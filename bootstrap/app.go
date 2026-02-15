@@ -25,6 +25,7 @@ type App struct {
 	Summary    *Summary
 
 	gracefulTimeout time.Duration
+	cfg             interface{} // stored config reference
 	onConfigure     []func(ctx context.Context, app *App) error
 
 	onStart []Hook
@@ -54,6 +55,11 @@ func NewApp(name, version string, opts ...Option) *App {
 // RegisterComponent adds a component to the application's registry.
 func (a *App) RegisterComponent(c component.Component) error {
 	return a.Components.Register(c)
+}
+
+// Config returns the stored config reference set via WithConfig.
+func (a *App) Config() interface{} {
+	return a.cfg
 }
 
 // OnConfigure registers a callback to run during the configure phase.
@@ -127,7 +133,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	// Phase 3: Block until shutdown signal
 	a.Logger.Info("Application ready — waiting for shutdown signal")
-	a.waitForSignal(ctx)
+	a.WaitForSignal(ctx)
 
 	// Graceful shutdown
 	return a.stop()
@@ -141,7 +147,16 @@ func (a *App) initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to start components: %w", err)
 	}
 
-	// Track started components in summary
+	a.TrackComponentHealth(ctx)
+
+	a.Logger.Info("Phase 1: All components started")
+	return nil
+}
+
+// TrackComponentHealth populates the bootstrap summary from the current
+// component health state. Called automatically by Run(), call manually
+// when using explicit lifecycle (Initialize/Configure/Start).
+func (a *App) TrackComponentHealth(ctx context.Context) {
 	for _, h := range a.Components.HealthAll(ctx) {
 		status := "active"
 		healthy := h.Status == component.StatusHealthy
@@ -150,9 +165,6 @@ func (a *App) initialize(ctx context.Context) error {
 		}
 		a.Summary.TrackComponent(h.Name, status, healthy)
 	}
-
-	a.Logger.Info("Phase 1: All components started")
-	return nil
 }
 
 // configure runs registered configuration callbacks (Phase 2).
@@ -175,19 +187,30 @@ func (a *App) configure(ctx context.Context) error {
 	return nil
 }
 
-// waitForSignal blocks until an OS interrupt/term signal or context cancellation.
-func (a *App) waitForSignal(ctx context.Context) {
+// WaitForSignal blocks until an OS interrupt/term signal or context cancellation.
+// Returns the received signal, or nil if the context was cancelled.
+// Use this when managing your own lifecycle instead of calling Run().
+func (a *App) WaitForSignal(ctx context.Context) os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	select {
 	case sig := <-sigCh:
 		a.Logger.Info("Received shutdown signal", map[string]interface{}{
 			"signal": sig.String(),
 		})
+		return sig
 	case <-ctx.Done():
 		a.Logger.Info("Context cancelled")
+		return nil
 	}
+}
+
+// Shutdown performs graceful shutdown: runs OnStop hooks, stops all components,
+// and closes the DI container. Use this when managing your own lifecycle.
+func (a *App) Shutdown(ctx context.Context) error {
+	return a.stop()
 }
 
 // stop gracefully shuts down all components within the graceful timeout.
