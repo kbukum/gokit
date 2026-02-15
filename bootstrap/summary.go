@@ -19,12 +19,13 @@ type ComponentStatus struct {
 
 // InfrastructureInfo holds detailed infrastructure component information.
 type InfrastructureInfo struct {
-	Name    string
-	Type    string // e.g. "database", "server", "kafka", "redis"
-	Status  string
-	Details string
-	Port    int
-	Healthy bool
+	Name          string
+	ComponentName string // Internal component name (for deduplication with ComponentStatus)
+	Type          string // e.g. "database", "server", "kafka", "redis"
+	Status        string
+	Details       string
+	Port          int
+	Healthy       bool
 }
 
 // BusinessComponentInfo represents a business-layer component (service, repository, handler).
@@ -100,6 +101,7 @@ func (s *Summary) TrackComponent(name, status string, healthy bool) {
 }
 
 // TrackInfrastructure adds an infrastructure component with detailed metadata.
+// For non-component infrastructure (e.g., auth config), componentName can be empty.
 func (s *Summary) TrackInfrastructure(name, componentType, status, details string, port int, healthy bool) {
 	s.infrastructure = append(s.infrastructure, InfrastructureInfo{
 		Name:    name,
@@ -108,6 +110,20 @@ func (s *Summary) TrackInfrastructure(name, componentType, status, details strin
 		Details: details,
 		Port:    port,
 		Healthy: healthy,
+	})
+}
+
+// trackInfrastructureWithComponent is like TrackInfrastructure but also records
+// the internal component name for deduplication with the Components section.
+func (s *Summary) trackInfrastructureWithComponent(name, componentName, componentType, status, details string, port int, healthy bool) {
+	s.infrastructure = append(s.infrastructure, InfrastructureInfo{
+		Name:          name,
+		ComponentName: componentName,
+		Type:          componentType,
+		Status:        status,
+		Details:       details,
+		Port:          port,
+		Healthy:       healthy,
 	})
 }
 
@@ -157,42 +173,57 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	fmt.Printf("🚀 %s v%s started in %.2fs\n\n",
 		s.serviceName, s.version, s.startupDuration.Seconds())
 
+	// Build a set of component names already shown in infrastructure (to avoid duplication).
+	describedComponents := make(map[string]bool)
+
 	// Infrastructure (detailed)
 	if len(s.infrastructure) > 0 {
 		fmt.Printf("📊 Infrastructure\n")
 		for i, inf := range s.infrastructure {
-			prefix := "├──"
-			if i == len(s.infrastructure)-1 && len(s.components) == 0 {
-				prefix = "└──"
-			}
+			prefix := treePrefix(i, len(s.infrastructure))
 			icon := statusIcon(inf.Status, inf.Healthy)
 			details := inf.Details
-			if inf.Port > 0 {
+			// Only append port suffix when Details doesn't already contain it.
+			if inf.Port > 0 && !strings.Contains(details, fmt.Sprintf(":%d", inf.Port)) {
 				details = fmt.Sprintf("%s (:%d)", details, inf.Port)
 			}
 			fmt.Printf("   %s %s %s: %s\n", prefix, icon, inf.Name, details)
+			// Track which component names are covered by infrastructure.
+			if inf.ComponentName != "" {
+				describedComponents[inf.ComponentName] = true
+			}
 		}
 		fmt.Printf("\n")
 	}
 
-	// Components
-	if len(s.components) > 0 {
+	// Components — only show those NOT already described in infrastructure.
+	var undescribed []ComponentStatus
+	for _, c := range s.components {
+		if !describedComponents[c.Name] {
+			undescribed = append(undescribed, c)
+		}
+	}
+
+	// Health summary line (from all components, including described ones).
+	healthy := 0
+	for _, c := range s.components {
+		if c.Healthy {
+			healthy++
+		}
+	}
+	total := len(s.components)
+
+	if len(undescribed) > 0 {
 		fmt.Printf("📦 Components\n")
-		healthy := 0
-		for i, c := range s.components {
-			prefix := "├──"
-			if i == len(s.components)-1 {
-				prefix = "└──"
-			}
+		for i, c := range undescribed {
+			prefix := treePrefix(i, len(undescribed))
 			icon := statusIcon(c.Status, c.Healthy)
 			fmt.Printf("   %s %s %s (%s)\n", prefix, icon, c.Name, c.Status)
-			if c.Healthy {
-				healthy++
-			}
 		}
 		fmt.Printf("\n")
+	}
 
-		total := len(s.components)
+	if total > 0 {
 		if healthy == total {
 			fmt.Printf("✅ All components healthy (%d/%d)\n", healthy, total)
 		} else {
@@ -208,10 +239,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	if len(s.business) > 0 {
 		fmt.Printf("\n💼 Business Layer\n")
 		for i, b := range s.business {
-			prefix := "├──"
-			if i == len(s.business)-1 {
-				prefix = "└──"
-			}
+			prefix := treePrefix(i, len(s.business))
 			fmt.Printf("   %s %s [%s] (%s)\n", prefix, businessIcon(b.Type), b.Name, b.Status)
 			for j, dep := range b.Dependencies {
 				depPrefix := "│   ├──"
@@ -234,10 +262,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	if len(s.routes) > 0 {
 		fmt.Printf("\n🌐 Routes (%d)\n", len(s.routes))
 		for i, r := range s.routes {
-			prefix := "├──"
-			if i == len(s.routes)-1 {
-				prefix = "└──"
-			}
+			prefix := treePrefix(i, len(s.routes))
 			fmt.Printf("   %s %-7s %s → %s\n", prefix, r.Method, r.Path, r.Handler)
 		}
 	}
@@ -246,10 +271,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	if len(s.consumers) > 0 {
 		fmt.Printf("\n📨 Consumers\n")
 		for i, c := range s.consumers {
-			prefix := "├──"
-			if i == len(s.consumers)-1 {
-				prefix = "└──"
-			}
+			prefix := treePrefix(i, len(s.consumers))
 			fmt.Printf("   %s %s (group: %s, topic: %s) [%s]\n", prefix, c.Name, c.Group, c.Topic, c.Status)
 		}
 	}
@@ -258,24 +280,24 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	if len(s.clients) > 0 {
 		fmt.Printf("\n🔌 Clients\n")
 		for i, c := range s.clients {
-			prefix := "├──"
-			if i == len(s.clients)-1 {
-				prefix = "└──"
-			}
+			prefix := treePrefix(i, len(s.clients))
 			fmt.Printf("   %s %s → %s [%s] (%s)\n", prefix, c.Name, c.Target, c.Type, c.Status)
 		}
 	}
 
-	// Live health check
+	// Live health check — only show details when something is NOT healthy.
 	if registry != nil {
 		healthResults := registry.HealthAll(context.Background())
-		if len(healthResults) > 0 {
-			fmt.Printf("\n🏥 Health Check\n")
-			for i, h := range healthResults {
-				prefix := "├──"
-				if i == len(healthResults)-1 {
-					prefix = "└──"
-				}
+		var unhealthy []component.ComponentHealth
+		for _, h := range healthResults {
+			if h.Status != component.StatusHealthy {
+				unhealthy = append(unhealthy, h)
+			}
+		}
+		if len(unhealthy) > 0 {
+			fmt.Printf("\n🏥 Health Issues\n")
+			for i, h := range unhealthy {
+				prefix := treePrefix(i, len(unhealthy))
 				icon := healthStatusIcon(h.Status)
 				msg := ""
 				if h.Message != "" {
@@ -287,6 +309,14 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	}
 
 	fmt.Printf("\n")
+}
+
+// treePrefix returns the correct tree connector for position i of n items.
+func treePrefix(i, n int) string {
+	if i == n-1 {
+		return "└──"
+	}
+	return "├──"
 }
 
 func statusIcon(status string, healthy bool) string {

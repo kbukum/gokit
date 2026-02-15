@@ -188,7 +188,7 @@ func (a *App) TrackRegisteredInfrastructure(ctx context.Context) {
 		if displayName == "" {
 			displayName = c.Name()
 		}
-		a.Summary.TrackInfrastructure(displayName, desc.Type, status, desc.Details, desc.Port, healthy)
+		a.Summary.trackInfrastructureWithComponent(displayName, c.Name(), desc.Type, status, desc.Details, desc.Port, healthy)
 	}
 }
 
