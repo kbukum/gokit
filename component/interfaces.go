@@ -59,3 +59,16 @@ type Description struct {
 type Describable interface {
 	Describe() Description
 }
+
+// Route holds a single HTTP route for the startup summary.
+type Route struct {
+	Method  string
+	Path    string
+	Handler string
+}
+
+// RouteProvider is optionally implemented by server components to
+// auto-report registered HTTP routes for the startup summary.
+type RouteProvider interface {
+	Routes() []Route
+}

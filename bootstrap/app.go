@@ -129,7 +129,7 @@ func (a *App) Run(ctx context.Context) error {
 
 	// Display startup summary
 	a.Summary.SetStartupDuration(time.Since(start))
-	a.Summary.DisplaySummary(a.Components, a.Logger)
+	a.DisplaySummary()
 
 	// Phase 3: Block until shutdown signal
 	a.Logger.Info("Application ready — waiting for shutdown signal")
@@ -147,49 +147,14 @@ func (a *App) initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to start components: %w", err)
 	}
 
-	a.TrackComponentHealth(ctx)
-
 	a.Logger.Info("Phase 1: All components started")
 	return nil
 }
 
-// TrackComponentHealth populates the bootstrap summary from the current
-// component health state. Called automatically by Run(), call manually
-// when using explicit lifecycle (Initialize/Configure/Start).
-func (a *App) TrackComponentHealth(ctx context.Context) {
-	for _, h := range a.Components.HealthAll(ctx) {
-		status := "active"
-		healthy := h.Status == component.StatusHealthy
-		if !healthy {
-			status = string(h.Status)
-		}
-		a.Summary.TrackComponent(h.Name, status, healthy)
-	}
-}
-
-// TrackRegisteredInfrastructure auto-discovers infrastructure details from
-// registered components that implement component.Describable. Call this after
-// components are registered and started. Components that implement Describable
-// are automatically added to the Infrastructure section of the startup summary.
-func (a *App) TrackRegisteredInfrastructure(ctx context.Context) {
-	for _, c := range a.Components.All() {
-		d, ok := c.(component.Describable)
-		if !ok {
-			continue
-		}
-		desc := d.Describe()
-		h := c.Health(ctx)
-		healthy := h.Status == component.StatusHealthy
-		status := "active"
-		if !healthy {
-			status = string(h.Status)
-		}
-		displayName := desc.Name
-		if displayName == "" {
-			displayName = c.Name()
-		}
-		a.Summary.trackInfrastructureWithComponent(displayName, c.Name(), desc.Type, status, desc.Details, desc.Port, healthy)
-	}
+// DisplaySummary prints the startup summary. It auto-collects infrastructure,
+// routes, and health from the component registry and DI container.
+func (a *App) DisplaySummary() {
+	a.Summary.DisplaySummary(a.Components, a.Container, a.Logger)
 }
 
 // configure runs registered configuration callbacks (Phase 2).

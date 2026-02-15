@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/skillsenselab/gokit/component"
 )
@@ -14,6 +15,9 @@ var _ component.Component = (*ServerComponent)(nil)
 
 // Ensure *ServerComponent satisfies component.Describable at compile time.
 var _ component.Describable = (*ServerComponent)(nil)
+
+// Ensure *ServerComponent satisfies component.RouteProvider at compile time.
+var _ component.RouteProvider = (*ServerComponent)(nil)
 
 // ServerComponent wraps Server to implement component.Component.
 type ServerComponent struct {
@@ -62,4 +66,36 @@ func (sc *ServerComponent) Describe() component.Description {
 		Details: fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Port:    cfg.Port,
 	}
+}
+
+// Routes returns all registered HTTP routes for the startup summary.
+func (sc *ServerComponent) Routes() []component.Route {
+	ginRoutes := sc.server.engine.Routes()
+
+	// Sort: API routes first (by path), then system routes
+	sort.Slice(ginRoutes, func(i, j int) bool {
+		iSys := systemPaths[ginRoutes[i].Path]
+		jSys := systemPaths[ginRoutes[j].Path]
+		if iSys != jSys {
+			return !iSys
+		}
+		if ginRoutes[i].Path != ginRoutes[j].Path {
+			return ginRoutes[i].Path < ginRoutes[j].Path
+		}
+		return methodOrder(ginRoutes[i].Method) < methodOrder(ginRoutes[j].Method)
+	})
+
+	routes := make([]component.Route, 0, len(ginRoutes))
+	for _, r := range ginRoutes {
+		handler := formatHandlerName(r.Handler)
+		if systemPaths[r.Path] {
+			handler = handler + " ⚙️"
+		}
+		routes = append(routes, component.Route{
+			Method:  r.Method,
+			Path:    r.Path,
+			Handler: handler,
+		})
+	}
+	return routes
 }

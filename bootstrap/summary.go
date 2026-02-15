@@ -3,10 +3,12 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/skillsenselab/gokit/component"
+	"github.com/skillsenselab/gokit/di"
 	"github.com/skillsenselab/gokit/logger"
 )
 
@@ -166,64 +168,46 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 	})
 }
 
-// DisplaySummary prints the bootstrap summary including live health from the registry.
-func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logger) {
+// DisplaySummary prints the bootstrap summary.
+// It auto-collects infrastructure, routes, and health from the component
+// registry and DI registrations from the container. Manual Track* calls
+// are only needed for non-component items (e.g., auth config).
+func (s *Summary) DisplaySummary(registry *component.Registry, container di.Container, log *logger.Logger) {
+	ctx := context.Background()
+
+	// --- Auto-collect from registry ---
+	s.collectFromRegistry(ctx, registry)
+
 	// Header
 	fmt.Printf("\n")
 	fmt.Printf("🚀 %s v%s started in %.2fs\n\n",
 		s.serviceName, s.version, s.startupDuration.Seconds())
 
-	// Build a set of component names already shown in infrastructure (to avoid duplication).
-	describedComponents := make(map[string]bool)
-
-	// Infrastructure (detailed)
+	// Infrastructure (auto-discovered from Describable components + manual entries)
 	if len(s.infrastructure) > 0 {
 		fmt.Printf("📊 Infrastructure\n")
 		for i, inf := range s.infrastructure {
 			prefix := treePrefix(i, len(s.infrastructure))
 			icon := statusIcon(inf.Status, inf.Healthy)
 			details := inf.Details
-			// Only append port suffix when Details doesn't already contain it.
 			if inf.Port > 0 && !strings.Contains(details, fmt.Sprintf(":%d", inf.Port)) {
 				details = fmt.Sprintf("%s (:%d)", details, inf.Port)
 			}
 			fmt.Printf("   %s %s %s: %s\n", prefix, icon, inf.Name, details)
-			// Track which component names are covered by infrastructure.
-			if inf.ComponentName != "" {
-				describedComponents[inf.ComponentName] = true
+		}
+		fmt.Printf("\n")
+	}
+
+	// Component health summary
+	healthResults := registry.HealthAll(ctx)
+	if len(healthResults) > 0 {
+		healthy := 0
+		for _, h := range healthResults {
+			if h.Status == component.StatusHealthy {
+				healthy++
 			}
 		}
-		fmt.Printf("\n")
-	}
-
-	// Components — only show those NOT already described in infrastructure.
-	var undescribed []ComponentStatus
-	for _, c := range s.components {
-		if !describedComponents[c.Name] {
-			undescribed = append(undescribed, c)
-		}
-	}
-
-	// Health summary line (from all components, including described ones).
-	healthy := 0
-	for _, c := range s.components {
-		if c.Healthy {
-			healthy++
-		}
-	}
-	total := len(s.components)
-
-	if len(undescribed) > 0 {
-		fmt.Printf("📦 Components\n")
-		for i, c := range undescribed {
-			prefix := treePrefix(i, len(undescribed))
-			icon := statusIcon(c.Status, c.Healthy)
-			fmt.Printf("   %s %s %s (%s)\n", prefix, icon, c.Name, c.Status)
-		}
-		fmt.Printf("\n")
-	}
-
-	if total > 0 {
+		total := len(healthResults)
 		if healthy == total {
 			fmt.Printf("✅ All components healthy (%d/%d)\n", healthy, total)
 		} else {
@@ -231,11 +215,10 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 		}
 	}
 
-	if len(s.infrastructure) == 0 && len(s.components) == 0 {
-		fmt.Printf("   └── No components registered\n")
-	}
+	// DI registrations (auto-discovered from container)
+	s.displayDIRegistrations(container)
 
-	// Business layer
+	// Business layer (manually tracked — project-specific service details)
 	if len(s.business) > 0 {
 		fmt.Printf("\n💼 Business Layer\n")
 		for i, b := range s.business {
@@ -258,7 +241,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 		}
 	}
 
-	// Routes
+	// Routes (auto-discovered from RouteProvider components + manual entries)
 	if len(s.routes) > 0 {
 		fmt.Printf("\n🌐 Routes (%d)\n", len(s.routes))
 		for i, r := range s.routes {
@@ -285,9 +268,8 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 		}
 	}
 
-	// Live health check — only show details when something is NOT healthy.
-	if registry != nil {
-		healthResults := registry.HealthAll(context.Background())
+	// Health issues — only show when something is NOT healthy
+	if len(healthResults) > 0 {
 		var unhealthy []component.ComponentHealth
 		for _, h := range healthResults {
 			if h.Status != component.StatusHealthy {
@@ -309,6 +291,159 @@ func (s *Summary) DisplaySummary(registry *component.Registry, log *logger.Logge
 	}
 
 	fmt.Printf("\n")
+}
+
+// collectFromRegistry auto-discovers infrastructure, routes, and health
+// from registered components. Called at the start of DisplaySummary.
+func (s *Summary) collectFromRegistry(ctx context.Context, registry *component.Registry) {
+	if registry == nil {
+		return
+	}
+
+	for _, c := range registry.All() {
+		// Auto-discover infrastructure from Describable components
+		if d, ok := c.(component.Describable); ok {
+			desc := d.Describe()
+			h := c.Health(ctx)
+			healthy := h.Status == component.StatusHealthy
+			status := "active"
+			if !healthy {
+				status = string(h.Status)
+			}
+			displayName := desc.Name
+			if displayName == "" {
+				displayName = c.Name()
+			}
+			// Avoid duplicates (if manually tracked too)
+			found := false
+			for _, inf := range s.infrastructure {
+				if inf.ComponentName == c.Name() {
+					found = true
+					break
+				}
+			}
+			if !found {
+				s.infrastructure = append(s.infrastructure, InfrastructureInfo{
+					Name:          displayName,
+					ComponentName: c.Name(),
+					Type:          desc.Type,
+					Status:        status,
+					Details:       desc.Details,
+					Port:          desc.Port,
+					Healthy:       healthy,
+				})
+			}
+		}
+
+		// Auto-discover routes from RouteProvider components
+		if rp, ok := c.(component.RouteProvider); ok {
+			for _, r := range rp.Routes() {
+				s.routes = append(s.routes, RouteInfo{
+					Method:  r.Method,
+					Path:    r.Path,
+					Handler: r.Handler,
+				})
+			}
+		}
+	}
+}
+
+// displayDIRegistrations shows DI container registrations grouped by type.
+func (s *Summary) displayDIRegistrations(container di.Container) {
+	if container == nil {
+		return
+	}
+
+	regs := container.Registrations()
+	if len(regs) == 0 {
+		return
+	}
+
+	// Group by prefix (service.*, repository.*, handler.*)
+	type group struct {
+		label string
+		icon  string
+		items []di.RegistrationInfo
+	}
+
+	groups := []group{
+		{label: "service", icon: "⚙️"},
+		{label: "repository", icon: "📁"},
+		{label: "handler", icon: "🎯"},
+	}
+
+	var other []di.RegistrationInfo
+
+	// Sort for deterministic output
+	sort.Slice(regs, func(i, j int) bool {
+		return regs[i].Key < regs[j].Key
+	})
+
+	for _, reg := range regs {
+		matched := false
+		for i, g := range groups {
+			if strings.HasPrefix(reg.Key, g.label+".") {
+				groups[i].items = append(groups[i].items, reg)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			other = append(other, reg)
+		}
+	}
+
+	// Only display if we have categorized registrations
+	hasGrouped := false
+	for _, g := range groups {
+		if len(g.items) > 0 {
+			hasGrouped = true
+			break
+		}
+	}
+	if !hasGrouped {
+		return
+	}
+
+	fmt.Printf("\n📦 DI Container (%d registrations)\n", len(regs))
+	displayIdx := 0
+	totalGroups := 0
+	for _, g := range groups {
+		if len(g.items) > 0 {
+			totalGroups++
+		}
+	}
+	if len(other) > 0 {
+		totalGroups++
+	}
+
+	for _, g := range groups {
+		if len(g.items) == 0 {
+			continue
+		}
+		displayIdx++
+		prefix := treePrefix(displayIdx-1, totalGroups)
+		names := make([]string, 0, len(g.items))
+		for _, item := range g.items {
+			name := strings.TrimPrefix(item.Key, g.label+".")
+			mode := ""
+			if item.Mode == di.Lazy && !item.Initialized {
+				mode = " 💤"
+			}
+			names = append(names, name+mode)
+		}
+		fmt.Printf("   %s %s %ss: %s\n", prefix, g.icon, g.label, strings.Join(names, ", "))
+	}
+
+	if len(other) > 0 {
+		displayIdx++
+		prefix := treePrefix(displayIdx-1, totalGroups)
+		names := make([]string, 0, len(other))
+		for _, item := range other {
+			names = append(names, item.Key)
+		}
+		fmt.Printf("   %s 📋 other: %s\n", prefix, strings.Join(names, ", "))
+	}
 }
 
 // treePrefix returns the correct tree connector for position i of n items.

@@ -14,8 +14,9 @@ import (
 type RegistrationMode int
 
 const (
-	Eager RegistrationMode = iota // Initialize immediately on registration
-	Lazy                          // Initialize on first resolve
+	Eager     RegistrationMode = iota // Initialize immediately on registration
+	Lazy                              // Initialize on first resolve
+	Singleton                         // Pre-created instance
 )
 
 // Container defines the interface for a dependency injection container
@@ -27,11 +28,21 @@ type Container interface {
 	RegisterSingleton(key string, instance interface{}) error
 	Close() error
 
+	// Introspection
+	Registrations() []RegistrationInfo
+
 	// Legacy methods for backward compatibility
 	InvalidateCache(name string) error
 	Refresh(name string) (interface{}, error)
 	GetResolver(name string) func() (interface{}, error)
 	MustResolve(name string) interface{}
+}
+
+// RegistrationInfo describes a registered component for introspection.
+type RegistrationInfo struct {
+	Key         string
+	Mode        RegistrationMode // Eager, Lazy, or Singleton
+	Initialized bool
 }
 
 // UnifiedContainer is our single, unified DI container
@@ -315,6 +326,34 @@ func (c *UnifiedContainer) handleConstructorResults(results []reflect.Value) (in
 	default:
 		return nil, fmt.Errorf("constructor must return either (instance) or (instance, error)")
 	}
+}
+
+// Registrations returns info about all registered components for introspection.
+func (c *UnifiedContainer) Registrations() []RegistrationInfo {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	result := make([]RegistrationInfo, 0, len(c.components)+len(c.singletons))
+
+	for key, reg := range c.components {
+		reg.mutex.RLock()
+		result = append(result, RegistrationInfo{
+			Key:         key,
+			Mode:        reg.mode,
+			Initialized: reg.initialized,
+		})
+		reg.mutex.RUnlock()
+	}
+
+	for key := range c.singletons {
+		result = append(result, RegistrationInfo{
+			Key:         key,
+			Mode:        Singleton,
+			Initialized: true,
+		})
+	}
+
+	return result
 }
 
 func (c *UnifiedContainer) Close() error {

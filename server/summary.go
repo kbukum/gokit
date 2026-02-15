@@ -1,10 +1,7 @@
 package server
 
 import (
-	"sort"
 	"strings"
-
-	"github.com/skillsenselab/gokit/bootstrap"
 )
 
 // System route paths registered by gokit (health, info, metrics).
@@ -12,39 +9,6 @@ var systemPaths = map[string]bool{
 	"/health":  true,
 	"/info":    true,
 	"/metrics": true,
-}
-
-// TrackRoutes automatically discovers all registered Gin routes and adds them
-// to the bootstrap summary. Call this after all routes are registered.
-//
-// This eliminates manual TrackRoute calls — gokit discovers routes from Gin.
-// System routes (/health, /info, /metrics) are labeled automatically.
-func (s *Server) TrackRoutes(summary *bootstrap.Summary) {
-	routes := s.engine.Routes()
-
-	// Sort: API routes first (by path), then system routes
-	sort.Slice(routes, func(i, j int) bool {
-		iSys := systemPaths[routes[i].Path]
-		jSys := systemPaths[routes[j].Path]
-		if iSys != jSys {
-			return !iSys // API routes first
-		}
-		if routes[i].Path != routes[j].Path {
-			return routes[i].Path < routes[j].Path
-		}
-		return methodOrder(routes[i].Method) < methodOrder(routes[j].Method)
-	})
-
-	for _, r := range routes {
-		handler := formatHandlerName(r.Handler)
-
-		// Label system routes
-		if systemPaths[r.Path] {
-			handler = handler + " ⚙️"
-		}
-
-		summary.TrackRoute(r.Method, r.Path, handler)
-	}
 }
 
 // formatHandlerName extracts a clean handler name from Gin's full handler path.
