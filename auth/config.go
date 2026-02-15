@@ -50,9 +50,9 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// SummaryLine returns a human-readable one-liner for the startup summary.
+// Describe returns a human-readable one-liner for the startup summary.
 // Example: "JWT(HS256) TTL=15m0s password=bcrypt"
-func (c *Config) SummaryLine() string {
+func (c *Config) Describe() string {
 	if !c.Enabled {
 		return "disabled"
 	}
