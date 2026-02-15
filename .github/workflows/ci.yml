@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23', '1.24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Build core
+        run: go build ./...
+
+      - name: Vet core
+        run: go vet ./...
+
+      - name: Test core
+        run: go test -race -count=1 ./...
+
+      - name: Build & test sub-modules
+        run: |
+          for mod in database redis kafka storage server grpc discovery connect llm transcription diarization; do
+            echo "==> $mod"
+            cd $mod && go build ./... && go vet ./... && go test -race -count=1 ./... && cd ..
+          done
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: golangci-lint (core)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: golangci-lint (sub-modules)
+        run: |
+          for mod in database redis kafka storage server grpc discovery connect llm transcription diarization; do
+            echo "==> Linting $mod"
+            cd $mod && golangci-lint run ./... && cd ..
+          done
