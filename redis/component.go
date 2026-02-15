@@ -83,3 +83,12 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 		Status: component.StatusHealthy,
 	}
 }
+
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	return component.Description{
+		Name:    "Redis",
+		Type:    "redis",
+		Details: fmt.Sprintf("%s db=%d pool=%d", c.cfg.Addr, c.cfg.DB, c.cfg.PoolSize),
+	}
+}

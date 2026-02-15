@@ -167,6 +167,31 @@ func (a *App) TrackComponentHealth(ctx context.Context) {
 	}
 }
 
+// TrackRegisteredInfrastructure auto-discovers infrastructure details from
+// registered components that implement component.Describable. Call this after
+// components are registered and started. Components that implement Describable
+// are automatically added to the Infrastructure section of the startup summary.
+func (a *App) TrackRegisteredInfrastructure(ctx context.Context) {
+	for _, c := range a.Components.All() {
+		d, ok := c.(component.Describable)
+		if !ok {
+			continue
+		}
+		desc := d.Describe()
+		h := c.Health(ctx)
+		healthy := h.Status == component.StatusHealthy
+		status := "active"
+		if !healthy {
+			status = string(h.Status)
+		}
+		displayName := desc.Name
+		if displayName == "" {
+			displayName = c.Name()
+		}
+		a.Summary.TrackInfrastructure(displayName, desc.Type, status, desc.Details, desc.Port, healthy)
+	}
+}
+
 // configure runs registered configuration callbacks (Phase 2).
 func (a *App) configure(ctx context.Context) error {
 	if len(a.onConfigure) == 0 {

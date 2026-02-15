@@ -91,7 +91,18 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 }
 
-// HealthStatus represents detailed database health information.
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	details := fmt.Sprintf("pool=%d/%d", c.cfg.MaxOpenConns, c.cfg.MaxIdleConns)
+	if c.cfg.AutoMigrate {
+		details += " auto-migrate=on"
+	}
+	return component.Description{
+		Name:    "Database",
+		Type:    "database",
+		Details: details,
+	}
+}
 type HealthStatus struct {
 	Connected  bool          `json:"connected"`
 	Error      string        `json:"error,omitempty"`

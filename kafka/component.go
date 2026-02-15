@@ -184,3 +184,26 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 		Status: component.StatusHealthy,
 	}
 }
+
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	details := fmt.Sprintf("brokers=%v", c.cfg.Brokers)
+	topics := make([]string, 0, len(c.consumers))
+	for _, cr := range c.consumers {
+		topics = append(topics, cr.Topic())
+	}
+	if len(topics) > 0 {
+		details += fmt.Sprintf(" topics=%v", topics)
+	}
+	if c.producer != nil {
+		details += " producer=yes"
+	}
+	return component.Description{
+		Name:    "Kafka",
+		Type:    "kafka",
+		Details: details,
+	}
+}

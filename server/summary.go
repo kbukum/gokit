@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -113,12 +112,4 @@ func methodOrder(method string) int {
 	default:
 		return 5
 	}
-}
-
-// InfrastructureInfo returns a summary description for this server.
-func (s *Server) InfrastructureInfo() (name, componentType, status, details string, port int) {
-	return "HTTP Server", "server",
-		"active",
-		fmt.Sprintf("%s:%d", s.config.Host, s.config.Port),
-		s.config.Port
 }

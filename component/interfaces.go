@@ -33,3 +33,29 @@ type Component interface {
 	// Health returns the current health status of the component.
 	Health(ctx context.Context) ComponentHealth
 }
+
+// Description holds summary information for the bootstrap display.
+// Components that implement Describable return this to self-report
+// what they are and how they're configured.
+type Description struct {
+	// Name is the human-readable display name (e.g., "HTTP Server", "PostgreSQL").
+	// If empty, the component's Name() is used.
+	Name string
+	// Type categorizes the component: "database", "server", "kafka", "redis", etc.
+	Type string
+	// Details is a human-readable one-liner shown in the startup summary.
+	// Examples: "localhost:5432 pool=25/5", "localhost:6379 db=0 pool=10"
+	Details string
+	// Port is the primary port, 0 if not applicable.
+	Port int
+}
+
+// Describable is optionally implemented by Components to provide
+// startup summary information for the bootstrap display.
+//
+// When a component implements this interface, the bootstrap system
+// automatically includes it in the infrastructure section of the
+// startup summary — no manual TrackInfrastructure calls needed.
+type Describable interface {
+	Describe() Description
+}

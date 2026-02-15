@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/skillsenselab/gokit/component"
 )
@@ -10,6 +11,9 @@ const componentName = "http-server"
 
 // Ensure *Server satisfies component.Component at compile time.
 var _ component.Component = (*ServerComponent)(nil)
+
+// Ensure *ServerComponent satisfies component.Describable at compile time.
+var _ component.Describable = (*ServerComponent)(nil)
 
 // ServerComponent wraps Server to implement component.Component.
 type ServerComponent struct {
@@ -46,5 +50,16 @@ func (sc *ServerComponent) Health(ctx context.Context) component.ComponentHealth
 		Name:    componentName,
 		Status:  component.StatusUnhealthy,
 		Message: "HTTP server not initialized",
+	}
+}
+
+// Describe returns infrastructure summary info for the bootstrap display.
+func (sc *ServerComponent) Describe() component.Description {
+	cfg := sc.server.config
+	return component.Description{
+		Name:    "HTTP Server",
+		Type:    "server",
+		Details: fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Port:    cfg.Port,
 	}
 }

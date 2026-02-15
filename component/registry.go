@@ -142,3 +142,15 @@ func (r *Registry) Get(name string) Component {
 	}
 	return nil
 }
+
+// All returns all registered components in registration order.
+func (r *Registry) All() []Component {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]Component, 0, len(r.entries))
+	for _, entry := range r.entries {
+		result = append(result, entry.component)
+	}
+	return result
+}

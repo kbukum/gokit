@@ -49,3 +49,17 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
+
+// SummaryLine returns a human-readable one-liner for the startup summary.
+// Example: "JWT(HS256) TTL=15m0s password=bcrypt"
+func (c *Config) SummaryLine() string {
+	if !c.Enabled {
+		return "disabled"
+	}
+	line := fmt.Sprintf("JWT(%s) TTL=%s password=%s",
+		c.JWT.Method, c.JWT.AccessTokenTTL, c.Password.Algorithm)
+	if c.OIDC.Enabled {
+		line += fmt.Sprintf(" OIDC(%s)", c.OIDC.Issuer)
+	}
+	return line
+}

@@ -87,3 +87,18 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 		Status: component.StatusHealthy,
 	}
 }
+
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	details := fmt.Sprintf("provider=%s", c.cfg.Provider)
+	if c.cfg.Bucket != "" {
+		details += fmt.Sprintf(" bucket=%s", c.cfg.Bucket)
+	} else if c.cfg.BasePath != "" {
+		details += fmt.Sprintf(" path=%s", c.cfg.BasePath)
+	}
+	return component.Description{
+		Name:    "Storage",
+		Type:    "storage",
+		Details: details,
+	}
+}

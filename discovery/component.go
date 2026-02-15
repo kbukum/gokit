@@ -167,6 +167,17 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 }
 
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	details := fmt.Sprintf("provider=%s service=%s", c.cfg.Provider, c.cfg.ServiceName)
+	return component.Description{
+		Name:    "Discovery",
+		Type:    "discovery",
+		Details: details,
+		Port:    c.cfg.ServicePort,
+	}
+}
+
 func getLocalIP() (string, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
