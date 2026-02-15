@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/skillsenselab/gokit v0.0.0
+	github.com/skillsenselab/gokit/auth v0.0.0
 	golang.org/x/net v0.49.0
 )
 
@@ -39,4 +40,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace (
+	github.com/skillsenselab/gokit => ../
+	github.com/skillsenselab/gokit/auth => ../auth
+)

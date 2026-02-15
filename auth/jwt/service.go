@@ -42,9 +42,9 @@ type Service[T gojwt.Claims] struct {
 //
 //	svc, err := jwt.NewService(cfg, func() *MyClaims { return &MyClaims{} })
 func NewService[T gojwt.Claims](cfg Config, newEmpty func() T) (*Service[T], error) {
-	cfg.applyDefaults()
-	if err := cfg.validate(); err != nil {
-		return nil, err
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("jwt: %w", err)
 	}
 	return &Service[T]{cfg: cfg, newEmpty: newEmpty}, nil
 }

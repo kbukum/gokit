@@ -25,35 +25,49 @@ const (
 )
 
 // Config configures the JWT token service.
+// Loadable from YAML/env via mapstructure tags.
 type Config struct {
 	// Secret is the HMAC signing key (required for HS* methods).
-	Secret string
+	Secret string `mapstructure:"secret"`
 
-	// PrivateKey is the RSA or ECDSA private key (required for RS*/ES* methods).
-	PrivateKey interface{}
+	// RefreshSecret is an optional separate secret for refresh tokens.
+	// If empty, Secret is used for both access and refresh tokens.
+	RefreshSecret string `mapstructure:"refresh_secret"`
 
-	// PublicKey is the RSA or ECDSA public key for verification.
-	// If not set, PrivateKey is used to derive it (RSA) or the same key is used (HMAC).
-	PublicKey interface{}
+	// PrivateKeyPath is the path to an RSA or ECDSA private key PEM file.
+	// Used for RS*/ES* methods. Alternative to Secret for asymmetric signing.
+	PrivateKeyPath string `mapstructure:"private_key_path"`
 
-	// Method is the signing algorithm (default: HS256).
-	Method SigningMethod
+	// PublicKeyPath is the path to the corresponding public key PEM file.
+	// If empty, the public key is derived from the private key.
+	PublicKeyPath string `mapstructure:"public_key_path"`
 
-	// Issuer is the "iss" claim (optional).
-	Issuer string
+	// Method is the signing algorithm (default: "HS256").
+	Method SigningMethod `mapstructure:"method"`
 
-	// Audience is the "aud" claim (optional).
-	Audience []string
+	// Issuer is the "iss" claim value (optional).
+	Issuer string `mapstructure:"issuer"`
 
-	// AccessTokenTTL is the lifetime of access tokens (default: 15m).
-	AccessTokenTTL time.Duration
+	// Audience is the "aud" claim value (optional).
+	Audience []string `mapstructure:"audience"`
 
-	// RefreshTokenTTL is the lifetime of refresh tokens (default: 7d).
-	RefreshTokenTTL time.Duration
+	// AccessTokenTTL is the lifetime of access tokens (default: "15m").
+	AccessTokenTTL time.Duration `mapstructure:"access_token_ttl"`
+
+	// RefreshTokenTTL is the lifetime of refresh tokens (default: "168h" / 7 days).
+	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
+
+	// --- Runtime fields (not from config files) ---
+
+	// PrivateKey is the parsed RSA or ECDSA private key (set programmatically).
+	PrivateKey interface{} `mapstructure:"-"`
+
+	// PublicKey is the parsed RSA or ECDSA public key (set programmatically).
+	PublicKey interface{} `mapstructure:"-"`
 }
 
-// applyDefaults fills in zero-value fields with sensible defaults.
-func (c *Config) applyDefaults() {
+// ApplyDefaults sets sensible defaults for zero-valued fields.
+func (c *Config) ApplyDefaults() {
 	if c.Method == "" {
 		c.Method = HS256
 	}
@@ -65,29 +79,33 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// validate checks required fields based on the signing method.
-func (c *Config) validate() error {
+// Validate checks required fields based on the signing method.
+func (c *Config) Validate() error {
 	switch c.Method {
 	case HS256, HS384, HS512:
 		if c.Secret == "" {
-			return errors.New("jwt: secret is required for HMAC signing methods")
+			return errors.New("secret is required for HMAC signing methods")
 		}
 	case RS256, RS384, RS512:
-		if c.PrivateKey == nil {
-			return errors.New("jwt: private key is required for RSA signing methods")
+		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
+			return errors.New("private_key or private_key_path is required for RSA signing methods")
 		}
-		if _, ok := c.PrivateKey.(*rsa.PrivateKey); !ok {
-			return errors.New("jwt: private key must be *rsa.PrivateKey for RSA signing methods")
+		if c.PrivateKey != nil {
+			if _, ok := c.PrivateKey.(*rsa.PrivateKey); !ok {
+				return errors.New("private_key must be *rsa.PrivateKey for RSA signing methods")
+			}
 		}
 	case ES256, ES384, ES512:
-		if c.PrivateKey == nil {
-			return errors.New("jwt: private key is required for ECDSA signing methods")
+		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
+			return errors.New("private_key or private_key_path is required for ECDSA signing methods")
 		}
-		if _, ok := c.PrivateKey.(*ecdsa.PrivateKey); !ok {
-			return errors.New("jwt: private key must be *ecdsa.PrivateKey for ECDSA signing methods")
+		if c.PrivateKey != nil {
+			if _, ok := c.PrivateKey.(*ecdsa.PrivateKey); !ok {
+				return errors.New("private_key must be *ecdsa.PrivateKey for ECDSA signing methods")
+			}
 		}
 	default:
-		return errors.New("jwt: unsupported signing method: " + string(c.Method))
+		return errors.New("unsupported signing method: " + string(c.Method))
 	}
 	return nil
 }
@@ -128,6 +146,19 @@ func (c *Config) signKey() interface{} {
 	}
 }
 
+// refreshSignKey returns the key for signing refresh tokens.
+func (c *Config) refreshSignKey() interface{} {
+	switch c.Method {
+	case HS256, HS384, HS512:
+		if c.RefreshSecret != "" {
+			return []byte(c.RefreshSecret)
+		}
+		return []byte(c.Secret)
+	default:
+		return c.PrivateKey
+	}
+}
+
 // verifyKey returns the key used for verifying tokens.
 func (c *Config) verifyKey() interface{} {
 	switch c.Method {
@@ -151,5 +182,18 @@ func (c *Config) verifyKey() interface{} {
 		return c.PrivateKey
 	default:
 		return []byte(c.Secret)
+	}
+}
+
+// refreshVerifyKey returns the key for verifying refresh tokens.
+func (c *Config) refreshVerifyKey() interface{} {
+	switch c.Method {
+	case HS256, HS384, HS512:
+		if c.RefreshSecret != "" {
+			return []byte(c.RefreshSecret)
+		}
+		return []byte(c.Secret)
+	default:
+		return c.verifyKey()
 	}
 }
