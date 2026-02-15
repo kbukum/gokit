@@ -19,6 +19,8 @@ const (
 	FieldDuration      = "duration_ms"
 	FieldPlatform      = "platform"
 	FieldPhase         = "phase"
+	FieldContainerID   = "container_id"
+	FieldEmail         = "email"
 )
 
 // Fields builds a map[string]interface{} from alternating key-value pairs.
