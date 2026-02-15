@@ -199,7 +199,10 @@ func (v *Validator) Custom(condition bool, field, message string) *Validator {
 // Required validates a single required field and returns an error if empty.
 func Required(field, value string) error {
 	v := New().Required(field, value)
-	return v.Validate()
+	if appErr := v.Validate(); appErr != nil {
+		return appErr
+	}
+	return nil
 }
 
 // ValidateUUID validates and parses a UUID string.

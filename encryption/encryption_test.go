@@ -103,7 +103,7 @@ func TestDifferentKeysProduceDifferentCiphertexts(t *testing.T) {
 
 	plaintext := "test data"
 	enc1, _ := svc1.Encrypt(plaintext)
-	enc2, _ := svc2.Encrypt(plaintext)
+	_, _ = svc2.Encrypt(plaintext)
 
 	// While randomness means they'd almost certainly differ anyway,
 	// the important thing is they can't decrypt each other's data

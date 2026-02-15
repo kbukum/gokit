@@ -217,14 +217,14 @@ func TestBulkhead_Callbacks(t *testing.T) {
 	close(release)
 	time.Sleep(10 * time.Millisecond) // Allow goroutine to finish
 
-	if acquired != 1 {
-		t.Errorf("expected 1 acquire callback, got %d", acquired)
+	if v := atomic.LoadInt32(&acquired); v != 1 {
+		t.Errorf("expected 1 acquire callback, got %d", v)
 	}
-	if released != 1 {
-		t.Errorf("expected 1 release callback, got %d", released)
+	if v := atomic.LoadInt32(&released); v != 1 {
+		t.Errorf("expected 1 release callback, got %d", v)
 	}
-	if rejected != 1 {
-		t.Errorf("expected 1 reject callback, got %d", rejected)
+	if v := atomic.LoadInt32(&rejected); v != 1 {
+		t.Errorf("expected 1 reject callback, got %d", v)
 	}
 }
 
