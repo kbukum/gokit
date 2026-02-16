@@ -5,7 +5,7 @@ package transcription
 import (
 	"context"
 
-	"github.com/skillsenselab/gokit/provider"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Provider is the interface that transcription backends must implement.

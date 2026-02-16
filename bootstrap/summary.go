@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/di"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ComponentStatus holds the tracked status of a component during bootstrap.

@@ -3,7 +3,7 @@ package kafka
 import (
 	"net/http"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // FromKafka converts a Kafka error to an AppError.

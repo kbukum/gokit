@@ -5,7 +5,7 @@ Configuration loading from YAML files and environment variables with automatic r
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/config"
+    "github.com/kbukum/gokit/config"
 )
 
 type AppConfig struct {

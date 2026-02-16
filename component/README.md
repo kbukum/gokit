@@ -5,7 +5,7 @@ Lifecycle-managed components with ordered startup/shutdown, health checks, and l
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -16,7 +16,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/skillsenselab/gokit/component"
+    "github.com/kbukum/gokit/component"
 )
 
 func main() {

@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Client represents a connected SSE client.
@@ -106,7 +106,7 @@ type Hub struct {
 	register   chan *Client       // Channel for registering clients
 	unregister chan *Client       // Channel for unregistering clients
 	broadcast  chan *Message      // Channel for broadcasting messages
-	mu         sync.RWMutex      // Protects clients map for reads during matching
+	mu         sync.RWMutex       // Protects clients map for reads during matching
 }
 
 // Message represents a message to broadcast.

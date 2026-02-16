@@ -5,7 +5,7 @@ Structured application error handling with HTTP status codes, error codes, and r
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/errors"
+    "github.com/kbukum/gokit/errors"
 )
 
 func main() {

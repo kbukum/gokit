@@ -5,15 +5,15 @@ LLM provider framework with completion, structured output, streaming, and provid
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/llm@latest
+go get github.com/kbukum/gokit/llm@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/llm"
-    "github.com/skillsenselab/gokit/llm/ollama"
+    "github.com/kbukum/gokit/llm"
+    "github.com/kbukum/gokit/llm/ollama"
 )
 
 // Create an Ollama provider

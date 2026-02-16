@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skillsenselab/gokit/auth/authctx"
-	"github.com/skillsenselab/gokit/auth/permission"
+	"github.com/kbukum/gokit/auth/authctx"
+	"github.com/kbukum/gokit/auth/permission"
 )
 
 // TokenValidator validates a token string and returns the parsed claims.

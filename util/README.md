@@ -5,7 +5,7 @@ Generic utility functions for slices, maps, pointers, string sanitization, and v
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/util"
+    "github.com/kbukum/gokit/util"
 )
 
 func main() {

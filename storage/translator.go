@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // FromSupabase converts a Supabase error to an AppError.

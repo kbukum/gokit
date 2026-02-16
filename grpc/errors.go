@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // FromGRPC converts a gRPC error to an AppError.

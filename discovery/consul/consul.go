@@ -8,8 +8,8 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	"github.com/skillsenselab/gokit/discovery"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/discovery"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Provider implements both discovery.Registry and discovery.Discovery using HashiCorp Consul.

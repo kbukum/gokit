@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Component wraps DB and implements component.Component for lifecycle management.
@@ -103,6 +103,7 @@ func (c *Component) Describe() component.Description {
 		Details: details,
 	}
 }
+
 type HealthStatus struct {
 	Connected  bool          `json:"connected"`
 	Error      string        `json:"error,omitempty"`

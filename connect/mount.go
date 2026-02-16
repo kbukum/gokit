@@ -3,7 +3,7 @@ package connect
 import (
 	"net/http"
 
-	"github.com/skillsenselab/gokit/server"
+	"github.com/kbukum/gokit/server"
 )
 
 // Mount mounts a Connect-Go handler at the given path on the server's ServeMux.

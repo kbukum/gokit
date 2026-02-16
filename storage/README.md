@@ -5,17 +5,17 @@ Multi-provider file storage with a unified interface — supports local filesyst
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/storage@latest
+go get github.com/kbukum/gokit/storage@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/storage"
-    _ "github.com/skillsenselab/gokit/storage/s3"       // register s3 provider
-    _ "github.com/skillsenselab/gokit/storage/supabase"  // register supabase provider
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/storage"
+    _ "github.com/kbukum/gokit/storage/s3"       // register s3 provider
+    _ "github.com/kbukum/gokit/storage/supabase"  // register supabase provider
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

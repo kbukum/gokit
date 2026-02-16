@@ -5,7 +5,7 @@ package diarization
 import (
 	"context"
 
-	"github.com/skillsenselab/gokit/provider"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Provider is the interface that diarization backends must implement.

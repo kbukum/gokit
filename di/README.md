@@ -5,7 +5,7 @@ Dependency injection container with eager/lazy registration, singletons, circuit
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/di"
+    "github.com/kbukum/gokit/di"
 )
 
 func main() {

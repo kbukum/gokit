@@ -12,9 +12,9 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 
-	"github.com/skillsenselab/gokit/logger"
-	"github.com/skillsenselab/gokit/server/endpoint"
-	"github.com/skillsenselab/gokit/server/middleware"
+	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/server/endpoint"
+	"github.com/kbukum/gokit/server/middleware"
 )
 
 // Server is a unified HTTP server backed by Gin with optional support for
@@ -46,7 +46,7 @@ func New(cfg Config, log *logger.Logger) *Server {
 	// Wrap with h2c for HTTP/2 cleartext (required for gRPC without TLS).
 	h2s := &http2.Server{
 		MaxConcurrentStreams: 250,
-		IdleTimeout:         120 * time.Second,
+		IdleTimeout:          120 * time.Second,
 	}
 	handler := h2c.NewHandler(mux, h2s)
 

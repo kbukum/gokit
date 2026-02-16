@@ -9,8 +9,8 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ProducerCloser is satisfied by any producer that can be closed.

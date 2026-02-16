@@ -5,15 +5,15 @@ Speaker diarization provider framework with segment-level output and provider re
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/diarization@latest
+go get github.com/kbukum/gokit/diarization@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/diarization"
-    "github.com/skillsenselab/gokit/diarization/pyannote"
+    "github.com/kbukum/gokit/diarization"
+    "github.com/kbukum/gokit/diarization/pyannote"
 )
 
 // Create a Pyannote provider

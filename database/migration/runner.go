@@ -3,7 +3,7 @@ package migration
 import (
 	"fmt"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 	"gorm.io/gorm"
 )
 

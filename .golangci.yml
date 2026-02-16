@@ -22,7 +22,7 @@ linters-settings:
   govet:
     shadow: true
   goimports:
-    local-prefixes: github.com/skillsenselab/gokit
+    local-prefixes: github.com/kbukum/gokit
   revive:
     rules:
       - name: blank-imports

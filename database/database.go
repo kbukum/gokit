@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // DB wraps a GORM database with gokit logging.

@@ -8,8 +8,8 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/skillsenselab/gokit/kafka"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/kafka"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Publisher provides a high-level API for publishing events and JSON data to Kafka.

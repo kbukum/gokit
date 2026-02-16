@@ -11,9 +11,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	grpccfg "github.com/skillsenselab/gokit/grpc"
-	"github.com/skillsenselab/gokit/grpc/interceptor"
-	"github.com/skillsenselab/gokit/logger"
+	grpccfg "github.com/kbukum/gokit/grpc"
+	"github.com/kbukum/gokit/grpc/interceptor"
+	"github.com/kbukum/gokit/logger"
 )
 
 // NewClient creates a gRPC client connection using the provided configuration

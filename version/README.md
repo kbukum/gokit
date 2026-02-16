@@ -5,7 +5,7 @@ Build-time version information with Git metadata, injected via `-ldflags`.
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/version"
+    "github.com/kbukum/gokit/version"
 )
 
 func main() {
@@ -32,10 +32,10 @@ func main() {
 Build with ldflags:
 
 ```bash
-go build -ldflags "-X github.com/skillsenselab/gokit/version.Version=1.2.3 \
-  -X github.com/skillsenselab/gokit/version.GitCommit=$(git rev-parse --short HEAD) \
-  -X github.com/skillsenselab/gokit/version.GitBranch=$(git rev-parse --abbrev-ref HEAD) \
-  -X github.com/skillsenselab/gokit/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+go build -ldflags "-X github.com/kbukum/gokit/version.Version=1.2.3 \
+  -X github.com/kbukum/gokit/version.GitCommit=$(git rev-parse --short HEAD) \
+  -X github.com/kbukum/gokit/version.GitBranch=$(git rev-parse --abbrev-ref HEAD) \
+  -X github.com/kbukum/gokit/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ## Key Types & Functions

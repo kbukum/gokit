@@ -8,9 +8,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
-	grpccfg "github.com/skillsenselab/gokit/grpc"
-	"github.com/skillsenselab/gokit/grpc/interceptor"
-	"github.com/skillsenselab/gokit/logger"
+	grpccfg "github.com/kbukum/gokit/grpc"
+	"github.com/kbukum/gokit/grpc/interceptor"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ClientOptionsBuilder constructs gRPC dial options from configuration.

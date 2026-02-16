@@ -5,7 +5,7 @@ Server-Sent Events hub for real-time client communication with pattern-based bro
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "net/http"
-    "github.com/skillsenselab/gokit/sse"
+    "github.com/kbukum/gokit/sse"
 )
 
 func main() {

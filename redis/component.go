@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Component wraps Client and implements component.Component for lifecycle management.

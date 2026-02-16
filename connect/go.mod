@@ -1,11 +1,11 @@
-module github.com/skillsenselab/gokit/connect
+module github.com/kbukum/gokit/connect
 
 go 1.25.3
 
 require (
 	connectrpc.com/connect v1.18.1
-	github.com/skillsenselab/gokit v0.0.0
-	github.com/skillsenselab/gokit/server v0.0.0
+	github.com/kbukum/gokit v0.0.0
+	github.com/kbukum/gokit/server v0.0.0
 )
 
 require (
@@ -30,7 +30,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
-	github.com/skillsenselab/gokit/auth v0.0.0 // indirect
+	github.com/kbukum/gokit/auth v0.0.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.8.0 // indirect
@@ -43,7 +43,7 @@ require (
 )
 
 replace (
-	github.com/skillsenselab/gokit => ../
-	github.com/skillsenselab/gokit/auth => ../auth
-	github.com/skillsenselab/gokit/server => ../server
+	github.com/kbukum/gokit => ../
+	github.com/kbukum/gokit/auth => ../auth
+	github.com/kbukum/gokit/server => ../server
 )

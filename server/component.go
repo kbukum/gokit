@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/skillsenselab/gokit/component"
+	"github.com/kbukum/gokit/component"
 )
 
 const componentName = "http-server"

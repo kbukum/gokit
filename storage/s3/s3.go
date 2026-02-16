@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/skillsenselab/gokit/storage"
+	"github.com/kbukum/gokit/storage"
 )
 
 func init() {

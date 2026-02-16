@@ -3,7 +3,7 @@ package server
 import (
 	"fmt"
 
-	"github.com/skillsenselab/gokit/server/middleware"
+	"github.com/kbukum/gokit/server/middleware"
 )
 
 // Config holds HTTP server configuration.

@@ -3,9 +3,9 @@ package bootstrap
 import (
 	"time"
 
-	"github.com/skillsenselab/gokit/config"
-	"github.com/skillsenselab/gokit/di"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/config"
+	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Option is a functional option for configuring an App.

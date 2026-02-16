@@ -3,7 +3,7 @@
 ## Development Setup
 
 ```bash
-git clone https://github.com/skillsenselab/gokit.git
+git clone https://github.com/kbukum/gokit.git
 cd gokit
 make build   # build all modules
 make test    # run all tests
@@ -33,9 +33,9 @@ make lint    # run linter (requires golangci-lint)
 
 1. Create `yourmod/` directory with its own `go.mod`:
    ```
-   module github.com/skillsenselab/gokit/yourmod
-   require github.com/skillsenselab/gokit v0.0.0
-   replace github.com/skillsenselab/gokit => ../
+   module github.com/kbukum/gokit/yourmod
+   require github.com/kbukum/gokit v0.0.0
+   replace github.com/kbukum/gokit => ../
    ```
 2. Add `config.go` with `Config` struct, `ApplyDefaults()`, `Validate()`
 3. Add `component.go` implementing `component.Component` if it has lifecycle

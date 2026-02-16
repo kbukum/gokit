@@ -1,6 +1,6 @@
 package transcription
 
-import "github.com/skillsenselab/gokit/provider"
+import "github.com/kbukum/gokit/provider"
 
 // NewRegistry creates a new provider registry for transcription providers.
 func NewRegistry() *provider.Registry[Provider] {

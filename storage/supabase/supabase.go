@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skillsenselab/gokit/storage"
+	"github.com/kbukum/gokit/storage"
 )
 
 func init() {

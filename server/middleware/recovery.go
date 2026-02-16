@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Recovery returns a Gin middleware that recovers from panics and logs the stack.

@@ -1,4 +1,4 @@
-module github.com/skillsenselab/gokit
+module github.com/kbukum/gokit
 
 go 1.25.3
 

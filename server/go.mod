@@ -1,4 +1,4 @@
-module github.com/skillsenselab/gokit/server
+module github.com/kbukum/gokit/server
 
 go 1.25.3
 
@@ -6,8 +6,8 @@ require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
-	github.com/skillsenselab/gokit v0.0.0
-	github.com/skillsenselab/gokit/auth v0.0.0
+	github.com/kbukum/gokit v0.0.0
+	github.com/kbukum/gokit/auth v0.0.0
 	golang.org/x/net v0.49.0
 )
 
@@ -52,6 +52,6 @@ require (
 )
 
 replace (
-	github.com/skillsenselab/gokit => ../
-	github.com/skillsenselab/gokit/auth => ../auth
+	github.com/kbukum/gokit => ../
+	github.com/kbukum/gokit/auth => ../auth
 )

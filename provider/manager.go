@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Manager provides the main API for working with providers,

@@ -3,7 +3,7 @@ package storage
 import (
 	"fmt"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // StorageFactory creates a Storage implementation from a Config.
@@ -21,7 +21,7 @@ func RegisterFactory(name string, f StorageFactory) {
 // New creates a Storage implementation based on the given Config.
 // The provider field determines which backend is used.
 // Ensure the desired provider package has been imported (e.g.
-// _ "github.com/skillsenselab/gokit/storage/local") so its factory is registered.
+// _ "github.com/kbukum/gokit/storage/local") so its factory is registered.
 func New(cfg Config, log *logger.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {

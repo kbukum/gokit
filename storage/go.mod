@@ -1,4 +1,4 @@
-module github.com/skillsenselab/gokit/storage
+module github.com/kbukum/gokit/storage
 
 go 1.25.3
 
@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.0
-	github.com/skillsenselab/gokit v0.0.0
+	github.com/kbukum/gokit v0.0.0
 )
 
 require (
@@ -32,4 +32,4 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

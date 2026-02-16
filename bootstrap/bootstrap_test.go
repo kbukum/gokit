@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/di"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/di"
 )
 
 // mockComponent implements component.Component for testing.
 type mockComponent struct {
-	name       string
-	startErr   error
-	stopErr    error
-	health     component.ComponentHealth
-	started    bool
-	stopped    bool
+	name     string
+	startErr error
+	stopErr  error
+	health   component.ComponentHealth
+	started  bool
+	stopped  bool
 }
 
 func (m *mockComponent) Name() string { return m.name }

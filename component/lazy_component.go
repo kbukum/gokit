@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // BaseLazyComponent provides thread-safe lazy initialization for components

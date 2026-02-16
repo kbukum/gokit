@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // DataResponse is the standard success envelope.

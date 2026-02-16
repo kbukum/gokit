@@ -5,15 +5,15 @@ Go-redis wrapper with connection pooling, health checks, and component lifecycle
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/redis@latest
+go get github.com/kbukum/gokit/redis@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/redis"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/redis"
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

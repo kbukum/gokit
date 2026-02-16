@@ -5,7 +5,7 @@ OpenTelemetry-based tracing, metrics, and health checks for service observabilit
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "context"
-    "github.com/skillsenselab/gokit/observability"
+    "github.com/kbukum/gokit/observability"
 )
 
 func main() {

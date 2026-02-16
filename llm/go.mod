@@ -1,8 +1,8 @@
-module github.com/skillsenselab/gokit/llm
+module github.com/kbukum/gokit/llm
 
 go 1.25.3
 
-require github.com/skillsenselab/gokit v0.0.0
+require github.com/kbukum/gokit v0.0.0
 
 require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -11,4 +11,4 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

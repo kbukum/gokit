@@ -9,7 +9,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Client wraps a go-redis client with gokit logging.

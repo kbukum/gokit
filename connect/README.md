@@ -5,16 +5,16 @@ Connect-Go integration with gokit server — interceptors, error mapping, and se
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/connect@latest
+go get github.com/kbukum/gokit/connect@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/connect"
-    "github.com/skillsenselab/gokit/server"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/connect"
+    "github.com/kbukum/gokit/server"
+    "github.com/kbukum/gokit/logger"
     "connectrpc.com/connect"
 )
 

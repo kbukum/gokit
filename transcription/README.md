@@ -5,15 +5,15 @@ Transcription provider framework with segment-level output and provider registry
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/transcription@latest
+go get github.com/kbukum/gokit/transcription@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/transcription"
-    "github.com/skillsenselab/gokit/transcription/whisper"
+    "github.com/kbukum/gokit/transcription"
+    "github.com/kbukum/gokit/transcription/whisper"
 )
 
 // Create a Whisper provider

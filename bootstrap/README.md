@@ -5,7 +5,7 @@ Application bootstrap framework with lifecycle hooks, component registration, an
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,8 +15,8 @@ package main
 
 import (
     "context"
-    "github.com/skillsenselab/gokit/bootstrap"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/bootstrap"
+    "github.com/kbukum/gokit/logger"
     "time"
 )
 

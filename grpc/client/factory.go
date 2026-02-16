@@ -3,8 +3,8 @@ package client
 import (
 	"google.golang.org/grpc"
 
-	grpccfg "github.com/skillsenselab/gokit/grpc"
-	"github.com/skillsenselab/gokit/logger"
+	grpccfg "github.com/kbukum/gokit/grpc"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ConnectionFactory defines the interface for creating gRPC connections.

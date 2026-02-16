@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // RegistrationMode determines how a component should be resolved

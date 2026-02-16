@@ -1,10 +1,10 @@
-module github.com/skillsenselab/gokit/redis
+module github.com/kbukum/gokit/redis
 
 go 1.25.3
 
 require (
 	github.com/redis/go-redis/v9 v9.10.0
-	github.com/skillsenselab/gokit v0.0.0
+	github.com/kbukum/gokit v0.0.0
 )
 
 require (
@@ -16,4 +16,4 @@ require (
 	golang.org/x/sys v0.40.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

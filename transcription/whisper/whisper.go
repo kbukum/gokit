@@ -11,8 +11,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/skillsenselab/gokit/provider"
-	"github.com/skillsenselab/gokit/transcription"
+	"github.com/kbukum/gokit/provider"
+	"github.com/kbukum/gokit/transcription"
 )
 
 const (
@@ -164,9 +164,9 @@ func (p *Provider) Transcribe(ctx context.Context, req transcription.Transcripti
 // --- internal Whisper API response types ---
 
 type whisperResponse struct {
-	Text     string            `json:"text"`
-	Segments []whisperSegment  `json:"segments"`
-	Language string            `json:"language"`
+	Text     string           `json:"text"`
+	Segments []whisperSegment `json:"segments"`
+	Language string           `json:"language"`
 }
 
 type whisperSegment struct {

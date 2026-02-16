@@ -1,6 +1,6 @@
 package llm
 
-import "github.com/skillsenselab/gokit/provider"
+import "github.com/kbukum/gokit/provider"
 
 // NewRegistry creates a new provider registry for LLM providers.
 func NewRegistry() *provider.Registry[Provider] {

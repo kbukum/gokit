@@ -5,16 +5,16 @@ Kafka producer and consumer with managed lifecycle, TLS/SASL, retries, and struc
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/kafka@latest
+go get github.com/kbukum/gokit/kafka@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/kafka"
-    "github.com/skillsenselab/gokit/kafka/producer"
-    "github.com/skillsenselab/gokit/kafka/consumer"
+    "github.com/kbukum/gokit/kafka"
+    "github.com/kbukum/gokit/kafka/producer"
+    "github.com/kbukum/gokit/kafka/consumer"
 )
 cfg := kafka.Config{Enabled: true, Brokers: []string{"localhost:9092"}, GroupID: "my-group"}
 p, _ := producer.NewProducer(cfg, log)

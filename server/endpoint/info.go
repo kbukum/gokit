@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skillsenselab/gokit/version"
+	"github.com/kbukum/gokit/version"
 )
 
 // startTime records when the process started for uptime calculation.

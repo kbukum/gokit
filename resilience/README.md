@@ -5,7 +5,7 @@ Resilience patterns: circuit breaker, retry with backoff, rate limiter, and bulk
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -17,7 +17,7 @@ import (
     "context"
     "fmt"
     "net/http"
-    "github.com/skillsenselab/gokit/resilience"
+    "github.com/kbukum/gokit/resilience"
 )
 
 func main() {

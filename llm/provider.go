@@ -5,7 +5,7 @@ package llm
 import (
 	"context"
 
-	"github.com/skillsenselab/gokit/provider"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Provider is the interface that LLM backends must implement.

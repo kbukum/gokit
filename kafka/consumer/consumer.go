@@ -7,8 +7,8 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/skillsenselab/gokit/kafka"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/kafka"
+	"github.com/kbukum/gokit/logger"
 )
 
 // MessageHandler processes a Kafka message. Return a non-nil error to log a

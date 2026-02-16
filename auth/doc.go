@@ -1,6 +1,6 @@
 // Package auth provides authentication and authorization building blocks.
 //
-// This is a Go module (github.com/skillsenselab/gokit/auth) with focused subpackages:
+// This is a Go module (github.com/kbukum/gokit/auth) with focused subpackages:
 //
 //   - auth/jwt        — Generic JWT token service using Go generics
 //   - auth/password   — Password hashing (bcrypt, argon2id) and secure token generation

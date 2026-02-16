@@ -1,11 +1,11 @@
-module github.com/skillsenselab/gokit/database
+module github.com/kbukum/gokit/database
 
 go 1.25.3
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
-	github.com/skillsenselab/gokit v0.0.0
+	github.com/kbukum/gokit v0.0.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
 )
@@ -27,4 +27,4 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

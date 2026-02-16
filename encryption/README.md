@@ -5,7 +5,7 @@ AES-256-GCM encryption and decryption service for sensitive data.
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/encryption"
+    "github.com/kbukum/gokit/encryption"
 )
 
 func main() {

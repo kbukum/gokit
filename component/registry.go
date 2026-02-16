@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // componentEntry holds a component and its started state.

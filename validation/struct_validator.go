@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-playground/validator/v10"
-	"github.com/skillsenselab/gokit/errors"
+	"github.com/kbukum/gokit/errors"
 )
 
 var (

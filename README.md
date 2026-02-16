@@ -1,6 +1,6 @@
 # gokit
 
-[![CI](https://github.com/skillsenselab/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/skillsenselab/gokit/actions/workflows/ci.yml)
+[![CI](https://github.com/kbukum/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/kbukum/gokit/actions/workflows/ci.yml)
 [![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -12,8 +12,8 @@ gokit provides a shared foundation across Go services — config, logging, resil
 
 gokit uses a **multi-module** layout:
 
-- **Core module** (`github.com/skillsenselab/gokit`) — lightweight, zero heavy dependencies. Covers config, logging, errors, DI, resilience, and abstractions.
-- **Sub-modules** (`github.com/skillsenselab/gokit/{name}`) — each has its own `go.mod` and brings in heavier dependencies (Gin, GORM, Kafka, gRPC, etc.) only when you need them.
+- **Core module** (`github.com/kbukum/gokit`) — lightweight, zero heavy dependencies. Covers config, logging, errors, DI, resilience, and abstractions.
+- **Sub-modules** (`github.com/kbukum/gokit/{name}`) — each has its own `go.mod` and brings in heavier dependencies (Gin, GORM, Kafka, gRPC, etc.) only when you need them.
 
 Import the core for foundational utilities. Add sub-modules à la carte for infrastructure.
 
@@ -59,14 +59,14 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 ### Install the core
 
 ```bash
-go get github.com/skillsenselab/gokit@latest
+go get github.com/kbukum/gokit@latest
 ```
 
 ### Add a sub-module
 
 ```bash
-go get github.com/skillsenselab/gokit/server@latest
-go get github.com/skillsenselab/gokit/database@latest
+go get github.com/kbukum/gokit/server@latest
+go get github.com/kbukum/gokit/database@latest
 ```
 
 ## Usage Examples
@@ -77,8 +77,8 @@ go get github.com/skillsenselab/gokit/database@latest
 package main
 
 import (
-    "github.com/skillsenselab/gokit/config"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/config"
+    "github.com/kbukum/gokit/logger"
 )
 
 type ServiceConfig struct {
@@ -110,7 +110,7 @@ func main() {
 ### HTTP Server with Middleware
 
 ```go
-import "github.com/skillsenselab/gokit/server"
+import "github.com/kbukum/gokit/server"
 
 srvCfg := &server.Config{Host: "0.0.0.0", Port: 8080}
 srvCfg.ApplyDefaults()
@@ -127,7 +127,7 @@ defer srv.Stop(ctx)
 ### LLM Provider
 
 ```go
-import "github.com/skillsenselab/gokit/llm"
+import "github.com/kbukum/gokit/llm"
 
 resp, err := llmProvider.Complete(ctx, llm.CompletionRequest{
     Model:        "gpt-4",
@@ -147,7 +147,7 @@ for chunk := range chunks {
 ### Bootstrap Lifecycle
 
 ```go
-import "github.com/skillsenselab/gokit/bootstrap"
+import "github.com/kbukum/gokit/bootstrap"
 
 app := bootstrap.NewApp("my-service", "1.0.0",
     bootstrap.WithLogger(log),

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillsenselab/gokit/kafka"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/kafka"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ManagedConsumer wraps a Consumer with background lifecycle management.

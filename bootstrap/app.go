@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/skillsenselab/gokit/component"
-	"github.com/skillsenselab/gokit/di"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/logger"
 )
 
 // App represents the base application with uniform lifecycle management.

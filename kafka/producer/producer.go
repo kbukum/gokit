@@ -9,8 +9,8 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/skillsenselab/gokit/kafka"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/kafka"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Producer wraps a kafka-go Writer with TLS/SASL, retries, and gokit logging.

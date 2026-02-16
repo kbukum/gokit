@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/skillsenselab/gokit/llm"
-	"github.com/skillsenselab/gokit/provider"
+	"github.com/kbukum/gokit/llm"
+	"github.com/kbukum/gokit/provider"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 
 	defaultOllamaURL   = "http://localhost:11434"
 	defaultOllamaModel = "llama3"
-	defaultTimeout      = 120 * time.Second
+	defaultTimeout     = 120 * time.Second
 )
 
 // Config holds configuration for the Ollama provider.

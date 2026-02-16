@@ -5,7 +5,7 @@ Fluent validation builder and struct tag validation with chainable rules and App
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -15,7 +15,7 @@ package main
 
 import (
     "fmt"
-    "github.com/skillsenselab/gokit/validation"
+    "github.com/kbukum/gokit/validation"
 )
 
 func main() {

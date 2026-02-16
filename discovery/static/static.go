@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillsenselab/gokit/discovery"
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/discovery"
+	"github.com/kbukum/gokit/logger"
 )
 
 // Provider implements discovery.Registry and discovery.Discovery using an in-memory list of

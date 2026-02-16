@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ClientConfig configures the discovery Client.

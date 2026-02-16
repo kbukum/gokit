@@ -11,8 +11,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/skillsenselab/gokit/diarization"
-	"github.com/skillsenselab/gokit/provider"
+	"github.com/kbukum/gokit/diarization"
+	"github.com/kbukum/gokit/provider"
 )
 
 const (

@@ -1,10 +1,10 @@
-module github.com/skillsenselab/gokit/kafka
+module github.com/kbukum/gokit/kafka
 
 go 1.25.3
 
 require (
 	github.com/segmentio/kafka-go v0.4.48
-	github.com/skillsenselab/gokit v0.0.0
+	github.com/kbukum/gokit v0.0.0
 )
 
 require (
@@ -20,4 +20,4 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

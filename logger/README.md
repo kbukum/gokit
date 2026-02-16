@@ -5,7 +5,7 @@ Structured logging built on zerolog with context propagation, component tagging,
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ go get github.com/skillsenselab/gokit
 ```go
 package main
 
-import "github.com/skillsenselab/gokit/logger"
+import "github.com/kbukum/gokit/logger"
 
 func main() {
     log := logger.NewDefault("my-service")

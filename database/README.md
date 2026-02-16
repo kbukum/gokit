@@ -5,15 +5,15 @@ GORM wrapper with connection pooling, migrations, query builder, and component l
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/database@latest
+go get github.com/kbukum/gokit/database@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/database"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/database"
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

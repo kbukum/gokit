@@ -5,16 +5,16 @@ Service discovery and registry with pluggable providers — supports Consul and 
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/discovery@latest
+go get github.com/kbukum/gokit/discovery@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/discovery"
-    _ "github.com/skillsenselab/gokit/discovery/consul"  // register consul provider
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/discovery"
+    _ "github.com/kbukum/gokit/discovery/consul"  // register consul provider
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

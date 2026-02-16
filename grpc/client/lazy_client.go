@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // LazyClient provides thread-safe lazy initialization for gRPC clients.

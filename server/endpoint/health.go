@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skillsenselab/gokit/component"
+	"github.com/kbukum/gokit/component"
 )
 
 // HealthChecker returns health status for registered components.

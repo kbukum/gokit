@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/skillsenselab/gokit/version"
+	"github.com/kbukum/gokit/version"
 )
 
 // Version returns a handler that reports build version information.

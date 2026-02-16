@@ -3,9 +3,9 @@ package auth
 import (
 	"fmt"
 
-	"github.com/skillsenselab/gokit/auth/jwt"
-	"github.com/skillsenselab/gokit/auth/oidc"
-	"github.com/skillsenselab/gokit/auth/password"
+	"github.com/kbukum/gokit/auth/jwt"
+	"github.com/kbukum/gokit/auth/oidc"
+	"github.com/kbukum/gokit/auth/password"
 )
 
 // Config holds all authentication configuration.

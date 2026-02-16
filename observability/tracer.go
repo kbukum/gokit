@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const defaultTracerName = "github.com/skillsenselab/gokit/observability"
+const defaultTracerName = "github.com/kbukum/gokit/observability"
 
 // TracerConfig configures the OpenTelemetry tracer.
 type TracerConfig struct {

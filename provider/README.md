@@ -5,7 +5,7 @@ Generic provider registry, manager, and selection strategies for pluggable backe
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit
+go get github.com/kbukum/gokit
 ```
 
 ## Quick Start
@@ -16,7 +16,7 @@ package main
 import (
     "context"
     "fmt"
-    "github.com/skillsenselab/gokit/provider"
+    "github.com/kbukum/gokit/provider"
 )
 
 // MyProvider implements provider.Provider

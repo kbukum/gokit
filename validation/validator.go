@@ -24,7 +24,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skillsenselab/gokit/errors"
+	"github.com/kbukum/gokit/errors"
 )
 
 // Validator collects validation errors.

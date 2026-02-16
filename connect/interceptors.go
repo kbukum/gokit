@@ -8,8 +8,8 @@ import (
 
 	"connectrpc.com/connect"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
-	"github.com/skillsenselab/gokit/logger"
+	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ---------------------------------------------------------------------------

@@ -5,15 +5,15 @@ Gin-based HTTP server with h2c support, built-in middleware, health/info endpoin
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/server@latest
+go get github.com/kbukum/gokit/server@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    "github.com/skillsenselab/gokit/server"
-    "github.com/skillsenselab/gokit/logger"
+    "github.com/kbukum/gokit/server"
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

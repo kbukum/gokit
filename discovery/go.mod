@@ -1,10 +1,10 @@
-module github.com/skillsenselab/gokit/discovery
+module github.com/kbukum/gokit/discovery
 
 go 1.25.3
 
 require (
 	github.com/hashicorp/consul/api v1.32.0
-	github.com/skillsenselab/gokit v0.0.0
+	github.com/kbukum/gokit v0.0.0
 )
 
 require (
@@ -27,4 +27,4 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/skillsenselab/gokit => ../
+replace github.com/kbukum/gokit => ../

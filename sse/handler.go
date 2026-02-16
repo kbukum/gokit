@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/skillsenselab/gokit/logger"
+	"github.com/kbukum/gokit/logger"
 )
 
 // ConnectedEvent is sent when a client successfully connects.

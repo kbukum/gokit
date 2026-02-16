@@ -5,17 +5,17 @@ gRPC client library with lazy initialization, generic client wrapper, intercepto
 ## Install
 
 ```bash
-go get github.com/skillsenselab/gokit/grpc@latest
+go get github.com/kbukum/gokit/grpc@latest
 ```
 
 ## Quick Start
 
 ```go
 import (
-    grpccfg "github.com/skillsenselab/gokit/grpc"
-    "github.com/skillsenselab/gokit/grpc/client"
-    "github.com/skillsenselab/gokit/grpc/interceptor"
-    "github.com/skillsenselab/gokit/logger"
+    grpccfg "github.com/kbukum/gokit/grpc"
+    "github.com/kbukum/gokit/grpc/client"
+    "github.com/kbukum/gokit/grpc/interceptor"
+    "github.com/kbukum/gokit/logger"
 )
 
 log := logger.New()

@@ -8,7 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
-	apperrors "github.com/skillsenselab/gokit/errors"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // IsConnectionError checks if a database error is a connection error
