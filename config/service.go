@@ -39,6 +39,10 @@ func (c *ServiceConfig) ApplyDefaults() {
 	if c.Environment == "development" {
 		c.Debug = true
 	}
+	// Propagate service name into logging so Init() uses the right tag.
+	if c.Logging.ServiceName == "" && c.Name != "" {
+		c.Logging.ServiceName = c.Name
+	}
 	c.Logging.ApplyDefaults()
 }
 

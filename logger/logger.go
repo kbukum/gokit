@@ -22,15 +22,21 @@ type Logger struct {
 }
 
 // Init initializes the global logger from config.
+// The service name used for the log tag comes from cfg.ServiceName.
+// If empty, it defaults to the value set later by bootstrap (via SetGlobalLogger).
 func Init(cfg Config) {
 	cfg.ApplyDefaults()
-	globalLogger = New(&cfg, "default")
+	name := cfg.ServiceName
+	if name == "" {
+		name = "default"
+	}
+	globalLogger = New(&cfg, name)
 
 	level, _ := zerolog.ParseLevel(cfg.Level)
 	zerolog.SetGlobalLevel(level)
 
 	if cfg.Format == "console" || cfg.Format == FormatPretty {
-		log.Logger = newConsoleLogger(&cfg, "default")
+		log.Logger = newConsoleLogger(&cfg, name)
 	}
 }
 

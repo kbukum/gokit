@@ -4,18 +4,19 @@ import "fmt"
 
 // Config contains logging configuration.
 type Config struct {
-	Level      string `yaml:"level" mapstructure:"level"`
-	Format     string `yaml:"format" mapstructure:"format"`
-	Output     string `yaml:"output" mapstructure:"output"`
-	NoColor    bool   `yaml:"no_color" mapstructure:"no_color"`
-	Timestamp  bool   `yaml:"timestamp" mapstructure:"timestamp"`
-	Caller     bool   `yaml:"caller" mapstructure:"caller"`
-	Stacktrace bool   `yaml:"stacktrace" mapstructure:"stacktrace"`
-	MaxSize    int    `yaml:"max_size" mapstructure:"max_size"`       // megabytes
-	MaxBackups int    `yaml:"max_backups" mapstructure:"max_backups"` // number of backups
-	MaxAge     int    `yaml:"max_age" mapstructure:"max_age"`         // days
-	Compress   bool   `yaml:"compress" mapstructure:"compress"`
-	LocalTime  bool   `yaml:"local_time" mapstructure:"local_time"`
+	Level       string `yaml:"level" mapstructure:"level"`
+	Format      string `yaml:"format" mapstructure:"format"`
+	Output      string `yaml:"output" mapstructure:"output"`
+	NoColor     bool   `yaml:"no_color" mapstructure:"no_color"`
+	Timestamp   bool   `yaml:"timestamp" mapstructure:"timestamp"`
+	Caller      bool   `yaml:"caller" mapstructure:"caller"`
+	Stacktrace  bool   `yaml:"stacktrace" mapstructure:"stacktrace"`
+	MaxSize     int    `yaml:"max_size" mapstructure:"max_size"`       // megabytes
+	MaxBackups  int    `yaml:"max_backups" mapstructure:"max_backups"` // number of backups
+	MaxAge      int    `yaml:"max_age" mapstructure:"max_age"`         // days
+	Compress    bool   `yaml:"compress" mapstructure:"compress"`
+	LocalTime   bool   `yaml:"local_time" mapstructure:"local_time"`
+	ServiceName string `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
 }
 
 // ApplyDefaults applies default values to logging configuration.

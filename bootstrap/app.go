@@ -75,7 +75,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		app.Logger = o.logger
 	} else {
 		logger.Init(base.Logging)
-		app.Logger = logger.GetGlobalLogger().WithComponent(base.Name)
+		app.Logger = logger.GetGlobalLogger()
 	}
 
 	app.Summary = NewSummary(base.Name, base.Version)
