@@ -43,19 +43,22 @@ type LazyClient[T any] struct {
 //   - factory: The connection factory to use for creating connections
 //   - createClient: Function to create the typed client from a connection
 //     (usually the generated New*Client function from protobuf)
-//   - log: Logger instance for diagnostics
+//   - log: Optional logger instance; if nil, uses the global logger
 func NewLazyClient[T any](
 	serviceName string,
 	factory ConnectionFactory,
 	createClient func(grpc.ClientConnInterface) T,
-	log *logger.Logger,
+	log ...*logger.Logger,
 ) *LazyClient[T] {
-	return &LazyClient[T]{
+	lc := &LazyClient[T]{
 		serviceName:  serviceName,
 		factory:      factory,
 		createClient: createClient,
-		log:          log,
 	}
+	if len(log) > 0 && log[0] != nil {
+		lc.log = log[0]
+	}
+	return lc
 }
 
 // GetClient returns the gRPC client, initializing the connection if needed.
@@ -90,7 +93,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	c.initialized = false
 	c.lastError = nil
 
-	c.log.Debug("Initializing gRPC client", map[string]interface{}{
+	c.logDebug("Initializing gRPC client", map[string]interface{}{
 		"service": c.serviceName,
 	})
 
@@ -98,7 +101,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	conn, err := c.factory.NewConn(c.serviceName)
 	if err != nil {
 		c.lastError = err
-		c.log.Error("Failed to create gRPC connection", map[string]interface{}{
+		c.logError("Failed to create gRPC connection", map[string]interface{}{
 			"service": c.serviceName,
 			"error":   err.Error(),
 		})
@@ -114,7 +117,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	c.initialized = true
 	c.lastError = nil
 
-	c.log.Info("gRPC client initialized", map[string]interface{}{
+	c.logInfo("gRPC client initialized", map[string]interface{}{
 		"service": c.serviceName,
 	})
 
@@ -131,7 +134,7 @@ func (c *LazyClient[T]) Close() error {
 		return nil
 	}
 
-	c.log.Debug("Closing gRPC client", map[string]interface{}{
+	c.logDebug("Closing gRPC client", map[string]interface{}{
 		"service": c.serviceName,
 	})
 
@@ -145,7 +148,7 @@ func (c *LazyClient[T]) Close() error {
 	c.lastError = nil
 
 	if err != nil {
-		c.log.Error("Error closing gRPC connection", map[string]interface{}{
+		c.logError("Error closing gRPC connection", map[string]interface{}{
 			"service": c.serviceName,
 			"error":   err.Error(),
 		})
@@ -179,4 +182,28 @@ func (c *LazyClient[T]) GetConnection() *grpc.ClientConn {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.conn
+}
+
+func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]interface{}) {
+	if c.log != nil {
+		c.log.Debug(msg, fields...)
+	} else {
+		logger.Debug(msg, fields...)
+	}
+}
+
+func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]interface{}) {
+	if c.log != nil {
+		c.log.Info(msg, fields...)
+	} else {
+		logger.Info(msg, fields...)
+	}
+}
+
+func (c *LazyClient[T]) logError(msg string, fields ...map[string]interface{}) {
+	if c.log != nil {
+		c.log.Error(msg, fields...)
+	} else {
+		logger.Error(msg, fields...)
+	}
 }
