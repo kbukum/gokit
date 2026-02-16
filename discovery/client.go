@@ -22,12 +22,17 @@ type ClientConfig struct {
 	// Criticality maps service names to their criticality level.
 	// Required services cause errors on discovery failure; optional ones are skipped.
 	Criticality map[string]Criticality
+
+	// StaticEndpoints provides fallback endpoints when the primary backend
+	// fails or returns no results. This enables hybrid discovery patterns.
+	StaticEndpoints []StaticEndpoint
 }
 
-// Client is a high-level discovery client that adds caching and load balancing
-// on top of a Discovery backend.
+// Client is a high-level discovery client that adds caching, load balancing,
+// and optional static fallback on top of a Discovery backend.
 type Client struct {
 	discovery Discovery
+	fallback  map[string][]ServiceInstance
 	cache     *instanceCache
 	cfg       ClientConfig
 	log       *logger.Logger
@@ -42,8 +47,35 @@ func NewClient(disc Discovery, cfg ClientConfig, log *logger.Logger) *Client {
 	if ttl == 0 {
 		ttl = 30 * time.Second
 	}
+
+	// Build static fallback map
+	fallback := make(map[string][]ServiceInstance)
+	now := time.Now()
+	for _, ep := range cfg.StaticEndpoints {
+		inst := ServiceInstance{
+			ID:       fmt.Sprintf("%s-%s-%d", ep.Name, ep.Address, ep.Port),
+			Name:     ep.Name,
+			Address:  ep.Address,
+			Port:     ep.Port,
+			Protocol: ep.Protocol,
+			Tags:     ep.Tags,
+			Metadata: ep.Metadata,
+			Weight:   ep.Weight,
+			Health:   HealthHealthy,
+			LastSeen: now,
+		}
+		if inst.Weight <= 0 {
+			inst.Weight = 1
+		}
+		if !ep.Healthy && ep.Address != "" {
+			inst.Health = HealthUnhealthy
+		}
+		fallback[ep.Name] = append(fallback[ep.Name], inst)
+	}
+
 	return &Client{
 		discovery: disc,
+		fallback:  fallback,
 		cache:     newInstanceCache(ttl),
 		cfg:       cfg,
 		log:       log,
@@ -54,6 +86,7 @@ func NewClient(disc Discovery, cfg ClientConfig, log *logger.Logger) *Client {
 
 // Discover returns all healthy instances of a service, using cache when fresh.
 // Optional protocol parameter filters results by protocol tag.
+// If the primary backend fails, static fallback endpoints are returned when configured.
 func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...string) ([]ServiceInstance, error) {
 	if instances := c.cache.get(serviceName); instances != nil {
 		if len(protocol) > 0 && protocol[0] != "" {
@@ -63,15 +96,28 @@ func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...s
 	}
 
 	instances, err := c.discovery.Discover(ctx, serviceName)
-	if err != nil {
-		crit := c.cfg.Criticality[serviceName]
-		if crit == CriticalityRequired {
-			return nil, fmt.Errorf("required service %q discovery failed: %w", serviceName, err)
+	if err != nil || len(instances) == 0 {
+		// Try static fallback
+		if fb, ok := c.fallback[serviceName]; ok && len(fb) > 0 {
+			if err != nil {
+				c.log.Debug("primary discovery failed, using static fallback", map[string]interface{}{
+					"service": serviceName, "error": err.Error(),
+				})
+			}
+			instances = fb
+			err = nil
+		} else if err != nil {
+			crit := c.cfg.Criticality[serviceName]
+			if crit == CriticalityRequired {
+				return nil, fmt.Errorf("required service %q discovery failed: %w", serviceName, err)
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
-	c.cache.set(serviceName, instances)
+	if len(instances) > 0 {
+		c.cache.set(serviceName, instances)
+	}
 
 	if len(protocol) > 0 && protocol[0] != "" {
 		return filterByProtocol(instances, protocol[0]), nil

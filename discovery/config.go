@@ -25,6 +25,8 @@ type Config struct {
 	// ConsulDatacenter is the Consul datacenter name.
 	ConsulDatacenter string `mapstructure:"consul_datacenter"`
 
+	// --- Registration (self) ---
+
 	// ServiceName is the name used when registering this service.
 	ServiceName string `mapstructure:"service_name"`
 
@@ -36,6 +38,18 @@ type Config struct {
 
 	// ServicePort is the port advertised to other services.
 	ServicePort int `mapstructure:"service_port"`
+
+	// Tags are metadata tags attached to the service registration.
+	Tags []string `mapstructure:"tags"`
+
+	// Metadata is arbitrary key-value metadata for the service.
+	Metadata map[string]string `mapstructure:"metadata"`
+
+	// --- Health checks ---
+
+	// HealthCheckType is the type of health check: "http", "grpc", "tcp", or "ttl".
+	// Defaults to "http".
+	HealthCheckType string `mapstructure:"health_check_type"`
 
 	// HealthCheckPath is the HTTP path for health checks (e.g. "/healthz").
 	HealthCheckPath string `mapstructure:"health_check_path"`
@@ -49,23 +63,41 @@ type Config struct {
 	// DeregisterAfter removes the service after being critical for this duration.
 	DeregisterAfter time.Duration `mapstructure:"deregister_after"`
 
-	// Tags are metadata tags attached to the service registration.
-	Tags []string `mapstructure:"tags"`
+	// --- Discovery (others) ---
 
-	// Metadata is arbitrary key-value metadata for the service.
-	Metadata map[string]string `mapstructure:"metadata"`
+	// Services lists remote services this application depends on.
+	Services []DiscoveredService `mapstructure:"services"`
 
-	// StaticEndpoints provides endpoints for the static provider.
+	// StaticEndpoints provides endpoints for the static provider or as fallback.
 	StaticEndpoints []StaticEndpoint `mapstructure:"static_endpoints"`
+}
+
+// DiscoveredService describes a remote service dependency.
+type DiscoveredService struct {
+	Name        string      `mapstructure:"name"`
+	Protocol    string      `mapstructure:"protocol"`
+	Criticality Criticality `mapstructure:"criticality"`
 }
 
 // StaticEndpoint describes a statically configured service endpoint.
 type StaticEndpoint struct {
-	Name     string `mapstructure:"name"`
-	Address  string `mapstructure:"address"`
-	Port     int    `mapstructure:"port"`
-	Protocol string `mapstructure:"protocol"`
+	Name     string            `mapstructure:"name"`
+	Address  string            `mapstructure:"address"`
+	Port     int               `mapstructure:"port"`
+	Protocol string            `mapstructure:"protocol"`
+	Tags     []string          `mapstructure:"tags"`
+	Metadata map[string]string `mapstructure:"metadata"`
+	Weight   int               `mapstructure:"weight"`
+	Healthy  bool              `mapstructure:"healthy"`
 }
+
+// Health check type constants.
+const (
+	HealthCheckHTTP = "http"
+	HealthCheckGRPC = "grpc"
+	HealthCheckTCP  = "tcp"
+	HealthCheckTTL  = "ttl"
+)
 
 // ApplyDefaults fills zero-valued fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
@@ -80,6 +112,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.ServiceID == "" {
 		c.ServiceID = c.ServiceName
+	}
+	if c.HealthCheckType == "" {
+		c.HealthCheckType = HealthCheckHTTP
 	}
 	if c.HealthCheckPath == "" {
 		c.HealthCheckPath = "/healthz"

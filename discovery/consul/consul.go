@@ -66,18 +66,7 @@ func (c *Provider) Register(ctx context.Context, service *discovery.ServiceInfo)
 		Meta:    service.Metadata,
 	}
 
-	if c.cfg.HealthCheckPath != "" {
-		scheme := c.cfg.ConsulScheme
-		if scheme == "" {
-			scheme = "http"
-		}
-		reg.Check = &api.AgentServiceCheck{
-			HTTP:                           fmt.Sprintf("%s://%s:%d%s", scheme, service.Address, service.Port, c.cfg.HealthCheckPath),
-			Interval:                       c.cfg.HealthCheckInterval.String(),
-			Timeout:                        c.cfg.HealthCheckTimeout.String(),
-			DeregisterCriticalServiceAfter: c.cfg.DeregisterAfter.String(),
-		}
-	}
+	reg.Check = c.buildHealthCheck(service)
 
 	if err := c.client.Agent().ServiceRegister(reg); err != nil {
 		c.log.Error("failed to register service", map[string]interface{}{
@@ -111,6 +100,16 @@ func (c *Provider) Deregister(ctx context.Context, serviceID string) error {
 
 	c.log.Info("service deregistered", map[string]interface{}{"service_id": serviceID})
 	return nil
+}
+
+// UpdateHealth updates the health status for a TTL-based check.
+// For HTTP/gRPC/TCP checks, this is a no-op since Consul polls them directly.
+func (c *Provider) UpdateHealth(_ context.Context, serviceID string, healthy bool, note string) error {
+	checkID := "service:" + serviceID
+	if healthy {
+		return c.client.Agent().PassTTL(checkID, note)
+	}
+	return c.client.Agent().FailTTL(checkID, note)
 }
 
 // --- Discovery implementation ---
@@ -238,6 +237,38 @@ func serviceEntryToInstance(e *api.ServiceEntry, now time.Time) discovery.Servic
 		Weight:   weight,
 		LastSeen: now,
 	}
+}
+
+// buildHealthCheck creates the appropriate Consul health check based on config.
+func (c *Provider) buildHealthCheck(service *discovery.ServiceInfo) *api.AgentServiceCheck {
+	check := &api.AgentServiceCheck{
+		Interval:                       c.cfg.HealthCheckInterval.String(),
+		Timeout:                        c.cfg.HealthCheckTimeout.String(),
+		DeregisterCriticalServiceAfter: c.cfg.DeregisterAfter.String(),
+	}
+
+	addr := fmt.Sprintf("%s:%d", service.Address, service.Port)
+
+	switch c.cfg.HealthCheckType {
+	case discovery.HealthCheckGRPC:
+		check.GRPC = addr
+		check.GRPCUseTLS = c.cfg.ConsulScheme == "https"
+	case discovery.HealthCheckTCP:
+		check.TCP = addr
+	case discovery.HealthCheckTTL:
+		check.TTL = c.cfg.HealthCheckInterval.String()
+		// Remove interval/timeout for TTL checks (Consul doesn't poll)
+		check.Interval = ""
+		check.Timeout = ""
+	default: // "http"
+		scheme := c.cfg.ConsulScheme
+		if scheme == "" {
+			scheme = "http"
+		}
+		check.HTTP = fmt.Sprintf("%s://%s:%d%s", scheme, service.Address, service.Port, c.cfg.HealthCheckPath)
+	}
+
+	return check
 }
 
 // Compile-time checks.

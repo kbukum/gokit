@@ -23,6 +23,13 @@ type Registry interface {
 	// Deregister removes a service instance from the discovery backend.
 	Deregister(ctx context.Context, serviceID string) error
 
+	// UpdateHealth pushes a health status update for a registered service.
+	// For TTL-based checks, this extends the TTL; for others it may be a no-op.
+	UpdateHealth(ctx context.Context, serviceID string, healthy bool, note string) error
+
+	// Stats returns current registry statistics.
+	Stats() RegistryStats
+
 	// Close releases any resources held by the registry.
 	Close() error
 }

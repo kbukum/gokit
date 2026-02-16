@@ -42,12 +42,27 @@ func NewProvider(endpoints []discovery.StaticEndpoint) *Provider {
 			Name:     ep.Name,
 			Address:  ep.Address,
 			Port:     ep.Port,
+			Protocol: ep.Protocol,
+			Tags:     ep.Tags,
+			Metadata: ep.Metadata,
+			Weight:   ep.Weight,
 			Health:   discovery.HealthHealthy,
 			LastSeen: now,
 		}
+		if inst.Weight <= 0 {
+			inst.Weight = 1
+		}
+		if ep.Healthy == false && ep.Address != "" {
+			inst.Health = discovery.HealthUnhealthy
+		}
+		// Ensure protocol is in tags for backward compatibility
 		if ep.Protocol != "" {
-			inst.Metadata = map[string]string{"protocol": ep.Protocol}
-			inst.Tags = []string{ep.Protocol}
+			if inst.Tags == nil {
+				inst.Tags = []string{ep.Protocol}
+			}
+			if inst.Metadata == nil {
+				inst.Metadata = map[string]string{"protocol": ep.Protocol}
+			}
 		}
 		sp.instances[ep.Name] = append(sp.instances[ep.Name], inst)
 	}
@@ -89,6 +104,22 @@ func (s *Provider) Deregister(_ context.Context, serviceID string) error {
 		}
 	}
 	return nil
+}
+
+// UpdateHealth is a no-op for the static provider.
+func (s *Provider) UpdateHealth(_ context.Context, _ string, _ bool, _ string) error {
+	return nil
+}
+
+// Stats returns empty stats for the static provider.
+func (s *Provider) Stats() discovery.RegistryStats {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	count := 0
+	for _, v := range s.instances {
+		count += len(v)
+	}
+	return discovery.RegistryStats{RegisteredServices: count}
 }
 
 // --- Discovery implementation ---
