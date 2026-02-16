@@ -252,5 +252,47 @@ func (s *Storage) setHeaders(req *http.Request) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", s.secretKey))
 }
 
+// SignedURL returns a pre-signed URL valid for the specified duration.
+func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	u := fmt.Sprintf("%s/object/sign/%s/%s", s.baseURL, s.bucket, path)
+
+	body := fmt.Sprintf(`{"expiresIn": %d}`, int(expiry.Seconds()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(body))
+	if err != nil {
+		return "", fmt.Errorf("storage: supabase create sign request: %w", err)
+	}
+	s.setHeaders(req)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("storage: supabase sign request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("storage: supabase sign failed (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		SignedURL string `json:"signedURL"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("storage: supabase decode sign response: %w", err)
+	}
+
+	if result.SignedURL == "" {
+		return "", fmt.Errorf("storage: supabase sign returned empty URL")
+	}
+
+	// The signedURL from Supabase is a relative path, prepend the base URL.
+	if !strings.HasPrefix(result.SignedURL, "http") {
+		return s.baseURL + result.SignedURL, nil
+	}
+	return result.SignedURL, nil
+}
+
 // compile-time check
 var _ storage.Storage = (*Storage)(nil)
+var _ storage.SignedURLProvider = (*Storage)(nil)
