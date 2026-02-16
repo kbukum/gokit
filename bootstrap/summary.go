@@ -370,9 +370,12 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 		{label: "service", icon: "⚙️"},
 		{label: "repository", icon: "📁"},
 		{label: "handler", icon: "🎯"},
+		{label: "client", icon: "🔌"},
+		{label: "producer", icon: "📤"},
+		{label: "consumer", icon: "📥"},
 	}
 
-	var other []di.RegistrationInfo
+	var infra []di.RegistrationInfo
 
 	// Sort for deterministic output
 	sort.Slice(regs, func(i, j int) bool {
@@ -389,7 +392,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 			}
 		}
 		if !matched {
-			other = append(other, reg)
+			infra = append(infra, reg)
 		}
 	}
 
@@ -406,43 +409,56 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 	}
 
 	fmt.Printf("\n\033[1m📦 DI Container (%d registrations)\033[0m\n", len(regs))
-	displayIdx := 0
+
+	// Count total displayable groups
 	totalGroups := 0
 	for _, g := range groups {
 		if len(g.items) > 0 {
 			totalGroups++
 		}
 	}
-	if len(other) > 0 {
+	if len(infra) > 0 {
 		totalGroups++
 	}
 
+	displayIdx := 0
 	for _, g := range groups {
 		if len(g.items) == 0 {
 			continue
 		}
 		displayIdx++
-		prefix := treePrefix(displayIdx-1, totalGroups)
-		names := make([]string, 0, len(g.items))
-		for _, item := range g.items {
-			name := strings.TrimPrefix(item.Key, g.label+".")
-			mode := ""
-			if item.Mode == di.Lazy && !item.Initialized {
-				mode = " 💤"
-			}
-			names = append(names, name+mode)
+		isLast := displayIdx == totalGroups
+		groupPrefix := treePrefix(displayIdx-1, totalGroups)
+		// continuation line: "│   " if not last group, "    " if last
+		cont := "│"
+		if isLast {
+			cont = " "
 		}
-		fmt.Printf("   %s %s %ss: %s\n", prefix, g.icon, g.label, strings.Join(names, ", "))
+
+		fmt.Printf("   %s %s %ss (%d)\n", groupPrefix, g.icon, g.label, len(g.items))
+		for j, item := range g.items {
+			name := strings.TrimPrefix(item.Key, g.label+".")
+			status := "✅"
+			if item.Mode == di.Lazy && !item.Initialized {
+				status = "💤"
+			}
+			itemPrefix := treePrefix(j, len(g.items))
+			fmt.Printf("   %s   %s %s %s\n", cont, itemPrefix, status, name)
+		}
 	}
 
-	if len(other) > 0 {
+	if len(infra) > 0 {
 		displayIdx++
-		prefix := treePrefix(displayIdx-1, totalGroups)
-		names := make([]string, 0, len(other))
-		for _, item := range other {
-			names = append(names, item.Key)
+		groupPrefix := treePrefix(displayIdx-1, totalGroups)
+		fmt.Printf("   %s 🔧 infrastructure (%d)\n", groupPrefix, len(infra))
+		for j, item := range infra {
+			status := "✅"
+			if item.Mode == di.Lazy && !item.Initialized {
+				status = "💤"
+			}
+			itemPrefix := treePrefix(j, len(infra))
+			fmt.Printf("      %s %s %s\n", itemPrefix, status, item.Key)
 		}
-		fmt.Printf("   %s 📋 other: %s\n", prefix, strings.Join(names, ", "))
 	}
 }
 
