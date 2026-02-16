@@ -17,13 +17,18 @@ type Provider struct {
 	mu     sync.RWMutex
 	client *api.Client
 	cfg    discovery.Config
+	consul *Config
 	log    *logger.Logger
 	stats  discovery.RegistryStats
 }
 
 func init() {
-	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
-		p, err := NewProvider(cfg, log)
+	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, providerCfg any, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+		consulCfg, ok := providerCfg.(*Config)
+		if !ok {
+			return nil, nil, fmt.Errorf("consul provider requires *consul.Config, got %T", providerCfg)
+		}
+		p, err := NewProvider(cfg, consulCfg, log)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -32,13 +37,45 @@ func init() {
 }
 
 // NewProvider creates a Provider from the given Config.
-func NewProvider(cfg discovery.Config, log *logger.Logger) (*Provider, error) {
+func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*Provider, error) {
+	consulCfg.ApplyDefaults()
+	if err := consulCfg.Validate(); err != nil {
+		return nil, fmt.Errorf("consul config: %w", err)
+	}
+
 	apiCfg := api.DefaultConfig()
-	apiCfg.Address = cfg.ConsulAddr
-	apiCfg.Scheme = cfg.ConsulScheme
-	apiCfg.Token = cfg.ConsulToken
-	if cfg.ConsulDatacenter != "" {
-		apiCfg.Datacenter = cfg.ConsulDatacenter
+	apiCfg.Address = consulCfg.Address
+	apiCfg.Scheme = consulCfg.Scheme
+	apiCfg.Token = consulCfg.Token
+	if consulCfg.Datacenter != "" {
+		apiCfg.Datacenter = consulCfg.Datacenter
+	}
+
+	// Apply TLS settings
+	if consulCfg.TLS != nil && consulCfg.TLS.Enabled {
+		apiCfg.TLSConfig = api.TLSConfig{
+			Address:            consulCfg.TLS.ServerName,
+			CAFile:             consulCfg.TLS.CACert,
+			CAPath:             consulCfg.TLS.CAPath,
+			CertFile:           consulCfg.TLS.ClientCert,
+			KeyFile:            consulCfg.TLS.ClientKey,
+			InsecureSkipVerify: consulCfg.TLS.InsecureSkipVerify,
+		}
+	}
+
+	// Apply transport/pool settings
+	if consulCfg.Pool != nil {
+		transport := apiCfg.Transport
+		if transport == nil {
+			transport = api.DefaultConfig().Transport
+		}
+		if transport != nil {
+			transport.MaxIdleConns = consulCfg.Pool.MaxIdleConns
+			transport.MaxIdleConnsPerHost = consulCfg.Pool.MaxIdleConnsPerHost
+			transport.MaxConnsPerHost = consulCfg.Pool.MaxConnsPerHost
+			transport.IdleConnTimeout = consulCfg.Pool.IdleConnTimeout
+			apiCfg.Transport = transport
+		}
 	}
 
 	client, err := api.NewClient(apiCfg)
@@ -49,6 +86,7 @@ func NewProvider(cfg discovery.Config, log *logger.Logger) (*Provider, error) {
 	return &Provider{
 		client: client,
 		cfg:    cfg,
+		consul: consulCfg,
 		log:    log,
 	}, nil
 }
@@ -242,30 +280,30 @@ func serviceEntryToInstance(e *api.ServiceEntry, now time.Time) discovery.Servic
 // buildHealthCheck creates the appropriate Consul health check based on config.
 func (c *Provider) buildHealthCheck(service *discovery.ServiceInfo) *api.AgentServiceCheck {
 	check := &api.AgentServiceCheck{
-		Interval:                       c.cfg.HealthCheckInterval,
-		Timeout:                        c.cfg.HealthCheckTimeout,
-		DeregisterCriticalServiceAfter: c.cfg.DeregisterAfter,
+		Interval:                       c.cfg.Health.Interval,
+		Timeout:                        c.cfg.Health.Timeout,
+		DeregisterCriticalServiceAfter: c.cfg.Health.DeregisterAfter,
 	}
 
 	addr := fmt.Sprintf("%s:%d", service.Address, service.Port)
 
-	switch c.cfg.HealthCheckType {
+	switch c.cfg.Health.Type {
 	case discovery.HealthCheckGRPC:
 		check.GRPC = addr
-		check.GRPCUseTLS = c.cfg.ConsulScheme == "https"
+		check.GRPCUseTLS = c.consul.Scheme == "https"
 	case discovery.HealthCheckTCP:
 		check.TCP = addr
 	case discovery.HealthCheckTTL:
-		check.TTL = c.cfg.HealthCheckInterval
+		check.TTL = c.cfg.Health.Interval
 		// Remove interval/timeout for TTL checks (Consul doesn't poll)
 		check.Interval = ""
 		check.Timeout = ""
 	default: // "http"
-		scheme := c.cfg.ConsulScheme
+		scheme := c.consul.Scheme
 		if scheme == "" {
 			scheme = "http"
 		}
-		check.HTTP = fmt.Sprintf("%s://%s:%d%s", scheme, service.Address, service.Port, c.cfg.HealthCheckPath)
+		check.HTTP = fmt.Sprintf("%s://%s:%d%s", scheme, service.Address, service.Port, c.cfg.Health.Path)
 	}
 
 	return check

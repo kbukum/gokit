@@ -10,7 +10,9 @@ import (
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
-type ProviderFactory func(cfg Config, log *logger.Logger) (Registry, Discovery, error)
+// providerCfg holds provider-specific configuration (e.g., *consul.Config).
+// Providers should type-assert providerCfg to their own config type.
+type ProviderFactory func(cfg Config, providerCfg any, log *logger.Logger) (Registry, Discovery, error)
 
 var providerFactories = make(map[string]ProviderFactory)
 
@@ -24,18 +26,21 @@ func RegisterProviderFactory(name string, f ProviderFactory) {
 // Component wraps a Registry and Discovery pair and implements
 // component.Component for lifecycle management.
 type Component struct {
-	registry  Registry
-	discovery Discovery
-	client    *Client
-	cfg       Config
-	log       *logger.Logger
+	registry    Registry
+	discovery   Discovery
+	client      *Client
+	cfg         Config
+	providerCfg any
+	log         *logger.Logger
 }
 
 // NewComponent creates a discovery Component for use with the component registry.
-func NewComponent(cfg Config, log *logger.Logger) *Component {
+// providerCfg holds provider-specific configuration (e.g., *consul.Config for Consul).
+func NewComponent(cfg Config, providerCfg any, log *logger.Logger) *Component {
 	return &Component{
-		cfg: cfg,
-		log: log.WithComponent("discovery"),
+		cfg:         cfg,
+		providerCfg: providerCfg,
+		log:         log.WithComponent("discovery"),
 	}
 }
 
@@ -65,7 +70,7 @@ func (c *Component) Start(ctx context.Context) error {
 		if !ok {
 			return fmt.Errorf("discovery: static provider not registered")
 		}
-		reg, disc, err := f(c.cfg, c.log)
+		reg, disc, err := f(c.cfg, c.providerCfg, c.log)
 		if err != nil {
 			return fmt.Errorf("discovery start: %w", err)
 		}
@@ -84,7 +89,7 @@ func (c *Component) Start(ctx context.Context) error {
 		return fmt.Errorf("unsupported discovery provider %q (not registered)", c.cfg.Provider)
 	}
 
-	reg, disc, err := f(c.cfg, c.log)
+	reg, disc, err := f(c.cfg, c.providerCfg, c.log)
 	if err != nil {
 		return fmt.Errorf("discovery start: %w", err)
 	}
@@ -93,7 +98,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	// Auto-register self for providers that support it.
 	if c.cfg.Provider == "consul" {
-		addr := c.cfg.ServiceAddress
+		addr := c.cfg.Registration.ServiceAddress
 		if addr == "" {
 			ip, err := getLocalIP()
 			if err != nil {
@@ -103,12 +108,12 @@ func (c *Component) Start(ctx context.Context) error {
 		}
 
 		svc := &ServiceInfo{
-			ID:       c.cfg.ServiceID,
-			Name:     c.cfg.ServiceName,
+			ID:       c.cfg.Registration.ServiceID,
+			Name:     c.cfg.Registration.ServiceName,
 			Address:  addr,
-			Port:     c.cfg.ServicePort,
-			Tags:     c.cfg.Tags,
-			Metadata: c.cfg.Metadata,
+			Port:     c.cfg.Registration.ServicePort,
+			Tags:     c.cfg.Registration.Tags,
+			Metadata: c.cfg.Registration.Metadata,
 		}
 		if err := c.registry.Register(ctx, svc); err != nil {
 			return fmt.Errorf("discovery: register self: %w", err)
@@ -127,8 +132,8 @@ func (c *Component) Start(ctx context.Context) error {
 func (c *Component) Stop(ctx context.Context) error {
 	c.log.Info("discovery component stopping")
 
-	if c.registry != nil && c.cfg.Enabled && c.cfg.ServiceID != "" {
-		if err := c.registry.Deregister(ctx, c.cfg.ServiceID); err != nil {
+	if c.registry != nil && c.cfg.Enabled && c.cfg.Registration.ServiceID != "" {
+		if err := c.registry.Deregister(ctx, c.cfg.Registration.ServiceID); err != nil {
 			c.log.Warn("failed to deregister on stop", map[string]interface{}{
 				"error": err.Error(),
 			})
@@ -181,12 +186,12 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
-	details := fmt.Sprintf("provider=%s service=%s", c.cfg.Provider, c.cfg.ServiceName)
+	details := fmt.Sprintf("provider=%s service=%s", c.cfg.Provider, c.cfg.Registration.ServiceName)
 	return component.Description{
 		Name:    "Discovery",
 		Type:    "discovery",
 		Details: details,
-		Port:    c.cfg.ServicePort,
+		Port:    c.cfg.Registration.ServicePort,
 	}
 }
 

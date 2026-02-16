@@ -13,19 +13,26 @@ type Config struct {
 	// Provider selects the discovery backend: "consul", "static", or "k8s".
 	Provider string `yaml:"provider" mapstructure:"provider"`
 
-	// ConsulAddr is the Consul agent address (host:port).
-	ConsulAddr string `yaml:"consul_addr" mapstructure:"consul_addr"`
+	// Registration holds self-registration settings.
+	Registration RegistrationConfig `yaml:"registration" mapstructure:"registration"`
 
-	// ConsulToken is the Consul ACL token for authentication.
-	ConsulToken string `yaml:"consul_token" mapstructure:"consul_token"`
+	// Health holds health check settings for registered services.
+	Health HealthCheckConfig `yaml:"health" mapstructure:"health"`
 
-	// ConsulScheme is the URI scheme for Consul ("http" or "https").
-	ConsulScheme string `yaml:"consul_scheme" mapstructure:"consul_scheme"`
+	// CacheTTL controls how long discovered endpoints are cached (e.g. "30s").
+	CacheTTL string `yaml:"cache_ttl" mapstructure:"cache_ttl"`
 
-	// ConsulDatacenter is the Consul datacenter name.
-	ConsulDatacenter string `yaml:"consul_datacenter" mapstructure:"consul_datacenter"`
+	// Services lists remote services this application depends on.
+	Services []DiscoveredService `yaml:"services" mapstructure:"services"`
 
-	// --- Registration (self) ---
+	// StaticEndpoints provides endpoints for the static provider or as fallback.
+	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
+}
+
+// RegistrationConfig holds settings for registering this service with a discovery backend.
+type RegistrationConfig struct {
+	// Enabled toggles self-registration.
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
 	// ServiceName is the name used when registering this service.
 	ServiceName string `yaml:"service_name" mapstructure:"service_name"`
@@ -44,35 +51,28 @@ type Config struct {
 
 	// Metadata is arbitrary key-value metadata for the service.
 	Metadata map[string]string `yaml:"metadata" mapstructure:"metadata"`
+}
 
-	// --- Health checks ---
+// HealthCheckConfig holds health check settings for service registration.
+type HealthCheckConfig struct {
+	// Enabled toggles health checks.
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// HealthCheckType is the type of health check: "http", "grpc", "tcp", or "ttl".
+	// Type is the health check type: "http", "grpc", "tcp", or "ttl".
 	// Defaults to "http".
-	HealthCheckType string `yaml:"health_check_type" mapstructure:"health_check_type"`
+	Type string `yaml:"type" mapstructure:"type"`
 
-	// HealthCheckPath is the HTTP path for health checks (e.g. "/healthz").
-	HealthCheckPath string `yaml:"health_check_path" mapstructure:"health_check_path"`
+	// Path is the HTTP path for health checks (e.g. "/healthz").
+	Path string `yaml:"path" mapstructure:"path"`
 
-	// HealthCheckInterval controls how often health is polled (e.g. "10s").
-	HealthCheckInterval string `yaml:"health_check_interval" mapstructure:"health_check_interval"`
+	// Interval controls how often health is polled (e.g. "10s").
+	Interval string `yaml:"interval" mapstructure:"interval"`
 
-	// HealthCheckTimeout is the timeout for a single health check (e.g. "5s").
-	HealthCheckTimeout string `yaml:"health_check_timeout" mapstructure:"health_check_timeout"`
+	// Timeout is the timeout for a single health check (e.g. "5s").
+	Timeout string `yaml:"timeout" mapstructure:"timeout"`
 
 	// DeregisterAfter removes the service after being critical for this duration (e.g. "1m").
 	DeregisterAfter string `yaml:"deregister_after" mapstructure:"deregister_after"`
-
-	// --- Discovery (others) ---
-
-	// CacheTTL controls how long discovered endpoints are cached (e.g. "30s").
-	CacheTTL string `yaml:"cache_ttl" mapstructure:"cache_ttl"`
-
-	// Services lists remote services this application depends on.
-	Services []DiscoveredService `yaml:"services" mapstructure:"services"`
-
-	// StaticEndpoints provides endpoints for the static provider or as fallback.
-	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
 }
 
 // DiscoveredService describes a remote service dependency.
@@ -107,29 +107,33 @@ func (c *Config) ApplyDefaults() {
 	if c.Provider == "" {
 		c.Provider = "static"
 	}
-	if c.ConsulAddr == "" {
-		c.ConsulAddr = "localhost:8500"
+	c.Registration.ApplyDefaults()
+	c.Health.ApplyDefaults()
+}
+
+// ApplyDefaults fills zero-valued RegistrationConfig fields.
+func (r *RegistrationConfig) ApplyDefaults() {
+	if r.ServiceID == "" {
+		r.ServiceID = r.ServiceName
 	}
-	if c.ConsulScheme == "" {
-		c.ConsulScheme = "http"
+}
+
+// ApplyDefaults fills zero-valued HealthCheckConfig fields.
+func (h *HealthCheckConfig) ApplyDefaults() {
+	if h.Type == "" {
+		h.Type = HealthCheckHTTP
 	}
-	if c.ServiceID == "" {
-		c.ServiceID = c.ServiceName
+	if h.Path == "" {
+		h.Path = "/healthz"
 	}
-	if c.HealthCheckType == "" {
-		c.HealthCheckType = HealthCheckHTTP
+	if h.Interval == "" {
+		h.Interval = "10s"
 	}
-	if c.HealthCheckPath == "" {
-		c.HealthCheckPath = "/healthz"
+	if h.Timeout == "" {
+		h.Timeout = "5s"
 	}
-	if c.HealthCheckInterval == "" {
-		c.HealthCheckInterval = "10s"
-	}
-	if c.HealthCheckTimeout == "" {
-		c.HealthCheckTimeout = "5s"
-	}
-	if c.DeregisterAfter == "" {
-		c.DeregisterAfter = "1m"
+	if h.DeregisterAfter == "" {
+		h.DeregisterAfter = "1m"
 	}
 }
 
@@ -138,19 +142,11 @@ func (c *Config) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	switch c.Provider {
-	case "consul", "static", "k8s":
-	default:
-		return fmt.Errorf("unsupported discovery provider %q", c.Provider)
+	if c.Registration.ServiceName == "" {
+		return fmt.Errorf("registration.service_name is required")
 	}
-	if c.Provider == "consul" && c.ConsulAddr == "" {
-		return fmt.Errorf("consul_addr is required when provider is consul")
-	}
-	if c.ServiceName == "" {
-		return fmt.Errorf("service_name is required")
-	}
-	if c.ServicePort <= 0 {
-		return fmt.Errorf("service_port must be > 0")
+	if c.Registration.ServicePort <= 0 {
+		return fmt.Errorf("registration.service_port must be > 0")
 	}
 	return nil
 }

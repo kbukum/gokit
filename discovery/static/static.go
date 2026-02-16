@@ -18,13 +18,13 @@ type Provider struct {
 }
 
 func init() {
-	discovery.RegisterProviderFactory("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	discovery.RegisterProviderFactory("static", func(cfg discovery.Config, _ any, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})
 
 	// k8s uses the static provider as a fallback.
-	discovery.RegisterProviderFactory("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	discovery.RegisterProviderFactory("k8s", func(cfg discovery.Config, _ any, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})
