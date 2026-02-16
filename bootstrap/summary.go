@@ -361,18 +361,19 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 
 	// Group by prefix (service.*, repository.*, handler.*)
 	type group struct {
-		label string
-		icon  string
-		items []di.RegistrationInfo
+		label  string
+		plural string
+		icon   string
+		items  []di.RegistrationInfo
 	}
 
 	groups := []group{
-		{label: "service", icon: "⚙️"},
-		{label: "repository", icon: "📁"},
-		{label: "handler", icon: "🎯"},
-		{label: "client", icon: "🔌"},
-		{label: "producer", icon: "📤"},
-		{label: "consumer", icon: "📥"},
+		{label: "service", plural: "services", icon: "⚙️"},
+		{label: "repository", plural: "repositories", icon: "📁"},
+		{label: "handler", plural: "handlers", icon: "🎯"},
+		{label: "client", plural: "clients", icon: "🔌"},
+		{label: "producer", plural: "producers", icon: "📤"},
+		{label: "consumer", plural: "consumers", icon: "📥"},
 	}
 
 	var infra []di.RegistrationInfo
@@ -435,7 +436,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 			cont = " "
 		}
 
-		fmt.Printf("   %s %s %ss (%d)\n", groupPrefix, g.icon, g.label, len(g.items))
+		fmt.Printf("   %s %s %s (%d)\n", groupPrefix, g.icon, g.plural, len(g.items))
 		for j, item := range g.items {
 			name := strings.TrimPrefix(item.Key, g.label+".")
 			status := "✅"

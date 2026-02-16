@@ -213,7 +213,7 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 		})
 		return sig
 	case <-ctx.Done():
-		a.Logger.Info("Context cancelled")
+		a.Logger.Info("Context cancelled — shutting down")
 		return nil
 	}
 }
@@ -232,27 +232,34 @@ func (a *App[C]) stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
 	defer cancel()
 
+	var shutdownErr error
+
 	// Run OnStop hooks before stopping components
 	if err := runHooks(ctx, a.onStop); err != nil {
 		a.Logger.Error("OnStop hook error", map[string]interface{}{
 			"error": err.Error(),
 		})
+		shutdownErr = err
 	}
 
+	// Stop all components (reverse order)
 	if err := a.Components.StopAll(ctx); err != nil {
 		a.Logger.Error("Shutdown completed with errors", map[string]interface{}{
 			"error": err.Error(),
 		})
-		return err
+		shutdownErr = err
 	}
 
+	// Close DI container (lazy components only — singletons are component-managed)
 	if err := a.Container.Close(); err != nil {
 		a.Logger.Error("DI container close error", map[string]interface{}{
 			"error": err.Error(),
 		})
-		return err
+		if shutdownErr == nil {
+			shutdownErr = err
+		}
 	}
 
 	a.Logger.Info("Application shutdown complete")
-	return nil
+	return shutdownErr
 }

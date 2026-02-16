@@ -360,7 +360,7 @@ func (c *UnifiedContainer) Close() error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// Close all initialized components that implement closer
+	// Close all initialized lazy components that implement closer
 	for _, registration := range c.components {
 		if registration.initialized && registration.instance != nil {
 			if closer, ok := registration.instance.(interface{ Close() error }); ok {
@@ -369,8 +369,11 @@ func (c *UnifiedContainer) Close() error {
 		}
 	}
 
-	// Close singletons
+	// Close singletons that implement closer
 	for _, singleton := range c.singletons {
+		if singleton == nil {
+			continue
+		}
 		if closer, ok := singleton.(interface{ Close() error }); ok {
 			closer.Close()
 		}
