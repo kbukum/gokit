@@ -211,4 +211,4 @@ make tidy     # go mod tidy for core + all sub-modules
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2024 SkillSense Lab
+[MIT](LICENSE) — Copyright (c) 2024 kbukum
