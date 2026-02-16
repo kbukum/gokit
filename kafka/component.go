@@ -3,7 +3,11 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
+	"time"
+
+	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/skillsenselab/gokit/component"
 	"github.com/skillsenselab/gokit/logger"
@@ -129,7 +133,16 @@ func (c *Component) Stop(_ context.Context) error {
 	return nil
 }
 
-// Health checks broker connectivity by dialling the first broker.
+// BrokerHealth represents individual broker health status.
+type BrokerHealth struct {
+	Address string        `json:"address"`
+	Status  string        `json:"status"` // "healthy", "unhealthy", "degraded"
+	Error   string        `json:"error,omitempty"`
+	Latency time.Duration `json:"latency"`
+}
+
+// Health checks broker connectivity by dialling all configured brokers.
+// Returns degraded status when some (but not all) brokers are unreachable.
 func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	c.mu.Lock()
 	running := c.running
@@ -161,28 +174,61 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 		}
 	}
 
-	conn, err := dialer.DialContext(ctx, "tcp", cfg.Brokers[0])
-	if err != nil {
+	healthy := 0
+	var issues []string
+	for _, broker := range cfg.Brokers {
+		bh := c.checkBroker(ctx, dialer, broker)
+		if bh.Status == "healthy" {
+			healthy++
+		} else if bh.Error != "" {
+			issues = append(issues, fmt.Sprintf("%s: %s", bh.Address, bh.Error))
+		}
+	}
+
+	total := len(cfg.Brokers)
+	switch {
+	case healthy == total:
+		return component.ComponentHealth{
+			Name:   c.Name(),
+			Status: component.StatusHealthy,
+		}
+	case healthy > 0:
+		return component.ComponentHealth{
+			Name:    c.Name(),
+			Status:  component.StatusDegraded,
+			Message: fmt.Sprintf("%d/%d brokers healthy; %s", healthy, total, strings.Join(issues, "; ")),
+		}
+	default:
 		return component.ComponentHealth{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
-			Message: fmt.Sprintf("broker unreachable: %v", err),
+			Message: fmt.Sprintf("no brokers available; %s", strings.Join(issues, "; ")),
 		}
+	}
+}
+
+func (c *Component) checkBroker(ctx context.Context, dialer *kafkago.Dialer, addr string) BrokerHealth {
+	bh := BrokerHealth{Address: addr}
+	start := time.Now()
+
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		bh.Status = "unhealthy"
+		bh.Error = err.Error()
+		bh.Latency = time.Since(start)
+		return bh
 	}
 	defer conn.Close()
 
 	if _, err := conn.Brokers(); err != nil {
-		return component.ComponentHealth{
-			Name:    c.Name(),
-			Status:  component.StatusDegraded,
-			Message: fmt.Sprintf("broker metadata: %v", err),
-		}
+		bh.Status = "degraded"
+		bh.Error = err.Error()
+	} else {
+		bh.Status = "healthy"
 	}
 
-	return component.ComponentHealth{
-		Name:   c.Name(),
-		Status: component.StatusHealthy,
-	}
+	bh.Latency = time.Since(start)
+	return bh
 }
 
 // Describe returns infrastructure summary info for the bootstrap display.

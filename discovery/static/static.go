@@ -52,7 +52,7 @@ func NewProvider(endpoints []discovery.StaticEndpoint) *Provider {
 		if inst.Weight <= 0 {
 			inst.Weight = 1
 		}
-		if ep.Healthy == false && ep.Address != "" {
+		if !ep.Healthy && ep.Address != "" {
 			inst.Health = discovery.HealthUnhealthy
 		}
 		// Ensure protocol is in tags for backward compatibility
