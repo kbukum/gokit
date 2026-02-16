@@ -159,19 +159,23 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 		}
 	}
 
-	// Quick smoke-test: try to discover our own service.
-	_, err := c.discovery.Discover(ctx, c.cfg.ServiceName)
-	if err != nil {
-		return component.ComponentHealth{
-			Name:    c.Name(),
-			Status:  component.StatusDegraded,
-			Message: fmt.Sprintf("self-discover failed: %v", err),
+	// Verify registration succeeded via local stats (avoids Consul health-check
+	// propagation race where the service is registered but Consul hasn't yet
+	// polled the /health endpoint, making self-discover fail).
+	if c.registry != nil {
+		stats := c.registry.Stats()
+		if stats.RegisteredServices > 0 {
+			return component.ComponentHealth{
+				Name:   c.Name(),
+				Status: component.StatusHealthy,
+			}
 		}
 	}
 
 	return component.ComponentHealth{
-		Name:   c.Name(),
-		Status: component.StatusHealthy,
+		Name:    c.Name(),
+		Status:  component.StatusDegraded,
+		Message: "no services registered",
 	}
 }
 
