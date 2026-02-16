@@ -93,9 +93,9 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
-	details := fmt.Sprintf("pool=%d/%d", c.cfg.MaxOpenConns, c.cfg.MaxIdleConns)
+	details := fmt.Sprintf("Driver: %s, MaxConns: %d", c.cfg.Driver, c.cfg.MaxOpenConns)
 	if c.cfg.AutoMigrate {
-		details += " auto-migrate=on"
+		details += ", auto-migrate=on"
 	}
 	return component.Description{
 		Name:    "Database",

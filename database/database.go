@@ -1,10 +1,13 @@
-// Package database provides a PostgreSQL database wrapper built on GORM
+// Package database provides a database wrapper built on GORM
 // with connection pooling, health checks, transactions, and auto-migration.
+// Supports PostgreSQL, MySQL, and SQLite drivers.
 package database
 
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -19,6 +22,8 @@ type DB struct {
 	GormDB *gorm.DB
 	log    *logger.Logger
 	cfg    Config
+	closed bool
+	mu     sync.Mutex
 }
 
 // New opens a PostgreSQL connection with retry logic and connection pooling.
@@ -27,7 +32,7 @@ func New(cfg Config, log *logger.Logger) (*DB, error) {
 	return NewWithContext(context.Background(), cfg, log)
 }
 
-// NewWithContext opens a PostgreSQL connection with context-aware retry logic.
+// NewWithContext opens a database connection with context-aware retry logic.
 func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, error) {
 	cfg.ApplyDefaults()
 
@@ -40,13 +45,18 @@ func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, e
 	}
 
 	slowThreshold, _ := time.ParseDuration(cfg.SlowQueryThreshold) // already validated
+	logLevel := parseLogLevel(cfg.LogLevel)
 
 	gormCfg := &gorm.Config{
-		Logger: newGormLogger(log, slowThreshold),
+		Logger: newGormLogger(log, slowThreshold, logLevel),
+	}
+
+	dialector, err := openDialector(cfg.Driver, cfg.DSN)
+	if err != nil {
+		return nil, err
 	}
 
 	var db *gorm.DB
-	var err error
 
 	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
 		// Check context before each attempt
@@ -54,7 +64,7 @@ func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, e
 			return nil, fmt.Errorf("database connection cancelled: %w", ctx.Err())
 		}
 
-		db, err = gorm.Open(postgres.Open(cfg.DSN), gormCfg)
+		db, err = gorm.Open(dialector, gormCfg)
 		if err == nil {
 			sqlDB, sqlErr := db.DB()
 			if sqlErr != nil {
@@ -96,6 +106,7 @@ func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, e
 			}
 
 			log.Info("Database connection established", map[string]interface{}{
+				"driver":            cfg.Driver,
 				"max_open_conns":    cfg.MaxOpenConns,
 				"max_idle_conns":    cfg.MaxIdleConns,
 				"conn_max_lifetime": cfg.ConnMaxLifetime,
@@ -118,6 +129,16 @@ func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, e
 	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", cfg.MaxRetries, err)
 }
 
+// openDialector returns a GORM dialector for the given driver.
+func openDialector(driver, dsn string) (gorm.Dialector, error) {
+	switch driver {
+	case "postgres", "":
+		return postgres.Open(dsn), nil
+	default:
+		return nil, fmt.Errorf("unsupported database driver %q", driver)
+	}
+}
+
 // contextSleep waits for the given duration or until context is cancelled.
 func contextSleep(ctx context.Context, d time.Duration) error {
 	select {
@@ -128,13 +149,21 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// Close closes the underlying sql.DB connection pool.
+// Close closes the underlying sql.DB connection pool. Safe to call multiple times.
 func (d *DB) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.closed {
+		return nil
+	}
+
 	sqlDB, err := d.GormDB.DB()
 	if err != nil {
 		return err
 	}
 	d.log.Info("Closing database connection")
+	d.closed = true
 	return sqlDB.Close()
 }
 
@@ -226,16 +255,30 @@ func (d *DB) WithReadOnlyTransaction(ctx context.Context, fn TransactionFunc) er
 
 // --- GORM logger adapter ---
 
+// parseLogLevel converts a string log level to GORM's LogLevel.
+func parseLogLevel(level string) gormlogger.LogLevel {
+	switch strings.ToLower(level) {
+	case "silent":
+		return gormlogger.Silent
+	case "error":
+		return gormlogger.Error
+	case "warn":
+		return gormlogger.Warn
+	default:
+		return gormlogger.Info
+	}
+}
+
 type gormLoggerAdapter struct {
 	log           *logger.Logger
 	logLevel      gormlogger.LogLevel
 	slowThreshold time.Duration
 }
 
-func newGormLogger(log *logger.Logger, slowThreshold time.Duration) gormlogger.Interface {
+func newGormLogger(log *logger.Logger, slowThreshold time.Duration, logLevel gormlogger.LogLevel) gormlogger.Interface {
 	return &gormLoggerAdapter{
 		log:           log.WithComponent("gorm"),
-		logLevel:      gormlogger.Info,
+		logLevel:      logLevel,
 		slowThreshold: slowThreshold,
 	}
 }
