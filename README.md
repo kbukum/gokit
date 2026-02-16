@@ -82,7 +82,7 @@ import (
 )
 
 type ServiceConfig struct {
-    config.BaseConfig
+    config.ServiceConfig `yaml:",inline" mapstructure:",squash"`
     Port int `yaml:"port"`
 }
 

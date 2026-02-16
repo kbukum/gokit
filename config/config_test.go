@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kbukum/gokit/logger"
 )
 
-func TestBaseConfigApplyDefaults(t *testing.T) {
+func TestServiceConfigApplyDefaults(t *testing.T) {
 	t.Run("empty environment defaults to development", func(t *testing.T) {
-		cfg := BaseConfig{Name: "svc"}
+		cfg := ServiceConfig{Name: "svc"}
 		cfg.ApplyDefaults()
 		if cfg.Environment != "development" {
 			t.Errorf("expected 'development', got %q", cfg.Environment)
@@ -20,7 +22,7 @@ func TestBaseConfigApplyDefaults(t *testing.T) {
 	})
 
 	t.Run("production environment keeps debug false", func(t *testing.T) {
-		cfg := BaseConfig{Name: "svc", Environment: "production"}
+		cfg := ServiceConfig{Name: "svc", Environment: "production"}
 		cfg.ApplyDefaults()
 		if cfg.Debug {
 			t.Error("expected debug=false for production")
@@ -28,7 +30,7 @@ func TestBaseConfigApplyDefaults(t *testing.T) {
 	})
 
 	t.Run("development sets debug true", func(t *testing.T) {
-		cfg := BaseConfig{Name: "svc", Environment: "development"}
+		cfg := ServiceConfig{Name: "svc", Environment: "development"}
 		cfg.ApplyDefaults()
 		if !cfg.Debug {
 			t.Error("expected debug=true for development")
@@ -36,18 +38,18 @@ func TestBaseConfigApplyDefaults(t *testing.T) {
 	})
 }
 
-func TestBaseConfigValidate(t *testing.T) {
+func TestServiceConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
-		cfg     BaseConfig
+		cfg     ServiceConfig
 		wantErr bool
 		errMsg  string
 	}{
-		{"valid development", BaseConfig{Name: "svc", Environment: "development"}, false, ""},
-		{"valid staging", BaseConfig{Name: "svc", Environment: "staging"}, false, ""},
-		{"valid production", BaseConfig{Name: "svc", Environment: "production"}, false, ""},
-		{"missing name", BaseConfig{Environment: "production"}, true, "base.name is required"},
-		{"invalid environment", BaseConfig{Name: "svc", Environment: "invalid"}, true, "base.environment must be one of"},
+		{"valid development", ServiceConfig{Name: "svc", Environment: "development", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
+		{"valid staging", ServiceConfig{Name: "svc", Environment: "staging", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
+		{"valid production", ServiceConfig{Name: "svc", Environment: "production", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
+		{"missing name", ServiceConfig{Environment: "production", Logging: logger.Config{Level: "info", Format: "console"}}, true, "config.name is required"},
+		{"invalid environment", ServiceConfig{Name: "svc", Environment: "invalid", Logging: logger.Config{Level: "info", Format: "console"}}, true, "config.environment must be one of"},
 	}
 
 	for _, tc := range tests {
@@ -82,7 +84,7 @@ base:
 	}
 
 	type TestConfig struct {
-		Base BaseConfig `yaml:"base" mapstructure:"base"`
+		Base ServiceConfig `yaml:"base" mapstructure:"base"`
 	}
 
 	var cfg TestConfig
@@ -101,7 +103,7 @@ base:
 
 func TestLoadConfigMissingFile(t *testing.T) {
 	type TestConfig struct {
-		Base BaseConfig `yaml:"base" mapstructure:"base"`
+		Base ServiceConfig `yaml:"base" mapstructure:"base"`
 	}
 
 	var cfg TestConfig

@@ -13,65 +13,88 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
-// App represents the base application with uniform lifecycle management.
-// It orchestrates component registration, startup, and graceful shutdown
-// without knowing about specific infrastructure modules.
-type App struct {
+// App represents a generic application with uniform lifecycle management.
+// The type parameter C is the config type, which must satisfy the Config interface.
+// Any struct embedding config.ServiceConfig automatically satisfies Config.
+//
+// Example:
+//
+//	app, err := bootstrap.NewApp(&myConfig)
+//	app.OnConfigure(func(ctx context.Context, a *bootstrap.App[*MyConfig]) error {
+//	    // a.Cfg is *MyConfig — fully typed
+//	    return nil
+//	})
+//	app.Run(context.Background())
+type App[C Config] struct {
 	Name       string
 	Version    string
+	Cfg        C
 	Container  di.Container
 	Components *component.Registry
 	Logger     *logger.Logger
 	Summary    *Summary
 
 	gracefulTimeout time.Duration
-	cfg             interface{} // stored config reference
-	onConfigure     []func(ctx context.Context, app *App) error
+	onConfigure     []func(ctx context.Context, app *App[C]) error
 
 	onStart []Hook
 	onReady []Hook
 	onStop  []Hook
 }
 
-// NewApp creates a new application instance with the given name, version, and options.
-func NewApp(name, version string, opts ...Option) *App {
-	app := &App{
-		Name:            name,
-		Version:         version,
+// NewApp creates a new application instance from a typed config.
+// It applies defaults, validates the config, and initializes the logger.
+func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
+
+	base := cfg.GetServiceConfig()
+
+	app := &App[C]{
+		Name:            base.Name,
+		Version:         base.Version,
+		Cfg:             cfg,
 		Container:       di.NewContainer(),
 		Components:      component.NewRegistry(),
-		Logger:          logger.NewDefault(name),
 		gracefulTimeout: 15 * time.Second,
 	}
 
-	for _, opt := range opts {
-		opt(app)
+	// Apply options (may override logger, container, timeout).
+	o := resolveOptions(opts)
+	if o.container != nil {
+		app.Container = o.container
+	}
+	if o.gracefulTimeout != nil {
+		app.gracefulTimeout = *o.gracefulTimeout
 	}
 
-	app.Summary = NewSummary(name, version)
-	return app
+	// Logger: use custom if provided, otherwise init from config.
+	if o.logger != nil {
+		app.Logger = o.logger
+	} else {
+		logger.Init(base.Logging)
+		app.Logger = logger.GetGlobalLogger().WithComponent(base.Name)
+	}
+
+	app.Summary = NewSummary(base.Name, base.Version)
+	return app, nil
 }
 
 // RegisterComponent adds a component to the application's registry.
-func (a *App) RegisterComponent(c component.Component) error {
+func (a *App[C]) RegisterComponent(c component.Component) error {
 	return a.Components.Register(c)
-}
-
-// Config returns the stored config reference set via WithConfig.
-func (a *App) Config() interface{} {
-	return a.cfg
 }
 
 // OnConfigure registers a callback to run during the configure phase.
 // Use this to set up business-layer dependencies after infrastructure is started.
-func (a *App) OnConfigure(fn func(ctx context.Context, app *App) error) {
+func (a *App[C]) OnConfigure(fn func(ctx context.Context, app *App[C]) error) {
 	a.onConfigure = append(a.onConfigure, fn)
 }
 
 // ReadyCheck verifies that all registered components are healthy.
-// Returns nil when every component reports StatusHealthy, or an error
-// describing which components are unhealthy.
-func (a *App) ReadyCheck(ctx context.Context) error {
+func (a *App[C]) ReadyCheck(ctx context.Context) error {
 	results := a.Components.HealthAll(ctx)
 	var unhealthy []string
 	for _, h := range results {
@@ -92,7 +115,7 @@ func (a *App) ReadyCheck(ctx context.Context) error {
 // Run executes the full application lifecycle:
 // Initialize → OnStart hooks → Configure → ReadyCheck → OnReady hooks →
 // Block on signal → OnStop hooks → Graceful Shutdown.
-func (a *App) Run(ctx context.Context) error {
+func (a *App[C]) Run(ctx context.Context) error {
 	start := time.Now()
 
 	a.Logger.Info("Starting application", map[string]interface{}{
@@ -140,7 +163,7 @@ func (a *App) Run(ctx context.Context) error {
 }
 
 // initialize starts all registered components (Phase 1).
-func (a *App) initialize(ctx context.Context) error {
+func (a *App[C]) initialize(ctx context.Context) error {
 	a.Logger.Info("Phase 1: Starting components")
 
 	if err := a.Components.StartAll(ctx); err != nil {
@@ -153,12 +176,12 @@ func (a *App) initialize(ctx context.Context) error {
 
 // DisplaySummary prints the startup summary. It auto-collects infrastructure,
 // routes, and health from the component registry and DI container.
-func (a *App) DisplaySummary() {
+func (a *App[C]) DisplaySummary() {
 	a.Summary.DisplaySummary(a.Components, a.Container, a.Logger)
 }
 
 // configure runs registered configuration callbacks (Phase 2).
-func (a *App) configure(ctx context.Context) error {
+func (a *App[C]) configure(ctx context.Context) error {
 	if len(a.onConfigure) == 0 {
 		return nil
 	}
@@ -178,9 +201,7 @@ func (a *App) configure(ctx context.Context) error {
 }
 
 // WaitForSignal blocks until an OS interrupt/term signal or context cancellation.
-// Returns the received signal, or nil if the context was cancelled.
-// Use this when managing your own lifecycle instead of calling Run().
-func (a *App) WaitForSignal(ctx context.Context) os.Signal {
+func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
@@ -197,14 +218,13 @@ func (a *App) WaitForSignal(ctx context.Context) os.Signal {
 	}
 }
 
-// Shutdown performs graceful shutdown: runs OnStop hooks, stops all components,
-// and closes the DI container. Use this when managing your own lifecycle.
-func (a *App) Shutdown(ctx context.Context) error {
+// Shutdown performs graceful shutdown. Use when managing your own lifecycle.
+func (a *App[C]) Shutdown(ctx context.Context) error {
 	return a.stop()
 }
 
 // stop gracefully shuts down all components within the graceful timeout.
-func (a *App) stop() error {
+func (a *App[C]) stop() error {
 	a.Logger.Info("Shutting down application", map[string]interface{}{
 		"timeout": a.gracefulTimeout.String(),
 	})

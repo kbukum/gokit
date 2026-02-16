@@ -7,8 +7,14 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
 )
+
+// testConfig is a minimal config for testing that satisfies the Config interface.
+type testConfig struct {
+	config.ServiceConfig
+}
 
 // mockComponent implements component.Component for testing.
 type mockComponent struct {
@@ -33,8 +39,22 @@ func (m *mockComponent) Health(ctx context.Context) component.ComponentHealth {
 	return m.health
 }
 
+func newTestConfig(name, version string) *testConfig {
+	return &testConfig{
+		ServiceConfig: config.ServiceConfig{
+			Name:        name,
+			Version:     version,
+			Environment: "development",
+		},
+	}
+}
+
 func TestNewApp(t *testing.T) {
-	app := NewApp("test-svc", "1.0.0")
+	cfg := newTestConfig("test-svc", "1.0.0")
+	app, err := NewApp(cfg)
+	if err != nil {
+		t.Fatalf("NewApp failed: %v", err)
+	}
 	if app == nil {
 		t.Fatal("expected non-nil app")
 	}
@@ -53,14 +73,35 @@ func TestNewApp(t *testing.T) {
 	if app.Logger == nil {
 		t.Error("expected non-nil logger")
 	}
+	// Config is typed
+	if app.Cfg.Name != "test-svc" {
+		t.Errorf("expected cfg.Name 'test-svc', got %q", app.Cfg.Name)
+	}
+}
+
+func TestNewAppValidation(t *testing.T) {
+	cfg := &testConfig{
+		ServiceConfig: config.ServiceConfig{
+			// Name is empty — should fail validation
+			Environment: "development",
+		},
+	}
+	_, err := NewApp(cfg)
+	if err == nil {
+		t.Error("expected error for missing name")
+	}
 }
 
 func TestNewAppWithOptions(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
 	container := di.NewContainer()
-	app := NewApp("test", "1.0",
+	app, err := NewApp(cfg,
 		WithGracefulTimeout(30*time.Second),
 		WithContainer(container),
 	)
+	if err != nil {
+		t.Fatalf("NewApp failed: %v", err)
+	}
 
 	if app.gracefulTimeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", app.gracefulTimeout)
@@ -71,7 +112,8 @@ func TestNewAppWithOptions(t *testing.T) {
 }
 
 func TestRegisterComponent(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	c := &mockComponent{
 		name:   "db",
 		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
@@ -88,7 +130,8 @@ func TestRegisterComponent(t *testing.T) {
 }
 
 func TestRegisterComponentDuplicate(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	c := &mockComponent{name: "db"}
 	app.RegisterComponent(c)
 
@@ -99,7 +142,8 @@ func TestRegisterComponentDuplicate(t *testing.T) {
 }
 
 func TestOnStartHook(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	called := false
 	app.OnStart(func(ctx context.Context) error {
 		called = true
@@ -110,7 +154,6 @@ func TestOnStartHook(t *testing.T) {
 		t.Errorf("expected 1 onStart hook, got %d", len(app.onStart))
 	}
 
-	// Simulate running hooks
 	err := runHooks(context.Background(), app.onStart)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
@@ -121,7 +164,8 @@ func TestOnStartHook(t *testing.T) {
 }
 
 func TestOnReadyHook(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	called := false
 	app.OnReady(func(ctx context.Context) error {
 		called = true
@@ -138,7 +182,8 @@ func TestOnReadyHook(t *testing.T) {
 }
 
 func TestOnStopHook(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	called := false
 	app.OnStop(func(ctx context.Context) error {
 		called = true
@@ -155,7 +200,8 @@ func TestOnStopHook(t *testing.T) {
 }
 
 func TestMultipleHooks(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	order := []string{}
 	app.OnStart(
 		func(ctx context.Context) error { order = append(order, "first"); return nil },
@@ -191,7 +237,8 @@ func TestHookErrorStopsExecution(t *testing.T) {
 }
 
 func TestReadyCheckAllHealthy(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "db",
 		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
@@ -208,7 +255,8 @@ func TestReadyCheckAllHealthy(t *testing.T) {
 }
 
 func TestReadyCheckUnhealthy(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "db",
 		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
@@ -225,7 +273,8 @@ func TestReadyCheckUnhealthy(t *testing.T) {
 }
 
 func TestReadyCheckDegraded(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "svc",
 		health: component.ComponentHealth{Name: "svc", Status: component.StatusDegraded, Message: "slow"},
@@ -238,7 +287,8 @@ func TestReadyCheckDegraded(t *testing.T) {
 }
 
 func TestReadyCheckEmpty(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	err := app.ReadyCheck(context.Background())
 	if err != nil {
 		t.Errorf("expected no error for empty registry, got %v", err)
@@ -246,12 +296,17 @@ func TestReadyCheckEmpty(t *testing.T) {
 }
 
 func TestOnConfigure(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	configured := false
-	app.OnConfigure(func(ctx context.Context, a *App) error {
+	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
 		configured = true
 		if a.Name != "test" {
 			t.Errorf("expected app name 'test' in configure callback, got %q", a.Name)
+		}
+		// Type-safe config access
+		if a.Cfg.Name != "test" {
+			t.Errorf("expected cfg.Name 'test', got %q", a.Cfg.Name)
 		}
 		return nil
 	})
@@ -260,7 +315,6 @@ func TestOnConfigure(t *testing.T) {
 		t.Errorf("expected 1 configure callback, got %d", len(app.onConfigure))
 	}
 
-	// Simulate configure phase
 	for _, fn := range app.onConfigure {
 		if err := fn(context.Background(), app); err != nil {
 			t.Fatalf("configure failed: %v", err)
@@ -272,14 +326,16 @@ func TestOnConfigure(t *testing.T) {
 }
 
 func TestWithGracefulTimeout(t *testing.T) {
-	app := NewApp("test", "1.0", WithGracefulTimeout(5*time.Second))
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg, WithGracefulTimeout(5*time.Second))
 	if app.gracefulTimeout != 5*time.Second {
 		t.Errorf("expected 5s, got %v", app.gracefulTimeout)
 	}
 }
 
 func TestDefaultGracefulTimeout(t *testing.T) {
-	app := NewApp("test", "1.0")
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	if app.gracefulTimeout != 15*time.Second {
 		t.Errorf("expected default 15s, got %v", app.gracefulTimeout)
 	}

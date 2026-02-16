@@ -19,9 +19,9 @@ import (
 )
 
 type AppConfig struct {
-    config.BaseConfig `yaml:",inline" mapstructure:",squash"`
-    Port              int    `yaml:"port" mapstructure:"port"`
-    DatabaseURL       string `yaml:"database_url" mapstructure:"database_url"`
+    config.ServiceConfig `yaml:",inline" mapstructure:",squash"`
+    Port                 int    `yaml:"port" mapstructure:"port"`
+    DatabaseURL          string `yaml:"database_url" mapstructure:"database_url"`
 }
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 
 | Name | Description |
 |------|-------------|
-| `BaseConfig` | Common fields: Name, Environment, Version, Debug |
+| `ServiceConfig` | Common fields: Name, Environment, Version, Debug, Logging |
 | `LoadConfig()` | Load config from YAML + env with auto-resolution |
 | `ConfigResolver` | Resolves config and .env file paths |
 | `WithConfigFile()` | Option to specify config file path |

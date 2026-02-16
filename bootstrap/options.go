@@ -3,55 +3,48 @@ package bootstrap
 import (
 	"time"
 
-	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
 	"github.com/kbukum/gokit/logger"
 )
 
-// Option is a functional option for configuring an App.
-type Option func(*App)
+// Option configures the App during creation.
+// Options are non-generic so they can be used with any config type.
+type Option func(*appOptions)
+
+// appOptions collects all option values before applying to App.
+type appOptions struct {
+	logger          *logger.Logger
+	container       di.Container
+	gracefulTimeout *time.Duration
+}
+
+// resolveOptions applies all options and returns the collected values.
+func resolveOptions(opts []Option) *appOptions {
+	o := &appOptions{}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
 
 // WithLogger sets a custom logger for the application.
+// If not set, the logger is auto-initialized from the config's Logging field.
 func WithLogger(l *logger.Logger) Option {
-	return func(a *App) {
-		a.Logger = l
+	return func(o *appOptions) {
+		o.logger = l
 	}
 }
 
 // WithGracefulTimeout sets the maximum duration for graceful shutdown.
 func WithGracefulTimeout(d time.Duration) Option {
-	return func(a *App) {
-		a.gracefulTimeout = d
+	return func(o *appOptions) {
+		o.gracefulTimeout = &d
 	}
 }
 
 // WithContainer sets a custom DI container for the application.
 func WithContainer(c di.Container) Option {
-	return func(a *App) {
-		a.Container = c
-	}
-}
-
-// WithConfig loads configuration from YAML/env into the provided struct.
-// Use this when you want App to own config loading instead of doing it in main.go.
-func WithConfig(cfg interface{}, opts ...config.LoaderOption) Option {
-	return func(a *App) {
-		if err := config.LoadConfig(a.Name, cfg, opts...); err != nil {
-			a.Logger.Error("Failed to load config", map[string]interface{}{
-				"error": err.Error(),
-			})
-			return
-		}
-		a.cfg = cfg
-	}
-}
-
-// WithLogging initializes the global logger from the given config.
-// Use this when you want App to own logger initialization instead of doing it in main.go.
-func WithLogging(cfg logger.Config) Option {
-	return func(a *App) {
-		cfg.ApplyDefaults()
-		logger.Init(cfg)
-		a.Logger = logger.GetGlobalLogger().WithComponent(a.Name)
+	return func(o *appOptions) {
+		o.container = c
 	}
 }
