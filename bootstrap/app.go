@@ -208,7 +208,7 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 
 	select {
 	case sig := <-sigCh:
-		a.Logger.Info("Received shutdown signal", map[string]interface{}{
+		a.Logger.Info("Received shutdown signal — graceful shutdown starting", map[string]interface{}{
 			"signal": sig.String(),
 		})
 		return sig
