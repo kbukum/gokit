@@ -22,6 +22,7 @@ type ServiceInstance struct {
 	Tags     []string
 	Metadata map[string]string
 	Health   HealthStatus
+	Weight   int
 	LastSeen time.Time
 }
 
