@@ -35,7 +35,13 @@ var _ component.Component = (*Component)(nil)
 func (c *Component) Name() string { return "redis" }
 
 // Start initializes the Redis client and verifies connectivity.
+// If Addr is empty, the component starts in a no-op state (useful when Redis is optional).
 func (c *Component) Start(ctx context.Context) error {
+	if c.cfg.Addr == "" {
+		c.log.Info("Redis address not configured, skipping")
+		return nil
+	}
+
 	client, err := New(c.cfg, c.log)
 	if err != nil {
 		return fmt.Errorf("redis start: %w", err)
@@ -89,6 +95,6 @@ func (c *Component) Describe() component.Description {
 	return component.Description{
 		Name:    "Redis",
 		Type:    "redis",
-		Details: fmt.Sprintf("%s db=%d pool=%d", c.cfg.Addr, c.cfg.DB, c.cfg.PoolSize),
+		Details: fmt.Sprintf("Addr: %s", c.cfg.Addr),
 	}
 }

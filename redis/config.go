@@ -25,6 +25,15 @@ type Config struct {
 	// MinIdleConns is the minimum number of idle connections.
 	MinIdleConns int `mapstructure:"min_idle_conns"`
 
+	// MaxRetries is the maximum number of retries before giving up (0 = default 3).
+	MaxRetries int `mapstructure:"max_retries"`
+
+	// MinRetryBackoff is the minimum backoff between retries (e.g. "8ms").
+	MinRetryBackoff string `mapstructure:"min_retry_backoff"`
+
+	// MaxRetryBackoff is the maximum backoff between retries (e.g. "512ms").
+	MaxRetryBackoff string `mapstructure:"max_retry_backoff"`
+
 	// DialTimeout is the timeout for establishing new connections (e.g. "5s").
 	DialTimeout string `mapstructure:"dial_timeout"`
 
@@ -33,18 +42,33 @@ type Config struct {
 
 	// WriteTimeout is the timeout for socket writes (e.g. "3s").
 	WriteTimeout string `mapstructure:"write_timeout"`
+
+	// ConnMaxIdleTime is the maximum time a connection may sit idle before being closed (e.g. "5m").
+	ConnMaxIdleTime string `mapstructure:"idle_timeout"`
+
+	// PoolTimeout is the amount of time the client waits for a connection from the pool (e.g. "4s").
+	PoolTimeout string `mapstructure:"pool_timeout"`
+
+	// ConnMaxLifetime is the maximum time a connection may be reused (e.g. "30m"). 0 means no limit.
+	ConnMaxLifetime string `mapstructure:"max_conn_age"`
 }
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.
 func (c *Config) ApplyDefaults() {
-	if c.Addr == "" {
-		c.Addr = "localhost:6379"
-	}
 	if c.PoolSize <= 0 {
 		c.PoolSize = 10
 	}
 	if c.MinIdleConns <= 0 {
 		c.MinIdleConns = 2
+	}
+	if c.MaxRetries <= 0 {
+		c.MaxRetries = 3
+	}
+	if c.MinRetryBackoff == "" {
+		c.MinRetryBackoff = "8ms"
+	}
+	if c.MaxRetryBackoff == "" {
+		c.MaxRetryBackoff = "512ms"
 	}
 	if c.DialTimeout == "" {
 		c.DialTimeout = "5s"
