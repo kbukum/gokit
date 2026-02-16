@@ -207,14 +207,35 @@ func serviceEntryToInstance(e *api.ServiceEntry, now time.Time) discovery.Servic
 			break
 		}
 	}
+
+	// Determine protocol from metadata or tags
+	protocol := ""
+	if meta, ok := e.Service.Meta["protocol"]; ok {
+		protocol = meta
+	} else {
+		for _, tag := range e.Service.Tags {
+			if tag == "http" || tag == "grpc" || tag == "websocket" {
+				protocol = tag
+				break
+			}
+		}
+	}
+
+	weight := 0
+	if w, ok := e.Service.Meta["weight"]; ok {
+		fmt.Sscanf(w, "%d", &weight)
+	}
+
 	return discovery.ServiceInstance{
 		ID:       e.Service.ID,
 		Name:     e.Service.Service,
 		Address:  e.Service.Address,
 		Port:     e.Service.Port,
+		Protocol: protocol,
 		Tags:     e.Service.Tags,
 		Metadata: e.Service.Meta,
 		Health:   health,
+		Weight:   weight,
 		LastSeen: now,
 	}
 }

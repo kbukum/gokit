@@ -19,12 +19,17 @@ type ServiceInstance struct {
 	Name     string
 	Address  string
 	Port     int
+	Protocol string
 	Tags     []string
 	Metadata map[string]string
 	Health   HealthStatus
 	Weight   int
 	LastSeen time.Time
 }
+
+// Endpoint is an alias for ServiceInstance, providing a shorter name
+// for callers that prefer endpoint-oriented terminology.
+type Endpoint = ServiceInstance
 
 // HealthStatus represents endpoint health.
 type HealthStatus string

@@ -53,8 +53,12 @@ func NewClient(disc Discovery, cfg ClientConfig, log *logger.Logger) *Client {
 }
 
 // Discover returns all healthy instances of a service, using cache when fresh.
-func (c *Client) Discover(ctx context.Context, serviceName string) ([]ServiceInstance, error) {
+// Optional protocol parameter filters results by protocol tag.
+func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...string) ([]ServiceInstance, error) {
 	if instances := c.cache.get(serviceName); instances != nil {
+		if len(protocol) > 0 && protocol[0] != "" {
+			return filterByProtocol(instances, protocol[0]), nil
+		}
 		return instances, nil
 	}
 
@@ -68,6 +72,10 @@ func (c *Client) Discover(ctx context.Context, serviceName string) ([]ServiceIns
 	}
 
 	c.cache.set(serviceName, instances)
+
+	if len(protocol) > 0 && protocol[0] != "" {
+		return filterByProtocol(instances, protocol[0]), nil
+	}
 	return instances, nil
 }
 
@@ -168,6 +176,12 @@ func filterByProtocol(instances []ServiceInstance, protocol string) []ServiceIns
 	protocolLower := strings.ToLower(protocol)
 	tag := "protocol:" + protocolLower
 	for _, inst := range instances {
+		// Match on Protocol field first
+		if strings.EqualFold(inst.Protocol, protocol) {
+			filtered = append(filtered, inst)
+			continue
+		}
+		// Fall back to tag matching
 		for _, t := range inst.Tags {
 			tl := strings.ToLower(t)
 			if tl == tag || tl == protocolLower {
@@ -233,3 +247,6 @@ func (c *instanceCache) clear() {
 	defer c.mu.Unlock()
 	c.entries = make(map[string]cacheEntry)
 }
+
+// Compile-time check that Client implements DiscoveryClient.
+var _ DiscoveryClient = (*Client)(nil)
