@@ -10,6 +10,7 @@ import (
 
 	grpccfg "github.com/skillsenselab/gokit/grpc"
 	"github.com/skillsenselab/gokit/grpc/interceptor"
+	"github.com/skillsenselab/gokit/logger"
 )
 
 // ClientOptionsBuilder constructs gRPC dial options from configuration.
@@ -132,7 +133,8 @@ func (b *ClientOptionsBuilder) buildUnaryInterceptors() []grpc.UnaryClientInterc
 		interceptors = append(interceptors, interceptor.UnaryClientTimeoutInterceptor(b.config.CallTimeout))
 	}
 	if b.enableLogging {
-		interceptors = append(interceptors, interceptor.UnaryClientLoggingInterceptor())
+		log := logger.NewDefault("grpc-client")
+		interceptors = append(interceptors, interceptor.UnaryClientLoggingInterceptor(log))
 	}
 	interceptors = append(interceptors, b.customInterceptors...)
 	return interceptors
@@ -141,7 +143,8 @@ func (b *ClientOptionsBuilder) buildUnaryInterceptors() []grpc.UnaryClientInterc
 func (b *ClientOptionsBuilder) buildStreamInterceptors() []grpc.StreamClientInterceptor {
 	var interceptors []grpc.StreamClientInterceptor
 	if b.enableLogging {
-		interceptors = append(interceptors, interceptor.StreamClientLoggingInterceptor())
+		log := logger.NewDefault("grpc-client")
+		interceptors = append(interceptors, interceptor.StreamClientLoggingInterceptor(log))
 	}
 	interceptors = append(interceptors, b.streamInterceptors...)
 	return interceptors
