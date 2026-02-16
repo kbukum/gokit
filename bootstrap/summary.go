@@ -180,12 +180,12 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Header
 	fmt.Printf("\n")
-	fmt.Printf("🚀 %s v%s started in %.2fs\n\n",
+	fmt.Printf("🚀 \033[1;32m%s\033[0m \033[1;36mv%s\033[0m started in \033[33m%.2fs\033[0m\n\n",
 		s.serviceName, s.version, s.startupDuration.Seconds())
 
 	// Infrastructure (auto-discovered from Describable components + manual entries)
 	if len(s.infrastructure) > 0 {
-		fmt.Printf("📊 Infrastructure\n")
+		fmt.Printf("\033[1m📊 Infrastructure\033[0m\n")
 		for i, inf := range s.infrastructure {
 			prefix := treePrefix(i, len(s.infrastructure))
 			icon := statusIcon(inf.Status, inf.Healthy)
@@ -220,7 +220,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Business layer (manually tracked — project-specific service details)
 	if len(s.business) > 0 {
-		fmt.Printf("\n💼 Business Layer\n")
+		fmt.Printf("\n\033[1m💼 Business Layer\033[0m\n")
 		for i, b := range s.business {
 			prefix := treePrefix(i, len(s.business))
 			fmt.Printf("   %s %s [%s] (%s)\n", prefix, businessIcon(b.Type), b.Name, b.Status)
@@ -243,16 +243,16 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Routes (auto-discovered from RouteProvider components + manual entries)
 	if len(s.routes) > 0 {
-		fmt.Printf("\n🌐 Routes (%d)\n", len(s.routes))
+		fmt.Printf("\n\033[1m🌐 Routes (%d)\033[0m\n", len(s.routes))
 		for i, r := range s.routes {
 			prefix := treePrefix(i, len(s.routes))
-			fmt.Printf("   %s %-7s %s → %s\n", prefix, r.Method, r.Path, r.Handler)
+			fmt.Printf("   %s %s%-7s\033[0m %s → %s\n", prefix, methodColor(r.Method), r.Method, r.Path, r.Handler)
 		}
 	}
 
 	// Consumers
 	if len(s.consumers) > 0 {
-		fmt.Printf("\n📨 Consumers\n")
+		fmt.Printf("\n\033[1m📨 Consumers\033[0m\n")
 		for i, c := range s.consumers {
 			prefix := treePrefix(i, len(s.consumers))
 			fmt.Printf("   %s %s (group: %s, topic: %s) [%s]\n", prefix, c.Name, c.Group, c.Topic, c.Status)
@@ -261,7 +261,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Clients
 	if len(s.clients) > 0 {
-		fmt.Printf("\n🔌 Clients\n")
+		fmt.Printf("\n\033[1m🔌 Clients\033[0m\n")
 		for i, c := range s.clients {
 			prefix := treePrefix(i, len(s.clients))
 			fmt.Printf("   %s %s → %s [%s] (%s)\n", prefix, c.Name, c.Target, c.Type, c.Status)
@@ -277,7 +277,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 			}
 		}
 		if len(unhealthy) > 0 {
-			fmt.Printf("\n🏥 Health Issues\n")
+			fmt.Printf("\n\033[1m🏥 Health Issues\033[0m\n")
 			for i, h := range unhealthy {
 				prefix := treePrefix(i, len(unhealthy))
 				icon := healthStatusIcon(h.Status)
@@ -405,7 +405,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 		return
 	}
 
-	fmt.Printf("\n📦 DI Container (%d registrations)\n", len(regs))
+	fmt.Printf("\n\033[1m📦 DI Container (%d registrations)\033[0m\n", len(regs))
 	displayIdx := 0
 	totalGroups := 0
 	for _, g := range groups {
@@ -495,5 +495,22 @@ func businessIcon(compType string) string {
 		return "🎯"
 	default:
 		return "💼"
+	}
+}
+
+func methodColor(method string) string {
+	switch method {
+	case "GET":
+		return "\033[32m" // Green
+	case "POST":
+		return "\033[33m" // Yellow
+	case "PUT":
+		return "\033[36m" // Cyan
+	case "PATCH":
+		return "\033[35m" // Magenta
+	case "DELETE":
+		return "\033[31m" // Red
+	default:
+		return "\033[0m"
 	}
 }
