@@ -12,7 +12,7 @@ import (
 // ManagedConsumer wraps a Consumer with background lifecycle management.
 type ManagedConsumer struct {
 	consumer  *Consumer
-	handler   MessageHandler
+	handler   kafka.MessageHandler
 	topic     string
 	groupID   string
 	log       *logger.Logger
@@ -26,7 +26,7 @@ type ManagedConsumer struct {
 type ManagedConsumerConfig struct {
 	Config  kafka.Config
 	Topic   string
-	Handler MessageHandler
+	Handler kafka.MessageHandler
 	Log     *logger.Logger
 }
 

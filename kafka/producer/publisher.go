@@ -13,10 +13,10 @@ import (
 )
 
 // Publisher provides a high-level API for publishing events and JSON data to Kafka.
+// It extends kafka.Publisher with additional convenience methods.
 type Publisher interface {
-	Publish(ctx context.Context, topic string, event kafka.Event, key ...string) error
+	kafka.Publisher
 	PublishJSON(ctx context.Context, topic string, key string, data interface{}) error
-	Close() error
 }
 
 // KafkaPublisher implements Publisher by wrapping a Producer.

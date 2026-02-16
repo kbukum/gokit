@@ -1,16 +1,20 @@
 package consumer
 
-import "context"
+import (
+	"context"
+
+	"github.com/kbukum/gokit/kafka"
+)
 
 // runner wraps a Consumer + MessageHandler to satisfy kafka.ConsumerRunner.
 type runner struct {
 	consumer *Consumer
-	handler  MessageHandler
+	handler  kafka.MessageHandler
 }
 
 // AsRunner wraps a Consumer with a MessageHandler to create a kafka.ConsumerRunner
 // suitable for use with kafka.Component.AddConsumer().
-func AsRunner(c *Consumer, h MessageHandler) *runner {
+func AsRunner(c *Consumer, h kafka.MessageHandler) *runner {
 	return &runner{consumer: c, handler: h}
 }
 

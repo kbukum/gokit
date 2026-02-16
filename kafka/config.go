@@ -38,6 +38,7 @@ type Config struct {
 	BatchSize    int    `mapstructure:"batch_size"`
 	BatchTimeout string `mapstructure:"batch_timeout"`
 	WriteTimeout string `mapstructure:"write_timeout"`
+	ReadTimeout  string `mapstructure:"read_timeout"`
 	RequiredAcks int    `mapstructure:"required_acks"`
 
 	// Consumer settings
@@ -70,6 +71,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.WriteTimeout == "" {
 		c.WriteTimeout = "10s"
+	}
+	if c.ReadTimeout == "" {
+		c.ReadTimeout = "10s"
 	}
 	if c.RequiredAcks <= 0 {
 		c.RequiredAcks = -1 // all replicas
@@ -110,6 +114,7 @@ func (c *Config) Validate() error {
 	}{
 		{"batch_timeout", c.BatchTimeout},
 		{"write_timeout", c.WriteTimeout},
+		{"read_timeout", c.ReadTimeout},
 		{"session_timeout", c.SessionTimeout},
 		{"heartbeat_interval", c.HeartbeatInterval},
 		{"rebalance_timeout", c.RebalanceTimeout},

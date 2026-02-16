@@ -11,10 +11,6 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
-// MessageHandler processes a Kafka message. Return a non-nil error to log a
-// processing failure (the consumer will continue to the next message).
-type MessageHandler func(ctx context.Context, msg kafkago.Message) error
-
 // Consumer wraps a kafka-go Reader with TLS/SASL, backoff, and gokit logging.
 type Consumer struct {
 	reader   *kafkago.Reader
@@ -79,7 +75,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 
 // Consume reads messages in a loop, calling handler for each one.
 // It blocks until ctx is cancelled or an unrecoverable error occurs.
-func (c *Consumer) Consume(ctx context.Context, handler MessageHandler) error {
+func (c *Consumer) Consume(ctx context.Context, handler kafka.MessageHandler) error {
 	c.log.Info("Starting consume loop", map[string]interface{}{
 		"topic":   c.topic,
 		"groupID": c.groupID,
@@ -103,11 +99,13 @@ func (c *Consumer) Consume(ctx context.Context, handler MessageHandler) error {
 
 			c.failures = 0
 
-			if err := handler(ctx, msg); err != nil {
+			domainMsg := kafka.FromKafkaMessage(msg)
+
+			if err := handler(ctx, domainMsg); err != nil {
 				c.log.Error("Message processing failed", map[string]interface{}{
 					"error":  err.Error(),
-					"topic":  msg.Topic,
-					"offset": msg.Offset,
+					"topic":  domainMsg.Topic,
+					"offset": domainMsg.Offset,
 				})
 			}
 		}

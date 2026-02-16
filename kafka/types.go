@@ -31,11 +31,23 @@ type Event struct {
 	Subject     string                 `json:"subject,omitempty"`
 }
 
+// MessageHandler processes domain messages (supports both binary and JSON).
+type MessageHandler func(ctx context.Context, msg Message) error
+
 // EventHandler processes structured events.
 type EventHandler func(ctx context.Context, event Event) error
 
 // BinaryHandler processes raw binary messages.
 type BinaryHandler func(ctx context.Context, key string, value []byte) error
+
+// JSONHandler processes JSON messages with automatic unmarshalling.
+type JSONHandler[T any] func(ctx context.Context, data T) error
+
+// Publisher defines the event publishing interface.
+type Publisher interface {
+	Publish(ctx context.Context, topic string, event Event, key ...string) error
+	Close() error
+}
 
 // FromKafkaMessage converts a kafka-go Message to the domain Message type.
 func FromKafkaMessage(msg kafka.Message) Message {
