@@ -22,7 +22,13 @@ type DB struct {
 }
 
 // New opens a PostgreSQL connection with retry logic and connection pooling.
+// The provided context controls cancellation of the connection attempts.
 func New(cfg Config, log *logger.Logger) (*DB, error) {
+	return NewWithContext(context.Background(), cfg, log)
+}
+
+// NewWithContext opens a PostgreSQL connection with context-aware retry logic.
+func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, error) {
 	cfg.ApplyDefaults()
 
 	if err := cfg.Validate(); err != nil {
@@ -43,6 +49,11 @@ func New(cfg Config, log *logger.Logger) (*DB, error) {
 	var err error
 
 	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
+		// Check context before each attempt
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("database connection cancelled: %w", ctx.Err())
+		}
+
 		db, err = gorm.Open(postgres.Open(cfg.DSN), gormCfg)
 		if err == nil {
 			sqlDB, sqlErr := db.DB()
@@ -52,18 +63,22 @@ func New(cfg Config, log *logger.Logger) (*DB, error) {
 					"error": sqlErr.Error(), "attempt": attempt,
 				})
 				if attempt < cfg.MaxRetries {
-					time.Sleep(time.Duration(attempt) * time.Second)
+					if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
+						return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
+					}
 				}
 				continue
 			}
 
-			if pingErr := sqlDB.Ping(); pingErr != nil {
+			if pingErr := sqlDB.PingContext(ctx); pingErr != nil {
 				err = pingErr
 				log.Warn("Database ping failed", map[string]interface{}{
 					"error": pingErr.Error(), "attempt": attempt,
 				})
 				if attempt < cfg.MaxRetries {
-					time.Sleep(time.Duration(attempt) * time.Second)
+					if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
+						return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
+					}
 				}
 				continue
 			}
@@ -74,11 +89,17 @@ func New(cfg Config, log *logger.Logger) (*DB, error) {
 			if lifetime, parseErr := time.ParseDuration(cfg.ConnMaxLifetime); parseErr == nil {
 				sqlDB.SetConnMaxLifetime(lifetime)
 			}
+			if cfg.ConnMaxIdleTime != "" {
+				if idleTime, parseErr := time.ParseDuration(cfg.ConnMaxIdleTime); parseErr == nil {
+					sqlDB.SetConnMaxIdleTime(idleTime)
+				}
+			}
 
 			log.Info("Database connection established", map[string]interface{}{
-				"max_open_conns": cfg.MaxOpenConns,
-				"max_idle_conns": cfg.MaxIdleConns,
-				"attempts":       attempt,
+				"max_open_conns":    cfg.MaxOpenConns,
+				"max_idle_conns":    cfg.MaxIdleConns,
+				"conn_max_lifetime": cfg.ConnMaxLifetime,
+				"attempts":          attempt,
 			})
 
 			return &DB{GormDB: db, log: log, cfg: cfg}, nil
@@ -88,11 +109,23 @@ func New(cfg Config, log *logger.Logger) (*DB, error) {
 			"error": err.Error(), "attempt": attempt, "max_retries": cfg.MaxRetries,
 		})
 		if attempt < cfg.MaxRetries {
-			time.Sleep(time.Duration(attempt) * time.Second)
+			if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
+				return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
+			}
 		}
 	}
 
 	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", cfg.MaxRetries, err)
+}
+
+// contextSleep waits for the given duration or until context is cancelled.
+func contextSleep(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 // Close closes the underlying sql.DB connection pool.
@@ -112,6 +145,15 @@ func (d *DB) Ping() error {
 		return err
 	}
 	return sqlDB.Ping()
+}
+
+// PingContext verifies the database connection is alive, respecting the context.
+func (d *DB) PingContext(ctx context.Context) error {
+	sqlDB, err := d.GormDB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
 }
 
 // WithContext returns a GORM session scoped to the given context.

@@ -22,6 +22,10 @@ type Config struct {
 	// ConnMaxLifetime is the maximum time a connection may be reused (e.g. "1h", "30m").
 	ConnMaxLifetime string `mapstructure:"conn_max_lifetime"`
 
+	// ConnMaxIdleTime is the maximum time a connection may sit idle (e.g. "5m", "10m").
+	// If empty, no idle timeout is set.
+	ConnMaxIdleTime string `mapstructure:"conn_max_idle_time"`
+
 	// MaxRetries is the number of connection attempts before giving up.
 	MaxRetries int `mapstructure:"max_retries"`
 
@@ -42,6 +46,9 @@ func (c *Config) ApplyDefaults() {
 	}
 	if c.ConnMaxLifetime == "" {
 		c.ConnMaxLifetime = "1h"
+	}
+	if c.ConnMaxIdleTime == "" {
+		c.ConnMaxIdleTime = "5m"
 	}
 	if c.MaxRetries <= 0 {
 		c.MaxRetries = 5
@@ -70,6 +77,11 @@ func (c *Config) Validate() error {
 	}
 	if _, err := time.ParseDuration(c.ConnMaxLifetime); err != nil {
 		return fmt.Errorf("invalid conn_max_lifetime %q: %w", c.ConnMaxLifetime, err)
+	}
+	if c.ConnMaxIdleTime != "" {
+		if _, err := time.ParseDuration(c.ConnMaxIdleTime); err != nil {
+			return fmt.Errorf("invalid conn_max_idle_time %q: %w", c.ConnMaxIdleTime, err)
+		}
 	}
 	if _, err := time.ParseDuration(c.SlowQueryThreshold); err != nil {
 		return fmt.Errorf("invalid slow_query_threshold %q: %w", c.SlowQueryThreshold, err)
