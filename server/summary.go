@@ -77,3 +77,32 @@ func methodOrder(method string) int {
 		return 5
 	}
 }
+
+// extractServiceNames extracts unique service names from mounted handler patterns.
+// Pattern "/bot_service.BotService/" → "BotService".
+func extractServiceNames(mounts []MountedHandler) []string {
+	seen := make(map[string]bool)
+	var names []string
+	for _, m := range mounts {
+		name := extractSingleServiceName(m.Pattern)
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// extractSingleServiceName extracts service name from a pattern like "/bot_service.BotService/".
+func extractSingleServiceName(pattern string) string {
+	p := strings.Trim(pattern, "/")
+	if idx := strings.LastIndex(p, "."); idx >= 0 {
+		return p[idx+1:]
+	}
+	return p
+}
+
+// joinStrings joins strings with a separator.
+func joinStrings(ss []string, sep string) string {
+	return strings.Join(ss, sep)
+}

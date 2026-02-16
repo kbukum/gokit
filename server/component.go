@@ -60,10 +60,20 @@ func (sc *ServerComponent) Health(ctx context.Context) component.ComponentHealth
 // Describe returns infrastructure summary info for the bootstrap display.
 func (sc *ServerComponent) Describe() component.Description {
 	cfg := sc.server.config
+	details := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+
+	// Include mounted ConnectRPC/gRPC services
+	if mounts := sc.server.Mounts(); len(mounts) > 0 {
+		services := extractServiceNames(mounts)
+		if len(services) > 0 {
+			details += " + ConnectRPC: " + joinStrings(services, ", ")
+		}
+	}
+
 	return component.Description{
 		Name:    "HTTP Server",
 		Type:    "server",
-		Details: fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		Details: details,
 		Port:    cfg.Port,
 	}
 }
@@ -85,7 +95,7 @@ func (sc *ServerComponent) Routes() []component.Route {
 		return methodOrder(ginRoutes[i].Method) < methodOrder(ginRoutes[j].Method)
 	})
 
-	routes := make([]component.Route, 0, len(ginRoutes))
+	routes := make([]component.Route, 0, len(ginRoutes)+len(sc.server.mounts))
 	for _, r := range ginRoutes {
 		handler := formatHandlerName(r.Handler)
 		if systemPaths[r.Path] {
@@ -97,5 +107,15 @@ func (sc *ServerComponent) Routes() []component.Route {
 			Handler: handler,
 		})
 	}
+
+	// Append mounted handlers (ConnectRPC services)
+	for _, m := range sc.server.mounts {
+		routes = append(routes, component.Route{
+			Method:  "CONNECT",
+			Path:    m.Pattern,
+			Handler: extractSingleServiceName(m.Pattern),
+		})
+	}
+
 	return routes
 }

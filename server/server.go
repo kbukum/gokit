@@ -25,6 +25,13 @@ type Server struct {
 	mux        *http.ServeMux
 	config     Config
 	log        *logger.Logger
+	mounts     []MountedHandler // tracked for summary display
+}
+
+// MountedHandler records a handler mounted on the ServeMux.
+type MountedHandler struct {
+	Pattern string
+	Label   string // optional human-readable label
 }
 
 // New creates a new Server. The Gin engine is created but no middleware is
@@ -79,9 +86,15 @@ func (s *Server) GinEngine() *gin.Engine {
 // The pattern must include a trailing slash for subtree matches (e.g. "/grpc.health.v1.Health/").
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.mux.Handle(pattern, handler)
+	s.mounts = append(s.mounts, MountedHandler{Pattern: pattern})
 	s.log.Debug("Handler mounted", map[string]interface{}{
 		"pattern": pattern,
 	})
+}
+
+// Mounts returns all handlers mounted on the ServeMux (excluding Gin root).
+func (s *Server) Mounts() []MountedHandler {
+	return s.mounts
 }
 
 // Start binds the port and begins serving. It returns once the listener is
