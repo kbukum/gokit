@@ -242,9 +242,9 @@ func serviceEntryToInstance(e *api.ServiceEntry, now time.Time) discovery.Servic
 // buildHealthCheck creates the appropriate Consul health check based on config.
 func (c *Provider) buildHealthCheck(service *discovery.ServiceInfo) *api.AgentServiceCheck {
 	check := &api.AgentServiceCheck{
-		Interval:                       c.cfg.HealthCheckInterval.String(),
-		Timeout:                        c.cfg.HealthCheckTimeout.String(),
-		DeregisterCriticalServiceAfter: c.cfg.DeregisterAfter.String(),
+		Interval:                       c.cfg.HealthCheckInterval,
+		Timeout:                        c.cfg.HealthCheckTimeout,
+		DeregisterCriticalServiceAfter: c.cfg.DeregisterAfter,
 	}
 
 	addr := fmt.Sprintf("%s:%d", service.Address, service.Port)
@@ -256,7 +256,7 @@ func (c *Provider) buildHealthCheck(service *discovery.ServiceInfo) *api.AgentSe
 	case discovery.HealthCheckTCP:
 		check.TCP = addr
 	case discovery.HealthCheckTTL:
-		check.TTL = c.cfg.HealthCheckInterval.String()
+		check.TTL = c.cfg.HealthCheckInterval
 		// Remove interval/timeout for TTL checks (Consul doesn't poll)
 		check.Interval = ""
 		check.Timeout = ""

@@ -8,49 +8,49 @@ import (
 // Config holds Redis connection configuration.
 type Config struct {
 	// Enabled controls whether the Redis component is active.
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
 	// Addr is the Redis server address (host:port).
-	Addr string `mapstructure:"addr"`
+	Addr string `yaml:"addr" mapstructure:"addr"`
 
 	// Password is the Redis server password.
-	Password string `mapstructure:"password"`
+	Password string `yaml:"password" mapstructure:"password"`
 
 	// DB is the Redis database number.
-	DB int `mapstructure:"db"`
+	DB int `yaml:"db" mapstructure:"db"`
 
 	// PoolSize is the maximum number of socket connections.
-	PoolSize int `mapstructure:"pool_size"`
+	PoolSize int `yaml:"pool_size" mapstructure:"pool_size"`
 
 	// MinIdleConns is the minimum number of idle connections.
-	MinIdleConns int `mapstructure:"min_idle_conns"`
+	MinIdleConns int `yaml:"min_idle_conns" mapstructure:"min_idle_conns"`
 
 	// MaxRetries is the maximum number of retries before giving up (0 = default 3).
-	MaxRetries int `mapstructure:"max_retries"`
+	MaxRetries int `yaml:"max_retries" mapstructure:"max_retries"`
 
 	// MinRetryBackoff is the minimum backoff between retries (e.g. "8ms").
-	MinRetryBackoff string `mapstructure:"min_retry_backoff"`
+	MinRetryBackoff string `yaml:"min_retry_backoff" mapstructure:"min_retry_backoff"`
 
 	// MaxRetryBackoff is the maximum backoff between retries (e.g. "512ms").
-	MaxRetryBackoff string `mapstructure:"max_retry_backoff"`
+	MaxRetryBackoff string `yaml:"max_retry_backoff" mapstructure:"max_retry_backoff"`
 
 	// DialTimeout is the timeout for establishing new connections (e.g. "5s").
-	DialTimeout string `mapstructure:"dial_timeout"`
+	DialTimeout string `yaml:"dial_timeout" mapstructure:"dial_timeout"`
 
 	// ReadTimeout is the timeout for socket reads (e.g. "3s").
-	ReadTimeout string `mapstructure:"read_timeout"`
+	ReadTimeout string `yaml:"read_timeout" mapstructure:"read_timeout"`
 
 	// WriteTimeout is the timeout for socket writes (e.g. "3s").
-	WriteTimeout string `mapstructure:"write_timeout"`
+	WriteTimeout string `yaml:"write_timeout" mapstructure:"write_timeout"`
 
 	// ConnMaxIdleTime is the maximum time a connection may sit idle before being closed (e.g. "5m").
-	ConnMaxIdleTime string `mapstructure:"idle_timeout"`
+	ConnMaxIdleTime string `yaml:"idle_timeout" mapstructure:"idle_timeout"`
 
 	// PoolTimeout is the amount of time the client waits for a connection from the pool (e.g. "4s").
-	PoolTimeout string `mapstructure:"pool_timeout"`
+	PoolTimeout string `yaml:"pool_timeout" mapstructure:"pool_timeout"`
 
 	// ConnMaxLifetime is the maximum time a connection may be reused (e.g. "30m"). 0 means no limit.
-	ConnMaxLifetime string `mapstructure:"max_conn_age"`
+	ConnMaxLifetime string `yaml:"max_conn_age" mapstructure:"max_conn_age"`
 }
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.

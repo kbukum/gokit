@@ -8,48 +8,48 @@ import (
 // Config holds Kafka connection and behavior configuration.
 type Config struct {
 	// Enabled controls whether the Kafka component is active.
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
 	// Brokers is the list of Kafka broker addresses.
-	Brokers []string `mapstructure:"brokers"`
+	Brokers []string `yaml:"brokers" mapstructure:"brokers"`
 
 	// GroupID is the consumer group identifier.
-	GroupID string `mapstructure:"group_id"`
+	GroupID string `yaml:"group_id" mapstructure:"group_id"`
 
 	// Topics is the list of topics to consume from.
-	Topics []string `mapstructure:"topics"`
+	Topics []string `yaml:"topics" mapstructure:"topics"`
 
 	// TLS
-	EnableTLS     bool   `mapstructure:"enable_tls"`
-	TLSSkipVerify bool   `mapstructure:"tls_skip_verify"`
-	TLSCAFile     string `mapstructure:"tls_ca_file"`
-	TLSCertFile   string `mapstructure:"tls_cert_file"`
-	TLSKeyFile    string `mapstructure:"tls_key_file"`
+	EnableTLS     bool   `yaml:"enable_tls" mapstructure:"enable_tls"`
+	TLSSkipVerify bool   `yaml:"tls_skip_verify" mapstructure:"tls_skip_verify"`
+	TLSCAFile     string `yaml:"tls_ca_file" mapstructure:"tls_ca_file"`
+	TLSCertFile   string `yaml:"tls_cert_file" mapstructure:"tls_cert_file"`
+	TLSKeyFile    string `yaml:"tls_key_file" mapstructure:"tls_key_file"`
 
 	// SASL
-	EnableSASL    bool   `mapstructure:"enable_sasl"`
-	SASLMechanism string `mapstructure:"sasl_mechanism"` // PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
-	Username      string `mapstructure:"username"`
-	Password      string `mapstructure:"password"`
+	EnableSASL    bool   `yaml:"enable_sasl" mapstructure:"enable_sasl"`
+	SASLMechanism string `yaml:"sasl_mechanism" mapstructure:"sasl_mechanism"` // PLAIN, SCRAM-SHA-256, SCRAM-SHA-512
+	Username      string `yaml:"username" mapstructure:"username"`
+	Password      string `yaml:"password" mapstructure:"password"`
 
 	// Producer settings
-	Compression  string `mapstructure:"compression"` // none, gzip, snappy, lz4, zstd
-	Retries      int    `mapstructure:"retries"`
-	BatchSize    int    `mapstructure:"batch_size"`
-	BatchTimeout string `mapstructure:"batch_timeout"`
-	WriteTimeout string `mapstructure:"write_timeout"`
-	ReadTimeout  string `mapstructure:"read_timeout"`
-	RequiredAcks int    `mapstructure:"required_acks"`
+	Compression  string `yaml:"compression" mapstructure:"compression"` // none, gzip, snappy, lz4, zstd
+	Retries      int    `yaml:"retries" mapstructure:"retries"`
+	BatchSize    int    `yaml:"batch_size" mapstructure:"batch_size"`
+	BatchTimeout string `yaml:"batch_timeout" mapstructure:"batch_timeout"`
+	WriteTimeout string `yaml:"write_timeout" mapstructure:"write_timeout"`
+	ReadTimeout  string `yaml:"read_timeout" mapstructure:"read_timeout"`
+	RequiredAcks int    `yaml:"required_acks" mapstructure:"required_acks"`
 
 	// Consumer settings
-	SessionTimeout    string `mapstructure:"session_timeout"`
-	HeartbeatInterval string `mapstructure:"heartbeat_interval"`
-	RebalanceTimeout  string `mapstructure:"rebalance_timeout"`
+	SessionTimeout    string `yaml:"session_timeout" mapstructure:"session_timeout"`
+	HeartbeatInterval string `yaml:"heartbeat_interval" mapstructure:"heartbeat_interval"`
+	RebalanceTimeout  string `yaml:"rebalance_timeout" mapstructure:"rebalance_timeout"`
 
 	// Connection settings
-	DialTimeout string `mapstructure:"dial_timeout"`
-	IdleTimeout string `mapstructure:"idle_timeout"`
-	MetadataTTL string `mapstructure:"metadata_ttl"`
+	DialTimeout string `yaml:"dial_timeout" mapstructure:"dial_timeout"`
+	IdleTimeout string `yaml:"idle_timeout" mapstructure:"idle_timeout"`
+	MetadataTTL string `yaml:"metadata_ttl" mapstructure:"metadata_ttl"`
 }
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.

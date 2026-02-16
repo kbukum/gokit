@@ -8,38 +8,38 @@ import (
 // Config holds database connection configuration.
 type Config struct {
 	// Enabled controls whether the database component is active.
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
 	// DSN is the database connection string.
-	DSN string `mapstructure:"dsn"`
+	DSN string `yaml:"dsn" mapstructure:"dsn"`
 
 	// Driver selects the database dialect: "postgres" (default), "mysql", or "sqlite".
-	Driver string `mapstructure:"driver"`
+	Driver string `yaml:"driver" mapstructure:"driver"`
 
 	// MaxOpenConns sets the maximum number of open connections to the database.
-	MaxOpenConns int `mapstructure:"max_open_conns"`
+	MaxOpenConns int `yaml:"max_open_conns" mapstructure:"max_open_conns"`
 
 	// MaxIdleConns sets the maximum number of idle connections in the pool.
-	MaxIdleConns int `mapstructure:"max_idle_conns"`
+	MaxIdleConns int `yaml:"max_idle_conns" mapstructure:"max_idle_conns"`
 
 	// ConnMaxLifetime is the maximum time a connection may be reused (e.g. "1h", "30m").
-	ConnMaxLifetime string `mapstructure:"conn_max_lifetime"`
+	ConnMaxLifetime string `yaml:"conn_max_lifetime" mapstructure:"conn_max_lifetime"`
 
 	// ConnMaxIdleTime is the maximum time a connection may sit idle (e.g. "5m", "10m").
 	// If empty, no idle timeout is set.
-	ConnMaxIdleTime string `mapstructure:"conn_max_idle_time"`
+	ConnMaxIdleTime string `yaml:"conn_max_idle_time" mapstructure:"conn_max_idle_time"`
 
 	// MaxRetries is the number of connection attempts before giving up.
-	MaxRetries int `mapstructure:"max_retries"`
+	MaxRetries int `yaml:"max_retries" mapstructure:"max_retries"`
 
 	// AutoMigrate controls whether GORM auto-migration runs on startup.
-	AutoMigrate bool `mapstructure:"auto_migrate"`
+	AutoMigrate bool `yaml:"auto_migrate" mapstructure:"auto_migrate"`
 
 	// SlowQueryThreshold is the duration above which queries are logged as slow (e.g. "200ms").
-	SlowQueryThreshold string `mapstructure:"slow_query_threshold"`
+	SlowQueryThreshold string `yaml:"slow_query_threshold" mapstructure:"slow_query_threshold"`
 
 	// LogLevel controls GORM's log verbosity: "silent", "error", "warn", "info" (default).
-	LogLevel string `mapstructure:"log_level"`
+	LogLevel string `yaml:"log_level" mapstructure:"log_level"`
 }
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.

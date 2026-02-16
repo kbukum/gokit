@@ -8,91 +8,90 @@ import (
 // Config holds service discovery and registration configuration.
 type Config struct {
 	// Enabled controls whether the discovery component is active.
-	Enabled bool `mapstructure:"enabled"`
+	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
 	// Provider selects the discovery backend: "consul", "static", or "k8s".
-	Provider string `mapstructure:"provider"`
+	Provider string `yaml:"provider" mapstructure:"provider"`
 
 	// ConsulAddr is the Consul agent address (host:port).
-	ConsulAddr string `mapstructure:"consul_addr"`
+	ConsulAddr string `yaml:"consul_addr" mapstructure:"consul_addr"`
 
 	// ConsulToken is the Consul ACL token for authentication.
-	ConsulToken string `mapstructure:"consul_token"`
+	ConsulToken string `yaml:"consul_token" mapstructure:"consul_token"`
 
 	// ConsulScheme is the URI scheme for Consul ("http" or "https").
-	ConsulScheme string `mapstructure:"consul_scheme"`
+	ConsulScheme string `yaml:"consul_scheme" mapstructure:"consul_scheme"`
 
 	// ConsulDatacenter is the Consul datacenter name.
-	ConsulDatacenter string `mapstructure:"consul_datacenter"`
+	ConsulDatacenter string `yaml:"consul_datacenter" mapstructure:"consul_datacenter"`
 
 	// --- Registration (self) ---
 
 	// ServiceName is the name used when registering this service.
-	ServiceName string `mapstructure:"service_name"`
+	ServiceName string `yaml:"service_name" mapstructure:"service_name"`
 
 	// ServiceID is the unique instance ID; defaults to ServiceName if empty.
-	ServiceID string `mapstructure:"service_id"`
+	ServiceID string `yaml:"service_id" mapstructure:"service_id"`
 
 	// ServiceAddress is the address advertised to other services.
-	ServiceAddress string `mapstructure:"service_address"`
+	ServiceAddress string `yaml:"service_address" mapstructure:"service_address"`
 
 	// ServicePort is the port advertised to other services.
-	ServicePort int `mapstructure:"service_port"`
+	ServicePort int `yaml:"service_port" mapstructure:"service_port"`
 
 	// Tags are metadata tags attached to the service registration.
-	Tags []string `mapstructure:"tags"`
+	Tags []string `yaml:"tags" mapstructure:"tags"`
 
 	// Metadata is arbitrary key-value metadata for the service.
-	Metadata map[string]string `mapstructure:"metadata"`
+	Metadata map[string]string `yaml:"metadata" mapstructure:"metadata"`
 
 	// --- Health checks ---
 
 	// HealthCheckType is the type of health check: "http", "grpc", "tcp", or "ttl".
 	// Defaults to "http".
-	HealthCheckType string `mapstructure:"health_check_type"`
+	HealthCheckType string `yaml:"health_check_type" mapstructure:"health_check_type"`
 
 	// HealthCheckPath is the HTTP path for health checks (e.g. "/healthz").
-	HealthCheckPath string `mapstructure:"health_check_path"`
+	HealthCheckPath string `yaml:"health_check_path" mapstructure:"health_check_path"`
 
-	// HealthCheckInterval controls how often health is polled.
-	HealthCheckInterval time.Duration `mapstructure:"health_check_interval"`
+	// HealthCheckInterval controls how often health is polled (e.g. "10s").
+	HealthCheckInterval string `yaml:"health_check_interval" mapstructure:"health_check_interval"`
 
-	// HealthCheckTimeout is the timeout for a single health check.
-	HealthCheckTimeout time.Duration `mapstructure:"health_check_timeout"`
+	// HealthCheckTimeout is the timeout for a single health check (e.g. "5s").
+	HealthCheckTimeout string `yaml:"health_check_timeout" mapstructure:"health_check_timeout"`
 
-	// DeregisterAfter removes the service after being critical for this duration.
-	DeregisterAfter time.Duration `mapstructure:"deregister_after"`
+	// DeregisterAfter removes the service after being critical for this duration (e.g. "1m").
+	DeregisterAfter string `yaml:"deregister_after" mapstructure:"deregister_after"`
 
 	// --- Discovery (others) ---
 
-	// CacheTTL controls how long discovered endpoints are cached by the
-	// high-level Client. Default: 30s.
-	CacheTTL time.Duration `mapstructure:"cache_ttl"`
+	// CacheTTL controls how long discovered endpoints are cached (e.g. "30s").
+	CacheTTL string `yaml:"cache_ttl" mapstructure:"cache_ttl"`
 
 	// Services lists remote services this application depends on.
-	Services []DiscoveredService `mapstructure:"services"`
+	Services []DiscoveredService `yaml:"services" mapstructure:"services"`
 
 	// StaticEndpoints provides endpoints for the static provider or as fallback.
-	StaticEndpoints []StaticEndpoint `mapstructure:"static_endpoints"`
+	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
 }
 
 // DiscoveredService describes a remote service dependency.
 type DiscoveredService struct {
-	Name        string      `mapstructure:"name"`
-	Protocol    string      `mapstructure:"protocol"`
-	Criticality Criticality `mapstructure:"criticality"`
+	Name        string      `yaml:"name" mapstructure:"name"`
+	Protocol    string      `yaml:"protocol" mapstructure:"protocol"`
+	Criticality Criticality `yaml:"criticality" mapstructure:"criticality"`
 }
 
 // StaticEndpoint describes a statically configured service endpoint.
 type StaticEndpoint struct {
-	Name     string            `mapstructure:"name"`
-	Address  string            `mapstructure:"address"`
-	Port     int               `mapstructure:"port"`
-	Protocol string            `mapstructure:"protocol"`
-	Tags     []string          `mapstructure:"tags"`
-	Metadata map[string]string `mapstructure:"metadata"`
-	Weight   int               `mapstructure:"weight"`
-	Healthy  bool              `mapstructure:"healthy"`
+	Name     string            `yaml:"name" mapstructure:"name"`
+	Address  string            `yaml:"address" mapstructure:"address"`
+	Port     int               `yaml:"port" mapstructure:"port"`
+	Protocol string            `yaml:"protocol" mapstructure:"protocol"`
+	Tags     []string          `yaml:"tags" mapstructure:"tags"`
+	Metadata map[string]string `yaml:"metadata" mapstructure:"metadata"`
+	Weight   int               `yaml:"weight" mapstructure:"weight"`
+	Healthy  bool              `yaml:"healthy" mapstructure:"healthy"`
 }
 
 // Health check type constants.
@@ -123,14 +122,14 @@ func (c *Config) ApplyDefaults() {
 	if c.HealthCheckPath == "" {
 		c.HealthCheckPath = "/healthz"
 	}
-	if c.HealthCheckInterval == 0 {
-		c.HealthCheckInterval = 10 * time.Second
+	if c.HealthCheckInterval == "" {
+		c.HealthCheckInterval = "10s"
 	}
-	if c.HealthCheckTimeout == 0 {
-		c.HealthCheckTimeout = 5 * time.Second
+	if c.HealthCheckTimeout == "" {
+		c.HealthCheckTimeout = "5s"
 	}
-	if c.DeregisterAfter == 0 {
-		c.DeregisterAfter = 1 * time.Minute
+	if c.DeregisterAfter == "" {
+		c.DeregisterAfter = "1m"
 	}
 }
 
@@ -159,7 +158,7 @@ func (c *Config) Validate() error {
 // BuildClientConfig derives a ClientConfig from this Config, avoiding duplication.
 func (c *Config) BuildClientConfig() ClientConfig {
 	cc := ClientConfig{
-		CacheTTL:        c.CacheTTL,
+		CacheTTL:        ParseDuration(c.CacheTTL),
 		Services:        make([]string, 0, len(c.Services)),
 		Criticality:     make(map[string]Criticality, len(c.Services)),
 		StaticEndpoints: c.StaticEndpoints,
@@ -169,4 +168,10 @@ func (c *Config) BuildClientConfig() ClientConfig {
 		cc.Criticality[svc.Name] = svc.Criticality
 	}
 	return cc
+}
+
+// ParseDuration parses a duration string, returning zero on empty or invalid input.
+func ParseDuration(s string) time.Duration {
+	d, _ := time.ParseDuration(s)
+	return d
 }
