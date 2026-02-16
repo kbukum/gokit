@@ -65,6 +65,10 @@ type Config struct {
 
 	// --- Discovery (others) ---
 
+	// CacheTTL controls how long discovered endpoints are cached by the
+	// high-level Client. Default: 30s.
+	CacheTTL time.Duration `mapstructure:"cache_ttl"`
+
 	// Services lists remote services this application depends on.
 	Services []DiscoveredService `mapstructure:"services"`
 
@@ -150,4 +154,19 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("service_port must be > 0")
 	}
 	return nil
+}
+
+// BuildClientConfig derives a ClientConfig from this Config, avoiding duplication.
+func (c *Config) BuildClientConfig() ClientConfig {
+	cc := ClientConfig{
+		CacheTTL:        c.CacheTTL,
+		Services:        make([]string, 0, len(c.Services)),
+		Criticality:     make(map[string]Criticality, len(c.Services)),
+		StaticEndpoints: c.StaticEndpoints,
+	}
+	for _, svc := range c.Services {
+		cc.Services = append(cc.Services, svc.Name)
+		cc.Criticality[svc.Name] = svc.Criticality
+	}
+	return cc
 }

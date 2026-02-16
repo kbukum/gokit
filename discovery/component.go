@@ -26,6 +26,7 @@ func RegisterProviderFactory(name string, f ProviderFactory) {
 type Component struct {
 	registry  Registry
 	discovery Discovery
+	client    *Client
 	cfg       Config
 	log       *logger.Logger
 }
@@ -50,6 +51,10 @@ func (c *Component) Registry() Registry { return c.registry }
 // Discovery returns the underlying Discovery, or nil if not started.
 func (c *Component) Discovery() Discovery { return c.discovery }
 
+// Client returns the high-level discovery Client (with caching and LB),
+// auto-created from Config after Start. Returns nil if not started.
+func (c *Component) Client() *Client { return c.client }
+
 // Start initialises the appropriate provider and registers the local service.
 func (c *Component) Start(ctx context.Context) error {
 	c.cfg.ApplyDefaults()
@@ -66,6 +71,7 @@ func (c *Component) Start(ctx context.Context) error {
 		}
 		c.registry = reg
 		c.discovery = disc
+		c.client = c.buildClient()
 		return nil
 	}
 
@@ -108,6 +114,8 @@ func (c *Component) Start(ctx context.Context) error {
 			return fmt.Errorf("discovery: register self: %w", err)
 		}
 	}
+
+	c.client = c.buildClient()
 
 	c.log.Info("discovery component started", map[string]interface{}{
 		"provider": c.cfg.Provider,
@@ -185,4 +193,12 @@ func getLocalIP() (string, error) {
 	}
 	defer conn.Close()
 	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
+}
+
+// buildClient derives a high-level Client from the component's Config and Discovery backend.
+func (c *Component) buildClient() *Client {
+	if c.discovery == nil {
+		return nil
+	}
+	return NewClient(c.discovery, c.cfg.BuildClientConfig(), c.log)
 }
