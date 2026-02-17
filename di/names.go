@@ -9,6 +9,7 @@ type PkgNames struct {
 	Database         string
 	Redis            string
 	Storage          string
+	Workload         string
 	ServiceRegistry  string
 	ServiceDiscovery string
 
@@ -31,6 +32,7 @@ var Pkg = PkgNames{
 	Database:         "database",
 	Redis:            "redis",
 	Storage:          "storage",
+	Workload:         "workload",
 	ServiceRegistry:  "service_registry",
 	ServiceDiscovery: "service_discovery",
 
