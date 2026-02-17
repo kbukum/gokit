@@ -1,5 +1,5 @@
 // Package workload provides a provider-based workload manager for deploying
-// and managing workloads across different runtimes (Docker, Kubernetes, local processes).
+// and managing workloads across different runtimes (Docker, Kubernetes, etc.).
 package workload
 
 import (
@@ -9,9 +9,9 @@ import (
 )
 
 // Manager manages workload lifecycle operations.
-// All providers must implement this interface.
+// All providers must implement this core interface.
 type Manager interface {
-	// Deploy creates and starts a workload, returning its ID.
+	// Deploy creates and starts a workload.
 	Deploy(ctx context.Context, req DeployRequest) (*DeployResult, error)
 
 	// Stop gracefully stops a running workload.
@@ -20,8 +20,14 @@ type Manager interface {
 	// Remove removes a stopped workload and cleans up resources.
 	Remove(ctx context.Context, id string) error
 
+	// Restart stops and restarts a workload.
+	Restart(ctx context.Context, id string) error
+
 	// Status returns the current status of a workload.
 	Status(ctx context.Context, id string) (*WorkloadStatus, error)
+
+	// Wait blocks until the workload exits, returning the exit status.
+	Wait(ctx context.Context, id string) (*WaitResult, error)
 
 	// Logs returns log output from a workload.
 	Logs(ctx context.Context, id string, opts LogOptions) ([]string, error)
@@ -57,7 +63,7 @@ type EventWatcher interface {
 	WatchEvents(ctx context.Context, filter ListFilter) (<-chan WorkloadEvent, error)
 }
 
-// StatusRunning and other status constants for workload state.
+// Status constants for workload state.
 const (
 	StatusCreated    = "created"
 	StatusRunning    = "running"
@@ -73,34 +79,43 @@ const (
 const (
 	ProviderDocker     = "docker"
 	ProviderKubernetes = "kubernetes"
-	ProviderProcess    = "process"
 )
 
 // DeployRequest describes a workload to deploy.
 type DeployRequest struct {
-	Name          string            // Human-readable identifier
-	Image         string            // Container image or executable path
+	Name          string            // Human-readable identifier (container name, pod name)
+	Image         string            // Container image reference
 	Command       []string          // Override entrypoint/command
 	Args          []string          // Arguments passed to the command
 	Environment   map[string]string // Environment variables
-	Labels        map[string]string // Key-value pairs for filtering
+	Labels        map[string]string // Key-value pairs for filtering and grouping
+	Annotations   map[string]string // Metadata annotations (K8s)
 	WorkDir       string            // Working directory inside workload
 	Resources     *ResourceConfig   // CPU/memory constraints
 	Network       *NetworkConfig    // Network configuration
 	Volumes       []VolumeMount     // Mount points
 	Ports         []PortMapping     // Port mappings
-	RestartPolicy string            // "no", "always", "on-failure"
-	AutoRemove    bool              // Remove after exit
+	RestartPolicy string            // "no", "always", "on-failure", "unless-stopped"
+	AutoRemove    bool              // Remove after exit (Docker)
+	Replicas      int               // Number of replicas (K8s, 0 = default 1)
 	Timeout       time.Duration     // Maximum run time (0 = no limit)
 	Platform      string            // Target platform (e.g. "linux/amd64")
+	Namespace     string            // Namespace (K8s, empty = default)
+	ServiceAccount string           // Service account (K8s)
 	Metadata      map[string]any    // Provider-specific extras
 }
 
 // DeployResult is returned after a successful deployment.
 type DeployResult struct {
-	ID     string
+	ID     string // Container ID (Docker) or Pod/Job name (K8s)
 	Name   string
 	Status string
+}
+
+// WaitResult is returned when a workload exits.
+type WaitResult struct {
+	StatusCode int64
+	Error      string
 }
 
 // WorkloadStatus represents the current state of a workload.
@@ -111,20 +126,23 @@ type WorkloadStatus struct {
 	Status    string
 	Running   bool
 	Healthy   bool
+	Ready     bool // All readiness checks pass (K8s)
 	StartedAt time.Time
 	StoppedAt time.Time
 	ExitCode  int
 	Message   string
+	Restarts  int // Restart count (K8s)
 }
 
 // WorkloadInfo contains summary information for list operations.
 type WorkloadInfo struct {
-	ID      string
-	Name    string
-	Image   string
-	Status  string
-	Labels  map[string]string
-	Created time.Time
+	ID        string
+	Name      string
+	Image     string
+	Status    string
+	Labels    map[string]string
+	Created   time.Time
+	Namespace string // K8s namespace
 }
 
 // WorkloadStats contains resource usage statistics.
@@ -134,6 +152,8 @@ type WorkloadStats struct {
 	MemoryLimit    int64
 	NetworkRxBytes int64
 	NetworkTxBytes int64
+	DiskReadBytes  int64
+	DiskWriteBytes int64
 	PIDs           int
 }
 
@@ -141,7 +161,7 @@ type WorkloadStats struct {
 type WorkloadEvent struct {
 	ID        string
 	Name      string
-	Event     string // "start", "stop", "die", "health_status", "oom"
+	Event     string // "start", "stop", "die", "health_status", "oom", "restart"
 	Timestamp time.Time
 	Message   string
 }
@@ -155,9 +175,10 @@ type LogOptions struct {
 
 // ListFilter filters workloads in List operations.
 type ListFilter struct {
-	Labels map[string]string // Match ALL labels (AND)
-	Name   string            // Name prefix/pattern
-	Status string            // Filter by status
+	Labels    map[string]string // Match ALL labels (AND)
+	Name      string            // Name prefix/pattern
+	Status    string            // Filter by status
+	Namespace string            // K8s namespace (empty = all)
 }
 
 // ExecResult is returned from ExecProvider.Exec.
@@ -177,7 +198,7 @@ type ResourceConfig struct {
 
 // NetworkConfig defines workload networking.
 type NetworkConfig struct {
-	Mode  string            // Network name, "host", "bridge"
+	Mode  string            // Network name, "host", "bridge", "none"
 	DNS   []string          // Custom DNS servers
 	Hosts map[string]string // Extra /etc/hosts entries
 }
@@ -191,7 +212,8 @@ type PortMapping struct {
 
 // VolumeMount defines a storage mount.
 type VolumeMount struct {
-	Source   string
-	Target   string
+	Source   string // Host path (Docker) or PVC/ConfigMap name (K8s)
+	Target   string // Mount path inside workload
 	ReadOnly bool
+	Type     string // "bind", "volume", "configmap", "secret", "pvc" (empty = "bind")
 }
