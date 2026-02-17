@@ -32,8 +32,8 @@ func (rfs *RealFileSystem) Getwd() (string, error) {
 	return os.Getwd()
 }
 
-// ConfigResolver handles finding and resolving config and env files.
-type ConfigResolver struct {
+// Resolver handles finding and resolving config and env files.
+type Resolver struct {
 	FileSystem FileSystem
 }
 
@@ -45,7 +45,7 @@ type ResolvedFiles struct {
 
 // ResolveFiles finds config and env files for a service.
 // Returns explicit paths if provided, otherwise searches for them.
-func (cr *ConfigResolver) ResolveFiles(serviceName string, opts LoaderConfig) ResolvedFiles {
+func (cr *Resolver) ResolveFiles(serviceName string, opts LoaderConfig) ResolvedFiles {
 	resolved := ResolvedFiles{
 		ConfigFile: opts.ConfigFile,
 		EnvFile:    opts.EnvFile,
@@ -62,7 +62,7 @@ func (cr *ConfigResolver) ResolveFiles(serviceName string, opts LoaderConfig) Re
 }
 
 // findConfigFile searches for config.yml in standard locations.
-func (cr *ConfigResolver) findConfigFile(serviceName string) string {
+func (cr *Resolver) findConfigFile(serviceName string) string {
 	shortName := serviceName
 	if idx := strings.LastIndex(serviceName, "-"); idx != -1 {
 		shortName = serviceName[idx+1:]
@@ -89,7 +89,7 @@ func (cr *ConfigResolver) findConfigFile(serviceName string) string {
 }
 
 // findEnvFile searches for .env files in standard locations.
-func (cr *ConfigResolver) findEnvFile(serviceName string) string {
+func (cr *Resolver) findEnvFile(serviceName string) string {
 	shortName := serviceName
 	if idx := strings.LastIndex(serviceName, "-"); idx != -1 {
 		shortName = serviceName[idx+1:]
@@ -158,7 +158,7 @@ func LoadConfig(serviceName string, cfg interface{}, opts ...LoaderOption) error
 		lc.FileSystem = &RealFileSystem{}
 	}
 
-	resolver := &ConfigResolver{FileSystem: lc.FileSystem}
+	resolver := &Resolver{FileSystem: lc.FileSystem}
 	files := resolver.ResolveFiles(serviceName, lc)
 
 	return loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem)

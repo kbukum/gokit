@@ -21,5 +21,5 @@ type service struct {
 	handler http.Handler
 }
 
-func (s *service) Path() string         { return s.path }
+func (s *service) Path() string          { return s.path }
 func (s *service) Handler() http.Handler { return s.handler }

@@ -1,7 +1,7 @@
 # gokit
 
 [![CI](https://github.com/kbukum/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/kbukum/gokit/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A modular Go toolkit for building production services.**
@@ -16,6 +16,12 @@ gokit uses a **multi-module** layout:
 - **Sub-modules** (`github.com/kbukum/gokit/{name}`) — each has its own `go.mod` and brings in heavier dependencies (Gin, GORM, Kafka, gRPC, etc.) only when you need them.
 
 Import the core for foundational utilities. Add sub-modules à la carte for infrastructure.
+
+## Compatibility Matrix
+
+| Go Version | Module Version |
+|------------|----------------|
+| 1.24+      | v0.1.0+        |
 
 ## Module Map
 

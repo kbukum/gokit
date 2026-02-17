@@ -81,7 +81,7 @@ func (b *Bulkhead) Execute(ctx context.Context, fn func() error) error {
 }
 
 // ExecuteWithResult runs a function that returns a value.
-func ExecuteWithResult[T any](b *Bulkhead, ctx context.Context, fn func() (T, error)) (T, error) {
+func ExecuteWithResult[T any](ctx context.Context, b *Bulkhead, fn func() (T, error)) (T, error) {
 	var result T
 	err := b.Execute(ctx, func() error {
 		var fnErr error

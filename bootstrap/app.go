@@ -74,7 +74,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.logger != nil {
 		app.Logger = o.logger
 	} else {
-		logger.Init(base.Logging)
+		logger.Init(&base.Logging)
 		app.Logger = logger.GetGlobalLogger()
 	}
 
@@ -213,7 +213,7 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 		})
 		return sig
 	case <-ctx.Done():
-		a.Logger.Info("Context cancelled — shutting down")
+		a.Logger.Info("Context canceled — shutting down")
 		return nil
 	}
 }

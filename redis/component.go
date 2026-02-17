@@ -67,9 +67,9 @@ func (c *Component) Stop(_ context.Context) error {
 }
 
 // Health returns the current health status of the Redis connection.
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	if c.client == nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "redis not initialized",
@@ -77,14 +77,14 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 
 	if err := c.client.Ping(ctx); err != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("ping failed: %v", err),
 		}
 	}
 
-	return component.ComponentHealth{
+	return component.Health{
 		Name:   c.Name(),
 		Status: component.StatusHealthy,
 	}

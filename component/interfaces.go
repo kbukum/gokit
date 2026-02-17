@@ -11,8 +11,8 @@ const (
 	StatusDegraded  HealthStatus = "degraded"
 )
 
-// ComponentHealth holds health information for a component.
-type ComponentHealth struct {
+// Health holds health information for a component.
+type Health struct {
 	Name    string       `json:"name"`
 	Status  HealthStatus `json:"status"`
 	Message string       `json:"message,omitempty"`
@@ -31,7 +31,7 @@ type Component interface {
 	Stop(ctx context.Context) error
 
 	// Health returns the current health status of the component.
-	Health(ctx context.Context) ComponentHealth
+	Health(ctx context.Context) Health
 }
 
 // Description holds summary information for the bootstrap display.

@@ -272,7 +272,7 @@ func TestBulkhead_AvailableAndInUse(t *testing.T) {
 func TestExecuteWithResult(t *testing.T) {
 	b := NewBulkhead(DefaultBulkheadConfig("test"))
 
-	result, err := ExecuteWithResult(b, context.Background(), func() (int, error) {
+	result, err := ExecuteWithResult(context.Background(), b, func() (int, error) {
 		return 42, nil
 	})
 

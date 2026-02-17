@@ -30,9 +30,9 @@ func (m *Manager) deployJob(ctx context.Context, ns string, req workload.DeployR
 			Annotations: annotations,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit:          &backoffLimit,
+			BackoffLimit:            &backoffLimit,
 			TTLSecondsAfterFinished: m.cfg.TTLAfterFinished,
-			ActiveDeadlineSeconds: m.cfg.ActiveDeadlineSeconds,
+			ActiveDeadlineSeconds:   m.cfg.ActiveDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,

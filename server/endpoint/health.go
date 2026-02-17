@@ -11,13 +11,13 @@ import (
 )
 
 // HealthChecker returns health status for registered components.
-type HealthChecker func(ctx context.Context) []component.ComponentHealth
+type HealthChecker func(ctx context.Context) []component.Health
 
 // Health returns a handler that reports service health including component statuses.
 func Health(serviceName string, checker HealthChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := "healthy"
-		var components []component.ComponentHealth
+		var components []component.Health
 
 		if checker != nil {
 			components = checker(c.Request.Context())

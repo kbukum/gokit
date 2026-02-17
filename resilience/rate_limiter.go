@@ -84,12 +84,12 @@ func (rl *RateLimiter) AllowN(n int) bool {
 	return false
 }
 
-// Wait blocks until a request is allowed or context is cancelled.
+// Wait blocks until a request is allowed or context is canceled.
 func (rl *RateLimiter) Wait(ctx context.Context) error {
 	return rl.WaitN(ctx, 1)
 }
 
-// WaitN blocks until n requests are allowed or context is cancelled.
+// WaitN blocks until n requests are allowed or context is canceled.
 func (rl *RateLimiter) WaitN(ctx context.Context, n int) error {
 	// Try immediate allow
 	if rl.AllowN(n) {

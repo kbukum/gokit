@@ -16,7 +16,7 @@ type CORSConfig struct {
 }
 
 // CORS returns a Gin middleware configured from CORSConfig.
-func CORS(cfg CORSConfig) gin.HandlerFunc {
+func CORS(cfg *CORSConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
 		if isAllowedOrigin(origin, cfg.AllowedOrigins) {

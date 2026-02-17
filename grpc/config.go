@@ -50,13 +50,13 @@ type Config struct {
 }
 
 const (
-	defaultHost           = "localhost"
-	defaultPort           = 50051
-	defaultMaxRecvMsgSize = 4 * 1024 * 1024 // 4 MB
-	defaultMaxSendMsgSize = 4 * 1024 * 1024 // 4 MB
-	defaultKeepaliveTime  = 30 * time.Second
+	defaultHost             = "localhost"
+	defaultPort             = 50051
+	defaultMaxRecvMsgSize   = 4 * 1024 * 1024 // 4 MB
+	defaultMaxSendMsgSize   = 4 * 1024 * 1024 // 4 MB
+	defaultKeepaliveTime    = 30 * time.Second
 	defaultKeepaliveTimeout = 10 * time.Second
-	defaultCallTimeout    = 30 * time.Second
+	defaultCallTimeout      = 30 * time.Second
 )
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.

@@ -58,9 +58,9 @@ func (c *Component) Stop(_ context.Context) error {
 }
 
 // Health returns the current health status of the storage component.
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	if !c.cfg.Enabled {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusHealthy,
 			Message: "disabled",
@@ -68,7 +68,7 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 
 	if c.storage == nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "storage not initialized",
@@ -77,14 +77,14 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 
 	// Simple health probe: check that we can resolve a URL.
 	if _, err := c.storage.URL(ctx, ".health"); err != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("health probe failed: %v", err),
 		}
 	}
 
-	return component.ComponentHealth{
+	return component.Health{
 		Name:   c.Name(),
 		Status: component.StatusHealthy,
 	}

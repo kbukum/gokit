@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/go-playground/validator/v10"
+
 	"github.com/kbukum/gokit/errors"
 )
 

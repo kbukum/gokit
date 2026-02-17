@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+
+	"github.com/kbukum/gokit/logger"
 )
 
 // MeterConfig configures the OpenTelemetry meter provider.
@@ -43,7 +44,7 @@ func DefaultMeterConfig(serviceName string) MeterConfig {
 
 // InitMeter initializes the OpenTelemetry meter provider.
 // Returns a MeterProvider that should be shut down on application exit.
-func InitMeter(ctx context.Context, config MeterConfig) (*sdkmetric.MeterProvider, error) {
+func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvider, error) {
 	opts := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(config.Endpoint),
 	}

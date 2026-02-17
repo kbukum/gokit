@@ -11,7 +11,7 @@ type mockComponent struct {
 	name       string
 	startErr   error
 	stopErr    error
-	health     ComponentHealth
+	health     Health
 	startOrder *[]string
 	stopOrder  *[]string
 }
@@ -29,7 +29,7 @@ func (m *mockComponent) Stop(ctx context.Context) error {
 	}
 	return m.stopErr
 }
-func (m *mockComponent) Health(ctx context.Context) ComponentHealth {
+func (m *mockComponent) Health(ctx context.Context) Health {
 	return m.health
 }
 
@@ -42,7 +42,7 @@ func TestNewRegistry(t *testing.T) {
 
 func TestRegister(t *testing.T) {
 	r := NewRegistry()
-	c := &mockComponent{name: "db", health: ComponentHealth{Name: "db", Status: StatusHealthy}}
+	c := &mockComponent{name: "db", health: Health{Name: "db", Status: StatusHealthy}}
 
 	if err := r.Register(c); err != nil {
 		t.Fatalf("Register failed: %v", err)
@@ -88,11 +88,11 @@ func TestStartAll(t *testing.T) {
 
 	r.Register(&mockComponent{
 		name: "db", startOrder: &order,
-		health: ComponentHealth{Name: "db", Status: StatusHealthy},
+		health: Health{Name: "db", Status: StatusHealthy},
 	})
 	r.Register(&mockComponent{
 		name: "cache", startOrder: &order,
-		health: ComponentHealth{Name: "cache", Status: StatusHealthy},
+		health: Health{Name: "cache", Status: StatusHealthy},
 	})
 
 	if err := r.StartAll(context.Background()); err != nil {
@@ -121,9 +121,9 @@ func TestStopAllReverseOrder(t *testing.T) {
 	r := NewRegistry()
 	order := []string{}
 
-	r.Register(&mockComponent{name: "db", stopOrder: &order, health: ComponentHealth{Name: "db", Status: StatusHealthy}})
-	r.Register(&mockComponent{name: "cache", stopOrder: &order, health: ComponentHealth{Name: "cache", Status: StatusHealthy}})
-	r.Register(&mockComponent{name: "kafka", stopOrder: &order, health: ComponentHealth{Name: "kafka", Status: StatusHealthy}})
+	r.Register(&mockComponent{name: "db", stopOrder: &order, health: Health{Name: "db", Status: StatusHealthy}})
+	r.Register(&mockComponent{name: "cache", stopOrder: &order, health: Health{Name: "cache", Status: StatusHealthy}})
+	r.Register(&mockComponent{name: "kafka", stopOrder: &order, health: Health{Name: "kafka", Status: StatusHealthy}})
 
 	r.StartAll(context.Background())
 	if err := r.StopAll(context.Background()); err != nil {
@@ -156,7 +156,7 @@ func TestStopAllWithErrors(t *testing.T) {
 	r := NewRegistry()
 	r.Register(&mockComponent{
 		name: "db", stopErr: fmt.Errorf("stop failed"),
-		health: ComponentHealth{Name: "db", Status: StatusHealthy},
+		health: Health{Name: "db", Status: StatusHealthy},
 	})
 	r.StartAll(context.Background())
 
@@ -170,11 +170,11 @@ func TestHealthAll(t *testing.T) {
 	r := NewRegistry()
 	r.Register(&mockComponent{
 		name:   "db",
-		health: ComponentHealth{Name: "db", Status: StatusHealthy, Message: "connected"},
+		health: Health{Name: "db", Status: StatusHealthy, Message: "connected"},
 	})
 	r.Register(&mockComponent{
 		name:   "cache",
-		health: ComponentHealth{Name: "cache", Status: StatusUnhealthy, Message: "timeout"},
+		health: Health{Name: "cache", Status: StatusUnhealthy, Message: "timeout"},
 	})
 
 	results := r.HealthAll(context.Background())
@@ -240,7 +240,7 @@ func TestBaseLazyComponentDoubleInit(t *testing.T) {
 	}
 }
 
-func TestBaseLazyComponentHealthCheck(t *testing.T) {
+func TestBaseLazyHealthCheck(t *testing.T) {
 	lc := NewBaseLazyComponent("svc", func(ctx context.Context) error { return nil })
 
 	// Not initialized yet

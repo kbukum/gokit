@@ -36,7 +36,7 @@ type MountedHandler struct {
 
 // New creates a new Server. The Gin engine is created but no middleware is
 // applied yet — call ApplyDefaults on the config first if needed.
-func New(cfg Config, log *logger.Logger) *Server {
+func New(cfg *Config, log *logger.Logger) *Server {
 	// Set Gin mode based on global zerolog level.
 	if zerolog.GlobalLevel() <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)
@@ -71,7 +71,7 @@ func New(cfg Config, log *logger.Logger) *Server {
 		httpServer: httpServer,
 		engine:     engine,
 		mux:        mux,
-		config:     cfg,
+		config:     *cfg,
 		log:        log.WithComponent("server"),
 	}
 }
@@ -151,7 +151,7 @@ func (s *Server) Addr() string {
 func (s *Server) ApplyMiddleware() {
 	s.engine.Use(middleware.Recovery())
 	s.engine.Use(middleware.RequestID())
-	s.engine.Use(middleware.CORS(s.config.CORS))
+	s.engine.Use(middleware.CORS(&s.config.CORS))
 	if s.config.MaxBodySize != "" {
 		s.engine.Use(middleware.BodySizeLimit(s.config.MaxBodySize))
 	}

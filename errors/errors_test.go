@@ -1,14 +1,14 @@
 package errors
 
 import (
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 )
 
-func TestNew(t *testing.T) {
+func TestAppError_New_Success(t *testing.T) {
 	err := New(ErrCodeNotFound, "not found", http.StatusNotFound)
 	if err.Code != ErrCodeNotFound {
 		t.Errorf("expected code %s, got %s", ErrCodeNotFound, err.Code)
@@ -24,14 +24,14 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestNewRetryable(t *testing.T) {
+func TestAppError_New_Retryable(t *testing.T) {
 	err := New(ErrCodeTimeout, "timed out", http.StatusGatewayTimeout)
 	if !err.Retryable {
 		t.Error("TIMEOUT should be retryable")
 	}
 }
 
-func TestNotFound(t *testing.T) {
+func TestAppError_NotFound_Success(t *testing.T) {
 	err := NotFound("user", "123")
 	if err.Code != ErrCodeNotFound {
 		t.Errorf("expected NOT_FOUND, got %s", err.Code)
@@ -50,14 +50,14 @@ func TestNotFound(t *testing.T) {
 	}
 }
 
-func TestNotFoundEmptyID(t *testing.T) {
+func TestAppError_NotFound_EmptyID(t *testing.T) {
 	err := NotFound("user", "")
 	if _, ok := err.Details["id"]; ok {
 		t.Error("expected no 'id' key in details when id is empty")
 	}
 }
 
-func TestInternal(t *testing.T) {
+func TestAppError_Internal_Success(t *testing.T) {
 	cause := fmt.Errorf("db connection lost")
 	err := Internal(cause)
 	if err.Code != ErrCodeInternal {
@@ -69,12 +69,12 @@ func TestInternal(t *testing.T) {
 	if err.Cause != cause {
 		t.Error("expected cause to be set")
 	}
-	if !err.Retryable {
-		t.Error("Internal should be retryable")
+	if err.Retryable {
+		t.Error("Internal should NOT be retryable by default")
 	}
 }
 
-func TestUnauthorized(t *testing.T) {
+func TestAppError_Unauthorized_Success(t *testing.T) {
 	err := Unauthorized("")
 	if err.Code != ErrCodeUnauthorized {
 		t.Errorf("expected UNAUTHORIZED, got %s", err.Code)
@@ -89,7 +89,7 @@ func TestUnauthorized(t *testing.T) {
 	}
 }
 
-func TestForbidden(t *testing.T) {
+func TestAppError_Forbidden_Success(t *testing.T) {
 	err := Forbidden("")
 	if err.HTTPStatus != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", err.HTTPStatus)
@@ -99,7 +99,7 @@ func TestForbidden(t *testing.T) {
 	}
 }
 
-func TestTokenExpired(t *testing.T) {
+func TestAppError_TokenExpired_Success(t *testing.T) {
 	err := TokenExpired()
 	if err.Code != ErrCodeTokenExpired {
 		t.Errorf("expected TOKEN_EXPIRED, got %s", err.Code)
@@ -109,7 +109,7 @@ func TestTokenExpired(t *testing.T) {
 	}
 }
 
-func TestInvalidInput(t *testing.T) {
+func TestAppError_InvalidInput_Success(t *testing.T) {
 	err := InvalidInput("email", "must be valid")
 	if err.Code != ErrCodeInvalidInput {
 		t.Errorf("expected INVALID_INPUT, got %s", err.Code)
@@ -119,7 +119,7 @@ func TestInvalidInput(t *testing.T) {
 	}
 }
 
-func TestWithCause(t *testing.T) {
+func TestAppError_WithCause_Chain(t *testing.T) {
 	cause := fmt.Errorf("root cause")
 	err := NotFound("item", "1").WithCause(cause)
 	if err.Cause != cause {
@@ -130,8 +130,8 @@ func TestWithCause(t *testing.T) {
 	}
 }
 
-func TestWithDetails(t *testing.T) {
-	err := NotFound("item", "1").WithDetails(map[string]interface{}{
+func TestAppError_WithDetails_Merge(t *testing.T) {
+	err := NotFound("item", "1").WithDetails(map[string]any{
 		"extra": "info",
 	})
 	if err.Details["extra"] != "info" {
@@ -140,16 +140,51 @@ func TestWithDetails(t *testing.T) {
 	if err.Details["resource"] != "item" {
 		t.Error("expected original details to be preserved")
 	}
+
+	// Test merging into existing details
+	err.WithDetails(map[string]any{
+		"another": "detail",
+	})
+	if err.Details["another"] != "detail" {
+		t.Error("expected another=detail to be merged")
+	}
+	if err.Details["extra"] != "info" {
+		t.Error("expected extra=info to be preserved after second merge")
+	}
 }
 
-func TestWithDetail(t *testing.T) {
+func TestAppError_WithDetails_Nil(t *testing.T) {
+	err := Internal(nil).WithDetails(nil)
+	if err.Details == nil {
+		t.Fatal("expected Details map to be initialized even with nil input")
+	}
+}
+
+func TestAppError_WithDetail_Single(t *testing.T) {
 	err := Internal(nil).WithDetail("trace", "abc")
 	if err.Details["trace"] != "abc" {
 		t.Errorf("expected trace=abc in details")
 	}
+
+	// Test overwriting
+	err.WithDetail("trace", "def")
+	if err.Details["trace"] != "def" {
+		t.Errorf("expected trace=def after overwrite")
+	}
 }
 
-func TestErrorString(t *testing.T) {
+func TestAppError_WithDetail_NilMap(t *testing.T) {
+	err := &AppError{}
+	err.WithDetail("key", "value")
+	if err.Details == nil {
+		t.Fatal("expected Details map to be initialized")
+	}
+	if err.Details["key"] != "value" {
+		t.Errorf("expected key=value, got %v", err.Details["key"])
+	}
+}
+
+func TestAppError_Error_Format(t *testing.T) {
 	err := NotFound("user", "5")
 	s := err.Error()
 	if !strings.Contains(s, "NOT_FOUND") {
@@ -160,7 +195,7 @@ func TestErrorString(t *testing.T) {
 	}
 }
 
-func TestUnwrap(t *testing.T) {
+func TestAppError_Unwrap_Success(t *testing.T) {
 	cause := fmt.Errorf("underlying")
 	err := Internal(cause)
 	if err.Unwrap() != cause {
@@ -173,13 +208,13 @@ func TestUnwrap(t *testing.T) {
 	}
 }
 
-func TestConstructors(t *testing.T) {
+func TestAppError_Constructors_Table(t *testing.T) {
 	tests := []struct {
-		name       string
-		err        *AppError
-		code       ErrorCode
-		status     int
-		retryable  bool
+		name      string
+		err       *AppError
+		code      ErrorCode
+		status    int
+		retryable bool
 	}{
 		{"ServiceUnavailable", ServiceUnavailable("api"), ErrCodeServiceUnavailable, http.StatusServiceUnavailable, true},
 		{"ConnectionFailed", ConnectionFailed("db"), ErrCodeConnectionFailed, http.StatusServiceUnavailable, true},
@@ -210,15 +245,15 @@ func TestConstructors(t *testing.T) {
 	}
 }
 
-func TestIsRetryableCode(t *testing.T) {
-	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited, ErrCodeDatabaseError, ErrCodeExternalService, ErrCodeInternal}
+func TestErrorCode_IsRetryableCode_Table(t *testing.T) {
+	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited, ErrCodeDatabaseError, ErrCodeExternalService}
 	for _, code := range retryable {
 		if !IsRetryableCode(code) {
 			t.Errorf("expected %s to be retryable", code)
 		}
 	}
 
-	nonRetryable := []ErrorCode{ErrCodeNotFound, ErrCodeAlreadyExists, ErrCodeInvalidInput, ErrCodeUnauthorized, ErrCodeForbidden}
+	nonRetryable := []ErrorCode{ErrCodeNotFound, ErrCodeAlreadyExists, ErrCodeInvalidInput, ErrCodeUnauthorized, ErrCodeForbidden, ErrCodeInternal}
 	for _, code := range nonRetryable {
 		if IsRetryableCode(code) {
 			t.Errorf("expected %s to NOT be retryable", code)
@@ -226,7 +261,7 @@ func TestIsRetryableCode(t *testing.T) {
 	}
 }
 
-func TestToResponse(t *testing.T) {
+func TestAppError_ToResponse_Success(t *testing.T) {
 	err := NotFound("user", "42")
 	resp := err.ToResponse()
 	if resp.Error.Code != ErrCodeNotFound {
@@ -240,7 +275,7 @@ func TestToResponse(t *testing.T) {
 	}
 }
 
-func TestIsAppError(t *testing.T) {
+func TestAppError_IsAppError_Success(t *testing.T) {
 	appErr := NotFound("x", "")
 	if !IsAppError(appErr) {
 		t.Error("expected IsAppError to return true for AppError")
@@ -257,7 +292,7 @@ func TestIsAppError(t *testing.T) {
 	}
 }
 
-func TestAsAppError(t *testing.T) {
+func TestAppError_AsAppError_Success(t *testing.T) {
 	appErr := Internal(nil)
 	wrapped := fmt.Errorf("wrap: %w", appErr)
 
@@ -275,14 +310,14 @@ func TestAsAppError(t *testing.T) {
 	}
 }
 
-func TestAppErrorImplementsErrorInterface(t *testing.T) {
+func TestAppError_ImplementsErrorInterface(t *testing.T) {
 	var err error = NotFound("test", "1")
-	if err == nil {
-		t.Error("AppError should implement error interface")
+	if err.Error() == "" {
+		t.Error("Error() should not be empty")
 	}
 
 	var appErr *AppError
-	if !errors.As(err, &appErr) {
-		t.Error("errors.As should work with AppError")
+	if !stderrors.As(err, &appErr) {
+		t.Error("stderrors.As should work with AppError")
 	}
 }

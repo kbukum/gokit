@@ -41,12 +41,12 @@ type Service[T gojwt.Claims] struct {
 // Example:
 //
 //	svc, err := jwt.NewService(cfg, func() *MyClaims { return &MyClaims{} })
-func NewService[T gojwt.Claims](cfg Config, newEmpty func() T) (*Service[T], error) {
+func NewService[T gojwt.Claims](cfg *Config, newEmpty func() T) (*Service[T], error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("jwt: %w", err)
 	}
-	return &Service[T]{cfg: cfg, newEmpty: newEmpty}, nil
+	return &Service[T]{cfg: *cfg, newEmpty: newEmpty}, nil
 }
 
 // Generate creates a signed JWT token from the given claims.
@@ -139,15 +139,10 @@ func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 	now := time.Now()
 
 	// Try to set via the ClaimsWithDefaults interface if the claims type supports it
-	if setter, ok := any(claims).(interface{ SetDefaults(time.Time, time.Duration, string, []string) }); ok {
+	if setter, ok := any(claims).(interface {
+		SetDefaults(time.Time, time.Duration, string, []string)
+	}); ok {
 		setter.SetDefaults(now, ttl, s.cfg.Issuer, s.cfg.Audience)
 		return
-	}
-
-	// For standard RegisteredClaims embedding, we can check expiry
-	// If ExpiresAt is already set (non-zero), we don't override it
-	if exp, err := claims.GetExpirationTime(); err == nil && exp == nil {
-		// Claims doesn't have expiry set — caller should set it manually
-		// We can't set it generically without knowing the concrete type
 	}
 }

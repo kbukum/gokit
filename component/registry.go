@@ -121,11 +121,11 @@ func (r *Registry) StopAll(ctx context.Context) error {
 }
 
 // HealthAll returns health status for all registered components.
-func (r *Registry) HealthAll(ctx context.Context) []ComponentHealth {
+func (r *Registry) HealthAll(ctx context.Context) []Health {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	results := make([]ComponentHealth, 0, len(r.entries))
+	results := make([]Health, 0, len(r.entries))
 	for _, entry := range r.entries {
 		results = append(results, entry.component.Health(ctx))
 	}

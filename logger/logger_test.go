@@ -97,7 +97,7 @@ func TestInit(t *testing.T) {
 		Format: "console",
 		Output: "stdout",
 	}
-	Init(cfg)
+	Init(&cfg)
 	gl := GetGlobalLogger()
 	if gl == nil {
 		t.Fatal("expected global logger to be set after Init")
@@ -122,7 +122,7 @@ func TestSetGlobalLogger(t *testing.T) {
 }
 
 func TestPackageLevelFunctions(t *testing.T) {
-	Init(Config{Level: "debug", Format: "console", Output: "stdout"})
+	Init(&Config{Level: "debug", Format: "console", Output: "stdout"})
 	// These should not panic
 	Debug("debug msg")
 	Info("info msg")
@@ -180,9 +180,9 @@ func TestConfigValidate(t *testing.T) {
 
 func TestConsoleLoggerFormat(t *testing.T) {
 	cfg := &Config{
-		Level:  "info",
-		Format: "console",
-		Output: "stdout",
+		Level:   "info",
+		Format:  "console",
+		Output:  "stdout",
 		NoColor: true,
 	}
 	l := New(cfg, "test-svc")

@@ -114,11 +114,11 @@ func TestLoadConfigMissingFile(t *testing.T) {
 	}
 }
 
-func TestConfigResolverWithMockFS(t *testing.T) {
+func TestResolverWithMockFS(t *testing.T) {
 	fs := &mockFS{files: map[string]bool{
 		"./cmd/my-svc/config.yml": true,
 	}}
-	resolver := &ConfigResolver{FileSystem: fs}
+	resolver := &Resolver{FileSystem: fs}
 	files := resolver.ResolveFiles("my-svc", LoaderConfig{})
 	if files.ConfigFile != "./cmd/my-svc/config.yml" {
 		t.Errorf("expected config file at ./cmd/my-svc/config.yml, got %q", files.ConfigFile)
@@ -129,9 +129,9 @@ type mockFS struct {
 	files map[string]bool
 }
 
-func (m *mockFS) Exists(path string) bool    { return m.files[path] }
-func (m *mockFS) LoadEnv(path string) error   { return nil }
-func (m *mockFS) Getwd() (string, error)      { return "/mock", nil }
+func (m *mockFS) Exists(path string) bool   { return m.files[path] }
+func (m *mockFS) LoadEnv(path string) error { return nil }
+func (m *mockFS) Getwd() (string, error)    { return "/mock", nil }
 
 func TestWithFileSystemOption(t *testing.T) {
 	var lc LoaderConfig

@@ -117,18 +117,6 @@ func (s *Summary) TrackInfrastructure(name, componentType, status, details strin
 
 // trackInfrastructureWithComponent is like TrackInfrastructure but also records
 // the internal component name for deduplication with the Components section.
-func (s *Summary) trackInfrastructureWithComponent(name, componentName, componentType, status, details string, port int, healthy bool) {
-	s.infrastructure = append(s.infrastructure, InfrastructureInfo{
-		Name:          name,
-		ComponentName: componentName,
-		Type:          componentType,
-		Status:        status,
-		Details:       details,
-		Port:          port,
-		Healthy:       healthy,
-	})
-}
-
 // TrackBusinessComponent records a business-layer component.
 func (s *Summary) TrackBusinessComponent(name, componentType, status string, dependencies []string) {
 	s.business = append(s.business, BusinessComponentInfo{
@@ -270,7 +258,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Health issues — only show when something is NOT healthy
 	if len(healthResults) > 0 {
-		var unhealthy []component.ComponentHealth
+		var unhealthy []component.Health
 		for _, h := range healthResults {
 			if h.Status != component.StatusHealthy {
 				unhealthy = append(unhealthy, h)

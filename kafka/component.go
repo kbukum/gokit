@@ -143,14 +143,14 @@ type BrokerHealth struct {
 
 // Health checks broker connectivity by dialling all configured brokers.
 // Returns degraded status when some (but not all) brokers are unreachable.
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	c.mu.Lock()
 	running := c.running
 	cfg := c.cfg
 	c.mu.Unlock()
 
 	if !running {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "kafka not started",
@@ -158,7 +158,7 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 
 	if len(cfg.Brokers) == 0 {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "no brokers configured",
@@ -167,7 +167,7 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 
 	dialer, err := CreateDialer(&cfg)
 	if err != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("dialer: %v", err),
@@ -188,18 +188,18 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	total := len(cfg.Brokers)
 	switch {
 	case healthy == total:
-		return component.ComponentHealth{
+		return component.Health{
 			Name:   c.Name(),
 			Status: component.StatusHealthy,
 		}
 	case healthy > 0:
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusDegraded,
 			Message: fmt.Sprintf("%d/%d brokers healthy; %s", healthy, total, strings.Join(issues, "; ")),
 		}
 	default:
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("no brokers available; %s", strings.Join(issues, "; ")),

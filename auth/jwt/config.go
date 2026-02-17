@@ -147,18 +147,6 @@ func (c *Config) signKey() interface{} {
 }
 
 // refreshSignKey returns the key for signing refresh tokens.
-func (c *Config) refreshSignKey() interface{} {
-	switch c.Method {
-	case HS256, HS384, HS512:
-		if c.RefreshSecret != "" {
-			return []byte(c.RefreshSecret)
-		}
-		return []byte(c.Secret)
-	default:
-		return c.PrivateKey
-	}
-}
-
 // verifyKey returns the key used for verifying tokens.
 func (c *Config) verifyKey() interface{} {
 	switch c.Method {
@@ -186,14 +174,3 @@ func (c *Config) verifyKey() interface{} {
 }
 
 // refreshVerifyKey returns the key for verifying refresh tokens.
-func (c *Config) refreshVerifyKey() interface{} {
-	switch c.Method {
-	case HS256, HS384, HS512:
-		if c.RefreshSecret != "" {
-			return []byte(c.RefreshSecret)
-		}
-		return []byte(c.Secret)
-	default:
-		return c.verifyKey()
-	}
-}

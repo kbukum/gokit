@@ -67,8 +67,8 @@ func WithExtraParam(key, value string) AuthURLOption {
 	}
 }
 
-// ApplyAuthURLOptions applies options and returns the resolved configuration.
-func ApplyAuthURLOptions(opts []AuthURLOption) authURLOptions {
+// applyAuthURLOptions applies options and returns the resolved configuration.
+func applyAuthURLOptions(opts []AuthURLOption) authURLOptions {
 	var o authURLOptions
 	for _, opt := range opts {
 		opt(&o)
@@ -94,8 +94,8 @@ func WithCodeVerifier(verifier string) ExchangeOption {
 	return func(o *exchangeOptions) { o.codeVerifier = verifier }
 }
 
-// ApplyExchangeOptions applies options and returns the resolved configuration.
-func ApplyExchangeOptions(opts []ExchangeOption) exchangeOptions {
+// applyExchangeOptions applies options and returns the resolved configuration.
+func applyExchangeOptions(opts []ExchangeOption) exchangeOptions {
 	var o exchangeOptions
 	for _, opt := range opts {
 		opt(&o)

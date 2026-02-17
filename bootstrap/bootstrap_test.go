@@ -21,7 +21,7 @@ type mockComponent struct {
 	name     string
 	startErr error
 	stopErr  error
-	health   component.ComponentHealth
+	health   component.Health
 	started  bool
 	stopped  bool
 }
@@ -35,7 +35,7 @@ func (m *mockComponent) Stop(ctx context.Context) error {
 	m.stopped = true
 	return m.stopErr
 }
-func (m *mockComponent) Health(ctx context.Context) component.ComponentHealth {
+func (m *mockComponent) Health(ctx context.Context) component.Health {
 	return m.health
 }
 
@@ -116,7 +116,7 @@ func TestRegisterComponent(t *testing.T) {
 	app, _ := NewApp(cfg)
 	c := &mockComponent{
 		name:   "db",
-		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
 	}
 
 	if err := app.RegisterComponent(c); err != nil {
@@ -241,11 +241,11 @@ func TestReadyCheckAllHealthy(t *testing.T) {
 	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "db",
-		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
 	})
 	app.RegisterComponent(&mockComponent{
 		name:   "cache",
-		health: component.ComponentHealth{Name: "cache", Status: component.StatusHealthy},
+		health: component.Health{Name: "cache", Status: component.StatusHealthy},
 	})
 
 	err := app.ReadyCheck(context.Background())
@@ -259,11 +259,11 @@ func TestReadyCheckUnhealthy(t *testing.T) {
 	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "db",
-		health: component.ComponentHealth{Name: "db", Status: component.StatusHealthy},
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
 	})
 	app.RegisterComponent(&mockComponent{
 		name:   "cache",
-		health: component.ComponentHealth{Name: "cache", Status: component.StatusUnhealthy, Message: "timeout"},
+		health: component.Health{Name: "cache", Status: component.StatusUnhealthy, Message: "timeout"},
 	})
 
 	err := app.ReadyCheck(context.Background())
@@ -277,7 +277,7 @@ func TestReadyCheckDegraded(t *testing.T) {
 	app, _ := NewApp(cfg)
 	app.RegisterComponent(&mockComponent{
 		name:   "svc",
-		health: component.ComponentHealth{Name: "svc", Status: component.StatusDegraded, Message: "slow"},
+		health: component.Health{Name: "svc", Status: component.StatusDegraded, Message: "slow"},
 	})
 
 	err := app.ReadyCheck(context.Background())

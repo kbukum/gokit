@@ -6,15 +6,20 @@ import (
 
 // ErrorResponse is the JSON structure returned to clients following RFC 7807.
 type ErrorResponse struct {
+	// Error contains the error details.
 	Error ErrorBody `json:"error"`
 }
 
 // ErrorBody contains the error details sent to clients.
 type ErrorBody struct {
-	Code      ErrorCode              `json:"code"`
-	Message   string                 `json:"message"`
-	Retryable bool                   `json:"retryable"`
-	Details   map[string]interface{} `json:"details,omitempty"`
+	// Code is a machine-readable error code.
+	Code ErrorCode `json:"code"`
+	// Message is a human-readable error message.
+	Message string `json:"message"`
+	// Retryable indicates if the operation can be retried.
+	Retryable bool `json:"retryable"`
+	// Details contains additional context for the error.
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // ToResponse converts an AppError to an ErrorResponse for JSON serialization.

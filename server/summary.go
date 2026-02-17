@@ -13,7 +13,9 @@ var systemPaths = map[string]bool{
 
 // formatHandlerName extracts a clean handler name from Gin's full handler path.
 // Gin stores handlers like:
-//   "github.com/yourorg/yourservice/internal/api/port.(*UserPort).List-fm"
+//
+//	"github.com/yourorg/yourservice/internal/api/port.(*UserPort).List-fm"
+//
 // We extract: "UserPort.List"
 func formatHandlerName(fullPath string) string {
 	// Remove -fm suffix Gin adds to method values
