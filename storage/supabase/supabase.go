@@ -11,33 +11,41 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/storage"
 )
 
 func init() {
-	storage.RegisterFactory(storage.ProviderSupabase, func(cfg storage.Config) (storage.Storage, error) {
-		return NewStorage(Config{
-			URL:       cfg.URL,
-			Bucket:    cfg.Bucket,
-			AccessKey: cfg.AccessKey,
-			SecretKey: cfg.SecretKey,
-		})
+	storage.RegisterFactory(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+		c := &Config{}
+		if providerCfg != nil {
+			pc, ok := providerCfg.(*Config)
+			if !ok {
+				return nil, fmt.Errorf("supabase: expected *supabase.Config, got %T", providerCfg)
+			}
+			c = pc
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			return nil, err
+		}
+		return NewStorage(c)
 	})
 }
 
 // Config holds Supabase-specific configuration.
 type Config struct {
 	// URL is the Supabase project URL (e.g., https://xyz.supabase.co).
-	URL string
+	URL string `mapstructure:"url" json:"url"`
 
 	// Bucket is the storage bucket name.
-	Bucket string
+	Bucket string `mapstructure:"bucket" json:"bucket"`
 
 	// AccessKey is used for authentication (optional, reserved for future use).
-	AccessKey string
+	AccessKey string `mapstructure:"access_key" json:"access_key"`
 
 	// SecretKey is the service-role key used as Bearer token.
-	SecretKey string
+	SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 }
 
 // Storage implements storage.Storage using the Supabase Storage REST API.
@@ -50,7 +58,7 @@ type Storage struct {
 }
 
 // NewStorage creates a new Supabase storage client.
-func NewStorage(cfg Config) (*Storage, error) {
+func NewStorage(cfg *Config) (*Storage, error) {
 	base := strings.TrimRight(cfg.URL, "/") + "/storage/v1"
 	return &Storage{
 		baseURL:   base,

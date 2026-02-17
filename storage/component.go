@@ -10,16 +10,18 @@ import (
 
 // Component wraps Storage and implements component.Component for lifecycle management.
 type Component struct {
-	storage Storage
-	cfg     Config
-	log     *logger.Logger
+	storage     Storage
+	cfg         Config
+	providerCfg any
+	log         *logger.Logger
 }
 
 // NewComponent creates a storage component for use with the component registry.
-func NewComponent(cfg Config, log *logger.Logger) *Component {
+func NewComponent(cfg Config, providerCfg any, log *logger.Logger) *Component {
 	return &Component{
-		cfg: cfg,
-		log: log.WithComponent("storage"),
+		cfg:         cfg,
+		providerCfg: providerCfg,
+		log:         log.WithComponent("storage"),
 	}
 }
 
@@ -41,7 +43,7 @@ func (c *Component) Start(_ context.Context) error {
 		return nil
 	}
 
-	s, err := New(c.cfg, c.log)
+	s, err := New(c.cfg, c.providerCfg, c.log)
 	if err != nil {
 		return fmt.Errorf("storage start: %w", err)
 	}
@@ -91,14 +93,22 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
 	details := fmt.Sprintf("provider=%s", c.cfg.Provider)
-	if c.cfg.Bucket != "" {
-		details += fmt.Sprintf(" bucket=%s", c.cfg.Bucket)
-	} else if c.cfg.BasePath != "" {
-		details += fmt.Sprintf(" path=%s", c.cfg.BasePath)
+
+	// Try to extract bucket from provider config via BucketDescriber interface.
+	if bp, ok := c.providerCfg.(BucketDescriber); ok {
+		if b := bp.GetBucket(); b != "" {
+			details += fmt.Sprintf(" bucket=%s", b)
+		}
 	}
+
 	return component.Description{
 		Name:    "Storage",
 		Type:    "storage",
 		Details: details,
 	}
+}
+
+// BucketDescriber is optionally implemented by provider configs that use a bucket.
+type BucketDescriber interface {
+	GetBucket() string
 }

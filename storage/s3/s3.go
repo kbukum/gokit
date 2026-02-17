@@ -10,29 +10,28 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/storage"
 )
 
 func init() {
-	storage.RegisterFactory(storage.ProviderS3, func(cfg storage.Config) (storage.Storage, error) {
-		return NewStorage(context.Background(), Config{
-			Region:    cfg.Region,
-			Bucket:    cfg.Bucket,
-			Endpoint:  cfg.Endpoint,
-			AccessKey: cfg.AccessKey,
-			SecretKey: cfg.SecretKey,
-		})
+	storage.RegisterFactory(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+		c := &Config{}
+		if providerCfg != nil {
+			pc, ok := providerCfg.(*Config)
+			if !ok {
+				return nil, fmt.Errorf("s3: expected *s3.Config, got %T", providerCfg)
+			}
+			c = pc
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			return nil, err
+		}
+		return NewStorage(context.Background(), c)
 	})
 }
 
-// Config holds the S3-specific configuration fields.
-type Config struct {
-	Region    string
-	Bucket    string
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-}
 
 // Storage implements storage.Storage using Amazon S3 (or S3-compatible services).
 type Storage struct {
@@ -41,7 +40,7 @@ type Storage struct {
 }
 
 // NewStorage creates a new S3 storage client from the given config.
-func NewStorage(ctx context.Context, cfg Config) (*Storage, error) {
+func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 	opts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
 	}
@@ -61,6 +60,10 @@ func NewStorage(ctx context.Context, cfg Config) (*Storage, error) {
 	if cfg.Endpoint != "" {
 		s3Opts = append(s3Opts, func(o *awss3.Options) {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
+			o.UsePathStyle = cfg.ForcePathStyle || true
+		})
+	} else if cfg.ForcePathStyle {
+		s3Opts = append(s3Opts, func(o *awss3.Options) {
 			o.UsePathStyle = true
 		})
 	}

@@ -6,8 +6,10 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
-// StorageFactory creates a Storage implementation from a Config.
-type StorageFactory func(cfg Config) (Storage, error)
+// StorageFactory creates a Storage implementation from core config and
+// provider-specific configuration. Each provider type-asserts providerCfg
+// to its own config type.
+type StorageFactory func(cfg Config, providerCfg any, log *logger.Logger) (Storage, error)
 
 var factories = make(map[string]StorageFactory)
 
@@ -20,9 +22,10 @@ func RegisterFactory(name string, f StorageFactory) {
 
 // New creates a Storage implementation based on the given Config.
 // The provider field determines which backend is used.
+// providerCfg carries provider-specific settings (e.g. *s3.Config, *supabase.Config).
 // Ensure the desired provider package has been imported (e.g.
 // _ "github.com/kbukum/gokit/storage/local") so its factory is registered.
-func New(cfg Config, log *logger.Logger) (Storage, error) {
+func New(cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -36,5 +39,5 @@ func New(cfg Config, log *logger.Logger) (Storage, error) {
 	}
 
 	l.Info("initializing storage", map[string]interface{}{"provider": cfg.Provider})
-	return f(cfg)
+	return f(cfg, providerCfg, l)
 }

@@ -11,12 +11,25 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/storage"
 )
 
 func init() {
-	storage.RegisterFactory(storage.ProviderLocal, func(cfg storage.Config) (storage.Storage, error) {
-		return NewStorage(cfg.BasePath)
+	storage.RegisterFactory(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+		c := &Config{}
+		if providerCfg != nil {
+			pc, ok := providerCfg.(*Config)
+			if !ok {
+				return nil, fmt.Errorf("local: expected *local.Config, got %T", providerCfg)
+			}
+			c = pc
+		}
+		c.ApplyDefaults()
+		if err := c.Validate(); err != nil {
+			return nil, err
+		}
+		return NewStorage(c.BasePath)
 	})
 }
 
