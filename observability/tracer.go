@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -13,6 +12,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/kbukum/gokit/logger"
 )
 
 const defaultTracerName = "github.com/kbukum/gokit/observability"
@@ -47,7 +48,7 @@ func DefaultTracerConfig(serviceName string) TracerConfig {
 
 // InitTracer initializes the OpenTelemetry tracer provider.
 // Returns a TracerProvider that should be shut down on application exit.
-func InitTracer(ctx context.Context, config TracerConfig) (*sdktrace.TracerProvider, error) {
+func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProvider, error) {
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(config.Endpoint),
 	}

@@ -52,7 +52,7 @@ func TestSanitizeEnvValue(t *testing.T) {
 
 func TestIsSafeString(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input string
 		want  bool
 	}{

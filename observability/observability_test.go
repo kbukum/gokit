@@ -128,17 +128,17 @@ func TestNewServiceHealth(t *testing.T) {
 func TestServiceHealth_AddComponent(t *testing.T) {
 	sh := NewServiceHealth("my-service", "1.0.0")
 
-	sh.AddComponent(ComponentHealth{Name: "db", Status: HealthStatusUp})
+	sh.AddComponent(Health{Name: "db", Status: HealthStatusUp})
 	if sh.Status != HealthStatusUp {
 		t.Errorf("expected status 'up' after healthy component, got %s", sh.Status)
 	}
 
-	sh.AddComponent(ComponentHealth{Name: "cache", Status: HealthStatusDegraded, Message: "high latency"})
+	sh.AddComponent(Health{Name: "cache", Status: HealthStatusDegraded, Message: "high latency"})
 	if sh.Status != HealthStatusDegraded {
 		t.Errorf("expected status 'degraded', got %s", sh.Status)
 	}
 
-	sh.AddComponent(ComponentHealth{Name: "queue", Status: HealthStatusDown, Message: "connection refused"})
+	sh.AddComponent(Health{Name: "queue", Status: HealthStatusDown, Message: "connection refused"})
 	if sh.Status != HealthStatusDown {
 		t.Errorf("expected status 'down', got %s", sh.Status)
 	}
@@ -150,8 +150,8 @@ func TestServiceHealth_AddComponent(t *testing.T) {
 
 func TestServiceHealth_DegradedDoesNotOverrideDown(t *testing.T) {
 	sh := NewServiceHealth("svc", "1.0.0")
-	sh.AddComponent(ComponentHealth{Name: "a", Status: HealthStatusDown})
-	sh.AddComponent(ComponentHealth{Name: "b", Status: HealthStatusDegraded})
+	sh.AddComponent(Health{Name: "a", Status: HealthStatusDown})
+	sh.AddComponent(Health{Name: "b", Status: HealthStatusDegraded})
 
 	if sh.Status != HealthStatusDown {
 		t.Errorf("expected 'down' not overridden by 'degraded', got %s", sh.Status)

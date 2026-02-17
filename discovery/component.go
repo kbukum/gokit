@@ -147,9 +147,9 @@ func (c *Component) Stop(ctx context.Context) error {
 }
 
 // Health returns the current health status of the discovery component.
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	if c.discovery == nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "discovery not initialized",
@@ -157,7 +157,7 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 
 	if !c.cfg.Enabled {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusHealthy,
 			Message: "disabled (static)",
@@ -170,14 +170,14 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	if c.registry != nil {
 		stats := c.registry.Stats()
 		if stats.RegisteredServices > 0 {
-			return component.ComponentHealth{
+			return component.Health{
 				Name:   c.Name(),
 				Status: component.StatusHealthy,
 			}
 		}
 	}
 
-	return component.ComponentHealth{
+	return component.Health{
 		Name:    c.Name(),
 		Status:  component.StatusDegraded,
 		Message: "no services registered",

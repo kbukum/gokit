@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -21,7 +20,6 @@ type Verifier struct {
 	config   VerifierConfig
 	disco    *discoveryDoc
 	jwks     *jwksCache
-	mu       sync.RWMutex
 }
 
 // VerifierConfig configures the OIDC token verifier.
@@ -196,7 +194,7 @@ type discoveryDoc struct {
 func (v *Verifier) discover(ctx context.Context) error {
 	wellKnown := v.issuer + "/.well-known/openid-configuration"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnown, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, wellKnown, http.NoBody)
 	if err != nil {
 		return err
 	}

@@ -68,9 +68,9 @@ func (c *Component) Stop(_ context.Context) error {
 }
 
 // Health returns the current health status of the database.
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	if c.db == nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "database not initialized",
@@ -78,14 +78,14 @@ func (c *Component) Health(ctx context.Context) component.ComponentHealth {
 	}
 
 	if err := c.db.Ping(); err != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("ping failed: %v", err),
 		}
 	}
 
-	return component.ComponentHealth{
+	return component.Health{
 		Name:   c.Name(),
 		Status: component.StatusHealthy,
 	}

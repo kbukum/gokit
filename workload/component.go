@@ -52,29 +52,29 @@ func (c *Component) Stop(_ context.Context) error {
 	return nil
 }
 
-func (c *Component) Health(ctx context.Context) component.ComponentHealth {
+func (c *Component) Health(ctx context.Context) component.Health {
 	if !c.cfg.Enabled {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusHealthy,
 			Message: "disabled",
 		}
 	}
 	if c.manager == nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: "workload manager not initialized",
 		}
 	}
 	if err := c.manager.HealthCheck(ctx); err != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,
 			Message: fmt.Sprintf("health check failed: %v", err),
 		}
 	}
-	return component.ComponentHealth{
+	return component.Health{
 		Name:   c.Name(),
 		Status: component.StatusHealthy,
 	}

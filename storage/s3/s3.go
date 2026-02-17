@@ -32,7 +32,6 @@ func init() {
 	})
 }
 
-
 // Storage implements storage.Storage using Amazon S3 (or S3-compatible services).
 type Storage struct {
 	client *awss3.Client

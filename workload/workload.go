@@ -83,26 +83,26 @@ const (
 
 // DeployRequest describes a workload to deploy.
 type DeployRequest struct {
-	Name          string            // Human-readable identifier (container name, pod name)
-	Image         string            // Container image reference
-	Command       []string          // Override entrypoint/command
-	Args          []string          // Arguments passed to the command
-	Environment   map[string]string // Environment variables
-	Labels        map[string]string // Key-value pairs for filtering and grouping
-	Annotations   map[string]string // Metadata annotations (K8s)
-	WorkDir       string            // Working directory inside workload
-	Resources     *ResourceConfig   // CPU/memory constraints
-	Network       *NetworkConfig    // Network configuration
-	Volumes       []VolumeMount     // Mount points
-	Ports         []PortMapping     // Port mappings
-	RestartPolicy string            // "no", "always", "on-failure", "unless-stopped"
-	AutoRemove    bool              // Remove after exit (Docker)
-	Replicas      int               // Number of replicas (K8s, 0 = default 1)
-	Timeout       time.Duration     // Maximum run time (0 = no limit)
-	Platform      string            // Target platform (e.g. "linux/amd64")
-	Namespace     string            // Namespace (K8s, empty = default)
-	ServiceAccount string           // Service account (K8s)
-	Metadata      map[string]any    // Provider-specific extras
+	Name           string            // Human-readable identifier (container name, pod name)
+	Image          string            // Container image reference
+	Command        []string          // Override entrypoint/command
+	Args           []string          // Arguments passed to the command
+	Environment    map[string]string // Environment variables
+	Labels         map[string]string // Key-value pairs for filtering and grouping
+	Annotations    map[string]string // Metadata annotations (K8s)
+	WorkDir        string            // Working directory inside workload
+	Resources      *ResourceConfig   // CPU/memory constraints
+	Network        *NetworkConfig    // Network configuration
+	Volumes        []VolumeMount     // Mount points
+	Ports          []PortMapping     // Port mappings
+	RestartPolicy  string            // "no", "always", "on-failure", "unless-stopped"
+	AutoRemove     bool              // Remove after exit (Docker)
+	Replicas       int               // Number of replicas (K8s, 0 = default 1)
+	Timeout        time.Duration     // Maximum run time (0 = no limit)
+	Platform       string            // Target platform (e.g. "linux/amd64")
+	Namespace      string            // Namespace (K8s, empty = default)
+	ServiceAccount string            // Service account (K8s)
+	Metadata       map[string]any    // Provider-specific extras
 }
 
 // DeployResult is returned after a successful deployment.

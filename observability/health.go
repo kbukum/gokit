@@ -11,8 +11,8 @@ const (
 	HealthStatusDegraded HealthStatus = "degraded"
 )
 
-// ComponentHealth describes the health of an individual component.
-type ComponentHealth struct {
+// Health describes the health of an individual component.
+type Health struct {
 	Name    string            `json:"name"`
 	Status  HealthStatus      `json:"status"`
 	Message string            `json:"message,omitempty"`
@@ -21,15 +21,15 @@ type ComponentHealth struct {
 
 // ServiceHealth describes the overall health of a service and its components.
 type ServiceHealth struct {
-	Service    string            `json:"service"`
-	Status     HealthStatus      `json:"status"`
-	Version    string            `json:"version,omitempty"`
-	Components []ComponentHealth `json:"components,omitempty"`
+	Service    string       `json:"service"`
+	Status     HealthStatus `json:"status"`
+	Version    string       `json:"version,omitempty"`
+	Components []Health     `json:"components,omitempty"`
 }
 
 // HealthChecker is implemented by components that can report their health.
 type HealthChecker interface {
-	CheckHealth(ctx context.Context) ComponentHealth
+	CheckHealth(ctx context.Context) Health
 }
 
 // NewServiceHealth creates a ServiceHealth with status up.
@@ -42,7 +42,7 @@ func NewServiceHealth(service, version string) *ServiceHealth {
 }
 
 // AddComponent adds a component health result and degrades overall status if needed.
-func (sh *ServiceHealth) AddComponent(ch ComponentHealth) {
+func (sh *ServiceHealth) AddComponent(ch Health) {
 	sh.Components = append(sh.Components, ch)
 
 	switch ch.Status {

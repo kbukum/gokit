@@ -11,46 +11,46 @@ import (
 const componentName = "http-server"
 
 // Ensure *Server satisfies component.Component at compile time.
-var _ component.Component = (*ServerComponent)(nil)
+var _ component.Component = (*Component)(nil)
 
-// Ensure *ServerComponent satisfies component.Describable at compile time.
-var _ component.Describable = (*ServerComponent)(nil)
+// Ensure *Component satisfies component.Describable at compile time.
+var _ component.Describable = (*Component)(nil)
 
-// Ensure *ServerComponent satisfies component.RouteProvider at compile time.
-var _ component.RouteProvider = (*ServerComponent)(nil)
+// Ensure *Component satisfies component.RouteProvider at compile time.
+var _ component.RouteProvider = (*Component)(nil)
 
-// ServerComponent wraps Server to implement component.Component.
-type ServerComponent struct {
+// Component wraps Server to implement component.Component.
+type Component struct {
 	server *Server
 }
 
 // NewComponent returns a component.Component backed by the given Server.
-func NewComponent(s *Server) *ServerComponent {
-	return &ServerComponent{server: s}
+func NewComponent(s *Server) *Component {
+	return &Component{server: s}
 }
 
 // Name returns the component name used for registration.
-func (sc *ServerComponent) Name() string { return componentName }
+func (sc *Component) Name() string { return componentName }
 
 // Start starts the underlying HTTP server.
-func (sc *ServerComponent) Start(ctx context.Context) error {
+func (sc *Component) Start(ctx context.Context) error {
 	return sc.server.Start(ctx)
 }
 
 // Stop gracefully shuts down the underlying HTTP server.
-func (sc *ServerComponent) Stop(ctx context.Context) error {
+func (sc *Component) Stop(ctx context.Context) error {
 	return sc.server.Stop(ctx)
 }
 
 // Health returns the health status of the server.
-func (sc *ServerComponent) Health(ctx context.Context) component.ComponentHealth {
+func (sc *Component) Health(ctx context.Context) component.Health {
 	if sc.server.httpServer != nil {
-		return component.ComponentHealth{
+		return component.Health{
 			Name:   componentName,
 			Status: component.StatusHealthy,
 		}
 	}
-	return component.ComponentHealth{
+	return component.Health{
 		Name:    componentName,
 		Status:  component.StatusUnhealthy,
 		Message: "HTTP server not initialized",
@@ -58,7 +58,7 @@ func (sc *ServerComponent) Health(ctx context.Context) component.ComponentHealth
 }
 
 // Describe returns infrastructure summary info for the bootstrap display.
-func (sc *ServerComponent) Describe() component.Description {
+func (sc *Component) Describe() component.Description {
 	cfg := sc.server.config
 	details := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
@@ -79,7 +79,7 @@ func (sc *ServerComponent) Describe() component.Description {
 }
 
 // Routes returns all registered HTTP routes for the startup summary.
-func (sc *ServerComponent) Routes() []component.Route {
+func (sc *Component) Routes() []component.Route {
 	ginRoutes := sc.server.engine.Routes()
 
 	// Sort: API routes first (by path), then system routes
@@ -99,7 +99,7 @@ func (sc *ServerComponent) Routes() []component.Route {
 	for _, r := range ginRoutes {
 		handler := formatHandlerName(r.Handler)
 		if systemPaths[r.Path] {
-			handler = handler + " ⚙️"
+			handler += " ⚙️"
 		}
 		routes = append(routes, component.Route{
 			Method:  r.Method,
