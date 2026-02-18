@@ -7,6 +7,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/kbukum/gokit v0.0.0
 	github.com/kbukum/gokit/auth v0.0.0
+	github.com/kbukum/gokit/server v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -47,3 +48,5 @@ require (
 replace github.com/kbukum/gokit => ../
 
 replace github.com/kbukum/gokit/auth => ../auth
+
+replace github.com/kbukum/gokit/server => ../server

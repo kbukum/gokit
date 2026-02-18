@@ -10,10 +10,13 @@ go get github.com/kbukum/gokit/database@latest
 
 ## Quick Start
 
+### Production (PostgreSQL, MySQL, etc.)
+
 ```go
 import (
     "github.com/kbukum/gokit/database"
     "github.com/kbukum/gokit/logger"
+    "gorm.io/driver/postgres"  // Import your chosen driver
 )
 
 log := logger.New()
@@ -21,7 +24,9 @@ comp := database.NewComponent(database.Config{
     Enabled:     true,
     DSN:         "host=localhost user=app dbname=mydb sslmode=disable",
     AutoMigrate: true,
-}, log).WithAutoMigrate(&User{})
+}, log).
+    WithDriver(postgres.Open).  // Specify driver function
+    WithAutoMigrate(&User{})
 
 // Start as a managed component
 comp.Start(ctx)
@@ -34,6 +39,56 @@ db.Transaction(func(tx *gorm.DB) error {
     return tx.Create(&User{Name: "alice"}).Error
 })
 ```
+
+### Tests/Development (SQLite default)
+
+```go
+// No driver import needed - SQLite is the default
+comp := database.NewComponent(database.Config{
+    DSN: ":memory:",  // In-memory SQLite
+}, log)
+```
+
+## Driver Pattern
+
+**Clean, flexible driver injection with no forced dependencies.**
+
+### How It Works
+
+```go
+type DriverFunc func(dsn string) gorm.Dialector
+
+// Pass the driver function (not the result of calling it)
+db := database.NewComponent(cfg, log).WithDriver(postgres.Open)
+
+// Component calls it during Start() to control lifecycle
+dialector := driverFunc(cfg.DSN)
+```
+
+### Supported Drivers
+
+All standard GORM drivers work:
+
+```go
+import "gorm.io/driver/postgres"
+WithDriver(postgres.Open)
+
+import "gorm.io/driver/mysql"
+WithDriver(mysql.Open)
+
+import "gorm.io/driver/sqlite"
+WithDriver(sqlite.Open)  // or omit for default
+
+import "gorm.io/driver/sqlserver"
+WithDriver(sqlserver.Open)
+```
+
+### Key Benefits
+
+- **No forced dependencies** - Only SQLite imported by default
+- **User controls driver** - Import what you need
+- **Lifecycle control** - Driver called during Start(), enabling retry logic
+- **Clean defaults** - SQLite works out of the box for tests
 
 ## Key Types & Functions
 

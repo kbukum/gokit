@@ -13,9 +13,6 @@ type Config struct {
 	// DSN is the database connection string.
 	DSN string `yaml:"dsn" mapstructure:"dsn"`
 
-	// Driver selects the database dialect: "postgres" (default), "mysql", or "sqlite".
-	Driver string `yaml:"driver" mapstructure:"driver"`
-
 	// MaxOpenConns sets the maximum number of open connections to the database.
 	MaxOpenConns int `yaml:"max_open_conns" mapstructure:"max_open_conns"`
 
@@ -44,9 +41,6 @@ type Config struct {
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.
 func (c *Config) ApplyDefaults() {
-	if c.Driver == "" {
-		c.Driver = "postgres"
-	}
 	if c.MaxOpenConns <= 0 {
 		c.MaxOpenConns = 25
 	}
@@ -78,10 +72,7 @@ func (c *Config) Validate() error {
 	if c.DSN == "" {
 		return fmt.Errorf("database DSN is required")
 	}
-	validDrivers := map[string]bool{"postgres": true, "mysql": true, "sqlite": true}
-	if !validDrivers[c.Driver] {
-		return fmt.Errorf("unsupported database driver %q (supported: postgres, mysql, sqlite)", c.Driver)
-	}
+	
 	if c.MaxOpenConns <= 0 {
 		return fmt.Errorf("max_open_conns must be > 0")
 	}

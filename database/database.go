@@ -1,6 +1,6 @@
 // Package database provides a database wrapper built on GORM
 // with connection pooling, health checks, transactions, and auto-migration.
-// Supports PostgreSQL, MySQL, and SQLite drivers.
+// Uses SQLite as default driver. For production, use Component.WithDriver(postgres.Open).
 package database
 
 import (
@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
@@ -26,118 +26,53 @@ type DB struct {
 	mu     sync.Mutex
 }
 
-// New opens a PostgreSQL connection with retry logic and connection pooling.
-// The provided context controls cancellation of the connection attempts.
+// New opens a database connection with retry logic and connection pooling.
+// Uses SQLite by default. For other databases, use Component.WithDriver().
 func New(cfg Config, log *logger.Logger) (*DB, error) {
-	return NewWithContext(context.Background(), cfg, log)
+	return NewWithDialector(sqlite.Open(cfg.DSN), cfg, log)
 }
 
-// NewWithContext opens a database connection with context-aware retry logic.
-func NewWithContext(ctx context.Context, cfg Config, log *logger.Logger) (*DB, error) {
-	cfg.ApplyDefaults()
+// NewWithDialector creates a database connection using a provided dialector.
+// This gives full control over the database driver while maintaining our connection management.
+func NewWithDialector(dialector interface{}, cfg Config, log *logger.Logger) (*DB, error) {
+cfg.ApplyDefaults()
 
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("database config: %w", err)
-	}
+slowThreshold, _ := time.ParseDuration(cfg.SlowQueryThreshold)
+logLevel := parseLogLevel(cfg.LogLevel)
 
-	if !cfg.Enabled {
-		return nil, fmt.Errorf("database is disabled")
-	}
-
-	slowThreshold, _ := time.ParseDuration(cfg.SlowQueryThreshold) // already validated
-	logLevel := parseLogLevel(cfg.LogLevel)
-
-	gormCfg := &gorm.Config{
-		Logger: newGormLogger(log, slowThreshold, logLevel),
-	}
-
-	dialector, err := openDialector(cfg.Driver, cfg.DSN)
-	if err != nil {
-		return nil, err
-	}
-
-	var db *gorm.DB
-
-	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
-		// Check context before each attempt
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("database connection cancelled: %w", ctx.Err())
-		}
-
-		db, err = gorm.Open(dialector, gormCfg)
-		if err == nil {
-			sqlDB, sqlErr := db.DB()
-			if sqlErr != nil {
-				err = sqlErr
-				log.Warn("Failed to get underlying sql.DB", map[string]interface{}{
-					"error": sqlErr.Error(), "attempt": attempt,
-				})
-				if attempt < cfg.MaxRetries {
-					if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
-						return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
-					}
-				}
-				continue
-			}
-
-			if pingErr := sqlDB.PingContext(ctx); pingErr != nil {
-				err = pingErr
-				log.Warn("Database ping failed", map[string]interface{}{
-					"error": pingErr.Error(), "attempt": attempt,
-				})
-				if attempt < cfg.MaxRetries {
-					if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
-						return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
-					}
-				}
-				continue
-			}
-
-			// Configure connection pool
-			sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-			sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-			if lifetime, parseErr := time.ParseDuration(cfg.ConnMaxLifetime); parseErr == nil {
-				sqlDB.SetConnMaxLifetime(lifetime)
-			}
-			if cfg.ConnMaxIdleTime != "" {
-				if idleTime, parseErr := time.ParseDuration(cfg.ConnMaxIdleTime); parseErr == nil {
-					sqlDB.SetConnMaxIdleTime(idleTime)
-				}
-			}
-
-			log.Info("Database connection established", map[string]interface{}{
-				"driver":            cfg.Driver,
-				"max_open_conns":    cfg.MaxOpenConns,
-				"max_idle_conns":    cfg.MaxIdleConns,
-				"conn_max_lifetime": cfg.ConnMaxLifetime,
-				"attempts":          attempt,
-			})
-
-			return &DB{GormDB: db, log: log, cfg: cfg}, nil
-		}
-
-		log.Warn("Database connection attempt failed", map[string]interface{}{
-			"error": err.Error(), "attempt": attempt, "max_retries": cfg.MaxRetries,
-		})
-		if attempt < cfg.MaxRetries {
-			if waitErr := contextSleep(ctx, time.Duration(attempt)*time.Second); waitErr != nil {
-				return nil, fmt.Errorf("database connection cancelled during retry: %w", waitErr)
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", cfg.MaxRetries, err)
+gormCfg := &gorm.Config{
+Logger: newGormLogger(log, slowThreshold, logLevel),
 }
 
-// openDialector returns a GORM dialector for the given driver.
-func openDialector(driver, dsn string) (gorm.Dialector, error) {
-	switch driver {
-	case "postgres", "":
-		return postgres.Open(dsn), nil
-	default:
-		return nil, fmt.Errorf("unsupported database driver %q", driver)
-	}
+d, ok := dialector.(gorm.Dialector)
+if !ok {
+return nil, fmt.Errorf("invalid dialector type: expected gorm.Dialector, got %T", dialector)
 }
+
+db, err := gorm.Open(d, gormCfg)
+if err != nil {
+return nil, fmt.Errorf("failed to open database: %w", err)
+}
+
+sqlDB, err := db.DB()
+if err != nil {
+return nil, fmt.Errorf("failed to get sql.DB: %w", err)
+}
+
+sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+if lifetime, err := time.ParseDuration(cfg.ConnMaxLifetime); err == nil {
+sqlDB.SetConnMaxLifetime(lifetime)
+}
+if idleTime, err := time.ParseDuration(cfg.ConnMaxIdleTime); err == nil {
+sqlDB.SetConnMaxIdleTime(idleTime)
+}
+
+log.Info("Database connection established")
+return &DB{GormDB: db, log: log, cfg: cfg}, nil
+}
+
+
 
 // contextSleep waits for the given duration or until context is cancelled.
 func contextSleep(ctx context.Context, d time.Duration) error {
