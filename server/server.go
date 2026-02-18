@@ -104,7 +104,8 @@ func (s *Server) Start(ctx context.Context) error {
 		"addr": s.httpServer.Addr,
 	})
 
-	listener, err := net.Listen("tcp", s.httpServer.Addr)
+	var lc net.ListenConfig
+	listener, err := lc.Listen(ctx, "tcp", s.httpServer.Addr)
 	if err != nil {
 		return fmt.Errorf("server failed to bind %s: %w", s.httpServer.Addr, err)
 	}

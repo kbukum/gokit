@@ -29,6 +29,7 @@ linters:
         - performance
       disabled-checks:
         - hugeParam
+        - paramTypeCombine  # Prefer explicit types for each parameter for clarity
     nakedret:
       max-func-lines: 30
     misspell:
@@ -38,6 +39,8 @@ linters:
         - G115
         - G404
         - G306
+        - G402  # TLS InsecureSkipVerify - intentional for test/dev configs
+        - G304  # File paths from variables - required for storage abstraction
 
 issues:
   max-issues-per-linter: 0

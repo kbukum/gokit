@@ -360,11 +360,15 @@ func (c *UnifiedContainer) Close() error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	var errs []error
+
 	// Close all initialized lazy components that implement closer
 	for _, registration := range c.components {
 		if registration.initialized && registration.instance != nil {
 			if closer, ok := registration.instance.(interface{ Close() error }); ok {
-				closer.Close()
+				if err := closer.Close(); err != nil {
+					errs = append(errs, fmt.Errorf("close component: %w", err))
+				}
 			}
 		}
 	}
@@ -375,10 +379,15 @@ func (c *UnifiedContainer) Close() error {
 			continue
 		}
 		if closer, ok := singleton.(interface{ Close() error }); ok {
-			closer.Close()
+			if err := closer.Close(); err != nil {
+				errs = append(errs, fmt.Errorf("close singleton: %w", err))
+			}
 		}
 	}
 
+	if len(errs) > 0 {
+		return fmt.Errorf("container close errors: %v", errs)
+	}
 	return nil
 }
 
