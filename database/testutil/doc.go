@@ -10,7 +10,7 @@
 //
 //	db := testutil.NewComponent()
 //	testutil.T(t).Setup(db)
-//	
+//
 //	// Use db.DB() to access *gorm.DB
 //	db.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 //
@@ -22,7 +22,7 @@
 //	    ID   uint   `gorm:"primarykey"`
 //	    Name string
 //	}
-//	
+//
 //	db := testutil.NewComponent().WithModels(&User{})
 //	testutil.T(t).Setup(db)
 //
@@ -32,10 +32,10 @@
 //
 //	// Reset clears all data
 //	testutil.T(t).Reset(db)
-//	
+//
 //	// Snapshot captures current state
 //	snapshot := testutil.T(t).Snapshot(db)
-//	
+//
 //	// Restore returns to snapshot
 //	testutil.T(t).Restore(db, snapshot)
 //
@@ -47,7 +47,7 @@
 //	    {"name": "Alice", "email": "alice@example.com"},
 //	    {"name": "Bob", "email": "bob@example.com"},
 //	})
-//	
+//
 //	AssertRowCount(t, db.DB(), "users", 2)
 //
 // See the README for more examples and best practices.

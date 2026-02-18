@@ -156,7 +156,7 @@ func connectCodeToAppError(code connect.Code, msg string) *apperrors.AppError {
 	case connect.CodeUnavailable:
 		return apperrors.ServiceUnavailable("service")
 	case connect.CodeCanceled:
-		return apperrors.Internal(errors.New("request cancelled"))
+		return apperrors.Internal(errors.New("request canceled"))
 	default:
 		return apperrors.Internal(errors.New(msg))
 	}

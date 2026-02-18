@@ -79,7 +79,7 @@ base:
   environment: staging
   version: "1.0.0"
 `
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(yamlContent), 0o644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 

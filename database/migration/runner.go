@@ -3,8 +3,9 @@ package migration
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
 	"gorm.io/gorm"
+
+	"github.com/kbukum/gokit/logger"
 )
 
 // Migration describes a single GORM-based schema migration.

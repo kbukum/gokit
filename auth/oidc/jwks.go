@@ -70,11 +70,15 @@ func (c *jwksCache) isStale() bool {
 }
 
 func (c *jwksCache) refresh(client *http.Client) error {
-	resp, err := client.Get(c.jwksURI)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.jwksURI, http.NoBody)
+	if err != nil {
+		return fmt.Errorf("create JWKS request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("fetch JWKS: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))

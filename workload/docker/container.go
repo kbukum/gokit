@@ -21,7 +21,7 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 	labels := mergeLabels(m.defaultLabels, req.Labels)
 	labels["managed-by"] = "gokit-workload"
 
-	var env []string
+	env := make([]string, 0, len(req.Environment))
 	for k, v := range req.Environment {
 		env = append(env, fmt.Sprintf("%s=%s", k, v))
 	}
@@ -71,12 +71,12 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 	if req.Resources != nil {
 		if req.Resources.MemoryLimit != "" {
 			if mem, err := workload.ParseMemory(req.Resources.MemoryLimit); err == nil {
-				hostCfg.Resources.Memory = mem
+				hostCfg.Memory = mem
 			}
 		}
 		if req.Resources.CPULimit != "" {
 			if cpu, err := workload.ParseCPU(req.Resources.CPULimit); err == nil {
-				hostCfg.Resources.NanoCPUs = cpu
+				hostCfg.NanoCPUs = cpu
 			}
 		}
 	}
@@ -142,7 +142,7 @@ func (m *Manager) ensureImage(ctx context.Context, imageName string, platform st
 	if err != nil {
 		return fmt.Errorf("pull %s: %w", imageName, err)
 	}
-	defer reader.Close()
+	defer reader.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 	_, _ = io.Copy(io.Discard, reader)
 	return nil
 }

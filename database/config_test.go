@@ -301,7 +301,7 @@ func TestConfig_Validate_InvalidConnMaxLifetime(t *testing.T) {
 		t.Error("Validate() should fail with invalid ConnMaxLifetime")
 	}
 
-	if len(err.Error()) == 0 {
+	if err.Error() == "" {
 		t.Error("Error message should not be empty")
 	}
 }
@@ -324,7 +324,7 @@ func TestConfig_Validate_InvalidConnMaxIdleTime(t *testing.T) {
 		t.Error("Validate() should fail with invalid ConnMaxIdleTime")
 	}
 
-	if len(err.Error()) == 0 {
+	if err.Error() == "" {
 		t.Error("Error message should not be empty")
 	}
 }
@@ -365,7 +365,7 @@ func TestConfig_Validate_InvalidSlowQueryThreshold(t *testing.T) {
 		t.Error("Validate() should fail with invalid SlowQueryThreshold")
 	}
 
-	if len(err.Error()) == 0 {
+	if err.Error() == "" {
 		t.Error("Error message should not be empty")
 	}
 }

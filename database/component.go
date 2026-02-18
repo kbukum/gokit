@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logger"
 )
 
 // DriverFunc is a factory function that creates a GORM dialector.

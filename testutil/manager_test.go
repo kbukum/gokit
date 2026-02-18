@@ -12,7 +12,7 @@ import (
 func TestManager_NewManager(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	if manager == nil {
 		t.Fatal("NewManager() should return non-nil manager")
 	}
@@ -22,13 +22,13 @@ func TestManager_NewManager(t *testing.T) {
 func TestManager_AddComponent(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	// Components should be tracked
 	components := manager.Components()
 	if len(components) != 2 {
@@ -40,17 +40,17 @@ func TestManager_AddComponent(t *testing.T) {
 func TestManager_StartAll(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	if err := manager.StartAll(); err != nil {
 		t.Fatalf("StartAll() failed: %v", err)
 	}
-	
+
 	if !comp1.started {
 		t.Error("comp1 should be started")
 	}
@@ -63,23 +63,23 @@ func TestManager_StartAll(t *testing.T) {
 func TestManager_StopAll(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	// Start first
 	if err := manager.StartAll(); err != nil {
 		t.Fatalf("StartAll() failed: %v", err)
 	}
-	
+
 	// Then stop
 	if err := manager.StopAll(); err != nil {
 		t.Fatalf("StopAll() failed: %v", err)
 	}
-	
+
 	if !comp1.stopped {
 		t.Error("comp1 should be stopped")
 	}
@@ -92,17 +92,17 @@ func TestManager_StopAll(t *testing.T) {
 func TestManager_ResetAll(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	if err := manager.ResetAll(); err != nil {
 		t.Fatalf("ResetAll() failed: %v", err)
 	}
-	
+
 	if !comp1.resetCalled {
 		t.Error("comp1.Reset() should be called")
 	}
@@ -115,14 +115,14 @@ func TestManager_ResetAll(t *testing.T) {
 func TestManager_StartError(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
 	comp2.startErr = errors.New("start failed")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	err := manager.StartAll()
 	if err == nil {
 		t.Error("StartAll() should return error when component fails")
@@ -133,19 +133,19 @@ func TestManager_StartError(t *testing.T) {
 func TestManager_StopError(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
 	comp2.stopErr = errors.New("stop failed")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	// Start components
 	if err := manager.StartAll(); err != nil {
 		t.Fatalf("StartAll() failed: %v", err)
 	}
-	
+
 	// Stop should collect errors
 	err := manager.StopAll()
 	if err == nil {
@@ -157,14 +157,14 @@ func TestManager_StopError(t *testing.T) {
 func TestManager_ResetError(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
 	comp2.resetErr = errors.New("reset failed")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	err := manager.ResetAll()
 	if err == nil {
 		t.Error("ResetAll() should return error when component fails")
@@ -175,13 +175,13 @@ func TestManager_ResetError(t *testing.T) {
 func TestManager_GetComponent(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp1 := newMockComponent("comp1")
 	comp2 := newMockComponent("comp2")
-	
+
 	manager.Add(comp1)
 	manager.Add(comp2)
-	
+
 	// Get existing component
 	got := manager.Get("comp1")
 	if got == nil {
@@ -190,7 +190,7 @@ func TestManager_GetComponent(t *testing.T) {
 	if got != nil && got.Name() != "comp1" {
 		t.Errorf("Get('comp1').Name() = %q, want 'comp1'", got.Name())
 	}
-	
+
 	// Get non-existing component
 	got = manager.Get("nonexistent")
 	if got != nil {
@@ -202,18 +202,18 @@ func TestManager_GetComponent(t *testing.T) {
 func TestManager_Cleanup(t *testing.T) {
 	ctx := context.Background()
 	manager := testutil.NewManager(ctx)
-	
+
 	comp := newMockComponent("comp")
 	manager.Add(comp)
-	
+
 	if err := manager.StartAll(); err != nil {
 		t.Fatalf("StartAll() failed: %v", err)
 	}
-	
+
 	if err := manager.Cleanup(); err != nil {
 		t.Fatalf("Cleanup() failed: %v", err)
 	}
-	
+
 	if !comp.stopped {
 		t.Error("component should be stopped after Cleanup()")
 	}

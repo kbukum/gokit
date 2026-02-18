@@ -54,7 +54,7 @@ func (a *byteAdapter) Download(ctx context.Context, path string) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer rc.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 	return io.ReadAll(rc)
 }
 

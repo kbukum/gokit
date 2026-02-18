@@ -27,49 +27,51 @@ type Provider interface {
 }
 
 // AuthURLOption configures authorization URL generation.
-type AuthURLOption func(*authURLOptions)
+type AuthURLOption func(*AuthURLOptions)
 
-type authURLOptions struct {
-	redirectURI string
-	scopes      []string
-	nonce       string
-	pkce        *PKCE
-	extraParams map[string]string
+// AuthURLOptions holds the configuration for authorization URL generation.
+type AuthURLOptions struct {
+	RedirectURI string
+	Scopes      []string
+	Nonce       string
+	PKCE        *PKCE
+	ExtraParams map[string]string
 }
 
 // WithRedirectURI overrides the configured redirect URI for this request.
 func WithRedirectURI(uri string) AuthURLOption {
-	return func(o *authURLOptions) { o.redirectURI = uri }
+	return func(o *AuthURLOptions) { o.RedirectURI = uri }
 }
 
 // WithScopes overrides the default scopes for this request.
 func WithScopes(scopes ...string) AuthURLOption {
-	return func(o *authURLOptions) { o.scopes = scopes }
+	return func(o *AuthURLOptions) { o.Scopes = scopes }
 }
 
 // WithNonce adds an OIDC nonce parameter for replay protection.
 func WithNonce(nonce string) AuthURLOption {
-	return func(o *authURLOptions) { o.nonce = nonce }
+	return func(o *AuthURLOptions) { o.Nonce = nonce }
 }
 
 // WithPKCE adds PKCE (Proof Key for Code Exchange) parameters.
 func WithPKCE(pkce *PKCE) AuthURLOption {
-	return func(o *authURLOptions) { o.pkce = pkce }
+	return func(o *AuthURLOptions) { o.PKCE = pkce }
 }
 
 // WithExtraParam adds a custom query parameter to the authorization URL.
 func WithExtraParam(key, value string) AuthURLOption {
-	return func(o *authURLOptions) {
-		if o.extraParams == nil {
-			o.extraParams = make(map[string]string)
+	return func(o *AuthURLOptions) {
+		if o.ExtraParams == nil {
+			o.ExtraParams = make(map[string]string)
 		}
-		o.extraParams[key] = value
+		o.ExtraParams[key] = value
 	}
 }
 
-// applyAuthURLOptions applies options and returns the resolved configuration.
-func applyAuthURLOptions(opts []AuthURLOption) authURLOptions {
-	var o authURLOptions
+// ApplyAuthURLOptions applies options and returns the resolved configuration.
+// This is a helper for Provider implementations to process AuthURLOption parameters.
+func ApplyAuthURLOptions(opts []AuthURLOption) AuthURLOptions {
+	var o AuthURLOptions
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -77,26 +79,28 @@ func applyAuthURLOptions(opts []AuthURLOption) authURLOptions {
 }
 
 // ExchangeOption configures the token exchange.
-type ExchangeOption func(*exchangeOptions)
+type ExchangeOption func(*ExchangeOptions)
 
-type exchangeOptions struct {
-	redirectURI  string
-	codeVerifier string
+// ExchangeOptions holds the configuration for token exchange.
+type ExchangeOptions struct {
+	RedirectURI  string
+	CodeVerifier string
 }
 
 // WithExchangeRedirectURI sets the redirect URI for the exchange (must match the one used in AuthURL).
 func WithExchangeRedirectURI(uri string) ExchangeOption {
-	return func(o *exchangeOptions) { o.redirectURI = uri }
+	return func(o *ExchangeOptions) { o.RedirectURI = uri }
 }
 
 // WithCodeVerifier adds the PKCE code verifier for the exchange.
 func WithCodeVerifier(verifier string) ExchangeOption {
-	return func(o *exchangeOptions) { o.codeVerifier = verifier }
+	return func(o *ExchangeOptions) { o.CodeVerifier = verifier }
 }
 
-// applyExchangeOptions applies options and returns the resolved configuration.
-func applyExchangeOptions(opts []ExchangeOption) exchangeOptions {
-	var o exchangeOptions
+// ApplyExchangeOptions applies options and returns the resolved configuration.
+// This is a helper for Provider implementations to process ExchangeOption parameters.
+func ApplyExchangeOptions(opts []ExchangeOption) ExchangeOptions {
+	var o ExchangeOptions
 	for _, opt := range opts {
 		opt(&o)
 	}

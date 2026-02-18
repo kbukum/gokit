@@ -177,11 +177,11 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 		}
 		if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 			result := &workload.WaitResult{}
-			for _, cs := range pod.Status.ContainerStatuses {
-				if cs.State.Terminated != nil {
-					result.StatusCode = int64(cs.State.Terminated.ExitCode)
-					if cs.State.Terminated.Reason != "" {
-						result.Error = cs.State.Terminated.Reason
+			for i := range pod.Status.ContainerStatuses {
+				if pod.Status.ContainerStatuses[i].State.Terminated != nil {
+					result.StatusCode = int64(pod.Status.ContainerStatuses[i].State.Terminated.ExitCode)
+					if pod.Status.ContainerStatuses[i].State.Terminated.Reason != "" {
+						result.Error = pod.Status.ContainerStatuses[i].State.Terminated.Reason
 					}
 					break
 				}
@@ -211,7 +211,7 @@ func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions)
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes: get logs: %w", err)
 	}
-	defer stream.Close()
+	defer stream.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	return readLines(stream), nil
 }
@@ -233,7 +233,8 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 	}
 
 	var infos []workload.WorkloadInfo
-	for _, pod := range pods.Items {
+	for i := range pods.Items {
+		pod := &pods.Items[i]
 		if filter.Name != "" && !strings.HasPrefix(pod.Name, filter.Name) {
 			continue
 		}
@@ -309,7 +310,8 @@ func podToStatus(pod *corev1.Pod) *workload.WorkloadStatus {
 	ws.Healthy = ws.Ready && ws.Running
 
 	// Restarts and exit code from container statuses
-	for _, cs := range pod.Status.ContainerStatuses {
+	for i := range pod.Status.ContainerStatuses {
+		cs := &pod.Status.ContainerStatuses[i]
 		ws.Restarts += int(cs.RestartCount)
 		if cs.State.Terminated != nil {
 			ws.ExitCode = int(cs.State.Terminated.ExitCode)
@@ -361,7 +363,7 @@ func buildLabelSelector(labels, defaults map[string]string) string {
 		merged[k] = v
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(merged))
 	for k, v := range merged {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
 	}

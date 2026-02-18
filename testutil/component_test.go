@@ -11,19 +11,19 @@ import (
 
 // mockComponent is a test implementation of TestComponent
 type mockComponent struct {
-	name            string
-	started         bool
-	stopped         bool
-	resetCalled     bool
-	snapshotData    interface{}
-	restoreData     interface{}
-	startErr        error
-	stopErr         error
-	resetErr        error
-	snapshotErr     error
-	restoreErr      error
-	healthStatus    component.HealthStatus
-	healthMessage   string
+	name          string
+	started       bool
+	stopped       bool
+	resetCalled   bool
+	snapshotData  interface{}
+	restoreData   interface{}
+	startErr      error
+	stopErr       error
+	resetErr      error
+	snapshotErr   error
+	restoreErr    error
+	healthStatus  component.HealthStatus
+	healthMessage string
 }
 
 func newMockComponent(name string) *mockComponent {
@@ -92,10 +92,10 @@ func (m *mockComponent) Restore(ctx context.Context, snapshot interface{}) error
 // TestComponent_Interface verifies TestComponent extends component.Component
 func TestComponent_Interface(t *testing.T) {
 	mock := newMockComponent("test")
-	
+
 	// Should be assignable to component.Component
 	var _ component.Component = mock
-	
+
 	// Should be assignable to testutil.TestComponent
 	var _ testutil.TestComponent = mock
 }
@@ -223,7 +223,7 @@ func TestComponent_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := newMockComponent("test")
 			tt.setupErr(mock)
-			
+
 			err := tt.operation(mock)
 			if err == nil {
 				t.Error("expected error, got nil")

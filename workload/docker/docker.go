@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/workload"
@@ -147,7 +147,7 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 func (m *Manager) Status(ctx context.Context, id string) (*workload.WorkloadStatus, error) {
 	info, err := m.client.ContainerInspect(ctx, id)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			return &workload.WorkloadStatus{
 				ID:     id,
 				Status: workload.StatusNotFound,
@@ -181,7 +181,7 @@ func (m *Manager) Status(ctx context.Context, id string) (*workload.WorkloadStat
 
 	ws.ExitCode = info.State.ExitCode
 	ws.Message = info.State.Status
-	ws.Restarts = int(info.RestartCount)
+	ws.Restarts = info.RestartCount
 
 	if info.State.StartedAt != "" {
 		if t, err := time.Parse(time.RFC3339Nano, info.State.StartedAt); err == nil {
@@ -219,18 +219,18 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 	}
 
 	infos := make([]workload.WorkloadInfo, len(containers))
-	for i, c := range containers {
+	for i := range containers {
 		name := ""
-		if len(c.Names) > 0 {
-			name = strings.TrimPrefix(c.Names[0], "/")
+		if len(containers[i].Names) > 0 {
+			name = strings.TrimPrefix(containers[i].Names[0], "/")
 		}
 		infos[i] = workload.WorkloadInfo{
-			ID:      c.ID,
+			ID:      containers[i].ID,
 			Name:    name,
-			Image:   c.Image,
-			Status:  c.State,
-			Labels:  c.Labels,
-			Created: time.Unix(c.Created, 0),
+			Image:   containers[i].Image,
+			Status:  containers[i].State,
+			Labels:  containers[i].Labels,
+			Created: time.Unix(containers[i].Created, 0),
 		}
 	}
 	return infos, nil

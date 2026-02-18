@@ -58,7 +58,7 @@ func (m *Manager) Get(name string) TestComponent {
 func (m *Manager) StartAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	for _, comp := range m.components {
 		if err := comp.Start(m.ctx); err != nil {
 			return fmt.Errorf("failed to start component %s: %w", comp.Name(), err)
@@ -73,9 +73,9 @@ func (m *Manager) StartAll() error {
 func (m *Manager) StopAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var errs []error
-	
+
 	// Stop in reverse order (LIFO)
 	for i := len(m.components) - 1; i >= 0; i-- {
 		comp := m.components[i]
@@ -83,7 +83,7 @@ func (m *Manager) StopAll() error {
 			errs = append(errs, fmt.Errorf("failed to stop component %s: %w", comp.Name(), err))
 		}
 	}
-	
+
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
@@ -95,7 +95,7 @@ func (m *Manager) StopAll() error {
 func (m *Manager) ResetAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	for _, comp := range m.components {
 		if err := comp.Reset(m.ctx); err != nil {
 			return fmt.Errorf("failed to reset component %s: %w", comp.Name(), err)

@@ -54,7 +54,7 @@ func formatHandlerName(fullPath string) string {
 				break
 			}
 		}
-		if !hasUpper && len(parts[1]) > 0 {
+		if !hasUpper && parts[1] != "" {
 			name = parts[1]
 		}
 	}

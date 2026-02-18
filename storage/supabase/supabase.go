@@ -87,7 +87,7 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 	if err != nil {
 		return fmt.Errorf("storage: supabase upload: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -100,7 +100,7 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("storage: supabase create request: %w", err)
 	}
@@ -112,12 +112,12 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("storage: file not found: %s", path)
 	}
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("storage: supabase download failed (status %d): %s", resp.StatusCode, string(body))
 	}
 	return resp.Body, nil
@@ -127,7 +127,7 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 func (s *Storage) Delete(ctx context.Context, path string) error {
 	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("storage: supabase create request: %w", err)
 	}
@@ -137,7 +137,7 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return fmt.Errorf("storage: supabase delete: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
 		body, _ := io.ReadAll(resp.Body)
@@ -150,7 +150,7 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
 	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, http.NoBody)
 	if err != nil {
 		return false, fmt.Errorf("storage: supabase create request: %w", err)
 	}
@@ -160,7 +160,7 @@ func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("storage: supabase head: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode == http.StatusNotFound {
 		return false, nil
@@ -215,7 +215,7 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 	if err != nil {
 		return nil, fmt.Errorf("storage: supabase list: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -276,7 +276,7 @@ func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Durati
 	if err != nil {
 		return "", fmt.Errorf("storage: supabase sign request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
 		respBody, _ := io.ReadAll(resp.Body)

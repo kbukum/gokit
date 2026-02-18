@@ -17,7 +17,7 @@ func TestComponent_Interface(t *testing.T) {
 
 func TestComponent_Name(t *testing.T) {
 	tc := NewComponent()
-	
+
 	if tc.Name() != "database-test" {
 		t.Errorf("Name() = %q, want %q", tc.Name(), "database-test")
 	}
@@ -262,7 +262,7 @@ func TestComponent_DB(t *testing.T) {
 
 func TestComponent_WithModels(t *testing.T) {
 	type User struct {
-		ID   uint   `gorm:"primarykey"`
+		ID   uint `gorm:"primarykey"`
 		Name string
 	}
 

@@ -91,7 +91,7 @@ func (p *Provider) Name() string { return ProviderName }
 
 // IsAvailable checks if the Whisper sidecar is reachable.
 func (p *Provider) IsAvailable(ctx context.Context) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.URL+"/health", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.URL+"/health", http.NoBody)
 	if err != nil {
 		return false
 	}
@@ -99,7 +99,7 @@ func (p *Provider) IsAvailable(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -134,7 +134,7 @@ func (p *Provider) Transcribe(ctx context.Context, req transcription.Transcripti
 	if lang != "" {
 		_ = writer.WriteField("language", lang)
 	}
-	writer.Close()
+	_ = writer.Close()
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.cfg.URL+"/transcribe", &buf)
 	if err != nil {
@@ -146,7 +146,7 @@ func (p *Provider) Transcribe(ctx context.Context, req transcription.Transcripti
 	if err != nil {
 		return nil, fmt.Errorf("whisper request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

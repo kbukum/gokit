@@ -144,7 +144,7 @@ func (m *Manager) buildPodSpec(req workload.DeployRequest) corev1.PodSpec {
 	}
 
 	// Volumes
-	var volumes []corev1.Volume
+	volumes := make([]corev1.Volume, 0, len(req.Volumes))
 	for i, v := range req.Volumes {
 		volName := fmt.Sprintf("vol-%d", i)
 		mount := corev1.VolumeMount{

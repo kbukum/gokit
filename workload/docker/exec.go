@@ -54,7 +54,7 @@ func (m *Manager) Stats(ctx context.Context, id string) (*workload.WorkloadStats
 	if err != nil {
 		return nil, fmt.Errorf("docker: stats: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	var stats container.StatsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {

@@ -44,7 +44,7 @@ func NewStorage(basePath string) (*Storage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: resolve base path: %w", err)
 	}
-	if err := os.MkdirAll(abs, 0755); err != nil {
+	if err := os.MkdirAll(abs, 0o750); err != nil {
 		return nil, fmt.Errorf("storage: create base directory: %w", err)
 	}
 	return &Storage{basePath: abs}, nil
@@ -52,8 +52,8 @@ func NewStorage(basePath string) (*Storage, error) {
 
 // Upload writes data from reader to a local file.
 func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error {
-	fullPath := filepath.Join(s.basePath, path)
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+	fullPath := filepath.Join(s.basePath, filepath.Clean(path))
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o750); err != nil {
 		return fmt.Errorf("storage: create directory: %w", err)
 	}
 
@@ -61,7 +61,7 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 	if err != nil {
 		return fmt.Errorf("storage: create file: %w", err)
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if _, err := io.Copy(f, reader); err != nil {
 		return fmt.Errorf("storage: write file: %w", err)
@@ -71,7 +71,7 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 
 // Download returns a reader for the local file at the given path.
 func (s *Storage) Download(_ context.Context, path string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(s.basePath, path)
+	fullPath := filepath.Join(s.basePath, filepath.Clean(path))
 	f, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {

@@ -72,7 +72,7 @@ func (c *Config) Validate() error {
 	if c.DSN == "" {
 		return fmt.Errorf("database DSN is required")
 	}
-	
+
 	if c.MaxOpenConns <= 0 {
 		return fmt.Errorf("max_open_conns must be > 0")
 	}

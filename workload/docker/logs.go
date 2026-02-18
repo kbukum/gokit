@@ -31,7 +31,7 @@ func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions)
 	if err != nil {
 		return nil, fmt.Errorf("docker: get logs: %w", err)
 	}
-	defer reader.Close()
+	defer reader.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	var lines []string
 	scanner := bufio.NewScanner(reader)

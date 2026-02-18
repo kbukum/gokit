@@ -27,11 +27,11 @@ func SetupWithContext(ctx context.Context, component TestComponent) (CleanupFunc
 	if err := component.Start(ctx); err != nil {
 		return nil, err
 	}
-	
+
 	cleanup := func() error {
 		return component.Stop(ctx)
 	}
-	
+
 	return cleanup, nil
 }
 
@@ -90,7 +90,7 @@ func (h *THelper) Setup(component TestComponent) {
 	if err := component.Start(h.ctx); err != nil {
 		h.t.Fatalf("failed to start component %s: %v", component.Name(), err)
 	}
-	
+
 	h.t.Cleanup(func() {
 		if err := component.Stop(h.ctx); err != nil {
 			h.t.Errorf("failed to stop component %s: %v", component.Name(), err)

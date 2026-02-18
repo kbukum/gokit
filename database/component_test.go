@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"gorm.io/driver/sqlite"
+
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 // TestComponent_Name tests that the component returns the correct name
@@ -81,9 +81,7 @@ func TestComponent_WithDriver(t *testing.T) {
 	comp := NewComponent(cfg, log)
 
 	// Custom driver that wraps sqlite
-	customDriver := func(dsn string) gorm.Dialector {
-		return sqlite.Open(dsn)
-	}
+	customDriver := sqlite.Open
 
 	// WithDriver should return the component for chaining
 	result := comp.WithDriver(customDriver)
@@ -293,10 +291,10 @@ func TestComponent_Health_AfterStart(t *testing.T) {
 // TestComponent_Describe tests the Describe method
 func TestComponent_Describe(t *testing.T) {
 	cfg := Config{
-		Enabled:     true,
-		DSN:         "file:testdb.db?mode=memory",
+		Enabled:      true,
+		DSN:          "file:testdb.db?mode=memory",
 		MaxOpenConns: 30,
-		AutoMigrate: true,
+		AutoMigrate:  true,
 	}
 	log := logger.NewDefault("test")
 	comp := NewComponent(cfg, log)
@@ -313,7 +311,7 @@ func TestComponent_Describe(t *testing.T) {
 		t.Error("Describe Details should not be empty")
 	}
 	// Verify DSN is masked
-	if len(desc.Details) > 0 && desc.Details[0:3] != "DSN" {
+	if desc.Details != "" && desc.Details[0:3] != "DSN" {
 		t.Error("Describe Details should start with DSN")
 	}
 }
