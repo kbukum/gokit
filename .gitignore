@@ -33,3 +33,6 @@ vendor/
 # Build output
 bin/
 dist/
+
+docs/testutil*.md
+
