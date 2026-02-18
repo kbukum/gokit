@@ -68,6 +68,11 @@ func (c *Component) Name() string { return "database" }
 
 // Start connects to the database and optionally runs auto-migration.
 func (c *Component) Start(ctx context.Context) error {
+	if !c.cfg.Enabled {
+		c.log.Info("Database component is disabled")
+		return nil
+	}
+
 	var dialectorFactory = sqlite.Open
 
 	if c.driverFunc != nil {
@@ -76,8 +81,8 @@ func (c *Component) Start(ctx context.Context) error {
 
 	dialector := dialectorFactory(c.cfg.DSN)
 
-	// Create connection using the dialector
-	db, err := NewWithDialector(dialector, c.cfg, c.log)
+	// Create connection using the dialector with context support
+	db, err := NewWithContext(ctx, dialector, c.cfg, c.log)
 	if err != nil {
 		return fmt.Errorf("database start: %w", err)
 	}
@@ -102,6 +107,14 @@ func (c *Component) Stop(_ context.Context) error {
 
 // Health returns the current health status of the database.
 func (c *Component) Health(ctx context.Context) component.Health {
+	if !c.cfg.Enabled {
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusHealthy,
+			Message: "disabled",
+		}
+	}
+
 	if c.db == nil {
 		return component.Health{
 			Name:    c.Name(),
@@ -110,7 +123,7 @@ func (c *Component) Health(ctx context.Context) component.Health {
 		}
 	}
 
-	if err := c.db.Ping(); err != nil {
+	if err := c.db.PingContext(ctx); err != nil {
 		return component.Health{
 			Name:    c.Name(),
 			Status:  component.StatusUnhealthy,

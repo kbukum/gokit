@@ -19,12 +19,15 @@ import (
     "gorm.io/driver/postgres"  // Import your chosen driver
 )
 
-log := logger.New()
-comp := database.NewComponent(database.Config{
+cfg := database.Config{
     Enabled:     true,
     DSN:         "host=localhost user=app dbname=mydb sslmode=disable",
     AutoMigrate: true,
-}, log).
+}
+cfg.ApplyDefaults()
+
+log := logger.New()
+comp := database.NewComponent(cfg, log).
     WithDriver(postgres.Open).  // Specify driver function
     WithAutoMigrate(&User{})
 
@@ -38,6 +41,20 @@ db.WithContext(ctx).Find(&users)
 db.Transaction(func(tx *gorm.DB) error {
     return tx.Create(&User{Name: "alice"}).Error
 })
+```
+
+### Optional Components (Disable via Config)
+
+```go
+// Database is optional - set Enabled: false to skip initialization
+cfg := database.Config{
+    Enabled: false,  // Component skips Start(), returns healthy status
+    DSN:     "...",
+}
+
+comp := database.NewComponent(cfg, log)
+comp.Start(ctx)  // No-op, logs "Database component is disabled"
+comp.Health(ctx) // Returns StatusHealthy with "disabled" message
 ```
 
 ### Tests/Development (SQLite default)
@@ -107,8 +124,46 @@ WithDriver(sqlserver.Open)
 
 | Package | Description |
 |---|---|
-| `database/migration` | `MigrateUp`, `MigrateDown`, `MigrateReset` via embedded FS; `MigrationRunner` for programmatic migrations |
+| `database/migration` | Driver-agnostic migrations using `DriverFunc`. Import your database's migrate driver (e.g., `migrate/v4/database/postgres`). Supports `MigrateUp`, `MigrateDown`, `MigrateReset`, and `MigrationRunner` for programmatic migrations. |
 | `database/query` | `ParseFromRequest` → `Params`; `ApplyToGorm[T]` → `*Result[T]` with pagination, filtering, sorting, facets, and includes |
+
+## Migration Usage
+
+Migrations are now driver-agnostic. Import the appropriate golang-migrate driver for your database:
+
+```go
+import (
+    "embed"
+    "github.com/kbukum/gokit/database/migration"
+    migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
+)
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+// PostgreSQL
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
+    func(sqlDB *sql.DB) (database.Driver, error) {
+        return migratepg.WithInstance(sqlDB, &migratepg.Config{})
+    },
+)
+
+// MySQL
+import migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
+    func(sqlDB *sql.DB) (database.Driver, error) {
+        return migratemysql.WithInstance(sqlDB, &migratemysql.Config{})
+    },
+)
+
+// SQLite
+import migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
+    func(sqlDB *sql.DB) (database.Driver, error) {
+        return migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
+    },
+)
+```
 
 ---
 

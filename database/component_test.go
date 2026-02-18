@@ -481,3 +481,90 @@ func TestComponent_DB_ReturnsValueAfterStart(t *testing.T) {
 		t.Fatalf("Stop() failed: %v", err)
 	}
 }
+
+// TestComponent_Disabled tests component behavior when Enabled=false
+func TestComponent_Disabled(t *testing.T) {
+	cfg := Config{
+		Enabled: false,
+		DSN:     ":memory:",
+	}
+	cfg.ApplyDefaults()
+	log := logger.NewDefault("test")
+	comp := NewComponent(cfg, log)
+
+	ctx := context.Background()
+
+	// Start should succeed but skip initialization
+	if err := comp.Start(ctx); err != nil {
+		t.Fatalf("Start() with Enabled=false should not error: %v", err)
+	}
+
+	// DB should remain nil
+	if db := comp.DB(); db != nil {
+		t.Error("DB() should be nil when component is disabled")
+	}
+
+	// Health should return healthy with "disabled" message
+	health := comp.Health(ctx)
+	if health.Status != component.StatusHealthy {
+		t.Errorf("Health Status = %q, want %q", health.Status, component.StatusHealthy)
+	}
+	if health.Message != "disabled" {
+		t.Errorf("Health Message = %q, want %q", health.Message, "disabled")
+	}
+
+	// Stop should be safe
+	if err := comp.Stop(ctx); err != nil {
+		t.Fatalf("Stop() with Enabled=false should not error: %v", err)
+	}
+}
+
+// TestComponent_EnabledDefaultTrue tests that Enabled defaults to false (zero value)
+func TestComponent_EnabledDefaultBehavior(t *testing.T) {
+	cfg := Config{
+		// Enabled not set - defaults to false
+		DSN: ":memory:",
+	}
+	cfg.ApplyDefaults()
+	log := logger.NewDefault("test")
+	comp := NewComponent(cfg, log)
+
+	ctx := context.Background()
+
+	// Should skip initialization when Enabled is false (default)
+	if err := comp.Start(ctx); err != nil {
+		t.Fatalf("Start() should not error with default Enabled=false: %v", err)
+	}
+
+	if db := comp.DB(); db != nil {
+		t.Error("DB() should be nil when Enabled defaults to false")
+	}
+}
+
+// TestComponent_ContextInHealthCheck tests context handling in Health()
+func TestComponent_ContextInHealthCheck(t *testing.T) {
+	cfg := Config{
+		Enabled: true,
+		DSN:     ":memory:",
+	}
+	cfg.ApplyDefaults()
+	log := logger.NewDefault("test")
+	comp := NewComponent(cfg, log)
+
+	ctx := context.Background()
+	if err := comp.Start(ctx); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+	defer comp.Stop(ctx)
+
+	// Create a canceled context
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Health check with canceled context should still work but might fail
+	health := comp.Health(canceledCtx)
+	// The health check should at least not panic
+	if health.Name != "database" {
+		t.Errorf("Health Name = %q, want %q", health.Name, "database")
+	}
+}
