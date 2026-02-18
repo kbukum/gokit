@@ -111,58 +111,107 @@ WithDriver(sqlserver.Open)
 
 | Symbol | Description |
 |---|---|
-| `Component` | Managed lifecycle wrapper — `Start`, `Stop`, `Health` |
-| `Config` | DSN, pool sizes, slow-query threshold, auto-migrate flag |
-| `DB` | GORM wrapper — `WithContext`, `Transaction`, `CheckHealth`, `AutoMigrate` |
+| `Component` | Managed lifecycle wrapper — `Start`, `Stop`, `Health`, `Describe` |
+| `Config` | DSN, pool sizes, slow-query threshold, auto-migrate flag, enabled flag |
+| `DB` | GORM wrapper — `WithContext`, `Transaction`, `PingContext`, `AutoMigrate` |
 | `BaseModel` | UUID primary key, timestamps, soft-delete |
-| `NewComponent(cfg, log)` | Create a managed database component |
-| `New(cfg, log)` | Create a standalone `*DB` without lifecycle |
+| `NewComponent(cfg, log)` | Create a managed database component (defaults to SQLite) |
+| `WithDriver(fn)` | Specify database driver (postgres, mysql, etc.) |
+| `WithAutoMigrate(models...)` | Register models for auto-migration on startup |
+| `New(cfg, log, dialector)` | Create a standalone `*DB` without lifecycle management |
+| `NewWithContext(ctx, dialector, cfg, log)` | Create `*DB` with context support (recommended) |
 | `IsNotFoundError(err)` | Check for record-not-found |
 | `IsDuplicateError(err)` | Check for unique constraint violation |
+| `FromDatabase(err, resource)` | Convert database error to AppError |
 
 ### Sub-packages
 
 | Package | Description |
 |---|---|
-| `database/migration` | Driver-agnostic migrations using `DriverFunc`. Import your database's migrate driver (e.g., `migrate/v4/database/postgres`). Supports `MigrateUp`, `MigrateDown`, `MigrateReset`, and `MigrationRunner` for programmatic migrations. |
-| `database/query` | `ParseFromRequest` → `Params`; `ApplyToGorm[T]` → `*Result[T]` with pagination, filtering, sorting, facets, and includes |
+| `database/migration` | Driver-agnostic migrations using `DriverFunc`. Import your database's migrate driver (e.g., `migrate/v4/database/postgres`). Functions: `MigrateUp`, `MigrateDown`, `MigrateSteps`, `MigrateVersion`, `MigrateReset`. Also includes `MigrationRunner` for programmatic Go-based migrations. |
+| `database/query` | HTTP query parsing and advanced filtering: `ParseFromRequest` → `Params`; `ApplyToGorm[T]` → `*Result[T]` with pagination, filtering, sorting, facets, and includes |
+| `database/testutil` | In-memory test components with snapshot/restore capabilities for testing |
 
 ## Migration Usage
 
 Migrations are now driver-agnostic. Import the appropriate golang-migrate driver for your database:
 
+### PostgreSQL Migrations
+
 ```go
 import (
+    "database/sql"
     "embed"
     "github.com/kbukum/gokit/database/migration"
+    "github.com/golang-migrate/migrate/v4/database"
     migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
 )
 
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-// PostgreSQL
-err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
-    func(sqlDB *sql.DB) (database.Driver, error) {
-        return migratepg.WithInstance(sqlDB, &migratepg.Config{})
-    },
-)
+// Define driver function
+driverFunc := func(sqlDB *sql.DB) (database.Driver, error) {
+    return migratepg.WithInstance(sqlDB, &migratepg.Config{})
+}
 
-// MySQL
+// Run migrations
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations", driverFunc)
+if err != nil {
+    log.Fatal("Migration failed", err)
+}
+```
+
+### MySQL Migrations
+
+```go
 import migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
-err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
-    func(sqlDB *sql.DB) (database.Driver, error) {
-        return migratemysql.WithInstance(sqlDB, &migratemysql.Config{})
-    },
-)
 
-// SQLite
+driverFunc := func(sqlDB *sql.DB) (database.Driver, error) {
+    return migratemysql.WithInstance(sqlDB, &migratemysql.Config{})
+}
+
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations", driverFunc)
+```
+
+### SQLite Migrations
+
+```go
 import migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite3"
-err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations",
-    func(sqlDB *sql.DB) (database.Driver, error) {
-        return migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
-    },
-)
+
+driverFunc := func(sqlDB *sql.DB) (database.Driver, error) {
+    return migratesqlite.WithInstance(sqlDB, &migratesqlite.Config{})
+}
+
+err := migration.MigrateUp(db.GormDB, migrationsFS, "migrations", driverFunc)
+```
+
+### Migration Files
+
+Create migration files in your `migrations/` directory:
+```
+migrations/
+  ├── 001_create_users.up.sql
+  ├── 001_create_users.down.sql
+  ├── 002_add_email_index.up.sql
+  └── 002_add_email_index.down.sql
+```
+
+### Other Migration Functions
+
+```go
+// Roll back all migrations
+migration.MigrateDown(db.GormDB, migrationsFS, "migrations", driverFunc)
+
+// Apply/rollback specific number of migrations
+migration.MigrateSteps(db.GormDB, migrationsFS, "migrations", 2, driverFunc)  // up 2
+migration.MigrateSteps(db.GormDB, migrationsFS, "migrations", -1, driverFunc) // down 1
+
+// Get current version
+version, dirty, err := migration.MigrateVersion(db.GormDB, migrationsFS, "migrations", driverFunc)
+
+// Reset database (development only - destroys all data!)
+migration.MigrateReset(db.GormDB, migrationsFS, "migrations", driverFunc)
 ```
 
 ---
