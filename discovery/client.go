@@ -156,8 +156,11 @@ func (c *Client) DiscoverOne(ctx context.Context, query Query) (ServiceInstance,
 		return c.selectWeighted(instances), nil
 
 	case StrategyRandom:
-		fallthrough
+		// Explicitly handle random strategy (same as default)
+		return instances[c.r.Intn(len(instances))], nil
+
 	default:
+		// Default to random selection for any unrecognized strategy
 		return instances[c.r.Intn(len(instances))], nil
 	}
 }
@@ -191,8 +194,8 @@ func (c *Client) Close() error {
 
 func (c *Client) selectWeighted(instances []ServiceInstance) ServiceInstance {
 	totalWeight := 0
-	for _, inst := range instances {
-		w := inst.Weight
+	for i := range instances {
+		w := instances[i].Weight
 		if w <= 0 {
 			w = 1
 		}
@@ -204,14 +207,14 @@ func (c *Client) selectWeighted(instances []ServiceInstance) ServiceInstance {
 	}
 
 	r := c.r.Intn(totalWeight)
-	for _, inst := range instances {
-		w := inst.Weight
+	for i := range instances {
+		w := instances[i].Weight
 		if w <= 0 {
 			w = 1
 		}
 		r -= w
 		if r < 0 {
-			return inst
+			return instances[i]
 		}
 	}
 	return instances[0]
@@ -221,17 +224,17 @@ func filterByProtocol(instances []ServiceInstance, protocol string) []ServiceIns
 	var filtered []ServiceInstance
 	protocolLower := strings.ToLower(protocol)
 	tag := "protocol:" + protocolLower
-	for _, inst := range instances {
+	for i := range instances {
 		// Match on Protocol field first
-		if strings.EqualFold(inst.Protocol, protocol) {
-			filtered = append(filtered, inst)
+		if strings.EqualFold(instances[i].Protocol, protocol) {
+			filtered = append(filtered, instances[i])
 			continue
 		}
 		// Fall back to tag matching
-		for _, t := range inst.Tags {
+		for _, t := range instances[i].Tags {
 			tl := strings.ToLower(t)
 			if tl == tag || tl == protocolLower {
-				filtered = append(filtered, inst)
+				filtered = append(filtered, instances[i])
 				break
 			}
 		}

@@ -55,24 +55,22 @@ func NewClient(cfg grpccfg.Config, log *logger.Logger) (*grpc.ClientConn, error)
 
 // buildDialOptions assembles all gRPC dial options from config.
 func buildDialOptions(cfg grpccfg.Config, log *logger.Logger) ([]grpc.DialOption, error) {
-	var opts []grpc.DialOption
+	opts := make([]grpc.DialOption, 0, 5)
 
 	// Transport credentials
 	creds, err := transportCredentials(cfg.TLS)
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, grpc.WithTransportCredentials(creds))
-
-	// Keepalive
-	opts = append(opts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
-		Time:                cfg.Keepalive.Time,
-		Timeout:             cfg.Keepalive.Timeout,
-		PermitWithoutStream: cfg.Keepalive.PermitWithoutStream,
-	}))
-
-	// Message size limits
 	opts = append(opts,
+		grpc.WithTransportCredentials(creds),
+		// Keepalive
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                cfg.Keepalive.Time,
+			Timeout:             cfg.Keepalive.Timeout,
+			PermitWithoutStream: cfg.Keepalive.PermitWithoutStream,
+		}),
+		// Message size limits
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(cfg.MaxRecvMsgSize),
 			grpc.MaxCallSendMsgSize(cfg.MaxSendMsgSize),

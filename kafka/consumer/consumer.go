@@ -74,7 +74,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 }
 
 // Consume reads messages in a loop, calling handler for each one.
-// It blocks until ctx is cancelled or an unrecoverable error occurs.
+// It blocks until ctx is canceled or an unrecoverable error occurs.
 func (c *Consumer) Consume(ctx context.Context, handler kafka.MessageHandler) error {
 	c.log.Info("Starting consume loop", map[string]interface{}{
 		"topic":   c.topic,

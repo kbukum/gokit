@@ -89,7 +89,7 @@ func FromGRPC(err error, serviceName string) *apperrors.AppError {
 	case codes.Canceled:
 		return (&apperrors.AppError{
 			Code:       apperrors.ErrCodeInternal,
-			Message:    "The request was cancelled.",
+			Message:    "The request was canceled.",
 			HTTPStatus: http.StatusRequestTimeout,
 			Retryable:  false,
 		}).WithCause(err)

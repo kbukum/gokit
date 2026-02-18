@@ -282,6 +282,7 @@ func TestAssertTableEmpty(t *testing.T) {
 		defer func() {
 			if r := recover(); r != nil {
 				// Expected to fail, that's ok
+				t.Logf("Caught expected panic: %v", r)
 			}
 		}()
 	})
@@ -305,6 +306,7 @@ func TestAssertRowCount(t *testing.T) {
 		defer func() {
 			if r := recover(); r != nil {
 				// Expected to fail
+				t.Logf("Caught expected panic: %v", r)
 			}
 		}()
 	})
@@ -340,7 +342,7 @@ func TestMustLoadFixture_Panic(t *testing.T) {
 	// So we can't test this with a panic recovery
 	// Instead, we'll test that it works correctly with valid data
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
-	
+
 	// This should succeed without panic
 	MustLoadFixture(t, db, "users", []map[string]interface{}{
 		{"name": "Alice"},

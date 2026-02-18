@@ -96,8 +96,8 @@ func (s *Provider) Deregister(_ context.Context, serviceID string) error {
 	defer s.mu.Unlock()
 
 	for name, list := range s.instances {
-		for i, inst := range list {
-			if inst.ID == serviceID {
+		for i := range list {
+			if list[i].ID == serviceID {
 				s.instances[name] = append(list[:i], list[i+1:]...)
 				return nil
 			}
@@ -136,15 +136,15 @@ func (s *Provider) Discover(_ context.Context, serviceName string) ([]discovery.
 
 	out := make([]discovery.ServiceInstance, len(instances))
 	now := time.Now()
-	for i, inst := range instances {
-		inst.LastSeen = now
-		out[i] = inst
+	for i := range instances {
+		instances[i].LastSeen = now
+		out[i] = instances[i]
 	}
 	return out, nil
 }
 
 // Watch returns a channel that never emits for the static provider (instances are fixed).
-// The channel is closed when the context is cancelled.
+// The channel is closed when the context is canceled.
 func (s *Provider) Watch(ctx context.Context, _ string) (<-chan []discovery.ServiceInstance, error) {
 	ch := make(chan []discovery.ServiceInstance)
 	go func() {

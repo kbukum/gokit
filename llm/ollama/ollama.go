@@ -82,7 +82,7 @@ func (p *Provider) Name() string { return ProviderName }
 
 // IsAvailable checks if the Ollama server is reachable.
 func (p *Provider) IsAvailable(ctx context.Context) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.BaseURL+"/api/tags", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.BaseURL+"/api/tags", http.NoBody)
 	if err != nil {
 		return false
 	}
@@ -90,7 +90,7 @@ func (p *Provider) IsAvailable(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
 }
 
@@ -153,6 +153,7 @@ func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-cha
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	//nolint:bodyclose // Body is closed in the goroutine that processes the stream
 	httpResp, err := p.client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("ollama stream: send request: %w", err)
@@ -160,14 +161,14 @@ func (p *Provider) Stream(ctx context.Context, req llm.CompletionRequest) (<-cha
 
 	if httpResp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(httpResp.Body)
-		httpResp.Body.Close()
+		_ = httpResp.Body.Close()
 		return nil, fmt.Errorf("ollama stream: unexpected status %d: %s", httpResp.StatusCode, string(respBody))
 	}
 
 	ch := make(chan llm.StreamChunk)
 	go func() {
 		defer close(ch)
-		defer httpResp.Body.Close()
+		defer httpResp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 		scanner := bufio.NewScanner(httpResp.Body)
 		for scanner.Scan() {
@@ -276,7 +277,7 @@ func (p *Provider) doRequest(ctx context.Context, req ollamaChatRequest) (*ollam
 	if err != nil {
 		return nil, fmt.Errorf("send request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if httpResp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(httpResp.Body)

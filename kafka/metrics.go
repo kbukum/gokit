@@ -1,8 +1,6 @@
 package kafka
 
 import (
-	"fmt"
-
 	kafkago "github.com/segmentio/kafka-go"
 )
 
@@ -58,6 +56,6 @@ func CollectReaderMetrics(stats kafkago.ReaderStats) ReaderMetrics {
 		Offset:     stats.Offset,
 		Lag:        stats.Lag,
 		Topic:      stats.Topic,
-		Partition:  fmt.Sprintf("%s", stats.Partition),
+		Partition:  stats.Partition,
 	}
 }

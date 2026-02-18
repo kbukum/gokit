@@ -260,7 +260,7 @@ func serviceEntryToInstance(e *api.ServiceEntry, now time.Time) discovery.Servic
 
 	weight := 0
 	if w, ok := e.Service.Meta["weight"]; ok {
-		fmt.Sscanf(w, "%d", &weight)
+		_, _ = fmt.Sscanf(w, "%d", &weight)
 	}
 
 	return discovery.ServiceInstance{

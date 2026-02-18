@@ -141,7 +141,7 @@ type BrokerHealth struct {
 	Latency time.Duration `json:"latency"`
 }
 
-// Health checks broker connectivity by dialling all configured brokers.
+// Health checks broker connectivity by dialing all configured brokers.
 // Returns degraded status when some (but not all) brokers are unreachable.
 func (c *Component) Health(ctx context.Context) component.Health {
 	c.mu.Lock()
@@ -218,7 +218,7 @@ func (c *Component) checkBroker(ctx context.Context, dialer *kafkago.Dialer, add
 		bh.Latency = time.Since(start)
 		return bh
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if _, err := conn.Brokers(); err != nil {
 		bh.Status = "degraded"

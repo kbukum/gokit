@@ -35,7 +35,7 @@ func ErrorMapper(err error) (message string, retryable bool) {
 	case codes.Internal:
 		return "An internal error occurred. Please try again or contact support.", true
 	case codes.Canceled:
-		return "The request was cancelled.", false
+		return "The request was canceled.", false
 	case codes.Aborted:
 		return "The operation was aborted. Please try again.", true
 	default:

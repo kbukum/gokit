@@ -165,7 +165,7 @@ func (p *Producer) Close() error {
 }
 
 // SendJSON marshals value as JSON and sends it to the given topic with the given key.
-func (p *Producer) SendJSON(ctx context.Context, topic, key string, value interface{}) error {
+func (p *Producer) SendJSON(ctx context.Context, topic string, key string, value interface{}) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
@@ -182,7 +182,7 @@ func (p *Producer) SendJSON(ctx context.Context, topic, key string, value interf
 }
 
 // SendBinary sends raw bytes to the given topic with the given key.
-func (p *Producer) SendBinary(ctx context.Context, topic, key string, data []byte) error {
+func (p *Producer) SendBinary(ctx context.Context, topic string, key string, data []byte) error {
 	msg := kafkago.Message{
 		Topic: topic,
 		Key:   []byte(key),

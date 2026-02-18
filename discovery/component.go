@@ -60,7 +60,7 @@ func (c *Component) Discovery() Discovery { return c.discovery }
 // auto-created from Config after Start. Returns nil if not started.
 func (c *Component) Client() *Client { return c.client }
 
-// Start initialises the appropriate provider and registers the local service.
+// Start initializes the appropriate provider and registers the local service.
 func (c *Component) Start(ctx context.Context) error {
 	c.cfg.ApplyDefaults()
 
@@ -196,11 +196,12 @@ func (c *Component) Describe() component.Description {
 }
 
 func getLocalIP() (string, error) {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
+	dialer := &net.Dialer{}
+	conn, err := dialer.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer conn.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
 }
 
