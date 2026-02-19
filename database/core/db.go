@@ -1,7 +1,6 @@
-// Package database provides a database wrapper built on GORM
-// with connection pooling, health checks, transactions, and auto-migration.
-// Use Component.WithDriver() to specify the database driver (postgres, mysql, sqlite, etc).
-package database
+// Package core provides the core database wrapper built on GORM
+// with connection pooling, health checks, transactions, and retry logic.
+package core
 
 import (
 	"context"

@@ -1,4 +1,6 @@
-package database
+// Package errors provides database error utilities and translation
+// to gokit AppError types for consistent error handling.
+package errors
 
 import (
 	"errors"

@@ -1,5 +1,5 @@
-// Package migration provides database migration utilities for GORM.
-// It supports both file-based migrations (via golang-migrate) and programmatic migrations.
+// Package migration provides file-based database migration utilities for GORM.
+// It uses golang-migrate with embedded SQL files for version-controlled schema changes.
 //
 // This package is driver-agnostic. Users must provide a DriverFunc that creates
 // the appropriate database driver for their chosen database (PostgreSQL, MySQL, SQLite, etc.).

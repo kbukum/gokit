@@ -7,12 +7,13 @@ import (
 	"gorm.io/driver/sqlite"
 
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/database/core"
 	"github.com/kbukum/gokit/logger"
 )
 
 // TestComponent_Name tests that the component returns the correct name
 func TestComponent_Name(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -27,7 +28,7 @@ func TestComponent_Name(t *testing.T) {
 
 // TestComponent_Interface tests that Component satisfies component.Component
 func TestComponent_Interface(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -39,7 +40,7 @@ func TestComponent_Interface(t *testing.T) {
 
 // TestComponent_Lifecycle tests basic start/stop lifecycle
 func TestComponent_Lifecycle(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -72,7 +73,7 @@ func TestComponent_Lifecycle(t *testing.T) {
 
 // TestComponent_WithDriver tests custom driver function
 func TestComponent_WithDriver(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -108,7 +109,7 @@ func TestComponent_WithDriver(t *testing.T) {
 
 // TestComponent_DefaultSQLiteDriver tests that SQLite is used by default
 func TestComponent_DefaultSQLiteDriver(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -142,7 +143,7 @@ func TestComponent_DefaultSQLiteDriver(t *testing.T) {
 
 // TestComponent_WithAutoMigrate_Enabled tests auto-migration when enabled
 func TestComponent_WithAutoMigrate_Enabled(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled:     true,
 		DSN:         ":memory:",
 		AutoMigrate: true,
@@ -179,7 +180,7 @@ func TestComponent_WithAutoMigrate_Enabled(t *testing.T) {
 
 // TestComponent_WithAutoMigrate_Disabled tests auto-migration when disabled
 func TestComponent_WithAutoMigrate_Disabled(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled:     true,
 		DSN:         ":memory:",
 		AutoMigrate: false,
@@ -215,7 +216,7 @@ func TestComponent_WithAutoMigrate_Disabled(t *testing.T) {
 
 // TestComponent_WithAutoMigrate_Chaining tests that WithAutoMigrate returns component
 func TestComponent_WithAutoMigrate_Chaining(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -235,7 +236,7 @@ func TestComponent_WithAutoMigrate_Chaining(t *testing.T) {
 
 // TestComponent_Health_BeforeStart tests health check before component starts
 func TestComponent_Health_BeforeStart(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -259,7 +260,7 @@ func TestComponent_Health_BeforeStart(t *testing.T) {
 
 // TestComponent_Health_AfterStart tests health check after component starts
 func TestComponent_Health_AfterStart(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -290,7 +291,7 @@ func TestComponent_Health_AfterStart(t *testing.T) {
 
 // TestComponent_Describe tests the Describe method
 func TestComponent_Describe(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled:      true,
 		DSN:          "file:testdb.db?mode=memory",
 		MaxOpenConns: 30,
@@ -316,9 +317,9 @@ func TestComponent_Describe(t *testing.T) {
 	}
 }
 
-// TestComponent_NewWithDialector tests NewWithDialector function
-func TestComponent_NewWithDialector(t *testing.T) {
-	cfg := Config{
+// TestNewWithDialector tests NewWithDialector function
+func TestNewWithDialector(t *testing.T) {
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -327,13 +328,13 @@ func TestComponent_NewWithDialector(t *testing.T) {
 
 	dialector := sqlite.Open(cfg.DSN)
 
-	db, err := NewWithDialector(dialector, cfg, log)
+	db, err := core.NewWithDialector(dialector, cfg, log)
 	if err != nil {
-		t.Fatalf("NewWithDialector() failed: %v", err)
+		t.Fatalf("core.NewWithDialector() failed: %v", err)
 	}
 
 	if db == nil {
-		t.Error("NewWithDialector() returned nil DB")
+		t.Error("core.NewWithDialector() returned nil DB")
 	}
 
 	// Verify database is functional
@@ -348,7 +349,7 @@ func TestComponent_NewWithDialector(t *testing.T) {
 
 // TestComponent_NewWithDialector_InvalidType tests NewWithDialector with invalid dialector
 func TestComponent_NewWithDialector_InvalidType(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -358,14 +359,14 @@ func TestComponent_NewWithDialector_InvalidType(t *testing.T) {
 	// Pass an invalid dialector type (string instead of gorm.Dialector)
 	invalidDialector := "not-a-dialector"
 
-	db, err := NewWithDialector(invalidDialector, cfg, log)
+	db, err := core.NewWithDialector(invalidDialector, cfg, log)
 
 	if err == nil {
-		t.Error("NewWithDialector() should return an error for invalid dialector type")
+		t.Error("core.NewWithDialector() should return an error for invalid dialector type")
 	}
 
 	if db != nil {
-		t.Error("NewWithDialector() should return nil DB on error")
+		t.Error("core.NewWithDialector() should return nil DB on error")
 	}
 
 	if errMsg := err.Error(); errMsg == "" {
@@ -375,7 +376,7 @@ func TestComponent_NewWithDialector_InvalidType(t *testing.T) {
 
 // TestComponent_Stop_BeforeStart tests Stop before Start is called
 func TestComponent_Stop_BeforeStart(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -392,7 +393,7 @@ func TestComponent_Stop_BeforeStart(t *testing.T) {
 
 // TestComponent_ChainedMethods tests that methods can be chained
 func TestComponent_ChainedMethods(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled:     true,
 		DSN:         ":memory:",
 		AutoMigrate: true,
@@ -425,7 +426,7 @@ func TestComponent_ChainedMethods(t *testing.T) {
 
 // TestComponent_StartWithInvalidDSN tests Start with invalid DSN
 func TestComponent_StartWithInvalidDSN(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     "/invalid/path/to/db.db",
 	}
@@ -445,7 +446,7 @@ func TestComponent_StartWithInvalidDSN(t *testing.T) {
 
 // TestComponent_DB_ReturnsNilBeforeStart tests DB() returns nil before Start
 func TestComponent_DB_ReturnsNilBeforeStart(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -459,7 +460,7 @@ func TestComponent_DB_ReturnsNilBeforeStart(t *testing.T) {
 
 // TestComponent_DB_ReturnsValueAfterStart tests DB() returns value after Start
 func TestComponent_DB_ReturnsValueAfterStart(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}
@@ -484,7 +485,7 @@ func TestComponent_DB_ReturnsValueAfterStart(t *testing.T) {
 
 // TestComponent_Disabled tests component behavior when Enabled=false
 func TestComponent_Disabled(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: false,
 		DSN:     ":memory:",
 	}
@@ -521,7 +522,7 @@ func TestComponent_Disabled(t *testing.T) {
 
 // TestComponent_EnabledDefaultTrue tests that Enabled defaults to false (zero value)
 func TestComponent_EnabledDefaultBehavior(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		// Enabled not set - defaults to false
 		DSN: ":memory:",
 	}
@@ -543,7 +544,7 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 
 // TestComponent_ContextInHealthCheck tests context handling in Health()
 func TestComponent_ContextInHealthCheck(t *testing.T) {
-	cfg := Config{
+	cfg := core.Config{
 		Enabled: true,
 		DSN:     ":memory:",
 	}

@@ -1,4 +1,6 @@
-package database
+// Package types provides common database types and models
+// used across database operations.
+package types
 
 import (
 	"time"
