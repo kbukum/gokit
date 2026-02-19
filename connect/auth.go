@@ -8,9 +8,90 @@ import (
 	"connectrpc.com/connect"
 	gojwt "github.com/golang-jwt/jwt/v5"
 
+	"github.com/kbukum/gokit/auth"
 	"github.com/kbukum/gokit/auth/authctx"
 	"github.com/kbukum/gokit/auth/jwt"
 )
+
+// ---------------------------------------------------------------------------
+// Generic Token Authentication Interceptor
+// ---------------------------------------------------------------------------
+
+// TokenAuthInterceptor returns a Connect interceptor that validates tokens
+// using any auth.TokenValidator implementation and stores the parsed claims
+// in context via authctx.Set.
+//
+// This is the preferred way to add authentication — it works with any
+// validator (JWT, OIDC, API key, etc.) without coupling to a specific implementation.
+//
+// Usage:
+//
+//	validator := jwtSvc.AsValidator() // or any auth.TokenValidator
+//	path, handler := myv1connect.NewMyServiceHandler(
+//	    svc,
+//	    connect.WithInterceptors(
+//	        TokenAuthInterceptor(validator),
+//	    ),
+//	)
+func TokenAuthInterceptor(validator auth.TokenValidator) connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			header := req.Header().Get("Authorization")
+			if header == "" {
+				return nil, connect.NewError(
+					connect.CodeUnauthenticated,
+					errors.New("missing authorization header"),
+				)
+			}
+
+			token := strings.TrimPrefix(header, "Bearer ")
+			if token == header {
+				return nil, connect.NewError(
+					connect.CodeUnauthenticated,
+					errors.New("invalid authorization scheme; expected 'Bearer <token>'"),
+				)
+			}
+
+			claims, err := validator.ValidateToken(token)
+			if err != nil {
+				return nil, connect.NewError(
+					connect.CodeUnauthenticated,
+					errors.New("invalid or expired token"),
+				)
+			}
+
+			ctx = authctx.Set(ctx, claims)
+			return next(ctx, req)
+		}
+	}
+}
+
+// OptionalTokenAuthInterceptor is like TokenAuthInterceptor but allows requests
+// without authentication to proceed. If a valid token is present, claims are
+// stored in context; otherwise, the request continues without claims.
+func OptionalTokenAuthInterceptor(validator auth.TokenValidator) connect.UnaryInterceptorFunc {
+	return func(next connect.UnaryFunc) connect.UnaryFunc {
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			header := req.Header().Get("Authorization")
+			if header == "" {
+				return next(ctx, req)
+			}
+
+			token := strings.TrimPrefix(header, "Bearer ")
+			if token == header {
+				return next(ctx, req)
+			}
+
+			claims, err := validator.ValidateToken(token)
+			if err != nil {
+				return next(ctx, req)
+			}
+
+			ctx = authctx.Set(ctx, claims)
+			return next(ctx, req)
+		}
+	}
+}
 
 // ---------------------------------------------------------------------------
 // JWT Authentication Interceptor

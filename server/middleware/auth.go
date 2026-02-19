@@ -6,14 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/kbukum/gokit/auth"
 	"github.com/kbukum/gokit/auth/authctx"
-	"github.com/kbukum/gokit/auth/permission"
+	"github.com/kbukum/gokit/authz"
 )
-
-// TokenValidator validates a token string and returns the parsed claims.
-// The returned value can be any type — it is stored in the request context
-// and retrieved with authctx.Get[T] in handlers.
-type TokenValidator func(token string) (any, error)
 
 // AuthOption configures the Auth middleware.
 type AuthOption func(*authOptions)
@@ -46,10 +42,9 @@ func WithScheme(scheme string) AuthOption {
 //
 //	claims, ok := authctx.Get[*MyClaims](c.Request.Context())
 //
-// The validator is any function that takes a token string and returns claims.
-// Typically this is jwtService.ValidatorFunc() but can be any implementation
-// (API key lookup, OAuth introspection, etc.).
-func Auth(validator TokenValidator, opts ...AuthOption) gin.HandlerFunc {
+// The validator is any auth.TokenValidator implementation — JWT, OIDC, API key, etc.
+// For JWT, use jwtService.AsValidator().
+func Auth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
 	for _, opt := range opts {
 		opt(o)
@@ -75,7 +70,7 @@ func Auth(validator TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 		}
 
 		// Validate
-		claims, err := validator(token)
+		claims, err := validator.ValidateToken(token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid token",
@@ -92,7 +87,7 @@ func Auth(validator TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 
 // OptionalAuth validates a token if present but allows unauthenticated requests.
 // If valid, claims are stored in context. If absent or invalid, request proceeds.
-func OptionalAuth(validator TokenValidator, opts ...AuthOption) gin.HandlerFunc {
+func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
 	for _, opt := range opts {
 		opt(o)
@@ -105,7 +100,7 @@ func OptionalAuth(validator TokenValidator, opts ...AuthOption) gin.HandlerFunc 
 			return
 		}
 
-		claims, err := validator(token)
+		claims, err := validator.ValidateToken(token)
 		if err != nil {
 			c.Next()
 			return
@@ -138,13 +133,13 @@ func Require(check func(c *gin.Context) bool) gin.HandlerFunc {
 	}
 }
 
-// RequirePermission is a guard middleware that uses a permission.Checker.
+// RequirePermission is a guard middleware that uses an authz.Checker.
 // The subjectExtractor reads the subject (e.g., role name) from the request,
 // and the checker determines if the subject has the required permission.
 //
 // Example:
 //
-//	checker := permission.NewMapChecker(rolePermissions)
+//	checker := authz.NewMapChecker(rolePermissions)
 //	router.Use(middleware.RequirePermission(
 //	    checker,
 //	    "article:write",
@@ -153,7 +148,7 @@ func Require(check func(c *gin.Context) bool) gin.HandlerFunc {
 //	        return claims.Role
 //	    },
 //	))
-func RequirePermission(checker permission.Checker, required string, subjectExtractor func(*gin.Context) string) gin.HandlerFunc {
+func RequirePermission(checker authz.Checker, required string, subjectExtractor func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subject := subjectExtractor(c)
 		if !checker.HasPermission(subject, required) {

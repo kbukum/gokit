@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logger"
 )
@@ -174,9 +175,11 @@ func sanitizeMessage(msg string) string {
 // ---------------------------------------------------------------------------
 
 // AuthInterceptor returns a Connect interceptor that validates the
-// Authorization header using the provided validateToken function.
+// Authorization header using the provided auth.TokenValidator.
 // The token is extracted by stripping the "Bearer " prefix.
-func AuthInterceptor(validateToken func(ctx context.Context, token string) error) connect.UnaryInterceptorFunc {
+//
+// Deprecated: Use TokenAuthInterceptor instead which also stores claims in context.
+func AuthInterceptor(validator auth.TokenValidator) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			header := req.Header().Get("Authorization")
@@ -190,7 +193,7 @@ func AuthInterceptor(validateToken func(ctx context.Context, token string) error
 				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid authorization scheme"))
 			}
 
-			if err := validateToken(ctx, token); err != nil {
+			if _, err := validator.ValidateToken(token); err != nil {
 				return nil, connect.NewError(connect.CodeUnauthenticated, err)
 			}
 

@@ -1,24 +1,4 @@
-// Package permission provides authorization building blocks.
-//
-// It defines a Checker interface that projects implement according to their
-// needs — whether that's a simple in-memory map, a database-backed system,
-// Casbin, Oso, or any other authorization engine.
-//
-// The package also provides pattern matching utilities for wildcard-based
-// permission schemes (e.g., "pipeline:*" matches "pipeline:read").
-//
-// Usage:
-//
-//	// Define your checker (in your project)
-//	checker := permission.NewMapChecker(map[string][]string{
-//	    "admin":  {"*:*"},
-//	    "editor": {"article:*", "media:read"},
-//	    "viewer": {"*:read"},
-//	})
-//
-//	// Check permissions
-//	allowed := checker.HasPermission("admin", "article:delete") // true
-package permission
+package authz
 
 // Checker is the core authorization interface.
 // Projects implement this based on their authorization requirements.
@@ -34,6 +14,7 @@ type Checker interface {
 // CheckerFunc is an adapter to use ordinary functions as Checker.
 type CheckerFunc func(subject string, permission string) bool
 
+// HasPermission implements Checker.
 func (f CheckerFunc) HasPermission(subject string, permission string) bool {
 	return f(subject, permission)
 }
@@ -48,7 +29,7 @@ type MapChecker struct {
 //
 // Example:
 //
-//	checker := permission.NewMapChecker(map[string][]string{
+//	checker := authz.NewMapChecker(map[string][]string{
 //	    "admin":  {"*:*"},
 //	    "editor": {"article:*", "media:read"},
 //	})
@@ -56,6 +37,7 @@ func NewMapChecker(permissions map[string][]string) *MapChecker {
 	return &MapChecker{permissions: permissions}
 }
 
+// HasPermission implements Checker.
 func (c *MapChecker) HasPermission(subject string, required string) bool {
 	patterns, ok := c.permissions[subject]
 	if !ok {

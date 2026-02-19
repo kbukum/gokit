@@ -1,6 +1,8 @@
 # auth
 
-Authentication and authorization building blocks with JWT, password hashing, OIDC, and permission checking.
+Authentication building blocks with JWT, password hashing, OIDC verification, and shared token validation interfaces.
+
+For authorization (permission checking, RBAC), see [authz](../authz/).
 
 ## Install
 
@@ -9,6 +11,37 @@ go get github.com/kbukum/gokit/auth@latest
 ```
 
 ## Quick Start
+
+### Token Validation Interface
+
+The `auth.TokenValidator` interface is the shared contract used by middleware and interceptors:
+
+```go
+import "github.com/kbukum/gokit/auth"
+
+// From a JWT service
+validator := auth.NewValidator(jwtSvc.ValidatorFunc())
+
+// From a custom function
+validator := auth.TokenValidatorFunc(func(token string) (any, error) {
+    return myCustomValidation(token)
+})
+```
+
+### Provider Registry
+
+Register multiple validators and select by name:
+
+```go
+reg := auth.NewRegistry()
+reg.Register("jwt", auth.NewValidator(jwtSvc.ValidatorFunc()))
+reg.Register("apikey", auth.TokenValidatorFunc(myAPIKeyValidator))
+reg.SetDefault("jwt")
+
+// In middleware setup
+validator, _ := reg.Default()
+router.Use(middleware.Auth(validator))
+```
 
 ### JWT Token Service
 
@@ -42,7 +75,32 @@ verifier, _ := oidc.NewVerifier(ctx, "https://issuer.example.com", oidc.Verifier
 idToken, _ := verifier.Verify(ctx, rawIDToken)
 ```
 
+### Composable Config
+
+Only configure what you need — unused sections are nil:
+
+```yaml
+auth:
+  enabled: true
+  jwt:
+    secret: "my-secret"
+    access_token_ttl: "15m"
+  # password and oidc are omitted — no validation or defaults applied
+```
+
 ## Key Types & Functions
+
+### `auth` (top-level)
+
+| Symbol | Description |
+|---|---|
+| `TokenValidator` | Interface — `ValidateToken(token) (any, error)` |
+| `TokenValidatorFunc` | Adapter for ordinary functions |
+| `TokenGenerator` | Interface — `GenerateToken(claims) (string, error)` |
+| `NewValidator(fn)` | Bridge helper for `ValidatorFunc()` |
+| `Registry` | Thread-safe named validator registry |
+| `NewRegistry()` | Constructor for Registry |
+| `Config` | Composable config with pointer sub-configs |
 
 ### `auth/jwt`
 
@@ -54,6 +112,7 @@ idToken, _ := verifier.Verify(ctx, rawIDToken)
 | `GenerateAccess(claims)` | Access token with configured TTL |
 | `GenerateRefresh(claims)` | Refresh token with configured TTL |
 | `Parse(tokenString)` | Parse and validate a token |
+| `ValidatorFunc()` | Returns `func(string) (any, error)` for middleware |
 | `Config` | Secret, PrivateKeyPath, Method, Issuer, Audience, TTLs |
 
 ### `auth/password`
@@ -73,14 +132,6 @@ idToken, _ := verifier.Verify(ctx, rawIDToken)
 | `Get[T](ctx)` | Type-safe claims retrieval |
 | `MustGet[T](ctx)` | Panic if claims missing |
 | `GetOrError[T](ctx)` | Error-based retrieval |
-
-### `auth/permission`
-
-| Symbol | Description |
-|---|---|
-| `Checker` | Interface — `HasPermission(subject, permission)` |
-| `NewMapChecker(permissions)` | In-memory map-backed checker |
-| `MatchPattern(pattern, required)` | Wildcard matching (`article:*`, `*:read`) |
 
 ### `auth/oidc`
 

@@ -48,6 +48,8 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 
 | Module | Import | Description |
 |---|---|---|
+| `auth` | `gokit/auth` | Authentication — JWT tokens, OIDC verification, password hashing, token validation interfaces |
+| `authz` | `gokit/authz` | Authorization — permission checking, wildcard pattern matching (zero external deps) |
 | `database` | `gokit/database` | PostgreSQL via GORM — pooling, migrations, health checks, slow query logging |
 | `redis` | `gokit/redis` | go-redis client wrapper with pooling, health checks, and integrated logging |
 | `kafka` | `gokit/kafka` | Kafka producer/consumer with TLS/SASL, configurable transport |
@@ -183,6 +185,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Foundation** | errors, config, logger, version | Configuration, logging, error handling |
 | **Utilities** | util, encryption, validation | Common helpers and data validation |
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle management, provider pattern |
+| **Auth & Authz** | auth, authz | Authentication (JWT, OIDC, password) and authorization (permissions) |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
 | **Networking** | sse | Server-sent events |
 | **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |

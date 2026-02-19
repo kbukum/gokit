@@ -100,9 +100,13 @@ func (s *Service[T]) Parse(tokenString string) (T, error) {
 // the parsed claims as any. This bridges the typed JWT service with generic
 // middleware that doesn't know about the specific claims type.
 //
-// Usage with middleware:
+// To get an auth.TokenValidator interface, wrap with auth.TokenValidatorFunc:
 //
-//	router.Use(middleware.Auth(svc.ValidatorFunc()))
+//	validator := auth.TokenValidatorFunc(svc.ValidatorFunc())
+//
+// Or use the convenience helper:
+//
+//	validator := auth.NewJWTValidator(svc)
 func (s *Service[T]) ValidatorFunc() func(string) (any, error) {
 	return func(token string) (any, error) {
 		return s.Parse(token)
