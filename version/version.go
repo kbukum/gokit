@@ -1,4 +1,3 @@
-// Package version provides build version information embedding.
 package version
 
 import (

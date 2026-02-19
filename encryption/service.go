@@ -1,4 +1,3 @@
-// Package encryption provides AES-GCM encryption and decryption.
 package encryption
 
 import (

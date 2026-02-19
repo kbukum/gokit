@@ -1,20 +1,3 @@
-// Package validation provides input validation utilities for handlers.
-// Supports both struct tag validation (recommended) and programmatic validation.
-//
-// Struct tag validation (preferred for Commands/Queries):
-//
-//	if err := validation.Validate(cmd); err != nil {
-//	    return nil, err
-//	}
-//
-// Programmatic validation (for complex cases):
-//
-//	v := validation.New()
-//	v.Required("name", name)
-//	v.MaxLength("description", desc, 2000)
-//	if err := v.Validate(); err != nil {
-//	    return nil, err
-//	}
 package validation
 
 import (

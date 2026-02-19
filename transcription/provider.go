@@ -1,5 +1,3 @@
-// Package transcription defines the transcription provider interface and common
-// types for interacting with speech-to-text backends.
 package transcription
 
 import (

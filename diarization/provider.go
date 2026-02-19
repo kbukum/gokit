@@ -1,5 +1,3 @@
-// Package diarization defines the diarization provider interface and common
-// types for interacting with speaker diarization backends.
 package diarization
 
 import (

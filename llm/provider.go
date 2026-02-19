@@ -1,5 +1,3 @@
-// Package llm defines the LLM provider interface and common types
-// for interacting with large language model backends.
 package llm
 
 import (

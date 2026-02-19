@@ -1,4 +1,3 @@
-// Package util provides generic utility functions.
 package util
 
 // StringInSlice checks if a string exists in a slice.

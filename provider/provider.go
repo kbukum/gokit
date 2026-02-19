@@ -1,5 +1,3 @@
-// Package provider implements a generic provider framework using Go generics
-// for swappable backends with runtime switching capabilities.
 package provider
 
 import "context"
