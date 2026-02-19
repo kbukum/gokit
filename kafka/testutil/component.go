@@ -79,11 +79,22 @@ func (c *MockConsumer) Feed(msg Message) {
 }
 
 // Consume blocks until context is canceled, processing fed messages.
+// After cancellation, any remaining buffered messages are still delivered.
 func (c *MockConsumer) Consume(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			// Drain buffered messages before returning
+			for {
+				select {
+				case msg := <-c.messages:
+					if c.handler != nil {
+						c.handler(msg)
+					}
+				default:
+					return ctx.Err()
+				}
+			}
 		case msg := <-c.messages:
 			if c.handler != nil {
 				c.handler(msg)
