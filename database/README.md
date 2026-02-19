@@ -15,12 +15,11 @@ go get github.com/kbukum/gokit/database@latest
 ```go
 import (
     "github.com/kbukum/gokit/database"
-    "github.com/kbukum/gokit/database/core"
     "github.com/kbukum/gokit/logger"
     "gorm.io/driver/postgres"  // Import your chosen driver
 )
 
-cfg := core.Config{
+cfg := database.Config{
     Enabled:     true,
     DSN:         "host=localhost user=app dbname=mydb sslmode=disable",
     AutoMigrate: true,
@@ -47,10 +46,8 @@ db.Transaction(func(tx *gorm.DB) error {
 ### Optional Components (Disable via Config)
 
 ```go
-import "github.com/kbukum/gokit/database/core"
-
 // Database is optional - set Enabled: false to skip initialization
-cfg := core.Config{
+cfg := database.Config{
     Enabled: false,  // Component skips Start(), returns healthy status
     DSN:     "...",
 }
@@ -65,11 +62,10 @@ comp.Health(ctx) // Returns StatusHealthy with "disabled" message
 ```go
 import (
     "github.com/kbukum/gokit/database"
-    "github.com/kbukum/gokit/database/core"
 )
 
 // No driver import needed - SQLite is the default
-comp := database.NewComponent(core.Config{
+comp := database.NewComponent(database.Config{
     DSN: ":memory:",  // In-memory SQLite
 }, log)
 ```
@@ -138,7 +134,6 @@ The database module follows a clean, standardized structure:
 
 | Package | Description |
 |---|---|
-| `database/core` | Core database wrapper, connection pooling, Config, and transaction helpers |
 | `database/errors` | Database error utilities and translation to AppError |
 | `database/types` | Common database types like BaseModel |
 | `database/migration` | Driver-agnostic file-based migrations using `golang-migrate`. Import your database's migrate driver (e.g., `migrate/v4/database/postgres`). Functions: `MigrateUp`, `MigrateDown`, `MigrateSteps`, `MigrateVersion`, `MigrateReset`. |

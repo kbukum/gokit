@@ -1,16 +1,12 @@
-// Package core provides the core database wrapper built on GORM
-// with connection pooling, health checks, transactions, and retry logic.
-package core
+package database
 
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	"github.com/kbukum/gokit/logger"
 )
@@ -26,15 +22,7 @@ type DB struct {
 
 // New opens a database connection with retry logic and connection pooling.
 // For most use cases, use Component instead which provides driver flexibility via WithDriver().
-// This function is kept for direct instantiation when not using the component framework.
 func New(cfg Config, log *logger.Logger, dialector gorm.Dialector) (*DB, error) {
-	return NewWithContext(context.Background(), dialector, cfg, log)
-}
-
-// NewWithDialector creates a database connection using a provided dialector.
-//
-// Deprecated: Use NewWithContext for better control, or use Component for lifecycle management.
-func NewWithDialector(dialector interface{}, cfg Config, log *logger.Logger) (*DB, error) {
 	return NewWithContext(context.Background(), dialector, cfg, log)
 }
 
@@ -58,16 +46,13 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 	var db *gorm.DB
 	var err error
 
-	// Retry loop with context-aware backoff
 	for attempt := 1; attempt <= cfg.MaxRetries; attempt++ {
-		// Check if context is canceled before attempting connection
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("database connection canceled: %w", ctx.Err())
 		}
 
 		db, err = gorm.Open(d, gormCfg)
 		if err == nil {
-			// Successfully connected, verify with ping
 			sqlDB, sqlErr := db.DB()
 			if sqlErr != nil {
 				err = sqlErr
@@ -82,7 +67,6 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 					"attempt": attempt,
 				})
 			} else {
-				// Connection successful, configure pool
 				sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 				sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 				if lifetime, parseErr := time.ParseDuration(cfg.ConnMaxLifetime); parseErr == nil {
@@ -99,7 +83,6 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 			}
 		}
 
-		// Connection failed, wait before retry (unless last attempt)
 		if attempt < cfg.MaxRetries {
 			backoff := time.Duration(attempt) * time.Second
 			log.Warn("Database connection attempt failed, retrying", map[string]interface{}{
@@ -108,7 +91,6 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 				"backoff": backoff.String(),
 			})
 
-			// Context-aware sleep - returns early if context is canceled
 			if waitErr := contextSleep(ctx, backoff); waitErr != nil {
 				return nil, fmt.Errorf("database connection canceled during retry: %w", waitErr)
 			}
@@ -119,7 +101,6 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 }
 
 // contextSleep waits for the given duration or until context is canceled.
-// This allows retry backoff to be interrupted if the context is canceled.
 func contextSleep(ctx context.Context, d time.Duration) error {
 	select {
 	case <-ctx.Done():
@@ -231,80 +212,4 @@ func (d *DB) WithReadOnlyTransaction(ctx context.Context, fn TransactionFunc) er
 	defer tx.Rollback()
 
 	return fn(tx)
-}
-
-// --- GORM logger adapter ---
-
-// parseLogLevel converts a string log level to GORM's LogLevel.
-func parseLogLevel(level string) gormlogger.LogLevel {
-	switch strings.ToLower(level) {
-	case "silent":
-		return gormlogger.Silent
-	case "error":
-		return gormlogger.Error
-	case "warn":
-		return gormlogger.Warn
-	default:
-		return gormlogger.Info
-	}
-}
-
-type gormLoggerAdapter struct {
-	log           *logger.Logger
-	logLevel      gormlogger.LogLevel
-	slowThreshold time.Duration
-}
-
-func newGormLogger(log *logger.Logger, slowThreshold time.Duration, logLevel gormlogger.LogLevel) gormlogger.Interface {
-	return &gormLoggerAdapter{
-		log:           log.WithComponent("gorm"),
-		logLevel:      logLevel,
-		slowThreshold: slowThreshold,
-	}
-}
-
-func (l *gormLoggerAdapter) LogMode(level gormlogger.LogLevel) gormlogger.Interface {
-	return &gormLoggerAdapter{log: l.log, logLevel: level, slowThreshold: l.slowThreshold}
-}
-
-func (l *gormLoggerAdapter) Info(_ context.Context, msg string, data ...interface{}) {
-	if l.logLevel >= gormlogger.Info {
-		l.log.Info(fmt.Sprintf(msg, data...))
-	}
-}
-
-func (l *gormLoggerAdapter) Warn(_ context.Context, msg string, data ...interface{}) {
-	if l.logLevel >= gormlogger.Warn {
-		l.log.Warn(fmt.Sprintf(msg, data...))
-	}
-}
-
-func (l *gormLoggerAdapter) Error(_ context.Context, msg string, data ...interface{}) {
-	if l.logLevel >= gormlogger.Error {
-		l.log.Error(fmt.Sprintf(msg, data...))
-	}
-}
-
-func (l *gormLoggerAdapter) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
-	if l.logLevel <= gormlogger.Silent {
-		return
-	}
-
-	elapsed := time.Since(begin)
-	sql, rows := fc()
-
-	switch {
-	case err != nil && err != gorm.ErrRecordNotFound:
-		l.log.Error("Query error", map[string]interface{}{
-			"sql": sql, "duration": elapsed.String(), "rows": rows, "error": err.Error(),
-		})
-	case elapsed > l.slowThreshold:
-		l.log.Warn("Slow query", map[string]interface{}{
-			"sql": sql, "duration": elapsed.String(), "rows": rows,
-		})
-	case l.logLevel >= gormlogger.Info:
-		l.log.Debug("Query", map[string]interface{}{
-			"sql": sql, "duration": elapsed.String(), "rows": rows,
-		})
-	}
 }

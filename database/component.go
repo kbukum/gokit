@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/database/core"
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/util"
 )
@@ -17,10 +16,10 @@ import (
 // Standard GORM drivers (postgres.Open, mysql.Open, sqlite.Open) all match this signature.
 type DriverFunc func(dsn string) gorm.Dialector
 
-// Component wraps core.DB and implements component.Component for lifecycle management.
+// Component wraps DB and implements component.Component for lifecycle management.
 type Component struct {
-	db         *core.DB
-	cfg        core.Config
+	db         *DB
+	cfg        Config
 	log        *logger.Logger
 	models     []interface{}
 	driverFunc DriverFunc
@@ -29,7 +28,7 @@ type Component struct {
 // NewComponent creates a database component for use with the component registry.
 // By default, SQLite is used. Call WithDriver to specify a different database.
 // The Config.Enabled flag can be used to skip initialization at runtime.
-func NewComponent(cfg core.Config, log *logger.Logger) *Component {
+func NewComponent(cfg Config, log *logger.Logger) *Component {
 	return &Component{
 		cfg: cfg,
 		log: log.WithComponent("database"),
@@ -60,8 +59,8 @@ func (c *Component) WithAutoMigrate(models ...interface{}) *Component {
 	return c
 }
 
-// DB returns the underlying *core.DB, or nil if not started.
-func (c *Component) DB() *core.DB {
+// DB returns the underlying *DB, or nil if not started.
+func (c *Component) DB() *DB {
 	return c.db
 }
 
@@ -89,7 +88,7 @@ func (c *Component) Start(ctx context.Context) error {
 	dialector := dialectorFactory(c.cfg.DSN)
 
 	// Create connection using the dialector with context support
-	db, err := core.NewWithContext(ctx, dialector, c.cfg, c.log)
+	db, err := NewWithContext(ctx, dialector, c.cfg, c.log)
 	if err != nil {
 		return fmt.Errorf("database start: %w", err)
 	}

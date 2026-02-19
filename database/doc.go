@@ -14,13 +14,12 @@
 //	import (
 //	    "github.com/kbukum/gokit/bootstrap"
 //	    "github.com/kbukum/gokit/database"
-//	    "github.com/kbukum/gokit/database/core"
 //	    "gorm.io/driver/postgres"
 //	)
 //
 //	func main() {
 //	    app := bootstrap.New()
-//	    cfg := core.Config{Enabled: true, DSN: "host=localhost user=myuser password=mypass dbname=mydb"}
+//	    cfg := database.Config{Enabled: true, DSN: "host=localhost user=myuser password=mypass dbname=mydb"}
 //	    app.Register(database.NewComponent(cfg, log).
 //	        WithDriver(func(dsn string) gorm.Dialector {
 //	            return postgres.Open(dsn)
@@ -30,7 +29,6 @@
 //
 // # Subpackages
 //
-//   - core: Core database wrapper, connection pooling, and transaction helpers
 //   - errors: Database error utilities and translation to AppError
 //   - types: Common database types like BaseModel
 //   - migration: File-based database migrations using golang-migrate
@@ -43,7 +41,7 @@
 // When disabled, Start() returns immediately without initializing the connection,
 // and Health() reports "disabled" status.
 //
-//	cfg := core.Config{Enabled: false}  // Component will be disabled
+//	cfg := database.Config{Enabled: false}  // Component will be disabled
 //
 // See component.go for full lifecycle documentation.
 package database
