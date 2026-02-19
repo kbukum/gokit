@@ -103,8 +103,3 @@ func extractSingleServiceName(pattern string) string {
 	}
 	return p
 }
-
-// joinStrings joins strings with a separator.
-func joinStrings(ss []string, sep string) string {
-	return strings.Join(ss, sep)
-}

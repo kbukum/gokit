@@ -10,6 +10,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/database/core"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/util"
 )
 
 // DriverFunc is a factory function that creates a GORM dialector.
@@ -147,7 +148,7 @@ func (c *Component) Health(ctx context.Context) component.Health {
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
-	details := fmt.Sprintf("DSN: %s, MaxConns: %d", maskDSN(c.cfg.DSN), c.cfg.MaxOpenConns)
+	details := fmt.Sprintf("DSN: %s, MaxConns: %d", util.MaskSecret(c.cfg.DSN, 10), c.cfg.MaxOpenConns)
 	if c.cfg.AutoMigrate {
 		details += ", auto-migrate=on"
 	}
@@ -156,12 +157,4 @@ func (c *Component) Describe() component.Description {
 		Type:    "database",
 		Details: details,
 	}
-}
-
-// maskDSN hides sensitive parts of the DSN for display
-func maskDSN(dsn string) string {
-	if len(dsn) <= 20 {
-		return "***"
-	}
-	return dsn[:10] + "***"
 }

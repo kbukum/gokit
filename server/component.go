@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/kbukum/gokit/component"
 )
@@ -66,7 +67,7 @@ func (sc *Component) Describe() component.Description {
 	if mounts := sc.server.Mounts(); len(mounts) > 0 {
 		services := extractServiceNames(mounts)
 		if len(services) > 0 {
-			details += " + ConnectRPC: " + joinStrings(services, ", ")
+			details += " + ConnectRPC: " + strings.Join(services, ", ")
 		}
 	}
 
