@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/discovery
 
-go 1.26.0
+go 1.25.5
 
 require (
 	github.com/hashicorp/consul/api v1.33.2

@@ -41,6 +41,8 @@ linters:
         - G306
         - G402  # TLS InsecureSkipVerify - intentional for test/dev configs
         - G304  # File paths from variables - required for storage abstraction
+        - G117  # Exported struct fields matching secret patterns - config structs need these fields
+        - G704  # SSRF via taint analysis - HTTP clients use configured base URLs
 
 issues:
   max-issues-per-linter: 0
