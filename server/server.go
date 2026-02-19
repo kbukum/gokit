@@ -147,16 +147,25 @@ func (s *Server) Addr() string {
 	return s.httpServer.Addr
 }
 
-// ApplyMiddleware applies the standard middleware stack to the server's Gin engine:
-// recovery, request-ID, CORS, body-size limit, and request logging.
+// ApplyMiddleware applies the standard middleware stack at the handler level
+// so it covers ALL routes — both Gin REST endpoints and ConnectRPC services
+// mounted via Handle().
 func (s *Server) ApplyMiddleware() {
-	s.engine.Use(middleware.Recovery())
-	s.engine.Use(middleware.RequestID())
-	s.engine.Use(middleware.CORS(&s.config.CORS))
-	if s.config.MaxBodySize != "" {
-		s.engine.Use(middleware.BodySizeLimit(s.config.MaxBodySize))
+	stack := []middleware.Middleware{
+		middleware.Recovery(s.log),
+		middleware.RequestID(),
+		middleware.CORS(&s.config.CORS),
+		middleware.RequestLogger(s.log),
 	}
-	s.engine.Use(middleware.RequestLogger())
+	if s.config.MaxBodySize != "" {
+		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodySize))
+	}
+
+	h2s := &http2.Server{
+		MaxConcurrentStreams: 250,
+		IdleTimeout:         120 * time.Second,
+	}
+	s.httpServer.Handler = h2c.NewHandler(middleware.Chain(stack...)(s.mux), h2s)
 }
 
 // RegisterDefaultEndpoints registers the standard /health, /info, and /metrics endpoints.

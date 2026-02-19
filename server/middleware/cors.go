@@ -15,27 +15,41 @@ type CORSConfig struct {
 	AllowCredentials bool     `yaml:"allow_credentials" mapstructure:"allow_credentials"`
 }
 
-// CORS returns a Gin middleware configured from CORSConfig.
-func CORS(cfg *CORSConfig) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origin := c.GetHeader("Origin")
-		if isAllowedOrigin(origin, cfg.AllowedOrigins) {
-			c.Header("Access-Control-Allow-Origin", origin)
-		}
-		if len(cfg.AllowedMethods) > 0 {
-			c.Header("Access-Control-Allow-Methods", strings.Join(cfg.AllowedMethods, ", "))
-		}
-		if len(cfg.AllowedHeaders) > 0 {
-			c.Header("Access-Control-Allow-Headers", strings.Join(cfg.AllowedHeaders, ", "))
-		}
-		if cfg.AllowCredentials {
-			c.Header("Access-Control-Allow-Credentials", "true")
-		}
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
+// CORS returns middleware that sets CORS headers and handles OPTIONS preflight.
+func CORS(cfg *CORSConfig) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			setCORSHeaders(w.Header(), r.Header.Get("Origin"), cfg)
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// GinCORS returns a Gin middleware for CORS.
+// Prefer using CORS() at the server level via ApplyMiddleware() which covers
+// all routes. Use this only when you need CORS on the Gin engine directly.
+func GinCORS(cfg *CORSConfig) gin.HandlerFunc {
+	return GinWrap(CORS(cfg))
+}
+
+// setCORSHeaders writes CORS response headers if the origin is allowed.
+func setCORSHeaders(h http.Header, origin string, cfg *CORSConfig) {
+	if origin == "" || !isAllowedOrigin(origin, cfg.AllowedOrigins) {
+		return
+	}
+	h.Set("Access-Control-Allow-Origin", origin)
+	if len(cfg.AllowedMethods) > 0 {
+		h.Set("Access-Control-Allow-Methods", strings.Join(cfg.AllowedMethods, ", "))
+	}
+	if len(cfg.AllowedHeaders) > 0 {
+		h.Set("Access-Control-Allow-Headers", strings.Join(cfg.AllowedHeaders, ", "))
+	}
+	if cfg.AllowCredentials {
+		h.Set("Access-Control-Allow-Credentials", "true")
 	}
 }
 
