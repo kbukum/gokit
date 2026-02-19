@@ -3,12 +3,10 @@ package connect
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"connectrpc.com/connect"
 
-	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logger"
 )
