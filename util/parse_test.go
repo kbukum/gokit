@@ -35,9 +35,9 @@ func TestParseSize_Default(t *testing.T) {
 
 func TestMaskSecret(t *testing.T) {
 	tests := []struct {
-		input   string
-		prefix  int
-		want    string
+		input  string
+		prefix int
+		want   string
 	}{
 		{"host=localhost user=admin password=secret", 10, "host=local***"},
 		{"short", 10, "***"},

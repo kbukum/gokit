@@ -97,6 +97,13 @@ func (s *Server) Mounts() []MountedHandler {
 	return s.mounts
 }
 
+// Handler returns the composed http.Handler (with middleware and h2c).
+// Call ApplyMiddleware() first to ensure the middleware stack is applied.
+// This is useful for testing with httptest.NewServer.
+func (s *Server) Handler() http.Handler {
+	return s.httpServer.Handler
+}
+
 // Start binds the port and begins serving. It returns once the listener is
 // bound so the caller knows the port is ready; serving continues in a goroutine.
 func (s *Server) Start(ctx context.Context) error {
@@ -163,7 +170,7 @@ func (s *Server) ApplyMiddleware() {
 
 	h2s := &http2.Server{
 		MaxConcurrentStreams: 250,
-		IdleTimeout:         120 * time.Second,
+		IdleTimeout:          120 * time.Second,
 	}
 	s.httpServer.Handler = h2c.NewHandler(middleware.Chain(stack...)(s.mux), h2s)
 }

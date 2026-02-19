@@ -22,7 +22,7 @@ func TestRecovery_NoPanic(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", http.NoBody))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -36,7 +36,7 @@ func TestRecovery_Panic(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/test", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/test", http.NoBody))
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
@@ -65,7 +65,7 @@ func TestRequestID_GeneratesID(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", http.NoBody))
 
 	if rr.Header().Get("X-Request-Id") == "" {
 		t.Error("expected X-Request-Id in response headers")
@@ -78,7 +78,7 @@ func TestRequestID_PreservesExisting(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/", http.NoBody)
 	req.Header.Set("X-Request-Id", "custom-id-123")
 	handler.ServeHTTP(rr, req)
 
@@ -102,7 +102,7 @@ func TestCORS_SetHeaders(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/", http.NoBody)
 	req.Header.Set("Origin", "https://example.com")
 	handler.ServeHTTP(rr, req)
 
@@ -124,7 +124,7 @@ func TestCORS_Preflight(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("OPTIONS", "/api/v1/users", nil)
+	req := httptest.NewRequest("OPTIONS", "/api/v1/users", http.NoBody)
 	req.Header.Set("Origin", "https://app.example.com")
 	handler.ServeHTTP(rr, req)
 
@@ -142,7 +142,7 @@ func TestCORS_DisallowedOrigin(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/", http.NoBody)
 	req.Header.Set("Origin", "https://evil.com")
 	handler.ServeHTTP(rr, req)
 
@@ -161,7 +161,7 @@ func TestCORS_Credentials(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequest("GET", "/", http.NoBody)
 	req.Header.Set("Origin", "https://app.example.com")
 	handler.ServeHTTP(rr, req)
 
@@ -181,7 +181,7 @@ func TestRequestLogger_LogsRequest(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/api/users", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/api/users", http.NoBody))
 
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rr.Code)
@@ -197,7 +197,7 @@ func TestRequestLogger_SkipsHealth(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/health", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/health", http.NoBody))
 
 	if !called {
 		t.Error("handler should still be called for health endpoints")
@@ -217,7 +217,7 @@ func TestBodySizeLimit_AppliesLimit(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/upload", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("POST", "/upload", http.NoBody))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
@@ -253,7 +253,7 @@ func TestChain_Order(t *testing.T) {
 	}))
 
 	rr := httptest.NewRecorder()
-	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
+	handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", http.NoBody))
 
 	expected := []string{"m1-before", "m2-before", "handler", "m2-after", "m1-after"}
 	if len(order) != len(expected) {
@@ -290,7 +290,7 @@ func TestStatusWriter_Flush(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	handler.ServeHTTP(fr, httptest.NewRequest("GET", "/stream", nil))
+	handler.ServeHTTP(fr, httptest.NewRequest("GET", "/stream", http.NoBody))
 
 	if !fr.flushed {
 		t.Error("expected Flush to be delegated to underlying writer")
