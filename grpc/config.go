@@ -3,6 +3,8 @@ package grpc
 import (
 	"fmt"
 	"time"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // KeepaliveConfig holds keepalive settings for gRPC connections.
@@ -13,20 +15,6 @@ type KeepaliveConfig struct {
 	Timeout time.Duration `mapstructure:"timeout"`
 	// PermitWithoutStream allows keepalive pings when there are no active RPCs.
 	PermitWithoutStream bool `mapstructure:"permit_without_stream"`
-}
-
-// TLSConfig holds TLS settings for gRPC connections.
-type TLSConfig struct {
-	// Enabled enables TLS for the connection.
-	Enabled bool `mapstructure:"enabled"`
-	// CertFile is the path to the TLS certificate file.
-	CertFile string `mapstructure:"cert_file"`
-	// KeyFile is the path to the TLS key file.
-	KeyFile string `mapstructure:"key_file"`
-	// CAFile is the path to the CA certificate file for verifying the server.
-	CAFile string `mapstructure:"ca_file"`
-	// InsecureSkipVerify disables server certificate verification.
-	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
 }
 
 // Config holds configuration for a gRPC client connection.
@@ -42,7 +30,7 @@ type Config struct {
 	// Keepalive holds keepalive configuration.
 	Keepalive KeepaliveConfig `mapstructure:"keepalive"`
 	// TLS holds TLS configuration.
-	TLS TLSConfig `mapstructure:"tls"`
+	TLS *security.TLSConfig `mapstructure:"tls"`
 	// Enabled controls whether gRPC is active.
 	Enabled bool `mapstructure:"enabled"`
 	// CallTimeout is the default timeout for unary RPCs.
@@ -98,12 +86,9 @@ func (c *Config) Validate() error {
 	if c.MaxSendMsgSize <= 0 {
 		return fmt.Errorf("grpc: max_send_msg_size must be positive, got %d", c.MaxSendMsgSize)
 	}
-	if c.TLS.Enabled {
-		if c.TLS.CertFile == "" {
-			return fmt.Errorf("grpc: tls cert_file is required when TLS is enabled")
-		}
-		if c.TLS.KeyFile == "" {
-			return fmt.Errorf("grpc: tls key_file is required when TLS is enabled")
+	if c.TLS != nil {
+		if err := c.TLS.Validate(); err != nil {
+			return fmt.Errorf("grpc: %w", err)
 		}
 	}
 	return nil

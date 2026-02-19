@@ -3,6 +3,8 @@ package consul
 import (
 	"fmt"
 	"time"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // Config holds Consul connection and client settings.
@@ -26,7 +28,10 @@ type Config struct {
 	Partition string `yaml:"partition" mapstructure:"partition"`
 
 	// TLS configuration.
-	TLS *TLSConfig `yaml:"tls" mapstructure:"tls"`
+	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
+
+	// TLSCAPath is the path to a directory of CA certificates (Consul-specific).
+	TLSCAPath string `yaml:"tls_ca_path" mapstructure:"tls_ca_path"`
 
 	// Pool holds connection pool settings.
 	Pool *PoolConfig `yaml:"pool" mapstructure:"pool"`
@@ -39,30 +44,6 @@ type Config struct {
 
 	// WriteTimeout is the write timeout.
 	WriteTimeout time.Duration `yaml:"write_timeout" mapstructure:"write_timeout"`
-}
-
-// TLSConfig holds TLS configuration for Consul connections.
-type TLSConfig struct {
-	// Enabled toggles TLS.
-	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
-
-	// CACert is the path to CA certificate.
-	CACert string `yaml:"ca_cert" mapstructure:"ca_cert"`
-
-	// CAPath is the path to a directory of CA certificates.
-	CAPath string `yaml:"ca_path" mapstructure:"ca_path"`
-
-	// ClientCert is the path to client certificate.
-	ClientCert string `yaml:"client_cert" mapstructure:"client_cert"`
-
-	// ClientKey is the path to client key.
-	ClientKey string `yaml:"client_key" mapstructure:"client_key"`
-
-	// InsecureSkipVerify skips TLS verification (not recommended for production).
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify" mapstructure:"insecure_skip_verify"`
-
-	// ServerName is the server name for TLS verification.
-	ServerName string `yaml:"server_name" mapstructure:"server_name"`
 }
 
 // PoolConfig holds connection pool settings.
@@ -130,7 +111,7 @@ func (c *Config) Validate() error {
 	if c.Scheme != "http" && c.Scheme != "https" {
 		return fmt.Errorf("consul scheme must be 'http' or 'https', got '%s'", c.Scheme)
 	}
-	if c.TLS != nil && c.TLS.Enabled && c.Scheme != "https" {
+	if c.TLS != nil && c.TLS.IsEnabled() && c.Scheme != "https" {
 		return fmt.Errorf("TLS enabled but scheme is not https")
 	}
 	if c.ConnectTimeout < 0 {

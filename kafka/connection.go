@@ -1,10 +1,7 @@
 package kafka
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"os"
 
 	"github.com/segmentio/kafka-go"
 	"github.com/segmentio/kafka-go/sasl"
@@ -19,8 +16,8 @@ func CreateTransport(cfg *Config) (*kafka.Transport, error) {
 		MetadataTTL: ParseDuration(cfg.MetadataTTL),
 	}
 
-	if cfg.EnableTLS {
-		tc, err := buildTLSConfig(cfg)
+	if cfg.TLS.IsEnabled() {
+		tc, err := cfg.TLS.Build()
 		if err != nil {
 			return nil, fmt.Errorf("TLS config: %w", err)
 		}
@@ -45,8 +42,8 @@ func CreateDialer(cfg *Config) (*kafka.Dialer, error) {
 		DualStack: true,
 	}
 
-	if cfg.EnableTLS {
-		tc, err := buildTLSConfig(cfg)
+	if cfg.TLS.IsEnabled() {
+		tc, err := cfg.TLS.Build()
 		if err != nil {
 			return nil, fmt.Errorf("TLS config: %w", err)
 		}
@@ -62,35 +59,6 @@ func CreateDialer(cfg *Config) (*kafka.Dialer, error) {
 	}
 
 	return dialer, nil
-}
-
-func buildTLSConfig(cfg *Config) (*tls.Config, error) {
-	tc := &tls.Config{
-		InsecureSkipVerify: cfg.TLSSkipVerify,
-		MinVersion:         tls.VersionTLS12,
-	}
-
-	if cfg.TLSCAFile != "" {
-		caCert, err := os.ReadFile(cfg.TLSCAFile)
-		if err != nil {
-			return nil, fmt.Errorf("read CA file: %w", err)
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(caCert) {
-			return nil, fmt.Errorf("parse CA certificate")
-		}
-		tc.RootCAs = pool
-	}
-
-	if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(cfg.TLSCertFile, cfg.TLSKeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("load client cert: %w", err)
-		}
-		tc.Certificates = []tls.Certificate{cert}
-	}
-
-	return tc, nil
 }
 
 func buildSASLMechanism(cfg *Config) (sasl.Mechanism, error) {

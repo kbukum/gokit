@@ -52,14 +52,14 @@ func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*
 	}
 
 	// Apply TLS settings
-	if consulCfg.TLS != nil && consulCfg.TLS.Enabled {
+	if consulCfg.TLS != nil && consulCfg.TLS.IsEnabled() {
 		apiCfg.TLSConfig = api.TLSConfig{
 			Address:            consulCfg.TLS.ServerName,
-			CAFile:             consulCfg.TLS.CACert,
-			CAPath:             consulCfg.TLS.CAPath,
-			CertFile:           consulCfg.TLS.ClientCert,
-			KeyFile:            consulCfg.TLS.ClientKey,
-			InsecureSkipVerify: consulCfg.TLS.InsecureSkipVerify,
+			CAFile:             consulCfg.TLS.CAFile,
+			CAPath:             consulCfg.TLSCAPath,
+			CertFile:           consulCfg.TLS.CertFile,
+			KeyFile:            consulCfg.TLS.KeyFile,
+			InsecureSkipVerify: consulCfg.TLS.SkipVerify,
 		}
 	}
 

@@ -51,8 +51,8 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger
 	} else {
 		opts = append(opts, client.WithAPIVersionNegotiation())
 	}
-	if cfg.TLS != nil && cfg.TLS.Cert != "" {
-		opts = append(opts, client.WithTLSClientConfig(cfg.TLS.CACert, cfg.TLS.Cert, cfg.TLS.Key))
+	if cfg.TLS != nil && cfg.TLS.IsEnabled() {
+		opts = append(opts, client.WithTLSClientConfig(cfg.TLS.CAFile, cfg.TLS.CertFile, cfg.TLS.KeyFile))
 	}
 
 	cli, err := client.NewClientWithOpts(opts...)

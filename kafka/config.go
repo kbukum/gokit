@@ -3,6 +3,8 @@ package kafka
 import (
 	"fmt"
 	"time"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // Config holds Kafka connection and behavior configuration.
@@ -19,12 +21,8 @@ type Config struct {
 	// Topics is the list of topics to consume from.
 	Topics []string `yaml:"topics" mapstructure:"topics"`
 
-	// TLS
-	EnableTLS     bool   `yaml:"enable_tls" mapstructure:"enable_tls"`
-	TLSSkipVerify bool   `yaml:"tls_skip_verify" mapstructure:"tls_skip_verify"`
-	TLSCAFile     string `yaml:"tls_ca_file" mapstructure:"tls_ca_file"`
-	TLSCertFile   string `yaml:"tls_cert_file" mapstructure:"tls_cert_file"`
-	TLSKeyFile    string `yaml:"tls_key_file" mapstructure:"tls_key_file"`
+	// TLS configures TLS settings. Nil disables TLS.
+	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 
 	// SASL
 	EnableSASL    bool   `yaml:"enable_sasl" mapstructure:"enable_sasl"`

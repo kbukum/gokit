@@ -136,7 +136,7 @@ Uses shared `security.TLSConfig` from gokit core:
 ```go
 client, err := httpclient.New(httpclient.Config{
     BaseURL: "https://internal-api.example.com",
-    TLS: &httpclient.TLSConfig{
+    TLS: &security.TLSConfig{
         CAFile:   "/path/to/ca.pem",
         CertFile: "/path/to/client-cert.pem",
         KeyFile:  "/path/to/client-key.pem",

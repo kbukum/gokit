@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/security"
 )
 
 const (
@@ -24,7 +25,7 @@ type Config struct {
 	Auth *AuthConfig `yaml:"-" mapstructure:"-"`
 
 	// TLS configures TLS settings for the HTTP transport.
-	TLS *TLSConfig `yaml:"tls" mapstructure:"tls"`
+	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 
 	// Headers are default headers applied to all requests.
 	Headers map[string]string `yaml:"headers" mapstructure:"headers"`

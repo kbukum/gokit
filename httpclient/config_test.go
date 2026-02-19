@@ -3,6 +3,8 @@ package httpclient
 import (
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/security"
 )
 
 func TestConfig_ApplyDefaults(t *testing.T) {
@@ -38,7 +40,7 @@ func TestConfig_Validate_InvalidTimeout(t *testing.T) {
 func TestConfig_Validate_InvalidTLS(t *testing.T) {
 	cfg := Config{
 		Timeout: 10 * time.Second,
-		TLS:     &TLSConfig{CertFile: "cert.pem"}, // missing KeyFile
+		TLS:     &security.TLSConfig{CertFile: "cert.pem"}, // missing KeyFile
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for mismatched TLS cert/key")

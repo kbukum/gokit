@@ -1,10 +1,7 @@
 package client
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
-	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -14,6 +11,7 @@ import (
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/interceptor"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/security"
 )
 
 // NewClient creates a gRPC client connection using the provided configuration
@@ -29,7 +27,7 @@ func NewClient(cfg grpccfg.Config, log *logger.Logger) (*grpc.ClientConn, error)
 
 	log.Info("Connecting to gRPC server", map[string]interface{}{
 		"target": target,
-		"tls":    cfg.TLS.Enabled,
+		"tls":    cfg.TLS.IsEnabled(),
 	})
 
 	opts, err := buildDialOptions(cfg, log)
@@ -94,32 +92,13 @@ func buildDialOptions(cfg grpccfg.Config, log *logger.Logger) ([]grpc.DialOption
 }
 
 // transportCredentials returns the appropriate transport credentials.
-func transportCredentials(cfg grpccfg.TLSConfig) (credentials.TransportCredentials, error) {
-	if !cfg.Enabled {
+func transportCredentials(cfg *security.TLSConfig) (credentials.TransportCredentials, error) {
+	tlsCfg, err := cfg.Build()
+	if err != nil {
+		return nil, fmt.Errorf("grpc: %w", err)
+	}
+	if tlsCfg == nil {
 		return insecure.NewCredentials(), nil
 	}
-
-	cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("grpc: failed to load TLS key pair: %w", err)
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates:       []tls.Certificate{cert},
-		InsecureSkipVerify: cfg.InsecureSkipVerify,
-	}
-
-	if cfg.CAFile != "" {
-		ca, err := os.ReadFile(cfg.CAFile)
-		if err != nil {
-			return nil, fmt.Errorf("grpc: failed to read CA file: %w", err)
-		}
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM(ca) {
-			return nil, fmt.Errorf("grpc: failed to parse CA certificate")
-		}
-		tlsCfg.RootCAs = pool
-	}
-
 	return credentials.NewTLS(tlsCfg), nil
 }
