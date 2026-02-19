@@ -1,0 +1,5 @@
+# Default act configuration
+# Use medium-size images (good balance of speed vs compatibility)
+--platform ubuntu-latest=catthehacker/ubuntu:act-latest
+# Required for Apple Silicon Macs
+--container-architecture linux/amd64

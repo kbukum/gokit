@@ -36,3 +36,7 @@ dist/
 
 docs/testutil*.md
 
+# Local CI secrets
+.secrets
+.env
+
