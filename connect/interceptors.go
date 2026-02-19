@@ -169,35 +169,3 @@ func sanitizeMessage(msg string) string {
 	}
 	return msg
 }
-
-// ---------------------------------------------------------------------------
-// Auth
-// ---------------------------------------------------------------------------
-
-// AuthInterceptor returns a Connect interceptor that validates the
-// Authorization header using the provided auth.TokenValidator.
-// The token is extracted by stripping the "Bearer " prefix.
-//
-// Deprecated: Use TokenAuthInterceptor instead which also stores claims in context.
-func AuthInterceptor(validator auth.TokenValidator) connect.UnaryInterceptorFunc {
-	return func(next connect.UnaryFunc) connect.UnaryFunc {
-		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			header := req.Header().Get("Authorization")
-			if header == "" {
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("missing authorization header"))
-			}
-
-			token := strings.TrimPrefix(header, "Bearer ")
-			if token == header {
-				// No "Bearer " prefix found.
-				return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid authorization scheme"))
-			}
-
-			if _, err := validator.ValidateToken(token); err != nil {
-				return nil, connect.NewError(connect.CodeUnauthenticated, err)
-			}
-
-			return next(ctx, req)
-		}
-	}
-}
