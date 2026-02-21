@@ -58,3 +58,30 @@ func RespondNoContent(c *gin.Context) {
 func RespondAccepted(c *gin.Context, data any) {
 	c.JSON(http.StatusAccepted, DataResponse{Data: data})
 }
+
+// --- Convenience error response helpers ---
+
+// RespondBadRequest sends a 400 response with the given message.
+func RespondBadRequest(c *gin.Context, message string) {
+	c.JSON(http.StatusBadRequest, apperrors.InvalidInput("", message).ToResponse())
+}
+
+// RespondNotFound sends a 404 response for the given resource.
+func RespondNotFound(c *gin.Context, resource string) {
+	c.JSON(http.StatusNotFound, apperrors.NotFound(resource, "").ToResponse())
+}
+
+// RespondUnauthorized sends a 401 response.
+func RespondUnauthorized(c *gin.Context, message string) {
+	c.JSON(http.StatusUnauthorized, apperrors.Unauthorized(message).ToResponse())
+}
+
+// RespondForbidden sends a 403 response.
+func RespondForbidden(c *gin.Context, message string) {
+	c.JSON(http.StatusForbidden, apperrors.Forbidden(message).ToResponse())
+}
+
+// RespondInternalError sends a 500 response for the given cause.
+func RespondInternalError(c *gin.Context, cause error) {
+	c.JSON(http.StatusInternalServerError, apperrors.Internal(cause).ToResponse())
+}

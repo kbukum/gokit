@@ -310,6 +310,60 @@ func TestAppError_AsAppError_Success(t *testing.T) {
 	}
 }
 
+func TestWrap_NilReturnsNil(t *testing.T) {
+	if Wrap(nil) != nil {
+		t.Error("Wrap(nil) should return nil")
+	}
+}
+
+func TestWrap_AppErrorPassthrough(t *testing.T) {
+	orig := NotFound("item", "1")
+	got := Wrap(orig)
+	if got != orig {
+		t.Error("Wrap should return the original AppError unchanged")
+	}
+}
+
+func TestWrap_WrappedAppError(t *testing.T) {
+	orig := NotFound("item", "1")
+	wrapped := fmt.Errorf("outer: %w", orig)
+	got := Wrap(wrapped)
+	if got.Code != ErrCodeNotFound {
+		t.Errorf("expected NOT_FOUND, got %s", got.Code)
+	}
+}
+
+func TestWrap_PlainError(t *testing.T) {
+	plain := fmt.Errorf("something broke")
+	got := Wrap(plain)
+	if got.Code != ErrCodeInternal {
+		t.Errorf("expected INTERNAL_ERROR, got %s", got.Code)
+	}
+	if got.Cause != plain {
+		t.Error("expected cause to be the original error")
+	}
+}
+
+func TestFormatResourceError_Success(t *testing.T) {
+	err := FormatResourceError("user", 42)
+	if err.Code != ErrCodeNotFound {
+		t.Errorf("expected NOT_FOUND, got %s", err.Code)
+	}
+	if err.Details["id"] != "42" {
+		t.Errorf("expected id=42, got %v", err.Details["id"])
+	}
+	if err.Details["resource"] != "user" {
+		t.Errorf("expected resource=user, got %v", err.Details["resource"])
+	}
+}
+
+func TestFormatResourceError_StringID(t *testing.T) {
+	err := FormatResourceError("bot", "abc-123")
+	if err.Details["id"] != "abc-123" {
+		t.Errorf("expected id=abc-123, got %v", err.Details["id"])
+	}
+}
+
 func TestAppError_ImplementsErrorInterface(t *testing.T) {
 	var err error = NotFound("test", "1")
 	if err.Error() == "" {

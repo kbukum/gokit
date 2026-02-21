@@ -237,3 +237,21 @@ func ExternalServiceError(service string, cause error) *AppError {
 		Details: map[string]any{"service": service}, Cause: cause,
 	}
 }
+
+// Wrap converts a standard error to an AppError. If the error is already an
+// AppError it is returned as-is; otherwise it is wrapped as Internal.
+// Returns nil when err is nil.
+func Wrap(err error) *AppError {
+	if err == nil {
+		return nil
+	}
+	if appErr, ok := AsAppError(err); ok {
+		return appErr
+	}
+	return Internal(err)
+}
+
+// FormatResourceError creates a not-found error with a formatted identifier.
+func FormatResourceError(resource string, id any) *AppError {
+	return NotFound(resource, fmt.Sprintf("%v", id))
+}
