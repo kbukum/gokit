@@ -35,12 +35,27 @@ func (m *Manager[T]) Register(name string, factory Factory[T]) {
 	m.log.Info("factory registered", map[string]interface{}{"provider": name})
 }
 
-// Initialize creates a provider from its factory and stores it for use.
+// Initialize creates a provider from its factory, calls Init() if the
+// provider implements Initializable, and stores it for use.
 func (m *Manager[T]) Initialize(name string, cfg map[string]any) error {
+	return m.InitializeWithContext(context.Background(), name, cfg)
+}
+
+// InitializeWithContext creates a provider from its factory, calls Init() if the
+// provider implements Initializable, and stores it for use.
+func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg map[string]any) error {
 	instance, err := m.registry.Create(name, cfg)
 	if err != nil {
 		return fmt.Errorf("initialize provider %q: %w", name, err)
 	}
+
+	// Call Init() if the provider supports it
+	if init, ok := any(instance).(Initializable); ok {
+		if err := init.Init(ctx); err != nil {
+			return fmt.Errorf("init provider %q: %w", name, err)
+		}
+	}
+
 	m.mu.Lock()
 	m.providers[name] = instance
 	m.mu.Unlock()
@@ -108,4 +123,26 @@ func (m *Manager[T]) snapshotLocked() map[string]T {
 		cp[k] = v
 	}
 	return cp
+}
+
+// CloseAll calls Close() on all providers that implement Closeable.
+func (m *Manager[T]) CloseAll(ctx context.Context) error {
+	m.mu.RLock()
+	snapshot := m.snapshotLocked()
+	m.mu.RUnlock()
+
+	var errs []error
+	for name, p := range snapshot {
+		if c, ok := any(p).(Closeable); ok {
+			if err := c.Close(ctx); err != nil {
+				errs = append(errs, fmt.Errorf("close provider %q: %w", name, err))
+			} else {
+				m.log.Info("provider closed", map[string]interface{}{"provider": name})
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("close errors: %v", errs)
+	}
+	return nil
 }

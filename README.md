@@ -58,9 +58,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `grpc` | `gokit/grpc` | gRPC client config — TLS, keepalive, message size, connection pooling |
 | `discovery` | `gokit/discovery` | Service discovery with Consul and static provider support |
 | `connect` | `gokit/connect` | Connect-Go RPC registration over HTTP/1.1 with standardized errors |
-| `llm` | `gokit/llm` | LLM provider interface — OpenAI, Ollama; completions, structured output, streaming |
-| `transcription` | `gokit/transcription` | Speech-to-text provider interface (Whisper) |
-| `diarization` | `gokit/diarization` | Speaker identification provider interface (Pyannote) |
+| `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
 
 ## Quick Start
 
@@ -132,24 +130,30 @@ srv.Start(ctx)
 defer srv.Stop(ctx)
 ```
 
-### LLM Provider
+### Provider Pattern
 
 ```go
-import "github.com/kbukum/gokit/llm"
+import "github.com/kbukum/gokit/provider"
 
-resp, err := llmProvider.Complete(ctx, llm.CompletionRequest{
-    Model:        "gpt-4",
-    SystemPrompt: "You are a helpful assistant.",
-    Messages:     []llm.Message{{Role: "user", Content: "Explain Go interfaces."}},
-    Temperature:  0.7,
+// Define a domain provider using the interaction pattern
+type DiarizationProvider = provider.RequestResponse[AudioInput, []Segment]
+
+// Use the manager for runtime selection
+reg := provider.NewRegistry[DiarizationProvider]()
+mgr := provider.NewManager(reg, &provider.HealthCheckSelector[DiarizationProvider]{})
+p, _ := mgr.Get(ctx)
+result, err := p.Execute(ctx, audioInput)
+```
+
+### Subprocess Execution
+
+```go
+import "github.com/kbukum/gokit/process"
+
+result, err := process.Run(ctx, process.Command{
+    Binary: "python", Args: []string{"diarize.py", "audio.wav"},
 })
-fmt.Println(resp.Content)
-
-// Streaming
-chunks, _ := llmProvider.Stream(ctx, req)
-for chunk := range chunks {
-    fmt.Print(chunk.Content)
-}
+fmt.Println(string(result.Stdout))
 ```
 
 ### Bootstrap Lifecycle
@@ -190,7 +194,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Networking** | sse | Server-sent events |
 | **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
-| **AI/ML** | llm, transcription, diarization | Language models, speech processing |
+| **Process** | process | Subprocess execution with context cancellation |
 
 ## Multi-Module Versioning
 
@@ -200,7 +204,6 @@ Core and sub-modules version **independently**. Each sub-module has its own `go.
 v0.5.0              ← core module
 server/v0.3.2       ← server sub-module
 database/v0.4.1     ← database sub-module
-llm/v0.2.0          ← llm sub-module
 ```
 
 This means:
