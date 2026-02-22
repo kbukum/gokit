@@ -107,7 +107,7 @@ type Hub struct {
 	unregister chan *Client       // Channel for unregistering clients
 	broadcast  chan *Message      // Channel for broadcasting messages
 	done       chan struct{}      // Signals the hub to stop
-	stopped    bool              // Whether the hub has been stopped
+	stopped    bool               // Whether the hub has been stopped
 	mu         sync.RWMutex       // Protects clients map for reads during matching
 }
 

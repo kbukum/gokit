@@ -131,7 +131,7 @@ func (a *App[C]) Run(ctx context.Context) error {
 // RunTask executes a finite task with the full bootstrap lifecycle.
 // Unlike Run(), it does not block on shutdown signals — it runs the task
 // function and gracefully shuts down when the task completes or the context
-// is cancelled (e.g., via SIGINT/SIGTERM).
+// is canceled (e.g., via SIGINT/SIGTERM).
 //
 // Use RunTask for CLI tools, batch jobs, and one-shot processes that need
 // the same bootstrap infrastructure (config, logger, components, hooks)

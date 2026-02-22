@@ -19,7 +19,7 @@ type Component struct {
 
 // ensure Component satisfies component.Component and Describable.
 var (
-	_ component.Component  = (*Component)(nil)
+	_ component.Component   = (*Component)(nil)
 	_ component.Describable = (*Component)(nil)
 )
 

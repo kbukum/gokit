@@ -382,7 +382,7 @@ func TestRunTaskCancellation(t *testing.T) {
 		return taskCtx.Err()
 	})
 	if err == nil {
-		t.Error("expected error from cancelled task")
+		t.Error("expected error from canceled task")
 	}
 }
 

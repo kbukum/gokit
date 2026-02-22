@@ -69,7 +69,8 @@ func TestServerMount(t *testing.T) {
 	defer srv.Stop(context.Background())
 
 	// Make a request
-	resp, err := srv.Client().Get(srv.BaseURL() + "/test/hello")
+	req, _ := http.NewRequestWithContext(context.Background(), "GET", srv.BaseURL()+"/test/hello", http.NoBody)
+	resp, err := srv.Client().Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}

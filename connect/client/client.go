@@ -64,12 +64,11 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 	return &http2.Transport{
 		TLSClientConfig: tlsCfg,
 		DialTLSContext: func(ctx context.Context, network, addr string, tlsConf *tls.Config) (net.Conn, error) {
-			dialer := &net.Dialer{Timeout: cfg.DialTimeout}
-			conn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialer.Timeout}, network, addr, tlsConf)
-			if err != nil {
-				return nil, err
+			dialer := &tls.Dialer{
+				NetDialer: &net.Dialer{Timeout: cfg.DialTimeout},
+				Config:    tlsConf,
 			}
-			return conn, nil
+			return dialer.DialContext(ctx, network, addr)
 		},
 	}, nil
 }

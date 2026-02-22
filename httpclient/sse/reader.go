@@ -101,7 +101,7 @@ func parseSSELine(line string) (field, value string) {
 	field = line[:idx]
 	value = line[idx+1:]
 	// Strip single leading space after colon per SSE spec
-	if len(value) > 0 && value[0] == ' ' {
+	if value != "" && value[0] == ' ' {
 		value = value[1:]
 	}
 	return field, value
