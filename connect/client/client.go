@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"net/http"
 
@@ -10,24 +11,67 @@ import (
 	"golang.org/x/net/http2"
 )
 
-// NewHTTPClient creates an h2c-capable *http.Client for use with ConnectRPC.
+// NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
-// The returned client supports cleartext HTTP/2 (h2c) which is required for
-// ConnectRPC and gRPC communication without TLS. It can be passed directly
-// to any generated Connect client constructor.
-func NewHTTPClient(cfg Config) *http.Client {
+// When TLS is configured, a standard HTTPS transport is used.
+// When TLS is nil (the default), an h2c (cleartext HTTP/2) transport is used,
+// which is required for ConnectRPC and gRPC communication without TLS.
+//
+// The returned client can be passed directly to any generated Connect client constructor.
+func NewHTTPClient(cfg Config) (*http.Client, error) {
 	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("connect client: %w", err)
+	}
 
-	dialTimeout := cfg.DialTimeout
+	transport, err := buildTransport(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect client: %w", err)
+	}
 
 	return &http.Client{
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-				return (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, network, addr)
-			},
+		Transport: transport,
+		Timeout:   cfg.Timeout,
+	}, nil
+}
+
+// buildTransport creates the appropriate HTTP transport based on TLS config.
+func buildTransport(cfg Config) (http.RoundTripper, error) {
+	if cfg.TLS != nil && cfg.TLS.IsEnabled() {
+		return buildTLSTransport(cfg)
+	}
+	return buildH2CTransport(cfg), nil
+}
+
+// buildH2CTransport creates an h2c (cleartext HTTP/2) transport.
+func buildH2CTransport(cfg Config) http.RoundTripper {
+	dialTimeout := cfg.DialTimeout
+	return &http2.Transport{
+		AllowHTTP: true,
+		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
+			return (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, network, addr)
 		},
 	}
+}
+
+// buildTLSTransport creates a standard HTTPS transport with the configured TLS settings.
+func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
+	tlsCfg, err := cfg.TLS.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	return &http2.Transport{
+		TLSClientConfig: tlsCfg,
+		DialTLSContext: func(ctx context.Context, network, addr string, tlsConf *tls.Config) (net.Conn, error) {
+			dialer := &net.Dialer{Timeout: cfg.DialTimeout}
+			conn, err := tls.DialWithDialer(&net.Dialer{Timeout: dialer.Timeout}, network, addr, tlsConf)
+			if err != nil {
+				return nil, err
+			}
+			return conn, nil
+		},
+	}, nil
 }
 
 // ProtocolOption returns the connect.ClientOption for the configured wire protocol.

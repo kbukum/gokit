@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"time"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // Config holds configuration for a Connect client connection.
@@ -11,6 +13,8 @@ type Config struct {
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout is the HTTP request timeout. Zero means no timeout.
+	// Note: for long-running streaming RPCs, callers should use per-request
+	// context deadlines instead of relying on this global timeout.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
 
 	// DialTimeout is the timeout for establishing the TCP connection.
@@ -19,6 +23,10 @@ type Config struct {
 	// Protocol selects the wire protocol: "connect" (default), "grpc", or "grpcweb".
 	// Use "grpc" when the server only speaks gRPC or when using bidi streaming.
 	Protocol string `yaml:"protocol" mapstructure:"protocol"`
+
+	// TLS configures TLS for the connection. When nil, h2c (cleartext HTTP/2) is used.
+	// When set, standard HTTPS/TLS transport is used instead.
+	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 }
 
 const (
@@ -56,6 +64,11 @@ func (c *Config) Validate() error {
 		// valid
 	default:
 		return fmt.Errorf("connect client: unsupported protocol %q (use connect, grpc, or grpcweb)", c.Protocol)
+	}
+	if c.TLS != nil {
+		if err := c.TLS.Validate(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

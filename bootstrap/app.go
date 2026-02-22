@@ -112,10 +112,77 @@ func (a *App[C]) ReadyCheck(ctx context.Context) error {
 	return nil
 }
 
-// Run executes the full application lifecycle:
+// Run executes the full application lifecycle for long-running services:
 // Initialize → OnStart hooks → Configure → ReadyCheck → OnReady hooks →
 // Block on signal → OnStop hooks → Graceful Shutdown.
 func (a *App[C]) Run(ctx context.Context) error {
+	if err := a.startup(ctx); err != nil {
+		return err
+	}
+
+	// Block until shutdown signal
+	a.Logger.Info("Application ready — waiting for shutdown signal")
+	a.WaitForSignal(ctx)
+
+	// Graceful shutdown
+	return a.stop()
+}
+
+// RunTask executes a finite task with the full bootstrap lifecycle.
+// Unlike Run(), it does not block on shutdown signals — it runs the task
+// function and gracefully shuts down when the task completes or the context
+// is cancelled (e.g., via SIGINT/SIGTERM).
+//
+// Use RunTask for CLI tools, batch jobs, and one-shot processes that need
+// the same bootstrap infrastructure (config, logger, components, hooks)
+// but have a finite workflow instead of running forever.
+//
+// Example:
+//
+//	app, _ := bootstrap.NewApp(&cfg)
+//	app.RunTask(ctx, func(ctx context.Context) error {
+//	    return processData(ctx)
+//	})
+func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) error) error {
+	if err := a.startup(ctx); err != nil {
+		return err
+	}
+
+	// Set up signal-based cancellation for the task
+	taskCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	go func() {
+		select {
+		case sig := <-sigCh:
+			a.Logger.Info("Received signal — canceling task", map[string]interface{}{
+				"signal": sig.String(),
+			})
+			cancel()
+		case <-taskCtx.Done():
+		}
+	}()
+
+	// Execute the task
+	taskErr := task(taskCtx)
+
+	// Graceful shutdown
+	if stopErr := a.stop(); stopErr != nil {
+		if taskErr != nil {
+			return taskErr
+		}
+		return stopErr
+	}
+
+	return taskErr
+}
+
+// startup performs the common initialization sequence shared by Run and RunTask.
+func (a *App[C]) startup(ctx context.Context) error {
 	start := time.Now()
 
 	a.Logger.Info("Starting application", map[string]interface{}{
@@ -154,12 +221,7 @@ func (a *App[C]) Run(ctx context.Context) error {
 	a.Summary.SetStartupDuration(time.Since(start))
 	a.DisplaySummary()
 
-	// Phase 3: Block until shutdown signal
-	a.Logger.Info("Application ready — waiting for shutdown signal")
-	a.WaitForSignal(ctx)
-
-	// Graceful shutdown
-	return a.stop()
+	return nil
 }
 
 // initialize starts all registered components (Phase 1).

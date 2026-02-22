@@ -340,3 +340,107 @@ func TestDefaultGracefulTimeout(t *testing.T) {
 		t.Errorf("expected default 15s, got %v", app.gracefulTimeout)
 	}
 }
+
+func TestRunTaskSuccess(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	executed := false
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		executed = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("RunTask failed: %v", err)
+	}
+	if !executed {
+		t.Error("expected task to be executed")
+	}
+}
+
+func TestRunTaskError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return fmt.Errorf("task error")
+	})
+	if err == nil {
+		t.Error("expected error from failing task")
+	}
+	if err.Error() != "task error" {
+		t.Errorf("expected 'task error', got %q", err.Error())
+	}
+}
+
+func TestRunTaskCancellation(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := app.RunTask(ctx, func(taskCtx context.Context) error {
+		cancel() // simulate signal
+		<-taskCtx.Done()
+		return taskCtx.Err()
+	})
+	if err == nil {
+		t.Error("expected error from cancelled task")
+	}
+}
+
+func TestRunTaskWithHooks(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+
+	order := []string{}
+	app.OnStart(func(ctx context.Context) error {
+		order = append(order, "start")
+		return nil
+	})
+	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
+		order = append(order, "configure")
+		return nil
+	})
+	app.OnReady(func(ctx context.Context) error {
+		order = append(order, "ready")
+		return nil
+	})
+	app.OnStop(func(ctx context.Context) error {
+		order = append(order, "stop")
+		return nil
+	})
+
+	app.RunTask(context.Background(), func(ctx context.Context) error {
+		order = append(order, "task")
+		return nil
+	})
+
+	expected := []string{"start", "configure", "ready", "task", "stop"}
+	if len(order) != len(expected) {
+		t.Fatalf("expected %v, got %v", expected, order)
+	}
+	for i, v := range expected {
+		if order[i] != v {
+			t.Errorf("order[%d] = %q, expected %q", i, order[i], v)
+		}
+	}
+}
+
+func TestRunTaskWithComponents(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	comp := &mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	app.RegisterComponent(comp)
+
+	app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+
+	if !comp.started {
+		t.Error("expected component to be started")
+	}
+	if !comp.stopped {
+		t.Error("expected component to be stopped after task")
+	}
+}

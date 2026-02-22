@@ -1,6 +1,6 @@
 # connect
 
-Connect-Go integration with gokit server — interceptors, error mapping, and service mounting.
+Connect-Go integration for gokit — server-side interceptors, error mapping, service mounting, and client utilities.
 
 ## Install
 
@@ -8,32 +8,45 @@ Connect-Go integration with gokit server — interceptors, error mapping, and se
 go get github.com/kbukum/gokit/connect@latest
 ```
 
-## Quick Start
+## Quick Start — Server
 
 ```go
 import (
-    "github.com/kbukum/gokit/connect"
-    "github.com/kbukum/gokit/server"
+    goconnect "github.com/kbukum/gokit/connect"
     "github.com/kbukum/gokit/logger"
     "connectrpc.com/connect"
 )
 
-log := logger.New()
-srv := server.New(server.Config{Port: 8080}, log)
+log := logger.NewDefault("my-service")
 
-// Create Connect service handler
+// Create Connect service handler with interceptors
 path, handler := userv1connect.NewUserServiceHandler(svc,
-    connectrpc.WithInterceptors(goconnect.LoggingInterceptor(log), goconnect.ErrorInterceptor()),
+    connect.WithInterceptors(goconnect.LoggingInterceptor(log), goconnect.ErrorInterceptor()),
 )
 
-// Mount on gokit server
-connect.Mount(srv, path, handler)
+// Mount on any server implementing HandlerMounter (e.g. gokit/server.Server)
+goconnect.Mount(srv, path, handler)
+```
 
-// Or use the Service abstraction
-services := []connect.Service{
-    connect.NewService(path, handler),
+## Quick Start — Client
+
+```go
+import (
+    "github.com/kbukum/gokit/connect/client"
+)
+
+cfg := client.Config{BaseURL: "http://localhost:8080"}
+httpClient, err := client.NewHTTPClient(cfg)
+if err != nil {
+    return err
 }
-connect.MountServices(srv, services...)
+svcClient := userv1connect.NewUserServiceClient(httpClient, cfg.BaseURL)
+
+// For bidi streaming, use gRPC protocol:
+cfg := client.Config{BaseURL: "http://localhost:8080", Protocol: client.ProtocolGRPC}
+httpClient, err := client.NewHTTPClient(cfg)
+opts := client.ClientOptions(cfg)
+svcClient := userv1connect.NewUserServiceClient(httpClient, cfg.BaseURL, opts...)
 ```
 
 ## JWT Authentication
@@ -290,16 +303,23 @@ func main() {
 
 | Symbol | Description |
 |---|---|
-| `Config` | SendMaxBytes, ReadMaxBytes, Enabled |
+| `Config` | Server-side config: SendMaxBytes, ReadMaxBytes, Enabled |
 | `Service` | Interface — `Path() string`, `Handler() http.Handler` |
 | `NewService(path, handler)` | Create a Service from path and handler |
-| `Mount(srv, path, handler)` | Mount a single Connect handler on gokit server |
+| `HandlerMounter` | Interface for servers that mount HTTP handlers |
+| `Mount(srv, path, handler)` | Mount a single Connect handler on any HandlerMounter |
 | `MountServices(srv, ...Service)` | Mount multiple services at once |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
 | `ErrorInterceptor()` | Convert `*AppError` to Connect errors |
-| `AuthInterceptor(validateToken)` | Bearer token validation interceptor |
+| `TokenAuthInterceptor(validator)` | Bearer token validation interceptor |
+| `JWTAuthInterceptor(jwtSvc)` | JWT-specific auth interceptor |
 | `ToConnectError(appErr)` | `*AppError` → `*connect.Error` |
 | `FromConnectError(err)` | `*connect.Error` → `*AppError` |
+| **client subpackage** | |
+| `client.Config` | Client config: BaseURL, Timeout, DialTimeout, Protocol, TLS |
+| `client.NewHTTPClient(cfg)` | Create HTTP client (h2c or TLS) for ConnectRPC |
+| `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
+| `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |
 
 ---
 
