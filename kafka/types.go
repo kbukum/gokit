@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -20,15 +21,45 @@ type Message struct {
 }
 
 // Event represents a structured event for domain messaging.
+// Data is json.RawMessage so events can be forwarded without re-marshaling.
 type Event struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Source      string                 `json:"source"`
-	ContentType string                 `json:"content_type"`
-	Version     string                 `json:"version"`
-	Timestamp   time.Time              `json:"timestamp"`
-	Data        map[string]interface{} `json:"data,omitempty"`
-	Subject     string                 `json:"subject,omitempty"`
+	ID          string          `json:"id"`
+	Type        string          `json:"type"`
+	Source      string          `json:"source"`
+	ContentType string          `json:"content_type,omitempty"`
+	Version     string          `json:"version,omitempty"`
+	Timestamp   time.Time       `json:"timestamp"`
+	Subject     string          `json:"subject,omitempty"`
+	Data        json.RawMessage `json:"data,omitempty"`
+}
+
+// ToJSON marshals the event to JSON.
+func (e Event) ToJSON() ([]byte, error) {
+	return json.Marshal(e)
+}
+
+// NewEvent creates an Event with auto-generated ID and timestamp.
+// Data is marshaled to json.RawMessage automatically.
+func NewEvent[D any](eventType, source string, data D, subject ...string) Event {
+	raw, _ := json.Marshal(data)
+	e := Event{
+		ID:        uuid.New().String(),
+		Type:      eventType,
+		Source:    source,
+		Timestamp: time.Now().UTC(),
+		Data:      raw,
+	}
+	if len(subject) > 0 {
+		e.Subject = subject[0]
+	}
+	return e
+}
+
+// ParseData unmarshals the event's Data into a typed value.
+func ParseData[D any](e Event) (D, error) {
+	var data D
+	err := json.Unmarshal(e.Data, &data)
+	return data, err
 }
 
 // MessageHandler processes domain messages (supports both binary and JSON).
@@ -111,9 +142,4 @@ func (m Message) ToEvent() (Event, error) {
 	var event Event
 	err := json.Unmarshal(m.Value, &event)
 	return event, err
-}
-
-// ToJSON marshals the event to JSON.
-func (e Event) ToJSON() ([]byte, error) {
-	return json.Marshal(e)
 }
