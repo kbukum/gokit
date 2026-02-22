@@ -43,9 +43,16 @@ type BinaryHandler func(ctx context.Context, key string, value []byte) error
 // JSONHandler processes JSON messages with automatic unmarshalling.
 type JSONHandler[T any] func(ctx context.Context, data T) error
 
-// Publisher defines the event publishing interface.
+// Publisher defines the unified Kafka publishing interface.
+//
+// Three methods for three use cases:
+//   - Publish:       structured domain events (gokit Event with headers/metadata)
+//   - PublishJSON:   arbitrary data as JSON (direct marshal, no envelope)
+//   - PublishBinary: raw bytes (protobuf, avro, etc. — zero encoding overhead)
 type Publisher interface {
 	Publish(ctx context.Context, topic string, event Event, key ...string) error
+	PublishJSON(ctx context.Context, topic string, key string, value interface{}) error
+	PublishBinary(ctx context.Context, topic string, key string, data []byte) error
 	Close() error
 }
 

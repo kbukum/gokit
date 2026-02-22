@@ -164,8 +164,8 @@ func (p *Producer) Close() error {
 	return nil
 }
 
-// SendJSON marshals value as JSON and sends it to the given topic with the given key.
-func (p *Producer) SendJSON(ctx context.Context, topic string, key string, value interface{}) error {
+// PublishJSON marshals value as JSON and publishes it to the given topic.
+func (p *Producer) PublishJSON(ctx context.Context, topic string, key string, value interface{}) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
@@ -181,8 +181,8 @@ func (p *Producer) SendJSON(ctx context.Context, topic string, key string, value
 	return p.WriteMessages(ctx, msg)
 }
 
-// SendBinary sends raw bytes to the given topic with the given key.
-func (p *Producer) SendBinary(ctx context.Context, topic string, key string, data []byte) error {
+// PublishBinary publishes raw bytes to the given topic (e.g. protobuf, avro).
+func (p *Producer) PublishBinary(ctx context.Context, topic string, key string, data []byte) error {
 	msg := kafkago.Message{
 		Topic: topic,
 		Key:   []byte(key),
@@ -193,3 +193,37 @@ func (p *Producer) SendBinary(ctx context.Context, topic string, key string, dat
 	}
 	return p.WriteMessages(ctx, msg)
 }
+
+// Publish sends a structured gokit Event to Kafka with event metadata headers.
+func (p *Producer) Publish(ctx context.Context, topic string, event kafka.Event, key ...string) error {
+	data, err := event.ToJSON()
+	if err != nil {
+		return fmt.Errorf("marshal event: %w", err)
+	}
+
+	partitionKey := event.Subject
+	if partitionKey == "" && len(key) > 0 {
+		partitionKey = key[0]
+	}
+	if partitionKey == "" {
+		partitionKey = event.ID
+	}
+
+	msg := kafkago.Message{
+		Topic: topic,
+		Key:   []byte(partitionKey),
+		Value: data,
+		Headers: []kafkago.Header{
+			{Key: "event-id", Value: []byte(event.ID)},
+			{Key: "event-type", Value: []byte(event.Type)},
+			{Key: "event-source", Value: []byte(event.Source)},
+			{Key: "content-type", Value: []byte("application/json")},
+		},
+		Time: event.Timestamp,
+	}
+
+	return p.WriteMessages(ctx, msg)
+}
+
+// Verify Producer implements kafka.Publisher at compile time.
+var _ kafka.Publisher = (*Producer)(nil)
