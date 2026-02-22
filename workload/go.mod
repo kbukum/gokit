@@ -2,7 +2,6 @@ module github.com/kbukum/gokit/workload
 
 go 1.25.0
 
-
 require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/docker/docker v28.5.2+incompatible

@@ -3,12 +3,12 @@ module github.com/kbukum/gokit/kafka
 go 1.25.0
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.1.0
 	github.com/segmentio/kafka-go v0.4.50
 )
 
 require (
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
