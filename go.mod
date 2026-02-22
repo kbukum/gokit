@@ -51,6 +51,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/kbukum/gokit/database/testutil => ./database/testutil
 
-replace github.com/kbukum/gokit/testutil => ./testutil

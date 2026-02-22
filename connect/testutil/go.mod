@@ -3,8 +3,8 @@ module github.com/kbukum/gokit/connect/testutil
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.0.0
-	github.com/kbukum/gokit/testutil v0.0.0
+	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit/testutil v0.1.0
 )
 
 require (
@@ -14,6 +14,4 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/kbukum/gokit => ../..
 
-replace github.com/kbukum/gokit/testutil => ../../testutil

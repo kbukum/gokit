@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/hashicorp/consul/api v1.33.2
-	github.com/kbukum/gokit v0.0.0
+	github.com/kbukum/gokit v0.1.0
 )
 
 require (
@@ -28,4 +28,3 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/kbukum/gokit => ../

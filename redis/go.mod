@@ -3,7 +3,7 @@ module github.com/kbukum/gokit/redis
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.0.0
+	github.com/kbukum/gokit v0.1.0
 	github.com/redis/go-redis/v9 v9.18.0
 )
 
@@ -17,4 +17,3 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/kbukum/gokit => ../

@@ -3,9 +3,9 @@ module github.com/kbukum/gokit/discovery/testutil
 go 1.25.5
 
 require (
-	github.com/kbukum/gokit v0.0.0
-	github.com/kbukum/gokit/discovery v0.0.0
-	github.com/kbukum/gokit/testutil v0.0.0
+	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit/discovery v0.1.0
+	github.com/kbukum/gokit/testutil v0.1.0
 )
 
 require (
@@ -15,8 +15,5 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 )
 
-replace github.com/kbukum/gokit => ../..
 
-replace github.com/kbukum/gokit/discovery => ../
 
-replace github.com/kbukum/gokit/testutil => ../../testutil

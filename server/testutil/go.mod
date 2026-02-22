@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.11.0
-	github.com/kbukum/gokit v0.0.0
-	github.com/kbukum/gokit/server v0.0.0
-	github.com/kbukum/gokit/testutil v0.0.0
+	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit/server v0.1.0
+	github.com/kbukum/gokit/testutil v0.1.0
 )
 
 require (
@@ -24,8 +24,8 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kbukum/gokit/auth v0.0.0 // indirect
-	github.com/kbukum/gokit/authz v0.0.0 // indirect
+	github.com/kbukum/gokit/auth v0.1.0 // indirect
+	github.com/kbukum/gokit/authz v0.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
@@ -46,12 +46,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/kbukum/gokit => ../..
 
-replace github.com/kbukum/gokit/server => ../
 
-replace github.com/kbukum/gokit/testutil => ../../testutil
 
-replace github.com/kbukum/gokit/auth => ../../auth
 
-replace github.com/kbukum/gokit/authz => ../../authz

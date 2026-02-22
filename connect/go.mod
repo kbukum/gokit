@@ -5,8 +5,8 @@ go 1.25.0
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/kbukum/gokit v0.0.0
-	github.com/kbukum/gokit/auth v0.0.0
+	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit/auth v0.1.0
 	golang.org/x/net v0.50.0
 )
 
@@ -20,8 +20,5 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/kbukum/gokit => ../
 
-replace github.com/kbukum/gokit/auth => ../auth
 
-replace github.com/kbukum/gokit/authz => ../authz

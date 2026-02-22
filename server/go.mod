@@ -5,9 +5,9 @@ go 1.25.0
 require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/google/uuid v1.6.0
-	github.com/kbukum/gokit v0.0.0
-	github.com/kbukum/gokit/auth v0.0.0
-	github.com/kbukum/gokit/authz v0.0.0
+	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit/auth v0.1.0
+	github.com/kbukum/gokit/authz v0.1.0
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/net v0.50.0
 )
