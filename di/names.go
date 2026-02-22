@@ -22,6 +22,9 @@ type PkgNames struct {
 	KafkaProducer      string
 	KafkaConsumer      string
 	KafkaConsumerGroup string
+
+	// Real-time
+	SSEHub string
 }
 
 // Pkg contains all component names for the pkg bootstrap layer.
@@ -45,4 +48,7 @@ var Pkg = PkgNames{
 	KafkaProducer:      "kafka_producer",
 	KafkaConsumer:      "kafka_consumer",
 	KafkaConsumerGroup: "kafka_consumer_group",
+
+	// Real-time
+	SSEHub: "sse_hub",
 }

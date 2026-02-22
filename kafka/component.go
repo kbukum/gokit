@@ -27,14 +27,15 @@ type ConsumerRunner interface {
 
 // Component wraps injected Producer and Consumer(s) and implements component.Component.
 type Component struct {
-	cfg       Config
-	log       *logger.Logger
-	producer  ProducerCloser
-	consumers []ConsumerRunner
-	cancelFn  context.CancelFunc
-	wg        sync.WaitGroup
-	mu        sync.Mutex
-	running   bool
+	cfg        Config
+	log        *logger.Logger
+	producer   ProducerCloser
+	consumers  []ConsumerRunner
+	consumeCtx context.Context
+	cancelFn   context.CancelFunc
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	running    bool
 }
 
 // ensure Component satisfies component.Component
@@ -55,11 +56,16 @@ func (c *Component) SetProducer(p ProducerCloser) {
 	c.producer = p
 }
 
-// AddConsumer injects a consumer into the component. Must be called before Start.
+// AddConsumer injects a consumer into the component.
+// If the component is already running, the consumer is started immediately.
 func (c *Component) AddConsumer(cr ConsumerRunner) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.consumers = append(c.consumers, cr)
+
+	if c.running {
+		c.startConsumer(cr)
+	}
 }
 
 // Producer returns the underlying ProducerCloser, or nil if not set.
@@ -83,19 +89,10 @@ func (c *Component) Start(ctx context.Context) error {
 
 	consumeCtx, cancel := context.WithCancel(ctx)
 	c.cancelFn = cancel
+	c.consumeCtx = consumeCtx
 
 	for _, cr := range c.consumers {
-		cr := cr
-		c.wg.Add(1)
-		go func() {
-			defer c.wg.Done()
-			if err := cr.Consume(consumeCtx); err != nil && err != context.Canceled {
-				c.log.Error("Consumer stopped with error", map[string]interface{}{
-					"topic": cr.Topic(),
-					"error": err.Error(),
-				})
-			}
-		}()
+		c.startConsumer(cr)
 	}
 
 	c.running = true
@@ -103,7 +100,23 @@ func (c *Component) Start(ctx context.Context) error {
 	return nil
 }
 
+// startConsumer launches a single consumer goroutine. Must be called with mu held.
+func (c *Component) startConsumer(cr ConsumerRunner) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		if err := cr.Consume(c.consumeCtx); err != nil && err != context.Canceled {
+			c.log.Error("Consumer stopped with error", map[string]interface{}{
+				"topic": cr.Topic(),
+				"error": err.Error(),
+			})
+		}
+	}()
+}
+
 // Stop gracefully shuts down consumers and the producer.
+// Context cancel stops all consume loops in parallel. Consumer close (offset
+// commit, TCP teardown) also runs in parallel to minimize shutdown time.
 func (c *Component) Stop(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -114,14 +127,23 @@ func (c *Component) Stop(_ context.Context) error {
 
 	c.log.Info("Kafka component stopping")
 
+	// Cancel shared context — all consumer goroutines exit their Consume loops in parallel
 	if c.cancelFn != nil {
 		c.cancelFn()
 	}
 	c.wg.Wait()
 
+	// Close all consumers in parallel (offset commit + connection teardown)
+	var closeWg sync.WaitGroup
 	for _, cr := range c.consumers {
-		_ = cr.Close()
+		cr := cr
+		closeWg.Add(1)
+		go func() {
+			defer closeWg.Done()
+			_ = cr.Close()
+		}()
 	}
+	closeWg.Wait()
 	c.consumers = nil
 
 	if c.producer != nil {

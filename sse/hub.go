@@ -106,6 +106,8 @@ type Hub struct {
 	register   chan *Client       // Channel for registering clients
 	unregister chan *Client       // Channel for unregistering clients
 	broadcast  chan *Message      // Channel for broadcasting messages
+	done       chan struct{}      // Signals the hub to stop
+	stopped    bool              // Whether the hub has been stopped
 	mu         sync.RWMutex       // Protects clients map for reads during matching
 }
 
@@ -122,14 +124,20 @@ func NewHub() *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *Message, 256),
+		done:       make(chan struct{}),
 	}
 }
 
 // Run starts the hub's main event loop.
+// It blocks until Stop is called or the context is canceled.
 // This should be run in a goroutine.
 func (h *Hub) Run() {
 	for {
 		select {
+		case <-h.done:
+			h.closeAllClients()
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.id] = client
@@ -155,6 +163,28 @@ func (h *Hub) Run() {
 			h.broadcastWithPattern(msg.Pattern, msg.Data)
 		}
 	}
+}
+
+// Stop signals the hub to shut down. It closes all client connections
+// and causes Run to return. Safe to call multiple times.
+func (h *Hub) Stop() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if !h.stopped {
+		h.stopped = true
+		close(h.done)
+	}
+}
+
+// closeAllClients disconnects all clients during shutdown.
+func (h *Hub) closeAllClients() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for id, client := range h.clients {
+		client.Close()
+		delete(h.clients, id)
+	}
+	logger.Debug("[SSE_HUB] All clients closed during shutdown")
 }
 
 // Register adds a client to the hub.
