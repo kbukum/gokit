@@ -41,6 +41,40 @@ func (m *Manager[T]) Initialize(name string, cfg map[string]any) error {
 	return m.InitializeWithContext(context.Background(), name, cfg)
 }
 
+// InitializeWithResilience creates a provider from its factory, wraps it with
+// the given middleware function, calls Init(), and stores it for use.
+// The wrap function applies resilience (or any other middleware) to the provider.
+// Example:
+//
+//	mgr.InitializeWithResilience(ctx, "http", nil, func(p MyProvider) MyProvider {
+//	    return provider.WithResilience(p, resilienceCfg).(MyProvider)
+//	})
+func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, cfg map[string]any, wrap func(T) T) error {
+	instance, err := m.registry.Create(name, cfg)
+	if err != nil {
+		return fmt.Errorf("initialize provider %q: %w", name, err)
+	}
+
+	// Call Init() if the provider supports it (before wrapping)
+	if init, ok := any(instance).(Initializable); ok {
+		if err := init.Init(ctx); err != nil {
+			return fmt.Errorf("init provider %q: %w", name, err)
+		}
+	}
+
+	// Apply middleware wrapper
+	if wrap != nil {
+		instance = wrap(instance)
+	}
+
+	m.mu.Lock()
+	m.providers[name] = instance
+	m.mu.Unlock()
+	m.registry.Set(name, instance)
+	m.log.Info("provider initialized with resilience", map[string]interface{}{"provider": name})
+	return nil
+}
+
 // InitializeWithContext creates a provider from its factory, calls Init() if the
 // provider implements Initializable, and stores it for use.
 func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg map[string]any) error {
