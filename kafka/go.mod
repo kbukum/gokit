@@ -8,6 +8,8 @@ require (
 	github.com/segmentio/kafka-go v0.4.50
 )
 
+replace github.com/kbukum/gokit => ../
+
 require (
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
