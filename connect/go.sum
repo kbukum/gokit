@@ -6,10 +6,6 @@ github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63Y
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
-github.com/kbukum/gokit v0.1.0 h1:roECa02iUKVQlwEAWRUhnGdhi/rfLAQtHEweN2yJzkM=
-github.com/kbukum/gokit v0.1.0/go.mod h1:+bYvZcOWk5sTkK+dxhH4zietZ1hEptLQ5cKGmYnfs+w=
-github.com/kbukum/gokit/auth v0.1.0 h1:MEUUyVkGHjpHKGbQeNRi83ATn0XkVQB5gS25zmZ56Ks=
-github.com/kbukum/gokit/auth v0.1.0/go.mod h1:h+YDWnBqmyfD+Ulx0IsaYghshnag+y141h5qvWyjWJE=
 github.com/mattn/go-colorable v0.1.13/go.mod h1:7S9/ev0klgBDR4GtXTXX8a3vIGJpMovkB8vQcUbaXHg=
 github.com/mattn/go-colorable v0.1.14 h1:9A9LHSqF/7dyVVX6g0U9cwm9pG3kP9gSzcuIPHPsaIE=
 github.com/mattn/go-colorable v0.1.14/go.mod h1:6LmQG8QLFO4G5z1gPvYEzlUgJ2wF+stgPZH1UqBm1s8=

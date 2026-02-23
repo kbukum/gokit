@@ -3,9 +3,9 @@ module github.com/kbukum/gokit/storage/testutil
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.0
-	github.com/kbukum/gokit/storage v0.1.0
-	github.com/kbukum/gokit/testutil v0.1.0
+	github.com/kbukum/gokit v0.1.1
+	github.com/kbukum/gokit/storage v0.1.1
+	github.com/kbukum/gokit/testutil v0.1.1
 )
 
 require (
@@ -14,3 +14,9 @@ require (
 	github.com/rs/zerolog v1.34.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 )
+
+replace github.com/kbukum/gokit => ../../
+
+replace github.com/kbukum/gokit/testutil => ../../testutil
+
+replace github.com/kbukum/gokit/storage => ../../storage

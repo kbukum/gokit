@@ -6,7 +6,7 @@ require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.6.0
-	github.com/kbukum/gokit v0.1.0
+	github.com/kbukum/gokit v0.1.1
 	github.com/opencontainers/image-spec v1.1.1
 	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.35.1
@@ -82,3 +82,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/kbukum/gokit => ../

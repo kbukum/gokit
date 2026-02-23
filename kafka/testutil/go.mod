@@ -3,12 +3,13 @@ module github.com/kbukum/gokit/kafka/testutil
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.0
-	github.com/kbukum/gokit/kafka v0.1.0
-	github.com/kbukum/gokit/testutil v0.1.0
+	github.com/kbukum/gokit v0.1.1
+	github.com/kbukum/gokit/kafka v0.1.1
+	github.com/kbukum/gokit/testutil v0.1.1
 )
 
 require (
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -21,3 +22,9 @@ require (
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 )
+
+replace github.com/kbukum/gokit => ../../
+
+replace github.com/kbukum/gokit/testutil => ../../testutil
+
+replace github.com/kbukum/gokit/kafka => ../../kafka

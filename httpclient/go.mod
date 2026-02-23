@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/httpclient
 
 go 1.25.0
 
-require github.com/kbukum/gokit v0.1.0
+require github.com/kbukum/gokit v0.1.1
 
 require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
