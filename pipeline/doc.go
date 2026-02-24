@@ -26,6 +26,14 @@
 //   - Parallel: concurrent Map with a worker pool (order NOT preserved)
 //   - Merge: combine multiple pipelines concurrently (order NOT preserved)
 //
+// Stream/time-aware:
+//
+//   - Throttle: rate-limit values (drop values arriving faster than interval)
+//   - Batch: collect N items or wait timeout, emit as slice
+//   - Debounce: wait for silence before emitting the latest value
+//   - TumblingWindow: non-overlapping fixed-duration windows
+//   - SlidingWindow: overlapping windows with configurable slide
+//
 // # Usage
 //
 //	src := pipeline.FromSlice([]int{1, 2, 3, 4, 5})

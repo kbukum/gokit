@@ -5,8 +5,8 @@ go 1.25.0
 require (
 	connectrpc.com/connect v1.19.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/kbukum/gokit v0.1.1
-	github.com/kbukum/gokit/auth v0.1.1
+	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit/auth v0.1.2
 	golang.org/x/net v0.50.0
 )
 

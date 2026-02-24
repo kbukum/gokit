@@ -31,20 +31,23 @@ In a multi-module repository, each module needs its own tag:
 # Main module
 v0.1.0
 
-# Submodules
+# Submodules (auto-discovered from go.mod files)
 auth/v0.1.0
+authz/v0.1.0
 connect/v0.1.0
 database/v0.1.0
 discovery/v0.1.0
-diarization/v0.1.0
 grpc/v0.1.0
+httpclient/v0.1.0
 kafka/v0.1.0
-llm/v0.1.0
 redis/v0.1.0
+server/v0.1.0
 storage/v0.1.0
-transcription/v0.1.0
+testutil/v0.1.0
 workload/v0.1.0
 ```
+
+> **Note:** The `tag-modules.sh` script automatically discovers all modules by finding `go.mod` files. You never need to maintain a hardcoded list.
 
 ## Tagging Modules
 

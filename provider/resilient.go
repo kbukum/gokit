@@ -82,8 +82,10 @@ type resilientStream[I, O any] struct {
 	state *ResilienceState
 }
 
-func (r *resilientStream[I, O]) Name() string                         { return r.inner.Name() }
-func (r *resilientStream[I, O]) IsAvailable(ctx context.Context) bool { return r.inner.IsAvailable(ctx) }
+func (r *resilientStream[I, O]) Name() string { return r.inner.Name() }
+func (r *resilientStream[I, O]) IsAvailable(ctx context.Context) bool {
+	return r.inner.IsAvailable(ctx)
+}
 
 func (r *resilientStream[I, O]) Execute(ctx context.Context, input I) (Iterator[O], error) {
 	return ExecuteWithResilience(ctx, r.state, func() (Iterator[O], error) {
@@ -115,8 +117,10 @@ type resilientDuplex[I, O any] struct {
 	state *ResilienceState
 }
 
-func (r *resilientDuplex[I, O]) Name() string                         { return r.inner.Name() }
-func (r *resilientDuplex[I, O]) IsAvailable(ctx context.Context) bool { return r.inner.IsAvailable(ctx) }
+func (r *resilientDuplex[I, O]) Name() string { return r.inner.Name() }
+func (r *resilientDuplex[I, O]) IsAvailable(ctx context.Context) bool {
+	return r.inner.IsAvailable(ctx)
+}
 
 func (r *resilientDuplex[I, O]) Open(ctx context.Context) (DuplexStream[I, O], error) {
 	// Duplex skips retry — reconnect should happen at a higher level.

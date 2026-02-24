@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/testutil
 
 go 1.25.0
 
-require github.com/kbukum/gokit v0.1.1
+require github.com/kbukum/gokit v0.1.2
 
 require (
 	github.com/mattn/go-colorable v0.1.14 // indirect

@@ -1,7 +1,7 @@
 # gokit
 
 [![CI](https://github.com/kbukum/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/kbukum/gokit/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A modular Go toolkit for building production services.**
@@ -21,7 +21,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 
 | Go Version | Module Version |
 |------------|----------------|
-| 1.24+      | v0.1.0+        |
+| 1.25+      | v0.1.2+        |
 
 ## Module Map
 
@@ -40,7 +40,9 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `resilience` | `gokit/resilience` | Circuit breaker, retry with backoff, bulkhead isolation, rate limiting |
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, and health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting with per-client channels |
-| `provider` | `gokit/provider` | Generic provider framework for swappable backends with runtime checks |
+| `provider` | `gokit/provider` | Generic provider framework with state management, middleware, and runtime checks |
+| `pipeline` | `gokit/pipeline` | Pull-based data pipeline with Throttle, Batch, Debounce, and Window operators |
+| `security` | `gokit/security` | Security utilities |
 | `component` | `gokit/component` | Lifecycle interface for infrastructure components (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration and graceful shutdown |
 
@@ -51,7 +53,8 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `auth` | `gokit/auth` | Authentication — JWT tokens, OIDC verification, password hashing, token validation interfaces |
 | `authz` | `gokit/authz` | Authorization — permission checking, wildcard pattern matching (zero external deps) |
 | `database` | `gokit/database` | PostgreSQL via GORM — pooling, migrations, health checks, slow query logging |
-| `redis` | `gokit/redis` | go-redis client wrapper with pooling, health checks, and integrated logging |
+| `redis` | `gokit/redis` | go-redis client wrapper with pooling, health checks, TypedStore, and JSON operations |
+| `httpclient` | `gokit/httpclient` | HTTP client with resilience patterns, retry, and circuit breaking |
 | `kafka` | `gokit/kafka` | Kafka producer/consumer with TLS/SASL, configurable transport |
 | `storage` | `gokit/storage` | Object storage abstraction — local filesystem and S3-compatible backends |
 | `server` | `gokit/server` | HTTP server with Gin, HTTP/2, middleware stack, handler mounting |
@@ -59,6 +62,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `discovery` | `gokit/discovery` | Service discovery with Consul and static provider support |
 | `connect` | `gokit/connect` | Connect-Go RPC registration over HTTP/1.1 with standardized errors |
 | `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
+| `workload` | `gokit/workload` | Workload execution on Docker and Kubernetes backends |
 
 ## Quick Start
 
@@ -191,10 +195,11 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle management, provider pattern |
 | **Auth & Authz** | auth, authz | Authentication (JWT, OIDC, password) and authorization (permissions) |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Networking** | sse | Server-sent events |
+| **Data** | pipeline, sse | Pull-based pipelines, server-sent events |
 | **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |
+| **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
-| **Process** | process | Subprocess execution with context cancellation |
+| **Execution** | process, workload | Subprocess and container workload execution |
 
 ## Multi-Module Versioning
 

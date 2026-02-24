@@ -4,6 +4,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -117,6 +118,28 @@ func (c *Client) Del(ctx context.Context, keys ...string) error {
 // Exists checks if one or more keys exist.
 func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
 	return c.rdb.Exists(ctx, keys...).Result()
+}
+
+// GetJSON retrieves and unmarshals a JSON value from Redis.
+// Returns an error if the key doesn't exist or the value can't be unmarshalled.
+func (c *Client) GetJSON(ctx context.Context, key string, dest any) error {
+	raw, err := c.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("redis get json %q: %w", key, err)
+	}
+	if err := json.Unmarshal([]byte(raw), dest); err != nil {
+		return fmt.Errorf("redis unmarshal %q: %w", key, err)
+	}
+	return nil
+}
+
+// SetJSON marshals a value to JSON and stores it in Redis with optional TTL.
+func (c *Client) SetJSON(ctx context.Context, key string, val any, ttl time.Duration) error {
+	data, err := json.Marshal(val)
+	if err != nil {
+		return fmt.Errorf("redis marshal %q: %w", key, err)
+	}
+	return c.rdb.Set(ctx, key, string(data), ttl).Err()
 }
 
 // Close closes the Redis connection. Safe to call multiple times.

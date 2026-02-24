@@ -40,7 +40,7 @@ type channelIter[T any] struct {
 	closer func() error
 }
 
-func (it *channelIter[T]) Next(ctx context.Context) (T, bool, error) {
+func (it *channelIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
 	select {
 	case r, open := <-it.ch:
 		if !open {
@@ -93,7 +93,7 @@ func Drain[T any](p *Pipeline[T], sink func(context.Context, T) error) *Runnable
 	return &Runnable{
 		run: func(ctx context.Context) error {
 			iter := p.create(ctx)
-			defer iter.Close()
+			defer func() { _ = iter.Close() }()
 			for {
 				val, ok, err := iter.Next(ctx)
 				if err != nil {
@@ -113,7 +113,7 @@ func Drain[T any](p *Pipeline[T], sink func(context.Context, T) error) *Runnable
 // Collect runs the pipeline and returns all values as a slice.
 func Collect[T any](ctx context.Context, p *Pipeline[T]) ([]T, error) {
 	iter := p.create(ctx)
-	defer iter.Close()
+	defer func() { _ = iter.Close() }()
 	var result []T
 	for {
 		val, ok, err := iter.Next(ctx)
@@ -144,7 +144,7 @@ type sliceIter[T any] struct {
 	index int
 }
 
-func (it *sliceIter[T]) Next(_ context.Context) (T, bool, error) {
+func (it *sliceIter[T]) Next(_ context.Context) (result T, ok bool, err error) {
 	if it.index >= len(it.items) {
 		var zero T
 		return zero, false, nil

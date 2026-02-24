@@ -54,8 +54,9 @@ func NewUploadProvider(name string, s Storage) *UploadProvider {
 	return &UploadProvider{name: name, storage: s}
 }
 
-func (p *UploadProvider) Name() string                         { return p.name }
-func (p *UploadProvider) IsAvailable(_ context.Context) bool   { return p.storage != nil }
+func (p *UploadProvider) Name() string { return p.name }
+
+func (p *UploadProvider) IsAvailable(_ context.Context) bool { return p.storage != nil }
 
 func (p *UploadProvider) Execute(ctx context.Context, req UploadRequest) (struct{}, error) {
 	if err := p.storage.Upload(ctx, req.Path, req.Reader); err != nil {
@@ -75,8 +76,9 @@ func NewDownloadProvider(name string, s Storage) *DownloadProvider {
 	return &DownloadProvider{name: name, storage: s}
 }
 
-func (p *DownloadProvider) Name() string                         { return p.name }
-func (p *DownloadProvider) IsAvailable(_ context.Context) bool   { return p.storage != nil }
+func (p *DownloadProvider) Name() string { return p.name }
+
+func (p *DownloadProvider) IsAvailable(_ context.Context) bool { return p.storage != nil }
 
 func (p *DownloadProvider) Execute(ctx context.Context, req DownloadRequest) (*DownloadResponse, error) {
 	body, err := p.storage.Download(ctx, req.Path)
@@ -97,8 +99,9 @@ func NewDeleteProvider(name string, s Storage) *DeleteProvider {
 	return &DeleteProvider{name: name, storage: s}
 }
 
-func (p *DeleteProvider) Name() string                         { return p.name }
-func (p *DeleteProvider) IsAvailable(_ context.Context) bool   { return p.storage != nil }
+func (p *DeleteProvider) Name() string { return p.name }
+
+func (p *DeleteProvider) IsAvailable(_ context.Context) bool { return p.storage != nil }
 
 func (p *DeleteProvider) Execute(ctx context.Context, req DeleteRequest) (struct{}, error) {
 	if err := p.storage.Delete(ctx, req.Path); err != nil {
@@ -118,8 +121,9 @@ func NewExistsProvider(name string, s Storage) *ExistsProvider {
 	return &ExistsProvider{name: name, storage: s}
 }
 
-func (p *ExistsProvider) Name() string                         { return p.name }
-func (p *ExistsProvider) IsAvailable(_ context.Context) bool   { return p.storage != nil }
+func (p *ExistsProvider) Name() string { return p.name }
+
+func (p *ExistsProvider) IsAvailable(_ context.Context) bool { return p.storage != nil }
 
 func (p *ExistsProvider) Execute(ctx context.Context, req ExistsRequest) (*ExistsResponse, error) {
 	exists, err := p.storage.Exists(ctx, req.Path)

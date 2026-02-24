@@ -93,7 +93,7 @@ type mapIter[I, O any] struct {
 	fn     func(context.Context, I) (O, error)
 }
 
-func (it *mapIter[I, O]) Next(ctx context.Context) (O, bool, error) {
+func (it *mapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err error) {
 	val, ok, err := it.source.Next(ctx)
 	if err != nil || !ok {
 		var zero O
@@ -115,7 +115,7 @@ type flatMapIter[I, O any] struct {
 	current Iterator[O]
 }
 
-func (it *flatMapIter[I, O]) Next(ctx context.Context) (O, bool, error) {
+func (it *flatMapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err error) {
 	for {
 		if it.current != nil {
 			val, ok, err := it.current.Next(ctx)
@@ -126,7 +126,7 @@ func (it *flatMapIter[I, O]) Next(ctx context.Context) (O, bool, error) {
 			if ok {
 				return val, true, nil
 			}
-			it.current.Close()
+			_ = it.current.Close()
 			it.current = nil
 		}
 		in, ok, err := it.source.Next(ctx)
@@ -145,7 +145,7 @@ func (it *flatMapIter[I, O]) Next(ctx context.Context) (O, bool, error) {
 
 func (it *flatMapIter[I, O]) Close() error {
 	if it.current != nil {
-		it.current.Close()
+		_ = it.current.Close()
 	}
 	return it.source.Close()
 }
@@ -155,7 +155,7 @@ type filterIter[T any] struct {
 	fn     func(T) bool
 }
 
-func (it *filterIter[T]) Next(ctx context.Context) (T, bool, error) {
+func (it *filterIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
 	for {
 		val, ok, err := it.source.Next(ctx)
 		if err != nil || !ok {
@@ -174,7 +174,7 @@ type tapIter[T any] struct {
 	fn     func(context.Context, T) error
 }
 
-func (it *tapIter[T]) Next(ctx context.Context) (T, bool, error) {
+func (it *tapIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
 	val, ok, err := it.source.Next(ctx)
 	if err != nil || !ok {
 		return val, ok, err
@@ -193,7 +193,7 @@ type tapEachIter[T any] struct {
 	fns    []func(context.Context, T) error
 }
 
-func (it *tapEachIter[T]) Next(ctx context.Context) ([]T, bool, error) {
+func (it *tapEachIter[T]) Next(ctx context.Context) (result []T, ok bool, err error) {
 	vals, ok, err := it.source.Next(ctx)
 	if err != nil || !ok {
 		return vals, ok, err
@@ -217,7 +217,7 @@ type fanOutIter[I, O any] struct {
 	fns    []func(context.Context, I) (O, error)
 }
 
-func (it *fanOutIter[I, O]) Next(ctx context.Context) ([]O, bool, error) {
+func (it *fanOutIter[I, O]) Next(ctx context.Context) (result []O, ok bool, err error) {
 	val, ok, err := it.source.Next(ctx)
 	if err != nil || !ok {
 		return nil, false, err
@@ -250,7 +250,7 @@ type reduceIter[T, R any] struct {
 	done   bool
 }
 
-func (it *reduceIter[T, R]) Next(ctx context.Context) (R, bool, error) {
+func (it *reduceIter[T, R]) Next(ctx context.Context) (result R, ok bool, err error) {
 	if it.done {
 		var zero R
 		return zero, false, nil
@@ -276,7 +276,7 @@ type concatIter[T any] struct {
 	index int
 }
 
-func (it *concatIter[T]) Next(ctx context.Context) (T, bool, error) {
+func (it *concatIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
 	for it.index < len(it.iters) {
 		val, ok, err := it.iters[it.index].Next(ctx)
 		if err != nil {

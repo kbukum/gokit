@@ -39,16 +39,6 @@ func RunWithResilience(ctx context.Context, cmd Command, runner *Runner) (*Resul
 	return runner.Run(ctx, cmd)
 }
 
-// isTransientProcessError returns true for errors that suggest a transient
-// subprocess failure worth retrying (non-zero exit, killed by signal).
-func isTransientProcessError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// All process errors are potentially transient (exit code != 0, signal kill)
-	return true
-}
-
 // SubprocessProvider wraps a Command as a provider.RequestResponse.
 // The input function builds a Command from the input, and the output function
 // parses the Result into the desired output type.

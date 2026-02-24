@@ -40,3 +40,5 @@ docs/testutil*.md
 .secrets
 .env
 
+# Temporary / planning files
+.tmp/

@@ -18,13 +18,13 @@ The modules don't have Git tags, so Go cannot determine their version and falls 
 ### Step 1: Commit Your Changes
 
 ```bash
-cd /Users/kbukum/DEV/skillsense/all/gokit
+cd /path/to/gokit
 
-# Add all changes (including the new auth.go file)
+# Add all changes
 git add .
 
 # Commit
-git commit -m "feat(connect): add JWT authentication interceptor integration with gokit/auth"
+git commit -m "chore: prepare release"
 ```
 
 ### Step 2: Tag All Modules
@@ -34,20 +34,22 @@ git commit -m "feat(connect): add JWT authentication interceptor integration wit
 make tag VERSION=v0.1.0
 ```
 
-This will create tags:
+This will create tags for all modules automatically (discovered from `go.mod` files):
 - `v0.1.0` (main module)
 - `auth/v0.1.0`
+- `authz/v0.1.0`
 - `connect/v0.1.0`
 - `database/v0.1.0`
 - `discovery/v0.1.0`
-- `diarization/v0.1.0`
 - `grpc/v0.1.0`
+- `httpclient/v0.1.0`
 - `kafka/v0.1.0`
-- `llm/v0.1.0`
 - `redis/v0.1.0`
+- `server/v0.1.0`
 - `storage/v0.1.0`
-- `transcription/v0.1.0`
+- `testutil/v0.1.0`
 - `workload/v0.1.0`
+- ... plus all `*/testutil` modules
 
 ### Step 3: Push Tags to Remote (Optional but Recommended)
 
@@ -78,7 +80,7 @@ make list-tags
 ### In consuming projects (like platform):
 
 ```bash
-cd /Users/kbukum/DEV/skillsense/all/platform
+cd /path/to/consuming-project
 
 # Update dependencies to use tagged versions
 go get github.com/kbukum/gokit@v0.1.0

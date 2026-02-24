@@ -386,11 +386,9 @@ func TestContext_Cancellation(t *testing.T) {
 	p := FromSlice([]int{1, 2, 3})
 	buffered := Buffer(p, 1)
 	_, err := Collect(ctx, buffered)
-	if err == nil {
-		// Buffer uses channels, so cancelled ctx should propagate
-		// (but slice source doesn't check ctx, so this is best-effort)
-	}
-	_ = err // context cancellation is best-effort for sync sources
+	// Buffer uses channels, so canceled ctx should propagate
+	// (but slice source doesn't check ctx, so this is best-effort)
+	_ = err
 }
 
 func TestChained_Pipeline(t *testing.T) {

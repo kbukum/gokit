@@ -222,10 +222,8 @@ func TestIntegration(t *testing.T) {
     
     // Add components
     db := dbtestutil.NewComponent().WithModels(&User{})
-    redis := redistestutil.NewComponent()  // from redis/testutil
     
     manager.Add(db)
-    manager.Add(redis)
     
     // Start all components
     if err := manager.StartAll(); err != nil {

@@ -6,59 +6,122 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test
+  # ── Stage 1: Discover all Go modules dynamically ──────────────────────────
+  discover:
+    name: Discover Modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Find all Go modules
+        id: find
+        run: |
+          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
+            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "modules=$modules" >> "$GITHUB_OUTPUT"
+          echo "Discovered modules: $modules"
+
+  # ── Stage 2a: Tidy check (single job) ─────────────────────────────────────
+  tidy:
+    name: Tidy Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify modules are tidy
+        run: |
+          chmod +x ./gomod.sh
+          ./gomod.sh tidy
+          if [ -n "$(git status --porcelain -- '*.mod' '*.sum')" ]; then
+            echo "::error::go.mod/go.sum are not tidy. Run 'make tidy' and commit the changes."
+            git --no-pager diff -- '*.mod' '*.sum'
+            exit 1
+          fi
+
+  # ── Stage 2b: Build + Vet + Test (per module, parallel) ───────────────────
+  check:
+    name: Check (${{ matrix.module }})
+    needs: discover
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        go-version: ['1.25', '1.26']
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version-file: go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
-      - name: Build core
+      - name: Build
+        working-directory: ${{ matrix.module }}
         run: go build ./...
 
-      - name: Vet core
+      - name: Vet
+        working-directory: ${{ matrix.module }}
         run: go vet ./...
 
-      - name: Test core
+      - name: Test
+        working-directory: ${{ matrix.module }}
         run: go test -race -count=1 ./...
 
-      - name: Build & test sub-modules
-        run: |
-          for mod in database redis kafka storage grpc discovery connect llm transcription diarization; do
-            echo "==> $mod"
-            (cd $mod && go build ./... && go vet ./... && go test -race -count=1 ./...)
-          done
-
+  # ── Stage 2c: Lint (per module, parallel) ─────────────────────────────────
   lint:
-    name: Lint
+    name: Lint (${{ matrix.module }})
+    needs: discover
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
       - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26'
+          go-version-file: go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
-      - name: golangci-lint (core)
+      - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: latest
+          working-directory: ${{ matrix.module }}
 
-      - name: golangci-lint (sub-modules)
+  # ── Gate: Aggregate status for branch protection ──────────────────────────
+  ci-status:
+    name: CI Status
+    if: always()
+    needs: [tidy, check, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
         run: |
-          for mod in database redis kafka storage grpc discovery connect llm transcription diarization; do
-            echo "==> Linting $mod"
-            (cd $mod && golangci-lint run ./...)
+          results=("${{ needs.tidy.result }}" "${{ needs.check.result }}" "${{ needs.lint.result }}")
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::CI failed — one or more jobs did not succeed."
+              exit 1
+            fi
           done
+          echo "All CI checks passed ✓"

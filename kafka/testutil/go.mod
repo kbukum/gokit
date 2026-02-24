@@ -3,9 +3,9 @@ module github.com/kbukum/gokit/kafka/testutil
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.1
-	github.com/kbukum/gokit/kafka v0.1.1
-	github.com/kbukum/gokit/testutil v0.1.1
+	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit/kafka v0.1.2
+	github.com/kbukum/gokit/testutil v0.1.2
 )
 
 require (

@@ -3,7 +3,7 @@ module github.com/kbukum/gokit/grpc
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.1
+	github.com/kbukum/gokit v0.1.2
 	google.golang.org/grpc v1.79.1
 )
 

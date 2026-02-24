@@ -3,8 +3,8 @@ module github.com/kbukum/gokit/database/testutil
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.1
-	github.com/kbukum/gokit/testutil v0.1.1
+	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit/testutil v0.1.2
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
 )

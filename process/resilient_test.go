@@ -119,7 +119,7 @@ func TestSubprocessProvider_Execute(t *testing.T) {
 		func(result *process.Result) (string, error) {
 			// Trim trailing newline
 			out := string(result.Stdout)
-			if len(out) > 0 && out[len(out)-1] == '\n' {
+			if out != "" && out[len(out)-1] == '\n' {
 				out = out[:len(out)-1]
 			}
 			return out, nil
@@ -153,7 +153,7 @@ func TestSubprocessProvider_WithResilience(t *testing.T) {
 		},
 		func(result *process.Result) (string, error) {
 			out := string(result.Stdout)
-			if len(out) > 0 && out[len(out)-1] == '\n' {
+			if out != "" && out[len(out)-1] == '\n' {
 				out = out[:len(out)-1]
 			}
 			return out, nil
