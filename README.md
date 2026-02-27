@@ -42,6 +42,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `sse` | `gokit/sse` | Server-sent events broadcasting with per-client channels |
 | `provider` | `gokit/provider` | Generic provider framework with state management, middleware, and runtime checks |
 | `pipeline` | `gokit/pipeline` | Pull-based data pipeline with Throttle, Batch, Debounce, and Window operators |
+| `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch and streaming modes |
 | `security` | `gokit/security` | Security utilities |
 | `component` | `gokit/component` | Lifecycle interface for infrastructure components (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration and graceful shutdown |
@@ -195,7 +196,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle management, provider pattern |
 | **Auth & Authz** | auth, authz | Authentication (JWT, OIDC, password) and authorization (permissions) |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Data** | pipeline, sse | Pull-based pipelines, server-sent events |
+| **Data** | pipeline, dag, sse | Pull-based pipelines, DAG orchestration, server-sent events |
 | **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
