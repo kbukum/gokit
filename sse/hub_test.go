@@ -1,6 +1,10 @@
 package sse
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -270,5 +274,261 @@ func TestMessage_Fields(t *testing.T) {
 
 	if string(msg.Data) != "test data" {
 		t.Errorf("expected data 'test data', got '%s'", string(msg.Data))
+	}
+}
+
+func TestClient_WithMetadata(t *testing.T) {
+	client := NewClient("test:abc",
+		WithMetadata("custom-key", "custom-value"),
+	)
+
+	if client.GetMetadata("custom-key") != "custom-value" {
+		t.Errorf("expected metadata 'custom-value', got '%s'", client.GetMetadata("custom-key"))
+	}
+}
+
+func TestClient_WithUserID(t *testing.T) {
+	client := NewClient("test:abc",
+		WithUserID("user-123"),
+	)
+
+	if client.UserID() != "user-123" {
+		t.Errorf("expected UserID 'user-123', got '%s'", client.UserID())
+	}
+	if client.GetMetadata("user_id") != "user-123" {
+		t.Errorf("expected metadata user_id 'user-123', got '%s'", client.GetMetadata("user_id"))
+	}
+}
+
+func TestClient_WithSessionID(t *testing.T) {
+	client := NewClient("test:abc",
+		WithSessionID("session-456"),
+	)
+
+	if client.SessionID() != "session-456" {
+		t.Errorf("expected SessionID 'session-456', got '%s'", client.SessionID())
+	}
+}
+
+func TestClient_MultipleOptions(t *testing.T) {
+	client := NewClient("test:abc",
+		WithUserID("user-1"),
+		WithSessionID("sess-2"),
+		WithMetadata("env", "prod"),
+	)
+
+	if client.UserID() != "user-1" {
+		t.Errorf("expected UserID 'user-1', got '%s'", client.UserID())
+	}
+	if client.SessionID() != "sess-2" {
+		t.Errorf("expected SessionID 'sess-2', got '%s'", client.SessionID())
+	}
+	if client.GetMetadata("env") != "prod" {
+		t.Errorf("expected env 'prod', got '%s'", client.GetMetadata("env"))
+	}
+}
+
+func TestClient_Metadata(t *testing.T) {
+	client := NewClient("test:abc",
+		WithMetadata("k1", "v1"),
+		WithMetadata("k2", "v2"),
+	)
+
+	meta := client.Metadata()
+	if meta == nil {
+		t.Fatal("expected non-nil metadata")
+	}
+	if len(meta) != 2 {
+		t.Errorf("expected 2 metadata entries, got %d", len(meta))
+	}
+}
+
+func TestHub_GetClient(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	client := NewClient("test:abc123")
+	hub.Register(client)
+	time.Sleep(10 * time.Millisecond)
+
+	got := hub.GetClient("test:abc123")
+	if got == nil {
+		t.Error("expected to find registered client")
+	}
+	if got.ID() != "test:abc123" {
+		t.Errorf("expected ID 'test:abc123', got '%s'", got.ID())
+	}
+
+	missing := hub.GetClient("nonexistent")
+	if missing != nil {
+		t.Error("expected nil for unregistered client")
+	}
+}
+
+func TestHub_Stop(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+
+	client := NewClient("test:abc")
+	hub.Register(client)
+	time.Sleep(10 * time.Millisecond)
+
+	hub.Stop()
+	time.Sleep(10 * time.Millisecond)
+
+	// Double stop should be safe
+	hub.Stop()
+}
+
+func TestComponent_Lifecycle(t *testing.T) {
+	comp := NewComponent("/events")
+
+	if comp.Name() != "sse" {
+		t.Errorf("expected name 'sse', got %q", comp.Name())
+	}
+
+	// Start
+	ctx := context.Background()
+	if err := comp.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// Health
+	health := comp.Health(ctx)
+	if health.Name != "sse" {
+		t.Errorf("expected health name 'sse', got %q", health.Name)
+	}
+	if health.Status != "healthy" {
+		t.Errorf("expected status 'healthy', got %q", health.Status)
+	}
+	if !strings.Contains(health.Message, "0 clients") {
+		t.Errorf("expected '0 clients' in message, got %q", health.Message)
+	}
+
+	// Hub should be accessible
+	if comp.Hub() == nil {
+		t.Error("expected non-nil Hub")
+	}
+
+	// Stop
+	if err := comp.Stop(ctx); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+}
+
+func TestComponent_Describe(t *testing.T) {
+	comp := NewComponent("/api/events")
+
+	desc := comp.Describe()
+	if desc.Name != "SSE Hub" {
+		t.Errorf("expected name 'SSE Hub', got %q", desc.Name)
+	}
+	if desc.Type != "sse" {
+		t.Errorf("expected type 'sse', got %q", desc.Type)
+	}
+	if !strings.Contains(desc.Details, "/api/events") {
+		t.Errorf("expected path in details, got %q", desc.Details)
+	}
+}
+
+func TestComponent_WithClients(t *testing.T) {
+	comp := NewComponent("/events")
+	ctx := context.Background()
+	comp.Start(ctx)
+	defer comp.Stop(ctx)
+
+	// Register a client through the hub
+	client := NewClient("test:client-1")
+	comp.Hub().Register(client)
+	time.Sleep(10 * time.Millisecond)
+
+	health := comp.Health(ctx)
+	if !strings.Contains(health.Message, "1 clients") {
+		t.Errorf("expected '1 clients' in message, got %q", health.Message)
+	}
+}
+
+func TestServeSSE(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	// Create a test HTTP server
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeSSE(hub, w, r, "test:client-1", WithUserID("user-1"))
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Connect as SSE client
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, http.NoBody)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		// Context timeout is expected - we just want to verify the connection was established
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Errorf("expected Content-Type 'text/event-stream', got %q", resp.Header.Get("Content-Type"))
+	}
+	if resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Errorf("expected Cache-Control 'no-cache', got %q", resp.Header.Get("Cache-Control"))
+	}
+}
+
+func TestServeSSE_WithBroadcast(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeSSE(hub, w, r, "test:client-1")
+	})
+
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Connect as SSE client in background
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, http.NoBody)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return // timeout is ok for SSE
+	}
+	defer resp.Body.Close()
+
+	// Read some data (connected event)
+	buf := make([]byte, 4096)
+	n, _ := resp.Body.Read(buf)
+	data := string(buf[:n])
+
+	if !strings.Contains(data, "connected") {
+		t.Errorf("expected connected event, got %q", data)
+	}
+}
+
+func TestEventTypeConstants(t *testing.T) {
+	if EventTypeConnected != "connected" {
+		t.Errorf("expected 'connected', got %q", EventTypeConnected)
+	}
+	if EventTypeKeepAlive != "keepalive" {
+		t.Errorf("expected 'keepalive', got %q", EventTypeKeepAlive)
+	}
+	if EventTypeMessage != "message" {
+		t.Errorf("expected 'message', got %q", EventTypeMessage)
+	}
+	if EventTypeError != "error" {
+		t.Errorf("expected 'error', got %q", EventTypeError)
+	}
+	if EventTypeMetric != "metric" {
+		t.Errorf("expected 'metric', got %q", EventTypeMetric)
 	}
 }

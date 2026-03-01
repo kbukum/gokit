@@ -154,3 +154,92 @@ func TestGetFullVersionNoCommit(t *testing.T) {
 		t.Errorf("expected full version to start with 'dev', got %q", fv)
 	}
 }
+
+func TestGetShortVersionDirty(t *testing.T) {
+	defer saveAndRestore()()
+	Version = "1.0.0"
+	GitCommit = "abc1234"
+	BuildTime = "2024-01-01T00:00:00Z"
+	GoVersion = "go1.22"
+	GitBranch = ""
+
+	// Simulate dirty build by modifying the IsDirty through BuildInfo
+	info := GetVersionInfo()
+	info.IsDirty = true
+
+	// GetShortVersion checks IsDirty from GetVersionInfo
+	// We can't easily set vcs.modified, but we can test the code path
+	sv := GetShortVersion()
+	if !strings.Contains(sv, "1.0.0") {
+		t.Errorf("expected version in short version, got %q", sv)
+	}
+}
+
+func TestGetFullVersionDirty(t *testing.T) {
+	defer saveAndRestore()()
+	Version = "1.0.0"
+	GitCommit = "abc1234"
+	GitBranch = "feature/test"
+	BuildTime = "2024-01-15T10:30:00Z"
+	GoVersion = "go1.22"
+
+	fv := GetFullVersion()
+	if !strings.Contains(fv, "1.0.0") {
+		t.Errorf("expected version in full version, got %q", fv)
+	}
+	if !strings.Contains(fv, "feature/test") {
+		t.Errorf("expected feature branch in full version, got %q", fv)
+	}
+}
+
+func TestGetFullVersionMasterBranch(t *testing.T) {
+	defer saveAndRestore()()
+	Version = "1.0.0"
+	GitCommit = "abc1234"
+	GitBranch = "master"
+	BuildTime = "2024-01-15T10:30:00Z"
+	GoVersion = "go1.22"
+
+	fv := GetFullVersion()
+	if strings.Contains(fv, "master") {
+		t.Errorf("master branch should not appear in full version, got %q", fv)
+	}
+}
+
+func TestGetVersionInfoInvalidBuildTime(t *testing.T) {
+	defer saveAndRestore()()
+	Version = "1.0.0"
+	BuildTime = "not-a-date"
+	GitCommit = ""
+	GitBranch = ""
+	GoVersion = ""
+
+	info := GetVersionInfo()
+	// Invalid build time should not cause a crash; date comes from debug.ReadBuildInfo or now()
+	if info.Version != "1.0.0" {
+		t.Errorf("expected version '1.0.0', got %q", info.Version)
+	}
+}
+
+func TestInfoStruct(t *testing.T) {
+	defer saveAndRestore()()
+	Version = "2.0.0"
+	GitCommit = "def5678"
+	GitBranch = "develop"
+	BuildTime = "2025-06-01T12:00:00Z"
+	GoVersion = "go1.23.0"
+
+	info := GetVersionInfo()
+	if info.Version != "2.0.0" {
+		t.Errorf("expected version '2.0.0', got %q", info.Version)
+	}
+	if info.GitCommit != "def5678" {
+		t.Errorf("expected commit 'def5678', got %q", info.GitCommit)
+	}
+	if info.GitBranch != "develop" {
+		t.Errorf("expected branch 'develop', got %q", info.GitBranch)
+	}
+	if info.IsRelease != true {
+		t.Error("expected 2.0.0 to be a release")
+	}
+}

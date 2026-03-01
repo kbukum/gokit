@@ -3,6 +3,7 @@ package process_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -175,5 +176,161 @@ func TestSubprocessProvider_WithResilience(t *testing.T) {
 	}
 	if result != "test" {
 		t.Fatalf("expected 'test', got %q", result)
+	}
+}
+
+func TestSubprocessProvider_WithAvailabilityCheck(t *testing.T) {
+	available := true
+	p := process.NewSubprocessProvider[string, string](
+		"avail-provider",
+		func(input string) process.Command {
+			return process.Command{Binary: "echo", Args: []string{input}}
+		},
+		func(result *process.Result) (string, error) {
+			return strings.TrimSpace(string(result.Stdout)), nil
+		},
+	).WithAvailabilityCheck(func(ctx context.Context) bool {
+		return available
+	})
+
+	if !p.IsAvailable(context.Background()) {
+		t.Error("expected provider to be available")
+	}
+
+	available = false
+	if p.IsAvailable(context.Background()) {
+		t.Error("expected provider to be unavailable")
+	}
+}
+
+func TestSubprocessProvider_ExecuteFailure(t *testing.T) {
+	p := process.NewSubprocessProvider[string, string](
+		"fail-provider",
+		func(input string) process.Command {
+			return process.Command{Binary: "false"}
+		},
+		func(result *process.Result) (string, error) {
+			return "", nil
+		},
+	)
+
+	_, err := p.Execute(context.Background(), "input")
+	if err == nil {
+		t.Error("expected error from failing command")
+	}
+}
+
+func TestAdapter_Basic(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name: "test-adapter",
+	})
+
+	if adapter.Name() != "test-adapter" {
+		t.Errorf("expected name 'test-adapter', got %q", adapter.Name())
+	}
+
+	if !adapter.IsAvailable(context.Background()) {
+		t.Error("expected adapter to be available")
+	}
+}
+
+func TestAdapter_Run(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name: "echo-adapter",
+	})
+
+	result, err := adapter.Run(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"adapter output"},
+	})
+	if err != nil {
+		t.Fatalf("Adapter.Run failed: %v", err)
+	}
+	out := strings.TrimSpace(string(result.Stdout))
+	if out != "adapter output" {
+		t.Errorf("expected 'adapter output', got %q", out)
+	}
+}
+
+func TestAdapter_Execute(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name: "exec-adapter",
+	})
+
+	result, err := adapter.Execute(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"execute output"},
+	})
+	if err != nil {
+		t.Fatalf("Adapter.Execute failed: %v", err)
+	}
+	out := strings.TrimSpace(string(result.Stdout))
+	if out != "execute output" {
+		t.Errorf("expected 'execute output', got %q", out)
+	}
+}
+
+func TestAdapter_WithTimeout(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name:    "timeout-adapter",
+		Timeout: 100 * time.Millisecond,
+	})
+
+	_, err := adapter.Run(context.Background(), process.Command{
+		Binary: "sleep",
+		Args:   []string{"10"},
+	})
+	if err == nil {
+		t.Error("expected error from timeout")
+	}
+}
+
+func TestAdapter_WithGracePeriod(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name:        "grace-adapter",
+		GracePeriod: 100 * time.Millisecond,
+		Timeout:     200 * time.Millisecond,
+	})
+
+	_, err := adapter.Run(context.Background(), process.Command{
+		Binary: "sleep",
+		Args:   []string{"10"},
+	})
+	if err == nil {
+		t.Error("expected error from timeout")
+	}
+}
+
+func TestAdapter_GracePeriodNotOverridden(t *testing.T) {
+	adapter := process.NewAdapter(process.Config{
+		Name:        "grace-no-override",
+		GracePeriod: 200 * time.Millisecond,
+	})
+
+	// Command already has grace period - adapter should not override
+	result, err := adapter.Run(context.Background(), process.Command{
+		Binary:      "echo",
+		Args:        []string{"ok"},
+		GracePeriod: 50 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit 0, got %d", result.ExitCode)
+	}
+}
+
+func TestRunner_NilState(t *testing.T) {
+	runner := process.NewRunner(provider.ResilienceConfig{})
+	result, err := runner.Run(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"nil state"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(string(result.Stdout), "nil state") {
+		t.Errorf("expected output with 'nil state', got %q", string(result.Stdout))
 	}
 }

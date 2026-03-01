@@ -9,6 +9,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/logger"
 )
 
 // testConfig is a minimal config for testing that satisfies the Config interface.
@@ -442,5 +443,430 @@ func TestRunTaskWithComponents(t *testing.T) {
 	}
 	if !comp.stopped {
 		t.Error("expected component to be stopped after task")
+	}
+}
+
+func TestShutdown(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	comp := &mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	app.RegisterComponent(comp)
+
+	// Start components first
+	app.RunTask(context.Background(), func(ctx context.Context) error {
+		// While running, call Shutdown
+		return nil
+	})
+
+	// Shutdown should work after RunTask
+	err := app.Shutdown(context.Background())
+	if err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
+}
+
+func TestWaitForSignalContextCancellation(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	sig := app.WaitForSignal(ctx)
+	if sig != nil {
+		t.Errorf("expected nil signal for context cancellation, got %v", sig)
+	}
+}
+
+func TestWithLogger(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	customLogger := logger.NewDefault("custom-logger")
+
+	app, err := NewApp(cfg, WithLogger(customLogger))
+	if err != nil {
+		t.Fatalf("NewApp failed: %v", err)
+	}
+	if app.Logger != customLogger {
+		t.Error("expected custom logger to be set")
+	}
+}
+
+func TestRunTaskWithStartHookError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnStart(func(ctx context.Context) error {
+		return fmt.Errorf("start hook failed")
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from failing start hook")
+	}
+}
+
+func TestRunTaskWithConfigureError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
+		return fmt.Errorf("configure failed")
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from failing configure callback")
+	}
+}
+
+func TestRunTaskWithReadyHookError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnReady(func(ctx context.Context) error {
+		return fmt.Errorf("ready hook failed")
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from failing ready hook")
+	}
+}
+
+func TestRunTaskWithStopHookError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnStop(func(ctx context.Context) error {
+		return fmt.Errorf("stop hook failed")
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from failing stop hook")
+	}
+}
+
+func TestRunTaskComponentStartError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.RegisterComponent(&mockComponent{
+		name:     "bad",
+		startErr: fmt.Errorf("start failed"),
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from component start failure")
+	}
+}
+
+func TestNewSummary(t *testing.T) {
+	s := NewSummary("my-service", "2.0.0")
+	if s == nil {
+		t.Fatal("expected non-nil summary")
+	}
+	if s.serviceName != "my-service" {
+		t.Errorf("expected 'my-service', got %q", s.serviceName)
+	}
+	if s.version != "2.0.0" {
+		t.Errorf("expected '2.0.0', got %q", s.version)
+	}
+}
+
+func TestSummaryTrackComponent(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackComponent("db", "active", true)
+	s.TrackComponent("cache", "error", false)
+
+	if len(s.components) != 2 {
+		t.Fatalf("expected 2 components, got %d", len(s.components))
+	}
+	if s.components[0].Name != "db" || !s.components[0].Healthy {
+		t.Error("expected healthy db component")
+	}
+	if s.components[1].Healthy {
+		t.Error("expected unhealthy cache component")
+	}
+}
+
+func TestSummaryTrackInfrastructure(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackInfrastructure("PostgreSQL", "database", "active", "localhost:5432", 5432, true)
+
+	if len(s.infrastructure) != 1 {
+		t.Fatalf("expected 1 infrastructure, got %d", len(s.infrastructure))
+	}
+	inf := s.infrastructure[0]
+	if inf.Name != "PostgreSQL" || inf.Port != 5432 {
+		t.Errorf("unexpected infrastructure: %+v", inf)
+	}
+}
+
+func TestSummaryTrackBusinessComponent(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackBusinessComponent("user-service", "service", "active", []string{"db", "cache"})
+
+	if len(s.business) != 1 {
+		t.Fatalf("expected 1 business component, got %d", len(s.business))
+	}
+	if s.business[0].Name != "user-service" {
+		t.Errorf("expected 'user-service', got %q", s.business[0].Name)
+	}
+	if len(s.business[0].Dependencies) != 2 {
+		t.Errorf("expected 2 dependencies, got %d", len(s.business[0].Dependencies))
+	}
+}
+
+func TestSummaryTrackRoute(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackRoute("GET", "/users", "UserHandler")
+	s.TrackRoute("POST", "/users", "CreateUserHandler")
+
+	if len(s.routes) != 2 {
+		t.Fatalf("expected 2 routes, got %d", len(s.routes))
+	}
+}
+
+func TestSummaryTrackConsumer(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackConsumer("order-consumer", "group-1", "orders", "active")
+
+	if len(s.consumers) != 1 {
+		t.Fatalf("expected 1 consumer, got %d", len(s.consumers))
+	}
+	if s.consumers[0].Topic != "orders" {
+		t.Errorf("expected topic 'orders', got %q", s.consumers[0].Topic)
+	}
+}
+
+func TestSummaryTrackClient(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.TrackClient("auth-client", "localhost:9090", "connected", "grpc")
+
+	if len(s.clients) != 1 {
+		t.Fatalf("expected 1 client, got %d", len(s.clients))
+	}
+	if s.clients[0].Type != "grpc" {
+		t.Errorf("expected type 'grpc', got %q", s.clients[0].Type)
+	}
+}
+
+func TestSummarySetStartupDuration(t *testing.T) {
+	s := NewSummary("svc", "1.0")
+	s.SetStartupDuration(500 * time.Millisecond)
+
+	if s.startupDuration != 500*time.Millisecond {
+		t.Errorf("expected 500ms, got %v", s.startupDuration)
+	}
+}
+
+func TestSummaryDisplaySummary(t *testing.T) {
+	s := NewSummary("test-svc", "1.0.0")
+	s.SetStartupDuration(100 * time.Millisecond)
+	s.TrackInfrastructure("DB", "database", "active", "localhost:5432", 5432, true)
+	s.TrackRoute("GET", "/health", "HealthHandler")
+	s.TrackBusinessComponent("user-svc", "service", "active", []string{"db"})
+	s.TrackConsumer("events", "g1", "events-topic", "active")
+	s.TrackClient("auth", "localhost:9090", "connected", "grpc")
+
+	registry := component.NewRegistry()
+	container := di.NewContainer()
+
+	// DisplaySummary should not panic
+	s.DisplaySummary(registry, container, nil)
+}
+
+func TestSummaryDisplaySummaryNilRegistry(t *testing.T) {
+	s := NewSummary("test-svc", "1.0.0")
+	s.SetStartupDuration(100 * time.Millisecond)
+
+	// Should not panic with nil container (registry is required)
+	registry := component.NewRegistry()
+	s.DisplaySummary(registry, nil, nil)
+}
+
+func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
+	s := NewSummary("test-svc", "1.0.0")
+	s.SetStartupDuration(100 * time.Millisecond)
+
+	registry := component.NewRegistry()
+	container := di.NewContainer()
+	container.RegisterSingleton("service.user", "user-svc")
+	container.RegisterSingleton("repository.user", "user-repo")
+	container.RegisterSingleton("handler.users", "users-handler")
+	container.RegisterSingleton("config", "cfg")
+
+	// Should not panic
+	s.DisplaySummary(registry, container, nil)
+}
+
+func TestTreePrefix(t *testing.T) {
+	// Last item should use └──
+	if p := treePrefix(2, 3); p != "└──" {
+		t.Errorf("expected '└──' for last item, got %q", p)
+	}
+	// Non-last item should use ├──
+	if p := treePrefix(0, 3); p != "├──" {
+		t.Errorf("expected '├──' for non-last item, got %q", p)
+	}
+}
+
+func TestStatusIcon(t *testing.T) {
+	tests := []struct {
+		status  string
+		healthy bool
+		icon    string
+	}{
+		{"active", true, "✅"},
+		{"lazy", true, "⚡"},
+		{"inactive", true, "⏸️"},
+		{"error", true, "❌"},
+		{"unknown", true, "⚠️"},
+		{"active", false, "❌"},
+	}
+
+	for _, tc := range tests {
+		got := statusIcon(tc.status, tc.healthy)
+		if got != tc.icon {
+			t.Errorf("statusIcon(%q, %v) = %q, expected %q", tc.status, tc.healthy, got, tc.icon)
+		}
+	}
+}
+
+func TestHealthStatusIcon(t *testing.T) {
+	tests := []struct {
+		status component.HealthStatus
+		icon   string
+	}{
+		{component.StatusHealthy, "✅"},
+		{component.StatusDegraded, "⚠️"},
+		{component.StatusUnhealthy, "❌"},
+		{"unknown", "❓"},
+	}
+
+	for _, tc := range tests {
+		got := healthStatusIcon(tc.status)
+		if got != tc.icon {
+			t.Errorf("healthStatusIcon(%q) = %q, expected %q", tc.status, got, tc.icon)
+		}
+	}
+}
+
+func TestBusinessIcon(t *testing.T) {
+	if businessIcon("service") != "⚙️" {
+		t.Error("expected ⚙️ for service")
+	}
+	if businessIcon("repository") != "📁" {
+		t.Error("expected 📁 for repository")
+	}
+	if businessIcon("handler") != "🎯" {
+		t.Error("expected 🎯 for handler")
+	}
+	if businessIcon("other") != "💼" {
+		t.Error("expected 💼 for other")
+	}
+}
+
+func TestMethodColor(t *testing.T) {
+	tests := []string{"GET", "POST", "PUT", "PATCH", "DELETE", "CONNECT", "OPTIONS"}
+	for _, m := range tests {
+		got := methodColor(m)
+		if got == "" {
+			t.Errorf("expected non-empty color for %s", m)
+		}
+	}
+}
+
+// mockDescribableComponent implements Component + Describable + RouteProvider
+type mockDescribableComponent struct {
+	mockComponent
+	desc   component.Description
+	routes []component.Route
+}
+
+func (m *mockDescribableComponent) Describe() component.Description { return m.desc }
+func (m *mockDescribableComponent) Routes() []component.Route       { return m.routes }
+
+func TestSummaryCollectFromRegistry(t *testing.T) {
+	s := NewSummary("test-svc", "1.0.0")
+	s.SetStartupDuration(100 * time.Millisecond)
+
+	registry := component.NewRegistry()
+	// Register a describable component with routes
+	comp := &mockDescribableComponent{
+		mockComponent: mockComponent{
+			name:   "http-server",
+			health: component.Health{Name: "http-server", Status: component.StatusHealthy},
+		},
+		desc: component.Description{
+			Name:    "HTTP Server",
+			Type:    "server",
+			Details: "localhost:8080",
+			Port:    8080,
+		},
+		routes: []component.Route{
+			{Method: "GET", Path: "/api/users", Handler: "ListUsers"},
+			{Method: "POST", Path: "/api/users", Handler: "CreateUser"},
+		},
+	}
+	registry.Register(comp)
+
+	container := di.NewContainer()
+	s.DisplaySummary(registry, container, nil)
+
+	// Verify infrastructure was auto-discovered
+	if len(s.infrastructure) != 1 {
+		t.Errorf("expected 1 infrastructure from auto-discovery, got %d", len(s.infrastructure))
+	}
+	// Verify routes were auto-discovered
+	if len(s.routes) != 2 {
+		t.Errorf("expected 2 routes from auto-discovery, got %d", len(s.routes))
+	}
+}
+
+func TestSummaryDisplayWithUnhealthyComponents(t *testing.T) {
+	s := NewSummary("test-svc", "1.0.0")
+	s.SetStartupDuration(100 * time.Millisecond)
+
+	registry := component.NewRegistry()
+	registry.Register(&mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusUnhealthy, Message: "connection refused"},
+	})
+
+	container := di.NewContainer()
+	// Should not panic and should show health issues
+	s.DisplaySummary(registry, container, nil)
+}
+
+func TestRunTaskWithComponentStopError(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	comp := &mockComponent{
+		name:    "db",
+		stopErr: fmt.Errorf("stop failed"),
+		health:  component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	app.RegisterComponent(comp)
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error from component stop failure")
 	}
 }
