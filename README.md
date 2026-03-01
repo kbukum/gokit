@@ -227,6 +227,12 @@ make fmt      # gofmt -s
 make tidy     # go mod tidy for core + all sub-modules
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding standards, and how to submit pull requests.
+
+We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 [MIT](LICENSE) — Copyright (c) 2024 kbukum

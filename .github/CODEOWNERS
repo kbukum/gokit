@@ -1,0 +1,56 @@
+# CODEOWNERS
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Each line is a file pattern followed by one or more owners (GitHub usernames or team names).
+# Owners are automatically requested for review when someone opens a pull request that modifies files matching the pattern.
+
+# Global owner (applies to everything unless overridden)
+* @kbukum
+
+# Core packages
+/errors/ @kbukum
+/config/ @kbukum
+/logger/ @kbukum
+/util/ @kbukum
+/version/ @kbukum
+/encryption/ @kbukum
+/validation/ @kbukum
+/di/ @kbukum
+/resilience/ @kbukum
+/observability/ @kbukum
+/sse/ @kbukum
+/provider/ @kbukum
+/pipeline/ @kbukum
+/dag/ @kbukum
+/security/ @kbukum
+/component/ @kbukum
+/bootstrap/ @kbukum
+
+# Sub-modules
+/auth/ @kbukum
+/authz/ @kbukum
+/database/ @kbukum
+/redis/ @kbukum
+/httpclient/ @kbukum
+/kafka/ @kbukum
+/storage/ @kbukum
+/server/ @kbukum
+/grpc/ @kbukum
+/discovery/ @kbukum
+/connect/ @kbukum
+/process/ @kbukum
+/workload/ @kbukum
+
+# Infrastructure
+/.github/ @kbukum
+/Makefile @kbukum
+/gomod.sh @kbukum
+/tag-modules.sh @kbukum
+/.golangci.yml @kbukum
+
+# Documentation
+/docs/ @kbukum
+/README.md @kbukum
+/CONTRIBUTING.md @kbukum
+/CHANGELOG.md @kbukum
+/SECURITY.md @kbukum

@@ -80,9 +80,9 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go vet ./...
 
-      - name: Test
+      - name: Test + Coverage
         working-directory: ${{ matrix.module }}
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 
   # ── Stage 2c: Lint (per module, parallel) ─────────────────────────────────
   lint:

@@ -1,0 +1,99 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe what you'd like to see.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      description: Which gokit module should this feature be added to?
+      options:
+        - Core (errors, config, logger, util, etc.)
+        - auth
+        - authz
+        - bootstrap
+        - component
+        - config
+        - connect
+        - dag
+        - database
+        - di
+        - discovery
+        - encryption
+        - grpc
+        - httpclient
+        - kafka
+        - logger
+        - observability
+        - pipeline
+        - process
+        - provider
+        - redis
+        - resilience
+        - security
+        - server
+        - sse
+        - storage
+        - validation
+        - version
+        - workload
+        - New Module
+        - Other/Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? What's the use case?
+      placeholder: "I'm trying to... but there's no way to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: How would you like this feature to work?
+      placeholder: |
+        Add a new method `Server.WithMiddleware(...)` that allows...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other approaches have you considered?
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Usage
+      description: Show how you'd use this feature (pseudo-code is fine)
+      render: go
+      placeholder: |
+        srv := server.New(cfg)
+        srv.WithMiddleware(myMiddleware)
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: Breaking Change
+      description: Would this require breaking changes to existing APIs?
+      options:
+        - label: This feature would require breaking changes
+          required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Links, references, or other relevant information
