@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 
@@ -42,6 +43,16 @@ func (r *Response) IsSuccess() bool {
 // IsError returns true if the status code is 4xx or 5xx.
 func (r *Response) IsError() bool {
 	return r.StatusCode >= 400
+}
+
+// JSON decodes the response body as JSON into v.
+func (r *Response) JSON(v any) error {
+	return json.Unmarshal(r.Body, v)
+}
+
+// Text returns the response body as a string.
+func (r *Response) Text() string {
+	return string(r.Body)
 }
 
 // StreamResponse wraps a streaming HTTP response.

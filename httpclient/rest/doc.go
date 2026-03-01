@@ -1,4 +1,4 @@
-// Package rest provides a JSON-focused REST client built on the base httpclient.
+// Package rest provides a JSON-focused REST client built on the HTTP adapter.
 //
 // It inherits all features from httpclient (auth, TLS, resilience, streaming)
 // and adds typed convenience methods for common REST operations:
@@ -14,4 +14,9 @@
 //
 //	// Typed POST
 //	created, err := rest.Post[User](ctx, client, "/users", CreateUserRequest{Name: "Alice"})
+//
+// Alternatively, use the generic functions directly on the HTTP adapter:
+//
+//	adapter, _ := httpclient.New(cfg)
+//	user, err := httpclient.Get[User](adapter, ctx, "/users/123")
 package rest

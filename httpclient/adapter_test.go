@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/security"
+	"github.com/kbukum/gokit/security/tlstest"
 )
 
 func TestClient_Do_GET(t *testing.T) {
@@ -469,5 +472,206 @@ func TestResponse_Helpers(t *testing.T) {
 	}
 	if !r2.IsError() {
 		t.Error("500 should be error")
+	}
+}
+
+func TestResponse_JSON(t *testing.T) {
+	r := &Response{
+		StatusCode: 200,
+		Body:       []byte(`{"name":"Alice","age":30}`),
+	}
+	var data struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+	if err := r.JSON(&data); err != nil {
+		t.Fatalf("JSON() error = %v", err)
+	}
+	if data.Name != "Alice" {
+		t.Errorf("expected Alice, got %s", data.Name)
+	}
+	if data.Age != 30 {
+		t.Errorf("expected 30, got %d", data.Age)
+	}
+}
+
+func TestResponse_JSON_Invalid(t *testing.T) {
+	r := &Response{Body: []byte(`not json`)}
+	var data map[string]any
+	if err := r.JSON(&data); err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestResponse_Text(t *testing.T) {
+	r := &Response{Body: []byte("hello world")}
+	if got := r.Text(); got != "hello world" {
+		t.Errorf("Text() = %q, want %q", got, "hello world")
+	}
+}
+
+func TestResponse_Text_Empty(t *testing.T) {
+	r := &Response{}
+	if got := r.Text(); got != "" {
+		t.Errorf("Text() = %q, want empty", got)
+	}
+}
+
+func TestClient_DoStream_NonSSE(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.WriteHeader(200)
+		w.Write([]byte("raw stream data"))
+	}))
+	defer srv.Close()
+
+	c, err := New(Config{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stream, err := c.DoStream(context.Background(), Request{Method: http.MethodGet, Path: "/"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer stream.Close()
+
+	if stream.SSE != nil {
+		t.Error("expected SSE to be nil for non-SSE response")
+	}
+	if stream.Body == nil {
+		t.Error("expected Body to be non-nil for raw stream")
+	}
+}
+
+func TestComponent_Stop_NilAdapter(t *testing.T) {
+	comp := NewComponent(Config{BaseURL: "http://localhost"})
+	// Stop before Start — adapter is nil
+	if err := comp.Stop(context.Background()); err != nil {
+		t.Errorf("Stop() should not error when adapter is nil: %v", err)
+	}
+}
+
+func TestAdapter_New_WithTLS(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+	cfg := Config{
+		BaseURL: "https://localhost",
+		TLS: &security.TLSConfig{
+			CAFile:   certs.CAFile,
+			CertFile: certs.CertFile,
+			KeyFile:  certs.KeyFile,
+		},
+	}
+	adapter, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() with TLS failed: %v", err)
+	}
+	if adapter == nil {
+		t.Fatal("expected non-nil adapter")
+	}
+}
+
+func TestAdapter_New_WithInvalidTLS(t *testing.T) {
+	cfg := Config{
+		BaseURL: "https://localhost",
+		TLS: &security.TLSConfig{
+			CAFile: "/nonexistent/ca.pem",
+		},
+	}
+	_, err := New(cfg)
+	if err == nil {
+		t.Fatal("expected error for invalid TLS config")
+	}
+}
+
+func TestAdapter_Do_TLS(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+
+	// Start a TLS test server using generated certs
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `{"tls":true}`)
+	}))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{certs.ServerTLS},
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	// Create adapter with CA trust
+	cfg := Config{
+		BaseURL: server.URL,
+		TLS: &security.TLSConfig{
+			CAFile: certs.CAFile,
+		},
+	}
+	adapter, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	resp, err := adapter.Do(context.Background(), Request{
+		Method: http.MethodGet,
+		Path:   "/test",
+	})
+	if err != nil {
+		t.Fatalf("Do() over TLS failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+
+	var body map[string]bool
+	if err := json.Unmarshal(resp.Body, &body); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if !body["tls"] {
+		t.Error("expected tls=true in response")
+	}
+}
+
+func TestAdapter_Do_TLS_WithClientCert(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+
+	// Start a TLS server that requires client certificates
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "mtls-ok")
+	}))
+	server.TLS = &tls.Config{
+		Certificates: []tls.Certificate{certs.ServerTLS},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    certs.CertPool,
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	// Create adapter with CA + client cert (mTLS)
+	cfg := Config{
+		BaseURL: server.URL,
+		TLS: &security.TLSConfig{
+			CAFile:   certs.CAFile,
+			CertFile: certs.CertFile,
+			KeyFile:  certs.KeyFile,
+		},
+	}
+	adapter, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	resp, err := adapter.Do(context.Background(), Request{
+		Method: http.MethodGet,
+		Path:   "/mtls",
+	})
+	if err != nil {
+		t.Fatalf("Do() over mTLS failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200, got %d", resp.StatusCode)
+	}
+	if string(resp.Body) != "mtls-ok" {
+		t.Errorf("expected mtls-ok, got %s", string(resp.Body))
 	}
 }

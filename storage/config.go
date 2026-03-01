@@ -22,6 +22,9 @@ const (
 // Config holds provider-agnostic storage configuration.
 // Provider-specific settings are passed separately via providerCfg (any).
 type Config struct {
+	// Name identifies this adapter instance (used by provider.Provider interface).
+	Name string `mapstructure:"name" json:"name"`
+
 	// Provider selects the storage backend (e.g. "local", "s3", "supabase").
 	Provider string `mapstructure:"provider" json:"provider"`
 

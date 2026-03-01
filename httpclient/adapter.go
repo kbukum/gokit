@@ -13,16 +13,18 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// Client is a configurable HTTP client with built-in auth, TLS, and resilience.
-type Client struct {
+// Adapter is a configurable HTTP adapter with built-in auth, TLS, and resilience.
+// It can be used as a simple HTTP client or as a provider.RequestResponse for
+// composition with the provider framework (WithResilience, Manager, Registry, etc.).
+type Adapter struct {
 	httpClient *http.Client
 	config     Config
 	cb         *resilience.CircuitBreaker
 	rl         *resilience.RateLimiter
 }
 
-// New creates a new HTTP client with the given configuration.
-func New(cfg Config) (*Client, error) {
+// New creates a new HTTP adapter with the given configuration.
+func New(cfg Config, opts ...Option) (*Adapter, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -41,7 +43,7 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	c := &Client{
+	c := &Adapter{
 		httpClient: &http.Client{
 			Transport: transport,
 			Timeout:   cfg.Timeout,
@@ -57,11 +59,16 @@ func New(cfg Config) (*Client, error) {
 		c.rl = resilience.NewRateLimiter(*cfg.RateLimiter)
 	}
 
+	// Apply options
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	return c, nil
 }
 
 // Do executes an HTTP request and returns the complete response.
-func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
+func (c *Adapter) Do(ctx context.Context, req Request) (*Response, error) {
 	if c.config.Retry != nil {
 		return resilience.Retry(ctx, *c.config.Retry, func() (*Response, error) {
 			return c.doOnce(ctx, req)
@@ -73,17 +80,17 @@ func (c *Client) Do(ctx context.Context, req Request) (*Response, error) {
 // DoStream executes an HTTP request and returns a streaming response.
 // The caller must close the returned StreamResponse when done.
 // Note: Retry is not applied to streaming requests.
-func (c *Client) DoStream(ctx context.Context, req Request) (*StreamResponse, error) {
+func (c *Adapter) DoStream(ctx context.Context, req Request) (*StreamResponse, error) {
 	return c.doStream(ctx, req)
 }
 
 // Unwrap returns the underlying *http.Client for advanced use cases.
-func (c *Client) Unwrap() *http.Client {
+func (c *Adapter) Unwrap() *http.Client {
 	return c.httpClient
 }
 
 // doOnce executes a single HTTP request with CB and rate limiter.
-func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
+func (c *Adapter) doOnce(ctx context.Context, req Request) (*Response, error) {
 	execute := func() (*Response, error) {
 		return c.executeRequest(ctx, req)
 	}
@@ -110,7 +117,7 @@ func (c *Client) doOnce(ctx context.Context, req Request) (*Response, error) {
 }
 
 // executeRequest builds and sends the HTTP request.
-func (c *Client) executeRequest(ctx context.Context, req Request) (*Response, error) {
+func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, error) {
 	httpReq, err := c.buildRequest(ctx, req)
 	if err != nil {
 		return nil, err
@@ -144,7 +151,7 @@ func (c *Client) executeRequest(ctx context.Context, req Request) (*Response, er
 }
 
 // doStream builds and sends a streaming HTTP request.
-func (c *Client) doStream(ctx context.Context, req Request) (*StreamResponse, error) {
+func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, error) {
 	// Use a client without timeout for streaming — context handles cancellation.
 	httpReq, err := c.buildRequest(ctx, req)
 	if err != nil {
@@ -193,8 +200,8 @@ func (c *Client) doStream(ctx context.Context, req Request) (*StreamResponse, er
 	}, nil
 }
 
-// buildRequest constructs an *http.Request from the client config and request.
-func (c *Client) buildRequest(ctx context.Context, req Request) (*http.Request, error) {
+// buildRequest constructs an *http.Request from the adapter config and request.
+func (c *Adapter) buildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	// Resolve URL
 	url := req.Path
 	if c.config.BaseURL != "" && !strings.HasPrefix(req.Path, "http://") && !strings.HasPrefix(req.Path, "https://") {
@@ -276,4 +283,42 @@ func flattenHeaders(h http.Header) map[string]string {
 		}
 	}
 	return result
+}
+
+// --- provider.Provider interface ---
+
+// Name returns the adapter name (implements provider.Provider).
+func (c *Adapter) Name() string {
+	return c.config.Name
+}
+
+// IsAvailable checks if the adapter is ready to handle requests (implements provider.Provider).
+func (c *Adapter) IsAvailable(_ context.Context) bool {
+	if c.cb != nil {
+		return c.cb.State() != resilience.StateOpen
+	}
+	return true
+}
+
+// --- provider.RequestResponse[Request, *Response] interface ---
+
+// Execute sends an HTTP request and returns the response (implements provider.RequestResponse).
+// This is equivalent to Do() but satisfies the provider interface for composition.
+func (c *Adapter) Execute(ctx context.Context, req Request) (*Response, error) {
+	return c.Do(ctx, req)
+}
+
+// --- provider.Closeable interface ---
+
+// Close releases resources held by the adapter (implements provider.Closeable).
+func (c *Adapter) Close(_ context.Context) error {
+	c.httpClient.CloseIdleConnections()
+	return nil
+}
+
+// --- Accessor for derivations ---
+
+// GetConfig returns the adapter's configuration.
+func (c *Adapter) GetConfig() Config {
+	return c.config
 }

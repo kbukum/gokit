@@ -3,6 +3,8 @@ package security
 import (
 	"crypto/tls"
 	"testing"
+
+	"github.com/kbukum/gokit/security/tlstest"
 )
 
 func TestTLSConfig_Build_NilConfig(t *testing.T) {
@@ -127,5 +129,77 @@ func TestTLSConfig_IsEnabled(t *testing.T) {
 				t.Errorf("IsEnabled() = %v, want %v", got, tt.enabled)
 			}
 		})
+	}
+}
+
+func TestTLSConfig_Build_ValidCA(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+	cfg := &TLSConfig{CAFile: certs.CAFile}
+	result, err := cfg.Build()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if result.RootCAs == nil {
+		t.Error("expected RootCAs to be set")
+	}
+}
+
+func TestTLSConfig_Build_ValidClientCert(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+	cfg := &TLSConfig{
+		CertFile: certs.CertFile,
+		KeyFile:  certs.KeyFile,
+	}
+	result, err := cfg.Build()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if len(result.Certificates) != 1 {
+		t.Errorf("expected 1 certificate, got %d", len(result.Certificates))
+	}
+}
+
+func TestTLSConfig_Build_FullConfig(t *testing.T) {
+	certs := tlstest.GenerateTLSCerts(t)
+	cfg := &TLSConfig{
+		CAFile:     certs.CAFile,
+		CertFile:   certs.CertFile,
+		KeyFile:    certs.KeyFile,
+		ServerName: "localhost",
+		MinVersion: tls.VersionTLS13,
+	}
+	result, err := cfg.Build()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil tls.Config")
+	}
+	if result.RootCAs == nil {
+		t.Error("expected RootCAs to be set")
+	}
+	if len(result.Certificates) != 1 {
+		t.Error("expected 1 client certificate")
+	}
+	if result.ServerName != "localhost" {
+		t.Errorf("expected ServerName=localhost, got %s", result.ServerName)
+	}
+	if result.MinVersion != tls.VersionTLS13 {
+		t.Errorf("expected MinVersion=TLS13, got %d", result.MinVersion)
+	}
+}
+
+func TestTLSConfig_Build_InvalidCAContent(t *testing.T) {
+	caFile := tlstest.WriteInvalidPEM(t, "bad-ca.pem")
+	cfg := &TLSConfig{CAFile: caFile}
+	_, err := cfg.Build()
+	if err == nil {
+		t.Fatal("expected error for invalid CA PEM content")
 	}
 }

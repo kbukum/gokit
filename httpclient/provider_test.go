@@ -7,61 +7,58 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kbukum/gokit/provider"
 	"github.com/kbukum/gokit/resilience"
 )
 
-func TestClientProvider_Name(t *testing.T) {
-	c, err := New(Config{BaseURL: "http://localhost"})
+func TestAdapter_Name(t *testing.T) {
+	a, err := New(Config{Name: "my-http", BaseURL: "http://localhost"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("my-http", c)
-	if got := p.Name(); got != "my-http" {
+	if got := a.Name(); got != "my-http" {
 		t.Errorf("Name() = %q, want %q", got, "my-http")
 	}
 }
 
-func TestClientProvider_IsAvailable_NoCB(t *testing.T) {
-	c, err := New(Config{BaseURL: "http://localhost"})
+func TestAdapter_IsAvailable_NoCB(t *testing.T) {
+	a, err := New(Config{BaseURL: "http://localhost"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("test", c)
-	if !p.IsAvailable(context.Background()) {
+	if !a.IsAvailable(context.Background()) {
 		t.Error("expected IsAvailable=true with no circuit breaker")
 	}
 }
 
-func TestClientProvider_IsAvailable_WithCB(t *testing.T) {
+func TestAdapter_IsAvailable_WithCB(t *testing.T) {
 	cfg := resilience.DefaultCircuitBreakerConfig("test-cb")
 	cfg.MaxFailures = 1
-	c, err := New(Config{
+	a, err := New(Config{
 		BaseURL:        "http://localhost",
 		CircuitBreaker: &cfg,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("test", c)
-	if !p.IsAvailable(context.Background()) {
+	if !a.IsAvailable(context.Background()) {
 		t.Error("expected IsAvailable=true before failures")
 	}
 }
 
-func TestClientProvider_Execute_Success(t *testing.T) {
+func TestAdapter_Execute_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	}))
 	defer srv.Close()
 
-	c, err := New(Config{BaseURL: srv.URL})
+	a, err := New(Config{Name: "test-api", BaseURL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("test-api", c)
 
-	resp, err := p.Execute(context.Background(), Request{
+	resp, err := a.Execute(context.Background(), Request{
 		Method: http.MethodGet,
 		Path:   "/health",
 	})
@@ -73,20 +70,19 @@ func TestClientProvider_Execute_Success(t *testing.T) {
 	}
 }
 
-func TestClientProvider_Execute_ServerError(t *testing.T) {
+func TestAdapter_Execute_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("internal error"))
 	}))
 	defer srv.Close()
 
-	c, err := New(Config{BaseURL: srv.URL})
+	a, err := New(Config{Name: "test-api", BaseURL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("test-api", c)
 
-	resp, err := p.Execute(context.Background(), Request{
+	resp, err := a.Execute(context.Background(), Request{
 		Method: http.MethodGet,
 		Path:   "/fail",
 	})
@@ -98,13 +94,37 @@ func TestClientProvider_Execute_ServerError(t *testing.T) {
 	}
 }
 
-func TestClientProvider_Client(t *testing.T) {
-	c, err := New(Config{BaseURL: "http://localhost"})
+func TestAdapter_Close(t *testing.T) {
+	a, err := New(Config{BaseURL: "http://localhost"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := NewProvider("test", c)
-	if p.Client() != c {
-		t.Error("Client() should return the underlying client")
+	if err := a.Close(context.Background()); err != nil {
+		t.Errorf("Close() error = %v", err)
 	}
+}
+
+func TestAdapter_GetConfig(t *testing.T) {
+	a, err := New(Config{Name: "test", BaseURL: "http://localhost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := a.GetConfig()
+	if cfg.Name != "test" {
+		t.Errorf("GetConfig().Name = %q, want %q", cfg.Name, "test")
+	}
+	if cfg.BaseURL != "http://localhost" {
+		t.Errorf("GetConfig().BaseURL = %q, want %q", cfg.BaseURL, "http://localhost")
+	}
+}
+
+func TestAdapter_ImplementsProvider(t *testing.T) {
+	a, err := New(Config{Name: "test", BaseURL: "http://localhost"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify the adapter satisfies the provider interface
+	var _ provider.RequestResponse[Request, *Response] = a
+	var _ provider.Closeable = a
 }

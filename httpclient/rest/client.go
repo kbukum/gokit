@@ -9,10 +9,10 @@ import (
 	"github.com/kbukum/gokit/httpclient"
 )
 
-// Client is a JSON-focused REST client that wraps the base HTTP client.
+// Client is a JSON-focused REST client that wraps the HTTP adapter.
 // All requests use Content-Type: application/json and Accept: application/json.
 type Client struct {
-	http *httpclient.Client
+	http *httpclient.Adapter
 }
 
 // New creates a new REST client from the given config.
@@ -36,13 +36,13 @@ func New(cfg httpclient.Config) (*Client, error) {
 	return &Client{http: c}, nil
 }
 
-// NewFromClient creates a REST client from an existing HTTP client.
-func NewFromClient(c *httpclient.Client) *Client {
-	return &Client{http: c}
+// NewFromAdapter creates a REST client from an existing HTTP adapter.
+func NewFromAdapter(a *httpclient.Adapter) *Client {
+	return &Client{http: a}
 }
 
-// HTTP returns the underlying HTTP client.
-func (c *Client) HTTP() *httpclient.Client {
+// HTTP returns the underlying HTTP adapter.
+func (c *Client) HTTP() *httpclient.Adapter {
 	return c.http
 }
 

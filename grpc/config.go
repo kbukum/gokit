@@ -19,6 +19,8 @@ type KeepaliveConfig struct {
 
 // Config holds configuration for a gRPC client connection.
 type Config struct {
+	// Name identifies this adapter instance (used by provider.Provider interface).
+	Name string `mapstructure:"name"`
 	// Host is the gRPC server hostname.
 	Host string `mapstructure:"host"`
 	// Port is the gRPC server port.

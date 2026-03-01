@@ -7,6 +7,9 @@ import (
 
 // Config holds database connection configuration.
 type Config struct {
+	// Name identifies this adapter instance (used by provider.Provider interface).
+	Name string `yaml:"name" mapstructure:"name"`
+
 	// Enabled controls whether the database component is active.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 

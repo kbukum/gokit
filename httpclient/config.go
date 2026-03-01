@@ -12,8 +12,11 @@ const (
 	defaultTimeout = 30 * time.Second
 )
 
-// Config configures the HTTP client.
+// Config configures the HTTP adapter.
 type Config struct {
+	// Name identifies this adapter instance (used by provider.Provider interface).
+	Name string `yaml:"name" mapstructure:"name"`
+
 	// BaseURL is the base URL prepended to all request paths.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 

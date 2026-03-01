@@ -1,29 +1,39 @@
-// Package httpclient provides a configurable HTTP client with built-in
+// Package httpclient provides a configurable HTTP adapter with built-in
 // authentication, TLS, resilience (retry, circuit breaker, rate limiting),
 // and streaming support.
 //
-// The base Client handles all HTTP protocol concerns. Subpackages provide
-// protocol-specific convenience layers:
-//
-//   - rest: JSON-focused REST client with generic typed methods
-//   - sse: Server-Sent Events reader
+// The Adapter is both a full-capability HTTP client and a provider.RequestResponse
+// implementation, so it can be used standalone or composed via the provider framework
+// (WithResilience, Manager, Registry, etc.).
 //
 // # Basic Usage
 //
-//	client := httpclient.New(httpclient.Config{
+//	adapter, _ := httpclient.New(httpclient.Config{
+//	    Name:    "my-api",
 //	    BaseURL: "https://api.example.com",
 //	    Timeout: 30 * time.Second,
 //	    Auth:    httpclient.BearerAuth("my-token"),
 //	})
 //
-//	resp, err := client.Do(ctx, httpclient.Request{
+//	resp, err := adapter.Do(ctx, httpclient.Request{
 //	    Method: http.MethodGet,
 //	    Path:   "/users/123",
 //	})
 //
+// # As a Provider
+//
+//	// The adapter IS a provider — no wrapper needed.
+//	var p provider.RequestResponse[httpclient.Request, *httpclient.Response] = adapter
+//	resilient := provider.WithResilience(adapter, resilienceConfig)
+//
+// # REST Convenience
+//
+//	user, err := httpclient.Get[User](adapter, ctx, "/users/123")
+//	created, err := httpclient.Post[User](adapter, ctx, "/users", body)
+//
 // # With Resilience
 //
-//	client := httpclient.New(httpclient.Config{
+//	adapter, _ := httpclient.New(httpclient.Config{
 //	    BaseURL: "https://api.example.com",
 //	    Retry:   httpclient.DefaultRetryConfig(),
 //	    CircuitBreaker: httpclient.DefaultCircuitBreakerConfig("my-api"),

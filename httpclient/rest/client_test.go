@@ -249,14 +249,14 @@ func TestGet_ErrorResponse_StillDecodesBody(t *testing.T) {
 	}
 }
 
-func TestNewFromClient(t *testing.T) {
-	httpC, err := httpclient.New(httpclient.Config{})
+func TestNewFromAdapter(t *testing.T) {
+	httpA, err := httpclient.New(httpclient.Config{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	c := NewFromClient(httpC)
-	if c.HTTP() != httpC {
-		t.Error("HTTP() should return the underlying client")
+	c := NewFromAdapter(httpA)
+	if c.HTTP() != httpA {
+		t.Error("HTTP() should return the underlying adapter")
 	}
 }
