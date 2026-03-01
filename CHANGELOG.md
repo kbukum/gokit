@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-03-01
+
+### Added
+- **github**: CODEOWNERS file for automatic code review assignment
+- **github**: Issue templates for bug reports and feature requests (YAML forms)
+- **github**: Pull request template with comprehensive checklist
+- **docs**: CODE_OF_CONDUCT.md based on Contributor Covenant 2.1
+- **docs**: SECURITY.md with responsible disclosure policy
+- **docs**: adapter-guide.md documenting adapter pattern across all modules
+- **docs**: adapter-framework-plan.md for adapter architecture planning
+- **docs**: pipeline/README.md with comprehensive operators guide and 7 usage examples
+- **kafka/producer**: `adapter.go` implementing `provider.Sink[Message]` with Send method
+- **kafka/producer**: Availability checks for producer health monitoring
+- **kafka/consumer**: `adapter.go` implementing provider interface
+- **kafka**: `FromKafka` error translation utility for consistent error handling
+- **kafka**: Message struct with JSON handling and Kafka message conversion
+- **kafka**: MockProducer with Publish methods and message tracking for testing
+- **process**: Process adapter for subprocess execution with timeout and grace period
+- **provider**: Health status reporting interface for all providers
+- **redis**: Availability checks for Redis client health monitoring
+- **redis**: Name field in Redis config for component identification
+- **storage**: Availability checks for storage component health monitoring
+- **storage**: Name field in storage config for component identification
+- **httpclient**: Component implementation with lifecycle management
+- **httpclient**: REST client with simplified interface
+- **httpclient**: Options pattern for HTTP client configuration
+- **database**: Adapter pattern implementation
+- **grpc/client**: Adapter pattern implementation
+- **security/tlstest**: Utility for generating TLS certificates in tests
+- **tests**: Comprehensive test suite for encryption (ChaCha20 encryption/decryption, error handling)
+- **tests**: Logger tests (metadata, context, component registration)
+- **tests**: Observability tests (tracing, metrics, health checks)
+- **tests**: Process tests (availability checks, command execution failures)
+- **tests**: Resilience tests for process execution with retries
+- **tests**: SSE hub tests (client registration, lifecycle, event serving)
+- **tests**: Versioning tests (version info, dirty builds, branch names)
+- **tests**: Kafka component tests (producer/consumer lifecycle, config, errors)
+- **tests**: Kafka connection, metrics, translator, and types tests
+- **tests**: Security TLS configuration tests (valid/invalid scenarios)
+- **tests**: httpclient component and REST client tests
+
+### Changed
+- **README.md**: Added contributing section with CODE_OF_CONDUCT link
+- **kafka**: Enhanced config with name field for better identification
+- **redis**: Enhanced config with name field for better identification
+- **storage**: Enhanced config with name field for better identification
+- **testutil/fixtures**: Updated documentation for clarity
+- **httpclient**: Refactored adapter with improved provider interface implementation
+- **httpclient**: Enhanced request handling and REST client functionality
+
+### Fixed
+- **discovery**: Standardized Go version to 1.25.0 (was 1.25.5 in discovery and discovery/testutil)
+
 ## [0.1.2] - 2026-02-24
 
 ### Added
