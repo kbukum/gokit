@@ -259,6 +259,8 @@ func encodeBody(body any) (io.Reader, string, error) {
 		return nil, "", nil
 	}
 	switch v := body.(type) {
+	case *MultipartBody:
+		return v.encode()
 	case io.Reader:
 		return v, "", nil
 	case []byte:

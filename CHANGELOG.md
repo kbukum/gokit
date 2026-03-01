@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **llm**: New sub-module — config-driven LLM adapter with Dialect pattern
+  - Universal types: `CompletionRequest`, `CompletionResponse`, `StreamChunk`, `Message`, `Usage`
+  - `Dialect` interface for provider-specific HTTP mapping (follows `database/sql` driver pattern)
+  - Thread-safe dialect registry: `RegisterDialect()`, `GetDialect()`, `Dialects()`
+  - `Adapter` composing REST client + Dialect with `New()` and `NewWithDialect()` constructors
+  - Streaming support for both NDJSON (Ollama) and SSE (OpenAI/Anthropic) formats
+  - Convenience helpers: `Complete()`, `CompleteStructured()` with JSON extraction
+  - Full config: auth, TLS, retry, circuit breaker, rate limiter — all inherited from httpclient
+  - Ships with zero built-in dialects — implementations live in separate driver modules
+- **provider**: `Streamable[I, O, C]` interface for providers supporting both request-response and streaming modes
+- **httpclient**: `MultipartBody` and `FileField` types for multipart/form-data requests
+  - `encodeBody()` auto-handles `*MultipartBody` — no more manual `mime/multipart` construction
+  - Supports custom content-type per file, streaming upload via `io.Reader`
+- **httpclient/rest**: `Client` now implements `provider.Provider` (Name, IsAvailable, Close)
+- **httpclient/rest**: Error helper re-exports (`IsNotFound`, `IsAuth`, `IsRateLimit`, `IsServerError`, `IsRetryable`, `IsTimeout`)
+- **tests**: 27 LLM adapter tests (81.7% coverage) — adapter, dialect registry, streaming, helpers, types
+- **tests**: 5 multipart encoding tests — fields, files, custom content-type, reader, full adapter integration
+- **tests**: 3 REST provider interface tests — Name/IsAvailable/Close delegation, error classification
+- **docs**: `adapter-derivation-plan.md` — architecture plan for layered adapter composition
+
 ## [0.1.4] - 2026-03-01
 
 ### Added
