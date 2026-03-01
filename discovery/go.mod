@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/hashicorp/consul/api v1.33.2
-	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit v0.1.5
 )
 
 require (

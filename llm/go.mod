@@ -3,8 +3,8 @@ module github.com/kbukum/gokit/llm
 go 1.25.0
 
 require (
-	github.com/kbukum/gokit v0.1.2
-	github.com/kbukum/gokit/httpclient v0.1.2
+	github.com/kbukum/gokit v0.1.5
+	github.com/kbukum/gokit/httpclient v0.1.5
 )
 
 require (

@@ -6,7 +6,7 @@ require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-connections v0.6.0
-	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit v0.1.5
 	github.com/opencontainers/image-spec v1.1.1
 	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.35.1

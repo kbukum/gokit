@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/kbukum/gokit v0.1.2
+	github.com/kbukum/gokit v0.1.5
 	github.com/segmentio/kafka-go v0.4.50
 )
 

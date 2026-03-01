@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/httpclient
 
 go 1.25.0
 
-require github.com/kbukum/gokit v0.1.2
+require github.com/kbukum/gokit v0.1.5
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
