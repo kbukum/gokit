@@ -10,6 +10,7 @@ import (
 // Config holds configuration for a Connect client connection.
 type Config struct {
 	// BaseURL is the target server URL (e.g. "http://localhost:8080").
+	// Optional when using service discovery, which resolves URLs dynamically.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout is the HTTP request timeout. Zero means no timeout.
@@ -56,9 +57,6 @@ func (c *Config) ApplyDefaults() {
 
 // Validate checks that the configuration is valid.
 func (c *Config) Validate() error {
-	if c.BaseURL == "" {
-		return fmt.Errorf("connect client: base_url must not be empty")
-	}
 	switch c.Protocol {
 	case ProtocolConnect, ProtocolGRPC, ProtocolGRPCWeb:
 		// valid

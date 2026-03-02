@@ -7,13 +7,22 @@
 // When TLS is not configured (the default), the client uses h2c (cleartext
 // HTTP/2). When TLS is configured via security.TLSConfig, standard HTTPS is used.
 //
-// # Basic Usage
+// # Basic Usage (static BaseURL)
 //
 // Create an HTTP client and use it with any generated Connect client:
 //
 //	cfg := client.Config{BaseURL: "http://localhost:8080"}
 //	httpClient, err := client.NewHTTPClient(cfg)
 //	svcClient := myv1connect.NewMyServiceClient(httpClient, cfg.BaseURL)
+//
+// # With Service Discovery (dynamic BaseURL)
+//
+// When using service discovery, BaseURL is resolved at call time:
+//
+//	cfg := client.Config{}  // no BaseURL needed
+//	httpClient, err := client.NewHTTPClient(cfg)
+//	endpoint, _ := disc.DiscoverOne(ctx, query)
+//	svcClient := myv1connect.NewMyServiceClient(httpClient, endpoint.BaseURL())
 //
 // # With gRPC Protocol (required for bidi streaming)
 //
