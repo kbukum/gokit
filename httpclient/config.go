@@ -17,7 +17,8 @@ type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `yaml:"name" mapstructure:"name"`
 
-	// BaseURL is the base URL prepended to all request paths.
+	// BaseURL is the root URL for the target service (e.g., "https://api.example.com/v1").
+	// Set statically via YAML or dynamically via discovery.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout is the default request timeout. Defaults to 30s.

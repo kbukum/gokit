@@ -21,9 +21,9 @@ type KeepaliveConfig struct {
 type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `mapstructure:"name"`
-	// BaseURL is the gRPC server target (e.g. "localhost:50051" or "dns:///myservice").
-	// Optional when using service discovery, which resolves targets dynamically.
-	BaseURL string `mapstructure:"base_url"`
+	// Addr is the gRPC server target (e.g., "localhost:50051").
+	// Set statically via config or dynamically via discovery (endpoint.HostPort()).
+	Addr string `mapstructure:"addr"`
 	// MaxRecvMsgSize is the maximum message size the client can receive (bytes).
 	MaxRecvMsgSize int `mapstructure:"max_recv_msg_size"`
 	// MaxSendMsgSize is the maximum message size the client can send (bytes).
@@ -39,7 +39,7 @@ type Config struct {
 }
 
 const (
-	defaultBaseURL              = "localhost:50051"
+	defaultAddr              = "localhost:50051"
 	defaultMaxRecvMsgSize   = 4 * 1024 * 1024 // 4 MB
 	defaultMaxSendMsgSize   = 4 * 1024 * 1024 // 4 MB
 	defaultKeepaliveTime    = 30 * time.Second
@@ -49,8 +49,8 @@ const (
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
-	if c.BaseURL == "" {
-		c.BaseURL = defaultBaseURL
+	if c.Addr == "" {
+		c.Addr = defaultAddr
 	}
 	if c.MaxRecvMsgSize == 0 {
 		c.MaxRecvMsgSize = defaultMaxRecvMsgSize
@@ -71,8 +71,8 @@ func (c *Config) ApplyDefaults() {
 
 // Validate checks that the configuration is valid.
 func (c *Config) Validate() error {
-	if c.BaseURL == "" {
-		return fmt.Errorf("grpc: base_url must not be empty")
+	if c.Addr == "" {
+		return fmt.Errorf("grpc: addr must not be empty")
 	}
 	if c.MaxRecvMsgSize <= 0 {
 		return fmt.Errorf("grpc: max_recv_msg_size must be positive, got %d", c.MaxRecvMsgSize)
@@ -90,5 +90,5 @@ func (c *Config) Validate() error {
 
 // Address returns the dial target for gRPC connections.
 func (c *Config) Address() string {
-	return c.BaseURL
+	return c.Addr
 }

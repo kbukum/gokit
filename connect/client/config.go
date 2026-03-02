@@ -9,8 +9,8 @@ import (
 
 // Config holds configuration for a Connect client connection.
 type Config struct {
-	// BaseURL is the target server URL (e.g. "http://localhost:8080").
-	// Optional when using service discovery, which resolves URLs dynamically.
+	// BaseURL is the root URL for the target service (e.g., "http://localhost:8080").
+	// Optional when using service discovery, which resolves addresses dynamically.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout is the HTTP request timeout. Zero means no timeout.

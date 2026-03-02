@@ -32,25 +32,8 @@ type ServiceInstance struct {
 // for callers that prefer endpoint-oriented terminology.
 type Endpoint = ServiceInstance
 
-// schemeFor returns the URL scheme for the given discovery protocol.
-func schemeFor(protocol string) string {
-	switch protocol {
-	case "https", "grpcs", "wss":
-		return "https"
-	default:
-		return "http"
-	}
-}
-
-// BaseURL returns the endpoint as an HTTP(S) URL (e.g., "http://192.168.1.5:8080").
-// For non-HTTP protocols (ws, grpc, etc.), the scheme reflects TLS status:
-// secure variants (wss, grpcs) return "https", others return "http".
-// Callers needing protocol-specific schemes (e.g., "ws://") should use Address() instead.
-func (s ServiceInstance) BaseURL() string {
-	return fmt.Sprintf("%s://%s:%d", schemeFor(s.Protocol), s.Address, s.Port)
-}
-
 // HostPort returns the host:port string (e.g., "192.168.1.5:8080").
+// Use this to set client Config.Addr from a discovered endpoint.
 func (s ServiceInstance) HostPort() string {
 	return fmt.Sprintf("%s:%d", s.Address, s.Port)
 }

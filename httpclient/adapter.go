@@ -18,6 +18,7 @@ import (
 // composition with the provider framework (WithResilience, Manager, Registry, etc.).
 type Adapter struct {
 	httpClient *http.Client
+	baseURL    string
 	config     Config
 	cb         *resilience.CircuitBreaker
 	rl         *resilience.RateLimiter
@@ -48,7 +49,8 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 			Transport: transport,
 			Timeout:   cfg.Timeout,
 		},
-		config: cfg,
+		baseURL: cfg.BaseURL,
+		config:  cfg,
 	}
 
 	// Initialize resilience components
@@ -204,8 +206,8 @@ func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, e
 func (c *Adapter) buildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	// Resolve URL
 	url := req.Path
-	if c.config.BaseURL != "" && !strings.HasPrefix(req.Path, "http://") && !strings.HasPrefix(req.Path, "https://") {
-		url = strings.TrimRight(c.config.BaseURL, "/") + "/" + strings.TrimLeft(req.Path, "/")
+	if c.baseURL != "" && !strings.HasPrefix(req.Path, "http://") && !strings.HasPrefix(req.Path, "https://") {
+		url = strings.TrimRight(c.baseURL, "/") + "/" + strings.TrimLeft(req.Path, "/")
 	}
 
 	// Build body

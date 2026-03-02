@@ -7,7 +7,7 @@
 // When TLS is not configured (the default), the client uses h2c (cleartext
 // HTTP/2). When TLS is configured via security.TLSConfig, standard HTTPS is used.
 //
-// # Basic Usage (static BaseURL)
+// # Basic Usage (static address)
 //
 // Create an HTTP client and use it with any generated Connect client:
 //
@@ -15,14 +15,15 @@
 //	httpClient, err := client.NewHTTPClient(cfg)
 //	svcClient := myv1connect.NewMyServiceClient(httpClient, cfg.BaseURL)
 //
-// # With Service Discovery (dynamic BaseURL)
+// # With Service Discovery (dynamic address)
 //
 // When using service discovery, BaseURL is resolved at call time:
 //
-//	cfg := client.Config{}  // no BaseURL needed
+//	cfg := client.Config{}  // no BaseURL needed for transport
 //	httpClient, err := client.NewHTTPClient(cfg)
 //	endpoint, _ := disc.DiscoverOne(ctx, query)
-//	svcClient := myv1connect.NewMyServiceClient(httpClient, endpoint.BaseURL())
+//	baseURL := fmt.Sprintf("http://%s", endpoint.HostPort())
+//	svcClient := myv1connect.NewMyServiceClient(httpClient, baseURL)
 //
 // # With gRPC Protocol (required for bidi streaming)
 //
@@ -34,7 +35,7 @@
 // # With TLS
 //
 //	cfg := client.Config{
-//	    BaseURL: "https://api.example.com",
+//	    BaseURL: "https://api.example.com:443",
 //	    TLS:     &security.TLSConfig{CAFile: "/path/to/ca.pem"},
 //	}
 //	httpClient, err := client.NewHTTPClient(cfg)

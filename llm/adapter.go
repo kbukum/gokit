@@ -66,8 +66,8 @@ func NewWithDialect(dialect Dialect, cfg Config) (*Adapter, error) {
 
 func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 	restCfg := httpclient.Config{
-		Name:           cfg.Name,
 		BaseURL:        cfg.BaseURL,
+		Name:           cfg.Name,
 		Timeout:        cfg.Timeout,
 		Auth:           cfg.Auth,
 		TLS:            cfg.TLS,
