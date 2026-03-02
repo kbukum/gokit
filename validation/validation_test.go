@@ -315,3 +315,23 @@ func TestRequiredFunc(t *testing.T) {
 		t.Error("expected error for empty required field")
 	}
 }
+
+func TestStructValidateAcronymFieldNames(t *testing.T) {
+	type TriggerBot struct {
+		UserID     string `validate:"required"`
+		MeetingURL string `validate:"required,url"`
+	}
+
+	err := Validate(TriggerBot{UserID: "", MeetingURL: "not-a-url"})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	errStr := err.Error()
+	// Without json tags, raw Go field names are used
+	if !strings.Contains(errStr, "UserID") {
+		t.Errorf("expected 'UserID' in error, got %q", errStr)
+	}
+	if !strings.Contains(errStr, "MeetingURL") {
+		t.Errorf("expected 'MeetingURL' in error, got %q", errStr)
+	}
+}

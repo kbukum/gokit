@@ -24,7 +24,7 @@ func getValidator() *validator.Validate {
 		validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
 			if name == "-" || name == "" {
-				return toSnakeCase(fld.Name)
+				return fld.Name
 			}
 			return name
 		})
@@ -51,7 +51,7 @@ func Validate(s any) error {
 	messages := make([]string, 0, len(validationErrors))
 
 	for _, e := range validationErrors {
-		fieldName := toSnakeCase(e.Field())
+		fieldName := e.Field()
 		message := formatValidationError(e)
 		fieldErrors = append(fieldErrors, FieldError{
 			Field:   fieldName,
@@ -88,20 +88,4 @@ func formatValidationError(e validator.FieldError) string {
 	default:
 		return "is invalid"
 	}
-}
-
-// toSnakeCase converts a field name to snake_case.
-func toSnakeCase(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			result.WriteRune('_')
-		}
-		if r >= 'A' && r <= 'Z' {
-			result.WriteRune(r + 32) // lowercase
-		} else {
-			result.WriteRune(r)
-		}
-	}
-	return result.String()
 }
