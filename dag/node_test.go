@@ -150,10 +150,10 @@ func TestFromProvider_InDAG(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["extract"].Status != "completed" {
+	if result.NodeResults["extract"].Status != StatusCompleted {
 		t.Fatal("expected extract completed")
 	}
-	if result.NodeResults["transform"].Status != "completed" {
+	if result.NodeResults["transform"].Status != StatusCompleted {
 		t.Fatal("expected transform completed")
 	}
 

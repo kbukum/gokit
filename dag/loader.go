@@ -72,6 +72,7 @@ func LoadPipeline(name string, paths ...string) (*Pipeline, error) {
 
 // ResolvePipeline converts a Pipeline definition into an executable Graph.
 // It resolves includes recursively and looks up node implementations from the registry.
+// Optional nodes not found in the registry get a placeholder that returns ErrUnavailable.
 func ResolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader) (*Graph, error) {
 	stack := make(map[string]bool)    // current recursion path (cycle detection)
 	resolved := make(map[string]bool) // already fully resolved (dedup)
@@ -86,7 +87,8 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 	defer delete(stack, p.Name)
 
 	g := &Graph{
-		Nodes: make(map[string]Node),
+		Nodes:    make(map[string]Node),
+		NodeDefs: make(map[string]NodeDef),
 	}
 
 	// Resolve includes first
@@ -112,6 +114,11 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 			}
 			g.Nodes[name] = node
 		}
+		for name, def := range subGraph.NodeDefs {
+			if _, exists := g.NodeDefs[name]; !exists {
+				g.NodeDefs[name] = def
+			}
+		}
 		g.Edges = append(g.Edges, subGraph.Edges...)
 	}
 
@@ -123,9 +130,17 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 
 		node, ok := registry.Get(def.Component)
 		if !ok {
-			return nil, fmt.Errorf("dag: component %q not found in registry", def.Component)
+			if def.Optional {
+				// Insert placeholder — node stays in graph, returns ErrUnavailable at runtime
+				g.Nodes[def.Component] = NewUnavailableNode(def.Component)
+			} else {
+				return nil, fmt.Errorf("dag: component %q not found in registry", def.Component)
+			}
+		} else {
+			g.Nodes[def.Component] = node
 		}
-		g.Nodes[def.Component] = node
+
+		g.NodeDefs[def.Component] = def
 
 		for _, dep := range def.DependsOn {
 			g.Edges = append(g.Edges, Edge{From: dep, To: def.Component})

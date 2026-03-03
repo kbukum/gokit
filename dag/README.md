@@ -100,6 +100,38 @@ pipeline, _ := loader.Load("full-process")
 graph, _ := dag.ResolvePipeline(pipeline, registry, loader)
 ```
 
+### Optional Nodes & Error Policies
+
+Nodes can be marked `optional` — if the component is not registered, a placeholder
+is inserted that returns `ErrUnavailable`. The engine skips dependents per-cycle
+without removing them from the graph.
+
+```yaml
+nodes:
+  - component: ser
+    optional: true                              # placeholder if not registered
+    on_error: skip                              # skip | continue | fail
+    schedule: { interval_sec: 3, min_buffer_sec: 1 }
+  - component: signal_compositor
+    depends_on: [ser]
+  - component: notes
+    depends_on: [signal_compositor]
+```
+
+| `on_error` | Behavior |
+|------------|----------|
+| `skip` (default) | Dependents are skipped this cycle |
+| `continue` | Dependents run regardless |
+| `fail` | Halt the entire pipeline |
+
+### Schedule Config
+
+Schedules use integer seconds in YAML for readability:
+
+```yaml
+schedule: { interval_sec: 30, min_buffer_sec: 15 }
+```
+
 ## Streaming Mode
 
 For long-running sessions where nodes fire on different schedules:
@@ -135,13 +167,16 @@ node = dag.WithLogging(node, log)
 | `Port[T]` | Compile-time typed accessor for State |
 | `Node` | Interface: `Name()` + `Run(ctx, state)` |
 | `FromProvider[I,O]()` | Bridges `provider.RequestResponse[I,O]` into a Node |
-| `Graph` / `Edge` | Declares nodes and dependency relationships |
+| `NewUnavailableNode()` | Placeholder node that returns `ErrUnavailable` |
+| `Graph` / `Edge` | Declares nodes, edges, and node metadata (`NodeDefs`) |
 | `BuildLevels()` | Kahn's algorithm — groups nodes by dependency level |
 | `Engine` | Executes graphs via `ExecuteBatch()` or `ExecuteStreaming()` |
 | `AsTool[I,O]()` | Wraps a DAG pipeline as `provider.RequestResponse[I,O]` |
 | `Registry` | Named node lookup for dynamic graph construction |
-| `Pipeline` / `NodeDef` | YAML-defined graph definitions with includes |
+| `Pipeline` / `NodeDef` | YAML-defined graph definitions with includes, optional, on_error |
+| `ScheduleConfig` | Schedule with `interval_sec` / `min_buffer_sec` YAML support |
 | `Session` | Per-session state and schedule tracking for streaming mode |
+| `ErrUnavailable` | Sentinel error for optional nodes not currently available |
 | `WithTracing` / `WithMetrics` / `WithLogging` | Observability node wrappers |
 
 ---

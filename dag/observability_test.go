@@ -147,10 +147,10 @@ func TestWithTracing_InDAG(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != "completed" {
+	if result.NodeResults["a"].Status != StatusCompleted {
 		t.Fatal("expected a completed")
 	}
-	if result.NodeResults["b"].Status != "completed" {
+	if result.NodeResults["b"].Status != StatusCompleted {
 		t.Fatal("expected b completed")
 	}
 	if result.NodeResults["b"].Output != "b-got:from-a" {

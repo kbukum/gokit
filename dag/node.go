@@ -49,3 +49,20 @@ func (n *providerNode[I, O]) Run(ctx context.Context, state *State) (any, error)
 	Write(state, n.cfg.Output, output)
 	return output, nil
 }
+
+// unavailableNode is a placeholder for optional components not in the registry.
+// It always returns ErrUnavailable, allowing the engine to skip dependents
+// for this cycle while keeping the node in the graph for future cycles.
+type unavailableNode struct {
+	name string
+}
+
+// NewUnavailableNode creates a placeholder node that always returns ErrUnavailable.
+func NewUnavailableNode(name string) Node {
+	return &unavailableNode{name: name}
+}
+
+func (n *unavailableNode) Name() string { return n.name }
+func (n *unavailableNode) Run(_ context.Context, _ *State) (any, error) {
+	return nil, ErrUnavailable
+}

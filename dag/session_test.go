@@ -131,13 +131,13 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != "completed" {
+	if result.NodeResults["a"].Status != StatusCompleted {
 		t.Fatalf("expected a completed, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != "skipped" {
+	if result.NodeResults["b"].Status != StatusSkipped {
 		t.Fatalf("expected b skipped, got %s", result.NodeResults["b"].Status)
 	}
-	if result.NodeResults["c"].Status != "completed" {
+	if result.NodeResults["c"].Status != StatusCompleted {
 		t.Fatalf("expected c completed, got %s", result.NodeResults["c"].Status)
 	}
 }

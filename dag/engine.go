@@ -2,6 +2,8 @@ package dag
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -34,6 +36,12 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 		return nil, err
 	}
 
+	// Build upstream dependency map: node → list of nodes it depends on
+	upstreams := make(map[string][]string)
+	for _, edge := range g.Edges {
+		upstreams[edge.To] = append(upstreams[edge.To], edge.From)
+	}
+
 	result := &Result{
 		NodeResults: make(map[string]NodeResult),
 	}
@@ -43,13 +51,22 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 			return nil, err
 		}
 
-		// Determine which nodes to run in this level
 		var toRun []string
 		for _, name := range level {
+			// Check upstream dependency results from this cycle
+			if skipStatus, shouldSkip := e.checkUpstreams(name, upstreams, result, g); shouldSkip {
+				result.NodeResults[name] = NodeResult{
+					Name:   name,
+					Status: skipStatus,
+				}
+				continue
+			}
+
+			// Apply schedule/condition filter
 			if filter != nil && !filter(name, state) {
 				result.NodeResults[name] = NodeResult{
 					Name:   name,
-					Status: "skipped",
+					Status: StatusSkipped,
 				}
 				continue
 			}
@@ -62,10 +79,47 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 
 		// Execute nodes in this level concurrently
 		e.executeLevel(ctx, g, state, toRun, result)
+
+		// Check for on_error=fail after each level
+		for _, name := range toRun {
+			nr, ok := result.NodeResults[name]
+			if !ok {
+				continue
+			}
+			if (nr.Status == StatusFailed || nr.Status == StatusUnavailable) && g.GetNodeDef(name).EffectiveOnError() == OnErrorFail {
+				result.Duration = time.Since(start)
+				return nil, fmt.Errorf("dag: node %q failed with on_error=fail: %w", name, nr.Error)
+			}
+		}
 	}
 
 	result.Duration = time.Since(start)
 	return result, nil
+}
+
+// checkUpstreams examines this cycle's results for all upstream dependencies.
+// Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed.
+func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, result *Result, g *Graph) (string, bool) {
+	for _, upstream := range upstreams[name] {
+		ur, exists := result.NodeResults[upstream]
+		if !exists {
+			continue // upstream not yet processed or not in this cycle
+		}
+
+		policy := g.GetNodeDef(upstream).EffectiveOnError()
+
+		switch {
+		case ur.Status == StatusUnavailable || ur.Status == StatusDepUnavailable:
+			if policy != OnErrorContinue {
+				return StatusDepUnavailable, true
+			}
+		case ur.Status == StatusFailed || ur.Status == StatusDepFailed:
+			if policy != OnErrorContinue {
+				return StatusDepFailed, true
+			}
+		}
+	}
+	return "", false
 }
 
 func (e *Engine) executeLevel(ctx context.Context, g *Graph, state *State, names []string, result *Result) {
@@ -97,9 +151,13 @@ func (e *Engine) executeNode(ctx context.Context, node Node, state *State) NodeR
 	duration := time.Since(start)
 
 	if err != nil {
+		status := StatusFailed
+		if errors.Is(err, ErrUnavailable) {
+			status = StatusUnavailable
+		}
 		return NodeResult{
 			Name:     node.Name(),
-			Status:   "failed",
+			Status:   status,
 			Duration: duration,
 			Error:    err,
 		}
@@ -107,7 +165,7 @@ func (e *Engine) executeNode(ctx context.Context, node Node, state *State) NodeR
 
 	return NodeResult{
 		Name:     node.Name(),
-		Status:   "completed",
+		Status:   StatusCompleted,
 		Duration: duration,
 		Output:   output,
 	}

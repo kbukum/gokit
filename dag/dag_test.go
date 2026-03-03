@@ -223,10 +223,10 @@ func TestEngine_BatchExecution(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != "completed" {
+	if result.NodeResults["a"].Status != StatusCompleted {
 		t.Fatalf("expected a completed, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != "completed" {
+	if result.NodeResults["b"].Status != StatusCompleted {
 		t.Fatalf("expected b completed, got %s", result.NodeResults["b"].Status)
 	}
 
@@ -256,7 +256,7 @@ func TestEngine_ErrorPropagation(t *testing.T) {
 	}
 
 	nr := result.NodeResults["a"]
-	if nr.Status != "failed" {
+	if nr.Status != StatusFailed {
 		t.Fatalf("expected failed, got %s", nr.Status)
 	}
 	if !errors.Is(nr.Error, nodeErr) {

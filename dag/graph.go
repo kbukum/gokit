@@ -2,16 +2,25 @@ package dag
 
 import "fmt"
 
-// Graph declares nodes and edges (dependency relationships).
+// Graph declares nodes, edges (dependency relationships), and node metadata.
 type Graph struct {
-	Nodes map[string]Node
-	Edges []Edge
+	Nodes    map[string]Node
+	Edges    []Edge
+	NodeDefs map[string]NodeDef // metadata from pipeline definition (optional, on_error, etc.)
 }
 
 // Edge represents a dependency: To depends on From.
 type Edge struct {
 	From string
 	To   string
+}
+
+// GetNodeDef returns the NodeDef for a node, or a zero-value NodeDef if not found.
+func (g *Graph) GetNodeDef(name string) NodeDef {
+	if g.NodeDefs == nil {
+		return NodeDef{}
+	}
+	return g.NodeDefs[name]
 }
 
 // BuildLevels uses Kahn's algorithm to group nodes by dependency level.
