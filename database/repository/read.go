@@ -53,9 +53,13 @@ func (r *ReadRepository[T, ID]) WithTx(tx *gorm.DB) *ReadRepository[T, ID] {
 }
 
 // GetByID retrieves a single entity by its primary key.
+// Returns (nil, nil) if the entity is not found.
 func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) {
 	var entity T
 	if err := r.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", r.idField), id).First(&entity).Error; err != nil {
+		if dberrors.IsNotFoundError(err) {
+			return nil, nil
+		}
 		return nil, dberrors.FromDatabase(err, r.resource)
 	}
 	return &entity, nil
@@ -81,9 +85,13 @@ func (r *ReadRepository[T, ID]) Count(ctx context.Context) (int64, error) {
 }
 
 // FindOneBy retrieves a single entity matching field == value.
+// Returns (nil, nil) if no matching entity is found.
 func (r *ReadRepository[T, ID]) FindOneBy(ctx context.Context, field string, value any) (*T, error) {
 	var entity T
 	if err := r.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", field), value).First(&entity).Error; err != nil {
+		if dberrors.IsNotFoundError(err) {
+			return nil, nil
+		}
 		return nil, dberrors.FromDatabase(err, r.resource)
 	}
 	return &entity, nil

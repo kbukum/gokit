@@ -16,9 +16,12 @@ func TestRepository_Delete(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	_, err := repo.GetByID(ctx, "d1")
-	if err == nil {
-		t.Fatal("expected not-found after Delete")
+	got, err := repo.GetByID(ctx, "d1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatal("expected nil after Delete")
 	}
 }
 
@@ -76,6 +79,15 @@ func TestRepository_FullCRUD(t *testing.T) {
 	count, _ = repo.Count(ctx)
 	if count != 0 {
 		t.Errorf("after delete: Count = %d, want 0", count)
+	}
+
+	// Verify GetByID returns nil after delete
+	gone, err := repo.GetByID(ctx, "crud1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gone != nil {
+		t.Fatal("expected nil after delete")
 	}
 }
 
@@ -151,8 +163,11 @@ func TestRepository_WithTx_Rollback(t *testing.T) {
 	txRepo.Create(ctx, &testModel{ID: "tr1", Name: "RolledBack", Age: 1})
 	tx.Rollback()
 
-	_, err := repo.GetByID(ctx, "tr1")
-	if err == nil {
-		t.Fatal("expected not-found after rollback")
+	got, err := repo.GetByID(ctx, "tr1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatal("expected nil after rollback")
 	}
 }

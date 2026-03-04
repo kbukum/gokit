@@ -22,10 +22,13 @@ func TestReadRepository_GetByID(t *testing.T) {
 		}
 	})
 
-	t.Run("not found", func(t *testing.T) {
-		_, err := repo.GetByID(ctx, "missing")
-		if err == nil {
-			t.Fatal("expected error for missing ID")
+	t.Run("not found returns nil", func(t *testing.T) {
+		got, err := repo.GetByID(ctx, "missing")
+		if err != nil {
+			t.Fatalf("expected nil error for not-found, got: %v", err)
+		}
+		if got != nil {
+			t.Fatal("expected nil result for not-found")
 		}
 	})
 }
@@ -47,10 +50,13 @@ func TestReadRepository_FindOneBy(t *testing.T) {
 		}
 	})
 
-	t.Run("not found", func(t *testing.T) {
-		_, err := repo.FindOneBy(ctx, "name", "Nobody")
-		if err == nil {
-			t.Fatal("expected error for missing record")
+	t.Run("not found returns nil", func(t *testing.T) {
+		got, err := repo.FindOneBy(ctx, "name", "Nobody")
+		if err != nil {
+			t.Fatalf("expected nil error for not-found, got: %v", err)
+		}
+		if got != nil {
+			t.Fatal("expected nil result for not-found")
 		}
 	})
 }

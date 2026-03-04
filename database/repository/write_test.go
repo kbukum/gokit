@@ -105,8 +105,11 @@ func TestWriteRepository_WithTx(t *testing.T) {
 	// Rollback — should not persist
 	tx.Rollback()
 
-	_, err := repo.GetByID(ctx, "tx1")
-	if err == nil {
-		t.Fatal("expected not-found after rollback")
+	got, err := repo.GetByID(ctx, "tx1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != nil {
+		t.Fatal("expected nil after rollback")
 	}
 }
