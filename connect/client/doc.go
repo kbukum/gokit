@@ -15,15 +15,22 @@
 //	httpClient, err := client.NewHTTPClient(cfg)
 //	svcClient := myv1connect.NewMyServiceClient(httpClient, cfg.BaseURL)
 //
-// # With Service Discovery (dynamic address)
+// # With Service Discovery (via provider.Connector)
 //
-// When using service discovery, BaseURL is resolved at call time:
+// Use provider.Connector for deferred initialization with resilience:
 //
-//	cfg := client.Config{}  // no BaseURL needed for transport
-//	httpClient, err := client.NewHTTPClient(cfg)
-//	endpoint, _ := disc.DiscoverOne(ctx, query)
-//	baseURL := fmt.Sprintf("http://%s", endpoint.HostPort())
-//	svcClient := myv1connect.NewMyServiceClient(httpClient, baseURL)
+//	c := provider.NewConnector(provider.ConnectorConfig[myv1connect.MyServiceClient]{
+//	    ServiceName: "my-service",
+//	    Create: func() (myv1connect.MyServiceClient, error) {
+//	        url, err := discovery.Resolve("my-service")
+//	        if err != nil { return nil, err }
+//	        return myv1connect.NewMyServiceClient(httpClient, url), nil
+//	    },
+//	    Resilience: &provider.ResilienceConfig{...},
+//	})
+//	resp, err := provider.Call(ctx, c, func(svc myv1connect.MyServiceClient) (*Resp, error) {
+//	    return svc.DoThing(ctx, connect.NewRequest(req))
+//	})
 //
 // # With gRPC Protocol (required for bidi streaming)
 //
