@@ -56,16 +56,15 @@ func Read[T any](state *State, port Port[T]) (T, error) {
 // Returns (zero, false) if the key is missing, without an error.
 // Returns an error only if the key exists but has the wrong type.
 func TryRead[T any](state *State, port Port[T]) (val T, found bool, err error) {
-	var zero T
 	raw, ok := state.Get(port.Key)
 	if !ok {
-		return zero, false, nil
+		return val, false, nil
 	}
-	val, ok := raw.(T)
+	typed, ok := raw.(T)
 	if !ok {
-		return zero, false, fmt.Errorf("dag: state key %q: expected %T, got %T", port.Key, zero, raw)
+		return val, false, fmt.Errorf("dag: state key %q: expected %T, got %T", port.Key, val, raw)
 	}
-	return val, true, nil
+	return typed, true, nil
 }
 
 // Write stores a typed value into state using a Port.
