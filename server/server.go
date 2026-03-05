@@ -154,6 +154,11 @@ func (s *Server) Addr() string {
 	return s.httpServer.Addr
 }
 
+// Config returns the server configuration.
+func (s *Server) Config() Config {
+	return s.config
+}
+
 // ApplyMiddleware applies the standard middleware stack at the handler level
 // so it covers ALL routes — both Gin REST endpoints and ConnectRPC services
 // mounted via Handle().

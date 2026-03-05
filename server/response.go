@@ -17,10 +17,10 @@ type DataResponse struct {
 
 // Meta carries pagination or other response metadata.
 type Meta struct {
-	Page       int `json:"page,omitempty"`
-	PageSize   int `json:"pageSize,omitempty"`
-	Total      int `json:"total,omitempty"`
-	TotalPages int `json:"totalPages,omitempty"`
+	Page       int `json:"page,omitempty" example:"1"`
+	PageSize   int `json:"pageSize,omitempty" example:"20"`
+	Total      int `json:"total,omitempty" example:"100"`
+	TotalPages int `json:"totalPages,omitempty" example:"5"`
 }
 
 // RespondWithError inspects err: if it is an *apperrors.AppError the status and
