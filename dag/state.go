@@ -55,7 +55,7 @@ func Read[T any](state *State, port Port[T]) (T, error) {
 // TryRead retrieves a typed value from state using a Port.
 // Returns (zero, false) if the key is missing, without an error.
 // Returns an error only if the key exists but has the wrong type.
-func TryRead[T any](state *State, port Port[T]) (T, bool, error) {
+func TryRead[T any](state *State, port Port[T]) (val T, found bool, err error) {
 	var zero T
 	raw, ok := state.Get(port.Key)
 	if !ok {

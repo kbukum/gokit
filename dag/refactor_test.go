@@ -452,7 +452,7 @@ func TestEngine_OnErrorFail_HaltsPipeline(t *testing.T) {
 				return "b-result", nil
 			}),
 		},
-		Edges:    []Edge{{From: "a", To: "b"}},
+		Edges: []Edge{{From: "a", To: "b"}},
 		NodeDefs: map[string]NodeDef{
 			"a": {Component: "a", OnError: "fail"},
 			"b": {Component: "b"},

@@ -115,14 +115,14 @@ func (s *stubDiscoveryClient) DiscoverAll(_ context.Context) (map[string][]Servi
 		return nil, s.err
 	}
 	result := make(map[string][]ServiceInstance)
-	for name, inst := range s.instances {
-		result[name] = []ServiceInstance{inst}
+	for name := range s.instances {
+		result[name] = []ServiceInstance{s.instances[name]}
 	}
 	return result, nil
 }
 
-func (s *stubDiscoveryClient) Invalidate(_ string)      {}
-func (s *stubDiscoveryClient) Close() error              { return nil }
+func (s *stubDiscoveryClient) Invalidate(_ string) {}
+func (s *stubDiscoveryClient) Close() error        { return nil }
 
 func TestServiceResolver_CustomTimeout(t *testing.T) {
 	disc := &stubDiscoveryClient{

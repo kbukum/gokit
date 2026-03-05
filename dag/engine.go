@@ -109,16 +109,16 @@ func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, resu
 
 		policy := g.GetNodeDef(upstream).EffectiveOnError()
 
-		switch {
-		case ur.Status == StatusUnavailable || ur.Status == StatusDepUnavailable:
+		switch ur.Status {
+		case StatusUnavailable, StatusDepUnavailable:
 			if policy != OnErrorContinue {
 				return StatusDepUnavailable, true
 			}
-		case ur.Status == StatusFailed || ur.Status == StatusDepFailed:
+		case StatusFailed, StatusDepFailed:
 			if policy != OnErrorContinue {
 				return StatusDepFailed, true
 			}
-		case ur.Status == StatusSkipped || ur.Status == StatusDepSkipped:
+		case StatusSkipped, StatusDepSkipped:
 			// Dependency was filtered/skipped this cycle. Only skip the dependent
 			// if the dependency's output isn't available in state from a prior cycle.
 			if _, hasState := state.Get(upstream); !hasState {

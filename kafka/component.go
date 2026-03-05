@@ -300,7 +300,7 @@ func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) erro
 	if err != nil {
 		return fmt.Errorf("kafka ensure topics: connect: %w", err)
 	}
-	defer conn.Close() //nolint:errcheck
+	defer conn.Close() //nolint:errcheck // best-effort close; main errors are returned from topic operations
 
 	// Get the controller broker for topic creation
 	controller, err := conn.Controller()
@@ -313,7 +313,7 @@ func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) erro
 	if err != nil {
 		return fmt.Errorf("kafka ensure topics: controller connect: %w", err)
 	}
-	defer controllerConn.Close() //nolint:errcheck
+	defer controllerConn.Close() //nolint:errcheck // best-effort close; main errors are returned from topic operations
 
 	specs := make([]kafkago.TopicConfig, 0, len(topics))
 	for _, t := range topics {

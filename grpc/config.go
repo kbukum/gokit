@@ -39,7 +39,7 @@ type Config struct {
 }
 
 const (
-	defaultAddr              = "localhost:50051"
+	defaultAddr             = "localhost:50051"
 	defaultMaxRecvMsgSize   = 4 * 1024 * 1024 // 4 MB
 	defaultMaxSendMsgSize   = 4 * 1024 * 1024 // 4 MB
 	defaultKeepaliveTime    = 30 * time.Second

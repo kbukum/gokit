@@ -4,13 +4,13 @@ import "time"
 
 // Node execution status constants.
 const (
-	StatusCompleted      = "completed"                // Ran successfully
-	StatusFailed         = "failed"                   // Ran and returned an error
-	StatusSkipped        = "skipped"                  // Filtered out by schedule/condition
-	StatusUnavailable    = "unavailable"              // Node itself is unavailable (optional + not registered)
-	StatusDepUnavailable = "skipped:dep_unavailable"  // Skipped because an upstream was unavailable
-	StatusDepFailed      = "skipped:dep_failed"       // Skipped because an upstream failed
-	StatusDepSkipped     = "skipped:dep_not_ready"    // Skipped because an upstream was skipped and has no state output yet
+	StatusCompleted      = "completed"               // Ran successfully
+	StatusFailed         = "failed"                  // Ran and returned an error
+	StatusSkipped        = "skipped"                 // Filtered out by schedule/condition
+	StatusUnavailable    = "unavailable"             // Node itself is unavailable (optional + not registered)
+	StatusDepUnavailable = "skipped:dep_unavailable" // Skipped because an upstream was unavailable
+	StatusDepFailed      = "skipped:dep_failed"      // Skipped because an upstream failed
+	StatusDepSkipped     = "skipped:dep_not_ready"   // Skipped because an upstream was skipped and has no state output yet
 )
 
 // Result holds the outcome of a graph execution.
