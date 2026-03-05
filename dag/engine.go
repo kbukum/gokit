@@ -54,7 +54,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 		var toRun []string
 		for _, name := range level {
 			// Check upstream dependency results from this cycle
-			if skipStatus, shouldSkip := e.checkUpstreams(name, upstreams, result, g); shouldSkip {
+			if skipStatus, shouldSkip := e.checkUpstreams(name, upstreams, result, g, state); shouldSkip {
 				result.NodeResults[name] = NodeResult{
 					Name:   name,
 					Status: skipStatus,
@@ -99,7 +99,8 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 
 // checkUpstreams examines this cycle's results for all upstream dependencies.
 // Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed.
-func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, result *Result, g *Graph) (string, bool) {
+// For skipped dependencies, also checks if state has cached output from a previous cycle.
+func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, result *Result, g *Graph, state *State) (string, bool) {
 	for _, upstream := range upstreams[name] {
 		ur, exists := result.NodeResults[upstream]
 		if !exists {
@@ -116,6 +117,14 @@ func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, resu
 		case ur.Status == StatusFailed || ur.Status == StatusDepFailed:
 			if policy != OnErrorContinue {
 				return StatusDepFailed, true
+			}
+		case ur.Status == StatusSkipped || ur.Status == StatusDepSkipped:
+			// Dependency was filtered/skipped this cycle. Only skip the dependent
+			// if the dependency's output isn't available in state from a prior cycle.
+			if _, hasState := state.Get(upstream); !hasState {
+				if policy != OnErrorContinue {
+					return StatusDepSkipped, true
+				}
 			}
 		}
 	}

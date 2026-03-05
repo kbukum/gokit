@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -274,4 +275,75 @@ func (c *Component) Describe() component.Description {
 		Type:    "kafka",
 		Details: details,
 	}
+}
+
+// TopicConfig defines configuration for topic auto-creation.
+type TopicConfig struct {
+	Topic             string
+	NumPartitions     int
+	ReplicationFactor int
+}
+
+// EnsureTopics creates Kafka topics if they don't already exist.
+// This is safe to call multiple times — existing topics are silently skipped.
+func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) error {
+	if len(topics) == 0 || len(c.cfg.Brokers) == 0 {
+		return nil
+	}
+
+	dialer, err := CreateDialer(&c.cfg)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: dialer: %w", err)
+	}
+
+	conn, err := dialer.DialContext(ctx, "tcp", c.cfg.Brokers[0])
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: connect: %w", err)
+	}
+	defer conn.Close() //nolint:errcheck
+
+	// Get the controller broker for topic creation
+	controller, err := conn.Controller()
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: controller: %w", err)
+	}
+	controllerAddr := net.JoinHostPort(controller.Host, fmt.Sprintf("%d", controller.Port))
+
+	controllerConn, err := dialer.DialContext(ctx, "tcp", controllerAddr)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: controller connect: %w", err)
+	}
+	defer controllerConn.Close() //nolint:errcheck
+
+	specs := make([]kafkago.TopicConfig, 0, len(topics))
+	for _, t := range topics {
+		partitions := t.NumPartitions
+		if partitions <= 0 {
+			partitions = 1
+		}
+		replication := t.ReplicationFactor
+		if replication <= 0 {
+			replication = 1
+		}
+		specs = append(specs, kafkago.TopicConfig{
+			Topic:             t.Topic,
+			NumPartitions:     partitions,
+			ReplicationFactor: replication,
+		})
+	}
+
+	err = controllerConn.CreateTopics(specs...)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: create: %w", err)
+	}
+
+	created := make([]string, len(topics))
+	for i, t := range topics {
+		created[i] = t.Topic
+	}
+	c.log.Info("Kafka topics ensured", map[string]interface{}{
+		"topics": created,
+	})
+
+	return nil
 }

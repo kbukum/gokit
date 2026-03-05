@@ -100,8 +100,9 @@ func TestSession_ReadyFilter_Condition(t *testing.T) {
 func TestEngine_ExecuteStreaming(t *testing.T) {
 	callCount := make(map[string]int)
 	makeNode := func(name string) Node {
-		return newFuncNode(name, func(_ context.Context, _ *State) (any, error) {
+		return newFuncNode(name, func(_ context.Context, s *State) (any, error) {
 			callCount[name]++
+			s.Set(name, name) // Write output to state so dependents can access it
 			return name, nil
 		})
 	}
@@ -121,7 +122,7 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 	engine := &Engine{}
 	state := NewState()
 
-	// Only run "a" and "c"
+	// Cycle 1: only run "a" — "b" is skipped with no state, so "c" should also be skipped
 	filter := func(name string, _ *State) bool {
 		return name == "a" || name == "c"
 	}
@@ -137,7 +138,29 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 	if result.NodeResults["b"].Status != StatusSkipped {
 		t.Fatalf("expected b skipped, got %s", result.NodeResults["b"].Status)
 	}
-	if result.NodeResults["c"].Status != StatusCompleted {
-		t.Fatalf("expected c completed, got %s", result.NodeResults["c"].Status)
+	// "c" should be dep-skipped because "b" was skipped and has no state output
+	if result.NodeResults["c"].Status != StatusDepSkipped {
+		t.Fatalf("expected c dep-skipped, got %s", result.NodeResults["c"].Status)
+	}
+
+	// Cycle 2: run "b" to populate state
+	filter2 := func(name string, _ *State) bool {
+		return name == "b"
+	}
+	result2, err := engine.ExecuteStreaming(context.Background(), g, state, filter2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result2.NodeResults["b"].Status != StatusCompleted {
+		t.Fatalf("expected b completed, got %s", result2.NodeResults["b"].Status)
+	}
+
+	// Cycle 3: "b" is skipped again, but state has "b" from cycle 2, so "c" should run
+	result3, err := engine.ExecuteStreaming(context.Background(), g, state, filter)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result3.NodeResults["c"].Status != StatusCompleted {
+		t.Fatalf("expected c completed with cached state, got %s", result3.NodeResults["c"].Status)
 	}
 }
