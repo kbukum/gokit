@@ -15,17 +15,14 @@ type Config struct {
 	IdleTimeout  int                   `yaml:"idle_timeout" mapstructure:"idle_timeout"`   // seconds
 	MaxBodySize  string                `yaml:"max_body_size" mapstructure:"max_body_size"` // e.g. "10MB"
 	CORS         middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
-	Swagger      SwaggerConfig         `yaml:"swagger" mapstructure:"swagger"`
+	Docs         DocsConfig            `yaml:"docs" mapstructure:"docs"`
 	Enabled      bool                  `yaml:"enabled" mapstructure:"enabled"`
 }
 
-// SwaggerConfig controls API documentation serving.
-type SwaggerConfig struct {
-	// Enabled controls whether Swagger UI is served. Defaults to true in
-	// non-production environments when a spec is available.
+// DocsConfig controls API documentation serving.
+type DocsConfig struct {
+	// Enabled controls whether API docs are served.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
-	// Path is the URL path prefix for Swagger UI (default: "/swagger").
-	Path string `yaml:"path" mapstructure:"path"`
 }
 
 // ApplyDefaults sets sensible default values for unset fields.

@@ -3,8 +3,9 @@ package endpoint
 import "github.com/kbukum/gokit/component"
 
 // Response types for gokit system endpoints.
-// These are provided so projects using swaggo/swag can reference them
-// in swagger annotations: @Success 200 {object} endpoint.HealthResponse
+// Projects can reference these in OpenAPI annotations, e.g.:
+//
+//	@Success 200 {object} endpoint.HealthResponse
 
 // HealthResponse is the response from GET /health.
 type HealthResponse struct {
