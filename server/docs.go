@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
+	"github.com/gin-gonic/gin"
 	"github.com/kbukum/gokit/logger"
 )
 

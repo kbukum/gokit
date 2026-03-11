@@ -43,6 +43,28 @@
 //	    provider.WithTracing[In, Out]("my-service"),
 //	)(rawProvider)
 //
+// SinkMiddleware[I] is the Sink equivalent. Use ChainSink to compose:
+//
+//	wrapped := provider.ChainSink(mw1, mw2)(rawSink)
+//
+// # Sink Combinators
+//
+// Sinks support composable combinators for push-based data flow:
+//
+//   - NewSinkFunc: wraps a plain func(ctx, I) error as a Sink (like http.HandlerFunc)
+//   - FanOutSink: dispatches each input to multiple sinks in parallel
+//   - AdaptSink: transforms input types before sending (bridges domain → backend)
+//   - TapSink: adds a side-effect before forwarding to the inner sink
+//   - WithSinkResilience: wraps a Sink with retry, circuit breaker, and rate limiting
+//
+// These compose naturally for push-based processing pipelines:
+//
+//	sink := provider.FanOutSink("multi",
+//	    kafkaSink,
+//	    provider.AdaptSink(analyticsSink, "adapt", mapFn),
+//	    provider.TapSink(loggingSink, metricsObserver),
+//	)
+//
 // # Usage
 //
 //	reg := provider.NewRegistry[MyProvider]()

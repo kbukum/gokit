@@ -40,7 +40,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `resilience` | `gokit/resilience` | Circuit breaker, retry with backoff, bulkhead isolation, rate limiting |
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, and health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting with per-client channels |
-| `provider` | `gokit/provider` | Generic provider framework with state management, middleware, and runtime checks |
+| `provider` | `gokit/provider` | Generic provider framework with state management, middleware, sink combinators, and runtime checks |
 | `pipeline` | `gokit/pipeline` | Pull-based data pipeline with Throttle, Batch, Debounce, and Window operators |
 | `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch and streaming modes |
 | `security` | `gokit/security` | Security utilities |
@@ -148,6 +148,30 @@ reg := provider.NewRegistry[DiarizationProvider]()
 mgr := provider.NewManager(reg, &provider.HealthCheckSelector[DiarizationProvider]{})
 p, _ := mgr.Get(ctx)
 result, err := p.Execute(ctx, audioInput)
+```
+
+### Sink Composition
+
+```go
+import "github.com/kbukum/gokit/provider"
+
+// Wrap a plain function as a Sink
+kafkaSink := provider.NewSinkFunc("kafka", func(ctx context.Context, event Event) error {
+    return producer.Publish(ctx, topic, event)
+})
+
+// Fan out to multiple sinks in parallel
+sink := provider.FanOutSink("multi",
+    kafkaSink,
+    provider.AdaptSink(analyticsSink, "adapt", toAnalyticsEvent),
+    provider.TapSink(loggingSink, func(ctx context.Context, e Event) {
+        metrics.RecordEvent(e.Type)
+    }),
+)
+
+// Compose sink middleware
+wrapped := provider.ChainSink(withLogging, withMetrics)(sink)
+wrapped.Send(ctx, event) // dispatches to all sinks with logging + metrics
 ```
 
 ### Subprocess Execution

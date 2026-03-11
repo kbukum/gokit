@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **provider**: Sink combinator primitives for composable push-based data flow
+  - `NewSinkFunc[I]`: wraps a plain `func(ctx, I) error` as a `Sink[I]` (like `http.HandlerFunc`)
+  - `FanOutSink[I]`: dispatches input to multiple sinks in parallel, joins errors
+  - `AdaptSink[I, BI]`: transforms input types before sending (mirrors `Adapt` for `RequestResponse`)
+  - `TapSink[I]`: adds a side-effect observer before forwarding to the inner sink
+  - `SinkMiddleware[I]` + `ChainSink[I]`: composable wrapping for sinks (mirrors `Middleware` + `Chain`)
+- **tests**: 11 sink combinator tests — SinkFunc, FanOutSink (parallel, errors, passthrough, availability), AdaptSink (mapping, errors), TapSink, ChainSink (ordering)
+- **docs**: Updated `provider/doc.go` with Sink Combinators section and composition examples
+
 ## [0.1.5] - 2026-03-01
 
 ### Added
