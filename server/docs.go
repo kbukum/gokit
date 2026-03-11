@@ -5,8 +5,10 @@ import (
 	"net/http"
 	"strings"
 
-	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
 	"github.com/gin-gonic/gin"
+
+	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
+
 	"github.com/kbukum/gokit/logger"
 )
 
@@ -53,8 +55,8 @@ type APIDoc struct {
 //	    HideAI:   true,
 //	})
 func MountDocs(engine *gin.Engine, docs ...APIDoc) {
-	for _, doc := range docs {
-		d := doc
+	for i := range docs {
+		d := &docs[i]
 
 		if d.Title == "" {
 			d.Title = "API Reference"
