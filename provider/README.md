@@ -56,6 +56,9 @@ func main() {
 | `WithMeta[I,O]` / `GetMeta[I,O]` | Attach and retrieve metadata on providers |
 | `Connector[T]` | Lazy-init client lifecycle with double-check locking |
 | `Call[C,R]` | Execute a function using a connector's client |
+| `FanOutStream[I,O]` | Fan-out one stream input to N streams, merge results |
+| `WindowedStream[I,O,R]` | Buffer stream items into windows, process as batch |
+| `DrainIterator[T]` | Drain remaining items on close for graceful shutdown |
 
 ## Provider Metadata
 
@@ -82,6 +85,23 @@ latency, _ := meta.Duration("latency_ms")
 Meta is consumed by `dag.OrderByCost()`, `dag.OrderByLatency()`, and
 `dag.WeightedScore()` for intelligent node scheduling. Also available
 for Sink and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
+
+## Stream Composition
+
+Utilities for composing and processing streams:
+
+```go
+// Fan-out: send same input to multiple streams, merge all results
+merged := provider.FanOutStream("multi", stream1, stream2, stream3)
+iter, _ := merged.Execute(ctx, input)
+
+// Windowed: buffer items and process in batches
+batched := provider.WindowedStream("batch", videoStream, 30, frameBatchProcessor)
+iter, _ := batched.Execute(ctx, videoInput) // yields one result per 30-frame window
+
+// Drain: gracefully drain remaining items on close
+drain := provider.DrainIterator(iter, 100) // drain up to 100 items on Close
+```
 
 ---
 

@@ -65,6 +65,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `connect` | `gokit/connect` | Connect-Go RPC registration over HTTP/1.1 with standardized errors |
 | `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
 | `workload` | `gokit/workload` | Workload execution on Docker and Kubernetes backends |
+| `llm` | `gokit/llm` | LLM chat completion abstraction — dialect-based provider mapping, streaming, structured output |
 
 ## Quick Start
 
@@ -226,6 +227,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload | Subprocess and container workload execution |
+| **AI** | llm | LLM chat completion, structured output, explanation generation |
 
 ## Multi-Module Versioning
 
