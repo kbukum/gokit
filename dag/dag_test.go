@@ -402,7 +402,7 @@ func TestAsTool_WrapsAsProvider(t *testing.T) {
 	}
 
 	engine := &Engine{}
-	tool := AsTool[string, string](engine, g, ToolConfig[string, string]{
+	tool := AsTool(engine, g, ToolConfig[string, string]{
 		Name: "upper-tool",
 		InputFn: func(input string, state *State) {
 			Write(state, inPort, input)

@@ -159,7 +159,7 @@ func TestWithTracing_InDAG(t *testing.T) {
 }
 
 func TestTool_IsAvailable(t *testing.T) {
-	tool := AsTool[string, string](&Engine{}, &Graph{Nodes: map[string]Node{}}, ToolConfig[string, string]{
+	tool := AsTool(&Engine{}, &Graph{Nodes: map[string]Node{}}, ToolConfig[string, string]{
 		Name:    "test-tool",
 		InputFn: func(_ string, _ *State) {},
 		OutputFn: func(_ *State) (string, error) {
@@ -182,7 +182,7 @@ func TestTool_ExecuteError(t *testing.T) {
 		},
 	}
 
-	tool := AsTool[string, string](&Engine{}, g, ToolConfig[string, string]{
+	tool := AsTool(&Engine{}, g, ToolConfig[string, string]{
 		Name:    "fail-tool",
 		InputFn: func(_ string, _ *State) {},
 		OutputFn: func(s *State) (string, error) {

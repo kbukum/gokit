@@ -626,7 +626,7 @@ func ContinueWithPartial() StageNodeFailurePolicy { return StageContinueWithPart
 
 // AddNode adds a provider-backed node to this stage.
 func (b *StageBuilder[I, O]) AddNode(name string, p provider.RequestResponse[I, O]) {
-	meta := provider.GetMeta[I, O](p)
+	meta := provider.GetMeta(p)
 	b.nodes = append(b.nodes, &cascadeNode[I, O]{
 		name:     name,
 		provider: p,

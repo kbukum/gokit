@@ -32,8 +32,8 @@ func newTestProvider[I, O any](name string, fn func(ctx context.Context, input I
 }
 
 func newTestProviderWithMeta[I, O any](name string, meta provider.Meta, fn func(ctx context.Context, input I) (O, error)) provider.RequestResponse[I, O] {
-	p := newTestProvider[I, O](name, fn)
-	return provider.WithMeta[I, O](p, meta)
+	p := newTestProvider(name, fn)
+	return provider.WithMeta(p, meta)
 }
 
 // --- Test types ---
@@ -68,10 +68,10 @@ func mergeResults(a, b analysisResult) analysisResult {
 }
 
 func TestCascade_BasicExecution(t *testing.T) {
-	p1 := newTestProvider[analysisInput, analysisResult]("tier1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p1 := newTestProvider("tier1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{Confidence: 0.5, Scores: map[string]float64{"metadata": 0.5}}, nil
 	})
-	p2 := newTestProvider[analysisInput, analysisResult]("tier2", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p2 := newTestProvider("tier2", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{Confidence: 0.8, Scores: map[string]float64{"frequency": 0.8}}, nil
 	})
 
@@ -100,10 +100,10 @@ func TestCascade_BasicExecution(t *testing.T) {
 }
 
 func TestCascade_EarlyExit(t *testing.T) {
-	p1 := newTestProvider[analysisInput, analysisResult]("metadata", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p1 := newTestProvider("metadata", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{Confidence: 0.99, Scores: map[string]float64{"metadata": 0.99}}, nil
 	})
-	p2 := newTestProvider[analysisInput, analysisResult]("frequency", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p2 := newTestProvider("frequency", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		t.Fatal("tier2 should not execute on early exit")
 		return analysisResult{}, nil
 	})
@@ -142,11 +142,11 @@ func TestCascade_EarlyExitWithFinalStage(t *testing.T) {
 	tier1Ran := false
 	fusionRan := false
 
-	p1 := newTestProvider[analysisInput, analysisResult]("metadata", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p1 := newTestProvider("metadata", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		tier1Ran = true
 		return analysisResult{Confidence: 0.99, Scores: map[string]float64{"metadata": 0.99}}, nil
 	})
-	pFusion := newTestProvider[analysisInput, analysisResult]("fusion", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFusion := newTestProvider("fusion", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		fusionRan = true
 		return analysisResult{Confidence: 0.99, Scores: map[string]float64{"fusion": 1.0}}, nil
 	})
@@ -157,7 +157,7 @@ func TestCascade_EarlyExitWithFinalStage(t *testing.T) {
 			b.AdvanceWhen(func(r analysisResult) bool { return r.Confidence < 0.95 })
 		}).
 		Stage("tier2", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("never", newTestProvider[analysisInput, analysisResult]("never", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("never", newTestProvider("never", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				t.Fatal("should not run")
 				return analysisResult{}, nil
 			}))
@@ -195,11 +195,11 @@ func TestCascade_ConditionalNodes(t *testing.T) {
 	videoRan := false
 	audioRan := false
 
-	pVideo := newTestProvider[analysisInput, analysisResult]("spatial", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pVideo := newTestProvider("spatial", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		videoRan = true
 		return analysisResult{Confidence: 0.8, Scores: map[string]float64{"spatial": 0.8}}, nil
 	})
-	pAudio := newTestProvider[analysisInput, analysisResult]("wav2vec", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pAudio := newTestProvider("wav2vec", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		audioRan = true
 		return analysisResult{Confidence: 0.7, Scores: map[string]float64{"wav2vec": 0.7}}, nil
 	})
@@ -251,11 +251,11 @@ func TestCascade_ConditionalNodes(t *testing.T) {
 
 func TestCascade_ParallelWithinStage(t *testing.T) {
 	startCh := make(chan struct{})
-	p1 := newTestProvider[analysisInput, analysisResult]("a", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p1 := newTestProvider("a", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		<-startCh // Wait until both goroutines are running.
 		return analysisResult{Confidence: 0.5, Scores: map[string]float64{"a": 0.5}}, nil
 	})
-	p2 := newTestProvider[analysisInput, analysisResult]("b", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p2 := newTestProvider("b", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		<-startCh
 		return analysisResult{Confidence: 0.6, Scores: map[string]float64{"b": 0.6}}, nil
 	})
@@ -287,11 +287,11 @@ func TestCascade_ParallelWithinStage(t *testing.T) {
 func TestCascade_InternalEdges(t *testing.T) {
 	order := make([]string, 0, 2)
 
-	pDire := newTestProvider[analysisInput, analysisResult]("dire", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pDire := newTestProvider("dire", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		order = append(order, "dire")
 		return analysisResult{Confidence: 0.7, Scores: map[string]float64{"dire": 0.7}}, nil
 	})
-	pTemporal := newTestProvider[analysisInput, analysisResult]("temporal", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pTemporal := newTestProvider("temporal", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		order = append(order, "temporal")
 		return analysisResult{Confidence: 0.8, Scores: map[string]float64{"temporal": 0.8}}, nil
 	})
@@ -316,7 +316,7 @@ func TestCascade_InternalEdges(t *testing.T) {
 }
 
 func TestCascade_StageFailure_Abort(t *testing.T) {
-	pFail := newTestProvider[analysisInput, analysisResult]("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("analyzer crashed")
 	})
 
@@ -325,7 +325,7 @@ func TestCascade_StageFailure_Abort(t *testing.T) {
 			b.AddNode("failing", pFail)
 		}).
 		Stage("tier2", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("should-not-run", newTestProvider[analysisInput, analysisResult]("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("should-not-run", newTestProvider("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				t.Fatal("should not run after abort")
 				return analysisResult{}, nil
 			}))
@@ -346,10 +346,10 @@ func TestCascade_StageFailure_Abort(t *testing.T) {
 func TestCascade_StageFailure_SkipToFinal(t *testing.T) {
 	fusionRan := false
 
-	pFail := newTestProvider[analysisInput, analysisResult]("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("crashed")
 	})
-	pFusion := newTestProvider[analysisInput, analysisResult]("fusion", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFusion := newTestProvider("fusion", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		fusionRan = true
 		return analysisResult{Confidence: 0.3, Scores: map[string]float64{"fusion": 0.3}}, nil
 	})
@@ -359,7 +359,7 @@ func TestCascade_StageFailure_SkipToFinal(t *testing.T) {
 			b.AddNode("failing", pFail)
 		}).
 		Stage("tier2", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("never", newTestProvider[analysisInput, analysisResult]("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("never", newTestProvider("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				t.Fatal("should not run on skip-to-final")
 				return analysisResult{}, nil
 			}))
@@ -384,10 +384,10 @@ func TestCascade_StageFailure_SkipToFinal(t *testing.T) {
 func TestCascade_ContinueWithPartial(t *testing.T) {
 	goodRan := false
 
-	pFail := newTestProvider[analysisInput, analysisResult]("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("crashed")
 	})
-	pGood := newTestProvider[analysisInput, analysisResult]("good", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pGood := newTestProvider("good", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		goodRan = true
 		return analysisResult{Confidence: 0.7, Scores: map[string]float64{"good": 0.7}}, nil
 	})
@@ -425,12 +425,12 @@ func TestCascade_ContinueWithPartial(t *testing.T) {
 }
 
 func TestCascade_ProviderMeta_CostTracking(t *testing.T) {
-	p1 := newTestProviderWithMeta[analysisInput, analysisResult]("metadata",
+	p1 := newTestProviderWithMeta("metadata",
 		provider.Meta{"cost": 0.0, "latency_ms": 1.0},
 		func(_ context.Context, _ analysisInput) (analysisResult, error) {
 			return analysisResult{Confidence: 0.5, Scores: map[string]float64{"metadata": 0.5}}, nil
 		})
-	p2 := newTestProviderWithMeta[analysisInput, analysisResult]("frequency",
+	p2 := newTestProviderWithMeta("frequency",
 		provider.Meta{"cost": 0.01, "latency_ms": 50.0},
 		func(_ context.Context, _ analysisInput) (analysisResult, error) {
 			return analysisResult{Confidence: 0.8, Scores: map[string]float64{"frequency": 0.8}}, nil
@@ -467,7 +467,7 @@ func TestCascade_OrderBy(t *testing.T) {
 	order := make([]string, 0, 3)
 
 	makeProvider := func(name string, cost float64) provider.RequestResponse[analysisInput, analysisResult] {
-		return newTestProviderWithMeta[analysisInput, analysisResult](name,
+		return newTestProviderWithMeta(name,
 			provider.Meta{"cost": cost},
 			func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				mu.Lock()
@@ -500,7 +500,7 @@ func TestCascade_OrderBy(t *testing.T) {
 }
 
 func TestCascade_Timeout(t *testing.T) {
-	pSlow := newTestProvider[analysisInput, analysisResult]("slow", func(ctx context.Context, _ analysisInput) (analysisResult, error) {
+	pSlow := newTestProvider("slow", func(ctx context.Context, _ analysisInput) (analysisResult, error) {
 		select {
 		case <-ctx.Done():
 			return analysisResult{}, ctx.Err()
@@ -552,7 +552,7 @@ func TestCascade_EmptyStages(t *testing.T) {
 func TestCascade_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	p1 := newTestProvider[analysisInput, analysisResult]("p1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	p1 := newTestProvider("p1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		cancel() // Cancel after first stage.
 		return analysisResult{Confidence: 0.5}, nil
 	})
@@ -563,7 +563,7 @@ func TestCascade_ContextCancellation(t *testing.T) {
 			b.AdvanceWhen(func(r analysisResult) bool { return true }) // Always advance.
 		}).
 		Stage("tier2", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("never", newTestProvider[analysisInput, analysisResult]("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("never", newTestProvider("noop", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				t.Fatal("should not run after cancellation")
 				return analysisResult{}, nil
 			}))
@@ -580,7 +580,7 @@ func TestCascade_ContextCancellation(t *testing.T) {
 func TestCascade_TraceCompleteness(t *testing.T) {
 	cascade := NewCascade[analysisInput, analysisResult]().
 		Stage("tier1", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("metadata", newTestProviderWithMeta[analysisInput, analysisResult]("metadata",
+			b.AddNode("metadata", newTestProviderWithMeta("metadata",
 				provider.Meta{"cost": 0.0},
 				func(_ context.Context, _ analysisInput) (analysisResult, error) {
 					return analysisResult{Confidence: 0.5}, nil
@@ -588,7 +588,7 @@ func TestCascade_TraceCompleteness(t *testing.T) {
 			b.AdvanceWhen(func(r analysisResult) bool { return r.Confidence < 0.95 })
 		}).
 		Stage("tier2", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("frequency", newTestProviderWithMeta[analysisInput, analysisResult]("frequency",
+			b.AddNode("frequency", newTestProviderWithMeta("frequency",
 				provider.Meta{"cost": 0.01},
 				func(_ context.Context, _ analysisInput) (analysisResult, error) {
 					return analysisResult{Confidence: 0.96}, nil
@@ -596,7 +596,7 @@ func TestCascade_TraceCompleteness(t *testing.T) {
 			b.AdvanceWhen(func(r analysisResult) bool { return r.Confidence < 0.95 })
 		}).
 		Stage("tier3", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("never", newTestProvider[analysisInput, analysisResult]("never", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("never", newTestProvider("never", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				t.Fatal("tier3 should be skipped")
 				return analysisResult{}, nil
 			}))
@@ -646,7 +646,7 @@ func TestCascade_OrderByLatency(t *testing.T) {
 	order := make([]string, 0, 2)
 
 	makeProv := func(name string, latency float64) provider.RequestResponse[analysisInput, analysisResult] {
-		return newTestProviderWithMeta[analysisInput, analysisResult](name,
+		return newTestProviderWithMeta(name,
 			provider.Meta{"latency_ms": latency},
 			func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				mu.Lock()
@@ -678,7 +678,7 @@ func TestCascade_WeightedScore(t *testing.T) {
 	order := make([]string, 0, 2)
 
 	makeProv := func(name string, cost, latency float64) provider.RequestResponse[analysisInput, analysisResult] {
-		return newTestProviderWithMeta[analysisInput, analysisResult](name,
+		return newTestProviderWithMeta(name,
 			provider.Meta{"cost": cost, "latency_ms": latency},
 			func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				mu.Lock()
@@ -711,10 +711,10 @@ func TestCascade_WeightedScore(t *testing.T) {
 func TestCascade_ContinueOnFailurePolicy(t *testing.T) {
 	tier2Ran := false
 
-	pFail := newTestProvider[analysisInput, analysisResult]("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("crashed")
 	})
-	pNext := newTestProvider[analysisInput, analysisResult]("next", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+	pNext := newTestProvider("next", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		tier2Ran = true
 		return analysisResult{Confidence: 0.6}, nil
 	})
@@ -746,7 +746,7 @@ func TestCascade_SequentialContextCancel(t *testing.T) {
 	nodeCount := 0
 
 	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
-		return newTestProvider[analysisInput, analysisResult](name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
 			nodeCount++
 			if nodeCount == 1 {
 				cancel() // Cancel after first node.
@@ -785,10 +785,10 @@ func TestCascade_SequentialContextCancel(t *testing.T) {
 func TestCascade_SequentialAllFailWithPartial(t *testing.T) {
 	cascade := NewCascade[analysisInput, analysisResult]().
 		Stage("failing", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
-			b.AddNode("f1", newTestProvider[analysisInput, analysisResult]("f1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("f1", newTestProvider("f1", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				return analysisResult{}, errors.New("fail1")
 			}))
-			b.AddNode("f2", newTestProvider[analysisInput, analysisResult]("f2", func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			b.AddNode("f2", newTestProvider("f2", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 				return analysisResult{}, errors.New("fail2")
 			}))
 			b.OnFailure(ContinueWithPartial())
