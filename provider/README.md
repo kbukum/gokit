@@ -52,6 +52,36 @@ func main() {
 | `Factory[T]` | Factory function type for creating providers |
 | `Selector[T]` | Interface for provider selection strategy |
 | `PrioritySelector` / `RoundRobinSelector` / `HealthCheckSelector` | Built-in selection strategies |
+| `Meta` | Open-ended metadata annotations (`map[string]any`) |
+| `WithMeta[I,O]` / `GetMeta[I,O]` | Attach and retrieve metadata on providers |
+| `Connector[T]` | Lazy-init client lifecycle with double-check locking |
+| `Call[C,R]` | Execute a function using a connector's client |
+
+## Provider Metadata
+
+Attach open-ended metadata to any provider for cost-aware ordering,
+scheduling, and observability:
+
+```go
+import "github.com/kbukum/gokit/provider"
+
+// Annotate providers with any dimensions that matter
+annotated := provider.WithMeta(myProvider, provider.Meta{
+    "cost":       0.05,
+    "latency_ms": 200,
+    "reliability": 0.999,
+    "requires":   "gpu",
+})
+
+// Retrieve metadata (e.g., in DAG ordering strategies)
+meta := provider.GetMeta(annotated)
+cost, _ := meta.Float("cost")
+latency, _ := meta.Duration("latency_ms")
+```
+
+Meta is consumed by `dag.OrderByCost()`, `dag.OrderByLatency()`, and
+`dag.WeightedScore()` for intelligent node scheduling. Also available
+for Sink and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
 
 ---
 

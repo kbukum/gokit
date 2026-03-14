@@ -424,3 +424,50 @@ func TestAsTool_WrapsAsProvider(t *testing.T) {
 		t.Fatalf("expected 'UPPER:hello', got %q", result)
 	}
 }
+
+func TestTryRead_Success(t *testing.T) {
+	state := NewState()
+	port := Port[string]{Key: "greeting"}
+	Write(state, port, "hello")
+
+	val, found, err := TryRead(state, port)
+	if err != nil {
+		t.Fatalf("TryRead error: %v", err)
+	}
+	if !found {
+		t.Error("expected found=true")
+	}
+	if val != "hello" {
+		t.Errorf("val = %q, want hello", val)
+	}
+}
+
+func TestTryRead_Missing(t *testing.T) {
+	state := NewState()
+	port := Port[string]{Key: "nonexistent"}
+
+	val, found, err := TryRead(state, port)
+	if err != nil {
+		t.Fatalf("TryRead error: %v", err)
+	}
+	if found {
+		t.Error("expected found=false for missing key")
+	}
+	if val != "" {
+		t.Errorf("expected zero value, got %q", val)
+	}
+}
+
+func TestTryRead_TypeMismatch(t *testing.T) {
+	state := NewState()
+	state.Set("key", "string-value")
+	port := Port[int]{Key: "key"}
+
+	_, found, err := TryRead(state, port)
+	if err == nil {
+		t.Error("expected error for type mismatch")
+	}
+	if found {
+		t.Error("expected found=false on type mismatch")
+	}
+}

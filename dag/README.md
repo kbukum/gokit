@@ -159,12 +159,84 @@ node = dag.WithMetrics(node, metrics)
 node = dag.WithLogging(node, log)
 ```
 
+## Cascade: Staged Execution Pipeline
+
+For multi-stage processing where each stage is a sub-DAG with its own
+configuration, conditional advancement, and early exit.
+
+```go
+cascade := dag.NewCascade[Input, Result]().
+
+    // Stage 1: cheap, fast checks
+    Stage("quick-check", func(b *dag.StageBuilder[Input, Result], input Input) {
+        b.AddNode("metadata", metadataAnalyzer)
+        b.Timeout(time.Second)
+        b.AdvanceWhen(func(r Result) bool {
+            return r.Confidence < 0.95 // advance only if uncertain
+        })
+    }).
+
+    // Stage 2: deeper analysis (parallel within stage)
+    Stage("deep-analysis", func(b *dag.StageBuilder[Input, Result], input Input) {
+        b.AddNode("frequency", frequencyAnalyzer)
+        b.AddNode("statistical", statisticalAnalyzer)
+        // No edges = parallel execution within stage
+        b.Timeout(5 * time.Second)
+    }).
+
+    // Final stage: always runs with all accumulated results
+    FinalStage("fusion", func(b *dag.StageBuilder[Input, Result], input Input) {
+        b.AddNode("fusion", fusionEngine)
+    }).
+
+    // Global configuration
+    MergeStrategy(mergeResults).
+    OrderNodesBy(dag.OrderByCost()).
+    MaxConcurrency(4).
+    OnStageFailure(dag.SkipToFinal()).
+    Build()
+
+result, trace := cascade.Execute(ctx, input)
+fmt.Println(trace.StagesExecuted) // ["quick-check"]
+fmt.Println(trace.EarlyExit)     // true — confident at stage 1
+```
+
+### Cascade Features
+
+- **Dynamic node composition** — stage builder receives input, adds nodes conditionally
+- **Advance conditions** — `AdvanceWhen` decides whether to continue to next stage
+- **Internal edges** — dependency ordering within a stage (`b.Edge("a", "b")`)
+- **Per-stage timeout** — independent timeout for each stage
+- **Node failure policies** — `ContinueWithPartial()` or abort on node failure
+- **Stage failure policies** — `Abort()`, `SkipToFinal()`, or `ContinueOnFailure()`
+- **Ordering strategies** — `OrderByCost()`, `OrderByLatency()`, `WeightedScore(weights)` using `provider.Meta`
+- **Execution trace** — `CascadeTrace` with per-node timing, cost aggregation, stages executed/skipped
+
+### Ordering Strategies
+
+OrderBy affects scheduling when multiple nodes are ready simultaneously
+and resources are constrained (`MaxConcurrency`). Strategies read `provider.Meta`:
+
+```go
+// Cheapest nodes first (reads "cost" from provider.Meta)
+OrderNodesBy(dag.OrderByCost())
+
+// Fastest nodes first (reads "latency_ms" from provider.Meta)
+OrderNodesBy(dag.OrderByLatency())
+
+// Multi-objective weighted scoring
+OrderNodesBy(dag.WeightedScore(map[string]float64{
+    "cost": 0.5, "latency_ms": 0.3, "reliability": 0.2,
+}))
+```
+
 ## Key Types & Functions
 
 | Name | Description |
 |------|-------------|
 | `State` | Thread-safe key-value store for passing data between nodes |
 | `Port[T]` | Compile-time typed accessor for State |
+| `Read` / `TryRead` / `Write` | Typed state access via ports |
 | `Node` | Interface: `Name()` + `Run(ctx, state)` |
 | `FromProvider[I,O]()` | Bridges `provider.RequestResponse[I,O]` into a Node |
 | `NewUnavailableNode()` | Placeholder node that returns `ErrUnavailable` |
@@ -174,9 +246,12 @@ node = dag.WithLogging(node, log)
 | `AsTool[I,O]()` | Wraps a DAG pipeline as `provider.RequestResponse[I,O]` |
 | `Registry` | Named node lookup for dynamic graph construction |
 | `Pipeline` / `NodeDef` | YAML-defined graph definitions with includes, optional, on_error |
-| `ScheduleConfig` | Schedule with `interval_sec` / `min_buffer_sec` YAML support |
 | `Session` | Per-session state and schedule tracking for streaming mode |
-| `ErrUnavailable` | Sentinel error for optional nodes not currently available |
+| `NewCascade[I,O]()` | Creates a staged execution pipeline builder |
+| `StageBuilder[I,O]` | Per-stage config: AddNode, Edge, Timeout, AdvanceWhen, OnFailure |
+| `Cascade[I,O]` | Executable staged pipeline with `Execute(ctx, input)` |
+| `CascadeTrace` | Execution details: stages, node results, cost, early exit |
+| `OrderByCost` / `OrderByLatency` / `WeightedScore` | Node ordering strategies |
 | `WithTracing` / `WithMetrics` / `WithLogging` | Observability node wrappers |
 
 ---

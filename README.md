@@ -40,9 +40,10 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `resilience` | `gokit/resilience` | Circuit breaker, retry with backoff, bulkhead isolation, rate limiting |
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, and health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting with per-client channels |
-| `provider` | `gokit/provider` | Generic provider framework with state management, middleware, sink combinators, and runtime checks |
+| `provider` | `gokit/provider` | Generic provider framework with metadata, state management, middleware, sink combinators, and runtime checks |
 | `pipeline` | `gokit/pipeline` | Pull-based data pipeline with Throttle, Batch, Debounce, and Window operators |
-| `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch and streaming modes |
+| `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch, streaming, and cascade modes |
+| `media` | `gokit/media` | Media type detection from content bytes — video, audio, image, text format identification |
 | `security` | `gokit/security` | Security utilities |
 | `component` | `gokit/component` | Lifecycle interface for infrastructure components (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration and graceful shutdown |
@@ -220,7 +221,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle management, provider pattern |
 | **Auth & Authz** | auth, authz | Authentication (JWT, OIDC, password) and authorization (permissions) |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Data** | pipeline, dag, sse | Pull-based pipelines, DAG orchestration, server-sent events |
+| **Data** | pipeline, dag, sse, media | Pull-based pipelines, DAG orchestration, server-sent events, media detection |
 | **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
