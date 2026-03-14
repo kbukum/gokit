@@ -32,6 +32,9 @@ type APIDoc struct {
 	DarkMode *bool
 	// HideAI hides Scalar's built-in AI assistant button.
 	HideAI bool
+	// HideModels hides the "Models" section from the sidebar; schemas are still
+	// shown inline under each operation.
+	HideModels bool
 	// CustomCSS allows injecting additional CSS into the docs page.
 	CustomCSS string
 	// Theme overrides the Scalar theme (e.g. "default", "moon", "purple", "deepSpace").
@@ -87,6 +90,7 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 		opts := &scalar.Options{
 			SpecContent: string(spec),
 			DarkMode:    darkMode,
+			HideModels:  d.HideModels,
 			CustomOptions: scalar.CustomOptions{
 				PageTitle: d.Title,
 			},
