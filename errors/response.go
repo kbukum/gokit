@@ -13,11 +13,11 @@ type ErrorResponse struct {
 // ErrorBody contains the error details sent to clients.
 type ErrorBody struct {
 	// Code is a machine-readable error code.
-	Code ErrorCode `json:"code"`
+	Code ErrorCode `json:"code" example:"NOT_FOUND"`
 	// Message is a human-readable error message.
-	Message string `json:"message"`
+	Message string `json:"message" example:"Resource not found"`
 	// Retryable indicates if the operation can be retried.
-	Retryable bool `json:"retryable"`
+	Retryable bool `json:"retryable" example:"false"`
 	// Details contains additional context for the error.
 	Details map[string]any `json:"details,omitempty"`
 }
