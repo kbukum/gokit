@@ -66,6 +66,9 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
 | `workload` | `gokit/workload` | Workload execution on Docker and Kubernetes backends |
 | `llm` | `gokit/llm` | LLM chat completion abstraction — dialect-based provider mapping, streaming, structured output |
+| `bench` | `gokit/bench` | Evaluation benchmarking framework — datasets, evaluators, metrics, reports, comparison |
+| `bench/viz` | `gokit/bench/viz` | SVG visualization generation — ROC curves, confusion matrices, calibration plots |
+| `bench/storage` | `gokit/bench/storage` | Bench storage adapter — bridges bench.RunStorage with gokit/storage backends |
 
 ## Quick Start
 
@@ -228,6 +231,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload | Subprocess and container workload execution |
 | **AI** | llm | LLM chat completion, structured output, explanation generation |
+| **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking, metrics, visualizations, result storage |
 
 ## Multi-Module Versioning
 

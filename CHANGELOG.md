@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **bench**: New sub-module — pluggable evaluation framework for benchmarking providers against labeled datasets
+  - Core types: `Sample[L]`, `Prediction[L]`, `ScoredSample[L]`, `LabelMapper[L]`
+  - `DatasetLoader[L]`: manifest-based dataset loading with filtering and pipeline integration
+  - `Evaluator[L]`: provider adapter interface with `EvaluatorFunc` and `FromProvider` helpers
+  - `BenchRunner[L]`: orchestrates evaluation runs with multi-branch support and concurrency
+  - `FileStorage`: JSON file-based run result persistence with listing, filtering, and Latest()
+  - `RunComparator`: compares two runs with metric diffs, regression detection, and sample-level tracking
+  - Result types: `RunResult`, `MetricResult`, `BranchResult`, `SampleResult`, `RunSummary`
+- **bench/metric**: Pluggable metric implementations for evaluation scoring
+  - Classification: `BinaryClassification`, `MultiClassClassification`, `ConfusionMatrix`, `ThresholdSweep`
+  - Probability: `AUCROC`, `BrierScore`, `LogLoss`, `Calibration`
+  - Ranking: `NDCG`, `MAP`, `PrecisionAtK`, `RecallAtK`
+  - Regression: `MAE`, `MSE`, `RMSE`, `RSquared`
+  - Matching: `ExactMatch`, `FuzzyMatch` (Levenshtein-based)
+  - Composite: `Weighted` for combining metrics with weights
+  - `Suite[L]` for batch metric evaluation; `AsRunMetric`/`AsRunMetrics` adapters
+- **bench/report**: Formatted output generation from benchmark results
+  - `Reporter` interface with `JSON`, `Markdown`, `Table`, `CSV`, `JUnit`, `VegaLite`, `HTML` implementations
+- **bench/viz**: SVG visualization generation from run results
+  - `RenderAll` generates applicable charts; individual renderers for ROC, calibration, confusion matrix, distribution, branch comparison
+- **bench/storage**: `ProviderStorage` adapter bridging `bench.RunStorage` with `gokit/storage.Storage` backends
+- **tests**: Comprehensive test suite for bench module — types, dataset loading, evaluator adapters, runner, file storage, comparator, classification metrics, probability metrics, regression metrics, matching metrics, JSON reporter
+- **docs**: Package-level documentation for bench/metric, bench/report sub-packages
+
 - **provider**: Sink combinator primitives for composable push-based data flow
   - `NewSinkFunc[I]`: wraps a plain `func(ctx, I) error` as a `Sink[I]` (like `http.HandlerFunc`)
   - `FanOutSink[I]`: dispatches input to multiple sinks in parallel, joins errors
