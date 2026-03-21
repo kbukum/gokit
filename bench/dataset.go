@@ -173,8 +173,7 @@ type errIter[T any] struct {
 	done bool
 }
 
-func (it *errIter[T]) Next(_ context.Context) (T, bool, error) {
-	var zero T
+func (it *errIter[T]) Next(_ context.Context) (zero T, _ bool, _ error) {
 	if it.done {
 		return zero, false, nil
 	}

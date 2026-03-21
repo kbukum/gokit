@@ -18,7 +18,7 @@ import (
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 // createDataset writes a manifest.json and 10 sample files to dir.
-// 5 samples are labelled "ai_generated", 5 are "human_created".
+// 5 samples are labeled "ai_generated", 5 are "human_created".
 func createDataset(t *testing.T, dir string) {
 	t.Helper()
 

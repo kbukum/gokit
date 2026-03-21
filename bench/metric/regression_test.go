@@ -22,7 +22,7 @@ func TestMAE(t *testing.T) {
 				{Sample: bench.Sample[float64]{Label: 5.0}, Prediction: bench.Prediction[float64]{Score: 5.0}},
 				{Sample: bench.Sample[float64]{Label: 2.0}, Prediction: bench.Prediction[float64]{Score: 3.0}},
 			},
-			want: 0.5, // (0.5 + 0 + 1) / 3 = 0.5
+			want: 0.5, // mean absolute error: (0.5 + 0 + 1) / 3
 		},
 		{
 			name: "perfect predictions",

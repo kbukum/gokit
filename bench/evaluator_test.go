@@ -72,7 +72,7 @@ func TestEvaluatorInterface(t *testing.T) {
 	t.Parallel()
 
 	// Ensure EvaluatorFunc returns something that satisfies Evaluator[string].
-	var _ Evaluator[string] = EvaluatorFunc("test", func(ctx context.Context, input []byte) (Prediction[string], error) {
+	var _ = EvaluatorFunc[string]("test", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		return Prediction[string]{}, nil
 	})
 }

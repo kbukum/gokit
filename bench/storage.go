@@ -75,7 +75,7 @@ func NewFileStorage(dir string) *FileStorage {
 
 // Save writes the RunResult as a JSON file named {runID}.json.
 func (fs *FileStorage) Save(_ context.Context, result *RunResult) (string, error) {
-	if err := os.MkdirAll(fs.dir, 0o755); err != nil {
+	if err := os.MkdirAll(fs.dir, 0o750); err != nil {
 		return "", fmt.Errorf("bench: create storage dir: %w", err)
 	}
 	data, err := json.MarshalIndent(result, "", "  ")

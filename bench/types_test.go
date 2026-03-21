@@ -1,6 +1,9 @@
 package bench
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestSampleCreation(t *testing.T) {
 	t.Parallel()
@@ -30,7 +33,7 @@ func TestSampleCreation(t *testing.T) {
 			if s.Label != tt.label {
 				t.Errorf("Label = %q, want %q", s.Label, tt.label)
 			}
-			if string(s.Input) != string(tt.input) {
+			if !bytes.Equal(s.Input, tt.input) {
 				t.Errorf("Input = %q, want %q", s.Input, tt.input)
 			}
 		})

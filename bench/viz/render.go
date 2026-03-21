@@ -136,7 +136,7 @@ func buildDistributions(samples []bench.SampleResult) []bench.ScoreDistribution 
 	}
 	sort.Strings(labels)
 
-	var dists []bench.ScoreDistribution
+	dists := make([]bench.ScoreDistribution, 0, len(labels))
 	for _, label := range labels {
 		scores := byLabel[label]
 		bins := make([]float64, numBins+1)
@@ -164,8 +164,8 @@ func buildDistributions(samples []bench.SampleResult) []bench.ScoreDistribution 
 }
 
 // decodeAs attempts to convert v into type T.
-// It handles the case where v is already T, *T, or a JSON-serialised
-// map/slice that can be marshalled then unmarshalled into T.
+// It handles the case where v is already T, *T, or a JSON-serialized
+// map/slice that can be marshaled then unmarshaled into T.
 func decodeAs[T any](v any) *T {
 	if v == nil {
 		return nil

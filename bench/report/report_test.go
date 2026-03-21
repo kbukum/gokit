@@ -360,8 +360,11 @@ func TestJUnitReporter(t *testing.T) {
 
 	// No targets → no test cases
 	var suites junitTestSuites
-	// Skip XML header for unmarshalling
-	xmlBody := out[strings.Index(out, "<testsuites"):]
+	idx := strings.Index(out, "<testsuites")
+	if idx < 0 {
+		t.Fatal("missing <testsuites in output")
+	}
+	xmlBody := out[idx:]
 	if err := xml.Unmarshal([]byte(xmlBody), &suites); err != nil {
 		t.Fatalf("invalid XML: %v", err)
 	}
@@ -431,7 +434,11 @@ func TestJUnitReporterWithTargets(t *testing.T) {
 				t.Fatalf("Generate() error: %v", err)
 			}
 			out := buf.String()
-			xmlBody := out[strings.Index(out, "<testsuites"):]
+			idx := strings.Index(out, "<testsuites")
+			if idx < 0 {
+				t.Fatal("missing <testsuites in output")
+			}
+			xmlBody := out[idx:]
 
 			var suites junitTestSuites
 			if err := xml.Unmarshal([]byte(xmlBody), &suites); err != nil {
@@ -770,7 +777,7 @@ func TestTableTruncation(t *testing.T) {
 	samples := make([]bench.SampleResult, 30)
 	for i := range samples {
 		samples[i] = bench.SampleResult{
-			ID: "sample-" + string(rune('A'+i%26)),
+			ID:    "sample-" + string(rune('A'+i%26)),
 			Label: "positive", Predicted: "positive",
 			Score: 0.9, Correct: true,
 		}
@@ -840,7 +847,11 @@ func TestJUnitWithoutTag(t *testing.T) {
 
 	// Should not have tag property
 	out := buf.String()
-	xmlBody := out[strings.Index(out, "<testsuites"):]
+	idx := strings.Index(out, "<testsuites")
+	if idx < 0 {
+		t.Fatal("missing <testsuites in output")
+	}
+	xmlBody := out[idx:]
 	var suites junitTestSuites
 	if err := xml.Unmarshal([]byte(xmlBody), &suites); err != nil {
 		t.Fatalf("invalid XML: %v", err)

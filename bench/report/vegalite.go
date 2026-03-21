@@ -88,26 +88,19 @@ func findCurve[T any](result *bench.RunResult, curveKey string) *T {
 }
 
 // findAllCurves collects all instances of a type from Curves and MetricResult.Detail.
+//
+//nolint:gocritic // typeAssertChain: type switches cannot be used with generic type parameters
 func findAllCurves[T any](result *bench.RunResult) []T {
 	var out []T
 	if result.Curves != nil {
 		for _, v := range result.Curves {
-			if typed, ok := v.(T); ok {
-				out = append(out, typed)
-			} else if typed, ok := v.(*T); ok {
-				out = append(out, *typed)
-			}
-			// Also check slices stored in Curves.
+			out = appendTyped(out, v)
 			if sl, ok := v.([]T); ok {
 				out = append(out, sl...)
 			}
 			if sl, ok := v.([]any); ok {
 				for _, item := range sl {
-					if typed, ok := item.(T); ok {
-						out = append(out, typed)
-					} else if typed, ok := item.(*T); ok {
-						out = append(out, *typed)
-					}
+					out = appendTyped(out, item)
 				}
 			}
 		}
@@ -116,23 +109,26 @@ func findAllCurves[T any](result *bench.RunResult) []T {
 		if m.Detail == nil {
 			continue
 		}
-		if typed, ok := m.Detail.(T); ok {
-			out = append(out, typed)
-		} else if typed, ok := m.Detail.(*T); ok {
-			out = append(out, *typed)
-		}
+		out = appendTyped(out, m.Detail)
 		if sl, ok := m.Detail.([]T); ok {
 			out = append(out, sl...)
 		}
 		if sl, ok := m.Detail.([]any); ok {
 			for _, item := range sl {
-				if typed, ok := item.(T); ok {
-					out = append(out, typed)
-				} else if typed, ok := item.(*T); ok {
-					out = append(out, *typed)
-				}
+				out = appendTyped(out, item)
 			}
 		}
+	}
+	return out
+}
+
+// appendTyped appends v to out if v is T or *T.
+func appendTyped[T any](out []T, v any) []T {
+	if typed, ok := v.(T); ok {
+		return append(out, typed)
+	}
+	if typed, ok := v.(*T); ok {
+		return append(out, *typed)
 	}
 	return out
 }
@@ -506,7 +502,7 @@ func scoreDistributionSpec(result *bench.RunResult) map[string]any {
 				"field": "count",
 				"type":  "quantitative",
 				"title": "Count",
-				"stack":  nil,
+				"stack": nil,
 			},
 			"color": map[string]any{
 				"field": "label",
@@ -518,7 +514,7 @@ func scoreDistributionSpec(result *bench.RunResult) map[string]any {
 }
 
 func scoreDistributionFromSamples(result *bench.RunResult) map[string]any {
-	var values []map[string]any
+	values := make([]map[string]any, 0, len(result.Samples))
 	for _, s := range result.Samples {
 		values = append(values, map[string]any{
 			"score": s.Score,

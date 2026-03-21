@@ -428,7 +428,7 @@ func TestSVGPolyline(t *testing.T) {
 	t.Parallel()
 	s := newSVG(100, 100)
 	pts := []point{{10, 20}, {30, 40}, {50, 60}}
-	s.polyline(pts, "blue", 1.5, "none")
+	s.polyline(pts, "blue", 1.5)
 
 	out := s.String()
 	if !strings.Contains(out, "<polyline") {
@@ -442,7 +442,7 @@ func TestSVGPolyline(t *testing.T) {
 func TestSVGPolylineEmpty(t *testing.T) {
 	t.Parallel()
 	s := newSVG(100, 100)
-	s.polyline(nil, "blue", 1, "none")
+	s.polyline(nil, "blue", 1)
 	out := s.String()
 	if strings.Contains(out, "<polyline") {
 		t.Error("empty polyline should not add element")
@@ -644,11 +644,4 @@ func keys(m map[string]string) []string {
 		out = append(out, k)
 	}
 	return out
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

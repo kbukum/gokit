@@ -17,37 +17,37 @@ func newSVG(w, h int) *svg {
 
 func (s *svg) rect(x, y, w, h int, fill string, attrs ...string) {
 	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" %s/>`, x, y, w, h, fill, extra))
+	el := fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" %s/>`, x, y, w, h, fill, extra) //nolint:gocritic // SVG attribute quoting
+	s.elements = append(s.elements, el)
 }
 
 func (s *svg) rectF(x, y, w, h float64, fill string, attrs ...string) {
 	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s" %s/>`, x, y, w, h, fill, extra))
+	el := fmt.Sprintf(`<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s" %s/>`, x, y, w, h, fill, extra) //nolint:gocritic // SVG attribute quoting
+	s.elements = append(s.elements, el)
 }
 
 func (s *svg) line(x1, y1, x2, y2 float64, stroke string, strokeWidth float64, attrs ...string) {
 	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" stroke-width="%.1f" %s/>`,
-			x1, y1, x2, y2, stroke, strokeWidth, extra))
+	el := fmt.Sprintf(`<line x1="%.2f" y1="%.2f" x2="%.2f" y2="%.2f" stroke="%s" stroke-width="%.1f" %s/>`, //nolint:gocritic // SVG attribute quoting
+		x1, y1, x2, y2, stroke, strokeWidth, extra)
+	s.elements = append(s.elements, el)
 }
 
 func (s *svg) text(x, y float64, content, fill string, fontSize int, attrs ...string) {
 	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<text x="%.2f" y="%.2f" fill="%s" font-size="%d" font-family="sans-serif" %s>%s</text>`,
-			x, y, fill, fontSize, extra, xmlEscape(content)))
+	el := fmt.Sprintf(`<text x="%.2f" y="%.2f" fill="%s" font-size="%d" font-family="sans-serif" %s>%s</text>`, //nolint:gocritic // SVG attribute quoting
+		x, y, fill, fontSize, extra, xmlEscape(content))
+	s.elements = append(s.elements, el)
 }
 
 func (s *svg) circle(cx, cy, r float64, fill string, attrs ...string) {
 	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<circle cx="%.2f" cy="%.2f" r="%.2f" fill="%s" %s/>`, cx, cy, r, fill, extra))
+	el := fmt.Sprintf(`<circle cx="%.2f" cy="%.2f" r="%.2f" fill="%s" %s/>`, cx, cy, r, fill, extra) //nolint:gocritic // SVG attribute quoting
+	s.elements = append(s.elements, el)
 }
 
-func (s *svg) polyline(points []point, stroke string, strokeWidth float64, fill string, attrs ...string) {
+func (s *svg) polyline(points []point, stroke string, strokeWidth float64) {
 	if len(points) == 0 {
 		return
 	}
@@ -58,10 +58,9 @@ func (s *svg) polyline(points []point, stroke string, strokeWidth float64, fill 
 		}
 		fmt.Fprintf(&b, "%.2f,%.2f", p.x, p.y)
 	}
-	extra := strings.Join(attrs, " ")
-	s.elements = append(s.elements,
-		fmt.Sprintf(`<polyline points="%s" stroke="%s" stroke-width="%.1f" fill="%s" %s/>`,
-			b.String(), stroke, strokeWidth, fill, extra))
+	el := fmt.Sprintf(`<polyline points="%s" stroke="%s" stroke-width="%.1f" fill="none"/>`, //nolint:gocritic // SVG attribute quoting
+		b.String(), stroke, strokeWidth)
+	s.elements = append(s.elements, el)
 }
 
 func (s *svg) String() string {

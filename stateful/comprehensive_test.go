@@ -182,8 +182,8 @@ func TestAccumulator_TriggerMode_ANY(t *testing.T) {
 	acc := NewAccumulator(store, Config[int]{
 		TriggerMode: TriggerAny, // OR logic
 		Triggers: []Trigger[int]{
-			TimeTrigger[int](1 * time.Second),  // Long time
-			SizeTrigger[int](3),                 // 3 items
+			TimeTrigger[int](1 * time.Second), // Long time
+			SizeTrigger[int](3),               // 3 items
 		},
 		OnFlush: func(ctx context.Context, values []int) error {
 			flushedCount++
@@ -474,11 +474,11 @@ func TestAccumulator_Concurrent_Appends(t *testing.T) {
 
 	wg.Wait()
 
-	// Manually flush remaining
-	remaining, _ := acc.Flush(ctx)
-	
+	// Manually flush remaining — OnFlush captures them into flushedValues
+	acc.Flush(ctx)
+
 	flushedMu.Lock()
-	total := len(flushedValues) + len(remaining)
+	total := len(flushedValues)
 	flushedMu.Unlock()
 
 	if total != expected {

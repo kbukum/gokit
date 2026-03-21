@@ -27,14 +27,14 @@ func (r *jsonReporter) Generate(w io.Writer, result *bench.RunResult) error {
 
 // jsonReport mirrors the desired JSON output format with $schema and version at top level.
 type jsonReport struct {
-	Schema  string          `json:"$schema"`
-	Version string          `json:"version"`
-	Run     jsonRun         `json:"run"`
-	Dataset jsonDataset     `json:"dataset"`
-	Metrics []jsonMetric    `json:"metrics"`
-	Curves  map[string]any  `json:"curves,omitempty"`
-	Branch  []jsonBranch    `json:"branches,omitempty"`
-	Samples []jsonSample    `json:"samples,omitempty"`
+	Schema  string         `json:"$schema"`
+	Version string         `json:"version"`
+	Run     jsonRun        `json:"run"`
+	Dataset jsonDataset    `json:"dataset"`
+	Metrics []jsonMetric   `json:"metrics"`
+	Curves  map[string]any `json:"curves,omitempty"`
+	Branch  []jsonBranch   `json:"branches,omitempty"`
+	Samples []jsonSample   `json:"samples,omitempty"`
 }
 
 type jsonRun struct {

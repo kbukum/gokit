@@ -55,7 +55,7 @@ func RenderComparison(branches map[string]bench.BranchResult, opts ...RenderOpti
 	}
 
 	// Axes.
-	drawAxes(s, padLeft, padTop, plotW, plotH)
+	drawAxes(s, padTop, plotW, plotH)
 
 	// Y-axis label.
 	s.text(14, float64(padTop)+plotH/2, "Value", "#555", 12,

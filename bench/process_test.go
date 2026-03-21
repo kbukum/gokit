@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -115,7 +116,7 @@ func TestFromProcessPassesInputToCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
-	if string(captured) != string(input) {
+	if !bytes.Equal(captured, input) {
 		t.Errorf("captured input = %q, want %q", captured, input)
 	}
 }
@@ -146,7 +147,7 @@ func TestFromProcessInterface(t *testing.T) {
 	t.Parallel()
 
 	// Ensure FromProcess returns something that satisfies Evaluator[string].
-	var _ Evaluator[string] = FromProcess[string](
+	var _ = FromProcess(
 		"test",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "echo"}

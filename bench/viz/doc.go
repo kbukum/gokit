@@ -14,7 +14,7 @@
 //	    os.WriteFile(name, []byte(content), 0o644)
 //	}
 //
-// Use [RenderOption] functions to customise output:
+// Use [RenderOption] functions to customize output:
 //
 //	svgs := viz.RenderAll(result, viz.WithSize(800, 600))
 //

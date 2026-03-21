@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func setupTestDataset(t *testing.T) (string, *DatasetLoader[string]) {
+func setupTestDataset(t *testing.T) *DatasetLoader[string] {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := DatasetManifest{
@@ -34,7 +34,7 @@ func setupTestDataset(t *testing.T) (string, *DatasetLoader[string]) {
 		}
 	}
 	loader := NewDatasetLoader[string](dir, func(s string) (string, error) { return s, nil })
-	return dir, loader
+	return loader
 }
 
 // simpleMetric implements RunMetric for testing.
@@ -64,7 +64,7 @@ func (m *simpleMetric) Compute(scored []ScoredSample[string]) MetricResult {
 func TestBenchRunnerBasic(t *testing.T) {
 	t.Parallel()
 
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 	runner := NewBenchRunner[string](
 		WithMetrics[string](&simpleMetric{name: "accuracy"}),
 	)
@@ -103,7 +103,7 @@ func TestBenchRunnerBasic(t *testing.T) {
 func TestBenchRunnerMultipleBranches(t *testing.T) {
 	t.Parallel()
 
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 	runner := NewBenchRunner[string](
 		WithMetrics[string](&simpleMetric{name: "accuracy"}),
 	)
@@ -138,7 +138,7 @@ func TestBenchRunnerMultipleBranches(t *testing.T) {
 func TestBenchRunnerWithConcurrency(t *testing.T) {
 	t.Parallel()
 
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 	runner := NewBenchRunner[string](
 		WithMetrics[string](&simpleMetric{name: "accuracy"}),
 		WithConcurrency[string](4),
@@ -163,7 +163,7 @@ func TestBenchRunnerWithConcurrency(t *testing.T) {
 func TestBenchRunnerWithTag(t *testing.T) {
 	t.Parallel()
 
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 	runner := NewBenchRunner[string](
 		WithTag[string]("v1-experiment"),
 	)
@@ -184,7 +184,7 @@ func TestBenchRunnerWithTag(t *testing.T) {
 func TestBenchRunnerNoBranches(t *testing.T) {
 	t.Parallel()
 
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 	runner := NewBenchRunner[string]()
 
 	ctx := context.Background()
@@ -223,7 +223,7 @@ func TestBenchRunnerWithStorage(t *testing.T) {
 	t.Parallel()
 
 	storageDir := t.TempDir()
-	_, loader := setupTestDataset(t)
+	loader := setupTestDataset(t)
 
 	storage := NewFileStorage(storageDir)
 	runner := NewBenchRunner[string](

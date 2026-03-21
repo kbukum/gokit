@@ -56,8 +56,8 @@ func (c *CLIRunner) CompareRuns(ctx context.Context, baseID, targetID string) er
 	cmp := NewRunComparator()
 	diff := cmp.Compare(base, target)
 
-	fmt.Fprintf(c.out, "Comparing: %s → %s\n\n", diff.BaseID, diff.TargetID)
-	fmt.Fprint(c.out, diff.Summary())
+	_, _ = fmt.Fprintf(c.out, "Comparing: %s → %s\n\n", diff.BaseID, diff.TargetID)
+	_, _ = fmt.Fprint(c.out, diff.Summary())
 	return nil
 }
 
@@ -80,18 +80,18 @@ func (c *CLIRunner) ListRuns(ctx context.Context, opts ...ListOption) error {
 		return fmt.Errorf("bench cli: list runs: %w", err)
 	}
 	if len(summaries) == 0 {
-		fmt.Fprintln(c.out, "No runs found.")
+		_, _ = fmt.Fprintln(c.out, "No runs found.")
 		return nil
 	}
 
-	fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %s\n", "ID", "Timestamp", "Dataset", "F1")
-	fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %s\n", "----", "---------", "-------", "--")
+	_, _ = fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %s\n", "ID", "Timestamp", "Dataset", "F1")
+	_, _ = fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %s\n", "----", "---------", "-------", "--")
 	for _, s := range summaries {
 		tag := ""
 		if s.Tag != "" {
 			tag = fmt.Sprintf(" [%s]", s.Tag)
 		}
-		fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %.4f%s\n",
+		_, _ = fmt.Fprintf(c.out, "%-36s  %-20s  %-16s  %.4f%s\n",
 			s.ID, s.Timestamp.Format("2006-01-02 15:04:05"), s.Dataset, s.F1, tag)
 	}
 	return nil
@@ -108,31 +108,31 @@ func (c *CLIRunner) ShowRun(ctx context.Context, runID string) error {
 }
 
 func (c *CLIRunner) printResult(r *RunResult) {
-	fmt.Fprintf(c.out, "Run: %s\n", r.ID)
-	fmt.Fprintf(c.out, "Timestamp: %s\n", r.Timestamp.Format("2006-01-02 15:04:05"))
+	_, _ = fmt.Fprintf(c.out, "Run: %s\n", r.ID)
+	_, _ = fmt.Fprintf(c.out, "Timestamp: %s\n", r.Timestamp.Format("2006-01-02 15:04:05"))
 	if r.Tag != "" {
-		fmt.Fprintf(c.out, "Tag: %s\n", r.Tag)
+		_, _ = fmt.Fprintf(c.out, "Tag: %s\n", r.Tag)
 	}
-	fmt.Fprintf(c.out, "Dataset: %s (v%s) — %d samples\n", r.Dataset.Name, r.Dataset.Version, r.Dataset.SampleCount)
-	fmt.Fprintf(c.out, "Duration: %s\n\n", r.Duration)
+	_, _ = fmt.Fprintf(c.out, "Dataset: %s (v%s) — %d samples\n", r.Dataset.Name, r.Dataset.Version, r.Dataset.SampleCount)
+	_, _ = fmt.Fprintf(c.out, "Duration: %s\n\n", r.Duration)
 
 	if len(r.Metrics) > 0 {
-		fmt.Fprintln(c.out, "Metrics:")
+		_, _ = fmt.Fprintln(c.out, "Metrics:")
 		for _, m := range r.Metrics {
-			fmt.Fprintf(c.out, "  %s: %.4f\n", m.Name, m.Value)
+			_, _ = fmt.Fprintf(c.out, "  %s: %.4f\n", m.Name, m.Value)
 			for k, v := range m.Values {
-				fmt.Fprintf(c.out, "    %s: %.4f\n", k, v)
+				_, _ = fmt.Fprintf(c.out, "    %s: %.4f\n", k, v)
 			}
 		}
-		fmt.Fprintln(c.out)
+		_, _ = fmt.Fprintln(c.out)
 	}
 
 	if len(r.Branches) > 0 {
-		fmt.Fprintln(c.out, "Branches:")
+		_, _ = fmt.Fprintln(c.out, "Branches:")
 		for name, br := range r.Branches {
-			fmt.Fprintf(c.out, "  %s (tier %d): %s, errors=%d\n", name, br.Tier, br.Duration, br.Errors)
+			_, _ = fmt.Fprintf(c.out, "  %s (tier %d): %s, errors=%d\n", name, br.Tier, br.Duration, br.Errors)
 		}
-		fmt.Fprintln(c.out)
+		_, _ = fmt.Fprintln(c.out)
 	}
 
 	// Sample summary.
@@ -142,6 +142,6 @@ func (c *CLIRunner) printResult(r *RunResult) {
 			correct++
 		}
 	}
-	fmt.Fprintf(c.out, "Samples: %d/%d correct (%.1f%%)\n", correct, len(r.Samples),
+	_, _ = fmt.Fprintf(c.out, "Samples: %d/%d correct (%.1f%%)\n", correct, len(r.Samples),
 		100*float64(correct)/max(float64(len(r.Samples)), 1))
 }

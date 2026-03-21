@@ -60,7 +60,8 @@ func (m *binaryClassification[L]) Compute(scored []bench.ScoredSample[L]) Result
 	fpr := safeDivide(float64(fp), float64(fp+tn))
 
 	// Build confusion matrix labels
-	labels := []string{fmt.Sprintf("%v", m.positive)}
+	labels := make([]string, 0, 2)
+	labels = append(labels, fmt.Sprintf("%v", m.positive))
 	var negLabel L
 	for _, s := range scored {
 		if s.Sample.Label != m.positive {

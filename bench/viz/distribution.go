@@ -30,7 +30,7 @@ func RenderDistribution(dists []bench.ScoreDistribution, opts ...RenderOption) s
 	s.text(float64(cfg.width)/2, 22, "Score Distribution", "#333", 16, `text-anchor="middle" font-weight="bold"`)
 
 	// Axes.
-	drawAxes(s, padLeft, padTop, plotW, plotH)
+	drawAxes(s, padTop, plotW, plotH)
 
 	// Axis labels.
 	s.text(float64(padLeft)+plotW/2, float64(cfg.height)-8, "Score", "#555", 12, `text-anchor="middle"`)

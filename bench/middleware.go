@@ -25,7 +25,7 @@ func WithTiming[L comparable](eval Evaluator[L]) *TimingMiddleware[L] {
 	}
 }
 
-func (m *TimingMiddleware[L]) Name() string                       { return m.inner.Name() }
+func (m *TimingMiddleware[L]) Name() string                         { return m.inner.Name() }
 func (m *TimingMiddleware[L]) IsAvailable(ctx context.Context) bool { return m.inner.IsAvailable(ctx) }
 
 func (m *TimingMiddleware[L]) Execute(ctx context.Context, input []byte) (Prediction[L], error) {
@@ -76,7 +76,7 @@ func WithCaching[L comparable](eval Evaluator[L]) *CachingMiddleware[L] {
 	}
 }
 
-func (m *CachingMiddleware[L]) Name() string                       { return m.inner.Name() }
+func (m *CachingMiddleware[L]) Name() string                         { return m.inner.Name() }
 func (m *CachingMiddleware[L]) IsAvailable(ctx context.Context) bool { return m.inner.IsAvailable(ctx) }
 
 func (m *CachingMiddleware[L]) Execute(ctx context.Context, input []byte) (Prediction[L], error) {

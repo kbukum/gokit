@@ -61,7 +61,7 @@ func (s *ProviderStorage) Load(ctx context.Context, runID string) (*bench.RunRes
 	if err != nil {
 		return nil, fmt.Errorf("bench/storage: download result %s: %w", runID, err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	var result bench.RunResult
 	if err := json.NewDecoder(rc).Decode(&result); err != nil {
@@ -104,7 +104,7 @@ func (s *ProviderStorage) List(ctx context.Context, opts ...bench.ListOption) ([
 
 		var result bench.RunResult
 		decErr := json.NewDecoder(rc).Decode(&result)
-		rc.Close()
+		_ = rc.Close()
 		if decErr != nil {
 			continue
 		}

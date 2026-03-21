@@ -29,7 +29,7 @@ func RenderCalibration(cal *bench.CalibrationCurve, opts ...RenderOption) string
 	s.text(float64(cfg.width)/2, 22, "Calibration Curve", "#333", 16, `text-anchor="middle" font-weight="bold"`)
 
 	// Axes.
-	drawAxes(s, padLeft, padTop, plotW, plotH)
+	drawAxes(s, padTop, plotW, plotH)
 
 	// Axis labels.
 	s.text(float64(padLeft)+plotW/2, float64(cfg.height)-8, "Predicted Probability", "#555", 12, `text-anchor="middle"`)
@@ -67,7 +67,7 @@ func RenderCalibration(cal *bench.CalibrationCurve, opts ...RenderOption) string
 				y: float64(padTop) + plotH - clamp01(cal.ActualFrequency[i])*plotH,
 			}
 		}
-		s.polyline(pts, "#EA4335", 2, "none")
+		s.polyline(pts, "#EA4335", 2)
 
 		// Draw data points.
 		for _, p := range pts {

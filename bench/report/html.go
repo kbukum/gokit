@@ -97,7 +97,7 @@ func htmlSummary(result *bench.RunResult) string {
 			labels = append(labels, l)
 		}
 		sort.Strings(labels)
-		var parts []string
+		parts := make([]string, 0, len(labels))
 		for _, l := range labels {
 			parts = append(parts, fmt.Sprintf("%s: %d", html.EscapeString(l), result.Dataset.LabelDistribution[l]))
 		}
@@ -165,7 +165,7 @@ func htmlCharts(specs map[string]any) string {
 		chartID := fmt.Sprintf("chart-%d", i)
 		name := strings.TrimSuffix(fn, ".vl.json")
 		name = strings.ReplaceAll(name, "_", " ")
-		b.WriteString(fmt.Sprintf(`<div class="chart-card"><h3>%s</h3><div id="%s"></div>`, html.EscapeString(name), chartID))
+		b.WriteString(fmt.Sprintf(`<div class="chart-card"><h3>%s</h3><div id="%s"></div>`, html.EscapeString(name), chartID)) //nolint:gocritic // HTML attribute quoting, not Go string quoting
 
 		specJSON, _ := json.Marshal(specs[fn])
 		b.WriteString(fmt.Sprintf(`<script type="application/json" id="%s-spec">%s</script>`, chartID, string(specJSON)))
@@ -244,7 +244,7 @@ func htmlSamples(result *bench.RunResult) string {
 		if s.Error != "" {
 			errText = html.EscapeString(s.Error)
 		}
-		b.WriteString(fmt.Sprintf(
+		b.WriteString(fmt.Sprintf( //nolint:gocritic // HTML attribute quoting, not Go string quoting
 			`<tr><td>%s</td><td>%s</td><td>%s</td><td>%.4f</td><td class="%s"><span class="badge %s">%s</span></td><td>%s</td><td>%s</td></tr>`,
 			html.EscapeString(s.ID), html.EscapeString(s.Label), html.EscapeString(s.Predicted),
 			s.Score, correctClass, correctBadge, correctText, s.Duration.String(), errText))

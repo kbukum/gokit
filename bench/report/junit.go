@@ -51,17 +51,17 @@ func (r *junitReporter) Generate(w io.Writer, result *bench.RunResult) error {
 // XML structures for JUnit output.
 
 type junitTestSuites struct {
-	XMLName xml.Name        `xml:"testsuites"`
+	XMLName xml.Name         `xml:"testsuites"`
 	Suites  []junitTestSuite `xml:"testsuite"`
 }
 
 type junitTestSuite struct {
-	Name       string            `xml:"name,attr"`
-	Tests      int               `xml:"tests,attr"`
-	Failures   int               `xml:"failures,attr"`
-	Time       string            `xml:"time,attr"`
-	Properties []junitProperty   `xml:"properties>property,omitempty"`
-	TestCases  []junitTestCase   `xml:"testcase"`
+	Name       string          `xml:"name,attr"`
+	Tests      int             `xml:"tests,attr"`
+	Failures   int             `xml:"failures,attr"`
+	Time       string          `xml:"time,attr"`
+	Properties []junitProperty `xml:"properties>property,omitempty"`
+	TestCases  []junitTestCase `xml:"testcase"`
 }
 
 type junitProperty struct {

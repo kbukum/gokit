@@ -29,7 +29,7 @@ func RenderROC(roc *bench.ROCCurve, opts ...RenderOption) string {
 	s.text(float64(cfg.width)/2, 22, "ROC Curve", "#333", 16, `text-anchor="middle" font-weight="bold"`)
 
 	// Axes.
-	drawAxes(s, padLeft, padTop, plotW, plotH)
+	drawAxes(s, padTop, plotW, plotH)
 
 	// Axis labels.
 	s.text(float64(padLeft)+plotW/2, float64(cfg.height)-8, "False Positive Rate", "#555", 12, `text-anchor="middle"`)
@@ -67,7 +67,7 @@ func RenderROC(roc *bench.ROCCurve, opts ...RenderOption) string {
 				y: float64(padTop) + plotH - roc.TPR[i]*plotH,
 			}
 		}
-		s.polyline(pts, "#4285F4", 2, "none")
+		s.polyline(pts, "#4285F4", 2)
 	}
 
 	// AUC annotation.
@@ -78,7 +78,8 @@ func RenderROC(roc *bench.ROCCurve, opts ...RenderOption) string {
 }
 
 // drawAxes draws the X and Y axis lines for a standard plot area.
-func drawAxes(s *svg, padLeft, padTop int, plotW, plotH float64) {
+func drawAxes(s *svg, padTop int, plotW, plotH float64) {
+	const padLeft = 60
 	x0 := float64(padLeft)
 	y0 := float64(padTop)
 	// Y axis.

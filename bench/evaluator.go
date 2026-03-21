@@ -45,7 +45,7 @@ func FromProvider[I, O any, L comparable](
 	return &fromProvider[I, O, L]{p: p, toInput: toInput, toPrediction: toPrediction}
 }
 
-func (a *fromProvider[I, O, L]) Name() string                       { return a.p.Name() }
+func (a *fromProvider[I, O, L]) Name() string                         { return a.p.Name() }
 func (a *fromProvider[I, O, L]) IsAvailable(ctx context.Context) bool { return a.p.IsAvailable(ctx) }
 func (a *fromProvider[I, O, L]) Execute(ctx context.Context, input []byte) (Prediction[L], error) {
 	out, err := a.p.Execute(ctx, a.toInput(input))
