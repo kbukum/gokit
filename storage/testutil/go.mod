@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/storage/testutil
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/kbukum/gokit v0.2.0
