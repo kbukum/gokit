@@ -15,7 +15,7 @@ func Debounce[T any](p *Pipeline[T], duration time.Duration) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {
 			source := p.create(ctx)
-			debCtx, cancel := context.WithCancel(ctx)
+			debCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is called in debounceIter.Close
 
 			// Feed source values into a channel so we can select on them
 			ch := make(chan result[T], 1)

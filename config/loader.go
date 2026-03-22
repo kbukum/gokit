@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -190,8 +191,13 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 		}
 	}
 
-	// 4. Unmarshal into config struct
-	if err := v.Unmarshal(cfg); err != nil {
+	// 4. Unmarshal into config struct (with duration parsing support)
+	if err := v.Unmarshal(cfg, viper.DecodeHook(
+		mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.StringToSliceHookFunc(","),
+		),
+	)); err != nil {
 		return fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
 	}
 

@@ -57,7 +57,7 @@ type mergedItem[T any] struct {
 }
 
 func newMergedIterator[T any](parent context.Context, iters []Iterator[T]) *mergedIterator[T] {
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancel(parent) //nolint:gosec // cancel is called in mergedIterator.Close
 	ch := make(chan mergedItem[T], len(iters))
 
 	var wg sync.WaitGroup

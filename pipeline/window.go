@@ -12,7 +12,7 @@ func TumblingWindow[T any](p *Pipeline[T], duration time.Duration) *Pipeline[[]T
 	return &Pipeline[[]T]{
 		create: func(ctx context.Context) Iterator[[]T] {
 			source := p.create(ctx)
-			winCtx, cancel := context.WithCancel(ctx)
+			winCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is called in tumblingWindowIter.Close
 
 			ch := make(chan result[T], 1)
 			go func() {

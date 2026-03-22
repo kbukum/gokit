@@ -152,7 +152,7 @@ func buildDistributions(samples []bench.SampleResult) []bench.ScoreDistribution 
 			if idx < 0 {
 				idx = 0
 			}
-			counts[idx]++
+			counts[idx]++ //nolint:gosec // idx is bounds-checked above
 		}
 		dists = append(dists, bench.ScoreDistribution{
 			Label:  label,

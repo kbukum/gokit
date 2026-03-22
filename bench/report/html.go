@@ -89,7 +89,7 @@ func htmlSummary(result *bench.RunResult) string {
 	var b strings.Builder
 	b.WriteString(`<section><h2>Summary</h2><div class="card"><table>`)
 	b.WriteString(`<tr><th>Dataset</th><td>` + html.EscapeString(result.Dataset.Name) + ` v` + html.EscapeString(result.Dataset.Version) + `</td></tr>`)
-	b.WriteString(fmt.Sprintf(`<tr><th>Samples</th><td>%d</td></tr>`, result.Dataset.SampleCount))
+	_, _ = fmt.Fprintf(&b, `<tr><th>Samples</th><td>%d</td></tr>`, result.Dataset.SampleCount)
 
 	if len(result.Dataset.LabelDistribution) > 0 {
 		labels := make([]string, 0, len(result.Dataset.LabelDistribution))
@@ -112,7 +112,7 @@ func htmlSummary(result *bench.RunResult) string {
 	}
 	if len(result.Samples) > 0 {
 		pct := float64(correct) / float64(len(result.Samples)) * 100
-		b.WriteString(fmt.Sprintf(`<tr><th>Accuracy</th><td>%d / %d (%.1f%%)</td></tr>`, correct, len(result.Samples), pct))
+		_, _ = fmt.Fprintf(&b, `<tr><th>Accuracy</th><td>%d / %d (%.1f%%)</td></tr>`, correct, len(result.Samples), pct)
 	}
 
 	b.WriteString(`</table></div></section>`)
@@ -140,8 +140,8 @@ func htmlMetrics(result *bench.RunResult) string {
 			}
 			perLabel = strings.Join(parts, ", ")
 		}
-		b.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%.4f</td><td>%s</td></tr>`,
-			html.EscapeString(m.Name), m.Value, perLabel))
+		_, _ = fmt.Fprintf(&b, `<tr><td>%s</td><td>%.4f</td><td>%s</td></tr>`,
+			html.EscapeString(m.Name), m.Value, perLabel)
 	}
 	b.WriteString(`</table></div></section>`)
 	return b.String()
@@ -165,10 +165,10 @@ func htmlCharts(specs map[string]any) string {
 		chartID := fmt.Sprintf("chart-%d", i)
 		name := strings.TrimSuffix(fn, ".vl.json")
 		name = strings.ReplaceAll(name, "_", " ")
-		b.WriteString(fmt.Sprintf(`<div class="chart-card"><h3>%s</h3><div id="%s"></div>`, html.EscapeString(name), chartID)) //nolint:gocritic // HTML attribute quoting, not Go string quoting
+		_, _ = fmt.Fprintf(&b, `<div class="chart-card"><h3>%s</h3><div id="%s"></div>`, html.EscapeString(name), chartID) //nolint:gocritic // HTML attribute quoting, not Go string quoting
 
 		specJSON, _ := json.Marshal(specs[fn])
-		b.WriteString(fmt.Sprintf(`<script type="application/json" id="%s-spec">%s</script>`, chartID, string(specJSON)))
+		_, _ = fmt.Fprintf(&b, `<script type="application/json" id="%s-spec">%s</script>`, chartID, string(specJSON))
 		b.WriteString(`</div>`)
 	}
 
@@ -210,13 +210,13 @@ func htmlBranches(result *bench.RunResult) string {
 
 	for _, name := range names {
 		br := result.Branches[name]
-		b.WriteString(fmt.Sprintf(`<tr><td>%s</td><td>%d</td>`,
-			html.EscapeString(br.Name), br.Tier))
+		_, _ = fmt.Fprintf(&b, `<tr><td>%s</td><td>%d</td>`,
+			html.EscapeString(br.Name), br.Tier)
 		for _, mk := range metricKeys {
-			b.WriteString(fmt.Sprintf(`<td>%.4f</td>`, br.Metrics[mk]))
+			_, _ = fmt.Fprintf(&b, `<td>%.4f</td>`, br.Metrics[mk])
 		}
-		b.WriteString(fmt.Sprintf(`<td>%.4f</td><td>%.4f</td><td>%s</td><td>%d</td></tr>`,
-			br.AvgScorePositive, br.AvgScoreNegative, br.Duration.String(), br.Errors))
+		_, _ = fmt.Fprintf(&b, `<td>%.4f</td><td>%.4f</td><td>%s</td><td>%d</td></tr>`,
+			br.AvgScorePositive, br.AvgScoreNegative, br.Duration.String(), br.Errors)
 	}
 
 	b.WriteString(`</table></div></section>`)
@@ -244,10 +244,10 @@ func htmlSamples(result *bench.RunResult) string {
 		if s.Error != "" {
 			errText = html.EscapeString(s.Error)
 		}
-		b.WriteString(fmt.Sprintf( //nolint:gocritic // HTML attribute quoting, not Go string quoting
+		_, _ = fmt.Fprintf(&b, //nolint:gocritic // HTML attribute quoting, not Go string quoting
 			`<tr><td>%s</td><td>%s</td><td>%s</td><td>%.4f</td><td class="%s"><span class="badge %s">%s</span></td><td>%s</td><td>%s</td></tr>`,
 			html.EscapeString(s.ID), html.EscapeString(s.Label), html.EscapeString(s.Predicted),
-			s.Score, correctClass, correctBadge, correctText, s.Duration.String(), errText))
+			s.Score, correctClass, correctBadge, correctText, s.Duration.String(), errText)
 	}
 
 	b.WriteString(`</table></div></section>`)
@@ -269,10 +269,10 @@ func htmlFooter(specs map[string]any) string {
 		b.WriteString("document.addEventListener('DOMContentLoaded', function() {\n")
 		for i := range filenames {
 			chartID := fmt.Sprintf("chart-%d", i)
-			b.WriteString(fmt.Sprintf(
+			_, _ = fmt.Fprintf(&b,
 				"  var spec%d = JSON.parse(document.getElementById('%s-spec').textContent);\n"+
 					"  vegaEmbed('#%s', spec%d, {actions: false}).catch(console.error);\n",
-				i, chartID, chartID, i))
+				i, chartID, chartID, i)
 		}
 		b.WriteString("});\n")
 		b.WriteString("</script>\n")

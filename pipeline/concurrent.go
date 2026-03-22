@@ -14,7 +14,7 @@ func Buffer[T any](p *Pipeline[T], size int) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {
 			source := p.create(ctx)
-			bufCtx, cancel := context.WithCancel(ctx)
+			bufCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is called in bufferedIter.Close
 			ch := make(chan result[T], size)
 
 			go func() {
@@ -59,7 +59,7 @@ func Parallel[I, O any](p *Pipeline[I], n int, fn func(context.Context, I) (O, e
 	return &Pipeline[O]{
 		create: func(ctx context.Context) Iterator[O] {
 			source := p.create(ctx)
-			workerCtx, cancel := context.WithCancel(ctx)
+			workerCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is called in parallelIter.Close
 			out := make(chan result[O], n)
 			in := make(chan I, n)
 
@@ -134,7 +134,7 @@ func Parallel[I, O any](p *Pipeline[I], n int, fn func(context.Context, I) (O, e
 func Merge[T any](pipelines ...*Pipeline[T]) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {
-			mergeCtx, cancel := context.WithCancel(ctx)
+			mergeCtx, cancel := context.WithCancel(ctx) //nolint:gosec // cancel is called in mergeIter.Close
 			ch := make(chan result[T], len(pipelines))
 			var wg sync.WaitGroup
 			iters := make([]Iterator[T], len(pipelines))
