@@ -45,6 +45,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch, streaming, and cascade modes |
 | `media` | `gokit/media` | Media type detection from content bytes — video, audio, image, text format identification |
 | `security` | `gokit/security` | Security utilities |
+| `worker` | `gokit/worker` | Push-based task execution with worker pools, real-time event streaming, supervision, and composition |
 | `component` | `gokit/component` | Lifecycle interface for infrastructure components (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration and graceful shutdown |
 
