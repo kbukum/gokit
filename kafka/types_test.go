@@ -31,7 +31,10 @@ func TestNewEvent(t *testing.T) {
 	type payload struct {
 		Name string `json:"name"`
 	}
-	e := NewEvent("user.created", "my-service", payload{Name: "John"})
+	e, err := NewEvent("user.created", "my-service", payload{Name: "John"})
+	if err != nil {
+		t.Fatalf("NewEvent() error: %v", err)
+	}
 	if e.ID == "" {
 		t.Error("expected auto-generated ID")
 	}
@@ -50,7 +53,10 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestNewEvent_WithSubject(t *testing.T) {
-	e := NewEvent("order.placed", "shop", map[string]string{"item": "book"}, "order-123")
+	e, err := NewEvent("order.placed", "shop", map[string]string{"item": "book"}, "order-123")
+	if err != nil {
+		t.Fatalf("NewEvent() error: %v", err)
+	}
 	if e.Subject != "order-123" {
 		t.Errorf("Subject = %q, want order-123", e.Subject)
 	}
@@ -60,7 +66,10 @@ func TestParseData(t *testing.T) {
 	type payload struct {
 		Name string `json:"name"`
 	}
-	e := NewEvent("test", "src", payload{Name: "Alice"})
+	e, err := NewEvent("test", "src", payload{Name: "Alice"})
+	if err != nil {
+		t.Fatalf("NewEvent() error: %v", err)
+	}
 	parsed, err := ParseData[payload](e)
 	if err != nil {
 		t.Fatalf("ParseData() error: %v", err)

@@ -2,6 +2,7 @@ package stateful
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -48,7 +49,7 @@ type sizeTrigger[V any] struct {
 }
 
 func (t *sizeTrigger[V]) Name() string {
-	return "size:>=" + string(rune(t.threshold))
+	return "size:>=" + strconv.Itoa(t.threshold)
 }
 
 func (t *sizeTrigger[V]) ShouldFlush(ctx context.Context, acc *Accumulator[V]) bool {

@@ -107,6 +107,10 @@ func (rl *RateLimiter) WaitN(ctx context.Context, n int) error {
 
 	select {
 	case <-ctx.Done():
+		// Restore reserved tokens on cancellation to avoid bucket drain
+		rl.mu.Lock()
+		rl.tokens += float64(n)
+		rl.mu.Unlock()
 		return ctx.Err()
 	case <-timer.C:
 		return nil

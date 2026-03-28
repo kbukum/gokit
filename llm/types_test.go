@@ -10,8 +10,8 @@ func TestCompletionRequest_Defaults(t *testing.T) {
 	if req.Model != "" {
 		t.Errorf("Model should be empty by default, got %q", req.Model)
 	}
-	if req.Temperature != 0 {
-		t.Errorf("Temperature should be 0 by default, got %v", req.Temperature)
+	if req.Temperature != nil {
+		t.Errorf("Temperature should be nil by default, got %v", req.Temperature)
 	}
 	if req.Stream {
 		t.Error("Stream should be false by default")

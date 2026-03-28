@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -30,10 +31,12 @@ func Init(cfg *Config) {
 	if name == "" {
 		name = "default"
 	}
-	globalLogger = New(cfg, name)
 
 	level, _ := zerolog.ParseLevel(cfg.Level)
 	zerolog.SetGlobalLevel(level)
+
+	l := New(cfg, name)
+	SetGlobalLogger(l)
 
 	if cfg.Format == "console" || cfg.Format == FormatPretty {
 		log.Logger = newConsoleLogger(cfg, name)
@@ -46,7 +49,6 @@ func New(cfg *Config, serviceName string) *Logger {
 	if err != nil {
 		level = zerolog.InfoLevel
 	}
-	zerolog.SetGlobalLevel(level)
 
 	output := outputWriter(cfg.Output)
 
@@ -63,6 +65,8 @@ func New(cfg *Config, serviceName string) *Logger {
 	if cfg.Caller {
 		zl = zl.With().Caller().Logger()
 	}
+
+	zl = zl.Level(level)
 
 	return &Logger{
 		logger:  zl,
@@ -187,16 +191,38 @@ func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
 
 // --- Global logger ---
 
-var globalLogger *Logger
+var (
+	globalLogger     *Logger
+	globalLoggerOnce sync.Once
+	globalLoggerMu   sync.RWMutex
+)
 
 // SetGlobalLogger sets the global logger instance.
-func SetGlobalLogger(l *Logger) { globalLogger = l }
+func SetGlobalLogger(l *Logger) {
+	globalLoggerMu.Lock()
+	defer globalLoggerMu.Unlock()
+	globalLogger = l
+}
 
 // GetGlobalLogger returns the global logger, creating a default one if needed.
 func GetGlobalLogger() *Logger {
-	if globalLogger == nil {
-		globalLogger = NewDefault("default")
+	globalLoggerMu.RLock()
+	if l := globalLogger; l != nil {
+		globalLoggerMu.RUnlock()
+		return l
 	}
+	globalLoggerMu.RUnlock()
+
+	globalLoggerOnce.Do(func() {
+		globalLoggerMu.Lock()
+		defer globalLoggerMu.Unlock()
+		if globalLogger == nil {
+			globalLogger = NewDefault("default")
+		}
+	})
+
+	globalLoggerMu.RLock()
+	defer globalLoggerMu.RUnlock()
 	return globalLogger
 }
 

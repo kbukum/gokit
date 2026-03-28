@@ -67,12 +67,12 @@ func IsRetryableError(err error) bool {
 
 // IsNotFoundError checks if the error is a GORM record-not-found error.
 func IsNotFoundError(err error) bool {
-	return err == gorm.ErrRecordNotFound
+	return errors.Is(err, gorm.ErrRecordNotFound)
 }
 
 // IsDuplicateError checks if the error is a GORM duplicate-key violation.
 func IsDuplicateError(err error) bool {
-	return err == gorm.ErrDuplicatedKey
+	return errors.Is(err, gorm.ErrDuplicatedKey)
 }
 
 // FromDatabase converts a database error to an AppError.

@@ -225,19 +225,12 @@ func (c *UnifiedContainer) resolveLazy(registration *ComponentRegistration) (int
 }
 
 func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistration) (interface{}, error) {
-	registration.mutex.Lock()
-	defer registration.mutex.Unlock()
-
-	// Double-check pattern
-	if registration.initialized && registration.instance != nil && registration.lastError == nil {
-		return registration.instance, nil
-	}
-
 	var lastError error
 	backoffMs := registration.retryPolicy.InitialBackoffMs
 
 	for attempt := 0; attempt < registration.retryPolicy.MaxAttempts; attempt++ {
 		if attempt > 0 {
+			// Sleep outside the lock to avoid blocking concurrent Resolve() calls
 			time.Sleep(time.Duration(backoffMs) * time.Millisecond)
 			backoffMs = int(float64(backoffMs) * registration.retryPolicy.BackoffMultiplier)
 			if backoffMs > registration.retryPolicy.MaxBackoffMs {
@@ -245,7 +238,17 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 			}
 		}
 
-		// Try to construct
+		registration.mutex.Lock()
+
+		// Double-check: another goroutine may have succeeded while we slept
+		if registration.initialized && registration.instance != nil && registration.lastError == nil {
+			instance := registration.instance
+			registration.mutex.Unlock()
+			return instance, nil
+		}
+
+		// Try to construct (unlock first to avoid holding lock during potentially slow constructor)
+		registration.mutex.Unlock()
 		instance, err := c.callConstructor(registration.constructor)
 		if err != nil {
 			lastError = err
@@ -258,10 +261,18 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 			continue
 		}
 
-		// Success
+		// Success — acquire lock to store the result
+		registration.mutex.Lock()
+		// Double-check again: another goroutine may have initialized while we were constructing
+		if registration.initialized && registration.instance != nil && registration.lastError == nil {
+			existing := registration.instance
+			registration.mutex.Unlock()
+			return existing, nil
+		}
 		registration.instance = instance
 		registration.initialized = true
 		registration.lastError = nil
+		registration.mutex.Unlock()
 		registration.circuitBreaker.RecordSuccess()
 
 		logger.Info("Lazy component initialized successfully", map[string]interface{}{
@@ -273,7 +284,9 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 	}
 
 	// All attempts failed
+	registration.mutex.Lock()
 	registration.lastError = lastError
+	registration.mutex.Unlock()
 	registration.circuitBreaker.RecordFailure()
 
 	return nil, fmt.Errorf("failed to initialize lazy component '%s' after %d attempts: %w",
@@ -306,6 +319,9 @@ func (c *UnifiedContainer) callConstructor(constructor interface{}) (interface{}
 
 	default:
 		// DI-aware constructor: func(Container) (Service, error)
+		if fnType.NumIn() > 1 {
+			return nil, fmt.Errorf("constructors with %d arguments are not supported; use 0 or 1 parameter", fnType.NumIn())
+		}
 		results := fn.Call([]reflect.Value{reflect.ValueOf(c)})
 		return c.handleConstructorResults(results)
 	}
@@ -472,8 +488,8 @@ func NewCircuitBreaker(config *CircuitBreakerConfig) *CircuitBreaker {
 }
 
 func (cb *CircuitBreaker) IsOpen() bool {
-	cb.mutex.RLock()
-	defer cb.mutex.RUnlock()
+	cb.mutex.Lock()
+	defer cb.mutex.Unlock()
 
 	if cb.state == CircuitOpen {
 		// Check if recovery timeout has passed
@@ -520,7 +536,12 @@ func ResolveTyped[T any](container Container, name string) (T, error) {
 		var zero T
 		return zero, err
 	}
-	return instance.(T), nil
+	typed, ok := instance.(T)
+	if !ok {
+		var zero T
+		return zero, fmt.Errorf("di: type mismatch for '%s': want %T, got %T", name, zero, instance)
+	}
+	return typed, nil
 }
 
 // GetTypedResolver returns a type-safe resolver function.

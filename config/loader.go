@@ -236,8 +236,9 @@ func pathsByPrefix(path, fileName string) []string {
 	}
 }
 
-// autoBindEnvVars automatically binds environment variables to Viper
-// by converting UPPER_CASE_WITH_UNDERSCORES to multiple possible nested key formats.
+// autoBindEnvVars binds environment variables to Viper using BindEnv (correct precedence)
+// instead of Set (which has the highest precedence and would override config file values).
+// Only binds variables that match known config key patterns.
 func autoBindEnvVars(v *viper.Viper) {
 	for _, env := range os.Environ() {
 		pair := strings.SplitN(env, "=", 2)
@@ -246,11 +247,10 @@ func autoBindEnvVars(v *viper.Viper) {
 		}
 
 		key := pair[0]
-		value := pair[1]
 
 		variants := generateEnvKeyVariants(key)
 		for _, variant := range variants {
-			v.Set(variant, value)
+			_ = v.BindEnv(variant, key)
 		}
 	}
 }

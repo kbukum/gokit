@@ -39,7 +39,9 @@ func (c *Config) ApplyDefaults() {
 	if c.MaxAge == 0 {
 		c.MaxAge = 28
 	}
-	c.Timestamp = true
+	if !c.Timestamp {
+		c.Timestamp = true
+	}
 }
 
 // Validate validates logging configuration.

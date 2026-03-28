@@ -59,7 +59,7 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 	if cfg.Endpoint != "" {
 		s3Opts = append(s3Opts, func(o *awss3.Options) {
 			o.BaseEndpoint = aws.String(cfg.Endpoint)
-			o.UsePathStyle = cfg.ForcePathStyle || true
+			o.UsePathStyle = cfg.ForcePathStyle
 		})
 	} else if cfg.ForcePathStyle {
 		s3Opts = append(s3Opts, func(o *awss3.Options) {

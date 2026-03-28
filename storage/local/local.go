@@ -15,6 +15,16 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
+// safePath resolves path within basePath and ensures it cannot escape via traversal.
+func safePath(basePath, path string) (string, error) {
+	// Prefix with "/" so Clean removes leading "../" sequences
+	fullPath := filepath.Join(basePath, filepath.Clean("/"+path))
+	if !strings.HasPrefix(fullPath, basePath+string(filepath.Separator)) && fullPath != basePath {
+		return "", fmt.Errorf("storage: path %q escapes base directory", path)
+	}
+	return fullPath, nil
+}
+
 func init() {
 	storage.RegisterFactory(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
 		c := &Config{}
@@ -52,7 +62,10 @@ func NewStorage(basePath string) (*Storage, error) {
 
 // Upload writes data from reader to a local file.
 func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error {
-	fullPath := filepath.Join(s.basePath, filepath.Clean(path))
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o750); err != nil {
 		return fmt.Errorf("storage: create directory: %w", err)
 	}
@@ -61,17 +74,20 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 	if err != nil {
 		return fmt.Errorf("storage: create file: %w", err)
 	}
-	defer f.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if _, err := io.Copy(f, reader); err != nil {
+		f.Close()
 		return fmt.Errorf("storage: write file: %w", err)
 	}
-	return nil
+	return f.Close()
 }
 
 // Download returns a reader for the local file at the given path.
 func (s *Storage) Download(_ context.Context, path string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(s.basePath, filepath.Clean(path))
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return nil, err
+	}
 	f, err := os.Open(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -84,7 +100,10 @@ func (s *Storage) Download(_ context.Context, path string) (io.ReadCloser, error
 
 // Delete removes a local file. Returns nil if the file does not exist.
 func (s *Storage) Delete(_ context.Context, path string) error {
-	fullPath := filepath.Join(s.basePath, path)
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("storage: delete file: %w", err)
 	}
@@ -93,8 +112,11 @@ func (s *Storage) Delete(_ context.Context, path string) error {
 
 // Exists checks whether a local file exists.
 func (s *Storage) Exists(_ context.Context, path string) (bool, error) {
-	fullPath := filepath.Join(s.basePath, path)
-	_, err := os.Stat(fullPath)
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return false, err
+	}
+	_, err = os.Stat(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return false, nil
@@ -106,14 +128,20 @@ func (s *Storage) Exists(_ context.Context, path string) (bool, error) {
 
 // URL returns a file:// URL for the local file.
 func (s *Storage) URL(_ context.Context, path string) (string, error) {
-	fullPath := filepath.Join(s.basePath, path)
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return "", err
+	}
 	u := &url.URL{Scheme: "file", Path: fullPath}
 	return u.String(), nil
 }
 
 // List returns metadata for all files whose relative path starts with prefix.
 func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, error) {
-	prefixPath := filepath.Join(s.basePath, prefix)
+	prefixPath, err := safePath(s.basePath, prefix)
+	if err != nil {
+		return nil, err
+	}
 	baseDir := filepath.Dir(prefixPath)
 
 	var files []storage.FileInfo

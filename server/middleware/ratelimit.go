@@ -28,6 +28,7 @@ func RateLimit(cfg RateLimitConfig) gin.HandlerFunc {
 	rl := &rateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    cfg.RequestsPerMinute,
+		done:     make(chan struct{}),
 	}
 	go rl.cleanup()
 
@@ -62,6 +63,7 @@ type rateLimiter struct {
 	mu       sync.Mutex
 	requests map[string][]time.Time
 	limit    int
+	done     chan struct{}
 }
 
 func (rl *rateLimiter) allow(key string) bool {
@@ -83,18 +85,23 @@ func (rl *rateLimiter) allow(key string) bool {
 func (rl *rateLimiter) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		rl.mu.Lock()
-		cutoff := time.Now().Add(-time.Minute)
-		for key, times := range rl.requests {
-			valid := filterByTime(times, cutoff)
-			if len(valid) == 0 {
-				delete(rl.requests, key)
-			} else {
-				rl.requests[key] = valid
+	for {
+		select {
+		case <-rl.done:
+			return
+		case <-ticker.C:
+			rl.mu.Lock()
+			cutoff := time.Now().Add(-time.Minute)
+			for key, times := range rl.requests {
+				valid := filterByTime(times, cutoff)
+				if len(valid) == 0 {
+					delete(rl.requests, key)
+				} else {
+					rl.requests[key] = valid
+				}
 			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
 }
 

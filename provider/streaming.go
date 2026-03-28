@@ -110,6 +110,10 @@ func (m *mergedIterator[T]) Next(ctx context.Context) (val T, ok bool, err error
 func (m *mergedIterator[T]) Close() error {
 	m.once.Do(func() {
 		m.cancel()
+		// Drain the channel to wait for all producer goroutines to finish.
+		// The channel is closed after wg.Wait() completes in the background goroutine.
+		for range m.ch {
+		}
 	})
 	var firstErr error
 	for _, it := range m.iters {

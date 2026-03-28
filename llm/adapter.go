@@ -155,7 +155,7 @@ func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan Str
 		return nil, fmt.Errorf("llm: stream: %w", err)
 	}
 
-	ch := make(chan StreamChunk)
+	ch := make(chan StreamChunk, 1)
 	go a.readStream(ctx, streamResp, ch)
 	return ch, nil
 }
@@ -174,8 +174,8 @@ func (a *Adapter) applyDefaults(req *CompletionRequest) {
 	if req.Model == "" {
 		req.Model = a.model
 	}
-	if req.Temperature == 0 {
-		req.Temperature = a.temp
+	if req.Temperature == nil && a.temp != 0 {
+		req.Temperature = &a.temp
 	}
 	if req.MaxTokens == 0 {
 		req.MaxTokens = a.maxTokens

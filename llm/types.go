@@ -15,7 +15,8 @@ type CompletionRequest struct {
 	// SystemPrompt is prepended as a system message.
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt"`
 	// Temperature controls randomness (0.0 = deterministic, 1.0 = creative).
-	Temperature float64 `json:"temperature,omitempty" yaml:"temperature"`
+	// Use a pointer to distinguish "not set" from "set to 0".
+	Temperature *float64 `json:"temperature,omitempty" yaml:"temperature"`
 	// MaxTokens limits the response length. 0 means provider default.
 	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens"`
 	// Stream requests streaming mode. Set automatically by Adapter.Stream().

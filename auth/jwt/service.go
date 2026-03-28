@@ -132,7 +132,9 @@ func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 		opts = append(opts, gojwt.WithIssuer(s.cfg.Issuer))
 	}
 	if len(s.cfg.Audience) > 0 {
-		opts = append(opts, gojwt.WithAudience(s.cfg.Audience[0]))
+		for _, aud := range s.cfg.Audience {
+			opts = append(opts, gojwt.WithAudience(aud))
+		}
 	}
 	return opts
 }
@@ -148,5 +150,26 @@ func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 	}); ok {
 		setter.SetDefaults(now, ttl, s.cfg.Issuer, s.cfg.Audience)
 		return
+	}
+
+	// Fallback: if the claims type embeds jwt.RegisteredClaims, set fields directly
+	type registeredClaimsAccessor interface {
+		GetExpirationTime() (*gojwt.NumericDate, error)
+	}
+	if rc, ok := any(claims).(registeredClaimsAccessor); ok {
+		// Only set if not already configured (zero expiry)
+		if exp, _ := rc.GetExpirationTime(); exp == nil || exp.IsZero() {
+			if setter, ok := any(claims).(*gojwt.RegisteredClaims); ok {
+				setter.ExpiresAt = gojwt.NewNumericDate(now.Add(ttl))
+				setter.IssuedAt = gojwt.NewNumericDate(now)
+				setter.NotBefore = gojwt.NewNumericDate(now)
+				if s.cfg.Issuer != "" {
+					setter.Issuer = s.cfg.Issuer
+				}
+				if len(s.cfg.Audience) > 0 {
+					setter.Audience = gojwt.ClaimStrings(s.cfg.Audience)
+				}
+			}
+		}
 	}
 }

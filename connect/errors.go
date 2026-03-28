@@ -1,6 +1,7 @@
 package connect
 
 import (
+	"errors"
 	"strings"
 
 	connectrpc "connectrpc.com/connect"
@@ -19,7 +20,7 @@ func IsTransientError(err error) bool {
 	}
 
 	var connectErr *connectrpc.Error
-	if asConnectError(err, &connectErr) {
+	if errors.As(err, &connectErr) {
 		switch connectErr.Code() {
 		case connectrpc.CodeUnavailable, connectrpc.CodeResourceExhausted, connectrpc.CodeAborted:
 			return true
@@ -31,20 +32,4 @@ func IsTransientError(err error) bool {
 		strings.Contains(msg, "no such host") ||
 		strings.Contains(msg, "i/o timeout") ||
 		strings.Contains(msg, "unavailable")
-}
-
-// asConnectError extracts a connect.Error from an error chain.
-func asConnectError(err error, target **connectrpc.Error) bool {
-	for err != nil {
-		if ce, ok := err.(*connectrpc.Error); ok {
-			*target = ce
-			return true
-		}
-		if unwrapper, ok := err.(interface{ Unwrap() error }); ok {
-			err = unwrapper.Unwrap()
-		} else {
-			return false
-		}
-	}
-	return false
 }

@@ -35,6 +35,8 @@ func OpenStreamWithTimeout[T any](
 	}
 	resultCh := make(chan result, 1)
 
+	// The opener receives the caller's context so the stream's lifetime is
+	// controlled by the caller, not the connection timeout.
 	go func() {
 		stream, err := opener(ctx)
 		resultCh <- result{stream: stream, err: err}

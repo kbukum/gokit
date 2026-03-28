@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
@@ -79,9 +78,13 @@ func (b *ClientOptionsBuilder) WithStreamInterceptor(i grpc.StreamClientIntercep
 }
 
 // Build constructs the complete set of dial options.
-func (b *ClientOptionsBuilder) Build() []grpc.DialOption {
+func (b *ClientOptionsBuilder) Build() ([]grpc.DialOption, error) {
+	creds, err := transportCredentials(b.config.TLS)
+	if err != nil {
+		return nil, err
+	}
 	opts := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(creds),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                b.config.Keepalive.Time,
 			Timeout:             b.config.Keepalive.Timeout,
@@ -105,7 +108,7 @@ func (b *ClientOptionsBuilder) Build() []grpc.DialOption {
 		opts = append(opts, grpc.WithChainStreamInterceptor(stream...))
 	}
 
-	return opts
+	return opts, nil
 }
 
 func (b *ClientOptionsBuilder) buildServiceConfig() string {

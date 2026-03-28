@@ -126,8 +126,8 @@ func (s *Provider) Stats() discovery.RegistryStats {
 
 // Discover returns the currently registered instances for the named service.
 func (s *Provider) Discover(_ context.Context, serviceName string) ([]discovery.ServiceInstance, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	instances, ok := s.instances[serviceName]
 	if !ok || len(instances) == 0 {

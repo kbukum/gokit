@@ -50,10 +50,15 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	err := c.Run()
 	duration := time.Since(start)
 
+	exitCode := -1
+	if c.ProcessState != nil {
+		exitCode = c.ProcessState.ExitCode()
+	}
+
 	result := &Result{
 		Stdout:   stdout.Bytes(),
 		Stderr:   stderr.Bytes(),
-		ExitCode: c.ProcessState.ExitCode(),
+		ExitCode: exitCode,
 		Duration: duration,
 	}
 

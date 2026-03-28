@@ -35,8 +35,10 @@ func SanitizeEnvValue(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// IsSafeString returns false if s contains patterns commonly associated with
-// SQL injection or XSS attacks.
+// IsSafeString checks whether s passes basic input validation. It is NOT a security
+// boundary — use parameterized queries for SQL and proper encoding for HTML output.
+// This only catches the most obvious injection patterns and is intended as an
+// additional defense-in-depth signal, not a primary safeguard.
 func IsSafeString(s string) bool {
 	return !unsafePatternRegex.MatchString(s)
 }

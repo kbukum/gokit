@@ -24,7 +24,10 @@ func (a *Adapter) readStream(ctx context.Context, resp *httpclient.StreamRespons
 // readSSEStream reads Server-Sent Events and parses each data payload.
 func (a *Adapter) readSSEStream(ctx context.Context, reader sse.Reader, ch chan<- StreamChunk) {
 	if reader == nil {
-		ch <- StreamChunk{Err: ErrNoSSEReader}
+		select {
+		case ch <- StreamChunk{Err: ErrNoSSEReader}:
+		case <-ctx.Done():
+		}
 		return
 	}
 	defer func() { _ = reader.Close() }()
@@ -33,14 +36,20 @@ func (a *Adapter) readSSEStream(ctx context.Context, reader sse.Reader, ch chan<
 		event, err := reader.Next()
 		if err != nil {
 			if err != io.EOF {
-				ch <- StreamChunk{Err: err}
+				select {
+				case ch <- StreamChunk{Err: err}:
+				case <-ctx.Done():
+				}
 			}
 			return
 		}
 
 		content, done, parseErr := a.dialect.ParseStreamChunk([]byte(event.Data))
 		if parseErr != nil {
-			ch <- StreamChunk{Err: parseErr}
+			select {
+			case ch <- StreamChunk{Err: parseErr}:
+			case <-ctx.Done():
+			}
 			return
 		}
 
@@ -48,7 +57,6 @@ func (a *Adapter) readSSEStream(ctx context.Context, reader sse.Reader, ch chan<
 		select {
 		case ch <- chunk:
 		case <-ctx.Done():
-			ch <- StreamChunk{Err: ctx.Err()}
 			return
 		}
 		if done {
@@ -74,7 +82,10 @@ func (a *Adapter) readNDJSONStream(ctx context.Context, body io.ReadCloser, ch c
 
 		content, done, err := a.dialect.ParseStreamChunk(line)
 		if err != nil {
-			ch <- StreamChunk{Err: err}
+			select {
+			case ch <- StreamChunk{Err: err}:
+			case <-ctx.Done():
+			}
 			return
 		}
 
@@ -82,7 +93,6 @@ func (a *Adapter) readNDJSONStream(ctx context.Context, body io.ReadCloser, ch c
 		select {
 		case ch <- chunk:
 		case <-ctx.Done():
-			ch <- StreamChunk{Err: ctx.Err()}
 			return
 		}
 		if done {
@@ -90,6 +100,9 @@ func (a *Adapter) readNDJSONStream(ctx context.Context, body io.ReadCloser, ch c
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		ch <- StreamChunk{Err: err}
+		select {
+		case ch <- StreamChunk{Err: err}:
+		case <-ctx.Done():
+		}
 	}
 }

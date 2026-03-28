@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -294,14 +295,14 @@ func (a *App[C]) stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
 	defer cancel()
 
-	var shutdownErr error
+	var shutdownErrs []error
 
 	// Run OnStop hooks before stopping components
 	if err := runHooks(ctx, a.onStop); err != nil {
 		a.Logger.Error("OnStop hook error", map[string]interface{}{
 			"error": err.Error(),
 		})
-		shutdownErr = err
+		shutdownErrs = append(shutdownErrs, err)
 	}
 
 	// Stop all components (reverse order)
@@ -309,7 +310,7 @@ func (a *App[C]) stop() error {
 		a.Logger.Error("Shutdown completed with errors", map[string]interface{}{
 			"error": err.Error(),
 		})
-		shutdownErr = err
+		shutdownErrs = append(shutdownErrs, err)
 	}
 
 	// Close DI container (lazy components only — singletons are component-managed)
@@ -317,11 +318,9 @@ func (a *App[C]) stop() error {
 		a.Logger.Error("DI container close error", map[string]interface{}{
 			"error": err.Error(),
 		})
-		if shutdownErr == nil {
-			shutdownErr = err
-		}
+		shutdownErrs = append(shutdownErrs, err)
 	}
 
 	a.Logger.Info("Application shutdown complete")
-	return shutdownErr
+	return errors.Join(shutdownErrs...)
 }

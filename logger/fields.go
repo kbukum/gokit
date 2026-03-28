@@ -38,10 +38,13 @@ func Fields(kvs ...interface{}) map[string]interface{} {
 
 // ErrorFields creates fields for an operation that failed.
 func ErrorFields(op string, err error) map[string]interface{} {
-	return map[string]interface{}{
+	m := map[string]interface{}{
 		FieldOperation: op,
-		FieldError:     err.Error(),
 	}
+	if err != nil {
+		m[FieldError] = err.Error()
+	}
+	return m
 }
 
 // DurationFields creates fields for a timed operation.
@@ -57,7 +60,9 @@ func MergeWithError(fields map[string]interface{}, err error) map[string]interfa
 	if fields == nil {
 		fields = make(map[string]interface{})
 	}
-	fields[FieldError] = err.Error()
+	if err != nil {
+		fields[FieldError] = err.Error()
+	}
 	return fields
 }
 

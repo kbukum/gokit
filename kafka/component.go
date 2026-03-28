@@ -88,7 +88,9 @@ func (c *Component) Start(ctx context.Context) error {
 		return nil
 	}
 
-	consumeCtx, cancel := context.WithCancel(ctx)
+	// Detach consumer context from the caller's context so consumers survive
+	// beyond the Start() call. They stop only when cancelFn is called in Stop().
+	consumeCtx, cancel := context.WithCancel(context.Background())
 	c.cancelFn = cancel
 	c.consumeCtx = consumeCtx
 

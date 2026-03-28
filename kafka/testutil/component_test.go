@@ -100,7 +100,10 @@ func TestMockProducer_PublishBinary(t *testing.T) {
 func TestMockProducer_Publish(t *testing.T) {
 	p := &MockProducer{}
 	ctx := context.Background()
-	event := kafka.NewEvent("user.created", "test-service", map[string]string{"id": "123"}, "user-123")
+	event, err := kafka.NewEvent("user.created", "test-service", map[string]string{"id": "123"}, "user-123")
+	if err != nil {
+		t.Fatalf("NewEvent() error: %v", err)
+	}
 	if err := p.Publish(ctx, "events", event); err != nil {
 		t.Fatalf("Publish() error: %v", err)
 	}
@@ -118,7 +121,10 @@ func TestMockProducer_Publish(t *testing.T) {
 
 func TestMockProducer_Publish_WithExplicitKey(t *testing.T) {
 	p := &MockProducer{}
-	event := kafka.NewEvent("test", "src", struct{}{}) // no subject
+	event, err := kafka.NewEvent("test", "src", struct{}{}) // no subject
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := p.Publish(context.Background(), "t", event, "explicit-key"); err != nil {
 		t.Fatal(err)
 	}

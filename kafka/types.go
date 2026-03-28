@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,8 +41,12 @@ func (e Event) ToJSON() ([]byte, error) {
 
 // NewEvent creates an Event with auto-generated ID and timestamp.
 // Data is marshaled to json.RawMessage automatically.
-func NewEvent[D any](eventType, source string, data D, subject ...string) Event {
-	raw, _ := json.Marshal(data)
+// Returns an error if data cannot be marshaled to JSON.
+func NewEvent[D any](eventType, source string, data D, subject ...string) (Event, error) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return Event{}, fmt.Errorf("kafka: marshal event data: %w", err)
+	}
 	e := Event{
 		ID:        uuid.New().String(),
 		Type:      eventType,
@@ -52,7 +57,7 @@ func NewEvent[D any](eventType, source string, data D, subject ...string) Event 
 	if len(subject) > 0 {
 		e.Subject = subject[0]
 	}
-	return e
+	return e, nil
 }
 
 // ParseData unmarshals the event's Data into a typed value.

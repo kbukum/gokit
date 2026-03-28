@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/provider"
@@ -37,7 +38,7 @@ func (s *TypedStore[C]) Load(ctx context.Context, key string) (*C, error) {
 	raw, err := s.client.Get(ctx, s.fullKey(key))
 	if err != nil {
 		// go-redis returns redis.Nil for missing keys
-		if err.Error() == "redis: nil" {
+		if err.Error() == "redis: nil" || strings.Contains(err.Error(), "redis: nil") {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("typed store load %q: %w", key, err)

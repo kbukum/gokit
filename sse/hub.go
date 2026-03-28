@@ -188,13 +188,21 @@ func (h *Hub) closeAllClients() {
 }
 
 // Register adds a client to the hub.
+// Returns immediately if the hub has been stopped.
 func (h *Hub) Register(client *Client) {
-	h.register <- client
+	select {
+	case h.register <- client:
+	case <-h.done:
+	}
 }
 
 // Unregister removes a client from the hub.
+// Returns immediately if the hub has been stopped.
 func (h *Hub) Unregister(client *Client) {
-	h.unregister <- client
+	select {
+	case h.unregister <- client:
+	case <-h.done:
+	}
 }
 
 // BroadcastToPattern sends data to all clients matching the pattern.

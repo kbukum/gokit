@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/pkg/stdcopy"
 
 	"github.com/kbukum/gokit/workload"
 )
@@ -32,7 +32,7 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 	defer resp.Close()
 
 	var stdout, stderr bytes.Buffer
-	if _, err := io.Copy(&stdout, resp.Reader); err != nil {
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, resp.Reader); err != nil {
 		return nil, fmt.Errorf("docker: exec read output: %w", err)
 	}
 
