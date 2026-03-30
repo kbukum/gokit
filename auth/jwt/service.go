@@ -23,6 +23,7 @@ package jwt
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
@@ -140,11 +141,14 @@ func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 }
 
 // prepareClaims sets standard RegisteredClaims fields if they're accessible.
-// Works by attempting to extract RegisteredClaims via the jwt.Claims interface.
+// It supports three approaches (tried in order):
+//  1. SetDefaults interface — cleanest, gives full control to the claims type
+//  2. Reflection — finds embedded RegisteredClaims in any custom struct
+//  3. Direct cast — only works if T is literally *jwt.RegisteredClaims
 func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 	now := time.Now()
 
-	// Try to set via the ClaimsWithDefaults interface if the claims type supports it
+	// Path 1: ClaimsWithDefaults interface (preferred)
 	if setter, ok := any(claims).(interface {
 		SetDefaults(time.Time, time.Duration, string, []string)
 	}); ok {
@@ -152,24 +156,48 @@ func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 		return
 	}
 
-	// Fallback: if the claims type embeds jwt.RegisteredClaims, set fields directly
-	type registeredClaimsAccessor interface {
-		GetExpirationTime() (*gojwt.NumericDate, error)
-	}
-	if rc, ok := any(claims).(registeredClaimsAccessor); ok {
-		// Only set if not already configured (zero expiry)
-		if exp, _ := rc.GetExpirationTime(); exp == nil || exp.IsZero() {
-			if setter, ok := any(claims).(*gojwt.RegisteredClaims); ok {
-				setter.ExpiresAt = gojwt.NewNumericDate(now.Add(ttl))
-				setter.IssuedAt = gojwt.NewNumericDate(now)
-				setter.NotBefore = gojwt.NewNumericDate(now)
-				if s.cfg.Issuer != "" {
-					setter.Issuer = s.cfg.Issuer
-				}
-				if len(s.cfg.Audience) > 0 {
-					setter.Audience = gojwt.ClaimStrings(s.cfg.Audience)
-				}
-			}
+	// Path 2: Use reflection to find embedded RegisteredClaims field
+	if rc := findRegisteredClaims(any(claims)); rc != nil {
+		if rc.ExpiresAt == nil || rc.ExpiresAt.IsZero() {
+			rc.ExpiresAt = gojwt.NewNumericDate(now.Add(ttl))
+		}
+		if rc.IssuedAt == nil {
+			rc.IssuedAt = gojwt.NewNumericDate(now)
+		}
+		if rc.NotBefore == nil {
+			rc.NotBefore = gojwt.NewNumericDate(now)
+		}
+		if rc.Issuer == "" && s.cfg.Issuer != "" {
+			rc.Issuer = s.cfg.Issuer
+		}
+		if len(rc.Audience) == 0 && len(s.cfg.Audience) > 0 {
+			rc.Audience = gojwt.ClaimStrings(s.cfg.Audience)
 		}
 	}
+}
+
+// findRegisteredClaims uses reflection to find an embedded
+// jwt.RegisteredClaims field in a struct (possibly behind a pointer).
+// Returns a pointer to the embedded field, or nil if not found.
+func findRegisteredClaims(v any) *gojwt.RegisteredClaims {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return nil
+		}
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return nil
+	}
+
+	// Look for a field of type jwt.RegisteredClaims
+	rcType := reflect.TypeOf(gojwt.RegisteredClaims{})
+	for i := 0; i < rv.NumField(); i++ {
+		field := rv.Field(i)
+		if field.Type() == rcType && field.CanAddr() {
+			return field.Addr().Interface().(*gojwt.RegisteredClaims)
+		}
+	}
+	return nil
 }
