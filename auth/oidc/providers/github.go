@@ -10,83 +10,72 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
+// GitHub OAuth2 endpoint defaults.
 const (
-	githubAuthURL     = "https://github.com/login/oauth/authorize"
-	githubTokenURL    = "https://github.com/login/oauth/access_token"
-	githubUserInfoURL = "https://api.github.com/user"
-	githubEmailsURL   = "https://api.github.com/user/emails"
+	GitHubAuthEndpoint     = "https://github.com/login/oauth/authorize"
+	GitHubTokenEndpoint    = "https://github.com/login/oauth/access_token"
+	GitHubUserInfoEndpoint = "https://api.github.com/user"
+	GitHubEmailsEndpoint   = "https://api.github.com/user/emails"
 )
 
-// GitHub implements the oidc.Provider interface for GitHub OAuth2.
+// GitHubDefaultScopes are the standard scopes for GitHub login.
+var GitHubDefaultScopes = []string{"read:user", "user:email"}
+
+// NewGitHub creates a GitHub OAuth2 provider.
 // Note: GitHub uses plain OAuth2, not OIDC — there is no ID token.
-type GitHub struct {
-	cfg ProviderConfig
-}
-
-// NewGitHub creates a new GitHub provider.
-// Default scopes: read:user, user:email.
-func NewGitHub(cfg ProviderConfig) *GitHub {
-	if len(cfg.Scopes) == 0 {
-		cfg.Scopes = []string{"read:user", "user:email"}
-	}
-	return &GitHub{cfg: cfg}
-}
-
-func (g *GitHub) Name() string { return "github" }
-
-func (g *GitHub) AuthURL(state string, opts ...oidc.AuthURLOption) string {
-	o := oidc.ApplyAuthURLOptions(opts)
-	return buildAuthURL(githubAuthURL, g.cfg, state, o, nil)
-}
-
-func (g *GitHub) Exchange(ctx context.Context, code string, opts ...oidc.ExchangeOption) (*oidc.TokenResult, error) {
-	o := oidc.ApplyExchangeOptions(opts)
-	tok, err := exchangeCode(ctx, githubTokenURL, g.cfg, code, o, map[string]string{
-		"Accept": "application/json",
+// All fields have sensible defaults; override any by setting them in cfg.
+//
+// For GitHub Enterprise, use NewGeneric() with custom endpoints:
+//
+//	providers.NewGeneric(providers.GenericConfig{
+//	    AuthEndpoint: "https://github.example.com/login/oauth/authorize",
+//	    ...
+//	})
+func NewGitHub(cfg ProviderConfig) *GenericProvider {
+	return NewGeneric(GenericConfig{
+		ProviderConfig:   withDefaultScopes(cfg, GitHubDefaultScopes...),
+		ProviderName:     "github",
+		Label:            "GitHub",
+		Type:             "identity",
+		AuthEndpoint:     GitHubAuthEndpoint,
+		TokenEndpoint:    GitHubTokenEndpoint,
+		UserInfoEndpoint: GitHubUserInfoEndpoint,
+		TokenExtraHeaders: map[string]string{
+			"Accept": "application/json",
+		},
+		UserInfo: UserInfoMapper{
+			SubjectKey: "id",
+			EmailKey:   "email",
+			NameKey:    "name",
+			PictureKey: "avatar_url",
+		},
+		PostUserInfoHook: newGitHubEmailFallback(GitHubEmailsEndpoint),
 	})
-	if err != nil {
-		return nil, fmt.Errorf("github: %w", err)
-	}
-	return toTokenResult(tok), nil
 }
 
-func (g *GitHub) UserInfo(ctx context.Context, accessToken string) (*oidc.UserInfo, error) {
-	var raw map[string]interface{}
-	if err := fetchJSON(ctx, githubUserInfoURL, accessToken, &raw); err != nil {
-		return nil, fmt.Errorf("github user: %w", err)
-	}
-
-	email := strVal(raw, "email")
-	emailVerified := email != ""
-
-	// If email is not public, fetch from /user/emails endpoint
-	if email == "" {
-		e, verified, err := g.fetchPrimaryEmail(ctx, accessToken)
-		if err == nil && e != "" {
-			email = e
-			emailVerified = verified
+// newGitHubEmailFallback returns a hook that fetches the user's primary email
+// from the GitHub /user/emails endpoint when it's not public on /user.
+// The endpoint URL is parameterized to support GitHub Enterprise.
+func newGitHubEmailFallback(emailsEndpoint string) func(ctx context.Context, accessToken string, info *oidc.UserInfo) error {
+	return func(ctx context.Context, accessToken string, info *oidc.UserInfo) error {
+		if info.Email != "" {
+			info.EmailVerified = true
+			return nil
 		}
-	}
 
-	// GitHub uses numeric IDs — convert to string
-	subject := strVal(raw, "login")
-	if id, ok := raw["id"]; ok {
-		subject = fmt.Sprintf("%v", id)
+		email, verified, err := fetchGitHubPrimaryEmail(ctx, emailsEndpoint, accessToken)
+		if err != nil {
+			return nil // non-fatal — return what we have
+		}
+		info.Email = email
+		info.EmailVerified = verified
+		return nil
 	}
-
-	return &oidc.UserInfo{
-		Subject:       subject,
-		Email:         email,
-		EmailVerified: emailVerified,
-		Name:          strVal(raw, "name"),
-		Picture:       strVal(raw, "avatar_url"),
-		Raw:           raw,
-	}, nil
 }
 
-// fetchPrimaryEmail fetches the user's primary email from the GitHub emails API.
-func (g *GitHub) fetchPrimaryEmail(ctx context.Context, accessToken string) (string, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubEmailsURL, nil)
+// fetchGitHubPrimaryEmail fetches the user's primary email from a GitHub emails API endpoint.
+func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) (string, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", false, err
 	}
@@ -125,5 +114,3 @@ func (g *GitHub) fetchPrimaryEmail(ctx context.Context, accessToken string) (str
 	}
 	return "", false, nil
 }
-
-var _ oidc.Provider = (*GitHub)(nil)

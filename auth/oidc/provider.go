@@ -3,8 +3,9 @@ package oidc
 import "context"
 
 // Provider defines the contract for an OAuth2/OIDC authentication provider.
-// Projects implement this per-provider (Google, GitHub, Microsoft, etc.)
-// or use the generic OIDC implementation for standard-compliant providers.
+// All built-in providers use GenericProvider from the providers package.
+// Custom providers can implement this interface directly if GenericConfig
+// doesn't cover their needs.
 //
 // This interface covers the Authorization Code flow — the most common
 // server-side OAuth2 pattern.
@@ -22,8 +23,22 @@ type Provider interface {
 	Exchange(ctx context.Context, code string, opts ...ExchangeOption) (*TokenResult, error)
 
 	// UserInfo fetches the user's profile from the provider using an access token.
-	// Not all providers support this endpoint (GitHub uses a different API).
+	// Providers that don't support a UserInfo endpoint (e.g., Apple) should return
+	// an error here; the Manager will automatically fall back to parsing the ID token.
 	UserInfo(ctx context.Context, accessToken string) (*UserInfo, error)
+}
+
+// ProviderMeta is an optional interface that providers can implement to expose
+// display metadata. The Manager uses this to build rich provider listings for UIs.
+// GenericProvider implements this automatically from its config.
+type ProviderMeta interface {
+	// Label returns the human-readable display name (e.g., "Google", "Sign in with Apple").
+	Label() string
+
+	// ProviderType returns a category string for UI grouping.
+	// Convention: "identity" for login-only providers (Google, GitHub, Apple),
+	// "social" for platform-connected providers (YouTube, TikTok, Instagram).
+	ProviderType() string
 }
 
 // AuthURLOption configures authorization URL generation.
