@@ -1,78 +1,55 @@
-# Copilot Instructions — gokit
+# gokit
 
-## Overview
+Multi-module Go library providing foundational infrastructure for service development. This is the reference implementation — pykit (Python) and rskit (Rust) mirror its structure.
 
-gokit (`github.com/kbukum/gokit`) is a multi-module Go library providing foundational
-infrastructure for all services in the SkillSense ecosystem. It is the **golden framework** —
-all infrastructure lives here, never in consuming projects.
+## Build, Test, and Lint
 
-## Architecture
+```bash
+make check              # Build + vet + test (full validation)
+make build              # Build (M=<module> for specific module)
+make test               # Test with -race -count=1 (M=<module>, T=<pattern>)
+make test-coverage      # Test with coverage report
+make lint               # golangci-lint (M=<module>)
+make fmt                # gofmt -s -w
+make tidy               # go mod tidy across all modules
+```
 
-- **Multi-module monorepo**: Root `go.mod` for core packages, sub-modules with own `go.mod` for heavy deps
-- **Core** (root module): config, logger, errors, validation, encryption, component, di, resilience, observability, provider, pipeline, dag, media, security, bootstrap, sse, util, version, bench
-- **Sub-modules**: auth, authz, database, redis, httpclient, kafka, storage, server, grpc, connect, discovery, process, workload, llm, stateful, testutil, bench/viz, bench/storage
+Cross-module operations use `./gomod.sh`:
+```bash
+./gomod.sh tidy         # Tidy all modules
+./gomod.sh cmd "go test -race -count=1"   # Run command in all modules
+./gomod.sh cmd "go test" -m kafka          # Run in specific module
+```
 
-## Key Principles
+Requires: Go 1.25+, golangci-lint (`go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`).
 
-1. **Generics-first**: All public APIs use Go generics (`[T any]`, `[L comparable]`). No `interface{}` in public APIs.
-2. **Interface-heavy, minimal methods**: Interfaces have 1-3 methods. Components opt-in to capabilities via separate interfaces.
-3. **Functional options**: All constructors accept `...Option` for extensibility.
-4. **Module boundary = dependency boundary**: If a package introduces a new external dependency, it's a separate module with its own `go.mod`.
-5. **Middleware composition**: Cross-cutting concerns (logging, metrics, tracing) via `Middleware[I, O]` chains.
-6. **Provider pattern**: Four interaction types — `RequestResponse[I,O]`, `Stream[I,O]`, `Sink[I]`, `Duplex[I,O]` — with Registry/Manager/Selector for runtime switching.
-7. **Pipeline pattern**: Lazy pull-based `Iterator[T]` with composable operators (Map, Filter, Parallel, Batch, etc.).
-8. **Component lifecycle**: `Start/Stop/Health` with deterministic ordering via Registry.
+## Module Structure
 
-## Cross-Language Portability
+Multi-module monorepo. Core packages share the root `go.mod`. Packages with heavy external dependencies have their own `go.mod` as sub-modules.
 
-gokit is the **reference implementation** for a polyglot kit ecosystem:
-- **gokit** (Go) — reference implementation, design happens here first
-- **pykit** (Python) — mirrors gokit structure with Python idioms (protocols, async/await, Pydantic)
-- **ruskit** (Rust) — mirrors gokit structure with Rust idioms (traits, serde, tokio)
+- **Root module** (`github.com/kbukum/gokit`): config, logger, errors, validation, encryption, component, di, resilience, observability, provider, pipeline, dag, media, security, bootstrap, sse, util, version, bench
+- **Sub-modules** (own `go.mod`): auth, authz, database, redis, httpclient, kafka, storage, server, grpc, connect, discovery, workload, llm, stateful, testutil
 
-When designing new modules:
-- Use the **same names** across kits (adapted for language casing: `BenchRunner` / `BenchRunner` / `BenchRunner`)
-- Use the **same module structure** (`{kit}/bench/`, `{kit}/bench/metric/`, `{kit}/bench/report/`)
-- Shared artifacts (JSON schemas, dataset formats, Vega-Lite specs) must be **identical** across languages
-- All three kits must produce **identical output** for the same input data
-
-## Technology
-
-- Go 1.25+ (generics, iterators)
-- zerolog (logging), viper (config), validator/v10 (validation)
-- OpenTelemetry (tracing + metrics)
-- No CGO in core — pure Go
+When adding a new module:
+1. No heavy deps → add under root module, no new `go.mod`
+2. Heavy deps → create sub-module with own `go.mod`, `replace` directive to `../` for local dev
+3. Always create `doc.go` with package documentation
 
 ## Code Style
 
-- `gofmt` + `golangci-lint`
-- Package names: lowercase, single-word, no plurals
-- Every package has a `doc.go` with `# Section` headings, usage examples, and key type overview
-- Exported interfaces + factory functions; concrete implementations often unexported
-- Errors: RFC 7807 `AppError` with typed error codes
-- Config: embed `config.ServiceConfig`, use `ApplyDefaults()` + `Validate()`
-- Tests: parallel, table-driven, use `testutil` helpers
+- `gofmt` + `golangci-lint` (`.golangci.yml` at root)
+- Generics-first: all public APIs use Go generics. No `interface{}` in public APIs.
+- Interfaces have 1–3 methods. Components opt-in to capabilities via separate interfaces.
+- Constructors accept `...Option` for extensibility (functional options pattern).
+- Package names: lowercase, single-word, no plurals.
+- Every package has a `doc.go`.
+- Exported interfaces + factory functions; concrete implementations unexported.
+- Errors: RFC 7807 `AppError` with typed error codes.
+- Tests: parallel, table-driven, use `testutil` helpers.
 
-## Module Creation Checklist
+## Key Patterns
 
-When adding a new module:
-1. Core package (no heavy deps) → add under root, no new `go.mod`
-2. Heavy deps → create sub-module with own `go.mod`, `replace` directive to `../` for local dev
-3. Always create `doc.go` with package documentation
-4. Add to root `README.md` module map
-5. Add `CHANGELOG.md` entry
-6. Consider pykit/ruskit portability — design for cross-language consistency
-7. Follow existing patterns: look at `provider/`, `pipeline/`, `bench/` for reference
-
-## Directory Structure
-
-```
-gokit/
-├── Core packages (root go.mod): config, logger, errors, validation, encryption,
-│   component, di, resilience, observability, provider, pipeline, dag, media,
-│   security, bootstrap, sse, util, version, bench
-├── Sub-modules (own go.mod): auth, authz, database, redis, httpclient, kafka,
-│   storage, server, grpc, connect, discovery, process, workload, llm, stateful,
-│   testutil, bench/viz, bench/storage
-└── docs/ — Design documents and implementation plans
-```
+- **Provider pattern**: `RequestResponse[I,O]`, `Stream[I,O]`, `Sink[I]`, `Duplex[I,O]` with Registry/Manager/Selector.
+- **Pipeline pattern**: Lazy pull-based `Iterator[T]` with composable operators.
+- **Component lifecycle**: `Start/Stop/Health` with deterministic ordering via Registry.
+- **Middleware composition**: `Middleware[I, O]` chains for cross-cutting concerns.
