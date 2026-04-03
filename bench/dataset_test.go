@@ -43,7 +43,7 @@ func TestNewDatasetLoader(t *testing.T) {
 	writeSampleFile(t, dir, "s1.txt", "hello world")
 	writeSampleFile(t, dir, "s2.txt", "goodbye world")
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 
 	ctx := context.Background()
 	samples, err := loader.All(ctx)
@@ -74,7 +74,7 @@ func TestDatasetLoaderManifest(t *testing.T) {
 		Samples: []ManifestSample{{ID: "s1", Label: "a"}},
 	})
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	m, err := loader.Manifest()
 	if err != nil {
 		t.Fatalf("Manifest() error: %v", err)
@@ -104,7 +104,7 @@ func TestDatasetLoaderIterator(t *testing.T) {
 		writeSampleFile(t, dir, name, "content-"+name)
 	}
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
 
 	iter, err := loader.Iterator(ctx)
@@ -146,7 +146,7 @@ func TestDatasetLoaderFilter(t *testing.T) {
 		writeSampleFile(t, dir, name, "data")
 	}
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	filtered := loader.Filter(func(ms ManifestSample) bool {
 		return ms.Label == "positive"
 	})
@@ -183,7 +183,7 @@ func TestDatasetLoaderCustomManifestFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loader := NewDatasetLoader[string](dir, stringMapper, WithManifestFile("custom.json"))
+	loader := NewDatasetLoader(dir, stringMapper, WithManifestFile("custom.json"))
 	manifest, err := loader.Manifest()
 	if err != nil {
 		t.Fatalf("Manifest() error: %v", err)
@@ -197,7 +197,7 @@ func TestDatasetLoaderMissingManifest(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 
 	ctx := context.Background()
 	_, err := loader.All(ctx)
@@ -214,7 +214,7 @@ func TestDatasetLoaderBadJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
 	_, err := loader.All(ctx)
 	if err == nil {
@@ -234,7 +234,7 @@ func TestDatasetLoaderMissingFile(t *testing.T) {
 		},
 	})
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
 	_, err := loader.All(ctx)
 	if err == nil {
@@ -261,7 +261,7 @@ func TestDatasetLoaderSampleWithMetadata(t *testing.T) {
 	})
 	writeSampleFile(t, dir, "s1.txt", "content")
 
-	loader := NewDatasetLoader[string](dir, stringMapper)
+	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
 	samples, err := loader.All(ctx)
 	if err != nil {

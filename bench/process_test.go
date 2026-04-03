@@ -12,7 +12,7 @@ import (
 func TestFromProcessName(t *testing.T) {
 	t.Parallel()
 
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"echo-eval",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "echo", Args: []string{"hello"}}
@@ -30,7 +30,7 @@ func TestFromProcessName(t *testing.T) {
 func TestFromProcessIsAvailable(t *testing.T) {
 	t.Parallel()
 
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"test",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "echo"}
@@ -48,7 +48,7 @@ func TestFromProcessIsAvailable(t *testing.T) {
 func TestFromProcessExecute(t *testing.T) {
 	t.Parallel()
 
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"echo-eval",
 		func(s Sample[string]) process.Command {
 			return process.Command{
@@ -77,7 +77,7 @@ func TestFromProcessExecute(t *testing.T) {
 func TestFromProcessErrorBadBinary(t *testing.T) {
 	t.Parallel()
 
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"bad-eval",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "/nonexistent/binary/that/does/not/exist"}
@@ -100,7 +100,7 @@ func TestFromProcessPassesInputToCommand(t *testing.T) {
 	t.Parallel()
 
 	var captured []byte
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"capture",
 		func(s Sample[string]) process.Command {
 			captured = s.Input
@@ -124,7 +124,7 @@ func TestFromProcessPassesInputToCommand(t *testing.T) {
 func TestFromProcessParseError(t *testing.T) {
 	t.Parallel()
 
-	eval := FromProcess[string](
+	eval := FromProcess(
 		"parse-fail",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "echo", Args: []string{"-n", "output"}}

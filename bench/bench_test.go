@@ -135,7 +135,7 @@ func TestEndToEnd(t *testing.T) {
 	createDataset(t, dataDir)
 
 	// ── 2. Create dataset loader ──
-	loader := bench.NewDatasetLoader[string](dataDir, stringMapper)
+	loader := bench.NewDatasetLoader(dataDir, stringMapper)
 
 	// Sanity-check the manifest loads.
 	manifest, err := loader.Manifest()
@@ -147,16 +147,16 @@ func TestEndToEnd(t *testing.T) {
 	}
 
 	// ── 3 & 4. Evaluators with middleware ──
-	evalA := bench.WithTiming[string](branchAEvaluator())
+	evalA := bench.WithTiming(branchAEvaluator())
 	evalB := branchBEvaluator()
 
 	// ── 5. Create runner (run 1) ──
 	// Use BinaryClassification and ExactMatch for storage-safe runs
 	// (AUCROC/BrierScore can produce +Inf which is not JSON-serializable).
 	storage := bench.NewFileStorage(storageDir)
-	runner1 := bench.NewBenchRunner[string](
-		bench.WithMetrics[string](metric.AsRunMetrics[string](
-			metric.BinaryClassification[string]("ai_generated"),
+	runner1 := bench.NewBenchRunner(
+		bench.WithMetrics(metric.AsRunMetrics(
+			metric.BinaryClassification("ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
 		bench.WithStorage[string](storage),
@@ -236,9 +236,9 @@ func TestEndToEnd(t *testing.T) {
 		}, nil
 	})
 
-	runner2 := bench.NewBenchRunner[string](
-		bench.WithMetrics[string](metric.AsRunMetrics[string](
-			metric.BinaryClassification[string]("ai_generated"),
+	runner2 := bench.NewBenchRunner(
+		bench.WithMetrics(metric.AsRunMetrics(
+			metric.BinaryClassification("ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
 		bench.WithStorage[string](storage),
@@ -393,10 +393,10 @@ func TestEndToEnd(t *testing.T) {
 
 	// ── 13. Probability metrics (AUCROC, BrierScore) without storage ──
 	t.Run("probability_metrics", func(t *testing.T) {
-		probRunner := bench.NewBenchRunner[string](
-			bench.WithMetrics[string](metric.AsRunMetrics[string](
-				metric.AUCROC[string]("ai_generated"),
-				metric.BrierScore[string]("ai_generated"),
+		probRunner := bench.NewBenchRunner(
+			bench.WithMetrics(metric.AsRunMetrics(
+				metric.AUCROC("ai_generated"),
+				metric.BrierScore("ai_generated"),
 			)...),
 		)
 		probRunner.Register("branch-a", branchAEvaluator())
@@ -421,7 +421,7 @@ func TestEndToEndWithRegression(t *testing.T) {
 
 	dataDir := t.TempDir()
 	createDataset(t, dataDir)
-	loader := bench.NewDatasetLoader[string](dataDir, stringMapper)
+	loader := bench.NewDatasetLoader(dataDir, stringMapper)
 
 	// Baseline: good evaluator (correctly classifies most samples).
 	goodEval := bench.EvaluatorFunc("good-model", func(_ context.Context, input []byte) (bench.Prediction[string], error) {
@@ -461,14 +461,14 @@ func TestEndToEndWithRegression(t *testing.T) {
 		}, nil
 	})
 
-	metrics := metric.AsRunMetrics[string](
-		metric.BinaryClassification[string]("ai_generated"),
+	metrics := metric.AsRunMetrics(
+		metric.BinaryClassification("ai_generated"),
 		metric.ExactMatch[string](),
 	)
 
 	// Run baseline.
-	baseRunner := bench.NewBenchRunner[string](
-		bench.WithMetrics[string](metrics...),
+	baseRunner := bench.NewBenchRunner(
+		bench.WithMetrics(metrics...),
 		bench.WithTag[string]("baseline"),
 	)
 	baseRunner.Register("model", goodEval)
@@ -479,8 +479,8 @@ func TestEndToEndWithRegression(t *testing.T) {
 	}
 
 	// Run target with worse model.
-	targetRunner := bench.NewBenchRunner[string](
-		bench.WithMetrics[string](metrics...),
+	targetRunner := bench.NewBenchRunner(
+		bench.WithMetrics(metrics...),
 		bench.WithTag[string]("regression-target"),
 	)
 	targetRunner.Register("model", badEval)

@@ -49,6 +49,12 @@ func TestSampleWithMetadata(t *testing.T) {
 		Source:   "test-set",
 		Metadata: map[string]any{"lang": "en", "score": 0.9},
 	}
+	if s.ID != "m1" {
+		t.Errorf("ID = %q, want %q", s.ID, "m1")
+	}
+	if s.Label != "positive" {
+		t.Errorf("Label = %q, want %q", s.Label, "positive")
+	}
 	if s.Source != "test-set" {
 		t.Errorf("Source = %q, want %q", s.Source, "test-set")
 	}
@@ -100,6 +106,15 @@ func TestPredictionWithScores(t *testing.T) {
 		Label:    "cat",
 		Score:    0.8,
 		Scores:   map[string]float64{"cat": 0.8, "dog": 0.15, "bird": 0.05},
+	}
+	if p.SampleID != "s1" {
+		t.Errorf("SampleID = %q, want %q", p.SampleID, "s1")
+	}
+	if p.Label != "cat" {
+		t.Errorf("Label = %q, want %q", p.Label, "cat")
+	}
+	if p.Score != 0.8 {
+		t.Errorf("Score = %f, want 0.8", p.Score)
 	}
 	if p.Scores["cat"] != 0.8 {
 		t.Errorf("Scores[cat] = %f, want 0.8", p.Scores["cat"])

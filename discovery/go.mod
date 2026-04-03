@@ -1,15 +1,15 @@
 module github.com/kbukum/gokit/discovery
 
-go 1.25.5
+go 1.25.8
 
 require (
-	github.com/hashicorp/consul/api v1.33.2
+	github.com/hashicorp/consul/api v1.33.7
 	github.com/kbukum/gokit v0.2.0
 )
 
 require (
 	github.com/armon/go-metrics v0.4.1 // indirect
-	github.com/fatih/color v1.18.0 // indirect
+	github.com/fatih/color v1.19.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
@@ -23,9 +23,9 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/rs/zerolog v1.34.0 // indirect
-	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
-	golang.org/x/sys v0.41.0 // indirect
+	github.com/rs/zerolog v1.35.0 // indirect
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 )
 
 replace github.com/kbukum/gokit => ../

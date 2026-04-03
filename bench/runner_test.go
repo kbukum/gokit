@@ -33,7 +33,7 @@ func setupTestDataset(t *testing.T) *DatasetLoader[string] {
 			t.Fatal(err)
 		}
 	}
-	loader := NewDatasetLoader[string](dir, func(s string) (string, error) { return s, nil })
+	loader := NewDatasetLoader(dir, func(s string) (string, error) { return s, nil })
 	return loader
 }
 
@@ -65,8 +65,8 @@ func TestBenchRunnerBasic(t *testing.T) {
 	t.Parallel()
 
 	loader := setupTestDataset(t)
-	runner := NewBenchRunner[string](
-		WithMetrics[string](&simpleMetric{name: "accuracy"}),
+	runner := NewBenchRunner(
+		WithMetrics(&simpleMetric{name: "accuracy"}),
 	)
 	runner.Register("perfect-model", EvaluatorFunc("perfect", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		// This evaluator always returns "positive" with score 0.9.
@@ -104,8 +104,8 @@ func TestBenchRunnerMultipleBranches(t *testing.T) {
 	t.Parallel()
 
 	loader := setupTestDataset(t)
-	runner := NewBenchRunner[string](
-		WithMetrics[string](&simpleMetric{name: "accuracy"}),
+	runner := NewBenchRunner(
+		WithMetrics(&simpleMetric{name: "accuracy"}),
 	)
 
 	// Branch 1: always predicts positive
@@ -139,8 +139,8 @@ func TestBenchRunnerWithConcurrency(t *testing.T) {
 	t.Parallel()
 
 	loader := setupTestDataset(t)
-	runner := NewBenchRunner[string](
-		WithMetrics[string](&simpleMetric{name: "accuracy"}),
+	runner := NewBenchRunner(
+		WithMetrics(&simpleMetric{name: "accuracy"}),
 		WithConcurrency[string](4),
 	)
 	runner.Register("concurrent", EvaluatorFunc("model", func(ctx context.Context, input []byte) (Prediction[string], error) {
@@ -164,7 +164,7 @@ func TestBenchRunnerWithTag(t *testing.T) {
 	t.Parallel()
 
 	loader := setupTestDataset(t)
-	runner := NewBenchRunner[string](
+	runner := NewBenchRunner(
 		WithTag[string]("v1-experiment"),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
@@ -206,7 +206,7 @@ func TestBenchRunnerEmptyDataset(t *testing.T) {
 	data, _ := json.Marshal(manifest)
 	os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644)
 
-	loader := NewDatasetLoader[string](dir, func(s string) (string, error) { return s, nil })
+	loader := NewDatasetLoader(dir, func(s string) (string, error) { return s, nil })
 	runner := NewBenchRunner[string]()
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		return Prediction[string]{}, nil
@@ -226,7 +226,7 @@ func TestBenchRunnerWithStorage(t *testing.T) {
 	loader := setupTestDataset(t)
 
 	storage := NewFileStorage(storageDir)
-	runner := NewBenchRunner[string](
+	runner := NewBenchRunner(
 		WithStorage[string](storage),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
