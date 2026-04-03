@@ -129,7 +129,7 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 // --- oidc.ProviderMeta implementation ---
 
 func (p *GenericProvider) Label() string        { return p.cfg.Label }
-func (p *GenericProvider) ProviderType() string  { return p.cfg.Type }
+func (p *GenericProvider) ProviderType() string { return p.cfg.Type }
 
 // --- Internal helpers ---
 

@@ -18,7 +18,7 @@ type testClaims struct {
 // testClaimsWithDefaults implements the SetDefaults interface.
 type testClaimsWithDefaults struct {
 	gojwt.RegisteredClaims
-	UserID        string `json:"user_id"`
+	UserID         string `json:"user_id"`
 	defaultsCalled bool
 }
 

@@ -17,13 +17,13 @@ import (
 type MockOAuthServer struct {
 	server *httptest.Server
 
-	mu             sync.Mutex
-	tokenResponse  map[string]interface{}
-	userResponse   map[string]interface{}
-	tokenRequests  []map[string]string
-	failToken      bool
-	failUserInfo   bool
-	idTokenClaims  map[string]interface{}
+	mu            sync.Mutex
+	tokenResponse map[string]interface{}
+	userResponse  map[string]interface{}
+	tokenRequests []map[string]string
+	failToken     bool
+	failUserInfo  bool
+	idTokenClaims map[string]interface{}
 }
 
 // NewMockOAuthServer creates and starts a mock OAuth server with sensible defaults.

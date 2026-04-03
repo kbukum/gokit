@@ -18,8 +18,8 @@ import (
 // message headers.
 type kafkaHeaderCarrier map[string]string
 
-func (c kafkaHeaderCarrier) Get(key string) string      { return c[key] }
-func (c kafkaHeaderCarrier) Set(key, value string)       { c[key] = value }
+func (c kafkaHeaderCarrier) Get(key string) string { return c[key] }
+func (c kafkaHeaderCarrier) Set(key, value string) { c[key] = value }
 func (c kafkaHeaderCarrier) Keys() []string {
 	keys := make([]string, 0, len(c))
 	for k := range c {

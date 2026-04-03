@@ -51,10 +51,10 @@ type MockProvider struct {
 	// UserInfoFunc, if set, is called instead of returning UserInfoResult/UserInfoErr.
 	UserInfoFunc func(ctx context.Context, accessToken string) (*oidc.UserInfo, error)
 
-	mu             sync.Mutex
-	exchangeCalls  []string // codes passed to Exchange
-	userInfoCalls  []string // tokens passed to UserInfo
-	authURLCalls   []AuthURLCall
+	mu            sync.Mutex
+	exchangeCalls []string // codes passed to Exchange
+	userInfoCalls []string // tokens passed to UserInfo
+	authURLCalls  []AuthURLCall
 }
 
 // AuthURLCall records arguments passed to AuthURL.
