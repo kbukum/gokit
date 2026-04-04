@@ -209,7 +209,7 @@ func TestGenerateRefresh_UsesRefreshTTL(t *testing.T) {
 	}
 
 	expected := before.Add(7 * 24 * time.Hour)
-	if claims.ExpiresAt.Time.Before(expected.Add(-time.Second)) {
+	if claims.ExpiresAt.Before(expected.Add(-time.Second)) {
 		t.Error("refresh token TTL seems too short")
 	}
 }

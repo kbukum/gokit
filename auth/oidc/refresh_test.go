@@ -231,7 +231,7 @@ func TestRefreshToken_ContextCancellation(t *testing.T) {
 		RefreshToken:  "rt",
 	})
 	if err == nil {
-		t.Fatal("expected error for cancelled context")
+		t.Fatal("expected error for canceled context")
 	}
 }
 

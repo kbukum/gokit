@@ -15,7 +15,7 @@ import (
 // Apple OAuth2/OIDC endpoint defaults.
 const (
 	AppleAuthEndpoint  = "https://appleid.apple.com/auth/authorize"
-	AppleTokenEndpoint = "https://appleid.apple.com/auth/token"
+	AppleTokenEndpoint = "https://appleid.apple.com/auth/token" //nolint:gosec // OAuth endpoint URL, not a credential
 	AppleAudience      = "https://appleid.apple.com"
 )
 

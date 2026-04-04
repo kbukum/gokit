@@ -152,7 +152,7 @@ func (m *MockOAuthServer) Reset() {
 
 func (m *MockOAuthServer) handleAuth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"redirect": true,
 		"params":   r.URL.Query(),
 	})
@@ -172,7 +172,10 @@ func (m *MockOAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 			params = body
 		}
 	} else {
-		r.ParseForm()
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
 		for k, v := range r.PostForm {
 			if len(v) > 0 {
 				params[k] = v[0]
@@ -183,7 +186,7 @@ func (m *MockOAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 
 	if m.failToken {
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
 		return
 	}
 
@@ -198,7 +201,7 @@ func (m *MockOAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (m *MockOAuthServer) handleUserInfo(w http.ResponseWriter, r *http.Request) {
@@ -207,12 +210,12 @@ func (m *MockOAuthServer) handleUserInfo(w http.ResponseWriter, r *http.Request)
 
 	if m.failUserInfo {
 		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(map[string]string{"error": "invalid_token"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid_token"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(m.userResponse)
+	_ = json.NewEncoder(w).Encode(m.userResponse)
 }
 
 // BuildTestIDToken creates an unsigned JWT with the given claims.

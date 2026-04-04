@@ -3,7 +3,7 @@ package providers
 // Google OAuth2/OIDC endpoint defaults.
 const (
 	GoogleAuthEndpoint     = "https://accounts.google.com/o/oauth2/v2/auth"
-	GoogleTokenEndpoint    = "https://oauth2.googleapis.com/token"
+	GoogleTokenEndpoint    = "https://oauth2.googleapis.com/token" //nolint:gosec // OAuth endpoint URL, not a credential
 	GoogleUserInfoEndpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
 )
 

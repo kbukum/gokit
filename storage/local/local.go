@@ -76,7 +76,7 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 	}
 
 	if _, err := io.Copy(f, reader); err != nil {
-		f.Close()
+		_ = f.Close()
 		return fmt.Errorf("storage: write file: %w", err)
 	}
 	return f.Close()

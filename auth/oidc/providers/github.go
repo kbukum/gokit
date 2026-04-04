@@ -13,7 +13,7 @@ import (
 // GitHub OAuth2 endpoint defaults.
 const (
 	GitHubAuthEndpoint     = "https://github.com/login/oauth/authorize"
-	GitHubTokenEndpoint    = "https://github.com/login/oauth/access_token"
+	GitHubTokenEndpoint    = "https://github.com/login/oauth/access_token" //nolint:gosec // OAuth endpoint URL, not a credential
 	GitHubUserInfoEndpoint = "https://api.github.com/user"
 	GitHubEmailsEndpoint   = "https://api.github.com/user/emails"
 )
@@ -74,8 +74,8 @@ func newGitHubEmailFallback(emailsEndpoint string) func(ctx context.Context, acc
 }
 
 // fetchGitHubPrimaryEmail fetches the user's primary email from a GitHub emails API endpoint.
-func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) (string, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) (email string, verified bool, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return "", false, err
 	}
@@ -85,7 +85,7 @@ func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) 
 	if err != nil {
 		return "", false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
