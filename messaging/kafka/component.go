@@ -1,0 +1,340 @@
+package kafka
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strings"
+	"sync"
+	"time"
+
+	kafkago "github.com/segmentio/kafka-go"
+
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/messaging"
+)
+
+// Component wraps injected Producer and Consumer(s) and implements component.Component.
+type Component struct {
+	cfg        Config
+	log        *logger.Logger
+	producer   messaging.ProducerCloser
+	consumers  []messaging.ConsumerRunner
+	consumeCtx context.Context
+	cancelFn   context.CancelFunc
+	wg         sync.WaitGroup
+	mu         sync.Mutex
+	running    bool
+}
+
+// ensure Component satisfies component.Component
+var _ component.Component = (*Component)(nil)
+
+// NewComponent creates a Kafka component for use with the component registry.
+func NewComponent(cfg Config, log *logger.Logger) *Component {
+	return &Component{
+		cfg: cfg,
+		log: log.WithComponent("kafka"),
+	}
+}
+
+// SetProducer injects a producer into the component. Must be called before Start.
+func (c *Component) SetProducer(p messaging.ProducerCloser) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.producer = p
+}
+
+// AddConsumer injects a consumer into the component.
+// If the component is already running, the consumer is started immediately.
+func (c *Component) AddConsumer(cr messaging.ConsumerRunner) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.consumers = append(c.consumers, cr)
+
+	if c.running {
+		c.startConsumer(cr)
+	}
+}
+
+// Producer returns the underlying ProducerCloser, or nil if not set.
+func (c *Component) Producer() messaging.ProducerCloser {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.producer
+}
+
+// Name returns the component name.
+func (c *Component) Name() string { return "kafka" }
+
+// Start begins consuming in background goroutines for all injected consumers.
+func (c *Component) Start(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.running {
+		return nil
+	}
+
+	// Detach consumer context from the caller's context so consumers survive
+	// beyond the Start() call. They stop only when cancelFn is called in Stop().
+	consumeCtx, cancel := context.WithCancel(context.Background())
+	c.cancelFn = cancel
+	c.consumeCtx = consumeCtx
+
+	for _, cr := range c.consumers {
+		c.startConsumer(cr)
+	}
+
+	c.running = true
+	c.log.Info("Kafka component started")
+	return nil
+}
+
+// startConsumer launches a single consumer goroutine. Must be called with mu held.
+func (c *Component) startConsumer(cr messaging.ConsumerRunner) {
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		if err := cr.Consume(c.consumeCtx); err != nil && err != context.Canceled {
+			c.log.Error("Consumer stopped with error", map[string]interface{}{
+				"topic": cr.Topic(),
+				"error": err.Error(),
+			})
+		}
+	}()
+}
+
+// Stop gracefully shuts down consumers and the producer.
+// Context cancel stops all consume loops in parallel. Consumer close (offset
+// commit, TCP teardown) also runs in parallel to minimize shutdown time.
+func (c *Component) Stop(_ context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.running {
+		return nil
+	}
+
+	c.log.Info("Kafka component stopping")
+
+	// Cancel shared context — all consumer goroutines exit their Consume loops in parallel
+	if c.cancelFn != nil {
+		c.cancelFn()
+	}
+	c.wg.Wait()
+
+	// Close all consumers in parallel (offset commit + connection teardown)
+	var closeWg sync.WaitGroup
+	for _, cr := range c.consumers {
+		cr := cr
+		closeWg.Add(1)
+		go func() {
+			defer closeWg.Done()
+			_ = cr.Close()
+		}()
+	}
+	closeWg.Wait()
+	c.consumers = nil
+
+	if c.producer != nil {
+		_ = c.producer.Close()
+		c.producer = nil
+	}
+
+	c.running = false
+	return nil
+}
+
+// BrokerHealth represents individual broker health status.
+type BrokerHealth struct {
+	Address string        `json:"address"`
+	Status  string        `json:"status"` // "healthy", "unhealthy", "degraded"
+	Error   string        `json:"error,omitempty"`
+	Latency time.Duration `json:"latency"`
+}
+
+// Health checks broker connectivity by dialing all configured brokers.
+// Returns degraded status when some (but not all) brokers are unreachable.
+func (c *Component) Health(ctx context.Context) component.Health {
+	c.mu.Lock()
+	running := c.running
+	cfg := c.cfg
+	c.mu.Unlock()
+
+	if !running {
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusUnhealthy,
+			Message: "kafka not started",
+		}
+	}
+
+	if len(cfg.Brokers) == 0 {
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusUnhealthy,
+			Message: "no brokers configured",
+		}
+	}
+
+	dialer, err := CreateDialer(&cfg)
+	if err != nil {
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusUnhealthy,
+			Message: fmt.Sprintf("dialer: %v", err),
+		}
+	}
+
+	healthy := 0
+	var issues []string
+	for _, broker := range cfg.Brokers {
+		bh := c.checkBroker(ctx, dialer, broker)
+		if bh.Status == "healthy" {
+			healthy++
+		} else if bh.Error != "" {
+			issues = append(issues, fmt.Sprintf("%s: %s", bh.Address, bh.Error))
+		}
+	}
+
+	total := len(cfg.Brokers)
+	switch {
+	case healthy == total:
+		return component.Health{
+			Name:   c.Name(),
+			Status: component.StatusHealthy,
+		}
+	case healthy > 0:
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusDegraded,
+			Message: fmt.Sprintf("%d/%d brokers healthy; %s", healthy, total, strings.Join(issues, "; ")),
+		}
+	default:
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusUnhealthy,
+			Message: fmt.Sprintf("no brokers available; %s", strings.Join(issues, "; ")),
+		}
+	}
+}
+
+func (c *Component) checkBroker(ctx context.Context, dialer *kafkago.Dialer, addr string) BrokerHealth {
+	bh := BrokerHealth{Address: addr}
+	start := time.Now()
+
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		bh.Status = "unhealthy"
+		bh.Error = err.Error()
+		bh.Latency = time.Since(start)
+		return bh
+	}
+	defer conn.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
+
+	if _, err := conn.Brokers(); err != nil {
+		bh.Status = "degraded"
+		bh.Error = err.Error()
+	} else {
+		bh.Status = "healthy"
+	}
+
+	bh.Latency = time.Since(start)
+	return bh
+}
+
+// Describe returns infrastructure summary info for the bootstrap display.
+func (c *Component) Describe() component.Description {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	details := fmt.Sprintf("brokers=%v", c.cfg.Brokers)
+	topics := make([]string, 0, len(c.consumers))
+	for _, cr := range c.consumers {
+		topics = append(topics, cr.Topic())
+	}
+	if len(topics) > 0 {
+		details += fmt.Sprintf(" topics=%v", topics)
+	}
+	if c.producer != nil {
+		details += " producer=yes"
+	}
+	return component.Description{
+		Name:    "Kafka",
+		Type:    "kafka",
+		Details: details,
+	}
+}
+
+// TopicConfig defines configuration for topic auto-creation.
+type TopicConfig struct {
+	Topic             string
+	NumPartitions     int
+	ReplicationFactor int
+}
+
+// EnsureTopics creates Kafka topics if they don't already exist.
+// This is safe to call multiple times — existing topics are silently skipped.
+func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) error {
+	if len(topics) == 0 || len(c.cfg.Brokers) == 0 {
+		return nil
+	}
+
+	dialer, err := CreateDialer(&c.cfg)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: dialer: %w", err)
+	}
+
+	conn, err := dialer.DialContext(ctx, "tcp", c.cfg.Brokers[0])
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: connect: %w", err)
+	}
+	defer conn.Close() //nolint:errcheck // best-effort close; main errors are returned from topic operations
+
+	// Get the controller broker for topic creation
+	controller, err := conn.Controller()
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: controller: %w", err)
+	}
+	controllerAddr := net.JoinHostPort(controller.Host, fmt.Sprintf("%d", controller.Port))
+
+	controllerConn, err := dialer.DialContext(ctx, "tcp", controllerAddr)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: controller connect: %w", err)
+	}
+	defer controllerConn.Close() //nolint:errcheck // best-effort close; main errors are returned from topic operations
+
+	specs := make([]kafkago.TopicConfig, 0, len(topics))
+	for _, t := range topics {
+		partitions := t.NumPartitions
+		if partitions <= 0 {
+			partitions = 1
+		}
+		replication := t.ReplicationFactor
+		if replication <= 0 {
+			replication = 1
+		}
+		specs = append(specs, kafkago.TopicConfig{
+			Topic:             t.Topic,
+			NumPartitions:     partitions,
+			ReplicationFactor: replication,
+		})
+	}
+
+	err = controllerConn.CreateTopics(specs...)
+	if err != nil {
+		return fmt.Errorf("kafka ensure topics: create: %w", err)
+	}
+
+	created := make([]string, len(topics))
+	for i, t := range topics {
+		created[i] = t.Topic
+	}
+	c.log.Info("Kafka topics ensured", map[string]interface{}{
+		"topics": created,
+	})
+
+	return nil
+}
