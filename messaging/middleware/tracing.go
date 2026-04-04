@@ -40,7 +40,7 @@ func ExtractTraceContext(ctx context.Context, headers map[string]string) context
 	return otel.GetTextMapPropagator().Extract(ctx, kafkaHeaderCarrier(headers))
 }
 
-// TracingOption configures TracingHandler behaviour.
+// TracingOption configures TracingHandler behavior.
 type TracingOption func(*tracingConfig)
 
 type tracingConfig struct {

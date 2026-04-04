@@ -12,6 +12,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/kbukum/gokit/messaging"
 )
@@ -24,7 +25,7 @@ func setupTestTracer(t *testing.T) *tracetest.SpanRecorder {
 	otel.SetTracerProvider(tp)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 	t.Cleanup(func() {
-		otel.SetTracerProvider(trace.NewNoopTracerProvider())
+		otel.SetTracerProvider(noop.NewTracerProvider())
 	})
 	return sr
 }

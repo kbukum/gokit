@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/kbukum/gokit/messaging"
 )
 
