@@ -1,0 +1,53 @@
+package messaging
+
+import "context"
+
+// EventPublisher is a convenience facade that wraps a Producer with a
+// pre-configured source name. Every call to Publish or PublishKeyed
+// automatically constructs an Event envelope (UUID, timestamp, source)
+// so callers only provide the topic, event type, and payload.
+type EventPublisher struct {
+	producer Producer
+	source   string
+}
+
+// NewEventPublisher creates an EventPublisher.
+//
+//   - producer: any Producer implementation (Kafka, in-memory, …).
+//   - source:   the originating service name embedded in every event.
+func NewEventPublisher(producer Producer, source string) *EventPublisher {
+	return &EventPublisher{producer: producer, source: source}
+}
+
+// Publish sends a typed payload as a domain event.
+//
+// An Event envelope is built with a fresh UUID, UTC timestamp,
+// the configured source, and data marshaled from the generic payload.
+func (p *EventPublisher) Publish(ctx context.Context, topic string, eventType string, data interface{}) error {
+	event, err := NewEvent[interface{}](eventType, p.source, data)
+	if err != nil {
+		return err
+	}
+	return p.producer.Publish(ctx, topic, event)
+}
+
+// PublishKeyed sends a typed payload with an explicit partition key.
+//
+// The key is set both as the Event.Subject and the Kafka partition key.
+func (p *EventPublisher) PublishKeyed(ctx context.Context, topic string, eventType string, data interface{}, key string) error {
+	event, err := NewEvent[interface{}](eventType, p.source, data, key)
+	if err != nil {
+		return err
+	}
+	return p.producer.Publish(ctx, topic, event, key)
+}
+
+// Source returns the configured source name.
+func (p *EventPublisher) Source() string {
+	return p.source
+}
+
+// Producer returns the underlying producer.
+func (p *EventPublisher) Producer() Producer {
+	return p.producer
+}
