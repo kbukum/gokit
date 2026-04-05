@@ -145,7 +145,7 @@ func InvalidInput(field, reason string) *AppError {
 	}
 	return &AppError{
 		Code: ErrCodeInvalidInput, Message: fmt.Sprintf("Invalid input: %s", reason),
-		HTTPStatus: http.StatusBadRequest, Retryable: false, Details: details,
+		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false, Details: details,
 	}
 }
 
@@ -153,7 +153,7 @@ func InvalidInput(field, reason string) *AppError {
 func Validation(message string) *AppError {
 	return &AppError{
 		Code: ErrCodeInvalidInput, Message: message,
-		HTTPStatus: http.StatusBadRequest, Retryable: false,
+		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
 	}
 }
 
@@ -161,7 +161,7 @@ func Validation(message string) *AppError {
 func MissingField(field string) *AppError {
 	return &AppError{
 		Code: ErrCodeMissingField, Message: fmt.Sprintf("Missing required field: %s", field),
-		HTTPStatus: http.StatusBadRequest, Retryable: false,
+		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
 		Details: map[string]any{"field": field},
 	}
 }
@@ -170,7 +170,7 @@ func MissingField(field string) *AppError {
 func InvalidFormat(field, expectedFormat string) *AppError {
 	return &AppError{
 		Code: ErrCodeInvalidFormat, Message: fmt.Sprintf("Invalid format for %s. Expected: %s", field, expectedFormat),
-		HTTPStatus: http.StatusBadRequest, Retryable: false,
+		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
 		Details: map[string]any{"field": field, "expected_format": expectedFormat},
 	}
 }
@@ -224,8 +224,8 @@ func Internal(cause error) *AppError {
 // DatabaseError creates a new AppError for a database error.
 func DatabaseError(cause error) *AppError {
 	return &AppError{
-		Code: ErrCodeDatabaseError, Message: "A database error occurred. Please try again.",
-		HTTPStatus: http.StatusInternalServerError, Retryable: true, Cause: cause,
+		Code: ErrCodeDatabaseError, Message: "A database error occurred.",
+		HTTPStatus: http.StatusInternalServerError, Retryable: false, Cause: cause,
 	}
 }
 

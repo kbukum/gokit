@@ -222,12 +222,12 @@ func TestAppError_Constructors_Table(t *testing.T) {
 		{"RateLimited", RateLimited(), ErrCodeRateLimited, http.StatusTooManyRequests, true},
 		{"AlreadyExists", AlreadyExists("user"), ErrCodeAlreadyExists, http.StatusConflict, false},
 		{"Conflict", Conflict("version mismatch"), ErrCodeConflict, http.StatusConflict, false},
-		{"MissingField", MissingField("name"), ErrCodeMissingField, http.StatusBadRequest, false},
-		{"InvalidFormat", InvalidFormat("date", "RFC3339"), ErrCodeInvalidFormat, http.StatusBadRequest, false},
+		{"MissingField", MissingField("name"), ErrCodeMissingField, http.StatusUnprocessableEntity, false},
+		{"InvalidFormat", InvalidFormat("date", "RFC3339"), ErrCodeInvalidFormat, http.StatusUnprocessableEntity, false},
 		{"InvalidToken", InvalidToken(), ErrCodeInvalidToken, http.StatusUnauthorized, false},
-		{"DatabaseError", DatabaseError(nil), ErrCodeDatabaseError, http.StatusInternalServerError, true},
+		{"DatabaseError", DatabaseError(nil), ErrCodeDatabaseError, http.StatusInternalServerError, false},
 		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusBadGateway, true},
-		{"Validation", Validation("bad input"), ErrCodeInvalidInput, http.StatusBadRequest, false},
+		{"Validation", Validation("bad input"), ErrCodeInvalidInput, http.StatusUnprocessableEntity, false},
 	}
 
 	for _, tc := range tests {
@@ -246,14 +246,14 @@ func TestAppError_Constructors_Table(t *testing.T) {
 }
 
 func TestErrorCode_IsRetryableCode_Table(t *testing.T) {
-	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited, ErrCodeDatabaseError, ErrCodeExternalService}
+	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited, ErrCodeExternalService}
 	for _, code := range retryable {
 		if !IsRetryableCode(code) {
 			t.Errorf("expected %s to be retryable", code)
 		}
 	}
 
-	nonRetryable := []ErrorCode{ErrCodeNotFound, ErrCodeAlreadyExists, ErrCodeInvalidInput, ErrCodeUnauthorized, ErrCodeForbidden, ErrCodeInternal}
+	nonRetryable := []ErrorCode{ErrCodeNotFound, ErrCodeAlreadyExists, ErrCodeInvalidInput, ErrCodeUnauthorized, ErrCodeForbidden, ErrCodeInternal, ErrCodeDatabaseError}
 	for _, code := range nonRetryable {
 		if IsRetryableCode(code) {
 			t.Errorf("expected %s to NOT be retryable", code)

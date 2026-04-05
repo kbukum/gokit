@@ -6,6 +6,33 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
+// Environment represents the deployment environment.
+type Environment string
+
+const (
+	// Development is the local development environment.
+	Development Environment = "development"
+	// Staging is the pre-production environment.
+	Staging Environment = "staging"
+	// Production is the live production environment.
+	Production Environment = "production"
+)
+
+// String returns the string representation of the environment.
+func (e Environment) String() string {
+	return string(e)
+}
+
+// IsProduction returns true if this is the production environment.
+func (e Environment) IsProduction() bool {
+	return e == Production
+}
+
+// IsDevelopment returns true if this is the development environment.
+func (e Environment) IsDevelopment() bool {
+	return e == Development
+}
+
 // ServiceConfig contains the essential configuration fields every service needs.
 // Projects extend this by embedding it in their own config structs.
 //
@@ -21,6 +48,11 @@ type ServiceConfig struct {
 	Version     string        `yaml:"version" mapstructure:"version"`
 	Debug       bool          `yaml:"debug" mapstructure:"debug"`
 	Logging     logger.Config `yaml:"logging" mapstructure:"logging"`
+}
+
+// GetEnvironment returns the environment as a typed Environment value.
+func (c *ServiceConfig) GetEnvironment() Environment {
+	return Environment(c.Environment)
 }
 
 // GetServiceConfig returns the base ServiceConfig.

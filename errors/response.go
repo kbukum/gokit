@@ -2,6 +2,7 @@ package errors
 
 import (
 	stderrors "errors"
+	"strings"
 )
 
 // ErrorResponse is the JSON structure returned to clients following RFC 7807.
@@ -31,6 +32,34 @@ func (e *AppError) ToResponse() ErrorResponse {
 			Retryable: e.Retryable,
 			Details:   e.Details,
 		},
+	}
+}
+
+// RFC7807Response follows the RFC 7807 Problem Details for HTTP APIs format.
+// Use this for standards-compliant error responses alongside the existing ErrorResponse.
+type RFC7807Response struct {
+	// Type is a URI identifying the problem type.
+	Type string `json:"type"`
+	// Title is a short human-readable summary.
+	Title string `json:"title"`
+	// Status is the HTTP status code.
+	Status int `json:"status"`
+	// Detail is a human-readable explanation.
+	Detail string `json:"detail"`
+	// Instance is an optional URI identifying the specific occurrence.
+	Instance string `json:"instance,omitempty"`
+	// Extensions contains additional context.
+	Extensions map[string]string `json:"extensions,omitempty"`
+}
+
+// ToRFC7807 converts an AppError to an RFC 7807 Problem Details response.
+func (e *AppError) ToRFC7807() RFC7807Response {
+	kebab := strings.ToLower(strings.ReplaceAll(string(e.Code), "_", "-"))
+	return RFC7807Response{
+		Type:   "https://gokit.dev/errors/" + kebab,
+		Title:  string(e.Code),
+		Status: e.HTTPStatus,
+		Detail: e.Message,
 	}
 }
 

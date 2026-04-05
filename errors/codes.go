@@ -62,7 +62,6 @@ var retryableCodes = map[ErrorCode]bool{
 	ErrCodeConnectionFailed:   true,
 	ErrCodeTimeout:            true,
 	ErrCodeRateLimited:        true,
-	ErrCodeDatabaseError:      true,
 	ErrCodeExternalService:    true,
 	ErrCodeInternal:           false,
 }
