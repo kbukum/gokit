@@ -1,8 +1,9 @@
 // Package middleware provides composable middleware for message handlers.
 //
 // Middleware wraps [messaging.MessageHandler] functions to add cross-cutting concerns
-// such as retry logic, dead-letter routing, distributed tracing, and metrics
-// collection — all built on top of existing gokit modules.
+// such as retry logic, dead-letter routing, distributed tracing, metrics
+// collection, deduplication, and circuit breaking — all built on top of
+// existing gokit modules.
 //
 // # Retry
 //
@@ -33,4 +34,18 @@
 // Instrument a handler with OTel metrics (counters + histogram):
 //
 //	instrumented := middleware.InstrumentHandler("my-topic", "my-group", handler)
+//
+// # Deduplication
+//
+// Skip duplicate messages by message ID or custom key:
+//
+//	deduped := middleware.DedupHandler(handler, middleware.DedupConfig{TTL: 5 * time.Minute})
+//
+// # Circuit Breaker
+//
+// Fail-fast when downstream is unhealthy (wraps resilience.CircuitBreaker):
+//
+//	protected := middleware.CircuitBreakerHandler(handler, middleware.CircuitBreakerConfig{
+//	    Threshold: 5, Timeout: 30 * time.Second,
+//	})
 package middleware

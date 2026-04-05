@@ -236,6 +236,136 @@ func TestBroker_MultipleConsumers(t *testing.T) {
 	}
 }
 
+// ── Message history & topic helpers ──────────────────────────────────────────
+
+func TestBroker_Messages(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	_ = producer.PublishBinary(context.Background(), "t1", "k1", []byte("a"))
+	_ = producer.PublishBinary(context.Background(), "t1", "k2", []byte("b"))
+	_ = producer.PublishBinary(context.Background(), "t2", "k3", []byte("c"))
+
+	msgs := broker.Messages("t1")
+	if len(msgs) != 2 {
+		t.Fatalf("Messages(t1) = %d, want 2", len(msgs))
+	}
+	if string(msgs[0].Value) != "a" || string(msgs[1].Value) != "b" {
+		t.Errorf("unexpected values: %q, %q", msgs[0].Value, msgs[1].Value)
+	}
+
+	all := broker.AllMessages()
+	if len(all) != 3 {
+		t.Fatalf("AllMessages() = %d, want 3", len(all))
+	}
+}
+
+func TestBroker_MessageCount(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	if broker.MessageCount("t1") != 0 {
+		t.Fatal("expected 0 before publishing")
+	}
+	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("x"))
+	if broker.MessageCount("t1") != 1 {
+		t.Fatalf("MessageCount(t1) = %d, want 1", broker.MessageCount("t1"))
+	}
+}
+
+func TestBroker_Reset(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("x"))
+	broker.Reset()
+	if broker.MessageCount("t1") != 0 {
+		t.Fatal("expected 0 after Reset()")
+	}
+}
+
+func TestBroker_CreateTopic(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+
+	broker.CreateTopic("new-topic")
+	topics := broker.Topics()
+	found := false
+	for _, tp := range topics {
+		if tp == "new-topic" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Topics() = %v, expected to contain new-topic", topics)
+	}
+}
+
+func TestBroker_TopicsSorted(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+
+	broker.CreateTopic("z-topic")
+	broker.CreateTopic("a-topic")
+	broker.CreateTopic("m-topic")
+
+	topics := broker.Topics()
+	if len(topics) != 3 || topics[0] != "a-topic" || topics[1] != "m-topic" || topics[2] != "z-topic" {
+		t.Errorf("Topics() = %v, want sorted [a-topic m-topic z-topic]", topics)
+	}
+}
+
+// ── Assertion helpers ───────────────────────────────────────────────────────
+
+func TestAssertPublished(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	_ = producer.PublishBinary(context.Background(), "t1", "k1", []byte("hello"))
+	_ = producer.PublishBinary(context.Background(), "t1", "k2", []byte("world"))
+
+	AssertPublished(t, broker, "t1", func(m messaging.Message) bool {
+		return string(m.Value) == "world"
+	})
+}
+
+func TestAssertPublishedN(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("a"))
+	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("b"))
+
+	AssertPublishedN(t, broker, "t1", 2)
+}
+
+func TestAssertNoMessages(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	AssertNoMessages(t, broker, "empty-topic")
+}
+
+func TestWaitForMessage(t *testing.T) {
+	broker := NewBroker()
+	defer broker.Close()
+	producer := broker.Producer()
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("delayed"))
+	}()
+
+	msg := WaitForMessage(t, broker, "t1", 2*time.Second)
+	if string(msg.Value) != "delayed" {
+		t.Errorf("WaitForMessage value = %q, want delayed", msg.Value)
+	}
+}
+
 func TestBrokerWithBuffer(t *testing.T) {
 	broker := NewBrokerWithBuffer(1)
 	defer broker.Close()

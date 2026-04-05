@@ -3,12 +3,17 @@
 // The InMemoryBroker creates producers and consumers that communicate via
 // buffered channels, enabling fast and deterministic integration tests
 // without a running message broker.
+//
+// Message history is always tracked so that test assertion helpers
+// ([AssertPublished], [AssertPublishedN], [WaitForMessage], [AssertNoMessages])
+// can inspect what was published without consuming from channels.
 package memory
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -23,15 +28,22 @@ const defaultBufferSize = 256
 type InMemoryBroker struct {
 	mu      sync.RWMutex
 	topics  map[string][]chan messaging.Message
+	history map[string][]messaging.Message
 	bufSize int
 	closed  bool
+
+	// msgCh is signaled (non-blocking) after every publish so that
+	// WaitForMessage can wake up without polling.
+	msgCh chan struct{}
 }
 
 // NewBroker creates a new in-memory broker with the default buffer size.
 func NewBroker() *InMemoryBroker {
 	return &InMemoryBroker{
 		topics:  make(map[string][]chan messaging.Message),
+		history: make(map[string][]messaging.Message),
 		bufSize: defaultBufferSize,
+		msgCh:   make(chan struct{}, 1),
 	}
 }
 
@@ -39,8 +51,90 @@ func NewBroker() *InMemoryBroker {
 func NewBrokerWithBuffer(size int) *InMemoryBroker {
 	return &InMemoryBroker{
 		topics:  make(map[string][]chan messaging.Message),
+		history: make(map[string][]messaging.Message),
 		bufSize: size,
+		msgCh:   make(chan struct{}, 1),
 	}
+}
+
+// Messages returns all messages published to the given topic.
+func (b *InMemoryBroker) Messages(topic string) []messaging.Message {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	out := make([]messaging.Message, len(b.history[topic]))
+	copy(out, b.history[topic])
+	return out
+}
+
+// AllMessages returns all published messages across every topic, ordered by
+// topic name then by publish order.
+func (b *InMemoryBroker) AllMessages() []messaging.Message {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	topics := make([]string, 0, len(b.history))
+	for t := range b.history {
+		topics = append(topics, t)
+	}
+	sort.Strings(topics)
+
+	var total int
+	for _, t := range topics {
+		total += len(b.history[t])
+	}
+	out := make([]messaging.Message, 0, total)
+	for _, t := range topics {
+		out = append(out, b.history[t]...)
+	}
+	return out
+}
+
+// MessageCount returns the number of messages published to the given topic.
+func (b *InMemoryBroker) MessageCount(topic string) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.history[topic])
+}
+
+// Reset clears all recorded message history (channels and subscriptions are
+// not affected).
+func (b *InMemoryBroker) Reset() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.history = make(map[string][]messaging.Message)
+}
+
+// CreateTopic pre-creates a topic so that it appears in [Topics] even before
+// any subscriber or publisher uses it.
+func (b *InMemoryBroker) CreateTopic(topic string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.topics[topic]; !ok {
+		b.topics[topic] = nil
+	}
+	if _, ok := b.history[topic]; !ok {
+		b.history[topic] = nil
+	}
+}
+
+// Topics returns the sorted list of topics that have been created,
+// subscribed to, or published to.
+func (b *InMemoryBroker) Topics() []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	seen := make(map[string]struct{})
+	for t := range b.topics {
+		seen[t] = struct{}{}
+	}
+	for t := range b.history {
+		seen[t] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for t := range seen {
+		out = append(out, t)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (b *InMemoryBroker) subscribe(topic string) chan messaging.Message {
@@ -52,12 +146,16 @@ func (b *InMemoryBroker) subscribe(topic string) chan messaging.Message {
 }
 
 func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	if b.closed {
 		return fmt.Errorf("broker is closed")
 	}
 	msg.Topic = topic
+
+	// Record into history before fan-out.
+	b.history[topic] = append(b.history[topic], msg)
+
 	for _, ch := range b.topics[topic] {
 		select {
 		case ch <- msg:
@@ -65,6 +163,13 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 			return fmt.Errorf("topic %q buffer full", topic)
 		}
 	}
+
+	// Signal any WaitForMessage callers.
+	select {
+	case b.msgCh <- struct{}{}:
+	default:
+	}
+
 	return nil
 }
 
