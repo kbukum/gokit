@@ -32,7 +32,7 @@
 /database/ @kbukum
 /redis/ @kbukum
 /httpclient/ @kbukum
-/kafka/ @kbukum
+/messaging/ @kbukum
 /storage/ @kbukum
 /server/ @kbukum
 /grpc/ @kbukum

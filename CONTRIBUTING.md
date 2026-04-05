@@ -33,7 +33,7 @@ gokit/
 │   └── testutil/           #  │ Bring in heavier deps (GORM, Kafka, etc.)
 │       └── go.mod          #  │ Each has a `replace ../` for local dev
 ├── redis/                  #  │
-├── kafka/                  #  │
+├── messaging/              #  │
 ├── server/                 # ─┘
 ├── gomod.sh                # Cross-module operations script
 ├── tag-modules.sh          # Multi-module tagging script
@@ -69,7 +69,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 ```bash
 ./gomod.sh tidy              # go mod tidy all modules
 ./gomod.sh cmd "go test"     # run tests across all modules
-./gomod.sh cmd "go test" -m kafka  # run tests in kafka only
+./gomod.sh cmd "go test" -m messaging  # run tests in messaging only
 ```
 
 ## Making Changes
@@ -119,7 +119,7 @@ make tag-push VERSION=v0.2.0   # tag all modules and push
 make list-tags                  # view all tags
 ```
 
-Tags are created per module (e.g., `v0.2.0`, `redis/v0.2.0`, `kafka/v0.2.0`) by `tag-modules.sh`, which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+Tags are created per module (e.g., `v0.2.0`, `redis/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`, which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
 
 ## CI
 

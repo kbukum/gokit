@@ -2,11 +2,11 @@
 # gomod.sh — Run go commands across all modules or a specific module
 # Usage:
 #   ./gomod.sh tidy                              # go mod tidy all modules
-#   ./gomod.sh tidy -m kafka                     # go mod tidy kafka module
+#   ./gomod.sh tidy -m messaging                  # go mod tidy messaging module
 #   ./gomod.sh update                            # go get -u ./... all modules
 #   ./gomod.sh update-go 1.26.0                  # update go version in all go.mod files
 #   ./gomod.sh cmd "go test ./..."               # run command in all modules
-#   ./gomod.sh cmd "go test ./..." -m kafka      # run command in kafka module only
+#   ./gomod.sh cmd "go test ./..." -m messaging   # run command in messaging module only
 #   ./gomod.sh cmd "go test" -m httpclient/rest  # resolves to httpclient module, ./rest/... package
 #   ./gomod.sh cmd "go test" -m security         # resolves to root module, ./security/... package
 
@@ -29,8 +29,8 @@ FAILED_MODULES=()
 #   PKG      — Go package pattern relative to module root (e.g. "./rest/...")
 #
 # Resolution rules:
-#   kafka           → mod_dir=kafka,           pkg=./...           (exact module)
-#   kafka/testutil  → mod_dir=kafka/testutil,  pkg=./...           (nested module)
+#   messaging       → mod_dir=messaging,       pkg=./...           (exact module)
+#   messaging/testutil  → mod_dir=messaging/testutil,  pkg=./...           (nested module)
 #   grpc/client     → mod_dir=grpc,            pkg=./client/...    (subpackage)
 #   security        → mod_dir=.,               pkg=./security/...  (core subpackage)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ case "$ACTION" in
     echo "  ./gomod.sh cmd \"<command>\" [-m mod]   # run command in module(s)"
     echo ""
     echo "Module targeting (-m):"
-    echo "  -m kafka             Target kafka module"
+    echo "  -m messaging         Target messaging module"
     echo "  -m httpclient/rest   Target httpclient module, rest package"
     echo "  -m grpc/client       Target grpc module, client package"
     echo "  -m security          Target root module, security package"

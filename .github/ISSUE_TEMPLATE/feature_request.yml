@@ -28,7 +28,7 @@ body:
         - encryption
         - grpc
         - httpclient
-        - kafka
+        - messaging
         - logger
         - observability
         - pipeline

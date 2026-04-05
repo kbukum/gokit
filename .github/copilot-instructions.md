@@ -18,7 +18,7 @@ Cross-module operations use `./gomod.sh`:
 ```bash
 ./gomod.sh tidy         # Tidy all modules
 ./gomod.sh cmd "go test -race -count=1"   # Run command in all modules
-./gomod.sh cmd "go test" -m kafka          # Run in specific module
+./gomod.sh cmd "go test" -m messaging      # Run in specific module
 ```
 
 Requires: Go 1.25+, golangci-lint (`go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`).
@@ -28,7 +28,7 @@ Requires: Go 1.25+, golangci-lint (`go install github.com/golangci/golangci-lint
 Multi-module monorepo. Core packages share the root `go.mod`. Packages with heavy external dependencies have their own `go.mod` as sub-modules.
 
 - **Root module** (`github.com/kbukum/gokit`): config, logger, errors, validation, encryption, component, di, resilience, observability, provider, pipeline, dag, media, security, bootstrap, sse, util, version, bench
-- **Sub-modules** (own `go.mod`): auth, authz, database, redis, httpclient, kafka, storage, server, grpc, connect, discovery, workload, llm, stateful, testutil
+- **Sub-modules** (own `go.mod`): auth, authz, database, redis, httpclient, messaging, storage, server, grpc, connect, discovery, workload, llm, stateful, testutil
 
 When adding a new module:
 1. No heavy deps → add under root module, no new `go.mod`
