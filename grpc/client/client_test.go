@@ -51,11 +51,11 @@ func testConn(t *testing.T) *grpc.ClientConn {
 
 // mockConnectionFactory implements ConnectionFactory for testing.
 type mockConnectionFactory struct {
-	conn    *grpc.ClientConn
-	err     error
-	calls   atomic.Int32
-	mu      sync.Mutex
-	connFn  func(string) (*grpc.ClientConn, error) // optional dynamic behavior
+	conn   *grpc.ClientConn
+	err    error
+	calls  atomic.Int32
+	mu     sync.Mutex
+	connFn func(string) (*grpc.ClientConn, error) // optional dynamic behavior
 }
 
 func (f *mockConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
