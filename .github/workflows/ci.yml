@@ -84,6 +84,15 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ matrix.module }}/coverage.out
+          flags: ${{ matrix.module }}
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   # ── Stage 2c: Lint (per module, parallel) ─────────────────────────────────
   lint:
     name: Lint (${{ matrix.module }})
@@ -108,16 +117,33 @@ jobs:
           version: latest
           working-directory: ${{ matrix.module }}
 
+  # ── Stage 2d: Security Scan ─────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run gosec
+        uses: securego/gosec@master
+        with:
+          args: -exclude-generated ./...
+
   # ── Gate: Aggregate status for branch protection ──────────────────────────
   ci-status:
     name: CI Status
     if: always()
-    needs: [tidy, check, lint]
+    needs: [tidy, check, lint, security]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.tidy.result }}" "${{ needs.check.result }}" "${{ needs.lint.result }}")
+          results=("${{ needs.tidy.result }}" "${{ needs.check.result }}" "${{ needs.lint.result }}" "${{ needs.security.result }}")
           for r in "${results[@]}"; do
             if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
               echo "::error::CI failed — one or more jobs did not succeed."
