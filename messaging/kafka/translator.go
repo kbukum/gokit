@@ -4,7 +4,17 @@ import (
 	"net/http"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/messaging"
 )
+
+// KafkaErrorTranslator implements messaging.ErrorTranslator for Kafka errors.
+type KafkaErrorTranslator struct{}
+
+var _ messaging.ErrorTranslator = KafkaErrorTranslator{}
+
+func (KafkaErrorTranslator) Translate(err error, topic string) *apperrors.AppError {
+	return FromKafka(err, topic)
+}
 
 // FromKafka converts a Kafka error to an AppError.
 // It translates Kafka-specific errors to user-friendly messages.

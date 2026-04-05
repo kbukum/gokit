@@ -1,14 +1,17 @@
 // Package messaging provides transport-agnostic message producer and consumer
 // abstractions for event-driven architectures.
 //
-// It defines shared types (Message, Event, handler functions) and interfaces
-// (Producer, Consumer) that are independent of any specific message broker.
+// It defines shared types (Message, Event, handler functions), interfaces
+// (Producer, Consumer, ErrorClassifier, MetricsCollector), and generic patterns
+// (AsRunner, ManagedConsumer, provider adapters) that are independent of any
+// specific message broker.
 //
 // # Sub-packages
 //
 //   - messaging/kafka:      Kafka implementation using segmentio/kafka-go
 //   - messaging/memory:     In-memory broker for testing
 //   - messaging/middleware:  Transport-agnostic middleware (retry, DLQ, tracing, metrics)
+//   - messaging/testutil:   Broker-agnostic mock producer/consumer for testing
 //
 // # Configuration
 //

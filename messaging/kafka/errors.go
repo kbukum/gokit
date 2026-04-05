@@ -1,6 +1,19 @@
 package kafka
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/kbukum/gokit/messaging"
+)
+
+// KafkaErrorClassifier implements messaging.ErrorClassifier with
+// Kafka-specific error patterns.
+type KafkaErrorClassifier struct{}
+
+var _ messaging.ErrorClassifier = KafkaErrorClassifier{}
+
+func (KafkaErrorClassifier) IsConnectionError(err error) bool { return IsConnectionError(err) }
+func (KafkaErrorClassifier) IsRetryableError(err error) bool  { return IsRetryableError(err) }
 
 // IsConnectionError checks if a Kafka error is a connection-level error.
 func IsConnectionError(err error) bool {
