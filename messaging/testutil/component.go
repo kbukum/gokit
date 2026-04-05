@@ -21,10 +21,12 @@ type Message struct {
 
 // MockProducer is an in-memory producer that records all written messages.
 // Implements messaging.ProducerCloser and messaging.Producer.
+// Use SetError to configure a fixed error returned by all publish methods.
 type MockProducer struct {
-	messages []Message
-	mu       sync.Mutex
-	closed   bool
+	messages   []Message
+	mu         sync.Mutex
+	closed     bool
+	publishErr error
 }
 
 var _ messaging.ProducerCloser = (*MockProducer)(nil)
@@ -43,6 +45,9 @@ func (p *MockProducer) Publish(_ context.Context, topic string, event messaging.
 	defer p.mu.Unlock()
 	if p.closed {
 		return fmt.Errorf("producer is closed")
+	}
+	if p.publishErr != nil {
+		return p.publishErr
 	}
 	data, err := event.ToJSON()
 	if err != nil {
@@ -76,6 +81,9 @@ func (p *MockProducer) PublishJSON(_ context.Context, topic string, key string, 
 	if p.closed {
 		return fmt.Errorf("producer is closed")
 	}
+	if p.publishErr != nil {
+		return p.publishErr
+	}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
@@ -96,6 +104,9 @@ func (p *MockProducer) PublishBinary(_ context.Context, topic string, key string
 	if p.closed {
 		return fmt.Errorf("producer is closed")
 	}
+	if p.publishErr != nil {
+		return p.publishErr
+	}
 	p.messages = append(p.messages, Message{
 		Topic:   topic,
 		Key:     []byte(key),
@@ -111,6 +122,9 @@ func (p *MockProducer) Send(_ context.Context, msg messaging.Message) error {
 	defer p.mu.Unlock()
 	if p.closed {
 		return fmt.Errorf("producer is closed")
+	}
+	if p.publishErr != nil {
+		return p.publishErr
 	}
 	p.messages = append(p.messages, Message{
 		Topic:   msg.Topic,

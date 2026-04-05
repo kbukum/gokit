@@ -15,34 +15,29 @@ var _ messaging.ErrorClassifier = KafkaErrorClassifier{}
 func (KafkaErrorClassifier) IsConnectionError(err error) bool { return IsConnectionError(err) }
 func (KafkaErrorClassifier) IsRetryableError(err error) bool  { return IsRetryableError(err) }
 
+// kafkaConnectionPatterns are Kafka-specific connection error patterns
+// that supplement the generic messaging.ConnectionPatterns.
+var kafkaConnectionPatterns = []string{
+	"broker not available",
+	"leader not available",
+	"network exception",
+}
+
+// kafkaRetryablePatterns are Kafka-specific retryable patterns that
+// supplement the generic messaging.RetryablePatterns.
+var kafkaRetryablePatterns = []string{
+	"not enough replicas",
+	"offset out of range",
+}
+
 // IsConnectionError checks if a Kafka error is a connection-level error.
+// It checks both generic patterns and Kafka-specific patterns.
 func IsConnectionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := strings.ToLower(err.Error())
-	connectionPatterns := []string{
-		"connection refused",
-		"connection reset",
-		"broken pipe",
-		"i/o timeout",
-		"no route to host",
-		"network is unreachable",
-		"broker not available",
-		"leader not available",
-		"connection closed",
-		"dial tcp",
-		"network exception",
-	}
-	for _, p := range connectionPatterns {
-		if strings.Contains(errStr, p) {
-			return true
-		}
-	}
-	return false
+	return messaging.IsConnectionError(err, kafkaConnectionPatterns...)
 }
 
 // IsRetryableError determines if a Kafka error should trigger a retry.
+// It checks both generic patterns and Kafka-specific patterns.
 func IsRetryableError(err error) bool {
 	if err == nil {
 		return false
@@ -50,19 +45,7 @@ func IsRetryableError(err error) bool {
 	if IsConnectionError(err) {
 		return true
 	}
-	errStr := strings.ToLower(err.Error())
-	retryablePatterns := []string{
-		"temporary",
-		"request timed out",
-		"not enough replicas",
-		"offset out of range",
-	}
-	for _, p := range retryablePatterns {
-		if strings.Contains(errStr, p) {
-			return true
-		}
-	}
-	return false
+	return messaging.IsRetryableError(err, kafkaRetryablePatterns...)
 }
 
 // IsNonRetryableError checks if the error should not be retried.
