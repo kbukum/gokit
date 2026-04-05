@@ -58,7 +58,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `database` | `gokit/database` | PostgreSQL via GORM — pooling, migrations, health checks, slow query logging |
 | `redis` | `gokit/redis` | go-redis client wrapper with pooling, health checks, TypedStore, and JSON operations |
 | `httpclient` | `gokit/httpclient` | HTTP client with resilience patterns, retry, and circuit breaking |
-| `kafka` | `gokit/kafka` | Kafka producer/consumer with TLS/SASL, configurable transport |
+| `messaging` | `gokit/messaging` | Message producer/consumer abstraction with Kafka provider and in-memory broker for testing |
 | `storage` | `gokit/storage` | Object storage abstraction — local filesystem and S3-compatible backends |
 | `server` | `gokit/server` | HTTP server with Gin, HTTP/2, middleware stack, handler mounting |
 | `grpc` | `gokit/grpc` | gRPC client config — TLS, keepalive, message size, connection pooling |
@@ -227,7 +227,7 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Auth & Authz** | auth, authz | Authentication (JWT, OIDC, password) and authorization (permissions) |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
 | **Data** | pipeline, dag, sse, media | Pull-based pipelines, DAG orchestration, server-sent events, media detection |
-| **Infrastructure** | database, redis, kafka, storage | Data stores and messaging |
+| **Infrastructure** | database, redis, messaging, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload | Subprocess and container workload execution |

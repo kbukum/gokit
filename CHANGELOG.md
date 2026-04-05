@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking Changes
+- **kafka → messaging**: The `gokit/kafka` module has been restructured into `gokit/messaging`
+  - Abstract interfaces (`Producer`, `Consumer`, `Message`, `Event`) now live in `github.com/kbukum/gokit/messaging`
+  - Kafka-specific code moved to `github.com/kbukum/gokit/messaging/kafka`
+  - Middleware moved to `github.com/kbukum/gokit/messaging/middleware` (broker-agnostic)
+  - New `InMemoryBroker` in `github.com/kbukum/gokit/messaging/memory` for testing
+  - Old `gokit/kafka` module has been removed
+
+### Migration
+- `github.com/kbukum/gokit/kafka` → `github.com/kbukum/gokit/messaging/kafka`
+- `github.com/kbukum/gokit/kafka/producer` → `github.com/kbukum/gokit/messaging/kafka/producer`
+- `github.com/kbukum/gokit/kafka/consumer` → `github.com/kbukum/gokit/messaging/kafka/consumer`
+- `github.com/kbukum/gokit/kafka/middleware` → `github.com/kbukum/gokit/messaging/middleware`
+- Abstract types (`Message`, `Event`, `MessageHandler`) now in `github.com/kbukum/gokit/messaging`
+
 ### Added
 - **bench**: New sub-module — pluggable evaluation framework for benchmarking providers against labeled datasets
   - Core types: `Sample[L]`, `Prediction[L]`, `ScoredSample[L]`, `LabelMapper[L]`
