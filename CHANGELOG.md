@@ -22,6 +22,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `github.com/kbukum/gokit/kafka/middleware` → `github.com/kbukum/gokit/messaging/middleware`
 - Abstract types (`Message`, `Event`, `MessageHandler`) now in `github.com/kbukum/gokit/messaging`
 
+### Added — Messaging Enhancement
+
+- **messaging**: `ManagedConsumer` — wraps any `Consumer` with lifecycle (Start/Stop/IsRunning) and handler dispatch
+- **messaging**: `ConsumerRunner` interface and `AsRunner()` adapter for managed consumption loops
+- **messaging**: `MetricsCollector` interface with `RecordPublish()`/`RecordConsume()` for broker-agnostic metrics
+- **messaging**: `ErrorTranslator` interface for converting raw errors to `*AppError`
+- **messaging**: `ErrorClassifier` interface with `IsConnectionError()`/`IsRetryableError()` helpers
+- **messaging**: `BrokerComponent` interface extending `component.Component` with `Producer()`/`Consumer()` accessors
+- **messaging**: `MessageHandler` type + `HandlerMiddleware` + `ChainHandlers()` for composable handler pipelines
+- **messaging**: `MessageRouter` — topic-based message routing with exact match and wildcard (`*`) pattern support
+- **messaging**: `BatchProducer` — buffered producer with size, time (MaxWait), and byte (MaxBytes) flush triggers
+- **messaging/bridge**: `ProducerAsSink()` — adapts `Producer` to `provider.Sink[Message]`
+- **messaging/bridge**: `EventProducerAsSink()` — adapts `EventProducer` to `provider.Sink[Event]`
+- **messaging/bridge**: `ConsumerAsStream()` — adapts `Consumer` to `provider.Stream[struct{}, Message]`
+- **messaging/middleware**: `DedupHandler` — deduplication middleware with LRU cache, TTL, and bounded window
+- **messaging/middleware**: `CircuitBreakerHandler` — fail-fast middleware wrapping `resilience.CircuitBreaker`
+- **messaging/memory**: Enhanced `InMemoryBroker` with message history, topic management, and reset capability
+- **messaging/memory**: Test assertions — `AssertPublished()`, `AssertPublishedN()`, `WaitForMessage()`, `AssertNoMessages()`
+
 ### Added
 - **bench**: New sub-module — pluggable evaluation framework for benchmarking providers against labeled datasets
   - Core types: `Sample[L]`, `Prediction[L]`, `ScoredSample[L]`, `LabelMapper[L]`
