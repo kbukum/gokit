@@ -45,6 +45,30 @@ func main() {
 | `WithFileSystem()` | Option to inject custom filesystem |
 | `FileSystem` | Interface for file existence and env loading |
 
+### Environment Type
+
+The `Environment` type represents deployment environments with helper methods:
+
+```go
+const (
+	Development Environment = "development"
+	Staging     Environment = "staging"
+	Production  Environment = "production"
+)
+```
+
+Access via `ServiceConfig`:
+
+```go
+env := cfg.GetEnvironment()
+if env.IsProduction() {
+	// production-specific behavior
+}
+if env.IsDevelopment() {
+	// enable debug features
+}
+```
+
 ---
 
 [⬅ Back to main README](../README.md)

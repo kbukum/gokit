@@ -38,14 +38,17 @@ This will create tags for all modules automatically (discovered from `go.mod` fi
 - `v0.1.0` (main module)
 - `auth/v0.1.0`
 - `authz/v0.1.0`
+- `bench/v0.1.0`
 - `connect/v0.1.0`
 - `database/v0.1.0`
 - `discovery/v0.1.0`
 - `grpc/v0.1.0`
 - `httpclient/v0.1.0`
-- `kafka/v0.1.0`
+- `llm/v0.1.0`
+- `messaging/v0.1.0`
 - `redis/v0.1.0`
 - `server/v0.1.0`
+- `stateful/v0.1.0`
 - `storage/v0.1.0`
 - `testutil/v0.1.0`
 - `workload/v0.1.0`

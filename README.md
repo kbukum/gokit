@@ -30,7 +30,7 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | Package | Import | Description |
 |---|---|---|
 | `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, and RFC 7807 support |
-| `config` | `gokit/config` | Base configuration with environment-specific settings and defaults |
+| `config` | `gokit/config` | Base configuration with Environment type (Development/Staging/Production) and defaults |
 | `logger` | `gokit/logger` | Structured logging via zerolog with context injection and component tagging |
 | `util` | `gokit/util` | Generic slice, map, pointer, and functional utilities |
 | `version` | `gokit/version` | Build version info — git commit, branch, build time, dirty state |
@@ -44,7 +44,8 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `pipeline` | `gokit/pipeline` | Pull-based data pipeline with Throttle, Batch, Debounce, and Window operators |
 | `dag` | `gokit/dag` | DAG execution engine — dependency-ordered orchestration with batch, streaming, and cascade modes |
 | `media` | `gokit/media` | Media type detection from content bytes — video, audio, image, text format identification |
-| `security` | `gokit/security` | Security utilities |
+| `security` | `gokit/security` | TLS configuration, certificate utilities, and test helpers |
+| `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
 | `worker` | `gokit/worker` | Push-based task execution with worker pools, real-time event streaming, supervision, and composition |
 | `component` | `gokit/component` | Lifecycle interface for infrastructure components (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration and graceful shutdown |
@@ -64,8 +65,9 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `grpc` | `gokit/grpc` | gRPC client config — TLS, keepalive, message size, connection pooling |
 | `discovery` | `gokit/discovery` | Service discovery with Consul and static provider support |
 | `connect` | `gokit/connect` | Connect-Go RPC registration over HTTP/1.1 with standardized errors |
-| `process` | `gokit/process` | Subprocess execution with context cancellation and signal handling |
 | `workload` | `gokit/workload` | Workload execution on Docker and Kubernetes backends |
+| `testutil` | `gokit/testutil` | Testing infrastructure with component lifecycle, setup/teardown, and state management |
+| `stateful` | `gokit/stateful` | Push-based stateful accumulation with configurable triggers and pluggable storage |
 | `llm` | `gokit/llm` | LLM chat completion abstraction — dialect-based provider mapping, streaming, structured output |
 | `bench` | `gokit/bench` | Evaluation benchmarking framework — datasets, evaluators, metrics, reports, comparison |
 | `bench/viz` | `gokit/bench/viz` | SVG visualization generation — ROC curves, confusion matrices, calibration plots |
@@ -231,6 +233,8 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload | Subprocess and container workload execution |
+| **Testing** | testutil | Component lifecycle testing infrastructure |
+| **Stateful** | stateful | Push-based accumulation with triggers and storage |
 | **AI** | llm | LLM chat completion, structured output, explanation generation |
 | **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking, metrics, visualizations, result storage |
 

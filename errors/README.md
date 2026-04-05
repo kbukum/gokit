@@ -60,17 +60,51 @@ This module does not require external configuration. It uses a predefined set of
 ### Common Constructors
 
 - `NotFound(resource, id string) *AppError`: For missing resources.
-- `InvalidInput(field, reason string) *AppError`: For validation failures.
+- `InvalidInput(field, reason string) *AppError`: For validation failures (HTTP 422).
 - `Unauthorized(reason string) *AppError`: For authentication issues.
 - `Forbidden(reason string) *AppError`: For permission issues.
 - `Internal(cause error) *AppError`: For unexpected server-side errors.
+- `DatabaseError(cause error) *AppError`: For database errors (non-retryable).
 - `ServiceUnavailable(service string) *AppError`: For temporary outages (retryable).
+
+### Error Codes
+
+The `ErrorCode` type defines all machine-readable error categories:
+
+| Code | HTTP Status | Retryable |
+|------|-------------|-----------|
+| `NOT_FOUND` | 404 | No |
+| `ALREADY_EXISTS` | 409 | No |
+| `INVALID_INPUT` | 422 | No |
+| `MISSING_FIELD` | 422 | No |
+| `INVALID_FORMAT` | 422 | No |
+| `UNAUTHORIZED` | 401 | No |
+| `FORBIDDEN` | 403 | No |
+| `INTERNAL` | 500 | No |
+| `DATABASE_ERROR` | 500 | No |
+| `SERVICE_UNAVAILABLE` | 503 | Yes |
+| `CONNECTION_FAILED` | 503 | Yes |
+| `TIMEOUT` | 504 | Yes |
+| `RATE_LIMITED` | 429 | Yes |
+| `EXTERNAL_SERVICE_ERROR` | 502 | Yes |
 
 ### Builder Methods
 
 - `WithCause(err error)`: Chains an underlying error.
 - `WithDetail(key string, value any)`: Adds a single piece of metadata.
 - `WithDetails(map[string]any)`: Merges multiple pieces of metadata.
+
+### RFC 7807 Support
+
+Convert any `AppError` to an [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7807) response:
+
+```go
+appErr := errors.NotFound("user", "abc-123")
+rfc := appErr.ToRFC7807()
+// RFC7807Response{Type, Title, Status, Detail, Instance}
+```
+
+The `RFC7807Response` struct includes `Type`, `Title`, `Status`, `Detail`, and `Instance` fields suitable for direct JSON serialization in HTTP APIs.
 
 ## Advanced Usage
 
