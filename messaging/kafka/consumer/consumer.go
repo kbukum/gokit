@@ -3,6 +3,7 @@ package consumer
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
@@ -19,6 +20,7 @@ type Consumer struct {
 	groupID  string
 	log      *logger.Logger
 	failures int
+	errCount *atomic.Int64 // tracks kafka-go internal error count for rate-limiting
 }
 
 // NewConsumer creates a new Kafka consumer for a single topic.
@@ -40,6 +42,18 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 
 	clog := log.WithComponent("kafka.consumer")
 
+	// Rate-limited error logger: log first error, suppress subsequent until recovery.
+	var errCount atomic.Int64
+	rateLimitedErrLogger := kafkago.LoggerFunc(func(msg string, args ...interface{}) {
+		n := errCount.Add(1)
+		if n == 1 {
+			clog.Warn("Kafka connection issue (retrying automatically)", map[string]interface{}{
+				"topic":   topic,
+				"groupID": cfg.GroupID,
+			})
+		}
+	})
+
 	reader := kafkago.NewReader(kafkago.ReaderConfig{
 		Brokers:           cfg.Brokers,
 		Topic:             topic,
@@ -51,13 +65,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 		SessionTimeout:    kafka.ParseDuration(cfg.SessionTimeout),
 		HeartbeatInterval: kafka.ParseDuration(cfg.HeartbeatInterval),
 		RebalanceTimeout:  kafka.ParseDuration(cfg.RebalanceTimeout),
-		ErrorLogger: kafkago.LoggerFunc(func(msg string, args ...interface{}) {
-			clog.Error("reader: "+msg, map[string]interface{}{
-				"args":    fmt.Sprintf("%v", args),
-				"topic":   topic,
-				"groupID": cfg.GroupID,
-			})
-		}),
+		ErrorLogger:       rateLimitedErrLogger,
 	})
 
 	clog.Debug("Kafka consumer initialized", map[string]interface{}{
@@ -67,10 +75,11 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 	})
 
 	return &Consumer{
-		reader:  reader,
-		topic:   topic,
-		groupID: cfg.GroupID,
-		log:     clog,
+		reader:   reader,
+		topic:    topic,
+		groupID:  cfg.GroupID,
+		log:      clog,
+		errCount: &errCount,
 	}, nil
 }
 
@@ -99,6 +108,13 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 			}
 
 			c.failures = 0
+			if c.errCount.Load() > 0 {
+				c.log.Info("Kafka connection recovered", map[string]interface{}{
+					"topic":   c.topic,
+					"groupID": c.groupID,
+				})
+				c.errCount.Store(0)
+			}
 
 			domainMsg := kafka.FromKafkaMessage(msg)
 
