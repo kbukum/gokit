@@ -122,7 +122,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	c.client = c.buildClient()
 
-	c.log.Info("discovery component started", map[string]interface{}{
+	c.log.Debug("discovery component started", map[string]interface{}{
 		"provider": c.cfg.Provider,
 	})
 	return nil
@@ -130,7 +130,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 // Stop deregisters the local service and releases resources.
 func (c *Component) Stop(ctx context.Context) error {
-	c.log.Info("discovery component stopping")
+	c.log.Debug("discovery component stopping")
 
 	if c.registry != nil && c.cfg.Enabled && c.cfg.Registration.ServiceID != "" {
 		if err := c.registry.Deregister(ctx, c.cfg.Registration.ServiceID); err != nil {

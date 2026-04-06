@@ -79,7 +79,7 @@ func New(cfg Config, log *logger.Logger) (*Client, error) {
 
 	rdb := goredis.NewClient(opts)
 
-	log.Info("Redis client created", map[string]interface{}{
+	log.Debug("Redis client created", map[string]interface{}{
 		"addr":      cfg.Addr,
 		"db":        cfg.DB,
 		"pool_size": cfg.PoolSize,
@@ -153,7 +153,7 @@ func (c *Client) Close() error {
 	if c.closed {
 		return nil
 	}
-	c.log.Info("Closing Redis connection")
+	c.log.Debug("Closing Redis connection")
 	c.closed = true
 	return c.rdb.Close()
 }

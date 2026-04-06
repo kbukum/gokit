@@ -88,7 +88,7 @@ func (c *Component) Start(ctx context.Context) error {
 	}
 
 	c.running = true
-	c.log.Info("Kafka component started")
+	c.log.Debug("Kafka component started")
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (c *Component) Stop(_ context.Context) error {
 		return nil
 	}
 
-	c.log.Info("Kafka component stopping")
+	c.log.Debug("Kafka component stopping")
 
 	// Cancel shared context — all consumer goroutines exit their Consume loops in parallel
 	if c.cancelFn != nil {
@@ -332,7 +332,7 @@ func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) erro
 	for i, t := range topics {
 		created[i] = t.Topic
 	}
-	c.log.Info("Kafka topics ensured", map[string]interface{}{
+	c.log.Debug("Kafka topics ensured", map[string]interface{}{
 		"topics": created,
 	})
 

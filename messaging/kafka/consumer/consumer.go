@@ -60,7 +60,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 		}),
 	})
 
-	clog.Info("Kafka consumer initialized", map[string]interface{}{
+	clog.Debug("Kafka consumer initialized", map[string]interface{}{
 		"topic":   topic,
 		"groupID": cfg.GroupID,
 		"brokers": cfg.Brokers,
@@ -77,7 +77,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 // Consume reads messages in a loop, calling handler for each one.
 // It blocks until ctx is canceled or an unrecoverable error occurs.
 func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
-	c.log.Info("Starting consume loop", map[string]interface{}{
+	c.log.Debug("Starting consume loop", map[string]interface{}{
 		"topic":   c.topic,
 		"groupID": c.groupID,
 	})
@@ -148,7 +148,7 @@ func (c *Consumer) Stats() kafkago.ReaderStats { return c.reader.Stats() }
 
 // Close shuts down the consumer.
 func (c *Consumer) Close() error {
-	c.log.Info("Kafka consumer closing", map[string]interface{}{
+	c.log.Debug("Kafka consumer closing", map[string]interface{}{
 		"topic":   c.topic,
 		"groupID": c.groupID,
 	})

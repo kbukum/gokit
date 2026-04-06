@@ -90,7 +90,7 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start inner server: %w", err)
 	}
 
-	dsc.log.Info("Starting service registration", map[string]interface{}{
+	dsc.log.Debug("Starting service registration", map[string]interface{}{
 		"service_id":   dsc.serviceID,
 		"service_name": dsc.svcInfo.Name,
 		"address":      dsc.svcInfo.Address,
@@ -111,7 +111,7 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to register service: %w", err)
 	}
 
-	dsc.log.Info("Service registered with discovery", map[string]interface{}{
+	dsc.log.Debug("Service registered with discovery", map[string]interface{}{
 		"service_id": dsc.serviceID,
 	})
 	return nil
@@ -119,7 +119,7 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 
 // Stop deregisters from discovery, then stops the inner server.
 func (dsc *DiscoveryServerComponent) Stop(ctx context.Context) error {
-	dsc.log.Info("Stopping discovery-server component")
+	dsc.log.Debug("Stopping discovery-server component")
 
 	// Deregister from discovery
 	if err := dsc.registry.Deregister(ctx, dsc.serviceID); err != nil {
@@ -134,7 +134,7 @@ func (dsc *DiscoveryServerComponent) Stop(ctx context.Context) error {
 		return fmt.Errorf("failed to stop inner server: %w", err)
 	}
 
-	dsc.log.Info("Discovery-server component stopped")
+	dsc.log.Debug("Discovery-server component stopped")
 	return nil
 }
 

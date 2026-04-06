@@ -53,7 +53,7 @@ func (c *Component) Start(ctx context.Context) error {
 	}
 
 	c.client = client
-	c.log.Info("Redis component started")
+	c.log.Debug("Redis component started")
 	return nil
 }
 
@@ -62,7 +62,7 @@ func (c *Component) Stop(_ context.Context) error {
 	if c.client == nil {
 		return nil
 	}
-	c.log.Info("Redis component stopping")
+	c.log.Debug("Redis component stopping")
 	return c.client.Close()
 }
 

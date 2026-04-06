@@ -118,7 +118,7 @@ func (c *Provider) Register(ctx context.Context, service *discovery.ServiceInfo)
 	c.stats.LastHeartbeat = time.Now()
 	c.mu.Unlock()
 
-	c.log.Info("service registered", map[string]interface{}{
+	c.log.Debug("service registered", map[string]interface{}{
 		"service_id": service.ID, "address": service.Address, "port": service.Port,
 	})
 	return nil
@@ -136,7 +136,7 @@ func (c *Provider) Deregister(ctx context.Context, serviceID string) error {
 	}
 	c.mu.Unlock()
 
-	c.log.Info("service deregistered", map[string]interface{}{"service_id": serviceID})
+	c.log.Debug("service deregistered", map[string]interface{}{"service_id": serviceID})
 	return nil
 }
 

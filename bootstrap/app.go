@@ -227,13 +227,13 @@ func (a *App[C]) startup(ctx context.Context) error {
 
 // initialize starts all registered components (Phase 1).
 func (a *App[C]) initialize(ctx context.Context) error {
-	a.Logger.Info("Phase 1: Starting components")
+	a.Logger.Debug("Phase 1: Starting components")
 
 	if err := a.Components.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start components: %w", err)
 	}
 
-	a.Logger.Info("Phase 1: All components started")
+	a.Logger.Debug("Phase 1: All components started")
 	return nil
 }
 
@@ -249,7 +249,7 @@ func (a *App[C]) configure(ctx context.Context) error {
 		return nil
 	}
 
-	a.Logger.Info("Phase 2: Running configuration callbacks", map[string]interface{}{
+	a.Logger.Debug("Phase 2: Running configuration callbacks", map[string]interface{}{
 		"count": len(a.onConfigure),
 	})
 
@@ -259,7 +259,7 @@ func (a *App[C]) configure(ctx context.Context) error {
 		}
 	}
 
-	a.Logger.Info("Phase 2: Configuration complete")
+	a.Logger.Debug("Phase 2: Configuration complete")
 	return nil
 }
 

@@ -123,7 +123,7 @@ func (d *DB) Close() error {
 	if err != nil {
 		return err
 	}
-	d.log.Info("Closing database connection")
+	d.log.Debug("Closing database connection")
 	d.closed = true
 	return sqlDB.Close()
 }

@@ -88,7 +88,7 @@ func (p *Producer) initWriter() error {
 		}),
 	}
 
-	p.log.Info("Kafka producer initialized", map[string]interface{}{
+	p.log.Debug("Kafka producer initialized", map[string]interface{}{
 		"brokers":     p.cfg.Brokers,
 		"compression": p.cfg.Compression,
 		"batch_size":  p.cfg.BatchSize,
@@ -158,7 +158,7 @@ func (p *Producer) Close() error {
 		return nil
 	}
 	p.closed = true
-	p.log.Info("Kafka producer closing")
+	p.log.Debug("Kafka producer closing")
 	if p.writer != nil {
 		return p.writer.Close()
 	}
