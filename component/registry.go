@@ -57,7 +57,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	logger.Info("Starting all components", map[string]interface{}{
+	logger.Debug("Starting all components", map[string]interface{}{
 		"count": len(r.entries),
 	})
 
