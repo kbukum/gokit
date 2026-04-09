@@ -1,38 +1,41 @@
 package openai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+
+	"github.com/kbukum/gokit/httpclient"
 )
 
 // EmbeddingProvider implements embedding.Provider for OpenAI-compatible APIs.
 // Works with OpenAI, Azure OpenAI, vLLM, llama.cpp, or any server that
 // exposes the /v1/embeddings endpoint.
+//
+// Uses gokit's httpclient for proper auth, TLS, timeouts, and resilience.
 type EmbeddingProvider struct {
-	client *http.Client
+	client *httpclient.Adapter
 	config Config
 }
 
 // NewEmbeddingProvider creates an OpenAI embedding provider.
 func NewEmbeddingProvider(config Config) *EmbeddingProvider {
 	config.applyDefaults()
-	return &EmbeddingProvider{
-		client: &http.Client{},
-		config: config,
-	}
-}
 
-// NewEmbeddingProviderWithClient creates an OpenAI embedding provider with a custom HTTP client.
-func NewEmbeddingProviderWithClient(config Config, client *http.Client) *EmbeddingProvider {
-	config.applyDefaults()
-	return &EmbeddingProvider{
-		client: client,
-		config: config,
+	httpCfg := httpclient.Config{
+		Name:    "openai-embedding",
+		BaseURL: config.BaseURL,
 	}
+	if config.APIKey != "" {
+		httpCfg.Auth = httpclient.BearerAuth(config.APIKey)
+	}
+
+	client, err := httpclient.New(httpCfg)
+	if err != nil {
+		client, _ = httpclient.New(httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL})
+	}
+
+	return &EmbeddingProvider{client: client, config: config}
 }
 
 // Embed generates an embedding for a single text input.
@@ -53,37 +56,14 @@ func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][
 		return [][]float32{}, nil
 	}
 
-	url := fmt.Sprintf("%s/embeddings", p.config.BaseURL)
-
 	reqBody := map[string]any{
 		"model": p.config.EmbeddingModel,
 		"input": texts,
 	}
 
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("openai: marshal embedding request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("openai: create embedding request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if p.config.APIKey != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", p.config.APIKey))
-	}
-
-	resp, err := p.client.Do(req)
+	resp, err := httpclient.Post[json.RawMessage](p.client, ctx, "/embeddings", reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("openai: embedding request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("openai: embedding API returned HTTP %d: %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -93,7 +73,7 @@ func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][
 		} `json:"data"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
 		return nil, fmt.Errorf("openai: parse embedding response: %w", err)
 	}
 

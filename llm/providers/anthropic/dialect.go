@@ -17,10 +17,10 @@ type Dialect struct{}
 
 var _ llm.Dialect = (*Dialect)(nil)
 
-func (d *Dialect) Name() string       { return "anthropic" }
-func (d *Dialect) ChatPath() string   { return "/v1/messages" }
-func (d *Dialect) HealthPath() string { return "/v1/messages" }
-func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
+func (d *Dialect) Name() string                    { return "anthropic" }
+func (d *Dialect) ChatPath() string                { return "/v1/messages" }
+func (d *Dialect) HealthPath() string              { return "/v1/messages" }
+func (d *Dialect) StreamFormat() llm.StreamFormat   { return llm.StreamSSE }
 
 // BuildRequest maps a universal CompletionRequest to the Anthropic JSON body.
 func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
@@ -197,8 +197,6 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 			"content": llm.TextOf(msg.Content),
 		}, nil
 	case llm.SystemMessage:
-		// Anthropic handles system at top level, but if included in messages,
-		// encode as user message with [system] prefix
 		return map[string]any{
 			"role":    "user",
 			"content": msg.Content,
@@ -208,9 +206,9 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 			"role": "user",
 			"content": []map[string]any{
 				{
-					"type":       "tool_result",
+					"type":        "tool_result",
 					"tool_use_id": msg.ToolUseID,
-					"content":    msg.Content,
+					"content":     msg.Content,
 				},
 			},
 		}, nil
@@ -236,7 +234,6 @@ func encodeToolChoice(tc *llm.ToolChoice) any {
 	case "auto":
 		return map[string]any{"type": "auto"}
 	case "none":
-		// Anthropic doesn't have "none" — omit tools instead
 		return nil
 	case "required":
 		return map[string]any{"type": "any"}

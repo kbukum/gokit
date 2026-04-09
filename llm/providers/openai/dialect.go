@@ -17,10 +17,10 @@ type Dialect struct{}
 
 var _ llm.Dialect = (*Dialect)(nil)
 
-func (d *Dialect) Name() string       { return "openai" }
-func (d *Dialect) ChatPath() string   { return "/v1/chat/completions" }
-func (d *Dialect) HealthPath() string { return "/v1/models" }
-func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
+func (d *Dialect) Name() string                    { return "openai" }
+func (d *Dialect) ChatPath() string                { return "/v1/chat/completions" }
+func (d *Dialect) HealthPath() string              { return "/v1/models" }
+func (d *Dialect) StreamFormat() llm.StreamFormat   { return llm.StreamSSE }
 
 // BuildRequest maps a universal CompletionRequest to the OpenAI JSON body.
 func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
@@ -75,8 +75,8 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Model   string `json:"model"`
 		Choices []struct {
 			Message struct {
-				Content   *string        `json:"content"`
-				ToolCalls []rawToolCall  `json:"tool_calls,omitempty"`
+				Content   *string       `json:"content"`
+				ToolCalls []rawToolCall `json:"tool_calls,omitempty"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`

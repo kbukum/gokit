@@ -8,10 +8,14 @@ const (
 
 // Config holds Anthropic-specific settings.
 type Config struct {
-	BaseURL    string // API base URL (default: https://api.anthropic.com)
-	APIKey     string // Anthropic API key
-	Model      string // Model identifier (default: claude-sonnet-4-20250514)
-	APIVersion string // Anthropic API version header (default: 2023-06-01)
+	// BaseURL is the API base URL. Defaults to https://api.anthropic.com.
+	BaseURL string `json:"base_url,omitempty" yaml:"base_url"`
+	// APIKey is the Anthropic API key.
+	APIKey string `json:"api_key,omitempty" yaml:"api_key"`
+	// Model is the model identifier (e.g., "claude-sonnet-4-20250514").
+	Model string `json:"model,omitempty" yaml:"model"`
+	// APIVersion is the Anthropic API version header. Defaults to "2023-06-01".
+	APIVersion string `json:"api_version,omitempty" yaml:"api_version"`
 }
 
 // DefaultConfig returns a Config with sensible defaults.

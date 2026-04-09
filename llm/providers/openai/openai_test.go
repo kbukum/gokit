@@ -279,7 +279,6 @@ func TestEmbeddingProvider_Embed(t *testing.T) {
 func TestEmbeddingProvider_EmbedBatch_Order(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Return out of order
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": []map[string]any{
 				{"embedding": []float32{0.3, 0.3}, "index": 1},
@@ -298,7 +297,6 @@ func TestEmbeddingProvider_EmbedBatch_Order(t *testing.T) {
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-	// Index 0 should be [0.1, 0.1]
 	if results[0][0] > 0.15 {
 		t.Errorf("expected first result ~0.1, got %f", results[0][0])
 	}
@@ -328,7 +326,7 @@ func TestEmbeddingProvider_AuthHeader(t *testing.T) {
 func TestEmbeddingProvider_ServerError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
+		_, _ = w.Write([]byte(`{"error":"server error"}`))
 	}))
 	defer srv.Close()
 

@@ -48,13 +48,9 @@ func TestDialect_BuildRequest_Basic(t *testing.T) {
 	if result["model"] != "claude-sonnet-4-20250514" {
 		t.Errorf("expected model claude-sonnet-4-20250514, got %v", result["model"])
 	}
-
-	// System prompt is a top-level field in Anthropic
 	if result["system"] != "You are helpful." {
 		t.Errorf("expected system prompt at top level, got %v", result["system"])
 	}
-
-	// max_tokens is required by Anthropic
 	if _, ok := result["max_tokens"]; !ok {
 		t.Error("expected max_tokens to be set (Anthropic requires it)")
 	}
