@@ -263,7 +263,7 @@ func TestAgent_ToolError(t *testing.T) {
 func TestAgent_HookAbortOnTurnStart(t *testing.T) {
 	provider := newMockProvider(textResponse("should not reach"))
 	hooks := hook.NewRegistry()
-	hooks.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventTurnStart, func(e hook.Event) hook.Result {
 		return hook.Abort("blocked by policy")
 	})
 
@@ -292,8 +292,8 @@ func TestAgent_HookAbortOnPreToolCall(t *testing.T) {
 	)
 	tools := makeMockTool("dangerous", "should not run")
 	hooks := hook.NewRegistry()
-	hooks.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
-		pre := e.(hook.PreToolCall)
+	hooks.On(agent.EventPreToolCall, func(e hook.Event) hook.Result {
+		pre := e.(agent.PreToolCall)
 		if pre.Name == "dangerous" {
 			return hook.Abort("tool blocked")
 		}
@@ -336,8 +336,8 @@ func TestAgent_HookModifyPreLLMCall(t *testing.T) {
 	wrapper := &modelCapturingProvider{inner: origProvider, captured: &capturedModel}
 
 	hooks := hook.NewRegistry()
-	hooks.On(hook.EventPreLLMCall, func(e hook.Event) hook.Result {
-		pre := e.(hook.PreLLMCall)
+	hooks.On(agent.EventPreLLMCall, func(e hook.Event) hook.Result {
+		pre := e.(agent.PreLLMCall)
 		modified := pre.Request
 		modified.Model = "gpt-4-turbo"
 		return hook.Modify(modified)

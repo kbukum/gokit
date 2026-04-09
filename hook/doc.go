@@ -1,16 +1,18 @@
-// Package hook provides a lightweight event system for agentic lifecycle hooks.
+// Package hook provides a lightweight, generic event system for lifecycle hooks.
 //
-// It allows registering handlers for events like PreToolCall, PostToolCall,
-// PreLLMCall, PostLLMCall, OnError, TurnStart, and TurnEnd. Handlers run
+// It allows registering handlers for arbitrary event types. Handlers run
 // sequentially in registration order, with short-circuit on Abort and
 // chained Modify results.
+//
+// The hook module is domain-agnostic — applications define their own event
+// types by implementing the Event interface. For example, the agent module
+// defines PreToolCall, PreLLMCall, TurnStart, etc.
 //
 // Usage:
 //
 //	registry := hook.NewRegistry()
-//	registry.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
-//	    pre := e.(hook.PreToolCall)
-//	    log.Printf("calling tool: %s", pre.Name)
+//	registry.On("my_event", func(e hook.Event) hook.Result {
+//	    log.Printf("event: %s", e.Type())
 //	    return hook.Continue()
 //	})
 package hook

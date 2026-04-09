@@ -1,27 +1,48 @@
 package hook_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 
 	"github.com/kbukum/gokit/hook"
-	"github.com/kbukum/gokit/llm"
-	"github.com/kbukum/gokit/tool"
 )
 
-func TestEventTypes(t *testing.T) {
+// --- Test event types (domain-agnostic) ---
+
+const (
+	eventAlpha hook.EventType = "alpha"
+	eventBeta  hook.EventType = "beta"
+	eventGamma hook.EventType = "gamma"
+)
+
+type alphaEvent struct {
+	Value string
+}
+
+func (alphaEvent) Type() hook.EventType { return eventAlpha }
+
+type betaEvent struct {
+	Count int
+}
+
+func (betaEvent) Type() hook.EventType { return eventBeta }
+
+type gammaEvent struct {
+	Err    error
+	Source string
+}
+
+func (gammaEvent) Type() hook.EventType { return eventGamma }
+
+// --- Event interface ---
+
+func TestEventInterface(t *testing.T) {
 	events := []struct {
 		event    hook.Event
 		expected hook.EventType
 	}{
-		{hook.PreToolCall{Name: "test"}, hook.EventPreToolCall},
-		{hook.PostToolCall{Name: "test"}, hook.EventPostToolCall},
-		{hook.PreLLMCall{}, hook.EventPreLLMCall},
-		{hook.PostLLMCall{}, hook.EventPostLLMCall},
-		{hook.OnError{Err: fmt.Errorf("err"), Source: "test"}, hook.EventOnError},
-		{hook.TurnStart{Turn: 1}, hook.EventTurnStart},
-		{hook.TurnEnd{Turn: 1}, hook.EventTurnEnd},
+		{alphaEvent{Value: "test"}, eventAlpha},
+		{betaEvent{Count: 42}, eventBeta},
+		{gammaEvent{Source: "test"}, eventGamma},
 	}
 
 	for _, tc := range events {
@@ -30,67 +51,6 @@ func TestEventTypes(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.expected)
 			}
 		})
-	}
-}
-
-func TestPreToolCall_Fields(t *testing.T) {
-	input := json.RawMessage(`{"key": "value"}`)
-	e := hook.PreToolCall{Name: "calculator", Input: input}
-
-	if e.Name != "calculator" {
-		t.Errorf("Name = %q, want %q", e.Name, "calculator")
-	}
-	if string(e.Input) != `{"key": "value"}` {
-		t.Errorf("Input = %s, want %s", e.Input, input)
-	}
-}
-
-func TestPostToolCall_Fields(t *testing.T) {
-	result := tool.TextResult("42")
-	e := hook.PostToolCall{
-		Name:   "calculator",
-		Input:  json.RawMessage(`{}`),
-		Result: result,
-		Err:    nil,
-	}
-
-	if e.Name != "calculator" {
-		t.Errorf("Name = %q, want %q", e.Name, "calculator")
-	}
-	if e.Result != result {
-		t.Error("Result mismatch")
-	}
-	if e.Err != nil {
-		t.Error("Err should be nil")
-	}
-}
-
-func TestPreLLMCall_Fields(t *testing.T) {
-	temp := 0.7
-	req := llm.CompletionRequest{
-		Model:       "gpt-4",
-		MaxTokens:   1024,
-		Temperature: &temp,
-	}
-	e := hook.PreLLMCall{Request: req}
-
-	if e.Request.Model != "gpt-4" {
-		t.Errorf("Model = %q, want %q", e.Request.Model, "gpt-4")
-	}
-}
-
-func TestTurnEvents(t *testing.T) {
-	start := hook.TurnStart{Turn: 3}
-	if start.Turn != 3 {
-		t.Errorf("TurnStart.Turn = %d, want 3", start.Turn)
-	}
-
-	end := hook.TurnEnd{
-		Turn:    3,
-		Message: llm.Assistant("done"),
-	}
-	if end.Turn != 3 {
-		t.Errorf("TurnEnd.Turn = %d, want 3", end.Turn)
 	}
 }
 
@@ -128,7 +88,7 @@ func TestModify(t *testing.T) {
 
 func TestRegistry_EmitWithNoHandlers(t *testing.T) {
 	reg := hook.NewRegistry()
-	result := reg.Emit(hook.TurnStart{Turn: 1})
+	result := reg.Emit(alphaEvent{Value: "test"})
 	if result.Action != hook.ActionContinue {
 		t.Errorf("expected Continue with no handlers, got %v", result.Action)
 	}
@@ -138,15 +98,32 @@ func TestRegistry_SingleHandler(t *testing.T) {
 	reg := hook.NewRegistry()
 	var received hook.EventType
 
-	reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		received = e.Type()
 		return hook.Continue()
 	})
 
-	reg.Emit(hook.TurnStart{Turn: 1})
+	reg.Emit(alphaEvent{Value: "hello"})
 
-	if received != hook.EventTurnStart {
-		t.Errorf("handler received %q, want %q", received, hook.EventTurnStart)
+	if received != eventAlpha {
+		t.Errorf("handler received %q, want %q", received, eventAlpha)
+	}
+}
+
+func TestRegistry_TypeAssertionInHandler(t *testing.T) {
+	reg := hook.NewRegistry()
+	var capturedValue string
+
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
+		a := e.(alphaEvent)
+		capturedValue = a.Value
+		return hook.Continue()
+	})
+
+	reg.Emit(alphaEvent{Value: "captured!"})
+
+	if capturedValue != "captured!" {
+		t.Errorf("capturedValue = %q, want %q", capturedValue, "captured!")
 	}
 }
 
@@ -154,20 +131,20 @@ func TestRegistry_MultipleHandlers_ExecutionOrder(t *testing.T) {
 	reg := hook.NewRegistry()
 	var order []int
 
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		order = append(order, 1)
 		return hook.Continue()
 	})
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		order = append(order, 2)
 		return hook.Continue()
 	})
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		order = append(order, 3)
 		return hook.Continue()
 	})
 
-	reg.Emit(hook.PreToolCall{Name: "test"})
+	reg.Emit(alphaEvent{Value: "test"})
 
 	if len(order) != 3 || order[0] != 1 || order[1] != 2 || order[2] != 3 {
 		t.Errorf("expected order [1,2,3], got %v", order)
@@ -178,16 +155,16 @@ func TestRegistry_AbortShortCircuits(t *testing.T) {
 	reg := hook.NewRegistry()
 	handlersCalled := 0
 
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		handlersCalled++
 		return hook.Abort("blocked")
 	})
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		handlersCalled++
 		return hook.Continue()
 	})
 
-	result := reg.Emit(hook.PreToolCall{Name: "dangerous_tool"})
+	result := reg.Emit(alphaEvent{Value: "dangerous"})
 
 	if result.Action != hook.ActionAbort {
 		t.Errorf("expected Abort, got %v", result.Action)
@@ -203,14 +180,14 @@ func TestRegistry_AbortShortCircuits(t *testing.T) {
 func TestRegistry_ModifyChains(t *testing.T) {
 	reg := hook.NewRegistry()
 
-	reg.On(hook.EventPreLLMCall, func(e hook.Event) hook.Result {
+	reg.On(eventBeta, func(e hook.Event) hook.Result {
 		return hook.Modify("step1")
 	})
-	reg.On(hook.EventPreLLMCall, func(e hook.Event) hook.Result {
+	reg.On(eventBeta, func(e hook.Event) hook.Result {
 		return hook.Modify("step2")
 	})
 
-	result := reg.Emit(hook.PreLLMCall{})
+	result := reg.Emit(betaEvent{Count: 1})
 
 	if result.Action != hook.ActionModify {
 		t.Errorf("expected Modify, got %v", result.Action)
@@ -224,19 +201,19 @@ func TestRegistry_Unsubscribe(t *testing.T) {
 	reg := hook.NewRegistry()
 	calls := 0
 
-	unsub := reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
+	unsub := reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		calls++
 		return hook.Continue()
 	})
 
-	reg.Emit(hook.TurnStart{Turn: 1})
+	reg.Emit(alphaEvent{Value: "1"})
 	if calls != 1 {
 		t.Fatalf("expected 1 call before unsub, got %d", calls)
 	}
 
 	unsub()
 
-	reg.Emit(hook.TurnStart{Turn: 2})
+	reg.Emit(alphaEvent{Value: "2"})
 	if calls != 1 {
 		t.Errorf("expected 1 call after unsub, got %d", calls)
 	}
@@ -244,47 +221,47 @@ func TestRegistry_Unsubscribe(t *testing.T) {
 
 func TestRegistry_DifferentEventTypes(t *testing.T) {
 	reg := hook.NewRegistry()
-	var toolCalls, turnCalls int
+	var alphaCalls, betaCalls int
 
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result {
-		toolCalls++
+	reg.On(eventAlpha, func(e hook.Event) hook.Result {
+		alphaCalls++
 		return hook.Continue()
 	})
-	reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
-		turnCalls++
+	reg.On(eventBeta, func(e hook.Event) hook.Result {
+		betaCalls++
 		return hook.Continue()
 	})
 
-	reg.Emit(hook.PreToolCall{Name: "test"})
-	reg.Emit(hook.PreToolCall{Name: "test2"})
-	reg.Emit(hook.TurnStart{Turn: 1})
+	reg.Emit(alphaEvent{Value: "a"})
+	reg.Emit(alphaEvent{Value: "b"})
+	reg.Emit(betaEvent{Count: 1})
 
-	if toolCalls != 2 {
-		t.Errorf("toolCalls = %d, want 2", toolCalls)
+	if alphaCalls != 2 {
+		t.Errorf("alphaCalls = %d, want 2", alphaCalls)
 	}
-	if turnCalls != 1 {
-		t.Errorf("turnCalls = %d, want 1", turnCalls)
+	if betaCalls != 1 {
+		t.Errorf("betaCalls = %d, want 1", betaCalls)
 	}
 }
 
 func TestRegistry_HasHandlers(t *testing.T) {
 	reg := hook.NewRegistry()
 
-	if reg.HasHandlers(hook.EventTurnStart) {
+	if reg.HasHandlers(eventAlpha) {
 		t.Error("should have no handlers initially")
 	}
 
-	unsub := reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
+	unsub := reg.On(eventAlpha, func(e hook.Event) hook.Result {
 		return hook.Continue()
 	})
 
-	if !reg.HasHandlers(hook.EventTurnStart) {
+	if !reg.HasHandlers(eventAlpha) {
 		t.Error("should have handlers after On")
 	}
 
 	unsub()
 
-	if reg.HasHandlers(hook.EventTurnStart) {
+	if reg.HasHandlers(eventAlpha) {
 		t.Error("should have no handlers after unsub")
 	}
 }
@@ -292,26 +269,26 @@ func TestRegistry_HasHandlers(t *testing.T) {
 func TestRegistry_Clear(t *testing.T) {
 	reg := hook.NewRegistry()
 
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result { return hook.Continue() })
-	reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventAlpha, func(e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventBeta, func(e hook.Event) hook.Result { return hook.Continue() })
 
-	reg.Clear(hook.EventPreToolCall)
-	if reg.HasHandlers(hook.EventPreToolCall) {
-		t.Error("should have cleared PreToolCall")
+	reg.Clear(eventAlpha)
+	if reg.HasHandlers(eventAlpha) {
+		t.Error("should have cleared alpha")
 	}
-	if !reg.HasHandlers(hook.EventTurnStart) {
-		t.Error("TurnStart should still have handlers")
+	if !reg.HasHandlers(eventBeta) {
+		t.Error("beta should still have handlers")
 	}
 }
 
 func TestRegistry_ClearAll(t *testing.T) {
 	reg := hook.NewRegistry()
 
-	reg.On(hook.EventPreToolCall, func(e hook.Event) hook.Result { return hook.Continue() })
-	reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventAlpha, func(e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventBeta, func(e hook.Event) hook.Result { return hook.Continue() })
 
 	reg.Clear()
-	if reg.HasHandlers(hook.EventPreToolCall) || reg.HasHandlers(hook.EventTurnStart) {
+	if reg.HasHandlers(eventAlpha) || reg.HasHandlers(eventBeta) {
 		t.Error("all handlers should be cleared")
 	}
 }
@@ -320,47 +297,23 @@ func TestRegistry_ConcurrentSafety(t *testing.T) {
 	reg := hook.NewRegistry()
 	done := make(chan struct{})
 
-	// Register handlers concurrently
 	for i := range 10 {
 		go func(n int) {
-			reg.On(hook.EventTurnStart, func(e hook.Event) hook.Result {
+			reg.On(eventAlpha, func(e hook.Event) hook.Result {
 				return hook.Continue()
 			})
 			done <- struct{}{}
 		}(i)
 	}
 
-	// Emit events concurrently
 	for range 10 {
 		go func() {
-			reg.Emit(hook.TurnStart{Turn: 1})
+			reg.Emit(alphaEvent{Value: "concurrent"})
 			done <- struct{}{}
 		}()
 	}
 
 	for range 20 {
 		<-done
-	}
-}
-
-func TestOnError_Fields(t *testing.T) {
-	err := fmt.Errorf("connection refused")
-	e := hook.OnError{Err: err, Source: "llm_provider"}
-
-	if e.Err.Error() != "connection refused" {
-		t.Errorf("Err = %v, want connection refused", e.Err)
-	}
-	if e.Source != "llm_provider" {
-		t.Errorf("Source = %q, want llm_provider", e.Source)
-	}
-}
-
-func TestPostLLMCall_WithError(t *testing.T) {
-	e := hook.PostLLMCall{
-		Err: fmt.Errorf("timeout"),
-	}
-
-	if e.Err == nil || e.Err.Error() != "timeout" {
-		t.Errorf("expected timeout error, got %v", e.Err)
 	}
 }

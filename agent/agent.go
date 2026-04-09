@@ -60,7 +60,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 	for turn := 1; turn <= a.config.MaxTurns; turn++ {
 		// Emit TurnStart hook
-		if hr := a.emitHook(hook.TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+		if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		}
 
@@ -68,7 +68,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		req := a.buildRequest(msgs)
 
 		// Emit PreLLMCall hook
-		if hr := a.emitHook(hook.PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+		if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		} else if hr.Action == hook.ActionModify {
 			if modified, ok := hr.ModifiedData.(llm.CompletionRequest); ok {
@@ -79,12 +79,12 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		// Call LLM
 		resp, err := a.config.Provider.Complete(ctx, req)
 		if err != nil {
-			a.emitHook(hook.OnError{Err: err, Source: "llm_provider"})
+			a.emitHook(OnError{Err: err, Source: "llm_provider"})
 			return nil, fmt.Errorf("agent: llm call failed on turn %d: %w", turn, err)
 		}
 
 		// Emit PostLLMCall hook
-		a.emitHook(hook.PostLLMCall{Response: *resp})
+		a.emitHook(PostLLMCall{Response: *resp})
 
 		// Accumulate usage
 		totalUsage = addUsage(totalUsage, resp.Usage)
@@ -94,7 +94,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 		// If no tool calls, we're done
 		if !resp.HasToolCalls() {
-			a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn), nil
 		}
 
@@ -114,7 +114,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 		// Check token budget
 		if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
-			a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget), nil
 		}
 
@@ -132,7 +132,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		}
 
 		// Emit TurnEnd hook
-		a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+		a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 	}
 
 	// Reached max turns
@@ -165,14 +165,14 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 
 			ch <- TurnStartEvent{Turn: turn}
 
-			if hr := a.emitHook(hook.TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+			if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
 				return
 			}
 
 			req := a.buildRequest(msgs)
 
-			if hr := a.emitHook(hook.PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+			if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
 				return
 			} else if hr.Action == hook.ActionModify {
@@ -184,7 +184,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			// Use streaming if provider supports it
 			streamCh, err := a.config.Provider.Stream(ctx, req)
 			if err != nil {
-				a.emitHook(hook.OnError{Err: err, Source: "llm_provider"})
+				a.emitHook(OnError{Err: err, Source: "llm_provider"})
 				return
 			}
 
@@ -201,13 +201,13 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				return
 			}
 
-			a.emitHook(hook.PostLLMCall{Response: *resp})
+			a.emitHook(PostLLMCall{Response: *resp})
 
 			totalUsage = addUsage(totalUsage, resp.Usage)
 			msgs = append(msgs, resp.Message)
 
 			if !resp.HasToolCalls() {
-				a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn)}
 				return
@@ -231,7 +231,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			}
 
 			if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
-				a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget)}
 				return
@@ -248,7 +248,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				ch <- ContextCompactedEvent{OldTokens: oldTokens, NewTokens: newTokens}
 			}
 
-			a.emitHook(hook.TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 			ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
 		}
 
@@ -287,7 +287,7 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 
 	// Emit PreToolCall hook
 	input := json.RawMessage(tc.Function.Arguments)
-	if hr := a.emitHook(hook.PreToolCall{Name: tc.Function.Name, Input: input}); hr.Action == hook.ActionAbort {
+	if hr := a.emitHook(PreToolCall{Name: tc.Function.Name, Input: input}); hr.Action == hook.ActionAbort {
 		return nil, fmt.Errorf("tool %q aborted by hook: %s", tc.Function.Name, hr.Reason)
 	}
 
@@ -302,7 +302,7 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 	result, err := callable.Call(toolCtx, input)
 
 	// Emit PostToolCall hook
-	a.emitHook(hook.PostToolCall{
+	a.emitHook(PostToolCall{
 		Name:   tc.Function.Name,
 		Input:  input,
 		Result: result,
