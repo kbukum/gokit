@@ -21,14 +21,20 @@ type CompletionRequest struct {
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt"`
 	// Temperature controls randomness (0.0 = deterministic, 1.0 = creative).
 	Temperature *float64 `json:"temperature,omitempty" yaml:"temperature"`
+	// TopP controls nucleus sampling. 0 means provider default.
+	TopP *float64 `json:"top_p,omitempty" yaml:"top_p"`
 	// MaxTokens limits the response length. 0 means provider default.
 	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens"`
+	// StopSequences causes the model to stop when any sequence is encountered.
+	StopSequences []string `json:"stop_sequences,omitempty" yaml:"stop_sequences,omitempty"`
 	// Stream requests streaming mode. Set automatically by Adapter.Stream().
 	Stream bool `json:"stream,omitempty" yaml:"stream"`
 	// Tools is the list of tools available to the model.
 	Tools []tool.Definition `json:"tools,omitempty" yaml:"tools,omitempty"`
 	// ToolChoice controls how the model selects tools.
 	ToolChoice *ToolChoice `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
+	// Metadata holds arbitrary key-value data passed through to the provider.
+	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 	// Extra holds provider-specific fields that don't fit the universal schema.
 	Extra map[string]any `json:"extra,omitempty" yaml:"extra"`
 }
@@ -72,6 +78,12 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+	// CacheReadTokens reports tokens read from provider cache (if supported).
+	CacheReadTokens int `json:"cache_read_tokens,omitempty"`
+	// CacheWriteTokens reports tokens written to provider cache (if supported).
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
+	// ThinkingTokens reports tokens used for extended thinking (if supported).
+	ThinkingTokens int `json:"thinking_tokens,omitempty"`
 }
 
 // --- Tool calling types ---
