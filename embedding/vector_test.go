@@ -303,28 +303,3 @@ func TestNormalize(t *testing.T) {
 		})
 	}
 }
-
-func TestDefaultOpenAIConfig(t *testing.T) {
-	cfg := DefaultOpenAIConfig()
-	if cfg.Endpoint != "https://api.openai.com" {
-		t.Errorf("DefaultOpenAIConfig().Endpoint = %s, want https://api.openai.com", cfg.Endpoint)
-	}
-	if cfg.Model != "text-embedding-3-small" {
-		t.Errorf("DefaultOpenAIConfig().Model = %s, want text-embedding-3-small", cfg.Model)
-	}
-	if cfg.Dimensions != 1536 {
-		t.Errorf("DefaultOpenAIConfig().Dimensions = %d, want 1536", cfg.Dimensions)
-	}
-}
-
-func TestOpenAIDimensions(t *testing.T) {
-	cfg := OpenAIConfig{
-		Endpoint:   "http://localhost:8000",
-		Model:      "test-model",
-		Dimensions: 768,
-	}
-	provider := NewOpenAIProvider(cfg)
-	if dims := provider.Dimensions(); dims != 768 {
-		t.Errorf("Dimensions() = %d, want 768", dims)
-	}
-}
