@@ -42,9 +42,18 @@ func (d *mockDialect) BuildRequest(req CompletionRequest) (any, error) {
 	if d.buildErr != nil {
 		return nil, d.buildErr
 	}
+	// Serialize messages using MarshalMessage for proper role-tagged format
+	msgs := make([]json.RawMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		data, err := MarshalMessage(m)
+		if err != nil {
+			return nil, err
+		}
+		msgs[i] = data
+	}
 	return map[string]any{
 		"model":    req.Model,
-		"messages": req.Messages,
+		"messages": msgs,
 		"stream":   req.Stream,
 	}, nil
 }
@@ -60,7 +69,7 @@ func (d *mockDialect) ParseResponse(body []byte) (*CompletionResponse, error) {
 	content, _ := raw["content"].(string)
 	model, _ := raw["model"].(string)
 	return &CompletionResponse{
-		Content: content,
+		Message: Assistant(content),
 		Model:   model,
 		Usage:   Usage{TotalTokens: 10},
 	}, nil
@@ -148,7 +157,6 @@ func TestAdapter_Execute(t *testing.T) {
 			t.Errorf("method = %q, want POST", r.Method)
 		}
 
-		// Verify the request body was built by the dialect
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
 		if body["model"] != "test-model" {
@@ -172,13 +180,13 @@ func TestAdapter_Execute(t *testing.T) {
 	}
 
 	resp, err := a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Messages: []Message{User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error: %v", err)
 	}
-	if resp.Content != "Hello from LLM!" {
-		t.Errorf("Content = %q, want %q", resp.Content, "Hello from LLM!")
+	if resp.Text() != "Hello from LLM!" {
+		t.Errorf("Text() = %q, want %q", resp.Text(), "Hello from LLM!")
 	}
 	if resp.Model != "test-model" {
 		t.Errorf("Model = %q, want %q", resp.Model, "test-model")
@@ -210,9 +218,8 @@ func TestAdapter_Execute_AppliesDefaults(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
-	// Send request WITHOUT model/temp/max — defaults should apply
 	_, err = a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "test"}},
+		Messages: []Message{User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error: %v", err)
@@ -305,7 +312,7 @@ func TestAdapter_Stream_NDJSON(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Messages: []Message{User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Stream() error: %v", err)
@@ -354,7 +361,7 @@ func TestAdapter_Stream_SSE(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Messages: []Message{User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Stream() error: %v", err)

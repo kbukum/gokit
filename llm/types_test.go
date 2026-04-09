@@ -4,7 +4,7 @@ import "testing"
 
 func TestCompletionRequest_Defaults(t *testing.T) {
 	req := CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "Hello"}},
+		Messages: []Message{User("Hello")},
 	}
 
 	if req.Model != "" {
@@ -68,7 +68,7 @@ func TestUsage_Fields(t *testing.T) {
 
 func TestExtra_Field(t *testing.T) {
 	req := CompletionRequest{
-		Messages: []Message{{Role: "user", Content: "test"}},
+		Messages: []Message{User("test")},
 		Extra:    map[string]any{"think": false, "format": "json"},
 	}
 

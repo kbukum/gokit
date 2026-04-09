@@ -22,7 +22,7 @@ func (m *mockLLM) Execute(_ context.Context, _ llm.CompletionRequest) (llm.Compl
 	if m.err != nil {
 		return llm.CompletionResponse{}, m.err
 	}
-	return llm.CompletionResponse{Content: m.response}, nil
+	return llm.CompletionResponse{Message: llm.Assistant(m.response)}, nil
 }
 
 // Verify mockLLM implements the interface.

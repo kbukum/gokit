@@ -10,22 +10,18 @@ import (
 )
 
 // Complete is a convenience helper: sends system + user prompts and returns the text response.
-// Accepts gokit RequestResponse so it works with any wrapped/composed provider
-// (e.g., WithResilience, middleware chains).
 func Complete(ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string) (string, error) {
 	resp, err := p.Execute(ctx, CompletionRequest{
 		SystemPrompt: system,
-		Messages:     []Message{{Role: "user", Content: user}},
+		Messages:     []Message{User(user)},
 	})
 	if err != nil {
 		return "", err
 	}
-	return resp.Content, nil
+	return resp.Text(), nil
 }
 
 // CompleteStructured sends a prompt expecting JSON and unmarshals the response into result.
-// Accepts gokit RequestResponse so it works with any wrapped/composed provider.
-// It appends JSON formatting instructions to the system prompt.
 func CompleteStructured(ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string, result any) error {
 	system += "\n\nIMPORTANT: Respond with ONLY the JSON object. " +
 		"No markdown, no code blocks, no explanations. " +
@@ -33,13 +29,13 @@ func CompleteStructured(ctx context.Context, p provider.RequestResponse[Completi
 
 	resp, err := p.Execute(ctx, CompletionRequest{
 		SystemPrompt: system,
-		Messages:     []Message{{Role: "user", Content: user}},
+		Messages:     []Message{User(user)},
 	})
 	if err != nil {
 		return err
 	}
 
-	content := extractJSON(resp.Content)
+	content := extractJSON(resp.Text())
 	if err := json.Unmarshal([]byte(content), result); err != nil {
 		return fmt.Errorf("llm: unmarshal structured response: %w", err)
 	}
