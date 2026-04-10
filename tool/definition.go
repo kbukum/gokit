@@ -47,6 +47,12 @@ type Annotations struct {
 	Category string `json:"category,omitempty"`
 	// Tags are searchable labels.
 	Tags []string `json:"tags,omitempty"`
+	// ExecutionHint tells the frontend how to handle the tool result.
+	// "ui"      — tool only validates/extracts params; frontend drives the action.
+	// "backend" — tool executes a real operation; result is authoritative.
+	// "hybrid"  — tool executes backend AND frontend should refresh/navigate.
+	// Empty string defaults to "backend" for backward compatibility.
+	ExecutionHint string `json:"executionHint,omitempty"`
 }
 
 // boolPtr is a helper for creating *bool values in annotations.

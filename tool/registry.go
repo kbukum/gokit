@@ -200,8 +200,9 @@ func (r *Registry) Filter(opts ...FilterOption) []Definition {
 type FilterOption func(*filterConfig)
 
 type filterConfig struct {
-	category string
-	tags     []string
+	category      string
+	tags          []string
+	executionHint string
 }
 
 // WithCategory filters tools by category annotation.
@@ -214,9 +215,19 @@ func WithTags(tags ...string) FilterOption {
 	return func(c *filterConfig) { c.tags = tags }
 }
 
+// WithExecutionHint filters tools by execution hint annotation.
+func WithExecutionHint(hint string) FilterOption {
+	return func(c *filterConfig) { c.executionHint = hint }
+}
+
 func matchesFilter(def Definition, cfg *filterConfig) bool {
 	if cfg.category != "" {
 		if def.Annotations == nil || def.Annotations.Category != cfg.category {
+			return false
+		}
+	}
+	if cfg.executionHint != "" {
+		if def.Annotations == nil || def.Annotations.ExecutionHint != cfg.executionHint {
 			return false
 		}
 	}

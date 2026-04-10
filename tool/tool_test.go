@@ -440,6 +440,52 @@ func TestRegistry_Filter(t *testing.T) {
 	}
 }
 
+func TestAnnotations_ExecutionHint(t *testing.T) {
+	st := tool.FromFunc("validate", "Validate input", doSearch).
+		WithAnnotations(tool.Annotations{
+			Category:      "forms",
+			ExecutionHint: "ui",
+		})
+
+	def := st.Definition()
+	if def.Annotations == nil {
+		t.Fatal("expected annotations")
+	}
+	if def.Annotations.ExecutionHint != "ui" {
+		t.Errorf("expected executionHint 'ui', got %q", def.Annotations.ExecutionHint)
+	}
+}
+
+func TestRegistry_FilterByExecutionHint(t *testing.T) {
+	reg := tool.NewRegistry()
+
+	reg.MustRegister(tool.FromFunc("validate", "Validate", doSearch).
+		WithAnnotations(tool.Annotations{ExecutionHint: "ui"}).
+		AsCallable())
+	reg.MustRegister(tool.FromFunc("process", "Process", doSearch).
+		WithAnnotations(tool.Annotations{ExecutionHint: "backend"}).
+		AsCallable())
+	reg.MustRegister(tool.FromFunc("submit", "Submit", doSearch).
+		WithAnnotations(tool.Annotations{ExecutionHint: "hybrid"}).
+		AsCallable())
+	reg.MustRegister(tool.FromFunc("plain", "Plain", doSearch).AsCallable())
+
+	defs := reg.Filter(tool.WithExecutionHint("ui"))
+	if len(defs) != 1 || defs[0].Name != "validate" {
+		t.Errorf("expected 1 ui tool (validate), got %d", len(defs))
+	}
+
+	defs = reg.Filter(tool.WithExecutionHint("backend"))
+	if len(defs) != 1 || defs[0].Name != "process" {
+		t.Errorf("expected 1 backend tool (process), got %d", len(defs))
+	}
+
+	defs = reg.Filter(tool.WithExecutionHint("hybrid"))
+	if len(defs) != 1 || defs[0].Name != "submit" {
+		t.Errorf("expected 1 hybrid tool (submit), got %d", len(defs))
+	}
+}
+
 // --- Middleware tests ---
 
 func TestMiddleware_Logging(t *testing.T) {
