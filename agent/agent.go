@@ -214,7 +214,9 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			}
 
 			for _, tc := range resp.Message.ToolCalls {
-				input, _ := json.Marshal(tc.Function.Arguments)
+				// Arguments is already a JSON string — use it directly as RawMessage
+				// to avoid double-encoding.
+				input := json.RawMessage(tc.Function.Arguments)
 				ch <- ToolExecutingEvent{ToolUseID: tc.ID, Name: tc.Function.Name, Input: input}
 
 				toolResult, toolErr := a.executeTool(ctx, tc)
