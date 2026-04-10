@@ -47,9 +47,11 @@ type Dialect interface {
 	// StreamFormat returns how this provider delivers streaming data.
 	StreamFormat() StreamFormat
 
-	// ParseStreamChunk extracts content from a single stream data chunk.
-	// Returns the text content and whether the stream is complete.
-	ParseStreamChunk(data []byte) (content string, done bool, err error)
+	// ParseStreamChunk extracts content (text and/or tool calls) from a single
+	// stream data chunk. The returned StreamChunk carries Content, ToolCalls,
+	// and Done fields. Err on the StreamChunk is unused; return errors via the
+	// error return value.
+	ParseStreamChunk(data []byte) (StreamChunk, error)
 }
 
 // --- Dialect Registry ---

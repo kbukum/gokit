@@ -187,12 +187,16 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 //
 // Gemini streaming returns the same structure as non-streaming but incrementally.
 // Each chunk is a full candidates array with partial content.
-func (d *Dialect) ParseStreamChunk(data []byte) (string, bool, error) {
+func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	var chunk struct {
 		Candidates []struct {
 			Content struct {
 				Parts []struct {
-					Text string `json:"text,omitempty"`
+					Text         string `json:"text,omitempty"`
+					FunctionCall *struct {
+						Name string         `json:"name"`
+						Args map[string]any `json:"args,omitempty"`
+					} `json:"functionCall,omitempty"`
 				} `json:"parts"`
 			} `json:"content"`
 			FinishReason string `json:"finishReason,omitempty"`
@@ -200,21 +204,36 @@ func (d *Dialect) ParseStreamChunk(data []byte) (string, bool, error) {
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return "", false, fmt.Errorf("gemini: parse stream chunk: %w", err)
+		return llm.StreamChunk{}, fmt.Errorf("gemini: parse stream chunk: %w", err)
 	}
 
 	if len(chunk.Candidates) == 0 {
-		return "", false, nil
+		return llm.StreamChunk{}, nil
 	}
 
 	candidate := chunk.Candidates[0]
 	var text string
+	var toolCalls []llm.ToolCall
 	for _, part := range candidate.Content.Parts {
 		text += part.Text
+		if part.FunctionCall != nil {
+			args, _ := json.Marshal(part.FunctionCall.Args)
+			toolCalls = append(toolCalls, llm.ToolCall{
+				Type: "function",
+				Function: llm.FunctionCall{
+					Name:      part.FunctionCall.Name,
+					Arguments: string(args),
+				},
+			})
+		}
 	}
 
 	done := candidate.FinishReason != "" && candidate.FinishReason != "NONE"
-	return text, done, nil
+	return llm.StreamChunk{
+		Content:   text,
+		ToolCalls: toolCalls,
+		Done:      done,
+	}, nil
 }
 
 // --- internal helpers ---

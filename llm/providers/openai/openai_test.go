@@ -166,15 +166,15 @@ func TestDialect_ParseResponse_ToolCalls(t *testing.T) {
 func TestDialect_ParseStreamChunk_Content(t *testing.T) {
 	d := &Dialect{}
 
-	chunk := `{"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}`
-	content, done, err := d.ParseStreamChunk([]byte(chunk))
+	data := `{"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if content != "Hello" {
-		t.Errorf("expected content 'Hello', got %q", content)
+	if chunk.Content != "Hello" {
+		t.Errorf("expected content 'Hello', got %q", chunk.Content)
 	}
-	if done {
+	if chunk.Done {
 		t.Error("expected done=false")
 	}
 }
@@ -182,14 +182,14 @@ func TestDialect_ParseStreamChunk_Content(t *testing.T) {
 func TestDialect_ParseStreamChunk_Done(t *testing.T) {
 	d := &Dialect{}
 
-	content, done, err := d.ParseStreamChunk([]byte("[DONE]"))
+	chunk, err := d.ParseStreamChunk([]byte("[DONE]"))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
+	if chunk.Content != "" {
+		t.Errorf("expected empty content, got %q", chunk.Content)
 	}
-	if !done {
+	if !chunk.Done {
 		t.Error("expected done=true")
 	}
 }
@@ -197,13 +197,36 @@ func TestDialect_ParseStreamChunk_Done(t *testing.T) {
 func TestDialect_ParseStreamChunk_FinishReason(t *testing.T) {
 	d := &Dialect{}
 
-	chunk := `{"choices":[{"delta":{"content":""},"finish_reason":"stop"}]}`
-	_, done, err := d.ParseStreamChunk([]byte(chunk))
+	data := `{"choices":[{"delta":{"content":""},"finish_reason":"stop"}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if !done {
+	if !chunk.Done {
 		t.Error("expected done=true for finish_reason=stop")
+	}
+}
+
+func TestDialect_ParseStreamChunk_ToolCalls(t *testing.T) {
+	d := &Dialect{}
+
+	data := `{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"search","arguments":"{\"q\":"}}]},"finish_reason":null}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
+	if err != nil {
+		t.Fatalf("ParseStreamChunk: %v", err)
+	}
+	if len(chunk.ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(chunk.ToolCalls))
+	}
+	tc := chunk.ToolCalls[0]
+	if tc.ID != "call_123" {
+		t.Errorf("tool call ID = %q, want %q", tc.ID, "call_123")
+	}
+	if tc.Function.Name != "search" {
+		t.Errorf("tool call name = %q, want %q", tc.Function.Name, "search")
+	}
+	if tc.Function.Arguments != `{"q":` {
+		t.Errorf("tool call args = %q, want %q", tc.Function.Arguments, `{"q":`)
 	}
 }
 

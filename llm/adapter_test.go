@@ -77,15 +77,15 @@ func (d *mockDialect) ParseResponse(body []byte) (*CompletionResponse, error) {
 
 func (d *mockDialect) StreamFormat() StreamFormat { return d.streamFormat }
 
-func (d *mockDialect) ParseStreamChunk(data []byte) (content string, done bool, err error) {
+func (d *mockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
 	var chunk struct {
 		Content string `json:"content"`
 		Done    bool   `json:"done"`
 	}
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return "", false, err
+		return StreamChunk{}, err
 	}
-	return chunk.Content, chunk.Done, nil
+	return StreamChunk{Content: chunk.Content, Done: chunk.Done}, nil
 }
 
 // --- tests ---

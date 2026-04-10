@@ -125,33 +125,62 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}, nil
 }
 
-// ParseStreamChunk extracts content from an SSE data payload.
-func (d *Dialect) ParseStreamChunk(data []byte) (string, bool, error) {
+// ParseStreamChunk extracts content and tool calls from an SSE data payload.
+func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	s := string(data)
 	if s == "[DONE]" {
-		return "", true, nil
+		return llm.StreamChunk{Done: true}, nil
 	}
 
 	var chunk struct {
 		Choices []struct {
 			Delta struct {
-				Content string `json:"content"`
+				Content   string          `json:"content"`
+				ToolCalls []rawStreamTool `json:"tool_calls,omitempty"`
 			} `json:"delta"`
 			FinishReason *string `json:"finish_reason"`
 		} `json:"choices"`
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return "", false, fmt.Errorf("openai: parse stream chunk: %w", err)
+		return llm.StreamChunk{}, fmt.Errorf("openai: parse stream chunk: %w", err)
 	}
 
 	if len(chunk.Choices) == 0 {
-		return "", false, nil
+		return llm.StreamChunk{}, nil
 	}
 
 	c := chunk.Choices[0]
 	done := c.FinishReason != nil && *c.FinishReason != ""
-	return c.Delta.Content, done, nil
+
+	var toolCalls []llm.ToolCall
+	for _, tc := range c.Delta.ToolCalls {
+		toolCalls = append(toolCalls, llm.ToolCall{
+			ID:   tc.ID,
+			Type: tc.Type,
+			Function: llm.FunctionCall{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		})
+	}
+
+	return llm.StreamChunk{
+		Content:   c.Delta.Content,
+		ToolCalls: toolCalls,
+		Done:      done,
+	}, nil
+}
+
+// rawStreamTool is the wire format for streaming tool call deltas.
+type rawStreamTool struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function"`
 }
 
 // --- internal helpers ---

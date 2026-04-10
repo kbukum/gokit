@@ -279,15 +279,15 @@ func TestDialect_ParseResponse_SafetyFilter(t *testing.T) {
 func TestDialect_ParseStreamChunk_Content(t *testing.T) {
 	d := &Dialect{}
 
-	chunk := `{"candidates":[{"content":{"parts":[{"text":"Hello"}]},"finishReason":""}]}`
-	content, done, err := d.ParseStreamChunk([]byte(chunk))
+	data := `{"candidates":[{"content":{"parts":[{"text":"Hello"}]},"finishReason":""}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if content != "Hello" {
-		t.Errorf("expected content 'Hello', got %q", content)
+	if chunk.Content != "Hello" {
+		t.Errorf("expected content 'Hello', got %q", chunk.Content)
 	}
-	if done {
+	if chunk.Done {
 		t.Error("expected done=false")
 	}
 }
@@ -295,12 +295,12 @@ func TestDialect_ParseStreamChunk_Content(t *testing.T) {
 func TestDialect_ParseStreamChunk_Done(t *testing.T) {
 	d := &Dialect{}
 
-	chunk := `{"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"STOP"}]}`
-	_, done, err := d.ParseStreamChunk([]byte(chunk))
+	data := `{"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"STOP"}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if !done {
+	if !chunk.Done {
 		t.Error("expected done=true for finishReason STOP")
 	}
 }
@@ -308,16 +308,32 @@ func TestDialect_ParseStreamChunk_Done(t *testing.T) {
 func TestDialect_ParseStreamChunk_Empty(t *testing.T) {
 	d := &Dialect{}
 
-	chunk := `{"candidates":[]}`
-	content, done, err := d.ParseStreamChunk([]byte(chunk))
+	data := `{"candidates":[]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if content != "" {
-		t.Errorf("expected empty content, got %q", content)
+	if chunk.Content != "" {
+		t.Errorf("expected empty content, got %q", chunk.Content)
 	}
-	if done {
+	if chunk.Done {
 		t.Error("expected done=false for empty candidates")
+	}
+}
+
+func TestDialect_ParseStreamChunk_FunctionCall(t *testing.T) {
+	d := &Dialect{}
+
+	data := `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"search","args":{"q":"test"}}}]},"finishReason":""}]}`
+	chunk, err := d.ParseStreamChunk([]byte(data))
+	if err != nil {
+		t.Fatalf("ParseStreamChunk: %v", err)
+	}
+	if len(chunk.ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(chunk.ToolCalls))
+	}
+	if chunk.ToolCalls[0].Function.Name != "search" {
+		t.Errorf("tool name = %q, want %q", chunk.ToolCalls[0].Function.Name, "search")
 	}
 }
 

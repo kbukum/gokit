@@ -126,33 +126,59 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 }
 
 // ParseStreamChunk extracts content from an Anthropic SSE data payload.
-func (d *Dialect) ParseStreamChunk(data []byte) (string, bool, error) {
+func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	var event struct {
 		Type  string `json:"type"`
+		Index int    `json:"index,omitempty"`
 		Delta struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
+			Type        string `json:"type"`
+			Text        string `json:"text"`
+			PartialJSON string `json:"partial_json,omitempty"`
 		} `json:"delta,omitempty"`
+		ContentBlock struct {
+			Type  string `json:"type"`
+			ID    string `json:"id,omitempty"`
+			Name  string `json:"name,omitempty"`
+			Input any    `json:"input,omitempty"`
+		} `json:"content_block,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &event); err != nil {
-		return "", false, fmt.Errorf("anthropic: parse stream chunk: %w", err)
+		return llm.StreamChunk{}, fmt.Errorf("anthropic: parse stream chunk: %w", err)
 	}
 
 	switch event.Type {
+	case "content_block_start":
+		if event.ContentBlock.Type == "tool_use" {
+			return llm.StreamChunk{
+				ToolCalls: []llm.ToolCall{{
+					ID:   event.ContentBlock.ID,
+					Type: "function",
+					Function: llm.FunctionCall{
+						Name: event.ContentBlock.Name,
+					},
+				}},
+			}, nil
+		}
+		return llm.StreamChunk{}, nil
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" {
-			return event.Delta.Text, false, nil
+			return llm.StreamChunk{Content: event.Delta.Text}, nil
 		}
-		return "", false, nil
-	case "message_delta":
-		return "", false, nil
+		if event.Delta.Type == "input_json_delta" {
+			return llm.StreamChunk{
+				ToolCalls: []llm.ToolCall{{
+					Function: llm.FunctionCall{
+						Arguments: event.Delta.PartialJSON,
+					},
+				}},
+			}, nil
+		}
+		return llm.StreamChunk{}, nil
 	case "message_stop":
-		return "", true, nil
-	case "message_start", "content_block_start", "content_block_stop", "ping":
-		return "", false, nil
+		return llm.StreamChunk{Done: true}, nil
 	default:
-		return "", false, nil
+		return llm.StreamChunk{}, nil
 	}
 }
 

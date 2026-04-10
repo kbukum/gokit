@@ -19,10 +19,10 @@ import (
 
 type extMockDialect struct {
 	mockDialect
-	parseChunkFn func(data []byte) (string, bool, error)
+	parseChunkFn func(data []byte) (StreamChunk, error)
 }
 
-func (d *extMockDialect) ParseStreamChunk(data []byte) (string, bool, error) {
+func (d *extMockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
 	if d.parseChunkFn != nil {
 		return d.parseChunkFn(data)
 	}
