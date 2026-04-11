@@ -15,13 +15,17 @@ import (
 
 // EventType constants for agent lifecycle hooks.
 const (
-	EventPreToolCall  hook.EventType = "pre_tool_call"
-	EventPostToolCall hook.EventType = "post_tool_call"
-	EventPreLLMCall   hook.EventType = "pre_llm_call"
-	EventPostLLMCall  hook.EventType = "post_llm_call"
-	EventOnError      hook.EventType = "on_error"
-	EventTurnStart    hook.EventType = "turn_start"
-	EventTurnEnd      hook.EventType = "turn_end"
+	EventPreToolCall       hook.EventType = "pre_tool_call"
+	EventPostToolCall      hook.EventType = "post_tool_call"
+	EventPreLLMCall        hook.EventType = "pre_llm_call"
+	EventPostLLMCall       hook.EventType = "post_llm_call"
+	EventOnError           hook.EventType = "on_error"
+	EventTurnStart         hook.EventType = "turn_start"
+	EventTurnEnd           hook.EventType = "turn_end"
+	EventContextCompacted  hook.EventType = "context_compacted"
+	EventModelSwitched     hook.EventType = "model_switched"
+	EventMemoryLoaded      hook.EventType = "memory_loaded"
+	EventToolsParallelized hook.EventType = "tools_parallelized"
 )
 
 // PreToolCall is emitted before a tool is invoked.
@@ -79,3 +83,37 @@ type TurnEnd struct {
 }
 
 func (TurnEnd) Type() hook.EventType { return EventTurnEnd }
+
+// ContextCompacted is emitted after the context window is compacted.
+type ContextCompacted struct {
+	OldTokens int `json:"old_tokens"`
+	NewTokens int `json:"new_tokens"`
+	Strategy  string `json:"strategy"`
+}
+
+func (ContextCompacted) Type() hook.EventType { return EventContextCompacted }
+
+// ModelSwitched is emitted when the model override changes during a session.
+type ModelSwitched struct {
+	PreviousModel string `json:"previous_model"`
+	NewModel      string `json:"new_model"`
+	Reason        string `json:"reason,omitempty"`
+}
+
+func (ModelSwitched) Type() hook.EventType { return EventModelSwitched }
+
+// MemoryLoaded is emitted when conversation history is loaded from memory.
+type MemoryLoaded struct {
+	SessionID    string `json:"session_id"`
+	MessageCount int    `json:"message_count"`
+}
+
+func (MemoryLoaded) Type() hook.EventType { return EventMemoryLoaded }
+
+// ToolsParallelized is emitted when tools are executed in parallel.
+type ToolsParallelized struct {
+	ToolNames []string `json:"tool_names"`
+	Count     int      `json:"count"`
+}
+
+func (ToolsParallelized) Type() hook.EventType { return EventToolsParallelized }

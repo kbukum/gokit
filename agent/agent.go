@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/kbukum/gokit/hook"
 	"github.com/kbukum/gokit/llm"
@@ -23,16 +24,39 @@ type Config struct {
 	Provider llm.Provider
 	// Tools is the tool registry available to the agent.
 	Tools *tool.Registry
+	// ToolFormatter, when set, transforms tool results before they are sent
+	// to the LLM as tool result messages.
+	ToolFormatter tool.Formatter
 	// Hooks is an optional hook registry for lifecycle events.
 	Hooks *hook.Registry
 	// SystemPrompt is prepended to every LLM call.
+	// Ignored when SystemPromptTemplate is set.
 	SystemPrompt string
+	// SystemPromptTemplate, when set, is rendered with SystemPromptData
+	// on each LLM call to produce the system prompt. Takes precedence
+	// over the plain SystemPrompt string.
+	SystemPromptTemplate *PromptTemplate
+	// SystemPromptData is the data passed to SystemPromptTemplate.Render.
+	SystemPromptData any
+	// Model overrides the provider's default model for all LLM calls.
+	// When empty the provider's default model is used.
+	Model string
 	// MaxTurns limits the number of LLM calls (default: 100).
 	MaxTurns int
 	// MaxTokenBudget limits total input+output tokens (0 = unlimited).
 	MaxTokenBudget int
 	// ContextStrategy handles context window overflow (default: FailStrategy).
 	ContextStrategy ContextStrategy
+	// ParallelTools enables concurrent execution of read-only tools.
+	// When true and all tool calls in a batch have ReadOnly=true, they
+	// execute concurrently. Mixed batches always run sequentially.
+	ParallelTools bool
+	// Memory is an optional conversation memory store.
+	// When set alongside SessionID, the agent loads history before the run
+	// and saves the full conversation after completion.
+	Memory Memory
+	// SessionID identifies the conversation session for Memory.
+	SessionID string
 }
 
 // Agent orchestrates the LLM conversation loop with tool execution.
@@ -56,11 +80,24 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 	msgs := make([]llm.Message, len(messages))
 	copy(msgs, messages)
 
+	// Load conversation history from memory.
+	if a.config.Memory != nil && a.config.SessionID != "" {
+		history, err := a.config.Memory.Load(ctx, a.config.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("agent: failed to load memory: %w", err)
+		}
+		if len(history) > 0 {
+			msgs = append(history, msgs...)
+			a.emitHook(MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
+		}
+	}
+
 	var totalUsage llm.Usage
 
 	for turn := 1; turn <= a.config.MaxTurns; turn++ {
 		// Emit TurnStart hook
 		if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		}
 
@@ -69,6 +106,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 		// Emit PreLLMCall hook
 		if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		} else if hr.Action == hook.ActionModify {
 			if modified, ok := hr.ModifiedData.(llm.CompletionRequest); ok {
@@ -95,26 +133,20 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		// If no tool calls, we're done
 		if !resp.HasToolCalls() {
 			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn), nil
 		}
 
 		// Execute tool calls
-		for _, tc := range resp.Message.ToolCalls {
-			toolResult, toolErr := a.executeTool(ctx, tc)
-			isError := toolErr != nil
-			content := ""
-			if toolErr != nil {
-				content = toolErr.Error()
-			} else if toolResult != nil {
-				content = toolResult.Content
-			}
-
-			msgs = append(msgs, llm.ToolResultMsg(tc.ID, content, isError))
+		toolResults := a.executeTools(ctx, resp.Message.ToolCalls)
+		for _, tr := range toolResults {
+			msgs = append(msgs, llm.ToolResultMsg(tr.id, tr.content, tr.isError))
 		}
 
 		// Check token budget
 		if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
 			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget), nil
 		}
 
@@ -127,8 +159,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 			}
 			msgs = compacted
 			newTokens := a.config.Provider.CountTokens(msgs)
-			_ = oldTokens
-			_ = newTokens
+			a.emitHook(ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
 		}
 
 		// Emit TurnEnd hook
@@ -143,6 +174,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 			break
 		}
 	}
+	a.saveMemory(ctx, msgs)
 	return a.buildResult(msgs, finalMsg, totalUsage, a.config.MaxTurns, StopMaxTurns), nil
 }
 
@@ -156,6 +188,15 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 		msgs := make([]llm.Message, len(messages))
 		copy(msgs, messages)
 
+		// Load conversation history from memory.
+		if a.config.Memory != nil && a.config.SessionID != "" {
+			history, err := a.config.Memory.Load(ctx, a.config.SessionID)
+			if err == nil && len(history) > 0 {
+				msgs = append(history, msgs...)
+				a.emitHook(MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
+			}
+		}
+
 		var totalUsage llm.Usage
 
 		for turn := 1; turn <= a.config.MaxTurns; turn++ {
@@ -166,6 +207,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			ch <- TurnStartEvent{Turn: turn}
 
 			if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+				a.saveMemory(ctx, msgs)
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
 				return
 			}
@@ -173,6 +215,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			req := a.buildRequest(msgs)
 
 			if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+				a.saveMemory(ctx, msgs)
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
 				return
 			} else if hr.Action == hook.ActionModify {
@@ -209,32 +252,28 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			if !resp.HasToolCalls() {
 				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
+				a.saveMemory(ctx, msgs)
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn)}
 				return
 			}
 
+			// Emit executing events for all tools
 			for _, tc := range resp.Message.ToolCalls {
-				// Arguments is already a JSON string — use it directly as RawMessage
-				// to avoid double-encoding.
 				input := json.RawMessage(tc.Function.Arguments)
 				ch <- ToolExecutingEvent{ToolUseID: tc.ID, Name: tc.Function.Name, Input: input}
+			}
 
-				toolResult, toolErr := a.executeTool(ctx, tc)
-				ch <- ToolCompleteEvent{ToolUseID: tc.ID, Name: tc.Function.Name, Result: toolResult, Err: toolErr}
-
-				isError := toolErr != nil
-				content := ""
-				if toolErr != nil {
-					content = toolErr.Error()
-				} else if toolResult != nil {
-					content = toolResult.Content
-				}
-				msgs = append(msgs, llm.ToolResultMsg(tc.ID, content, isError))
+			// Execute tools (parallel when safe)
+			toolResults := a.executeTools(ctx, resp.Message.ToolCalls)
+			for _, tr := range toolResults {
+				ch <- ToolCompleteEvent{ToolUseID: tr.id, Name: tr.name, Result: tr.result, Err: tr.err}
+				msgs = append(msgs, llm.ToolResultMsg(tr.id, tr.content, tr.isError))
 			}
 
 			if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
 				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
 				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
+				a.saveMemory(ctx, msgs)
 				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget)}
 				return
 			}
@@ -247,6 +286,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				}
 				msgs = compacted
 				newTokens := a.config.Provider.CountTokens(msgs)
+				a.emitHook(ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
 				ch <- ContextCompactedEvent{OldTokens: oldTokens, NewTokens: newTokens}
 			}
 
@@ -261,6 +301,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				break
 			}
 		}
+		a.saveMemory(ctx, msgs)
 		ch <- CompleteEvent{Result: *a.buildResult(msgs, finalMsg, totalUsage, a.config.MaxTurns, StopMaxTurns)}
 	}()
 
@@ -273,8 +314,15 @@ func (a *Agent) buildRequest(msgs []llm.Message) llm.CompletionRequest {
 	req := llm.CompletionRequest{
 		Messages: msgs,
 	}
-	if a.config.SystemPrompt != "" {
+	if a.config.SystemPromptTemplate != nil {
+		if rendered, err := a.config.SystemPromptTemplate.Render(a.config.SystemPromptData); err == nil {
+			req.SystemPrompt = rendered
+		}
+	} else if a.config.SystemPrompt != "" {
 		req.SystemPrompt = a.config.SystemPrompt
+	}
+	if a.config.Model != "" {
+		req.Model = a.config.Model
 	}
 	if a.config.Tools != nil {
 		req.Tools = a.config.Tools.List()
@@ -303,6 +351,13 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 
 	result, err := callable.Call(toolCtx, input)
 
+	// Apply formatter to transform result content for the LLM.
+	if err == nil && result != nil && a.config.ToolFormatter != nil {
+		if formatted, fmtErr := a.config.ToolFormatter.Format(tc.Function.Name, result); fmtErr == nil {
+			result.Content = formatted
+		}
+	}
+
 	// Emit PostToolCall hook
 	a.emitHook(PostToolCall{
 		Name:   tc.Function.Name,
@@ -312,6 +367,76 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 	})
 
 	return result, err
+}
+
+// toolResultEntry holds the result of a single tool execution.
+type toolResultEntry struct {
+	id      string
+	name    string
+	result  *tool.Result
+	err     error
+	content string
+	isError bool
+}
+
+// allReadOnly returns true if every tool call targets a ReadOnly tool.
+func (a *Agent) allReadOnly(calls []llm.ToolCall) bool {
+	if a.config.Tools == nil {
+		return false
+	}
+	for _, tc := range calls {
+		c, ok := a.config.Tools.Get(tc.Function.Name)
+		if !ok || !c.Definition().ReadOnly {
+			return false
+		}
+	}
+	return true
+}
+
+// executeTools runs tool calls sequentially or in parallel depending on
+// Config.ParallelTools and whether all tools are read-only.
+func (a *Agent) executeTools(ctx context.Context, calls []llm.ToolCall) []toolResultEntry {
+	results := make([]toolResultEntry, len(calls))
+
+	if a.config.ParallelTools && len(calls) > 1 && a.allReadOnly(calls) {
+		names := make([]string, len(calls))
+		for i, tc := range calls {
+			names[i] = tc.Function.Name
+		}
+		a.emitHook(ToolsParallelized{ToolNames: names, Count: len(calls)})
+
+		var wg sync.WaitGroup
+		for i, tc := range calls {
+			wg.Add(1)
+			go func(idx int, tc llm.ToolCall) {
+				defer wg.Done()
+				r, err := a.executeTool(ctx, tc)
+				entry := toolResultEntry{id: tc.ID, name: tc.Function.Name, result: r, err: err}
+				entry.isError = err != nil
+				if err != nil {
+					entry.content = err.Error()
+				} else if r != nil {
+					entry.content = r.Content
+				}
+				results[idx] = entry
+			}(i, tc)
+		}
+		wg.Wait()
+	} else {
+		for i, tc := range calls {
+			r, err := a.executeTool(ctx, tc)
+			entry := toolResultEntry{id: tc.ID, name: tc.Function.Name, result: r, err: err}
+			entry.isError = err != nil
+			if err != nil {
+				entry.content = err.Error()
+			} else if r != nil {
+				entry.content = r.Content
+			}
+			results[i] = entry
+		}
+	}
+
+	return results
 }
 
 func (a *Agent) emitHook(event hook.Event) hook.Result {
@@ -328,6 +453,12 @@ func (a *Agent) contextTooLarge(msgs []llm.Message) bool {
 	}
 	tokens := a.config.Provider.CountTokens(msgs)
 	return tokens > caps.MaxContextTokens
+}
+
+func (a *Agent) saveMemory(ctx context.Context, msgs []llm.Message) {
+	if a.config.Memory != nil && a.config.SessionID != "" {
+		_ = a.config.Memory.Save(ctx, a.config.SessionID, msgs)
+	}
 }
 
 func (a *Agent) buildResult(msgs []llm.Message, finalMsg llm.AssistantMessage, usage llm.Usage, turns int, reason StopReason) *Result {

@@ -119,3 +119,162 @@ func (s TruncateStrategy) Compact(messages []llm.Message, _ int) ([]llm.Message,
 	}
 	return messages[len(messages)-s.KeepLast:], nil
 }
+
+// SlidingWindowStrategy keeps a token-budget-aware sliding window.
+// It preserves the system message (if present) and removes the oldest
+// non-system messages until the total token count fits within the budget.
+type SlidingWindowStrategy struct {
+	// TokenCounter counts tokens for a message list.
+	// When nil, llm.CountTokensApprox is used.
+	TokenCounter func([]llm.Message) int
+}
+
+func (s SlidingWindowStrategy) Compact(messages []llm.Message, maxTokens int) ([]llm.Message, error) {
+	counter := s.TokenCounter
+	if counter == nil {
+		counter = llm.CountTokensApprox
+	}
+
+	if counter(messages) <= maxTokens {
+		return messages, nil
+	}
+
+	// Separate system message (if first message is system).
+	var system llm.Message
+	rest := messages
+	if len(messages) > 0 {
+		if _, ok := messages[0].(llm.SystemMessage); ok {
+			system = messages[0]
+			rest = messages[1:]
+		}
+	}
+
+	// Drop oldest messages one at a time until we fit.
+	for len(rest) > 1 {
+		rest = rest[1:]
+		candidate := rest
+		if system != nil {
+			candidate = append([]llm.Message{system}, rest...)
+		}
+		if counter(candidate) <= maxTokens {
+			return candidate, nil
+		}
+	}
+
+	// Even a single message doesn't fit — return what we have.
+	if system != nil {
+		return append([]llm.Message{system}, rest...), nil
+	}
+	return rest, nil
+}
+
+// SummarizeStrategy uses an LLM to summarize dropped messages before
+// discarding them. It keeps the last KeepLast messages verbatim and
+// replaces earlier messages with a summary.
+type SummarizeStrategy struct {
+	// Provider is the LLM provider used for summarization.
+	Provider llm.Provider
+	// KeepLast is the number of recent messages to preserve verbatim.
+	KeepLast int
+	// SummaryPrompt is the system prompt for the summarization call.
+	// Defaults to a reasonable prompt if empty.
+	SummaryPrompt string
+}
+
+func (s SummarizeStrategy) Compact(messages []llm.Message, _ int) ([]llm.Message, error) {
+	keepLast := s.KeepLast
+	if keepLast <= 0 {
+		keepLast = 4
+	}
+
+	if len(messages) <= keepLast {
+		return messages, nil
+	}
+
+	// Separate system message.
+	var system llm.Message
+	rest := messages
+	if len(messages) > 0 {
+		if _, ok := messages[0].(llm.SystemMessage); ok {
+			system = messages[0]
+			rest = messages[1:]
+		}
+	}
+
+	if len(rest) <= keepLast {
+		if system != nil {
+			return append([]llm.Message{system}, rest...), nil
+		}
+		return rest, nil
+	}
+
+	// Split into old (to summarize) and recent (to keep).
+	old := rest[:len(rest)-keepLast]
+	recent := rest[len(rest)-keepLast:]
+
+	// Build summary of old messages.
+	summaryPrompt := s.SummaryPrompt
+	if summaryPrompt == "" {
+		summaryPrompt = "Summarize this conversation concisely, preserving key facts, decisions, and context needed to continue. Be brief."
+	}
+
+	// Format old messages into a single text block.
+	var sb llmStrBuilder
+	for _, m := range old {
+		sb.writeMessage(m)
+	}
+
+	if s.Provider != nil {
+		resp, err := s.Provider.Complete(llmCtxBackground(), llm.CompletionRequest{
+			SystemPrompt: summaryPrompt,
+			Messages:     []llm.Message{llm.User(sb.String())},
+			MaxTokens:    500,
+		})
+		if err == nil && resp.Text() != "" {
+			summaryMsg := llm.System("[Conversation summary] " + resp.Text())
+			result := []llm.Message{summaryMsg}
+			if system != nil {
+				result = append([]llm.Message{system, summaryMsg}, recent...)
+			} else {
+				result = append(result, recent...)
+			}
+			return result, nil
+		}
+	}
+
+	// Fallback: just truncate.
+	if system != nil {
+		return append([]llm.Message{system}, recent...), nil
+	}
+	return recent, nil
+}
+
+// llmStrBuilder is a helper for formatting messages as text.
+type llmStrBuilder struct {
+	buf []byte
+}
+
+func (b *llmStrBuilder) writeMessage(m llm.Message) {
+	switch msg := m.(type) {
+	case llm.UserMessage:
+		b.buf = append(b.buf, "User: "...)
+		b.buf = append(b.buf, msg.Text()...)
+		b.buf = append(b.buf, '\n')
+	case llm.AssistantMessage:
+		b.buf = append(b.buf, "Assistant: "...)
+		b.buf = append(b.buf, msg.Text()...)
+		b.buf = append(b.buf, '\n')
+	case llm.ToolResultMessage:
+		b.buf = append(b.buf, "Tool("...)
+		b.buf = append(b.buf, msg.ToolUseID...)
+		b.buf = append(b.buf, "): "...)
+		b.buf = append(b.buf, msg.Content...)
+		b.buf = append(b.buf, '\n')
+	}
+}
+
+func (b *llmStrBuilder) String() string { return string(b.buf) }
+
+func llmCtxBackground() context.Context {
+	return context.Background()
+}

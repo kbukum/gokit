@@ -50,6 +50,7 @@ func NewEvent[D any](eventType, source string, data D, subject ...string) (Event
 		ID:        uuid.New().String(),
 		Type:      eventType,
 		Source:    source,
+		Version:   "1.0",
 		Timestamp: time.Now().UTC(),
 		Data:      raw,
 	}
