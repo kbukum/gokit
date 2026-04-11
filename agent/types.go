@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/kbukum/gokit/llm"
@@ -258,7 +259,7 @@ func (b *llmStrBuilder) writeMessage(m llm.Message) {
 	switch msg := m.(type) {
 	case llm.UserMessage:
 		b.buf = append(b.buf, "User: "...)
-		b.buf = append(b.buf, msg.Text()...)
+		b.buf = append(b.buf, llm.TextOf(msg.Content)...)
 		b.buf = append(b.buf, '\n')
 	case llm.AssistantMessage:
 		b.buf = append(b.buf, "Assistant: "...)
