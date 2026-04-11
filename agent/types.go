@@ -16,6 +16,7 @@ const (
 	StopMaxTurns  StopReason = "max_turns"
 	StopMaxBudget StopReason = "max_budget"
 	StopAborted   StopReason = "aborted"
+	StopCommand   StopReason = "command"
 )
 
 // Result is the final outcome of an agent run.

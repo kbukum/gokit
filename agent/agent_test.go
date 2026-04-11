@@ -420,6 +420,79 @@ func TestTruncateStrategy_ShortList(t *testing.T) {
 	}
 }
 
+func TestSlidingWindowStrategy(t *testing.T) {
+	msgs := []llm.Message{
+		llm.System("system"),
+		llm.User("1"),
+		llm.User("2"),
+		llm.User("3"),
+		llm.User("4"),
+	}
+
+	// Use a counter that assigns 10 tokens per message.
+	counter := func(ms []llm.Message) int { return len(ms) * 10 }
+	s := agent.SlidingWindowStrategy{TokenCounter: counter}
+
+	// Budget = 30 tokens (3 messages). System + 2 recent should fit.
+	result, err := s.Compact(msgs, 30)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should have system + 2 recent = 3 messages.
+	if len(result) > 3 {
+		t.Errorf("expected ≤3 messages, got %d", len(result))
+	}
+	// First should still be system.
+	if _, ok := result[0].(llm.SystemMessage); !ok {
+		t.Error("expected system message to be preserved")
+	}
+}
+
+func TestSlidingWindowStrategy_AlreadyFits(t *testing.T) {
+	msgs := []llm.Message{llm.User("1"), llm.User("2")}
+	counter := func(ms []llm.Message) int { return len(ms) * 10 }
+	s := agent.SlidingWindowStrategy{TokenCounter: counter}
+
+	result, err := s.Compact(msgs, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(result))
+	}
+}
+
+func TestSummarizeStrategy_FallbackTruncate(t *testing.T) {
+	// Without a provider, it should just truncate.
+	msgs := []llm.Message{
+		llm.User("1"),
+		llm.User("2"),
+		llm.User("3"),
+		llm.User("4"),
+		llm.User("5"),
+	}
+	s := agent.SummarizeStrategy{KeepLast: 2}
+	result, err := s.Compact(msgs, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 messages (fallback truncate), got %d", len(result))
+	}
+}
+
+func TestSummarizeStrategy_ShortList(t *testing.T) {
+	msgs := []llm.Message{llm.User("1")}
+	s := agent.SummarizeStrategy{KeepLast: 4}
+	result, err := s.Compact(msgs, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 1 {
+		t.Errorf("expected 1 message, got %d", len(result))
+	}
+}
+
 // --- Event Types ---
 
 func TestEventTypes(t *testing.T) {

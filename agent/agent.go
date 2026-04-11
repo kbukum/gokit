@@ -57,6 +57,9 @@ type Config struct {
 	Memory Memory
 	// SessionID identifies the conversation session for Memory.
 	SessionID string
+	// Commands is an optional slash command registry.
+	// When set, user messages starting with "/" are intercepted before the LLM loop.
+	Commands *CommandRegistry
 }
 
 // Agent orchestrates the LLM conversation loop with tool execution.
@@ -79,6 +82,11 @@ func New(config Config) *Agent {
 func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error) {
 	msgs := make([]llm.Message, len(messages))
 	copy(msgs, messages)
+
+	// Check for slash commands before the LLM loop.
+	if result, handled := a.handleCommand(ctx, msgs); handled {
+		return result, nil
+	}
 
 	// Load conversation history from memory.
 	if a.config.Memory != nil && a.config.SessionID != "" {
@@ -187,6 +195,12 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 
 		msgs := make([]llm.Message, len(messages))
 		copy(msgs, messages)
+
+		// Check for slash commands before the LLM loop.
+		if result, handled := a.handleCommand(ctx, msgs); handled {
+			ch <- CompleteEvent{Result: *result}
+			return
+		}
 
 		// Load conversation history from memory.
 		if a.config.Memory != nil && a.config.SessionID != "" {
