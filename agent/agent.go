@@ -51,15 +51,16 @@ type Config struct {
 	// When true and all tool calls in a batch have ReadOnly=true, they
 	// execute concurrently. Mixed batches always run sequentially.
 	ParallelTools bool
+	// Commands is an optional slash command registry.
+	// When set, user messages starting with "/" are intercepted and
+	// handled as commands before reaching the LLM.
+	Commands *CommandRegistry
 	// Memory is an optional conversation memory store.
 	// When set alongside SessionID, the agent loads history before the run
 	// and saves the full conversation after completion.
 	Memory Memory
 	// SessionID identifies the conversation session for Memory.
 	SessionID string
-	// Commands is an optional slash command registry.
-	// When set, user messages starting with "/" are intercepted before the LLM loop.
-	Commands *CommandRegistry
 }
 
 // Agent orchestrates the LLM conversation loop with tool execution.
