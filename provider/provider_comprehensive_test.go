@@ -163,29 +163,29 @@ type initErrProvider struct {
 	name string
 }
 
-func (p *initErrProvider) Name() string                                          { return p.name }
-func (p *initErrProvider) IsAvailable(_ context.Context) bool                    { return true }
-func (p *initErrProvider) Execute(_ context.Context, in string) (string, error)  { return in, nil }
-func (p *initErrProvider) Init(_ context.Context) error                          { return errors.New("init failed") }
+func (p *initErrProvider) Name() string                                         { return p.name }
+func (p *initErrProvider) IsAvailable(_ context.Context) bool                   { return true }
+func (p *initErrProvider) Execute(_ context.Context, in string) (string, error) { return in, nil }
+func (p *initErrProvider) Init(_ context.Context) error                         { return errors.New("init failed") }
 
 // nonCloseableProvider does NOT implement Closeable.
 type nonCloseableProvider struct {
 	name string
 }
 
-func (p *nonCloseableProvider) Name() string                                          { return p.name }
-func (p *nonCloseableProvider) IsAvailable(_ context.Context) bool                    { return true }
-func (p *nonCloseableProvider) Execute(_ context.Context, in string) (string, error)  { return in, nil }
+func (p *nonCloseableProvider) Name() string                                         { return p.name }
+func (p *nonCloseableProvider) IsAvailable(_ context.Context) bool                   { return true }
+func (p *nonCloseableProvider) Execute(_ context.Context, in string) (string, error) { return in, nil }
 
 // closeErrProvider implements Closeable but returns an error from Close.
 type closeErrProvider struct {
 	name string
 }
 
-func (p *closeErrProvider) Name() string                                          { return p.name }
-func (p *closeErrProvider) IsAvailable(_ context.Context) bool                    { return true }
-func (p *closeErrProvider) Execute(_ context.Context, in string) (string, error)  { return in, nil }
-func (p *closeErrProvider) Close(_ context.Context) error                         { return errors.New("close error") }
+func (p *closeErrProvider) Name() string                                         { return p.name }
+func (p *closeErrProvider) IsAvailable(_ context.Context) bool                   { return true }
+func (p *closeErrProvider) Execute(_ context.Context, in string) (string, error) { return in, nil }
+func (p *closeErrProvider) Close(_ context.Context) error                        { return errors.New("close error") }
 
 // healthCheckProvider implements HealthChecker.
 type healthCheckProvider struct {
@@ -193,8 +193,10 @@ type healthCheckProvider struct {
 	status provider.HealthStatus
 }
 
-func (p *healthCheckProvider) Name() string                       { return p.name }
-func (p *healthCheckProvider) IsAvailable(_ context.Context) bool { return p.status.Status == provider.StatusHealthy }
+func (p *healthCheckProvider) Name() string { return p.name }
+func (p *healthCheckProvider) IsAvailable(_ context.Context) bool {
+	return p.status.Status == provider.StatusHealthy
+}
 func (p *healthCheckProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }
@@ -720,7 +722,7 @@ func TestManager_InitializeWithContext_CancellationMidInit(t *testing.T) {
 
 	err := mgr.InitializeWithContext(ctx, "slow-init", nil)
 	if err == nil {
-		t.Fatal("expected error from cancelled context during init")
+		t.Fatal("expected error from canceled context during init")
 	}
 }
 

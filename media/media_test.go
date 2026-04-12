@@ -547,7 +547,7 @@ func TestDetect_HEIF_AllBrands(t *testing.T) {
 
 func TestDetect_MultipleMP3SyncPatterns(t *testing.T) {
 	patterns := []struct {
-		name string
+		name  string
 		byte1 byte
 	}{
 		{"0xE3", 0xE3},

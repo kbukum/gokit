@@ -52,5 +52,6 @@ func (sh *ServiceHealth) AddComponent(ch Health) {
 		if sh.Status != HealthStatusDown {
 			sh.Status = HealthStatusDegraded
 		}
+	default:
 	}
 }

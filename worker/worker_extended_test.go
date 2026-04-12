@@ -184,10 +184,10 @@ func TestTaskCancelMidExecution(t *testing.T) {
 
 	_, herr := handle.Result()
 	if herr == nil {
-		t.Fatal("expected error from cancelled task")
+		t.Fatal("expected error from canceled task")
 	}
 	if !gotError {
-		t.Fatal("expected error event from cancelled task")
+		t.Fatal("expected error event from canceled task")
 	}
 }
 

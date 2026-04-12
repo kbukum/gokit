@@ -80,8 +80,8 @@ type countingProvider struct {
 	callCount atomic.Int32
 }
 
-func (p *countingProvider) Name() string                        { return "counter" }
-func (p *countingProvider) IsAvailable(_ context.Context) bool  { return true }
+func (p *countingProvider) Name() string                       { return "counter" }
+func (p *countingProvider) IsAvailable(_ context.Context) bool { return true }
 
 // failingIterator yields errors on every call.
 type failingIterator struct {
@@ -89,7 +89,7 @@ type failingIterator struct {
 }
 
 func (i *failingIterator) Next(_ context.Context) (int, bool, error) { return 0, false, i.err }
-func (i *failingIterator) Close() error                               { return nil }
+func (i *failingIterator) Close() error                              { return nil }
 
 // sliceIterator provides pull-based access to a slice.
 type sliceIterator[T any] struct {
@@ -667,7 +667,7 @@ func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
 
 	// Logger should work without panicking
 	log.Info("integration test message", map[string]interface{}{
-		"test": true,
+		"test":  true,
 		"layer": "integration",
 	})
 }
@@ -752,7 +752,7 @@ func TestIntegration_Validation_Pipeline_ValidateThenTransform(t *testing.T) {
 
 	inputs := []UserInput{
 		{Name: "Alice", Email: "alice@example.com"},
-		{Name: "", Email: "bob@example.com"},       // invalid name
+		{Name: "", Email: "bob@example.com"}, // invalid name
 		{Name: "Charlie", Email: "charlie@test.com"},
 	}
 

@@ -72,6 +72,14 @@ Import the core for foundational utilities. Add sub-modules à la carte for infr
 | `bench` | `gokit/bench` | Evaluation benchmarking framework — datasets, evaluators, metrics, reports, comparison |
 | `bench/viz` | `gokit/bench/viz` | SVG visualization generation — ROC curves, confusion matrices, calibration plots |
 | `bench/storage` | `gokit/bench/storage` | Bench storage adapter — bridges bench.RunStorage with gokit/storage backends |
+| `agent` | `gokit/agent` | Agentic conversation loop — LLM orchestration, tool execution, context management |
+| `tool` | `gokit/tool` | Type-safe tool definitions with auto-generated schemas, registry, and middleware |
+| `schema` | `gokit/schema` | JSON Schema generation from Go types with validation |
+| `hook` | `gokit/hook` | Generic event hook system for lifecycle handler registration and execution |
+| `mcp` | `gokit/mcp` | Model Context Protocol server and client integration |
+| `explain` | `gokit/explain` | Structured explanation generation from analysis signals via LLM |
+| `embedding` | `gokit/embedding` | Vector utilities — cosine similarity, distance metrics, pooling |
+| `vectorstore` | `gokit/vectorstore` | Vector similarity search store abstraction with in-memory backend |
 
 ## Quick Start
 
@@ -217,6 +225,88 @@ if err := app.Run(ctx); err != nil {
 }
 ```
 
+### Agent Loop
+
+```go
+import (
+    "github.com/kbukum/gokit/agent"
+    "github.com/kbukum/gokit/tool"
+)
+
+registry := tool.NewRegistry()
+registry.Register(weatherTool)
+
+a := agent.New(llmProvider, registry,
+    agent.WithContextStrategy(&agent.SlidingWindowStrategy{MaxTokens: 4096}),
+)
+result, err := a.Run(ctx, "What's the weather in Berlin?")
+fmt.Println(result.Events)
+```
+
+### LLM Chat Completion
+
+```go
+import "github.com/kbukum/gokit/llm"
+
+provider := llm.NewProvider(llm.Config{
+    Dialect: "openai",
+    Model:   "gpt-4",
+    APIKey:  os.Getenv("OPENAI_API_KEY"),
+})
+
+resp, err := provider.ChatCompletion(ctx, llm.Request{
+    Messages: []llm.Message{
+        {Role: "user", Content: "Explain circuit breakers"},
+    },
+})
+fmt.Println(resp.Content)
+```
+
+### Tool Definition
+
+```go
+import "github.com/kbukum/gokit/tool"
+
+t := tool.New("get_weather", "Get current weather for a city",
+    tool.HandlerFunc(func(ctx context.Context, input map[string]any) (any, error) {
+        city := input["city"].(string)
+        return fetchWeather(ctx, city)
+    }),
+)
+
+registry := tool.NewRegistry()
+registry.Register(t)
+```
+
+### Messaging
+
+```go
+import "github.com/kbukum/gokit/messaging"
+
+producer, _ := messaging.NewProducer(cfg)
+producer.Publish(ctx, "events", messaging.Message{
+    Key:   []byte("user-123"),
+    Value: payload,
+})
+
+consumer, _ := messaging.NewConsumer(cfg, "my-group")
+consumer.Subscribe("events", func(ctx context.Context, msg messaging.Message) error {
+    return processEvent(msg)
+})
+consumer.Start(ctx)
+```
+
+### Object Storage
+
+```go
+import "github.com/kbukum/gokit/storage"
+
+store, _ := storage.New(cfg)
+_ = store.Put(ctx, "uploads/report.pdf", reader)
+rc, _ := store.Get(ctx, "uploads/report.pdf")
+defer rc.Close()
+```
+
 ## Module Details
 
 Each module has its own documentation. Refer to the package-level Go docs or source:
@@ -237,6 +327,8 @@ Each module has its own documentation. Refer to the package-level Go docs or sou
 | **Stateful** | stateful | Push-based accumulation with triggers and storage |
 | **AI** | llm | LLM chat completion, structured output, explanation generation |
 | **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking, metrics, visualizations, result storage |
+| **AI / Agent** | agent, tool, hook, mcp, schema, explain | Agentic loops, tool registry, MCP integration, explanations |
+| **Vectors** | embedding, vectorstore | Embedding utilities, vector similarity search |
 
 ## Multi-Module Versioning
 
@@ -252,6 +344,62 @@ This means:
 - Upgrading `gokit/server` does **not** force an upgrade of `gokit/database`.
 - Core can ship breaking changes without touching sub-modules (and vice versa).
 - Each module follows [semver](https://semver.org/) on its own timeline.
+
+## Cross-Kit Comparison
+
+gokit, [rskit](https://github.com/kbukum/rskit) (Rust), and [pykit](https://github.com/kbukum/pykit) (Python) share the same module structure and design philosophy. The table below shows capability coverage across all three kits.
+
+| Capability | gokit | rskit | pykit |
+|---|---|---|---|
+| Errors | ✅ `errors` | ✅ `rskit-errors` | ✅ `pykit-errors` |
+| Config | ✅ `config` | ✅ `rskit-config` | ✅ `pykit-config` |
+| Logging | ✅ `logger` | ✅ `rskit-logging` | ✅ `pykit-logging` |
+| Validation | ✅ `validation` | ✅ `rskit-validation` | ✅ `pykit-validation` |
+| Encryption | ✅ `encryption` | ✅ `rskit-encryption` | ✅ `pykit-encryption` |
+| Utilities | ✅ `util` | ❌ | ✅ `pykit-util` |
+| Version | ✅ `version` | ❌ | ✅ `pykit-version` |
+| Media | ✅ `media` | ✅ `rskit-media` | ✅ `pykit-media` |
+| Security | ✅ `security` | ❌ | ✅ `pykit-security` |
+| DI | ✅ `di` | ✅ `rskit-di` | ✅ `pykit-di` |
+| Component | ✅ `component` | ❌ | ✅ `pykit-component` |
+| Bootstrap | ✅ `bootstrap` | ✅ `rskit-bootstrap` | ✅ `pykit-bootstrap` |
+| Provider | ✅ `provider` | ✅ `rskit-provider` | ✅ `pykit-provider` |
+| Resilience | ✅ `resilience` | ✅ `rskit-resilience` | ✅ `pykit-resilience` |
+| Observability | ✅ `observability` | ✅ `rskit-observability` | ✅ `pykit-observability` |
+| Pipeline | ✅ `pipeline` | ✅ `rskit-pipeline` | ✅ `pykit-pipeline` |
+| DAG | ✅ `dag` | ✅ `rskit-dag` | ✅ `pykit-dag` |
+| Worker | ✅ `worker` | ✅ `rskit-worker` | ✅ `pykit-worker` |
+| SSE | ✅ `sse` | ✅ `rskit-sse` | ✅ `pykit-sse` |
+| Stateful | ✅ `stateful` | ❌ | ✅ `pykit-stateful` |
+| Auth | ✅ `auth` | ✅ `rskit-auth` | ✅ `pykit-auth` |
+| Authz | ✅ `authz` | ✅ `rskit-authz` | ✅ `pykit-authz` |
+| Database | ✅ `database` | ✅ `rskit-database` | ✅ `pykit-database` |
+| Redis / Cache | ✅ `redis` | ✅ `rskit-cache` | ✅ `pykit-redis` |
+| Storage / File | ✅ `storage` | ✅ `rskit-file` | ✅ `pykit-storage` |
+| Messaging | ✅ `messaging` | ✅ `rskit-messaging` | ✅ `pykit-messaging` |
+| HTTP Client | ✅ `httpclient` | ✅ `rskit-httpclient` | ✅ `pykit-httpclient` |
+| Server | ✅ `server` | ✅ `rskit-http`, `rskit-server` | ✅ `pykit-server` |
+| gRPC Client | ✅ `grpc` | ✅ `rskit-grpc-client` | ✅ `pykit-grpc` |
+| Connect | ✅ `connect` | ❌ | ❌ |
+| Discovery | ✅ `discovery` | ✅ `rskit-discovery` | ✅ `pykit-discovery` |
+| Process | ✅ `process` | ✅ `rskit-process` | ✅ `pykit-process` |
+| Workload | ✅ `workload` | ❌ | ✅ `pykit-workload` |
+| Test Utilities | ✅ `testutil` | ✅ `rskit-testutil` | ✅ `pykit-testutil` |
+| LLM | ✅ `llm` | ✅ `rskit-llm` | ✅ `pykit-llm` |
+| LLM Providers | ❌ | ✅ `rskit-llm-providers` | ✅ `pykit-llm-providers` |
+| Agent | ✅ `agent` | ✅ `rskit-agent` | ✅ `pykit-agent` |
+| Tool | ✅ `tool` | ✅ `rskit-tool` | ✅ `pykit-tool` |
+| MCP | ✅ `mcp` | ✅ `rskit-mcp` | ✅ `pykit-mcp` |
+| Hook | ✅ `hook` | ✅ `rskit-hook` | ✅ `pykit-hook` |
+| Schema | ✅ `schema` | ✅ `rskit-schema` | ✅ `pykit-schema` |
+| Explain | ✅ `explain` | ✅ `rskit-explain` | ✅ `pykit-explain` |
+| Bench | ✅ `bench` | ✅ `rskit-bench` | ✅ `pykit-bench` |
+| Dataset | ❌ | ✅ `rskit-dataset` | ✅ `pykit-dataset` |
+| Embedding | ✅ `embedding` | ✅ `rskit-embedding` | ✅ `pykit-embedding` |
+| Vector Store | ✅ `vectorstore` | ✅ `rskit-vector-store` | ✅ `pykit-vector-store` |
+| Inference | ❌ | ✅ `rskit-inference` | ✅ `pykit-triton` |
+| CLI | ❌ | ✅ `rskit-cli` | ❌ |
+| Metrics | ❌ | ❌ | ✅ `pykit-metrics` |
 
 ## Development
 

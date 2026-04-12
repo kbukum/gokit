@@ -327,7 +327,7 @@ func TestGetVersionInfo_ReleaseLogicTable(t *testing.T) {
 		{"0.0.0", true},
 		{"dirty", false},
 		{"1.0.0-rc1", true},
-		{"DEV", true},              // case-sensitive: only lowercase "dev" is non-release
+		{"DEV", true},                // case-sensitive: only lowercase "dev" is non-release
 		{"1.0.0-dirty-build", false}, // contains "dirty"
 	}
 

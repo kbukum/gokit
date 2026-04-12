@@ -74,7 +74,7 @@ func TestRunAlreadyCancelledContext(t *testing.T) {
 		GracePeriod: 100 * time.Millisecond,
 	})
 	if err == nil {
-		t.Fatal("expected error from already-cancelled context")
+		t.Fatal("expected error from already-canceled context")
 	}
 }
 

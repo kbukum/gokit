@@ -12,12 +12,22 @@ linters:
     - gosec
     - bodyclose
     - noctx
+    - govet
+    - errcheck
+    - staticcheck
+    - exhaustive
+    - unused
+    - ineffassign
   exclusions:
     rules:
       - path: "_test\\.go"
         linters:
           - errcheck
           - gosec
+          - noctx
+          - unparam
+          - unused
+          - gocritic
   settings:
     govet:
       disable:
@@ -43,6 +53,8 @@ linters:
         - G304  # File paths from variables - required for storage abstraction
         - G117  # Exported struct fields matching secret patterns - config structs need these fields
         - G704  # SSRF via taint analysis - HTTP clients use configured base URLs
+    exhaustive:
+      default-signifies-exhaustive: true
 
 issues:
   max-issues-per-linter: 0

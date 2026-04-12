@@ -426,7 +426,7 @@ func TestStartAllContextCancelled(t *testing.T) {
 
 	err := r.StartAll(ctx)
 	if err == nil {
-		t.Fatal("expected error from StartAll with cancelled context")
+		t.Fatal("expected error from StartAll with canceled context")
 	}
 }
 
@@ -445,7 +445,7 @@ func TestStopAllContextCancelled(t *testing.T) {
 
 	err := r.StopAll(ctx)
 	if err == nil {
-		t.Fatal("expected error from StopAll with cancelled context")
+		t.Fatal("expected error from StopAll with canceled context")
 	}
 }
 
@@ -982,10 +982,10 @@ type countingComponent struct {
 	stopCount  int
 }
 
-func (c *countingComponent) Name() string                       { return c.name }
-func (c *countingComponent) Start(_ context.Context) error      { c.startCount++; return nil }
-func (c *countingComponent) Stop(_ context.Context) error       { c.stopCount++; return nil }
-func (c *countingComponent) Health(_ context.Context) Health     { return c.health }
+func (c *countingComponent) Name() string                    { return c.name }
+func (c *countingComponent) Start(_ context.Context) error   { c.startCount++; return nil }
+func (c *countingComponent) Stop(_ context.Context) error    { c.stopCount++; return nil }
+func (c *countingComponent) Health(_ context.Context) Health { return c.health }
 
 // ---------------------------------------------------------------------------
 // GAP 17: Security — injection in component names / health messages

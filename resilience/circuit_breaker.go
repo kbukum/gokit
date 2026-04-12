@@ -182,6 +182,7 @@ func (cb *CircuitBreaker) onSuccess() {
 		if cb.successes >= cb.config.HalfOpenMaxCalls {
 			cb.toState(StateClosed)
 		}
+	default:
 	}
 }
 
@@ -197,6 +198,7 @@ func (cb *CircuitBreaker) onFailure() {
 		}
 	case StateHalfOpen:
 		cb.toState(StateOpen)
+	default:
 	}
 }
 

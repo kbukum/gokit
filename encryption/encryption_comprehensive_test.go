@@ -386,7 +386,7 @@ func TestFactory_EncryptorInterface(t *testing.T) {
 				t.Fatalf("New: %v", err)
 			}
 			// Verify the returned value satisfies the Encryptor interface
-			var _ Encryptor = enc
+			var _ = enc
 
 			ct, err := enc.Encrypt("interface test")
 			if err != nil {
@@ -408,12 +408,12 @@ func TestFactory_EncryptorInterface(t *testing.T) {
 func TestSecurity_VariousKeyLengths(t *testing.T) {
 	// Keys are SHA-256 hashed, so any length should work
 	keys := []string{
-		"",            // empty key
-		"a",           // 1 byte
-		"short",       // 5 bytes
-		strings.Repeat("x", 16),  // 16 bytes (AES-128 length)
-		strings.Repeat("x", 32),  // 32 bytes (AES-256 length)
-		strings.Repeat("x", 64),  // 64 bytes
+		"",                        // empty key
+		"a",                       // 1 byte
+		"short",                   // 5 bytes
+		strings.Repeat("x", 16),   // 16 bytes (AES-128 length)
+		strings.Repeat("x", 32),   // 32 bytes (AES-256 length)
+		strings.Repeat("x", 64),   // 64 bytes
 		strings.Repeat("x", 1024), // 1 KB key
 	}
 
@@ -567,12 +567,12 @@ func TestEdge_VeryLongKey(t *testing.T) {
 
 func TestEdge_UnicodeMultibyte(t *testing.T) {
 	plaintexts := []string{
-		"🔐🔑🛡️",                                // emoji
-		"Ω≈ç√∫≤≥÷",                              // math symbols
-		"日本語テスト",                            // Japanese
-		"مرحبا",                                  // Arabic
-		"Привет",                                 // Cyrillic
-		"\u0000\u200B\uFEFF",                     // null + zero-width space + BOM
+		"🔐🔑🛡️",               // emoji
+		"Ω≈ç√∫≤≥÷",           // math symbols
+		"日本語テスト",             // Japanese
+		"مرحبا",              // Arabic
+		"Привет",             // Cyrillic
+		"\u0000\u200B\uFEFF", // null + zero-width space + BOM
 		"mixed 🎉 content\nwith\ttabs\x00and\nnulls",
 	}
 

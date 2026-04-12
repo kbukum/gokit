@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
 	"github.com/kbukum/gokit/errors"
 )
 
@@ -385,7 +386,7 @@ func TestMinLength_TableDriven(t *testing.T) {
 		{"below min", "ab", 3, true},
 		{"empty string min=0", "", 0, false},
 		{"empty string min=1", "", 1, true},
-		{"unicode bytes count", "日本語", 3, false},       // len() counts bytes, 9 bytes >= 3
+		{"unicode bytes count", "日本語", 3, false}, // len() counts bytes, 9 bytes >= 3
 		{"unicode short byte", "a", 2, true},
 		{"min=0 always passes", "anything", 0, false},
 	}
@@ -444,7 +445,7 @@ func TestMin_TableDriven(t *testing.T) {
 		{"zero vs zero", 0, 0, false},
 		{"negative below", -1, 0, true},
 		{"negative at negative min", -5, -5, false},
-		{"large value", 1<<30, 0, false},
+		{"large value", 1 << 30, 0, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

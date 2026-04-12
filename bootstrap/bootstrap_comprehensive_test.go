@@ -586,13 +586,13 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 
 	expected := []string{
-		"db:start",   // Phase 1: components start
-		"onStart",    // OnStart hooks
+		"db:start",    // Phase 1: components start
+		"onStart",     // OnStart hooks
 		"onConfigure", // Phase 2: configure
-		"onReady",    // Ready hooks
-		"task",       // Task execution
-		"onStop",     // Stop hooks
-		"db:stop",    // Components stop (reverse order)
+		"onReady",     // Ready hooks
+		"task",        // Task execution
+		"onStop",      // Stop hooks
+		"db:stop",     // Components stop (reverse order)
 	}
 
 	if len(order) != len(expected) {

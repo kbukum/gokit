@@ -47,6 +47,7 @@ func FanOut[I, O any](name string, handlers ...Handler[I, O]) Handler[I, []O] {
 							Timestamp: e.Timestamp,
 						}
 						safeEmit(fwdEvent)
+					default:
 					}
 				}
 
