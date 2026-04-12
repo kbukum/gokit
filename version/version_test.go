@@ -599,10 +599,7 @@ func TestGetFullVersion_EmptyBranch(t *testing.T) {
 			t.Errorf("unexpected empty segment in version string %q", fv)
 		}
 	}
-	if strings.Count(parts[0], "-") > 1 {
-		// "1.0.0-bbc8888" has exactly 1 hyphen; more would indicate a branch or dirty
-		// (unless dirty is injected by VCS — we just check branch isn't there)
-	}
+	// "1.0.0-bbc8888" has exactly 1 hyphen; more would indicate a branch or dirty tag.
 	if !strings.Contains(fv, "1.0.0") {
 		t.Errorf("expected version in output, got %q", fv)
 	}

@@ -1376,10 +1376,8 @@ func TestIntegration_RecoveryScenario(t *testing.T) {
 
 	// Phase 1: System healthy.
 	_ = cb.Execute(func() error { return nil })
-	if !dm.IsHealthy() || dm.ServiceStatus("recover").Health != Healthy {
-		// Service might not yet be tracked by DM (no state change happened).
-		// That's fine – IsHealthy returns true when no services are degraded.
-	}
+	// Service might not yet be tracked by DM (no state change happened).
+	// IsHealthy returns true when no services are degraded — that's fine.
 
 	// Phase 2: Service degrades.
 	for i := 0; i < 2; i++ {
