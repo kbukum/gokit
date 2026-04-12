@@ -18,6 +18,10 @@ type Config struct {
 	// Brokers is the list of Kafka broker addresses.
 	Brokers []string `yaml:"brokers" mapstructure:"brokers"`
 
+	// Resolve is the discovery service name for Kafka brokers.
+	// Empty = use static Brokers. Set = resolve from discovery provider.
+	Resolve string `yaml:"resolve" mapstructure:"resolve"`
+
 	// GroupID is the consumer group identifier.
 	GroupID string `yaml:"group_id" mapstructure:"group_id"`
 

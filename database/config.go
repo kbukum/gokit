@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -13,8 +14,32 @@ type Config struct {
 	// Enabled controls whether the database component is active.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// DSN is the database connection string.
+	// DSN is the full database connection string (legacy).
+	// When set, it takes precedence over structured fields.
+	// Prefer using Host/Port/DBName/User/Password instead.
 	DSN string `yaml:"dsn" mapstructure:"dsn"`
+
+	// Host is the database server hostname or IP.
+	Host string `yaml:"host" mapstructure:"host"`
+
+	// Port is the database server port.
+	Port int `yaml:"port" mapstructure:"port"`
+
+	// DBName is the database name.
+	DBName string `yaml:"db_name" mapstructure:"db_name"`
+
+	// User is the database user.
+	User string `yaml:"user" mapstructure:"user"`
+
+	// Password is the database password (from env var, not committed).
+	Password string `yaml:"password" mapstructure:"password"`
+
+	// SSLMode controls the SSL connection mode (e.g. "disable", "require").
+	SSLMode string `yaml:"ssl_mode" mapstructure:"ssl_mode"`
+
+	// Resolve is the discovery service name for this database.
+	// Empty = use static Host:Port. Set = resolve from discovery provider.
+	Resolve string `yaml:"resolve" mapstructure:"resolve"`
 
 	// MaxOpenConns sets the maximum number of open connections to the database.
 	MaxOpenConns int `yaml:"max_open_conns" mapstructure:"max_open_conns"`
@@ -42,8 +67,43 @@ type Config struct {
 	LogLevel string `yaml:"log_level" mapstructure:"log_level"`
 }
 
+// BuildDSN constructs a PostgreSQL DSN from structured fields.
+// If DSN is already set, it is returned as-is (backward compatible).
+func (c *Config) BuildDSN() string {
+	if c.DSN != "" {
+		return c.DSN
+	}
+	if c.Host == "" {
+		return ""
+	}
+
+	port := c.Port
+	if port == 0 {
+		port = 5432
+	}
+	sslMode := c.SSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		url.PathEscape(c.User),
+		url.PathEscape(c.Password),
+		c.Host,
+		port,
+		c.DBName,
+		sslMode,
+	)
+}
+
 // ApplyDefaults sets sensible defaults for zero-valued fields.
 func (c *Config) ApplyDefaults() {
+	if c.Port == 0 {
+		c.Port = 5432
+	}
+	if c.SSLMode == "" {
+		c.SSLMode = "disable"
+	}
 	if c.MaxOpenConns <= 0 {
 		c.MaxOpenConns = 25
 	}
@@ -72,8 +132,10 @@ func (c *Config) Validate() error {
 	if !c.Enabled {
 		return nil // skip validation when disabled
 	}
-	if c.DSN == "" {
-		return fmt.Errorf("database DSN is required")
+
+	// Either DSN or structured Host must be set.
+	if c.DSN == "" && c.Host == "" {
+		return fmt.Errorf("database: either dsn or host is required")
 	}
 
 	if c.MaxOpenConns <= 0 {

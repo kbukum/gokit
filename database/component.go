@@ -85,7 +85,7 @@ func (c *Component) Start(ctx context.Context) error {
 		dialectorFactory = c.driverFunc
 	}
 
-	dialector := dialectorFactory(c.cfg.DSN)
+	dialector := dialectorFactory(c.cfg.BuildDSN())
 
 	// Create connection using the dialector with context support
 	db, err := NewWithContext(ctx, dialector, c.cfg, c.log)
@@ -147,7 +147,7 @@ func (c *Component) Health(ctx context.Context) component.Health {
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
-	details := fmt.Sprintf("DSN: %s, MaxConns: %d", util.MaskSecret(c.cfg.DSN, 10), c.cfg.MaxOpenConns)
+	details := fmt.Sprintf("DSN: %s, MaxConns: %d", util.MaskSecret(c.cfg.BuildDSN(), 10), c.cfg.MaxOpenConns)
 	if c.cfg.AutoMigrate {
 		details += ", auto-migrate=on"
 	}

@@ -93,3 +93,23 @@ func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 
 	return fmt.Sprintf("%s://%s", r.scheme, endpoint.HostPort()), nil
 }
+
+// ResolveAddr resolves a service name to a host:port pair using the Discovery
+// interface. This is a bootstrap-time utility for resolving infrastructure
+// addresses (database, redis, kafka, etc.) before connection pools are created.
+// Returns the first healthy instance's address and port.
+func ResolveAddr(disc Discovery, serviceName string) (host string, port int, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	instances, err := disc.Discover(ctx, serviceName)
+	if err != nil {
+		return "", 0, fmt.Errorf("resolve %q: discovery failed: %w", serviceName, err)
+	}
+	if len(instances) == 0 {
+		return "", 0, fmt.Errorf("resolve %q: no healthy instances found", serviceName)
+	}
+
+	inst := instances[0]
+	return inst.Address, inst.Port, nil
+}

@@ -24,6 +24,16 @@ func RegisterProviderFactory(name string, f ProviderFactory) {
 	providerFactories[name] = f
 }
 
+// GetProviderFactory returns the factory registered for the given provider name.
+// Returns an error if no factory is registered.
+func GetProviderFactory(name string) (ProviderFactory, error) {
+	f, ok := providerFactories[name]
+	if !ok {
+		return nil, fmt.Errorf("unsupported discovery provider %q (not registered)", name)
+	}
+	return f, nil
+}
+
 // Component wraps a Registry and Discovery pair and implements
 // component.Component for lifecycle management.
 type Component struct {

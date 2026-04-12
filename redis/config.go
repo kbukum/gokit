@@ -16,6 +16,10 @@ type Config struct {
 	// Addr is the Redis server address (host:port).
 	Addr string `yaml:"addr" mapstructure:"addr"`
 
+	// Resolve is the discovery service name for this Redis instance.
+	// Empty = use static Addr. Set = resolve from discovery provider.
+	Resolve string `yaml:"resolve" mapstructure:"resolve"`
+
 	// Password is the Redis server password.
 	Password string `yaml:"password" mapstructure:"password"`
 
