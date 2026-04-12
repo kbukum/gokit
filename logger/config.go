@@ -4,19 +4,39 @@ import "fmt"
 
 // Config contains logging configuration.
 type Config struct {
-	Level       string `yaml:"level" mapstructure:"level"`
-	Format      string `yaml:"format" mapstructure:"format"`
-	Output      string `yaml:"output" mapstructure:"output"`
-	NoColor     bool   `yaml:"no_color" mapstructure:"no_color"`
-	Timestamp   bool   `yaml:"timestamp" mapstructure:"timestamp"`
-	Caller      bool   `yaml:"caller" mapstructure:"caller"`
-	Stacktrace  bool   `yaml:"stacktrace" mapstructure:"stacktrace"`
-	MaxSize     int    `yaml:"max_size" mapstructure:"max_size"`       // megabytes
-	MaxBackups  int    `yaml:"max_backups" mapstructure:"max_backups"` // number of backups
-	MaxAge      int    `yaml:"max_age" mapstructure:"max_age"`         // days
-	Compress    bool   `yaml:"compress" mapstructure:"compress"`
-	LocalTime   bool   `yaml:"local_time" mapstructure:"local_time"`
-	ServiceName string `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
+	Level        string            `yaml:"level" mapstructure:"level"`
+	Format       string            `yaml:"format" mapstructure:"format"`
+	Output       string            `yaml:"output" mapstructure:"output"`
+	NoColor      bool              `yaml:"no_color" mapstructure:"no_color"`
+	Timestamp    bool              `yaml:"timestamp" mapstructure:"timestamp"`
+	Caller       bool              `yaml:"caller" mapstructure:"caller"`
+	Stacktrace   bool              `yaml:"stacktrace" mapstructure:"stacktrace"`
+	MaxSize      int               `yaml:"max_size" mapstructure:"max_size"`       // megabytes
+	MaxBackups   int               `yaml:"max_backups" mapstructure:"max_backups"` // number of backups
+	MaxAge       int               `yaml:"max_age" mapstructure:"max_age"`         // days
+	Compress     bool              `yaml:"compress" mapstructure:"compress"`
+	LocalTime    bool              `yaml:"local_time" mapstructure:"local_time"`
+	ServiceName  string            `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
+	Masking      MaskingConfig     `yaml:"masking" mapstructure:"masking"`
+	Sampling     SamplingConfig    `yaml:"sampling" mapstructure:"sampling"`
+	ModuleLevels map[string]string `yaml:"module_levels" mapstructure:"module_levels"` // e.g., {"database": "debug", "kafka": "warn"}
+	OTLP         OTLPConfig        `yaml:"otlp" mapstructure:"otlp"`
+}
+
+// OTLPConfig configures the OpenTelemetry OTLP log export bridge.
+type OTLPConfig struct {
+	Enabled  bool              `yaml:"enabled" mapstructure:"enabled"`   // Default: false
+	Endpoint string            `yaml:"endpoint" mapstructure:"endpoint"` // e.g., "localhost:4317"
+	Protocol string            `yaml:"protocol" mapstructure:"protocol"` // "grpc" or "http" (default: "grpc")
+	Insecure bool              `yaml:"insecure" mapstructure:"insecure"` // Skip TLS (for dev)
+	Headers  map[string]string `yaml:"headers" mapstructure:"headers"`   // Auth headers
+}
+
+// SamplingConfig controls rate-based log sampling to reduce volume in high-throughput scenarios.
+type SamplingConfig struct {
+	Enabled        bool `yaml:"enabled" mapstructure:"enabled"`                 // Default: false
+	InitialRate    int  `yaml:"initial_rate" mapstructure:"initial_rate"`       // Log first N per second per level
+	ThereafterRate int  `yaml:"thereafter_rate" mapstructure:"thereafter_rate"` // Then log every Nth
 }
 
 // ApplyDefaults applies default values to logging configuration.
@@ -41,6 +61,24 @@ func (c *Config) ApplyDefaults() {
 	}
 	if !c.Timestamp {
 		c.Timestamp = true
+	}
+	if !c.Masking.Enabled {
+		c.Masking.Enabled = true
+	}
+	if c.Masking.Replacement == "" {
+		c.Masking.Replacement = "***REDACTED***"
+	}
+	if c.Sampling.InitialRate == 0 {
+		c.Sampling.InitialRate = 100
+	}
+	if c.Sampling.ThereafterRate == 0 {
+		c.Sampling.ThereafterRate = 100
+	}
+	if c.OTLP.Protocol == "" {
+		c.OTLP.Protocol = "grpc"
+	}
+	if c.OTLP.Endpoint == "" {
+		c.OTLP.Endpoint = "localhost:4317"
 	}
 }
 

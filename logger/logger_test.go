@@ -1407,7 +1407,7 @@ func TestEdge_MergeWithDurationZero(t *testing.T) {
 // Trace logs a trace-level message (mirrors the other level methods).
 func (l *Logger) Trace(msg string, fields ...map[string]interface{}) {
 	event := l.logger.Trace()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
 }
 

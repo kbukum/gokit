@@ -21,6 +21,14 @@ const (
 	FieldPhase         = "phase"
 	FieldContainerID   = "container_id"
 	FieldEmail         = "email"
+
+	// Unified schema fields — consistent across gokit, rskit, and pykit.
+	FieldService     = "service"
+	FieldEnvironment = "environment"
+	FieldTimestamp   = "timestamp"
+	FieldLevel       = "level"
+	FieldMessage     = "message"
+	FieldVersion     = "version"
 )
 
 // Fields builds a map[string]interface{} from alternating key-value pairs.
@@ -73,4 +81,14 @@ func MergeWithDuration(fields map[string]interface{}, d time.Duration) map[strin
 	}
 	fields[FieldDuration] = d.Milliseconds()
 	return fields
+}
+
+// ServiceFields creates the standard service identification fields
+// for the unified log schema (consistent across gokit, rskit, and pykit).
+func ServiceFields(service, environment, version string) map[string]interface{} {
+	return map[string]interface{}{
+		FieldService:     service,
+		FieldEnvironment: environment,
+		FieldVersion:     version,
+	}
 }

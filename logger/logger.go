@@ -18,8 +18,11 @@ const (
 
 // Logger wraps zerolog.Logger with additional context.
 type Logger struct {
-	logger  zerolog.Logger
-	service string
+	logger       zerolog.Logger
+	service      string
+	masker       Masker
+	moduleLevels *ModuleLevelManager
+	otlpProvider *OTLPProvider
 }
 
 // Init initializes the global logger from config.
@@ -68,10 +71,38 @@ func New(cfg *Config, serviceName string) *Logger {
 
 	zl = zl.Level(level)
 
-	return &Logger{
+	// Apply sampling when enabled.
+	if cfg.Sampling.Enabled {
+		zl = zl.Sample(NewSampler(cfg.Sampling))
+	}
+
+	l := &Logger{
 		logger:  zl,
 		service: serviceName,
 	}
+
+	if cfg.Masking.Enabled {
+		l.masker = NewDefaultMasker(cfg.Masking)
+	}
+
+	// Create module-level manager when overrides are configured.
+	if len(cfg.ModuleLevels) > 0 {
+		l.moduleLevels = NewModuleLevelManager(cfg.ModuleLevels)
+	}
+
+	// Initialize OTLP log bridge when enabled.
+	if cfg.OTLP.Enabled {
+		env := ""
+		ver := ""
+		provider, err := NewOTLPProvider(cfg.OTLP, serviceName, env, ver)
+		if err != nil {
+			l.logger.Warn().Err(err).Msg("failed to initialize OTLP log provider")
+		} else {
+			l.otlpProvider = provider
+		}
+	}
+
+	return l
 }
 
 // NewDefault creates a logger with default configuration.
@@ -118,17 +149,30 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 		zc = zc.Str(FieldCorrelationID, fmt.Sprintf("%v", v))
 	}
 
-	return &Logger{logger: zc.Logger(), service: l.service}
+	return &Logger{logger: zc.Logger(), service: l.service, masker: l.masker, moduleLevels: l.moduleLevels, otlpProvider: l.otlpProvider}
 }
 
 // contextKey is an unexported type for context keys to avoid collisions.
 type contextKey string
 
 // WithComponent returns a logger tagged with a component name.
+// If a per-module log level override exists for the component, it is applied.
 func (l *Logger) WithComponent(name string) *Logger {
+	zl := l.logger.With().Str(FieldComponent, name).Logger()
+
+	// Apply per-module level override when available.
+	if l.moduleLevels != nil {
+		if lvl, ok := l.moduleLevels.Level(name); ok {
+			zl = zl.Level(lvl)
+		}
+	}
+
 	return &Logger{
-		logger:  l.logger.With().Str(FieldComponent, name).Logger(),
-		service: l.service,
+		logger:       zl,
+		service:      l.service,
+		masker:       l.masker,
+		moduleLevels: l.moduleLevels,
+		otlpProvider: l.otlpProvider,
 	}
 }
 
@@ -138,15 +182,48 @@ func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
 	for k, v := range fields {
 		zc = zc.Interface(k, v)
 	}
-	return &Logger{logger: zc.Logger(), service: l.service}
+	return &Logger{logger: zc.Logger(), service: l.service, masker: l.masker, moduleLevels: l.moduleLevels, otlpProvider: l.otlpProvider}
 }
 
 // WithError returns a logger with an error field.
 func (l *Logger) WithError(err error) *Logger {
 	return &Logger{
-		logger:  l.logger.With().Err(err).Logger(),
-		service: l.service,
+		logger:       l.logger.With().Err(err).Logger(),
+		service:      l.service,
+		masker:       l.masker,
+		moduleLevels: l.moduleLevels,
+		otlpProvider: l.otlpProvider,
 	}
+}
+
+// WithMasker returns a new Logger with the given Masker applied.
+func (l *Logger) WithMasker(m Masker) *Logger {
+	return &Logger{
+		logger:       l.logger,
+		service:      l.service,
+		masker:       m,
+		moduleLevels: l.moduleLevels,
+		otlpProvider: l.otlpProvider,
+	}
+}
+
+// WithOTLP returns a new Logger with the given OTLPProvider attached.
+func (l *Logger) WithOTLP(provider *OTLPProvider) *Logger {
+	return &Logger{
+		logger:       l.logger,
+		service:      l.service,
+		masker:       l.masker,
+		moduleLevels: l.moduleLevels,
+		otlpProvider: provider,
+	}
+}
+
+// Close gracefully shuts down the OTLP provider, flushing pending logs.
+func (l *Logger) Close() error {
+	if l.otlpProvider != nil {
+		return l.otlpProvider.Shutdown(context.Background())
+	}
+	return nil
 }
 
 // GetLogger returns the underlying zerolog.Logger.
@@ -157,35 +234,40 @@ func (l *Logger) GetLogger() zerolog.Logger {
 // Debug logs a debug message.
 func (l *Logger) Debug(msg string, fields ...map[string]interface{}) {
 	event := l.logger.Debug()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
+	l.emitOTLP("debug", msg, fields...)
 }
 
 // Info logs an info message.
 func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
 	event := l.logger.Info()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
+	l.emitOTLP("info", msg, fields...)
 }
 
 // Warn logs a warning message.
 func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
 	event := l.logger.Warn()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
+	l.emitOTLP("warn", msg, fields...)
 }
 
 // Error logs an error message.
 func (l *Logger) Error(msg string, fields ...map[string]interface{}) {
 	event := l.logger.Error()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
+	l.emitOTLP("error", msg, fields...)
 }
 
 // Fatal logs a fatal message and exits.
 func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
+	l.emitOTLP("fatal", msg, fields...)
 	event := l.logger.Fatal()
-	addFields(event, fields...)
+	l.addFields(event, fields...)
 	event.Msg(msg)
 }
 
@@ -265,7 +347,37 @@ func WithComponent(name string) *Logger {
 
 // --- internal helpers ---
 
-func addFields(event *zerolog.Event, fields ...map[string]interface{}) {
+func (l *Logger) emitOTLP(level, msg string, fields ...map[string]interface{}) {
+	if l.otlpProvider == nil {
+		return
+	}
+	merged := make(map[string]interface{})
+	for _, fm := range fields {
+		for k, v := range fm {
+			merged[k] = v
+		}
+	}
+	l.otlpProvider.EmitLog(level, msg, merged)
+}
+
+func (l *Logger) addFields(event *zerolog.Event, fields ...map[string]interface{}) {
+	if l.masker != nil {
+		for _, fm := range fields {
+			for k, v := range fm {
+				str, isStr := v.(string)
+				if !isStr {
+					str = fmt.Sprintf("%v", v)
+				}
+				masked := l.masker.MaskValue(k, str)
+				if masked != str {
+					event.Str(k, masked)
+				} else {
+					event.Interface(k, v)
+				}
+			}
+		}
+		return
+	}
 	for _, fm := range fields {
 		for k, v := range fm {
 			event.Interface(k, v)
