@@ -44,7 +44,7 @@ func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*
 	}
 
 	apiCfg := api.DefaultConfig()
-	apiCfg.Address = consulCfg.Address
+	apiCfg.Address = consulCfg.Addr
 	apiCfg.Scheme = consulCfg.Scheme
 	apiCfg.Token = consulCfg.Token
 	if consulCfg.Datacenter != "" {

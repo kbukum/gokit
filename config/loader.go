@@ -40,8 +40,9 @@ type Resolver struct {
 
 // ResolvedFiles contains the resolved config and env file paths.
 type ResolvedFiles struct {
-	ConfigFile string
-	EnvFile    string
+	ConfigFile     string
+	ProfileEnvFile string
+	EnvFile        string
 }
 
 // ResolveFiles finds config and env files for a service.
@@ -57,6 +58,15 @@ func (cr *Resolver) ResolveFiles(serviceName string, opts LoaderConfig) Resolved
 	}
 	if resolved.EnvFile == "" {
 		resolved.EnvFile = cr.findEnvFile(serviceName)
+	}
+
+	// Resolve profile env file if profile loading is enabled.
+	if opts.ProfileEnabled {
+		profile := opts.Profile
+		if profile == "" {
+			profile = os.Getenv("ENVIRONMENT")
+		}
+		resolved.ProfileEnvFile = cr.findProfileEnvFile(profile)
 	}
 
 	return resolved
@@ -122,11 +132,31 @@ func (cr *Resolver) findEnvFile(serviceName string) string {
 	return ""
 }
 
+// findProfileEnvFile searches for a profile-specific .env file in standard locations.
+func (cr *Resolver) findProfileEnvFile(profile string) string {
+	if profile == "" {
+		return ""
+	}
+	searchPaths := []string{
+		fmt.Sprintf("./config/profiles/%s.env", profile),
+		fmt.Sprintf("../config/profiles/%s.env", profile),
+		fmt.Sprintf("../../config/profiles/%s.env", profile),
+	}
+	for _, path := range searchPaths {
+		if cr.FileSystem.Exists(path) {
+			return path
+		}
+	}
+	return ""
+}
+
 // LoaderConfig holds dependencies and optional file overrides.
 type LoaderConfig struct {
-	FileSystem FileSystem
-	ConfigFile string // Direct config file path (optional)
-	EnvFile    string // Direct env file path (optional)
+	FileSystem     FileSystem
+	ConfigFile     string // Direct config file path (optional)
+	EnvFile        string // Direct env file path (optional)
+	Profile        string // Profile name (e.g., "development", "docker", "staging")
+	ProfileEnabled bool   // Whether profile loading was explicitly enabled
 }
 
 // LoaderOption is a functional option for LoadConfig.
@@ -145,6 +175,16 @@ func WithConfigFile(path string) LoaderOption {
 // WithEnvFile sets an explicit .env file path.
 func WithEnvFile(path string) LoaderOption {
 	return func(lc *LoaderConfig) { lc.EnvFile = path }
+}
+
+// WithProfile sets the configuration profile to load.
+// Searches for config/profiles/{profile}.env in standard paths.
+// If profile is empty, reads from the ENVIRONMENT env var.
+func WithProfile(profile string) LoaderOption {
+	return func(lc *LoaderConfig) {
+		lc.Profile = profile
+		lc.ProfileEnabled = true
+	}
 }
 
 // LoadConfig loads configuration for a service into the provided cfg struct.
@@ -177,11 +217,18 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 		}
 	}
 
-	// 2. Enable automatic environment variable reading
+	// 2. Load profile .env file (environment-specific overrides)
+	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
+		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
+			fmt.Printf("[config] warning: failed to load profile env file %s: %v\n", files.ProfileEnvFile, err)
+		}
+	}
+
+	// 3. Enable automatic environment variable reading
 	v.AutomaticEnv()
 	autoBindEnvVars(v)
 
-	// 3. Load .env file
+	// 4. Load service .env file
 	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
 			fmt.Printf("[config] warning: failed to load .env file %s: %v\n", files.EnvFile, err)
@@ -191,7 +238,7 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 		}
 	}
 
-	// 4. Unmarshal into config struct (with duration parsing support)
+	// 5. Unmarshal into config struct (with duration parsing support)
 	if err := v.Unmarshal(cfg, viper.DecodeHook(
 		mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),

@@ -9,8 +9,8 @@ import (
 
 // Config holds Consul connection and client settings.
 type Config struct {
-	// Address is the Consul agent address (default: localhost:8500).
-	Address string `yaml:"address" mapstructure:"address"`
+	// Addr is the Consul agent address (default: localhost:8500).
+	Addr string `yaml:"addr" mapstructure:"addr"`
 
 	// Scheme is the URI scheme (http/https).
 	Scheme string `yaml:"scheme" mapstructure:"scheme"`
@@ -63,8 +63,8 @@ type PoolConfig struct {
 
 // ApplyDefaults sets sensible defaults for Config.
 func (c *Config) ApplyDefaults() {
-	if c.Address == "" {
-		c.Address = "localhost:8500"
+	if c.Addr == "" {
+		c.Addr = "localhost:8500"
 	}
 	if c.Scheme == "" {
 		c.Scheme = "http"
@@ -105,7 +105,7 @@ func (c *PoolConfig) ApplyDefaults() {
 
 // Validate checks if the Consul configuration is valid.
 func (c *Config) Validate() error {
-	if c.Address == "" {
+	if c.Addr == "" {
 		return fmt.Errorf("consul address is required")
 	}
 	if c.Scheme != "http" && c.Scheme != "https" {
