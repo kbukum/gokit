@@ -1161,8 +1161,8 @@ func TestHealthCheck_UnavailableProvider(t *testing.T) {
 	if health.Message != "database unreachable" {
 		t.Fatalf("expected 'database unreachable', got %q", health.Message)
 	}
-	if !p.IsAvailable(context.Background()) == true {
-		// Should not be available
+	if p.IsAvailable(context.Background()) {
+		t.Fatal("unavailable provider should return false from IsAvailable")
 	}
 	if p.IsAvailable(context.Background()) {
 		t.Fatal("unavailable provider should return false from IsAvailable")

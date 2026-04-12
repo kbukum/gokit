@@ -361,7 +361,7 @@ func TestComplexChain_ParallelFanOutTapReduce(t *testing.T) {
 
 	// Each slice has 2 elements: [v*10+1, v*10+2].
 	// Collect sums to verify all values present.
-	var sums []int
+	sums := make([]int, 0, len(edges))
 	for _, pair := range got {
 		if len(pair) != 2 {
 			t.Fatalf("expected pair of 2, got %v", pair)

@@ -322,7 +322,7 @@ func TestKeyRotation_FallbackPattern(t *testing.T) {
 	for _, ac := range algorithms {
 		t.Run(ac.name, func(t *testing.T) {
 			keys := []string{"key-v1", "key-v2", "key-v3"}
-			var encryptors []Encryptor
+			encryptors := make([]Encryptor, 0, len(keys))
 			for _, k := range keys {
 				encryptors = append(encryptors, newEncryptor(t, k, ac.alg))
 			}

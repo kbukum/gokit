@@ -215,7 +215,7 @@ func TestEventOrdering(t *testing.T) {
 		t.Fatalf("submit: %v", err)
 	}
 
-	var types []worker.EventType
+	types := make([]worker.EventType, 0, 4)
 	for e := range handle.Events() {
 		types = append(types, e.Type)
 	}
@@ -261,7 +261,7 @@ func TestStatsDuringConcurrency(t *testing.T) {
 	})
 	defer func() { _ = pool.Stop(context.Background()) }()
 
-	var handles []*worker.TaskHandle[int]
+	handles := make([]*worker.TaskHandle[int], 0, total)
 	for i := range total {
 		h, err := pool.Submit(context.Background(), i)
 		if err != nil {
