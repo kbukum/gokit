@@ -710,11 +710,8 @@ func TestBulkhead_OnRejectCalled(t *testing.T) {
 		Name:          "reject-cb",
 		MaxConcurrent: 1,
 		MaxWait:       0,
-		OnReject: func(name string) {
+		OnReject: func(_ string) {
 			atomic.AddInt32(&rejectCount, 1)
-			if name != "reject-cb" {
-				// Can't use t.Errorf from goroutine easily, so skip.
-			}
 		},
 	})
 
