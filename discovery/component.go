@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
-// Provider-specific settings are embedded in Config itself (e.g., Config.Consul).
-// providerCfg is an optional override for programmatic use; when nil the
-// factory should fall back to the settings in Config.
-type ProviderFactory func(cfg Config, providerCfg any, log *logger.Logger) (Registry, Discovery, error)
+// The factory reads generic connection fields (Addr, Scheme, Token) directly
+// from Config, and exotic provider-specific settings from Config.ProviderOptions.
+type ProviderFactory func(cfg Config, log *logger.Logger) (Registry, Discovery, error)
 
 var providerFactories = make(map[string]ProviderFactory)
 
@@ -35,21 +35,10 @@ type Component struct {
 }
 
 // NewComponent creates a discovery Component for use with the component registry.
-// Provider-specific configuration is read from fields within cfg (e.g., cfg.Consul).
 func NewComponent(cfg Config, log *logger.Logger) *Component {
 	return &Component{
 		cfg: cfg,
 		log: log.WithComponent("discovery"),
-	}
-}
-
-// resolveProviderConfig returns the provider-specific settings embedded in Config.
-func (c *Component) resolveProviderConfig() any {
-	switch c.cfg.Provider {
-	case "consul":
-		return c.cfg.Consul
-	default:
-		return nil
 	}
 }
 
@@ -73,15 +62,13 @@ func (c *Component) Client() *Client { return c.client }
 func (c *Component) Start(ctx context.Context) error {
 	c.cfg.ApplyDefaults()
 
-	providerCfg := c.resolveProviderConfig()
-
 	if !c.cfg.Enabled {
 		c.log.Info("discovery disabled, using static provider")
 		f, ok := providerFactories["static"]
 		if !ok {
 			return fmt.Errorf("discovery: static provider not registered")
 		}
-		reg, disc, err := f(c.cfg, providerCfg, c.log)
+		reg, disc, err := f(c.cfg, c.log)
 		if err != nil {
 			return fmt.Errorf("discovery start: %w", err)
 		}
@@ -100,15 +87,15 @@ func (c *Component) Start(ctx context.Context) error {
 		return fmt.Errorf("unsupported discovery provider %q (not registered)", c.cfg.Provider)
 	}
 
-	reg, disc, err := f(c.cfg, providerCfg, c.log)
+	reg, disc, err := f(c.cfg, c.log)
 	if err != nil {
 		return fmt.Errorf("discovery start: %w", err)
 	}
 	c.registry = reg
 	c.discovery = disc
 
-	// Auto-register self for providers that support it.
-	if c.cfg.Provider == "consul" {
+	// Auto-register self when registration is enabled.
+	if c.cfg.Registration.Enabled {
 		addr := c.cfg.Registration.ServiceAddress
 		if addr == "" {
 			ip, err := getLocalIP()
@@ -126,8 +113,15 @@ func (c *Component) Start(ctx context.Context) error {
 			Tags:     c.cfg.Registration.Tags,
 			Metadata: c.cfg.Registration.Metadata,
 		}
-		if err := c.registry.Register(ctx, svc); err != nil {
-			return fmt.Errorf("discovery: register self: %w", err)
+
+		if err := c.registerWithRetry(ctx, svc); err != nil {
+			if c.cfg.Registration.Required {
+				return fmt.Errorf("discovery: register self: %w", err)
+			}
+			c.log.Warn("failed to register with discovery — continuing in degraded mode", map[string]interface{}{
+				"error":      err.Error(),
+				"service_id": svc.ID,
+			})
 		}
 	}
 
@@ -214,6 +208,43 @@ func getLocalIP() (string, error) {
 	}
 	defer conn.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
+}
+
+// registerWithRetry attempts registration with exponential backoff.
+// Returns nil on success, or the last error after all retries are exhausted.
+func (c *Component) registerWithRetry(ctx context.Context, svc *ServiceInfo) error {
+	maxRetries := c.cfg.Registration.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = 3
+	}
+	interval := ParseDuration(c.cfg.Registration.RetryInterval)
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := c.registry.Register(ctx, svc); err != nil {
+			lastErr = err
+			c.log.Warn("failed to register service", map[string]interface{}{
+				"error":      err.Error(),
+				"service_id": svc.ID,
+				"attempt":    attempt,
+				"max":        maxRetries,
+			})
+			if attempt < maxRetries {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(interval):
+				}
+				interval *= 2 // exponential backoff
+			}
+			continue
+		}
+		return nil
+	}
+	return lastErr
 }
 
 // buildClient derives a high-level Client from the component's Config and Discovery backend.

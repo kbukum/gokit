@@ -24,10 +24,18 @@ type Provider struct {
 }
 
 func init() {
-	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, providerCfg any, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
-		consulCfg, err := resolveConfig(providerCfg)
-		if err != nil {
-			return nil, nil, err
+	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+		// Build consul config from generic Config fields + ProviderOptions
+		consulCfg := &Config{
+			Addr:   cfg.Addr,
+			Scheme: cfg.Scheme,
+			Token:  cfg.Token,
+		}
+		// Merge exotic provider-specific options (datacenter, TLS, pool, etc.)
+		if cfg.ProviderOptions != nil {
+			if err := mergeProviderOptions(consulCfg, cfg.ProviderOptions); err != nil {
+				return nil, nil, err
+			}
 		}
 		p, err := NewProvider(cfg, consulCfg, log)
 		if err != nil {
@@ -37,34 +45,24 @@ func init() {
 	})
 }
 
-// resolveConfig converts providerCfg to *Config.
-// Accepts *Config directly (programmatic use) or map[string]any (from YAML/config deserialization).
-func resolveConfig(providerCfg any) (*Config, error) {
-	switch v := providerCfg.(type) {
-	case *Config:
-		return v, nil
-	case map[string]any:
-		cfg := &Config{}
-		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-			Result:           cfg,
-			WeaklyTypedInput: true,
-			TagName:          "mapstructure",
-			DecodeHook: mapstructure.ComposeDecodeHookFunc(
-				mapstructure.StringToTimeDurationHookFunc(),
-			),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("consul config decoder: %w", err)
-		}
-		if err := decoder.Decode(v); err != nil {
-			return nil, fmt.Errorf("consul config decode: %w", err)
-		}
-		return cfg, nil
-	case nil:
-		return &Config{}, nil
-	default:
-		return nil, fmt.Errorf("consul provider requires *consul.Config or map[string]any, got %T", providerCfg)
+// mergeProviderOptions decodes exotic Consul-specific options from the
+// generic ProviderOptions map into the consul Config.
+func mergeProviderOptions(consulCfg *Config, opts map[string]any) error {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:           consulCfg,
+		WeaklyTypedInput: true,
+		TagName:          "mapstructure",
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+		),
+	})
+	if err != nil {
+		return fmt.Errorf("consul options decoder: %w", err)
 	}
+	if err := decoder.Decode(opts); err != nil {
+		return fmt.Errorf("consul options decode: %w", err)
+	}
+	return nil
 }
 
 // NewProvider creates a Provider from the given Config.

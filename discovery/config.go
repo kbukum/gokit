@@ -13,6 +13,16 @@ type Config struct {
 	// Provider selects the discovery backend: "consul", "static", or "k8s".
 	Provider string `yaml:"provider" mapstructure:"provider"`
 
+	// Addr is the discovery provider address (e.g. "localhost:8500").
+	// Generic — every remote provider needs an address.
+	Addr string `yaml:"addr" mapstructure:"addr"`
+
+	// Scheme is the URI scheme for the provider connection (e.g. "http", "https").
+	Scheme string `yaml:"scheme" mapstructure:"scheme"`
+
+	// Token is the auth token for the discovery provider.
+	Token string `yaml:"token" mapstructure:"token"`
+
 	// Registration holds self-registration settings.
 	Registration RegistrationConfig `yaml:"registration" mapstructure:"registration"`
 
@@ -28,16 +38,32 @@ type Config struct {
 	// StaticEndpoints provides endpoints for the static provider or as fallback.
 	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
 
-	// Consul holds Consul-specific provider settings as a raw map.
-	// Only relevant when Provider == "consul". Ignored for other providers.
-	// Keys match consul.Config field tags (e.g., addr, scheme, token, datacenter).
-	Consul map[string]any `yaml:"consul" mapstructure:"consul"`
+	// ProviderOptions holds exotic backend-specific settings (e.g., datacenter,
+	// TLS, connection pool for Consul). Generic fields like addr/scheme/token
+	// are on Config directly.
+	ProviderOptions map[string]any `yaml:"provider_options" mapstructure:"provider_options"`
 }
 
 // RegistrationConfig holds settings for registering this service with a discovery backend.
 type RegistrationConfig struct {
 	// Enabled toggles self-registration.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+
+	// Required controls startup behaviour when registration fails.
+	// When true (the default), the service will retry with backoff and
+	// ultimately fail to start if registration cannot be completed —
+	// appropriate for staging/production where an undiscoverable service
+	// is a silent outage. When false, the service logs a warning and
+	// continues in degraded mode — convenient for local development.
+	Required bool `yaml:"required" mapstructure:"required"`
+
+	// MaxRetries is the number of registration retries before giving up.
+	// Defaults to 3. Only meaningful when Required is true.
+	MaxRetries int `yaml:"max_retries" mapstructure:"max_retries"`
+
+	// RetryInterval is the base interval between retries (e.g. "2s").
+	// Each retry doubles the interval (exponential backoff). Defaults to "2s".
+	RetryInterval string `yaml:"retry_interval" mapstructure:"retry_interval"`
 
 	// ServiceName is the name used when registering this service.
 	ServiceName string `yaml:"service_name" mapstructure:"service_name"`
@@ -112,6 +138,9 @@ func (c *Config) ApplyDefaults() {
 	if c.Provider == "" {
 		c.Provider = "static"
 	}
+	if c.Scheme == "" {
+		c.Scheme = "http"
+	}
 	c.Registration.ApplyDefaults()
 	c.Health.ApplyDefaults()
 }
@@ -120,6 +149,12 @@ func (c *Config) ApplyDefaults() {
 func (r *RegistrationConfig) ApplyDefaults() {
 	if r.ServiceID == "" {
 		r.ServiceID = r.ServiceName
+	}
+	if r.MaxRetries == 0 {
+		r.MaxRetries = 3
+	}
+	if r.RetryInterval == "" {
+		r.RetryInterval = "2s"
 	}
 }
 
