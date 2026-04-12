@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/hashicorp/consul/api"
 
 	"github.com/kbukum/gokit/discovery"
@@ -24,9 +25,9 @@ type Provider struct {
 
 func init() {
 	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, providerCfg any, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
-		consulCfg, ok := providerCfg.(*Config)
-		if !ok {
-			return nil, nil, fmt.Errorf("consul provider requires *consul.Config, got %T", providerCfg)
+		consulCfg, err := resolveConfig(providerCfg)
+		if err != nil {
+			return nil, nil, err
 		}
 		p, err := NewProvider(cfg, consulCfg, log)
 		if err != nil {
@@ -34,6 +35,36 @@ func init() {
 		}
 		return p, p, nil
 	})
+}
+
+// resolveConfig converts providerCfg to *Config.
+// Accepts *Config directly (programmatic use) or map[string]any (from YAML/config deserialization).
+func resolveConfig(providerCfg any) (*Config, error) {
+	switch v := providerCfg.(type) {
+	case *Config:
+		return v, nil
+	case map[string]any:
+		cfg := &Config{}
+		decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			Result:           cfg,
+			WeaklyTypedInput: true,
+			TagName:          "mapstructure",
+			DecodeHook: mapstructure.ComposeDecodeHookFunc(
+				mapstructure.StringToTimeDurationHookFunc(),
+			),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("consul config decoder: %w", err)
+		}
+		if err := decoder.Decode(v); err != nil {
+			return nil, fmt.Errorf("consul config decode: %w", err)
+		}
+		return cfg, nil
+	case nil:
+		return &Config{}, nil
+	default:
+		return nil, fmt.Errorf("consul provider requires *consul.Config or map[string]any, got %T", providerCfg)
+	}
 }
 
 // NewProvider creates a Provider from the given Config.

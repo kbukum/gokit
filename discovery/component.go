@@ -10,8 +10,9 @@ import (
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
-// providerCfg holds provider-specific configuration (e.g., *consul.Config).
-// Providers should type-assert providerCfg to their own config type.
+// Provider-specific settings are embedded in Config itself (e.g., Config.Consul).
+// providerCfg is an optional override for programmatic use; when nil the
+// factory should fall back to the settings in Config.
 type ProviderFactory func(cfg Config, providerCfg any, log *logger.Logger) (Registry, Discovery, error)
 
 var providerFactories = make(map[string]ProviderFactory)
@@ -26,21 +27,29 @@ func RegisterProviderFactory(name string, f ProviderFactory) {
 // Component wraps a Registry and Discovery pair and implements
 // component.Component for lifecycle management.
 type Component struct {
-	registry    Registry
-	discovery   Discovery
-	client      *Client
-	cfg         Config
-	providerCfg any
-	log         *logger.Logger
+	registry  Registry
+	discovery Discovery
+	client    *Client
+	cfg       Config
+	log       *logger.Logger
 }
 
 // NewComponent creates a discovery Component for use with the component registry.
-// providerCfg holds provider-specific configuration (e.g., *consul.Config for Consul).
-func NewComponent(cfg Config, providerCfg any, log *logger.Logger) *Component {
+// Provider-specific configuration is read from fields within cfg (e.g., cfg.Consul).
+func NewComponent(cfg Config, log *logger.Logger) *Component {
 	return &Component{
-		cfg:         cfg,
-		providerCfg: providerCfg,
-		log:         log.WithComponent("discovery"),
+		cfg: cfg,
+		log: log.WithComponent("discovery"),
+	}
+}
+
+// resolveProviderConfig returns the provider-specific settings embedded in Config.
+func (c *Component) resolveProviderConfig() any {
+	switch c.cfg.Provider {
+	case "consul":
+		return c.cfg.Consul
+	default:
+		return nil
 	}
 }
 
@@ -64,13 +73,15 @@ func (c *Component) Client() *Client { return c.client }
 func (c *Component) Start(ctx context.Context) error {
 	c.cfg.ApplyDefaults()
 
+	providerCfg := c.resolveProviderConfig()
+
 	if !c.cfg.Enabled {
 		c.log.Info("discovery disabled, using static provider")
 		f, ok := providerFactories["static"]
 		if !ok {
 			return fmt.Errorf("discovery: static provider not registered")
 		}
-		reg, disc, err := f(c.cfg, c.providerCfg, c.log)
+		reg, disc, err := f(c.cfg, providerCfg, c.log)
 		if err != nil {
 			return fmt.Errorf("discovery start: %w", err)
 		}
@@ -89,7 +100,7 @@ func (c *Component) Start(ctx context.Context) error {
 		return fmt.Errorf("unsupported discovery provider %q (not registered)", c.cfg.Provider)
 	}
 
-	reg, disc, err := f(c.cfg, c.providerCfg, c.log)
+	reg, disc, err := f(c.cfg, providerCfg, c.log)
 	if err != nil {
 		return fmt.Errorf("discovery start: %w", err)
 	}

@@ -19,11 +19,13 @@ import (
 
 log := logger.New()
 comp := discovery.NewComponent(discovery.Config{
-    Enabled:     true,
-    Provider:    "consul",
-    ConsulAddr:  "localhost:8500",
-    ServiceName: "my-service",
-    ServicePort: 8080,
+    Enabled:  true,
+    Provider: "consul",
+    Consul:   map[string]any{"addr": "localhost:8500"},
+    Registration: discovery.RegistrationConfig{
+        ServiceName: "my-service",
+        ServicePort: 8080,
+    },
 }, log)
 
 comp.Start(ctx)

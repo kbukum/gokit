@@ -27,6 +27,11 @@ type Config struct {
 
 	// StaticEndpoints provides endpoints for the static provider or as fallback.
 	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
+
+	// Consul holds Consul-specific provider settings as a raw map.
+	// Only relevant when Provider == "consul". Ignored for other providers.
+	// Keys match consul.Config field tags (e.g., addr, scheme, token, datacenter).
+	Consul map[string]any `yaml:"consul" mapstructure:"consul"`
 }
 
 // RegistrationConfig holds settings for registering this service with a discovery backend.
