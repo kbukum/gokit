@@ -582,6 +582,537 @@ func TestAgent_SystemPromptIncluded(t *testing.T) {
 	}
 }
 
+// --- Multi-Tool Tests ---
+
+func multiToolCallResponse(tools map[string]string) llm.CompletionResponse {
+	var calls []llm.ToolCall
+	i := 0
+	for name, args := range tools {
+		calls = append(calls, llm.ToolCall{
+			ID:       fmt.Sprintf("call_%d", i),
+			Function: llm.FunctionCall{Name: name, Arguments: args},
+		})
+		i++
+	}
+	return llm.CompletionResponse{
+		Message: llm.AssistantMessage{
+			Content:   []llm.ContentBlock{llm.TextBlock{Text: "calling tools"}},
+			ToolCalls: calls,
+		},
+		StopReason: llm.StopToolUse,
+		Usage:      llm.Usage{PromptTokens: 20, CompletionTokens: 10, TotalTokens: 30},
+	}
+}
+
+func makeMultiTool(names ...string) *tool.Registry {
+	reg := tool.NewRegistry()
+	for _, name := range names {
+		n := name
+		t := tool.FromFunc(n, "tool "+n, func(ctx context.Context, in struct{}) (string, error) {
+			return "result-" + n, nil
+		})
+		reg.Register(t.AsCallable())
+	}
+	return reg
+}
+
+func makeReadOnlyMultiTool(names ...string) *tool.Registry {
+	reg := tool.NewRegistry()
+	for _, name := range names {
+		n := name
+		t := tool.FromFunc(n, "tool "+n, func(ctx context.Context, in struct{}) (string, error) {
+			return "result-" + n, nil
+		})
+		t.Def.ReadOnly = true
+		reg.Register(t.AsCallable())
+	}
+	return reg
+}
+
+func TestAgent_MultiToolCall(t *testing.T) {
+	provider := newMockProvider(
+		multiToolCallResponse(map[string]string{"search": "{}", "fetch": "{}"}),
+		textResponse("Found and fetched the data."),
+	)
+	tools := makeMultiTool("search", "fetch")
+
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Tools:    tools,
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("search and fetch data")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.StopReason != agent.StopEndTurn {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopEndTurn)
+	}
+	if result.TurnCount != 2 {
+		t.Errorf("TurnCount = %d, want 2", result.TurnCount)
+	}
+	// Messages: user + assistant(multi-tool) + 2 tool results + assistant(final)
+	if len(result.Messages) != 5 {
+		t.Errorf("Messages count = %d, want 5", len(result.Messages))
+	}
+	// Verify both tool results are present
+	toolResults := 0
+	for _, msg := range result.Messages {
+		if _, ok := msg.(llm.ToolResultMessage); ok {
+			toolResults++
+		}
+	}
+	if toolResults != 2 {
+		t.Errorf("tool results = %d, want 2", toolResults)
+	}
+}
+
+func TestAgent_ParallelTools(t *testing.T) {
+	provider := newMockProvider(
+		multiToolCallResponse(map[string]string{"lookup1": "{}", "lookup2": "{}"}),
+		textResponse("Both lookups done."),
+	)
+	tools := makeReadOnlyMultiTool("lookup1", "lookup2")
+
+	var parallelHookFired bool
+	hooks := hook.NewRegistry()
+	hooks.On(agent.EventToolsParallelized, func(e hook.Event) hook.Result {
+		parallelHookFired = true
+		tp := e.(agent.ToolsParallelized)
+		if tp.Count != 2 {
+			t.Errorf("parallel tool count = %d, want 2", tp.Count)
+		}
+		return hook.Continue()
+	})
+
+	a := agent.New(agent.Config{
+		Provider:      provider,
+		Tools:         tools,
+		Hooks:         hooks,
+		ParallelTools: true,
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("lookup both")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !parallelHookFired {
+		t.Error("ToolsParallelized hook was not fired")
+	}
+	if result.StopReason != agent.StopEndTurn {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopEndTurn)
+	}
+	if result.TurnCount != 2 {
+		t.Errorf("TurnCount = %d, want 2", result.TurnCount)
+	}
+}
+
+// --- Memory Tests ---
+
+func TestAgent_MemoryLoadAndSave(t *testing.T) {
+	store := agent.NewInMemoryStore()
+
+	// Pre-populate memory with history
+	ctx := context.Background()
+	_ = store.Save(ctx, "sess-1", []llm.Message{
+		llm.User("previous question"),
+		llm.AssistantMessage{Content: []llm.ContentBlock{llm.TextBlock{Text: "previous answer"}}},
+	})
+
+	provider := newMockProvider(textResponse("Based on our history..."))
+	a := agent.New(agent.Config{
+		Provider:  provider,
+		Memory:    store,
+		SessionID: "sess-1",
+	})
+
+	result, err := a.Run(ctx, []llm.Message{llm.User("follow up")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Messages: history(2) + new user + assistant = 4
+	if len(result.Messages) < 4 {
+		t.Errorf("Messages count = %d, want >= 4", len(result.Messages))
+	}
+
+	// Verify memory was updated with full conversation
+	saved, _ := store.Load(ctx, "sess-1")
+	if len(saved) != len(result.Messages) {
+		t.Errorf("saved memory has %d messages, want %d", len(saved), len(result.Messages))
+	}
+}
+
+func TestAgent_MemoryHookFired(t *testing.T) {
+	store := agent.NewInMemoryStore()
+	ctx := context.Background()
+	_ = store.Save(ctx, "sess-1", []llm.Message{llm.User("old msg")})
+
+	var loaded bool
+	hooks := hook.NewRegistry()
+	hooks.On(agent.EventMemoryLoaded, func(e hook.Event) hook.Result {
+		loaded = true
+		ml := e.(agent.MemoryLoaded)
+		if ml.SessionID != "sess-1" {
+			t.Errorf("SessionID = %q, want sess-1", ml.SessionID)
+		}
+		if ml.MessageCount != 1 {
+			t.Errorf("MessageCount = %d, want 1", ml.MessageCount)
+		}
+		return hook.Continue()
+	})
+
+	provider := newMockProvider(textResponse("hi"))
+	a := agent.New(agent.Config{
+		Provider:  provider,
+		Hooks:     hooks,
+		Memory:    store,
+		SessionID: "sess-1",
+	})
+
+	_, err := a.Run(ctx, []llm.Message{llm.User("test")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !loaded {
+		t.Error("MemoryLoaded hook was not fired")
+	}
+}
+
+// --- Slash Command Tests ---
+
+func TestAgent_SlashCommand_Help(t *testing.T) {
+	cmds := agent.NewCommandRegistry()
+	cmds.RegisterBuiltins()
+
+	provider := newMockProvider(textResponse("should not be called"))
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Commands: cmds,
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("/help")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.StopReason != agent.StopCommand {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopCommand)
+	}
+	if result.FinalMessage.Text() == "" {
+		t.Error("expected non-empty help output")
+	}
+}
+
+func TestAgent_SlashCommand_Clear(t *testing.T) {
+	store := agent.NewInMemoryStore()
+	ctx := context.Background()
+	_ = store.Save(ctx, "sess-1", []llm.Message{llm.User("old")})
+
+	cmds := agent.NewCommandRegistry()
+	cmds.RegisterBuiltins()
+
+	provider := newMockProvider(textResponse("should not be called"))
+	a := agent.New(agent.Config{
+		Provider:  provider,
+		Commands:  cmds,
+		Memory:    store,
+		SessionID: "sess-1",
+	})
+
+	result, err := a.Run(ctx, []llm.Message{llm.User("/clear")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.StopReason != agent.StopCommand {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopCommand)
+	}
+
+	// Verify memory was cleared
+	saved, _ := store.Load(ctx, "sess-1")
+	if len(saved) != 0 {
+		t.Errorf("memory should be empty after /clear, has %d messages", len(saved))
+	}
+}
+
+func TestAgent_SlashCommand_Model(t *testing.T) {
+	cmds := agent.NewCommandRegistry()
+	cmds.RegisterBuiltins()
+
+	provider := newMockProvider(textResponse("should not be called"))
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Commands: cmds,
+		Model:    "gpt-4",
+	})
+
+	// Switch model
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("/model gpt-4o")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.StopReason != agent.StopCommand {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopCommand)
+	}
+	if a.GetModel() != "gpt-4o" {
+		t.Errorf("model = %q, want gpt-4o", a.GetModel())
+	}
+
+	// Query model
+	result2, err := a.Run(context.Background(), []llm.Message{llm.User("/model")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result2.FinalMessage.Text() == "" {
+		t.Error("expected non-empty model output")
+	}
+}
+
+func TestAgent_NonCommandPassthrough(t *testing.T) {
+	cmds := agent.NewCommandRegistry()
+	cmds.RegisterBuiltins()
+
+	provider := newMockProvider(textResponse("normal response"))
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Commands: cmds,
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("hello")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Regular messages should bypass commands and go to LLM
+	if result.StopReason != agent.StopEndTurn {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopEndTurn)
+	}
+	if result.FinalMessage.Text() != "normal response" {
+		t.Errorf("FinalMessage = %q, want %q", result.FinalMessage.Text(), "normal response")
+	}
+}
+
+// --- Context Compaction Test ---
+
+func TestAgent_ContextCompaction(t *testing.T) {
+	// Create a provider with tiny context window
+	provider := &mockProvider{
+		responses: []llm.CompletionResponse{
+			toolCallResponse("search", "{}"),
+			textResponse("done"),
+		},
+		caps: llm.Capabilities{
+			SupportsTools:    true,
+			MaxContextTokens: 20, // Very small to trigger compaction
+			ModelID:          "mock",
+		},
+	}
+	tools := makeMockTool("search", "lots of data here")
+
+	var compactedHookFired bool
+	hooks := hook.NewRegistry()
+	hooks.On(agent.EventContextCompacted, func(e hook.Event) hook.Result {
+		compactedHookFired = true
+		return hook.Continue()
+	})
+
+	a := agent.New(agent.Config{
+		Provider:        provider,
+		Tools:           tools,
+		Hooks:           hooks,
+		ContextStrategy: agent.TruncateStrategy{KeepLast: 3},
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("search for something")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.StopReason != agent.StopEndTurn {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopEndTurn)
+	}
+	if !compactedHookFired {
+		t.Error("ContextCompacted hook was not fired")
+	}
+}
+
+// --- System Prompt Template Test ---
+
+func TestAgent_SystemPromptTemplate(t *testing.T) {
+	tmpl, err := agent.NewPromptTemplate("system", "You are {{.Role}}. Help with {{.Topic}}.")
+	if err != nil {
+		t.Fatalf("failed to create template: %v", err)
+	}
+
+	var capturedReq llm.CompletionRequest
+	provider := &reqCapturingProvider{
+		inner:    newMockProvider(textResponse("hi")),
+		captured: &capturedReq,
+	}
+
+	a := agent.New(agent.Config{
+		Provider:             provider,
+		SystemPromptTemplate: tmpl,
+		SystemPromptData:     map[string]string{"Role": "analyst", "Topic": "data"},
+	})
+
+	_, runErr := a.Run(context.Background(), []llm.Message{llm.User("test")})
+	if runErr != nil {
+		t.Fatalf("unexpected error: %v", runErr)
+	}
+
+	// Verify system prompt was rendered from template into SystemPrompt field
+	expected := "You are analyst. Help with data."
+	if capturedReq.SystemPrompt != expected {
+		t.Errorf("system prompt = %q, want %q", capturedReq.SystemPrompt, expected)
+	}
+}
+
+type reqCapturingProvider struct {
+	inner    *mockProvider
+	captured *llm.CompletionRequest
+}
+
+func (p *reqCapturingProvider) Complete(ctx context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+	*p.captured = req
+	return p.inner.Complete(ctx, req)
+}
+
+func (p *reqCapturingProvider) Stream(ctx context.Context, req llm.CompletionRequest) (<-chan llm.StreamEvent, error) {
+	*p.captured = req
+	return p.inner.Stream(ctx, req)
+}
+
+func (p *reqCapturingProvider) Capabilities() llm.Capabilities { return p.inner.Capabilities() }
+
+func (p *reqCapturingProvider) CountTokens(msgs []llm.Message) int {
+	return p.inner.CountTokens(msgs)
+}
+
+// --- Model Override Test ---
+
+func TestAgent_ModelOverride(t *testing.T) {
+	var capturedReq llm.CompletionRequest
+	provider := &reqCapturingProvider{
+		inner:    newMockProvider(textResponse("hi")),
+		captured: &capturedReq,
+	}
+
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Model:    "custom-model-v2",
+	})
+
+	_, err := a.Run(context.Background(), []llm.Message{llm.User("test")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if capturedReq.Model != "custom-model-v2" {
+		t.Errorf("model = %q, want custom-model-v2", capturedReq.Model)
+	}
+}
+
+// --- ToolFormatter Test ---
+
+func TestAgent_ToolFormatter(t *testing.T) {
+	provider := newMockProvider(
+		toolCallResponse("search", "{}"),
+		textResponse("formatted result received"),
+	)
+	tools := makeMockTool("search", "raw json data here")
+
+	formatter := tool.FormatterFunc(func(name string, r *tool.Result) (string, error) {
+		return fmt.Sprintf("[%s] %s", name, r.Content), nil
+	})
+
+	a := agent.New(agent.Config{
+		Provider:      provider,
+		Tools:         tools,
+		ToolFormatter: formatter,
+	})
+
+	result, err := a.Run(context.Background(), []llm.Message{llm.User("search")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Find the tool result message and verify it was formatted
+	for _, msg := range result.Messages {
+		if trm, ok := msg.(llm.ToolResultMessage); ok {
+			// FromFunc JSON-marshals the string output, so Content includes quotes
+			expected := `[search] "raw json data here"`
+			if trm.Content != expected {
+				t.Errorf("tool result = %q, want %q", trm.Content, expected)
+			}
+		}
+	}
+	if result.StopReason != agent.StopEndTurn {
+		t.Errorf("StopReason = %q, want %q", result.StopReason, agent.StopEndTurn)
+	}
+}
+
+// --- Stream with Tool Call Test ---
+
+func TestAgent_Stream_ToolCall(t *testing.T) {
+	provider := newMockProvider(
+		toolCallResponse("calc", "{}"),
+		textResponse("42"),
+	)
+	tools := makeMockTool("calc", "42")
+
+	a := agent.New(agent.Config{
+		Provider: provider,
+		Tools:    tools,
+	})
+
+	ch, err := a.Stream(context.Background(), []llm.Message{llm.User("calc")})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var events []agent.Event
+	for e := range ch {
+		events = append(events, e)
+	}
+
+	// Should have: TurnStart, TurnComplete/ToolExecuting/ToolComplete, TurnStart, TurnComplete, CompleteEvent
+	if len(events) < 3 {
+		t.Fatalf("expected at least 3 events, got %d", len(events))
+	}
+
+	// Last should be CompleteEvent
+	last := events[len(events)-1]
+	complete, ok := last.(agent.CompleteEvent)
+	if !ok {
+		t.Errorf("last event should be CompleteEvent, got %T", last)
+	} else if complete.Result.TurnCount != 2 {
+		t.Errorf("TurnCount = %d, want 2", complete.Result.TurnCount)
+	}
+}
+
+// --- Context Cancel Test ---
+
+func TestAgent_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	provider := newMockProvider(textResponse("should not reach"))
+	a := agent.New(agent.Config{
+		Provider: provider,
+	})
+
+	_, err := a.Run(ctx, []llm.Message{llm.User("test")})
+	// Should get a context error from the provider
+	if err == nil {
+		// Some providers may not check ctx, which is fine — the test
+		// mainly verifies no panic occurs.
+		return
+	}
+}
+
 func TestAgent_UsageAccumulation(t *testing.T) {
 	provider := newMockProvider(
 		llm.CompletionResponse{

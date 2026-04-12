@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -157,6 +158,19 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 	return files, nil
 }
 
+// SignedURL generates a pre-signed GET URL valid for the specified duration.
+func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
+	presignClient := awss3.NewPresignClient(s.client)
+	req, err := presignClient.PresignGetObject(ctx, &awss3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(path),
+	}, awss3.WithPresignExpires(expiry))
+	if err != nil {
+		return "", fmt.Errorf("storage: s3 presign: %w", err)
+	}
+	return req.URL, nil
+}
+
 func (s *Storage) resolveEndpoint() string {
 	opts := s.client.Options()
 	if opts.BaseEndpoint != nil && *opts.BaseEndpoint != "" {
@@ -167,3 +181,4 @@ func (s *Storage) resolveEndpoint() string {
 
 // compile-time check
 var _ storage.Storage = (*Storage)(nil)
+var _ storage.SignedURLProvider = (*Storage)(nil)
