@@ -92,9 +92,7 @@ func New(cfg *Config, serviceName string) *Logger {
 
 	// Initialize OTLP log bridge when enabled.
 	if cfg.OTLP.Enabled {
-		env := ""
-		ver := ""
-		provider, err := NewOTLPProvider(cfg.OTLP, serviceName, env, ver)
+		provider, err := NewOTLPProvider(cfg.OTLP, serviceName, cfg.Environment, cfg.Version)
 		if err != nil {
 			l.logger.Warn().Err(err).Msg("failed to initialize OTLP log provider")
 		} else {

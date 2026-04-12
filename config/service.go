@@ -75,6 +75,13 @@ func (c *ServiceConfig) ApplyDefaults() {
 	if c.Logging.ServiceName == "" && c.Name != "" {
 		c.Logging.ServiceName = c.Name
 	}
+	// Propagate environment and version for OTLP resource attributes.
+	if c.Logging.Environment == "" && c.Environment != "" {
+		c.Logging.Environment = c.Environment
+	}
+	if c.Logging.Version == "" && c.Version != "" {
+		c.Logging.Version = c.Version
+	}
 	c.Logging.ApplyDefaults()
 }
 
