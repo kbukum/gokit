@@ -175,7 +175,7 @@ func ParseRateLimitHeaders(headers http.Header) *RateLimitInfo {
 // checks before sending requests. For accurate counts, use the
 // provider's native tokenizer.
 func EstimateTokens(text string) int {
-	if len(text) == 0 {
+	if text == "" {
 		return 0
 	}
 	return (len(text) + 3) / 4

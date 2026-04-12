@@ -15,10 +15,10 @@ import (
 
 // mockRegistry implements discovery.Registry for testing.
 type mockRegistry struct {
-	registered   map[string]*discovery.ServiceInfo
-	registerErr  error
+	registered    map[string]*discovery.ServiceInfo
+	registerErr   error
 	deregisterErr error
-	updateErr    error
+	updateErr     error
 }
 
 func newMockRegistry() *mockRegistry {

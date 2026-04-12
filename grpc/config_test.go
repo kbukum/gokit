@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kbukum/gokit/security"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // ---------------------------------------------------------------------------

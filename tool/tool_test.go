@@ -147,7 +147,7 @@ func TestContext_Background(t *testing.T) {
 		t.Fatal("expected non-nil context")
 	}
 	if ctx.Err() != nil {
-		t.Error("background context should not be cancelled")
+		t.Error("background context should not be canceled")
 	}
 }
 
@@ -210,7 +210,7 @@ func TestContext_WithCancel(t *testing.T) {
 	cancel()
 
 	if cctx.Err() == nil {
-		t.Error("expected cancelled context")
+		t.Error("expected canceled context")
 	}
 }
 

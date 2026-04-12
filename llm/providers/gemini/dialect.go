@@ -23,8 +23,8 @@ type Dialect struct{}
 
 var _ llm.Dialect = (*Dialect)(nil)
 
-func (d *Dialect) Name() string       { return "gemini" }
-func (d *Dialect) HealthPath() string { return "" }
+func (d *Dialect) Name() string                   { return "gemini" }
+func (d *Dialect) HealthPath() string             { return "" }
 func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
 
 // ChatPath returns a placeholder. The actual path is model-dependent and set
@@ -120,7 +120,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Candidates []struct {
 			Content struct {
 				Parts []struct {
-					Text         string          `json:"text,omitempty"`
+					Text         string `json:"text,omitempty"`
 					FunctionCall *struct {
 						Name string          `json:"name"`
 						Args json.RawMessage `json:"args"`
@@ -295,7 +295,7 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 }
 
 func encodeTools(defs []tool.Definition) []map[string]any {
-	var tools []map[string]any
+	tools := make([]map[string]any, 0, len(defs))
 	for _, d := range defs {
 		t := map[string]any{
 			"name":        d.Name,

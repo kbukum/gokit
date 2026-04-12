@@ -256,8 +256,9 @@ func TestStatsDuringConcurrency(t *testing.T) {
 	})
 
 	pool := worker.NewPool(h, worker.PoolConfig{
-		Name: "stats-conc",
-		Size: 4,
+		Name:      "stats-conc",
+		Size:      4,
+		QueueSize: total,
 	})
 	defer func() { _ = pool.Stop(context.Background()) }()
 

@@ -15,7 +15,7 @@ type ModuleLevelManager struct {
 }
 
 // NewModuleLevelManager creates a manager from a map of module names to level strings.
-// Unrecognised level strings are silently ignored.
+// Unrecognized level strings are silently ignored.
 func NewModuleLevelManager(levels map[string]string) *ModuleLevelManager {
 	m := &ModuleLevelManager{
 		levels: make(map[string]zerolog.Level, len(levels)),
@@ -39,7 +39,7 @@ func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 }
 
 // SetLevel dynamically sets a module's log level.
-// An unrecognised level string is silently ignored.
+// An unrecognized level string is silently ignored.
 func (m *ModuleLevelManager) SetLevel(module string, level string) {
 	parsed, err := zerolog.ParseLevel(strings.ToLower(level))
 	if err != nil {

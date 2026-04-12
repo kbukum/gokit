@@ -17,10 +17,10 @@ type Dialect struct{}
 
 var _ llm.Dialect = (*Dialect)(nil)
 
-func (d *Dialect) Name() string                    { return "anthropic" }
-func (d *Dialect) ChatPath() string                { return "/v1/messages" }
-func (d *Dialect) HealthPath() string              { return "/v1/messages" }
-func (d *Dialect) StreamFormat() llm.StreamFormat   { return llm.StreamSSE }
+func (d *Dialect) Name() string                   { return "anthropic" }
+func (d *Dialect) ChatPath() string               { return "/v1/messages" }
+func (d *Dialect) HealthPath() string             { return "/v1/messages" }
+func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
 
 // BuildRequest maps a universal CompletionRequest to the Anthropic JSON body.
 func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
@@ -244,7 +244,7 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 }
 
 func encodeTools(defs []tool.Definition) []map[string]any {
-	var tools []map[string]any
+	tools := make([]map[string]any, 0, len(defs))
 	for _, d := range defs {
 		tools = append(tools, map[string]any{
 			"name":         d.Name,

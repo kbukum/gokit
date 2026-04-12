@@ -81,7 +81,7 @@ func (r *retryCallable) Call(ctx *Context, input json.RawMessage) (*Result, erro
 
 		if attempt < r.cfg.MaxAttempts {
 			if err := ctx.Err(); err != nil {
-				return nil, fmt.Errorf("tool %q: context cancelled during retry: %w",
+				return nil, fmt.Errorf("tool %q: context canceled during retry: %w",
 					r.next.Definition().Name, err)
 			}
 			delay := r.backoffDelay(attempt)

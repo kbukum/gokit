@@ -359,7 +359,7 @@ func TestStream_CommandEmitsCompleteEvent(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var events []agent.Event
+	events := make([]agent.Event, 0, 1)
 	for e := range ch {
 		events = append(events, e)
 	}

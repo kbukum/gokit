@@ -160,13 +160,13 @@ func TestStreamEvent_TypeSwitch(t *testing.T) {
 
 func TestCapabilities_Fields(t *testing.T) {
 	caps := Capabilities{
-		SupportsTools:    true,
-		SupportsVision:   true,
-		SupportsThinking: false,
+		SupportsTools:     true,
+		SupportsVision:    true,
+		SupportsThinking:  false,
 		SupportsStreaming: true,
-		MaxContextTokens: 128000,
-		MaxOutputTokens:  4096,
-		ModelID:          "gpt-4o",
+		MaxContextTokens:  128000,
+		MaxOutputTokens:   4096,
+		ModelID:           "gpt-4o",
 	}
 
 	if !caps.SupportsTools {
@@ -198,9 +198,9 @@ func TestCapabilities_Fields(t *testing.T) {
 
 // mockProvider implements Provider for testing.
 type mockProvider struct {
-	caps  Capabilities
-	resp  *CompletionResponse
-	err   error
+	caps Capabilities
+	resp *CompletionResponse
+	err  error
 }
 
 func (m *mockProvider) Complete(_ context.Context, _ CompletionRequest) (*CompletionResponse, error) {
@@ -258,7 +258,7 @@ func TestProvider_Stream(t *testing.T) {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	events := make([]StreamEvent, 0)
+	events := make([]StreamEvent, 0, 3)
 	for e := range ch {
 		events = append(events, e)
 	}

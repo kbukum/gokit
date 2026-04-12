@@ -393,7 +393,7 @@ func TestStart_CancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before start
 
-	// A cancelled context may or may not prevent Listen depending on OS timing.
+	// A canceled context may or may not prevent Listen depending on OS timing.
 	// We just verify it doesn't panic.
 	err := s.Start(ctx)
 	if err == nil {

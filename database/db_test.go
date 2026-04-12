@@ -310,7 +310,8 @@ func TestWithContext(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
 
-	ctx := context.WithValue(context.Background(), "key", "val")
+	type ctxKey string
+	ctx := context.WithValue(context.Background(), ctxKey("key"), "val")
 	gormDB := db.WithContext(ctx)
 	if gormDB == nil {
 		t.Error("WithContext() returned nil")

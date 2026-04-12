@@ -26,11 +26,11 @@ func newMockProvider(responses ...llm.CompletionResponse) *mockProvider {
 	return &mockProvider{
 		responses: responses,
 		caps: llm.Capabilities{
-			SupportsTools:    true,
+			SupportsTools:     true,
 			SupportsStreaming: true,
-			MaxContextTokens: 100000,
-			MaxOutputTokens:  4096,
-			ModelID:          "mock-model",
+			MaxContextTokens:  100000,
+			MaxOutputTokens:   4096,
+			ModelID:           "mock-model",
 		},
 	}
 }
@@ -527,7 +527,7 @@ func TestAgent_Stream_SimpleCompletion(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var events []agent.Event
+	events := make([]agent.Event, 0, 2)
 	for e := range ch {
 		events = append(events, e)
 	}
@@ -585,7 +585,7 @@ func TestAgent_SystemPromptIncluded(t *testing.T) {
 // --- Multi-Tool Tests ---
 
 func multiToolCallResponse(tools map[string]string) llm.CompletionResponse {
-	var calls []llm.ToolCall
+	calls := make([]llm.ToolCall, 0, len(tools))
 	i := 0
 	for name, args := range tools {
 		calls = append(calls, llm.ToolCall{
@@ -1073,7 +1073,7 @@ func TestAgent_Stream_ToolCall(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	var events []agent.Event
+	events := make([]agent.Event, 0, 8)
 	for e := range ch {
 		events = append(events, e)
 	}

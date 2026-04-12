@@ -18,10 +18,10 @@ func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
 
 	// Convert input schema (schema.JSON is map[string]any — MCP accepts any)
 	if def.InputSchema != nil {
-		t.InputSchema = map[string]any(def.InputSchema)
+		t.InputSchema = def.InputSchema
 	}
 	if def.OutputSchema != nil {
-		t.OutputSchema = map[string]any(def.OutputSchema)
+		t.OutputSchema = def.OutputSchema
 	}
 
 	// Convert annotations
@@ -82,11 +82,11 @@ func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
 func toSchemaJSON(v any) (schema.JSON, bool) {
 	switch val := v.(type) {
 	case map[string]any:
-		return schema.JSON(val), true
+		return val, true
 	case json.RawMessage:
 		var m map[string]any
 		if err := json.Unmarshal(val, &m); err == nil {
-			return schema.JSON(m), true
+			return m, true
 		}
 	default:
 		data, err := json.Marshal(v)
@@ -95,7 +95,7 @@ func toSchemaJSON(v any) (schema.JSON, bool) {
 		}
 		var m map[string]any
 		if err := json.Unmarshal(data, &m); err == nil {
-			return schema.JSON(m), true
+			return m, true
 		}
 	}
 	return nil, false

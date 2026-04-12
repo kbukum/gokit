@@ -24,8 +24,8 @@ func (p *PointPayload) WithField(key string, value interface{}) *PointPayload {
 
 // SearchResult represents a single result from a vector search.
 type SearchResult struct {
-	ID      string       `json:"id"`
-	Score   float32      `json:"score"`
+	ID      string        `json:"id"`
+	Score   float32       `json:"score"`
 	Payload *PointPayload `json:"payload"`
 }
 

@@ -177,7 +177,7 @@ func (e *inMemoryExporter) Export(_ context.Context, records []sdklog.Record) er
 	return nil
 }
 
-func (e *inMemoryExporter) Shutdown(_ context.Context) error { return nil }
+func (e *inMemoryExporter) Shutdown(_ context.Context) error   { return nil }
 func (e *inMemoryExporter) ForceFlush(_ context.Context) error { return nil }
 
 func newTestOTLPProvider(exporter sdklog.Exporter) *OTLPProvider {

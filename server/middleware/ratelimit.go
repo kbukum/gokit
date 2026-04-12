@@ -76,14 +76,14 @@ func (rl *RateLimiterInstance) Stop() {
 
 // Allow checks whether the given key is permitted another request at the given RPM.
 // Returns (allowed, limit, remaining, retryAfterSecs, resetUnix).
-func (rl *RateLimiterInstance) Allow(key string, rpm int) (bool, int, int, float64, int64) {
+func (rl *RateLimiterInstance) Allow(key string, rpm int) (allowed bool, limit int, remaining int, retryAfterSecs float64, resetUnix int64) {
 	now := rl.nowFunc()
 
 	val, _ := rl.buckets.LoadOrStore(key, newTokenBucket(rpm, now))
 	bucket := val.(*tokenBucket)
 
 	allowed, remaining, retryAfter := bucket.allow(now)
-	resetUnix := now.Add(time.Duration(float64(time.Second) * (float64(rpm-remaining) / (float64(rpm) / 60.0)))).Unix()
+	resetUnix = now.Add(time.Duration(float64(time.Second) * (float64(rpm-remaining) / (float64(rpm) / 60.0)))).Unix()
 
 	return allowed, rpm, remaining, retryAfter, resetUnix
 }
@@ -148,7 +148,7 @@ func UserBasedKey(c *gin.Context) string {
 	return c.ClientIP()
 }
 
-func resolveKeyAndRPM(c *gin.Context, cfg RateLimitConfig) (string, int) {
+func resolveKeyAndRPM(c *gin.Context, cfg RateLimitConfig) (key string, rpm int) {
 	if cfg.LimitFunc != nil {
 		return cfg.LimitFunc(c)
 	}
@@ -166,18 +166,18 @@ type tokenBucket struct {
 }
 
 func newTokenBucket(rpm int, now time.Time) *tokenBucket {
-	max := float64(rpm)
+	maxT := float64(rpm)
 	return &tokenBucket{
-		tokens:     max,
-		maxTokens:  max,
-		refillRate: max / 60.0,
+		tokens:     maxT,
+		maxTokens:  maxT,
+		refillRate: maxT / 60.0,
 		lastRefill: now,
 		lastAccess: now,
 	}
 }
 
 // allow consumes one token and returns (allowed, remaining tokens, seconds until next token).
-func (b *tokenBucket) allow(now time.Time) (bool, int, float64) {
+func (b *tokenBucket) allow(now time.Time) (allowed bool, remaining int, retryAfterSecs float64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

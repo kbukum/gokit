@@ -20,7 +20,7 @@ type Callable interface {
 }
 
 // AsCallable converts a typed Tool[I,O] into a Callable by adding
-// JSON marshalling/unmarshalling around the typed handler.
+// JSON marshaling/unmarshaling around the typed handler.
 func (t *Tool[I, O]) AsCallable() Callable {
 	return &wrappedCallable[I, O]{tool: t}
 }

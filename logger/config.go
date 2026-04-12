@@ -16,10 +16,10 @@ type Config struct {
 	MaxAge       int               `yaml:"max_age" mapstructure:"max_age"`         // days
 	Compress     bool              `yaml:"compress" mapstructure:"compress"`
 	LocalTime    bool              `yaml:"local_time" mapstructure:"local_time"`
-	ServiceName string            `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
-	Environment string            `yaml:"environment" mapstructure:"environment"`   // deployment environment (e.g. development, staging, production)
-	Version     string            `yaml:"version" mapstructure:"version"`           // service version (e.g. 1.0.0)
-	Masking     MaskingConfig     `yaml:"masking" mapstructure:"masking"`
+	ServiceName  string            `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
+	Environment  string            `yaml:"environment" mapstructure:"environment"`   // deployment environment (e.g. development, staging, production)
+	Version      string            `yaml:"version" mapstructure:"version"`           // service version (e.g. 1.0.0)
+	Masking      MaskingConfig     `yaml:"masking" mapstructure:"masking"`
 	Sampling     SamplingConfig    `yaml:"sampling" mapstructure:"sampling"`
 	ModuleLevels map[string]string `yaml:"module_levels" mapstructure:"module_levels"` // e.g., {"database": "debug", "kafka": "warn"}
 	OTLP         OTLPConfig        `yaml:"otlp" mapstructure:"otlp"`

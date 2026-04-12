@@ -267,12 +267,12 @@ func TestClassifyStatusCode_NonStandardCodes(t *testing.T) {
 		wantCode  ErrorCode
 		retryable bool
 	}{
-		{418, ErrCodeValidation, false},  // I'm a teapot
-		{451, ErrCodeValidation, false},  // Unavailable For Legal Reasons
-		{502, ErrCodeServer, true},       // Bad Gateway
-		{599, ErrCodeServer, true},       // custom 5xx
-		{100, ErrCodeServer, false},      // Informational - falls to default
-		{301, ErrCodeServer, false},      // Redirect - falls to default
+		{418, ErrCodeValidation, false}, // I'm a teapot
+		{451, ErrCodeValidation, false}, // Unavailable For Legal Reasons
+		{502, ErrCodeServer, true},      // Bad Gateway
+		{599, ErrCodeServer, true},      // custom 5xx
+		{100, ErrCodeServer, false},     // Informational - falls to default
+		{301, ErrCodeServer, false},     // Redirect - falls to default
 	}
 	for _, tt := range tests {
 		e := ClassifyStatusCode(tt.code, []byte("body"))
@@ -366,7 +366,7 @@ func TestAdapter_Do_ContextCancellation(t *testing.T) {
 
 	_, err = a.Do(ctx, Request{Method: "GET", Path: "/"})
 	if err == nil {
-		t.Fatal("expected error from cancelled context")
+		t.Fatal("expected error from canceled context")
 	}
 	if !IsTimeout(err) {
 		t.Errorf("expected timeout error, got %T: %v", err, err)
@@ -515,7 +515,7 @@ func TestEscapeQuotes(t *testing.T) {
 
 func TestFlattenHeaders_MultiValue(t *testing.T) {
 	h := http.Header{
-		"X-Multi": {"first", "second"},
+		"X-Multi":  {"first", "second"},
 		"X-Single": {"only"},
 	}
 	flat := flattenHeaders(h)

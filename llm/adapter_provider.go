@@ -23,9 +23,9 @@ func NewProvider(a *Adapter, model string) *AdapterProvider {
 		adapter: a,
 		model:   model,
 		caps: Capabilities{
-			SupportsTools:    true,
+			SupportsTools:     true,
 			SupportsStreaming: true,
-			ModelID:          model,
+			ModelID:           model,
 		},
 	}
 }

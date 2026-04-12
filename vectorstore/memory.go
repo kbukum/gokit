@@ -1,6 +1,7 @@
 package vectorstore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -199,7 +200,7 @@ func valueEquals(a, b interface{}) bool {
 	bJSON, err2 := json.Marshal(b)
 
 	if err1 == nil && err2 == nil {
-		return string(aJSON) == string(bJSON)
+		return bytes.Equal(aJSON, bJSON)
 	}
 
 	return false

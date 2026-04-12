@@ -134,19 +134,15 @@ func (f *DiscoveryConnectionFactory) buildDialOptions() ([]grpc.DialOption, erro
 	if err != nil {
 		return nil, err
 	}
-	opts = append(opts, grpc.WithTransportCredentials(creds))
-
-	// Keepalive configuration
 	opts = append(opts,
+		grpc.WithTransportCredentials(creds),
+		// Keepalive configuration
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                f.gRPCCfg.Keepalive.Time,
 			Timeout:             f.gRPCCfg.Keepalive.Timeout,
 			PermitWithoutStream: f.gRPCCfg.Keepalive.PermitWithoutStream,
 		}),
-	)
-
-	// Message size limits
-	opts = append(opts,
+		// Message size limits
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(f.gRPCCfg.MaxRecvMsgSize),
 			grpc.MaxCallSendMsgSize(f.gRPCCfg.MaxSendMsgSize),

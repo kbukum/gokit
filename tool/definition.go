@@ -54,6 +54,3 @@ type Annotations struct {
 	// Empty string defaults to "backend" for backward compatibility.
 	ExecutionHint string `json:"executionHint,omitempty"`
 }
-
-// boolPtr is a helper for creating *bool values in annotations.
-func boolPtr(v bool) *bool { return &v }

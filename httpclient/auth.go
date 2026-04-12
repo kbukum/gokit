@@ -74,6 +74,8 @@ func (a *AuthConfig) apply(req *http.Request) {
 		return
 	}
 	switch a.Type {
+	case AuthNone:
+		return
 	case AuthBearer:
 		req.Header.Set("Authorization", "Bearer "+a.Token)
 	case AuthBasic:

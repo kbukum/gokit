@@ -33,7 +33,7 @@ func Connect(ctx context.Context, transport sdkmcp.Transport, opts *ConnectOptio
 	var callables []tool.Callable
 	for t, err := range session.Tools(ctx, nil) {
 		if err != nil {
-			session.Close()
+			_ = session.Close()
 			return nil, nil, fmt.Errorf("mcp list tools: %w", err)
 		}
 		name := t.Name

@@ -86,8 +86,8 @@ func (TurnEnd) Type() hook.EventType { return EventTurnEnd }
 
 // ContextCompacted is emitted after the context window is compacted.
 type ContextCompacted struct {
-	OldTokens int `json:"old_tokens"`
-	NewTokens int `json:"new_tokens"`
+	OldTokens int    `json:"old_tokens"`
+	NewTokens int    `json:"new_tokens"`
 	Strategy  string `json:"strategy"`
 }
 

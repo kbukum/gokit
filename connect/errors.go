@@ -24,6 +24,8 @@ func IsTransientError(err error) bool {
 		switch connectErr.Code() {
 		case connectrpc.CodeUnavailable, connectrpc.CodeResourceExhausted, connectrpc.CodeAborted:
 			return true
+		default:
+			// other codes are not considered transient at the RPC level
 		}
 	}
 
