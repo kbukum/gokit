@@ -13,15 +13,19 @@ const (
 
 // ParseFromRequest extracts query params from an HTTP request.
 // Supports PostgREST/Supabase filter format: field=op.value
+// Accepts page size from: pageSize, page_size, per_page, or limit (in priority order).
 func ParseFromRequest(r *http.Request, config Config) Params {
 	q := r.URL.Query()
+
+	defPS := config.defaultPageSize()
+	maxPS := config.maxPageSize()
 
 	limitStr := q.Get("limit")
 	noPagination := limitStr == "-1" || limitStr == "all"
 
 	params := Params{
 		Page:         intOrDefault(q.Get("page"), 1),
-		PageSize:     clamp(intOrDefault(limitStr, DefaultPageSize), 1, MaxPageSize),
+		PageSize:     clamp(intOrDefault(limitStr, defPS), 1, maxPS),
 		NoPagination: noPagination,
 		SortBy:       q.Get("sortBy"),
 		SortOrder:    normalizeSortOrder(q.Get("order")),
@@ -31,11 +35,24 @@ func ParseFromRequest(r *http.Request, config Config) Params {
 		},
 	}
 
+	// Check page size params in priority order: pageSize > page_size > per_page
 	if ps := q.Get("pageSize"); ps != "" {
 		if ps == "-1" || ps == "all" {
 			params.NoPagination = true
 		} else {
-			params.PageSize = clamp(intOrDefault(ps, DefaultPageSize), 1, MaxPageSize)
+			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
+		}
+	} else if ps := q.Get("page_size"); ps != "" {
+		if ps == "-1" || ps == "all" {
+			params.NoPagination = true
+		} else {
+			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
+		}
+	} else if ps := q.Get("per_page"); ps != "" {
+		if ps == "-1" || ps == "all" {
+			params.NoPagination = true
+		} else {
+			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
 		}
 	}
 

@@ -17,7 +17,7 @@ type incrementOp struct {
 	id string
 }
 
-func (o *incrementOp) ID() string { return o.id }
+func (o *incrementOp) ID() string   { return o.id }
 func (o *incrementOp) Name() string { return o.id }
 func (o *incrementOp) Execute(_ context.Context, input any, progress chain.ProgressFn) (any, error) {
 	n, _ := input.(int)
@@ -31,7 +31,7 @@ type failOp struct {
 	id string
 }
 
-func (o *failOp) ID() string { return o.id }
+func (o *failOp) ID() string   { return o.id }
 func (o *failOp) Name() string { return o.id }
 func (o *failOp) Execute(_ context.Context, _ any, _ chain.ProgressFn) (any, error) {
 	return nil, fmt.Errorf("intentional failure")
@@ -43,7 +43,7 @@ type cleanupTracker struct {
 	cleaned *atomic.Bool
 }
 
-func (o *cleanupTracker) ID() string { return o.id }
+func (o *cleanupTracker) ID() string   { return o.id }
 func (o *cleanupTracker) Name() string { return o.id }
 func (o *cleanupTracker) Execute(_ context.Context, input any, _ chain.ProgressFn) (any, error) {
 	return input, nil

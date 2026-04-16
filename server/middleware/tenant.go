@@ -72,6 +72,13 @@ func TenantFromContext(ctx context.Context) (string, bool) {
 	return tenantID, ok
 }
 
+// SetTenantInContext stores a tenant ID in the context. This is useful when
+// composing custom middleware that needs to set the tenant value without running
+// the full Tenant middleware chain (which calls c.Next()).
+func SetTenantInContext(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, tenantKey, tenantID)
+}
+
 // MustTenantFromContext retrieves the tenant ID from the request context.
 // Panics if tenant ID is missing.
 // Use in handlers where Tenant middleware guarantees tenant ID exists.

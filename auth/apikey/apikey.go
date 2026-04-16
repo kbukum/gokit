@@ -3,6 +3,7 @@ package apikey
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -72,6 +73,14 @@ func Generate(prefix string) (*GenerateResult, error) {
 func Hash(plainKey string) string {
 	h := sha256.Sum256([]byte(plainKey))
 	return hex.EncodeToString(h[:])
+}
+
+// CompareHash performs a constant-time comparison between the hash of a plaintext
+// key and a stored hash. Returns true if they match. This prevents timing attacks
+// that could leak information about stored hashes.
+func CompareHash(plainKey, storedHash string) bool {
+	computed := Hash(plainKey)
+	return subtle.ConstantTimeCompare([]byte(computed), []byte(storedHash)) == 1
 }
 
 // Validate checks whether a key is usable: active and not expired past grace.

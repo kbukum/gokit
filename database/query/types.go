@@ -94,9 +94,27 @@ type Config struct {
 	AllowedFilters    []string
 	FieldAliases      map[string]string
 	DefaultSort       string
+	DefaultPageSize   int
+	MaxPageSize       int
 	FacetFields       []string
 	FacetLabels       map[string]string
 	IncludeConfig     IncludeConfig
+}
+
+// defaultPageSize returns the configured default or the global DefaultPageSize.
+func (c Config) defaultPageSize() int {
+	if c.DefaultPageSize > 0 {
+		return c.DefaultPageSize
+	}
+	return DefaultPageSize
+}
+
+// maxPageSize returns the configured max or the global MaxPageSize.
+func (c Config) maxPageSize() int {
+	if c.MaxPageSize > 0 {
+		return c.MaxPageSize
+	}
+	return MaxPageSize
 }
 
 // ResolveField returns the actual column name for a field, using FieldAliases if available.
