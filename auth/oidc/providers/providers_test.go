@@ -679,7 +679,7 @@ func TestPostExchangeHook(t *testing.T) {
 		ProviderConfig: mockProviderConfig(),
 		ProviderName:   "ig-like",
 		TokenEndpoint:  srv.TokenURL(),
-		PostExchangeHook: func(_ context.Context, cfg ProviderConfig, token *oidc.TokenResult) (*oidc.TokenResult, error) {
+		PostExchangeHook: func(_ context.Context, _ *http.Client, cfg ProviderConfig, token *oidc.TokenResult) (*oidc.TokenResult, error) {
 			hookCalled = true
 			// Simulate exchanging short-lived for long-lived token
 			return &oidc.TokenResult{
@@ -710,7 +710,7 @@ func TestPostExchangeHookErrorFallsBack(t *testing.T) {
 		ProviderConfig: mockProviderConfig(),
 		ProviderName:   "ig-fail",
 		TokenEndpoint:  srv.TokenURL(),
-		PostExchangeHook: func(_ context.Context, _ ProviderConfig, _ *oidc.TokenResult) (*oidc.TokenResult, error) {
+		PostExchangeHook: func(_ context.Context, _ *http.Client, _ ProviderConfig, _ *oidc.TokenResult) (*oidc.TokenResult, error) {
 			return nil, fmt.Errorf("long-lived exchange failed")
 		},
 	})
@@ -981,7 +981,7 @@ func TestExchangeCodeDirect(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
+	tok, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -996,7 +996,7 @@ func TestExchangeCodeWithCodeVerifier(t *testing.T) {
 
 	cfg := mockProviderConfig()
 	opts := oidc.ExchangeOptions{CodeVerifier: "my-verifier"}
-	_, err := ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code", opts, nil)
+	_, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", opts, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1013,7 +1013,7 @@ func TestExchangeCodeRedirectOverride(t *testing.T) {
 
 	cfg := mockProviderConfig()
 	opts := oidc.ExchangeOptions{RedirectURI: "http://overridden/callback"}
-	_, err := ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code", opts, nil)
+	_, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", opts, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1029,7 +1029,7 @@ func TestExchangeJSONDirect(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeJSON(context.Background(), srv.TokenURL(), cfg, "json-code", oidc.ExchangeOptions{}, "", nil)
+	tok, err := ExchangeJSON(context.Background(), nil, srv.TokenURL(), cfg, "json-code", oidc.ExchangeOptions{}, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1043,7 +1043,7 @@ func TestExchangeJSONCustomClientIDParam(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	_, err := ExchangeJSON(context.Background(), srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, "client_key", nil)
+	_, err := ExchangeJSON(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, "client_key", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1059,7 +1059,7 @@ func TestFetchJSON(t *testing.T) {
 	defer srv.Close()
 
 	var raw map[string]interface{}
-	err := FetchJSON(context.Background(), srv.UserInfoURL(), "test-token", &raw)
+	err := FetchJSON(context.Background(), nil, srv.UserInfoURL(), "test-token", &raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1543,8 +1543,8 @@ func TestMockServerReset(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code1", oidc.ExchangeOptions{}, nil)
-	ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code2", oidc.ExchangeOptions{}, nil)
+	ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code1", oidc.ExchangeOptions{}, nil)
+	ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code2", oidc.ExchangeOptions{}, nil)
 
 	if len(srv.TokenRequests()) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(srv.TokenRequests()))
@@ -1566,7 +1566,7 @@ func TestMockServerCustomResponses(t *testing.T) {
 	})
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeCode(context.Background(), srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
+	tok, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

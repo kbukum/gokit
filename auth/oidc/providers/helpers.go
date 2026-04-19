@@ -13,8 +13,13 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// httpClient is a shared HTTP client with sensible defaults.
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+// resolveClient returns the given client if non-nil, otherwise DefaultHTTPClient.
+func resolveClient(client *http.Client) *http.Client {
+	if client != nil {
+		return client
+	}
+	return DefaultHTTPClient
+}
 
 // TokenResponse is the standard OAuth2 token response.
 // Exported for use by custom providers that implement oidc.Provider directly.
@@ -33,7 +38,7 @@ type tokenResponse struct {
 // ExchangeCode performs a standard OAuth2 authorization code exchange.
 // This is a low-level helper used by GenericProvider. Custom providers
 // that can't use GenericConfig can call this directly.
-func ExchangeCode(ctx context.Context, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, extraHeaders map[string]string) (*tokenResponse, error) {
+func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, extraHeaders map[string]string) (*tokenResponse, error) {
 	redirectURI := opts.RedirectURI
 	if redirectURI == "" {
 		redirectURI = cfg.RedirectURL
@@ -59,7 +64,7 @@ func ExchangeCode(ctx context.Context, tokenURL string, cfg ProviderConfig, code
 		req.Header.Set(k, v)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := resolveClient(client).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %w", err)
 	}
@@ -83,7 +88,7 @@ func ExchangeCode(ctx context.Context, tokenURL string, cfg ProviderConfig, code
 
 // ExchangeJSON performs a token exchange using a JSON request body.
 // Used by providers like TikTok that require JSON instead of form-encoded.
-func ExchangeJSON(ctx context.Context, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, clientIDParam string, extraHeaders map[string]string) (*tokenResponse, error) {
+func ExchangeJSON(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, clientIDParam string, extraHeaders map[string]string) (*tokenResponse, error) {
 	redirectURI := opts.RedirectURI
 	if redirectURI == "" {
 		redirectURI = cfg.RedirectURL
@@ -119,7 +124,7 @@ func ExchangeJSON(ctx context.Context, tokenURL string, cfg ProviderConfig, code
 		req.Header.Set(k, v)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := resolveClient(client).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %w", err)
 	}
@@ -138,14 +143,14 @@ func ExchangeJSON(ctx context.Context, tokenURL string, cfg ProviderConfig, code
 }
 
 // FetchJSON performs a GET request with a Bearer token and decodes JSON.
-func FetchJSON(ctx context.Context, endpoint, accessToken string, result interface{}) error {
+func FetchJSON(ctx context.Context, client *http.Client, endpoint, accessToken string, result interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := httpClient.Do(req)
+	resp, err := resolveClient(client).Do(req)
 	if err != nil {
 		return err
 	}

@@ -111,6 +111,15 @@ func (m *Manager) UserInfo(ctx context.Context, providerName, accessToken string
 	return p.UserInfo(ctx, accessToken)
 }
 
+// Refresh refreshes tokens with the named provider.
+func (m *Manager) Refresh(ctx context.Context, providerName string, token oidc.RefreshInput) (*oidc.TokenResult, error) {
+	p, err := m.Get(providerName)
+	if err != nil {
+		return nil, err
+	}
+	return p.Refresh(ctx, token)
+}
+
 // ExchangeAndUserInfo performs token exchange followed by user info fetch.
 // For providers that don't support a UserInfo endpoint (e.g., Apple with
 // IDTokenAsUserInfo=true), it automatically falls back to parsing the ID token

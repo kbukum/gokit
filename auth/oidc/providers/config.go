@@ -22,9 +22,14 @@ package providers
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	"github.com/kbukum/gokit/auth/oidc"
 )
+
+// DefaultHTTPClient is the default HTTP client used when GenericConfig.HTTPClient is nil.
+var DefaultHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // ProviderConfig holds common OAuth2 credentials for all providers.
 type ProviderConfig struct {
@@ -140,9 +145,31 @@ type GenericConfig struct {
 
 	// PostExchangeHook is called after a successful token exchange.
 	// Use for provider-specific post-processing (e.g., Instagram long-lived token exchange).
+	// The client parameter is the resolved HTTP client from GenericConfig.HTTPClient.
 	// Return the (possibly modified) TokenResult, or an error.
 	// If nil, the token exchange result is used as-is.
-	PostExchangeHook func(ctx context.Context, cfg ProviderConfig, token *oidc.TokenResult) (*oidc.TokenResult, error)
+	PostExchangeHook func(ctx context.Context, client *http.Client, cfg ProviderConfig, token *oidc.TokenResult) (*oidc.TokenResult, error)
+
+	// --- Token Refresh Customization ---
+
+	// RefreshEndpoint is the OAuth2 token refresh URL.
+	// Defaults to TokenEndpoint for standard OAuth2 providers.
+	// Override for providers that use a different endpoint for refresh
+	// (e.g., Instagram uses graph.instagram.com/refresh_access_token).
+	RefreshEndpoint string
+
+	// RefreshFunc is a custom refresh implementation for providers that don't
+	// follow standard OAuth2 refresh_token grant (RFC 6749 §6).
+	// Examples: Facebook fb_exchange_token, Instagram ig_refresh_token,
+	// TikTok JSON body with client_key.
+	// If nil, uses standard form-encoded refresh_token grant via oidc.RefreshToken().
+	RefreshFunc func(ctx context.Context, client *http.Client, cfg ProviderConfig, token oidc.RefreshInput) (*oidc.TokenResult, error)
+
+	// --- HTTP Client ---
+
+	// HTTPClient is the HTTP client used for token exchange, user info, and
+	// any hook requests. Default: &http.Client{Timeout: 10 * time.Second}.
+	HTTPClient *http.Client
 }
 
 // WithDefaultScopes returns a copy of cfg with default scopes if none are set.

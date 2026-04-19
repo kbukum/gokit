@@ -44,6 +44,15 @@ type MockProvider struct {
 	// UserInfoErr is returned by UserInfo when set.
 	UserInfoErr error
 
+	// RefreshResult is returned by Refresh when RefreshErr is nil.
+	RefreshResult *oidc.TokenResult
+
+	// RefreshErr is returned by Refresh when set.
+	RefreshErr error
+
+	// RefreshFunc, if set, is called instead of returning RefreshResult/RefreshErr.
+	RefreshFunc func(ctx context.Context, token oidc.RefreshInput) (*oidc.TokenResult, error)
+
 	// ExchangeFunc, if set, is called instead of returning ExchangeResult/ExchangeErr.
 	// This allows dynamic behavior in tests.
 	ExchangeFunc func(ctx context.Context, code string, opts ...oidc.ExchangeOption) (*oidc.TokenResult, error)
@@ -54,6 +63,7 @@ type MockProvider struct {
 	mu            sync.Mutex
 	exchangeCalls []string // codes passed to Exchange
 	userInfoCalls []string // tokens passed to UserInfo
+	refreshCalls  []oidc.RefreshInput
 	authURLCalls  []AuthURLCall
 }
 
@@ -130,6 +140,23 @@ func (m *MockProvider) UserInfo(ctx context.Context, accessToken string) (*oidc.
 	return nil, errors.New("mock: no userinfo result configured")
 }
 
+func (m *MockProvider) Refresh(ctx context.Context, token oidc.RefreshInput) (*oidc.TokenResult, error) {
+	m.mu.Lock()
+	m.refreshCalls = append(m.refreshCalls, token)
+	m.mu.Unlock()
+
+	if m.RefreshFunc != nil {
+		return m.RefreshFunc(ctx, token)
+	}
+	if m.RefreshErr != nil {
+		return nil, m.RefreshErr
+	}
+	if m.RefreshResult != nil {
+		return m.RefreshResult, nil
+	}
+	return nil, errors.New("mock: no refresh result configured")
+}
+
 // --- Inspection ---
 
 // ExchangeCalls returns all authorization codes passed to Exchange.
@@ -150,6 +177,15 @@ func (m *MockProvider) UserInfoCalls() []string {
 	return cp
 }
 
+// RefreshCalls returns all RefreshInput values passed to Refresh.
+func (m *MockProvider) RefreshCalls() []oidc.RefreshInput {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]oidc.RefreshInput, len(m.refreshCalls))
+	copy(cp, m.refreshCalls)
+	return cp
+}
+
 // AuthURLCalls returns all recorded AuthURL invocations.
 func (m *MockProvider) AuthURLCalls() []AuthURLCall {
 	m.mu.Lock()
@@ -165,5 +201,6 @@ func (m *MockProvider) Reset() {
 	defer m.mu.Unlock()
 	m.exchangeCalls = nil
 	m.userInfoCalls = nil
+	m.refreshCalls = nil
 	m.authURLCalls = nil
 }

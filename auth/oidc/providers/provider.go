@@ -64,7 +64,7 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 	var result *oidc.TokenResult
 
 	if p.cfg.TokenRequestFormat == "json" {
-		tok, err := ExchangeJSON(ctx, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.ClientIDParam, p.cfg.TokenExtraHeaders)
+		tok, err := ExchangeJSON(ctx, p.cfg.HTTPClient, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.ClientIDParam, p.cfg.TokenExtraHeaders)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
 		}
@@ -74,7 +74,7 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 			result.Scopes = strings.Split(tok.Scope, ",")
 		}
 	} else {
-		tok, err := ExchangeCode(ctx, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.TokenExtraHeaders)
+		tok, err := ExchangeCode(ctx, p.cfg.HTTPClient, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.TokenExtraHeaders)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
 		}
@@ -83,13 +83,42 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 
 	// Run post-exchange hook if configured (e.g., Instagram long-lived token exchange)
 	if p.cfg.PostExchangeHook != nil {
-		hooked, err := p.cfg.PostExchangeHook(ctx, cfg, result)
+		hooked, err := p.cfg.PostExchangeHook(ctx, resolveClient(p.cfg.HTTPClient), cfg, result)
 		if err != nil {
 			return result, nil // fall back to original token if hook fails
 		}
 		return hooked, nil
 	}
 
+	return result, nil
+}
+
+func (p *GenericProvider) Refresh(ctx context.Context, token oidc.RefreshInput) (*oidc.TokenResult, error) {
+	// Custom refresh (TikTok JSON, Facebook fb_exchange_token, Instagram ig_refresh_token)
+	if p.cfg.RefreshFunc != nil {
+		result, err := p.cfg.RefreshFunc(ctx, resolveClient(p.cfg.HTTPClient), p.cfg.ProviderConfig, token)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
+		}
+		return result, nil
+	}
+
+	// Standard OAuth2 refresh_token grant (RFC 6749 §6)
+	endpoint := p.cfg.RefreshEndpoint
+	if endpoint == "" {
+		endpoint = p.cfg.TokenEndpoint
+	}
+
+	result, err := oidc.RefreshToken(ctx, oidc.RefreshConfig{
+		TokenEndpoint: endpoint,
+		ClientID:      p.cfg.ClientID,
+		ClientSecret:  p.cfg.ClientSecret,
+		RefreshToken:  token.RefreshToken,
+		HTTPClient:    resolveClient(p.cfg.HTTPClient),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
+	}
 	return result, nil
 }
 
@@ -110,7 +139,7 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	}
 
 	var raw map[string]interface{}
-	if err := FetchJSON(ctx, reqURL, accessToken, &raw); err != nil {
+	if err := FetchJSON(ctx, p.cfg.HTTPClient, reqURL, accessToken, &raw); err != nil {
 		return nil, fmt.Errorf("%s userinfo: %w", p.cfg.ProviderName, err)
 	}
 

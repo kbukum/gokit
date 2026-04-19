@@ -7,8 +7,8 @@ import "context"
 // Custom providers can implement this interface directly if GenericConfig
 // doesn't cover their needs.
 //
-// This interface covers the Authorization Code flow — the most common
-// server-side OAuth2 pattern.
+// This interface covers the full OAuth2 token lifecycle: authorization,
+// exchange, user info, and token refresh.
 type Provider interface {
 	// Name returns the provider identifier (e.g., "google", "github").
 	Name() string
@@ -26,6 +26,20 @@ type Provider interface {
 	// Providers that don't support a UserInfo endpoint (e.g., Apple) should return
 	// an error here; the Manager will automatically fall back to parsing the ID token.
 	UserInfo(ctx context.Context, accessToken string) (*UserInfo, error)
+
+	// Refresh exchanges current tokens for a new token set.
+	// Standard OAuth2 providers use RefreshToken; platforms like Facebook/Instagram
+	// that don't issue refresh tokens use AccessToken instead.
+	// The provider implementation knows which field to use.
+	Refresh(ctx context.Context, token RefreshInput) (*TokenResult, error)
+}
+
+// RefreshInput holds the tokens available for a refresh operation.
+// Standard OAuth2 providers use RefreshToken; platforms that don't issue
+// refresh tokens (Facebook, Instagram) use AccessToken instead.
+type RefreshInput struct {
+	RefreshToken string
+	AccessToken  string
 }
 
 // ProviderMeta is an optional interface that providers can implement to expose

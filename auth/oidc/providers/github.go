@@ -81,7 +81,7 @@ func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) 
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	resp, err := httpClient.Do(req)
+	resp, err := DefaultHTTPClient.Do(req)
 	if err != nil {
 		return "", false, err
 	}
