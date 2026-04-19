@@ -25,13 +25,16 @@ type Meta struct {
 
 // RespondWithError inspects err: if it is an *apperrors.AppError the status and
 // structured body are derived automatically; otherwise a generic 500 is sent.
+// The response uses Content-Type: application/problem+json per RFC 9457.
 func RespondWithError(c *gin.Context, err error) {
 	var appErr *apperrors.AppError
-	if errors.As(err, &appErr) {
-		c.JSON(appErr.HTTPStatus, appErr.ToResponse())
-		return
+	if !errors.As(err, &appErr) {
+		appErr = apperrors.Internal(err)
 	}
-	c.JSON(http.StatusInternalServerError, apperrors.Internal(err).ToResponse())
+	pd := appErr.ToProblemDetail()
+	pd.Instance = c.Request.URL.Path
+	c.Header("Content-Type", "application/problem+json")
+	c.JSON(appErr.HTTPStatus, pd)
 }
 
 // RespondOK sends a 200 response wrapping data.
@@ -63,25 +66,25 @@ func RespondAccepted(c *gin.Context, data any) {
 
 // RespondBadRequest sends a 400 response with the given message.
 func RespondBadRequest(c *gin.Context, message string) {
-	c.JSON(http.StatusBadRequest, apperrors.InvalidInput("", message).ToResponse())
+	RespondWithError(c, apperrors.InvalidInput("", message))
 }
 
 // RespondNotFound sends a 404 response for the given resource.
 func RespondNotFound(c *gin.Context, resource string) {
-	c.JSON(http.StatusNotFound, apperrors.NotFound(resource, "").ToResponse())
+	RespondWithError(c, apperrors.NotFound(resource, ""))
 }
 
 // RespondUnauthorized sends a 401 response.
 func RespondUnauthorized(c *gin.Context, message string) {
-	c.JSON(http.StatusUnauthorized, apperrors.Unauthorized(message).ToResponse())
+	RespondWithError(c, apperrors.Unauthorized(message))
 }
 
 // RespondForbidden sends a 403 response.
 func RespondForbidden(c *gin.Context, message string) {
-	c.JSON(http.StatusForbidden, apperrors.Forbidden(message).ToResponse())
+	RespondWithError(c, apperrors.Forbidden(message))
 }
 
 // RespondInternalError sends a 500 response for the given cause.
 func RespondInternalError(c *gin.Context, cause error) {
-	c.JSON(http.StatusInternalServerError, apperrors.Internal(cause).ToResponse())
+	RespondWithError(c, apperrors.Internal(cause))
 }

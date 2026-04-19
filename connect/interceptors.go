@@ -2,6 +2,7 @@ package connect
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -84,13 +85,22 @@ func ErrorInterceptor() connect.UnaryInterceptorFunc {
 }
 
 // ToConnectError converts an AppError to a *connect.Error with the
-// appropriate Connect status code.
+// appropriate Connect status code. The ProblemDetail JSON is embedded in the
+// error's metadata under the "Problem-Detail" key so callers can reconstruct
+// the full RFC 9457 response.
 func ToConnectError(appErr *apperrors.AppError) *connect.Error {
 	if appErr == nil {
 		return nil
 	}
 	code := appErrorCodeToConnect(appErr.Code)
-	return connect.NewError(code, errors.New(appErr.Message))
+	cerr := connect.NewError(code, errors.New(appErr.Message))
+
+	pd := appErr.ToProblemDetail()
+	if pdJSON, err := json.Marshal(pd); err == nil {
+		cerr.Meta().Set("Problem-Detail", string(pdJSON))
+	}
+
+	return cerr
 }
 
 // FromConnectError converts a Connect error to an AppError.
@@ -167,3 +177,4 @@ func sanitizeMessage(msg string) string {
 	}
 	return msg
 }
+

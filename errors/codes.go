@@ -1,5 +1,7 @@
 package errors
 
+import "google.golang.org/grpc/codes"
+
 // ErrorCode represents a machine-readable error code.
 type ErrorCode string
 
@@ -69,4 +71,32 @@ var retryableCodes = map[ErrorCode]bool{
 // IsRetryableCode returns true if the error code indicates a retryable error.
 func IsRetryableCode(code ErrorCode) bool {
 	return retryableCodes[code]
+}
+
+// GRPCCode returns the gRPC status code corresponding to this error code.
+func (c ErrorCode) GRPCCode() codes.Code {
+	if code, ok := grpcCodeMap[c]; ok {
+		return code
+	}
+	return codes.Internal
+}
+
+var grpcCodeMap = map[ErrorCode]codes.Code{
+	ErrCodeNotFound:           codes.NotFound,
+	ErrCodeAlreadyExists:      codes.AlreadyExists,
+	ErrCodeInvalidInput:       codes.InvalidArgument,
+	ErrCodeMissingField:       codes.InvalidArgument,
+	ErrCodeInvalidFormat:      codes.InvalidArgument,
+	ErrCodeUnauthorized:       codes.Unauthenticated,
+	ErrCodeTokenExpired:       codes.Unauthenticated,
+	ErrCodeInvalidToken:       codes.Unauthenticated,
+	ErrCodeForbidden:          codes.PermissionDenied,
+	ErrCodeConflict:           codes.FailedPrecondition,
+	ErrCodeTimeout:            codes.DeadlineExceeded,
+	ErrCodeRateLimited:        codes.ResourceExhausted,
+	ErrCodeServiceUnavailable: codes.Unavailable,
+	ErrCodeConnectionFailed:   codes.Unavailable,
+	ErrCodeInternal:           codes.Internal,
+	ErrCodeDatabaseError:      codes.Internal,
+	ErrCodeExternalService:    codes.Internal,
 }

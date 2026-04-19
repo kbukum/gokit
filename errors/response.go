@@ -3,64 +3,80 @@ package errors
 import (
 	stderrors "errors"
 	"strings"
+	"sync/atomic"
+	"unicode"
 )
 
-// ErrorResponse is the JSON structure returned to clients following RFC 7807.
-type ErrorResponse struct {
-	// Error contains the error details.
-	Error ErrorBody `json:"error"`
+// typeBaseURI holds the configurable base URI for problem type URIs.
+// Default: "https://gokit.dev/errors/"
+var typeBaseURI atomic.Value
+
+func init() {
+	typeBaseURI.Store("https://gokit.dev/errors/")
 }
 
-// ErrorBody contains the error details sent to clients.
-type ErrorBody struct {
-	// Code is a machine-readable error code.
-	Code ErrorCode `json:"code" example:"NOT_FOUND"`
-	// Message is a human-readable error message.
-	Message string `json:"message" example:"Resource not found"`
-	// Retryable indicates if the operation can be retried.
-	Retryable bool `json:"retryable" example:"false"`
+// SetTypeBaseURI sets the base URI used when constructing ProblemDetail.Type.
+// The uri is normalised to always end with "/".
+func SetTypeBaseURI(uri string) {
+	if !strings.HasSuffix(uri, "/") {
+		uri += "/"
+	}
+	typeBaseURI.Store(uri)
+}
+
+// GetTypeBaseURI returns the current base URI.
+func GetTypeBaseURI() string {
+	return typeBaseURI.Load().(string)
+}
+
+// ProblemDetail is the RFC 9457 Problem Details response type.
+type ProblemDetail struct {
+	// Type is a URI identifying the problem type.
+	Type string `json:"type"`
+	// Title is a short human-readable summary of the problem type.
+	Title string `json:"title"`
+	// Status is the HTTP status code.
+	Status int `json:"status"`
+	// Detail is a human-readable explanation specific to this occurrence.
+	Detail string `json:"detail"`
+	// Instance is an optional URI identifying the specific occurrence.
+	Instance string `json:"instance,omitempty"`
+	// Code is the machine-readable error code.
+	Code ErrorCode `json:"code"`
+	// Retryable indicates whether the client may retry the request.
+	Retryable bool `json:"retryable"`
 	// Details contains additional context for the error.
 	Details map[string]any `json:"details,omitempty"`
 }
 
-// ToResponse converts an AppError to an ErrorResponse for JSON serialization.
-func (e *AppError) ToResponse() ErrorResponse {
-	return ErrorResponse{
-		Error: ErrorBody{
-			Code:      e.Code,
-			Message:   e.Message,
-			Retryable: e.Retryable,
-			Details:   e.Details,
-		},
-	}
-}
-
-// RFC7807Response follows the RFC 7807 Problem Details for HTTP APIs format.
-// Use this for standards-compliant error responses alongside the existing ErrorResponse.
-type RFC7807Response struct {
-	// Type is a URI identifying the problem type.
-	Type string `json:"type"`
-	// Title is a short human-readable summary.
-	Title string `json:"title"`
-	// Status is the HTTP status code.
-	Status int `json:"status"`
-	// Detail is a human-readable explanation.
-	Detail string `json:"detail"`
-	// Instance is an optional URI identifying the specific occurrence.
-	Instance string `json:"instance,omitempty"`
-	// Extensions contains additional context.
-	Extensions map[string]string `json:"extensions,omitempty"`
-}
-
-// ToRFC7807 converts an AppError to an RFC 7807 Problem Details response.
-func (e *AppError) ToRFC7807() RFC7807Response {
+// ToProblemDetail converts an AppError to a ProblemDetail following RFC 9457.
+// Instance is left empty and should be populated by the HTTP middleware.
+func (e *AppError) ToProblemDetail() ProblemDetail {
 	kebab := strings.ToLower(strings.ReplaceAll(string(e.Code), "_", "-"))
-	return RFC7807Response{
-		Type:   "https://gokit.dev/errors/" + kebab,
-		Title:  string(e.Code),
-		Status: e.HTTPStatus,
-		Detail: e.Message,
+	return ProblemDetail{
+		Type:      GetTypeBaseURI() + kebab,
+		Title:     codeToTitle(e.Code),
+		Status:    e.HTTPStatus,
+		Detail:    e.Message,
+		Code:      e.Code,
+		Retryable: e.Retryable,
+		Details:   e.Details,
 	}
+}
+
+// codeToTitle converts a SCREAMING_SNAKE_CASE error code to a title-cased string.
+// e.g. NOT_FOUND → "Not Found", INTERNAL_ERROR → "Internal Error".
+func codeToTitle(code ErrorCode) string {
+	parts := strings.Split(string(code), "_")
+	for i, p := range parts {
+		if len(p) == 0 {
+			continue
+		}
+		runes := []rune(strings.ToLower(p))
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[i] = string(runes)
+	}
+	return strings.Join(parts, " ")
 }
 
 // IsAppError checks if an error is an AppError.

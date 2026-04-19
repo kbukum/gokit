@@ -43,12 +43,20 @@ func TestRecovery_Panic(t *testing.T) {
 		t.Fatalf("expected 500, got %d", rr.Code)
 	}
 
-	var body map[string]string
-	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+	var pd struct {
+		Code      string `json:"code"`
+		Detail    string `json:"detail"`
+		Retryable bool   `json:"retryable"`
+		Instance  string `json:"instance"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &pd); err != nil {
 		t.Fatalf("response is not valid JSON: %v", err)
 	}
-	if body["error"] != "Internal server error" {
-		t.Fatalf("unexpected error message: %s", body["error"])
+	if pd.Code != "INTERNAL_ERROR" {
+		t.Fatalf("unexpected error code: %s", pd.Code)
+	}
+	if pd.Detail == "" {
+		t.Fatal("expected non-empty detail message")
 	}
 }
 

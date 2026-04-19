@@ -262,17 +262,17 @@ func TestErrorCode_IsRetryableCode_Table(t *testing.T) {
 	}
 }
 
-func TestAppError_ToResponse_Success(t *testing.T) {
+func TestAppError_ToProblemDetail_Success(t *testing.T) {
 	err := NotFound("user", "42")
-	resp := err.ToResponse()
-	if resp.Error.Code != ErrCodeNotFound {
-		t.Errorf("expected code NOT_FOUND in response, got %s", resp.Error.Code)
+	pd := err.ToProblemDetail()
+	if pd.Code != ErrCodeNotFound {
+		t.Errorf("expected code NOT_FOUND in problem detail, got %s", pd.Code)
 	}
-	if resp.Error.Retryable != false {
-		t.Error("expected retryable=false in response")
+	if pd.Retryable != false {
+		t.Error("expected retryable=false in problem detail")
 	}
-	if resp.Error.Details["resource"] != "user" {
-		t.Error("expected resource=user in response details")
+	if pd.Details["resource"] != "user" {
+		t.Error("expected resource=user in problem detail details")
 	}
 }
 
@@ -494,10 +494,10 @@ func TestIsRetryableCode_UnknownCode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 3. RFC 7807 Response
+// 3. RFC 9457 ProblemDetail
 // ---------------------------------------------------------------------------
 
-func TestToRFC7807_AllCodes(t *testing.T) {
+func TestToProblemDetail_AllCodes(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		code        ErrorCode
@@ -547,49 +547,49 @@ func TestToRFC7807_AllCodes(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			t.Parallel()
 			err := constructorForCode[tc.code]()
-			rfc := err.ToRFC7807()
+			pd := err.ToProblemDetail()
 
-			if rfc.Type != tc.expectedURL {
-				t.Errorf("Type = %q, want %q", rfc.Type, tc.expectedURL)
+			if pd.Type != tc.expectedURL {
+				t.Errorf("Type = %q, want %q", pd.Type, tc.expectedURL)
 			}
-			if rfc.Title != string(tc.code) {
-				t.Errorf("Title = %q, want %q", rfc.Title, string(tc.code))
+			if pd.Status != tc.status {
+				t.Errorf("Status = %d, want %d", pd.Status, tc.status)
 			}
-			if rfc.Status != tc.status {
-				t.Errorf("Status = %d, want %d", rfc.Status, tc.status)
-			}
-			if rfc.Detail == "" {
+			if pd.Detail == "" {
 				t.Error("Detail should not be empty")
+			}
+			if pd.Code != tc.code {
+				t.Errorf("Code = %q, want %q", pd.Code, tc.code)
 			}
 		})
 	}
 }
 
-func TestToRFC7807_Detail(t *testing.T) {
+func TestToProblemDetail_Detail(t *testing.T) {
 	t.Parallel()
 	err := NotFound("user", "42")
-	rfc := err.ToRFC7807()
-	if rfc.Detail != err.Message {
-		t.Errorf("Detail = %q, want %q", rfc.Detail, err.Message)
+	pd := err.ToProblemDetail()
+	if pd.Detail != err.Message {
+		t.Errorf("Detail = %q, want %q", pd.Detail, err.Message)
 	}
 }
 
-func TestToRFC7807_EmptyError(t *testing.T) {
+func TestToProblemDetail_EmptyError(t *testing.T) {
 	t.Parallel()
 	err := &AppError{}
-	rfc := err.ToRFC7807()
-	if rfc.Type != "https://gokit.dev/errors/" {
-		t.Errorf("Type = %q, want base URL with empty code", rfc.Type)
+	pd := err.ToProblemDetail()
+	if pd.Type != "https://gokit.dev/errors/" {
+		t.Errorf("Type = %q, want base URL with empty code", pd.Type)
 	}
-	if rfc.Status != 0 {
-		t.Errorf("Status = %d, want 0 for zero-value AppError", rfc.Status)
+	if pd.Status != 0 {
+		t.Errorf("Status = %d, want 0 for zero-value AppError", pd.Status)
 	}
-	if rfc.Detail != "" {
-		t.Errorf("Detail = %q, want empty", rfc.Detail)
+	if pd.Detail != "" {
+		t.Errorf("Detail = %q, want empty", pd.Detail)
 	}
 }
 
-func TestToRFC7807_KebabCaseConversion(t *testing.T) {
+func TestToProblemDetail_KebabCaseConversion(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		code     ErrorCode
@@ -604,12 +604,62 @@ func TestToRFC7807_KebabCaseConversion(t *testing.T) {
 		t.Run(string(tc.code), func(t *testing.T) {
 			t.Parallel()
 			err := &AppError{Code: tc.code}
-			rfc := err.ToRFC7807()
+			pd := err.ToProblemDetail()
 			wantURL := "https://gokit.dev/errors/" + tc.expected
-			if rfc.Type != wantURL {
-				t.Errorf("Type = %q, want %q", rfc.Type, wantURL)
+			if pd.Type != wantURL {
+				t.Errorf("Type = %q, want %q", pd.Type, wantURL)
 			}
 		})
+	}
+}
+
+func TestToProblemDetail_TitleCase(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		code  ErrorCode
+		title string
+	}{
+		{ErrCodeNotFound, "Not Found"},
+		{ErrCodeInternal, "Internal Error"},
+		{ErrCodeServiceUnavailable, "Service Unavailable"},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.code), func(t *testing.T) {
+			t.Parallel()
+			err := &AppError{Code: tc.code}
+			pd := err.ToProblemDetail()
+			if pd.Title != tc.title {
+				t.Errorf("Title = %q, want %q", pd.Title, tc.title)
+			}
+		})
+	}
+}
+
+func TestSetTypeBaseURI(t *testing.T) {
+	t.Parallel()
+	original := GetTypeBaseURI()
+	defer SetTypeBaseURI(original)
+
+	SetTypeBaseURI("https://example.com/problems")
+	if GetTypeBaseURI() != "https://example.com/problems/" {
+		t.Errorf("GetTypeBaseURI() = %q, want trailing slash normalised", GetTypeBaseURI())
+	}
+
+	err := NotFound("item", "1")
+	pd := err.ToProblemDetail()
+	if !strings.HasPrefix(pd.Type, "https://example.com/problems/") {
+		t.Errorf("Type = %q, want prefix https://example.com/problems/", pd.Type)
+	}
+}
+
+func TestSetTypeBaseURI_AlreadyHasSlash(t *testing.T) {
+	t.Parallel()
+	original := GetTypeBaseURI()
+	defer SetTypeBaseURI(original)
+
+	SetTypeBaseURI("https://example.com/p/")
+	if GetTypeBaseURI() != "https://example.com/p/" {
+		t.Errorf("GetTypeBaseURI() = %q, should not double-slash", GetTypeBaseURI())
 	}
 }
 
@@ -1110,107 +1160,84 @@ func TestUnwrap_ChainedCause(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Serialization: ToResponse and JSON round-trip
+// 9. Serialization: ToProblemDetail and JSON round-trip
 // ---------------------------------------------------------------------------
 
-func TestToResponse_AllFields(t *testing.T) {
+func TestToProblemDetail_AllFields(t *testing.T) {
 	t.Parallel()
 	err := NotFound("user", "42").WithDetail("trace", "xyz")
-	resp := err.ToResponse()
+	pd := err.ToProblemDetail()
 
-	if resp.Error.Code != ErrCodeNotFound {
-		t.Errorf("code = %s, want NOT_FOUND", resp.Error.Code)
+	if pd.Code != ErrCodeNotFound {
+		t.Errorf("code = %s, want NOT_FOUND", pd.Code)
 	}
-	if resp.Error.Message != err.Message {
-		t.Errorf("message = %q, want %q", resp.Error.Message, err.Message)
+	if pd.Detail != err.Message {
+		t.Errorf("detail = %q, want %q", pd.Detail, err.Message)
 	}
-	if resp.Error.Retryable != false {
+	if pd.Retryable != false {
 		t.Error("retryable should be false")
 	}
-	if resp.Error.Details["resource"] != "user" {
+	if pd.Details["resource"] != "user" {
 		t.Error("resource detail should be preserved")
 	}
-	if resp.Error.Details["trace"] != "xyz" {
+	if pd.Details["trace"] != "xyz" {
 		t.Error("trace detail should be preserved")
 	}
 }
 
-func TestToResponse_NilDetails(t *testing.T) {
+func TestToProblemDetail_NilDetails(t *testing.T) {
 	t.Parallel()
 	err := Conflict("test")
-	resp := err.ToResponse()
-	if resp.Error.Details != nil {
-		t.Error("nil details should stay nil in response")
+	pd := err.ToProblemDetail()
+	if pd.Details != nil {
+		t.Error("nil details should stay nil in problem detail")
 	}
 }
 
-func TestToResponse_Retryable(t *testing.T) {
+func TestToProblemDetail_Retryable(t *testing.T) {
 	t.Parallel()
 	err := ServiceUnavailable("api")
-	resp := err.ToResponse()
-	if !resp.Error.Retryable {
+	pd := err.ToProblemDetail()
+	if !pd.Retryable {
 		t.Error("retryable should be true for ServiceUnavailable")
 	}
 }
 
-func TestJSON_RoundTrip_ErrorResponse(t *testing.T) {
+func TestJSON_RoundTrip_ProblemDetail(t *testing.T) {
 	t.Parallel()
 	original := NotFound("user", "42").WithDetail("extra", "data")
-	resp := original.ToResponse()
+	pd := original.ToProblemDetail()
 
-	data, err := json.Marshal(resp)
+	data, err := json.Marshal(pd)
 	if err != nil {
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 
-	var decoded ErrorResponse
+	var decoded ProblemDetail
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
 
-	if decoded.Error.Code != resp.Error.Code {
-		t.Errorf("code = %s, want %s", decoded.Error.Code, resp.Error.Code)
+	if decoded.Code != pd.Code {
+		t.Errorf("code = %s, want %s", decoded.Code, pd.Code)
 	}
-	if decoded.Error.Message != resp.Error.Message {
-		t.Errorf("message = %q, want %q", decoded.Error.Message, resp.Error.Message)
+	if decoded.Detail != pd.Detail {
+		t.Errorf("detail = %q, want %q", decoded.Detail, pd.Detail)
 	}
-	if decoded.Error.Retryable != resp.Error.Retryable {
-		t.Errorf("retryable = %v, want %v", decoded.Error.Retryable, resp.Error.Retryable)
+	if decoded.Retryable != pd.Retryable {
+		t.Errorf("retryable = %v, want %v", decoded.Retryable, pd.Retryable)
 	}
-	if decoded.Error.Details["resource"] != "user" {
+	if decoded.Type != pd.Type {
+		t.Errorf("type = %q, want %q", decoded.Type, pd.Type)
+	}
+	if decoded.Title != pd.Title {
+		t.Errorf("title = %q, want %q", decoded.Title, pd.Title)
+	}
+	if decoded.Details["resource"] != "user" {
 		t.Error("resource detail should survive round-trip")
 	}
-	if decoded.Error.Details["extra"] != "data" {
+	if decoded.Details["extra"] != "data" {
 		t.Error("extra detail should survive round-trip")
-	}
-}
-
-func TestJSON_RoundTrip_RFC7807(t *testing.T) {
-	t.Parallel()
-	original := Timeout("query")
-	rfc := original.ToRFC7807()
-
-	data, err := json.Marshal(rfc)
-	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
-	}
-
-	var decoded RFC7807Response
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("json.Unmarshal failed: %v", err)
-	}
-
-	if decoded.Type != rfc.Type {
-		t.Errorf("Type = %q, want %q", decoded.Type, rfc.Type)
-	}
-	if decoded.Title != rfc.Title {
-		t.Errorf("Title = %q, want %q", decoded.Title, rfc.Title)
-	}
-	if decoded.Status != rfc.Status {
-		t.Errorf("Status = %d, want %d", decoded.Status, rfc.Status)
-	}
-	if decoded.Detail != rfc.Detail {
-		t.Errorf("Detail = %q, want %q", decoded.Detail, rfc.Detail)
 	}
 }
 

@@ -1,26 +1,31 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
 
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logger"
 )
 
 // Recovery returns middleware that recovers from panics and returns a
-// 500 JSON error response.
+// 500 Problem Details error response.
 func Recovery(log *logger.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
 					logRecoveredPanic(log, err, r.URL.Path, r.Method, r.RemoteAddr)
-					w.Header().Set("Content-Type", "application/json")
+					pd := apperrors.Internal(fmt.Errorf("%v", err)).ToProblemDetail()
+					pd.Instance = r.URL.Path
+					w.Header().Set("Content-Type", "application/problem+json")
 					w.WriteHeader(http.StatusInternalServerError)
-					_, _ = w.Write([]byte(`{"error":"Internal server error"}`))
+					body, _ := json.Marshal(pd)
+					_, _ = w.Write(body)
 				}
 			}()
 			next.ServeHTTP(w, r)
