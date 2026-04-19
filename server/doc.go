@@ -4,6 +4,30 @@
 // The server follows gokit's component pattern with lifecycle management,
 // health endpoints, and configurable middleware.
 //
+// # API Documentation
+//
+// The server can serve interactive API documentation powered by Scalar UI.
+// Enable via config and provide an OpenAPI spec:
+//
+//	cfg := &server.Config{
+//	    Port: 8080,
+//	    Docs: server.DocsConfig{
+//	        Enabled:  true,
+//	        SpecFile: "./api/openapi.json",
+//	    },
+//	}
+//	srv := server.New(cfg, log)
+//	srv.MountDocsFromConfig()
+//
+// Or mount docs directly with [MountDocs] for full control:
+//
+//	server.MountDocs(engine, server.APIDoc{
+//	    Title:    "My API",
+//	    SpecPath: "/docs/openapi.json",
+//	    Spec:     specBytes,
+//	    UIPath:   "/docs",
+//	})
+//
 // # Middleware
 //
 // Built-in middleware (server/middleware):

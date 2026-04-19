@@ -23,6 +23,15 @@ type Config struct {
 type DocsConfig struct {
 	// Enabled controls whether API docs are served.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
+	// SpecPath is the route for the raw OpenAPI spec (default: "/docs/openapi.json").
+	SpecPath string `yaml:"spec_path" mapstructure:"spec_path"`
+	// UIPath is the route for the interactive Scalar UI (default: "/docs").
+	UIPath string `yaml:"ui_path" mapstructure:"ui_path"`
+	// Title is shown in the browser tab (default: "API Reference").
+	Title string `yaml:"title" mapstructure:"title"`
+	// SpecFile is an optional path to an OpenAPI spec file on disk.
+	// If set, the spec is loaded from this file at startup.
+	SpecFile string `yaml:"spec_file" mapstructure:"spec_file"`
 }
 
 // ApplyDefaults sets sensible default values for unset fields.

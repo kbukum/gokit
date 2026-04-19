@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -159,6 +160,11 @@ func (s *Server) Config() Config {
 	return s.config
 }
 
+// readSpecFile reads an OpenAPI spec file from disk.
+func readSpecFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
+
 // ApplyMiddleware applies the standard middleware stack at the handler level
 // so it covers ALL routes — both Gin REST endpoints and ConnectRPC services
 // mounted via Handle().
@@ -185,6 +191,58 @@ func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.H
 	s.engine.GET("/health", endpoint.Health(serviceName, checker))
 	s.engine.GET("/info", endpoint.Info(serviceName))
 	s.engine.GET("/metrics", endpoint.Metrics())
+}
+
+// MountDocsFromConfig mounts interactive API documentation using Scalar UI
+// based on the server's DocsConfig. If DocsConfig.Enabled is false, this is
+// a no-op. When SpecFile is set, the spec is loaded from disk; otherwise spec
+// must be provided via the optional specJSON parameter.
+//
+// This is a convenience wrapper around [MountDocs] for config-driven setups.
+func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
+	if !s.config.Docs.Enabled {
+		return
+	}
+
+	dc := s.config.Docs
+	if dc.UIPath == "" {
+		dc.UIPath = "/docs"
+	}
+	if dc.SpecPath == "" {
+		dc.SpecPath = "/docs/openapi.json"
+	}
+	if dc.Title == "" {
+		dc.Title = "API Reference"
+	}
+
+	var spec []byte
+	if dc.SpecFile != "" {
+		data, err := readSpecFile(dc.SpecFile)
+		if err != nil {
+			s.log.Error("Failed to load OpenAPI spec file", map[string]interface{}{
+				"path":  dc.SpecFile,
+				"error": err.Error(),
+			})
+			return
+		}
+		spec = data
+	} else if len(specJSON) > 0 && specJSON[0] != nil {
+		spec = specJSON[0]
+	} else {
+		s.log.Warn("API docs enabled but no spec provided — set docs.spec_file or pass spec bytes")
+		return
+	}
+
+	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
+
+	MountDocs(s.engine, APIDoc{
+		Title:    dc.Title,
+		SpecPath: dc.SpecPath,
+		Spec:     spec,
+		UIPath:   dc.UIPath,
+		Host:     host,
+		HideAI:   true,
+	})
 }
 
 // ApplyDefaults applies the standard middleware stack and registers default endpoints.
