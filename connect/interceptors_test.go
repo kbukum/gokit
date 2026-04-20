@@ -108,4 +108,3 @@ func TestFromConnectError_NonConnectError(t *testing.T) {
 		t.Fatalf("expected Internal, got %v", appErr.Code)
 	}
 }
-

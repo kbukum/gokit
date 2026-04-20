@@ -177,4 +177,3 @@ func sanitizeMessage(msg string) string {
 	}
 	return msg
 }
-
