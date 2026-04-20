@@ -3,6 +3,7 @@ module github.com/kbukum/gokit/discovery
 go 1.25.8
 
 require (
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/hashicorp/consul/api v1.33.7
 	github.com/kbukum/gokit v0.2.0
 )
@@ -14,7 +15,6 @@ require (
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
