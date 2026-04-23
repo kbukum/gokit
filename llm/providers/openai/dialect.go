@@ -75,8 +75,9 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Model   string `json:"model"`
 		Choices []struct {
 			Message struct {
-				Content   *string       `json:"content"`
-				ToolCalls []rawToolCall `json:"tool_calls,omitempty"`
+				Content          *string       `json:"content"`
+				ReasoningContent *string       `json:"reasoning_content,omitempty"`
+				ToolCalls        []rawToolCall `json:"tool_calls,omitempty"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -100,6 +101,10 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 
 	if choice.Message.Content != nil && *choice.Message.Content != "" {
 		msg.Content = llm.TextContent(*choice.Message.Content)
+	} else if choice.Message.ReasoningContent != nil && *choice.Message.ReasoningContent != "" {
+		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1)
+		// emit text under reasoning_content when content is empty.
+		msg.Content = llm.TextContent(*choice.Message.ReasoningContent)
 	}
 
 	for _, tc := range choice.Message.ToolCalls {
@@ -135,8 +140,9 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	var chunk struct {
 		Choices []struct {
 			Delta struct {
-				Content   string          `json:"content"`
-				ToolCalls []rawStreamTool `json:"tool_calls,omitempty"`
+				Content          string          `json:"content"`
+				ReasoningContent string          `json:"reasoning_content,omitempty"`
+				ToolCalls        []rawStreamTool `json:"tool_calls,omitempty"`
 			} `json:"delta"`
 			FinishReason *string `json:"finish_reason"`
 		} `json:"choices"`
@@ -165,8 +171,13 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 		})
 	}
 
+	content := c.Delta.Content
+	if content == "" && c.Delta.ReasoningContent != "" {
+		content = c.Delta.ReasoningContent
+	}
+
 	return llm.StreamChunk{
-		Content:   c.Delta.Content,
+		Content:   content,
 		ToolCalls: toolCalls,
 		Done:      done,
 	}, nil
