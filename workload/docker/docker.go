@@ -41,6 +41,10 @@ type Manager struct {
 	log           *logger.Logger
 }
 
+// Client returns the underlying Docker SDK client for direct operations
+// not covered by the Manager's high-level API.
+func (m *Manager) Client() *client.Client { return m.client }
+
 // NewManager creates a new Docker workload manager.
 func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger) (*Manager, error) {
 	opts := []client.Opt{

@@ -15,9 +15,10 @@ import (
 type AuthOption func(*authOptions)
 
 type authOptions struct {
-	skipPaths  []string
-	headerName string
-	scheme     string
+	skipPaths       []string
+	headerName      string
+	scheme          string
+	queryTokenParam string
 }
 
 // WithSkipPaths skips authentication for requests whose path starts with
@@ -35,6 +36,13 @@ func WithHeaderName(name string) AuthOption {
 // Set to empty string to read the raw header value without scheme parsing.
 func WithScheme(scheme string) AuthOption {
 	return func(o *authOptions) { o.scheme = scheme }
+}
+
+// WithQueryTokenParam enables token extraction from a URL query parameter
+// as a fallback when the header is missing. This is useful for SSE endpoints
+// where browser EventSource clients cannot set custom headers.
+func WithQueryTokenParam(param string) AuthOption {
+	return func(o *authOptions) { o.queryTokenParam = param }
 }
 
 // Auth returns a Gin middleware that validates tokens and stores the parsed
@@ -164,20 +172,25 @@ func RequirePermission(checker authz.Checker, required string, subjectExtractor 
 // extractToken reads the token from the request based on options.
 func extractToken(c *gin.Context, o *authOptions) (string, bool) {
 	header := c.GetHeader(o.headerName)
-	if header == "" {
-		return "", false
+	if header != "" {
+		// If no scheme expected, return raw header value
+		if o.scheme == "" {
+			return header, true
+		}
+
+		// Parse "Scheme token" format
+		parts := strings.SplitN(header, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], o.scheme) {
+			return parts[1], true
+		}
 	}
 
-	// If no scheme expected, return raw header value
-	if o.scheme == "" {
-		return header, true
+	// Fallback to query parameter if configured
+	if o.queryTokenParam != "" {
+		if token := c.Query(o.queryTokenParam); token != "" {
+			return token, true
+		}
 	}
 
-	// Parse "Scheme token" format
-	parts := strings.SplitN(header, " ", 2)
-	if len(parts) != 2 || !strings.EqualFold(parts[0], o.scheme) {
-		return "", false
-	}
-
-	return parts[1], true
+	return "", false
 }
