@@ -932,20 +932,9 @@ func TestLargeComponentCount(t *testing.T) {
 func TestDoubleStartAll(t *testing.T) {
 	t.Parallel()
 	r := NewRegistry()
-	callCount := 0
-	r.Register(&mockComponent{
-		name:   "db",
-		health: Health{Name: "db", Status: StatusHealthy},
-		startOrder: func() *[]string {
-			s := []string{}
-			return &s
-		}(),
-	})
 
-	// Since mockComponent doesn't track call count directly, use a wrapper
 	counter := &countingComponent{name: "counter", health: Health{Name: "counter", Status: StatusHealthy}}
 	r.Register(counter)
-	_ = callCount
 
 	if err := r.StartAll(context.Background()); err != nil {
 		t.Fatalf("first StartAll failed: %v", err)
@@ -953,8 +942,9 @@ func TestDoubleStartAll(t *testing.T) {
 	if err := r.StartAll(context.Background()); err != nil {
 		t.Fatalf("second StartAll failed: %v", err)
 	}
-	if counter.startCount != 2 {
-		t.Errorf("expected Start called 2 times, got %d", counter.startCount)
+	// Idempotent: Start should be called only once since the component is already running.
+	if counter.startCount != 1 {
+		t.Errorf("expected Start called 1 time (idempotent), got %d", counter.startCount)
 	}
 }
 
@@ -971,6 +961,109 @@ func TestDoubleStopAll(t *testing.T) {
 
 	if counter.stopCount != 1 {
 		t.Errorf("expected Stop called 1 time, got %d", counter.stopCount)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Two-phase startup: register after StartAll, then StartAll again
+// ---------------------------------------------------------------------------
+
+func TestStartAllTwoPhase(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	order := []string{}
+
+	// Phase 1: infrastructure
+	infra := &mockComponent{name: "db", startOrder: &order, health: Health{Name: "db", Status: StatusHealthy}}
+	r.Register(infra)
+
+	if err := r.StartAll(context.Background()); err != nil {
+		t.Fatalf("Phase 1 StartAll failed: %v", err)
+	}
+	if len(order) != 1 || order[0] != "db" {
+		t.Fatalf("expected [db], got %v", order)
+	}
+
+	// Phase 2: application components registered after first StartAll
+	app1 := &mockComponent{name: "worker", startOrder: &order, health: Health{Name: "worker", Status: StatusHealthy}}
+	app2 := &mockComponent{name: "scheduler", startOrder: &order, health: Health{Name: "scheduler", Status: StatusHealthy}}
+	r.Register(app1)
+	r.Register(app2)
+
+	if err := r.StartAll(context.Background()); err != nil {
+		t.Fatalf("Phase 2 StartAll failed: %v", err)
+	}
+
+	// db should NOT be started again; worker and scheduler should be started in order
+	if len(order) != 3 {
+		t.Fatalf("expected 3 total starts, got %d: %v", len(order), order)
+	}
+	if order[1] != "worker" || order[2] != "scheduler" {
+		t.Errorf("expected [db, worker, scheduler], got %v", order)
+	}
+}
+
+func TestStartAllTwoPhaseRollback(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	order := []string{}
+	stopOrder := []string{}
+
+	// Phase 1
+	r.Register(&mockComponent{name: "db", startOrder: &order, stopOrder: &stopOrder, health: Health{Name: "db", Status: StatusHealthy}})
+	r.StartAll(context.Background())
+
+	// Phase 2: second component fails
+	r.Register(&mockComponent{name: "worker-ok", startOrder: &order, stopOrder: &stopOrder, health: Health{Name: "worker-ok", Status: StatusHealthy}})
+	r.Register(&mockComponent{name: "worker-fail", startOrder: &order, stopOrder: &stopOrder, startErr: fmt.Errorf("boom"), health: Health{Name: "worker-fail", Status: StatusHealthy}})
+	r.Register(&mockComponent{name: "worker-never", startOrder: &order, stopOrder: &stopOrder, health: Health{Name: "worker-never", Status: StatusHealthy}})
+
+	err := r.StartAll(context.Background())
+	if err == nil {
+		t.Fatal("expected error from second StartAll")
+	}
+
+	// worker-ok was started then rolled back; worker-fail failed; worker-never never started
+	if len(order) != 3 { // db, worker-ok, worker-fail (attempted)
+		t.Fatalf("expected 3 start attempts, got %d: %v", len(order), order)
+	}
+	// Rollback should stop only worker-ok (the one started in this call)
+	if len(stopOrder) != 1 || stopOrder[0] != "worker-ok" {
+		t.Errorf("expected rollback of [worker-ok], got %v", stopOrder)
+	}
+
+	// db should still be started (from phase 1, not rolled back)
+	all := r.All()
+	for _, c := range all {
+		if c.Name() == "db" {
+			h := c.Health(context.Background())
+			if h.Status != StatusHealthy {
+				t.Errorf("db should still be healthy after phase 2 rollback")
+			}
+		}
+	}
+}
+
+func TestStartAllTwoPhaseStopAll(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	stopOrder := []string{}
+
+	// Phase 1: infra
+	r.Register(&mockComponent{name: "db", stopOrder: &stopOrder, health: Health{Name: "db", Status: StatusHealthy}})
+	r.StartAll(context.Background())
+
+	// Phase 2: app
+	r.Register(&mockComponent{name: "worker", stopOrder: &stopOrder, health: Health{Name: "worker", Status: StatusHealthy}})
+	r.StartAll(context.Background())
+
+	// StopAll should stop both in reverse order
+	r.StopAll(context.Background())
+	if len(stopOrder) != 2 {
+		t.Fatalf("expected 2 stops, got %d: %v", len(stopOrder), stopOrder)
+	}
+	if stopOrder[0] != "worker" || stopOrder[1] != "db" {
+		t.Errorf("expected reverse stop [worker, db], got %v", stopOrder)
 	}
 }
 

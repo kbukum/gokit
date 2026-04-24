@@ -586,13 +586,75 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 
 	expected := []string{
-		"db:start",    // Phase 1: components start
+		"db:start",    // Phase 1: infrastructure components start
 		"onStart",     // OnStart hooks
-		"onConfigure", // Phase 2: configure
-		"onReady",     // Ready hooks
-		"task",        // Task execution
-		"onStop",      // Stop hooks
-		"db:stop",     // Components stop (reverse order)
+		"onConfigure", // Phase 2: configure (may register app components)
+		// Phase 3: StartAll again (no-op here since no new components)
+		"onReady", // Ready hooks
+		"task",    // Task execution
+		"onStop",  // Stop hooks
+		"db:stop", // Components stop (reverse order)
+	}
+
+	if len(order) != len(expected) {
+		t.Fatalf("expected %v, got %v", expected, order)
+	}
+	for i, v := range expected {
+		if order[i] != v {
+			t.Errorf("order[%d] = %q, expected %q", i, order[i], v)
+		}
+	}
+}
+
+// TestTwoPhaseStartupComponentsRegisteredDuringConfigure verifies that
+// components registered during OnConfigure are automatically started
+// before ReadyCheck runs.
+func TestTwoPhaseStartupComponentsRegisteredDuringConfigure(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+
+	order := []string{}
+
+	// Phase 1: infra component registered before startup
+	infra := &orderTrackingComponent{
+		name:   "db",
+		order:  &order,
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	app.RegisterComponent(infra)
+
+	// OnConfigure registers an application-layer component (e.g. a worker)
+	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
+		order = append(order, "onConfigure")
+		worker := &orderTrackingComponent{
+			name:   "catalog-refresh",
+			order:  &order,
+			health: component.Health{Name: "catalog-refresh", Status: component.StatusHealthy},
+		}
+		return a.RegisterComponent(worker)
+	})
+
+	app.OnReady(func(ctx context.Context) error {
+		order = append(order, "onReady")
+		return nil
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error {
+		order = append(order, "task")
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("RunTask failed: %v", err)
+	}
+
+	expected := []string{
+		"db:start",              // Phase 1: infra started
+		"onConfigure",           // Phase 2: registers worker
+		"catalog-refresh:start", // Phase 3: late-registered component started
+		"onReady",               // Ready hooks
+		"task",                  // Task
+		"catalog-refresh:stop",  // Stop: reverse order (app component first)
+		"db:stop",               // Stop: infra last
 	}
 
 	if len(order) != len(expected) {

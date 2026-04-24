@@ -191,7 +191,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 		"version": a.Version,
 	})
 
-	// Phase 1: Initialize — start all registered components
+	// Phase 1: Initialize — start all registered infrastructure components.
 	if err := a.initialize(ctx); err != nil {
 		return fmt.Errorf("initialization failed: %w", err)
 	}
@@ -201,9 +201,18 @@ func (a *App[C]) startup(ctx context.Context) error {
 		return fmt.Errorf("onStart hook failed: %w", err)
 	}
 
-	// Phase 2: Configure — run business-layer setup callbacks
+	// Phase 2: Configure — run business-layer setup callbacks.
+	// Configure callbacks may register additional components (workers,
+	// schedulers, background tasks) that depend on infrastructure.
 	if err := a.configure(ctx); err != nil {
 		return fmt.Errorf("configuration failed: %w", err)
+	}
+
+	// Phase 3: Start application components — starts any components
+	// registered during Phase 2. Already-started infrastructure
+	// components are skipped (StartAll is idempotent).
+	if err := a.Components.StartAll(ctx); err != nil {
+		return fmt.Errorf("application component startup failed: %w", err)
 	}
 
 	// Ready check — verify all components are healthy
