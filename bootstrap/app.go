@@ -290,6 +290,13 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 	}
 }
 
+// Startup performs the full bootstrap lifecycle (initialize, start hooks,
+// configure, start components, ready check, ready hooks) without blocking
+// on shutdown signals. Pair with Shutdown for test and CLI scenarios.
+func (a *App[C]) Startup(ctx context.Context) error {
+	return a.startup(ctx)
+}
+
 // Shutdown performs graceful shutdown. Use when managing your own lifecycle.
 func (a *App[C]) Shutdown(ctx context.Context) error {
 	return a.stop()

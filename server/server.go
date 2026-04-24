@@ -27,6 +27,7 @@ type Server struct {
 	config     Config
 	log        *logger.Logger
 	mounts     []MountedHandler // tracked for summary display
+	listener   net.Listener     // set by Start(); used by ListenAddr()
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -117,6 +118,7 @@ func (s *Server) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("server failed to bind %s: %w", s.httpServer.Addr, err)
 	}
+	s.listener = listener
 
 	go func() {
 		if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
@@ -153,6 +155,16 @@ func (s *Server) Stop(ctx context.Context) error {
 // Addr returns the configured listen address.
 func (s *Server) Addr() string {
 	return s.httpServer.Addr
+}
+
+// ListenAddr returns the actual address the server is listening on.
+// This is useful when the server is configured with port 0 (random port).
+// Returns nil if the server has not started yet.
+func (s *Server) ListenAddr() net.Addr {
+	if s.listener != nil {
+		return s.listener.Addr()
+	}
+	return nil
 }
 
 // Config returns the server configuration.
