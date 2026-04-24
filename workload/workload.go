@@ -63,6 +63,31 @@ type EventWatcher interface {
 	WatchEvents(ctx context.Context, filter ListFilter) (<-chan WorkloadEvent, error)
 }
 
+// SystemInfoProvider reports host-level system information.
+type SystemInfoProvider interface {
+	// SystemInfo returns Docker host information (OS, arch, memory, CPUs).
+	SystemInfo(ctx context.Context) (*SystemInfo, error)
+}
+
+// DiskUsageProvider reports disk usage for the container runtime.
+type DiskUsageProvider interface {
+	// DiskUsage returns runtime disk usage broken down by category.
+	DiskUsage(ctx context.Context) (*DiskUsage, error)
+}
+
+// ImageInspector provides detailed image inspection.
+type ImageInspector interface {
+	// ImageInspect returns detailed metadata for a specific image.
+	ImageInspect(ctx context.Context, ref string) (*ImageDetail, error)
+}
+
+// ImageEventWatcher watches image lifecycle events (pull, delete, tag, untag).
+type ImageEventWatcher interface {
+	// WatchImageEvents streams image-scoped events from the runtime.
+	// The filter allows restricting which events are returned.
+	WatchImageEvents(ctx context.Context, filter ImageEventFilter) (<-chan ImageEvent, error)
+}
+
 // Status constants for workload state.
 const (
 	StatusCreated    = "created"
@@ -216,4 +241,98 @@ type VolumeMount struct {
 	Target   string // Mount path inside workload
 	ReadOnly bool
 	Type     string // "bind", "volume", "configmap", "secret", "pvc" (empty = "bind")
+}
+
+// ---------------------------------------------------------------------------
+// System info types
+// ---------------------------------------------------------------------------
+
+// SystemInfo describes the container runtime host.
+type SystemInfo struct {
+	OS              string // "linux", "darwin"
+	Architecture    string // "x86_64", "aarch64"
+	TotalMemoryMB   int64
+	CPUs            int
+	StorageDriver   string // "overlay2", etc.
+	RuntimeVersion  string // Docker / containerd version
+	KernelVersion   string
+	OperatingSystem string // Full name ("Docker Desktop", "Ubuntu 24.04")
+	GPUs            []GPUInfo
+}
+
+// GPUInfo describes a GPU detected by the container runtime.
+type GPUInfo struct {
+	Name          string // "NVIDIA GeForce RTX 4090"
+	MemoryMB      int64  // Total VRAM
+	DriverVersion string
+}
+
+// ---------------------------------------------------------------------------
+// Disk usage types
+// ---------------------------------------------------------------------------
+
+// DiskUsage describes storage consumption by the container runtime.
+type DiskUsage struct {
+	ImagesSize     int64 // Total size of all images (may include shared layers)
+	ContainersSize int64
+	VolumesSize    int64
+	BuildCacheSize int64
+
+	// DataRoot fields are best-effort and may be zero for remote daemons.
+	DataRootPath  string // "/var/lib/docker" or equivalent
+	DataRootTotal int64  // Total filesystem capacity (0 if unavailable)
+	DataRootFree  int64  // Free filesystem space (0 if unavailable)
+
+	Images []ImageDiskEntry
+}
+
+// ImageDiskEntry describes a single image in the disk usage breakdown.
+type ImageDiskEntry struct {
+	ID         string
+	RepoTags   []string
+	Size       int64 // Unique size (not counting shared layers)
+	SharedSize int64 // Size shared with other images
+	Created    time.Time
+}
+
+// ---------------------------------------------------------------------------
+// Image detail types
+// ---------------------------------------------------------------------------
+
+// ImageDetail contains detailed metadata for a single image.
+type ImageDetail struct {
+	ID           string
+	RepoTags     []string
+	RepoDigests  []string
+	Size         int64
+	Architecture string
+	OS           string
+	Created      time.Time
+	Config       ImageConfig
+	Layers       []string // Layer digests
+}
+
+// ImageConfig holds selected container config from an image.
+type ImageConfig struct {
+	Env        []string
+	Labels     map[string]string
+	Cmd        []string
+	Entrypoint []string
+}
+
+// ---------------------------------------------------------------------------
+// Image event types
+// ---------------------------------------------------------------------------
+
+// ImageEvent represents an image lifecycle event from the runtime.
+type ImageEvent struct {
+	Action    string    // "pull", "delete", "tag", "untag", "import"
+	ImageRef  string    // Best-effort image reference
+	ImageID   string    // Image ID
+	Timestamp time.Time
+}
+
+// ImageEventFilter restricts which image events are returned.
+type ImageEventFilter struct {
+	Actions []string // Empty = all actions
 }

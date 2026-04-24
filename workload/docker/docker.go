@@ -251,9 +251,13 @@ func (m *Manager) HealthCheck(ctx context.Context) error {
 
 // Compile-time interface checks.
 var (
-	_ workload.Manager       = (*Manager)(nil)
-	_ workload.ExecProvider  = (*Manager)(nil)
-	_ workload.StatsProvider = (*Manager)(nil)
-	_ workload.LogStreamer   = (*Manager)(nil)
-	_ workload.EventWatcher  = (*Manager)(nil)
+	_ workload.Manager            = (*Manager)(nil)
+	_ workload.ExecProvider       = (*Manager)(nil)
+	_ workload.StatsProvider      = (*Manager)(nil)
+	_ workload.LogStreamer        = (*Manager)(nil)
+	_ workload.EventWatcher       = (*Manager)(nil)
+	_ workload.SystemInfoProvider = (*Manager)(nil)
+	_ workload.DiskUsageProvider  = (*Manager)(nil)
+	_ workload.ImageInspector     = (*Manager)(nil)
+	_ workload.ImageEventWatcher  = (*Manager)(nil)
 )
