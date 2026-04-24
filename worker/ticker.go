@@ -12,6 +12,23 @@ import (
 // TickerFunc is the callback invoked on every tick.
 type TickerFunc func(ctx context.Context) error
 
+// TickerOption configures optional TickerWorker behaviour.
+type TickerOption func(*TickerWorker)
+
+// WithRunOnStart causes the worker to execute fn once immediately when
+// the background goroutine starts, before entering the periodic loop.
+// The initial run does NOT block app startup — it runs inside the
+// goroutine launched by Start.
+func WithRunOnStart() TickerOption {
+	return func(w *TickerWorker) { w.runOnStart = true }
+}
+
+// WithOnError registers a callback that is invoked after every tick
+// that returns a non-nil error. Useful for logging or alerting.
+func WithOnError(fn func(error)) TickerOption {
+	return func(w *TickerWorker) { w.onError = fn }
+}
+
 // TickerWorker is a Component that runs a function on a fixed interval.
 //
 // Start launches a background goroutine; Stop signals it and waits for
@@ -21,12 +38,14 @@ type TickerFunc func(ctx context.Context) error
 //
 //	tw := worker.NewTickerWorker("cache-cleanup", 30*time.Second, func(ctx context.Context) error {
 //	    return cache.Cleanup(ctx)
-//	})
+//	}, worker.WithRunOnStart())
 //	registry.Register(tw)
 type TickerWorker struct {
-	name     string
-	interval time.Duration
-	fn       TickerFunc
+	name       string
+	interval   time.Duration
+	fn         TickerFunc
+	runOnStart bool
+	onError    func(error)
 
 	cancel  context.CancelFunc
 	done    chan struct{}
@@ -40,12 +59,16 @@ type TickerWorker struct {
 }
 
 // NewTickerWorker creates a TickerWorker with the given name, interval, and handler.
-func NewTickerWorker(name string, interval time.Duration, fn TickerFunc) *TickerWorker {
-	return &TickerWorker{
+func NewTickerWorker(name string, interval time.Duration, fn TickerFunc, opts ...TickerOption) *TickerWorker {
+	w := &TickerWorker{
 		name:     name,
 		interval: interval,
 		fn:       fn,
 	}
+	for _, o := range opts {
+		o(w)
+	}
+	return w
 }
 
 // Name returns the component name.
@@ -126,6 +149,11 @@ func (w *TickerWorker) FailCount() uint64 {
 
 func (w *TickerWorker) loop(ctx context.Context) {
 	defer close(w.done)
+
+	if w.runOnStart {
+		w.tick(ctx)
+	}
+
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
@@ -134,17 +162,24 @@ func (w *TickerWorker) loop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			err := w.fn(ctx)
-			w.mu.Lock()
-			w.lastRun = time.Now()
-			w.runCount++
-			if err != nil {
-				w.lastErr = err
-				w.failCount++
-			} else {
-				w.lastErr = nil
-			}
-			w.mu.Unlock()
+			w.tick(ctx)
 		}
+	}
+}
+
+func (w *TickerWorker) tick(ctx context.Context) {
+	err := w.fn(ctx)
+	w.mu.Lock()
+	w.lastRun = time.Now()
+	w.runCount++
+	if err != nil {
+		w.lastErr = err
+		w.failCount++
+	} else {
+		w.lastErr = nil
+	}
+	w.mu.Unlock()
+	if err != nil && w.onError != nil {
+		w.onError(err)
 	}
 }
