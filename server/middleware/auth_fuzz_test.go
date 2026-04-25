@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,11 @@ func FuzzExtractToken(f *testing.F) {
 	f.Add("", "/x?access=abc", "Authorization", "Bearer", "access")
 
 	f.Fuzz(func(t *testing.T, header, rawURL, headerName, scheme, queryParam string) {
+		// httptest.NewRequest panics on invalid URLs; skip inputs that would panic.
+		if _, err := url.ParseRequestURI(rawURL); err != nil {
+			t.Skip("invalid URL")
+		}
+
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		req := httptest.NewRequest(http.MethodGet, rawURL, nil)
