@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/testutil v0.2.0
-	github.com/segmentio/kafka-go v0.4.50
+	github.com/segmentio/kafka-go v0.4.51
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/metric v1.43.0
 	go.opentelemetry.io/otel/sdk v1.43.0
