@@ -53,12 +53,12 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 // The registry is mandatory; pass an explicit *FactoryRegistry with the desired
 // provider registered (e.g. via local.Register, s3.Register, etc.).
 func New(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
-	if registry == nil {
-		return nil, fmt.Errorf("storage: factory registry is nil")
-	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+	if registry == nil {
+		return nil, fmt.Errorf("storage: factory registry is nil")
 	}
 
 	l := log.WithComponent("storage")

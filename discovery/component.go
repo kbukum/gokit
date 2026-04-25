@@ -279,7 +279,7 @@ func resolveLocalIPv4(resolver networkResolver, probeTarget string) (string, err
 		return ip, nil
 	}
 	if probeTarget == "" {
-		return "", err
+		return "", fmt.Errorf("discovery: failed to detect local IP via interfaces and probe target not configured: %w", err)
 	}
 	return localIPFromUDPProbe(resolver, probeTarget)
 }
