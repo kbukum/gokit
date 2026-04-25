@@ -11,7 +11,7 @@ require (
 	github.com/kbukum/gokit/authz v0.2.0
 	github.com/kbukum/gokit/discovery v0.2.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/metric v1.43.0
