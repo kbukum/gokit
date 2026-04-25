@@ -36,5 +36,5 @@ func NewAdapter(cfg Config) (*llm.Adapter, error) {
 		llmCfg.Auth = httpclient.BearerAuth(cfg.APIKey)
 	}
 
-	return llm.New(llmCfg)
+	return llm.NewWithDialect(&Dialect{}, llmCfg)
 }

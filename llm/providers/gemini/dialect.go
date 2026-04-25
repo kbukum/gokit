@@ -8,8 +8,10 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-func init() {
-	llm.RegisterDialect("gemini", &Dialect{})
+// Register installs the Gemini dialect in the supplied registry.
+// Call once at application startup before invoking [llm.New].
+func Register(registry *llm.DialectRegistry) error {
+	return registry.Register("gemini", &Dialect{})
 }
 
 // Dialect implements llm.Dialect for Google's Gemini Generative AI API.

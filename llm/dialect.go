@@ -22,12 +22,10 @@ const (
 // Each LLM provider (Ollama, OpenAI, Anthropic, etc.) has its own Dialect
 // implementation that handles the provider-specific request/response structure.
 //
-// Dialect implementations should live OUTSIDE this package:
-//   - In separate gokit sub-modules (e.g., gokit/llm-ollama, gokit/llm-openai)
-//   - In project code (e.g., internal/llm/dialects/)
-//   - In community packages
-//
-// Register dialects at startup using [RegisterDialect], or pass directly to [NewWithDialect].
+// Dialect implementations live in driver packages outside this package
+// (e.g. github.com/kbukum/gokit/llm/providers/openai). Driver packages
+// expose a Register function that callers invoke against an explicit
+// [DialectRegistry] at startup.
 type Dialect interface {
 	// Name returns the dialect identifier (e.g., "ollama", "openai").
 	Name() string
@@ -54,46 +52,66 @@ type Dialect interface {
 	ParseStreamChunk(data []byte) (StreamChunk, error)
 }
 
-// --- Dialect Registry ---
-
-var (
-	dialectsMu sync.RWMutex
-	dialects   = map[string]Dialect{}
-)
-
-// RegisterDialect adds a dialect to the global registry.
-// Typically called from init() in dialect driver packages:
+// DialectRegistry stores LLM dialects by name.
 //
-//	func init() {
-//	    llm.RegisterDialect("ollama", &Dialect{})
-//	}
-//
-// Importing the driver package registers the dialect as a side-effect:
-//
-//	import _ "github.com/your-org/llm-ollama"
-func RegisterDialect(name string, d Dialect) {
-	dialectsMu.Lock()
-	defer dialectsMu.Unlock()
-	dialects[name] = d
+// Registries are explicit, isolated, and thread-safe. Driver packages
+// (for example github.com/kbukum/gokit/llm/providers/openai) expose
+// Register(*DialectRegistry) functions that populate a registry during
+// application startup. Pass the populated registry to [NewWithRegistry]
+// to create an [Adapter] that resolves its dialect from the registry.
+type DialectRegistry struct {
+	mu       sync.RWMutex
+	dialects map[string]Dialect
 }
 
-// GetDialect retrieves a dialect by name from the global registry.
-func GetDialect(name string) (Dialect, error) {
-	dialectsMu.RLock()
-	defer dialectsMu.RUnlock()
-	d, ok := dialects[name]
+// NewDialectRegistry creates an isolated dialect registry.
+func NewDialectRegistry() *DialectRegistry {
+	return &DialectRegistry{dialects: make(map[string]Dialect)}
+}
+
+// Register adds a dialect to the registry. It returns an error on
+// programmer errors (empty name, nil dialect, duplicate name).
+func (r *DialectRegistry) Register(name string, d Dialect) error {
+	if name == "" {
+		return fmt.Errorf("llm: dialect name cannot be empty")
+	}
+	if d == nil {
+		return fmt.Errorf("llm: dialect %q cannot be nil", name)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, exists := r.dialects[name]; exists {
+		return fmt.Errorf("llm: dialect %q already registered", name)
+	}
+	r.dialects[name] = d
+	return nil
+}
+
+// MustRegister is like [DialectRegistry.Register] but panics on error.
+// Intended for application startup where a failed registration is fatal.
+func (r *DialectRegistry) MustRegister(name string, d Dialect) {
+	if err := r.Register(name, d); err != nil {
+		panic(err)
+	}
+}
+
+// Get retrieves a dialect by name.
+func (r *DialectRegistry) Get(name string) (Dialect, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	d, ok := r.dialects[name]
 	if !ok {
-		return nil, fmt.Errorf("llm: unknown dialect %q (forgot to import driver?)", name)
+		return nil, fmt.Errorf("llm: unknown dialect %q (forgot to register?)", name)
 	}
 	return d, nil
 }
 
-// Dialects returns the names of all registered dialects.
-func Dialects() []string {
-	dialectsMu.RLock()
-	defer dialectsMu.RUnlock()
-	names := make([]string, 0, len(dialects))
-	for name := range dialects {
+// Names returns the names of all registered dialects.
+func (r *DialectRegistry) Names() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.dialects))
+	for name := range r.dialects {
 		names = append(names, name)
 	}
 	return names

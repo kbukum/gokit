@@ -8,8 +8,10 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-func init() {
-	llm.RegisterDialect("anthropic", &Dialect{})
+// Register installs the Anthropic dialect in the supplied registry.
+// Call once at application startup before invoking [llm.New].
+func Register(registry *llm.DialectRegistry) error {
+	return registry.Register("anthropic", &Dialect{})
 }
 
 // Dialect implements llm.Dialect for Anthropic's Messages API.
