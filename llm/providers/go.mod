@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/llm/providers
 
-go 1.25.5
+go 1.25.8
 
 require (
 	github.com/kbukum/gokit/httpclient v0.2.0

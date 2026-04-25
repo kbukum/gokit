@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/connect
 
-go 1.25.5
+go 1.25.8
 
 require (
 	connectrpc.com/connect v1.19.1
