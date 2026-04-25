@@ -13,7 +13,8 @@ import (
 type SSEBridgeOption func(*sseBridgeConfig)
 
 type sseBridgeConfig struct {
-	topicFunc func(event Event[any]) string
+	topicFunc    func(event Event[any]) string
+	envelopeFunc func(event Event[any]) any
 }
 
 // WithTopicFunc sets a custom function to derive the SSE broadcast pattern
@@ -21,6 +22,19 @@ type sseBridgeConfig struct {
 func WithTopicFunc(fn func(event Event[any]) string) SSEBridgeOption {
 	return func(cfg *sseBridgeConfig) {
 		cfg.topicFunc = fn
+	}
+}
+
+// WithEnvelope replaces the default JSON event payload with one returned by
+// fn. Use this to project worker events into a domain-specific schema (e.g.
+// adding workspace_id, attempt_id, ts) without modifying the bridge.
+//
+// The function receives the event projected to Event[any] so it can be
+// shared across input/output type parameters. The returned value is JSON
+// marshaled directly — return any serializable type.
+func WithEnvelope(fn func(event Event[any]) any) SSEBridgeOption {
+	return func(cfg *sseBridgeConfig) {
+		cfg.envelopeFunc = fn
 	}
 }
 
@@ -89,23 +103,26 @@ func (b *SSEBridge[I, O]) forward(ctx context.Context) {
 }
 
 func (b *SSEBridge[I, O]) broadcastEvent(ev Event[O]) {
-	se := sseEvent{
-		Type:     ev.Type.String(),
-		TaskID:   ev.TaskID,
-		WorkerID: ev.WorkerID,
+	var payload any
+	if b.cfg.envelopeFunc != nil {
+		payload = b.cfg.envelopeFunc(toGenericEvent(ev))
+	} else {
+		se := sseEvent{
+			Type:     ev.Type.String(),
+			TaskID:   ev.TaskID,
+			WorkerID: ev.WorkerID,
+		}
+		if ev.Progress != nil {
+			se.Progress = ev.Progress
+		}
+		if ev.Error != nil {
+			se.Error = ev.Error.Error()
+		}
+		se.Data = ev.Data
+		payload = se
 	}
 
-	if ev.Progress != nil {
-		se.Progress = ev.Progress
-	}
-	if ev.Error != nil {
-		se.Error = ev.Error.Error()
-	}
-
-	// Marshal data — ignore errors for non-serializable types.
-	se.Data = ev.Data
-
-	data, err := json.Marshal(se)
+	data, err := json.Marshal(payload)
 	if err != nil {
 		data = []byte(fmt.Sprintf(`{"type":"error","task_id":%q,"error":"marshal failed"}`, ev.TaskID))
 	}
@@ -116,16 +133,22 @@ func (b *SSEBridge[I, O]) broadcastEvent(ev Event[O]) {
 
 func (b *SSEBridge[I, O]) topic(ev Event[O]) string {
 	if b.cfg.topicFunc != nil {
-		// Convert to Event[any] for the topic function.
-		generic := Event[any]{
-			Type:      ev.Type,
-			TaskID:    ev.TaskID,
-			WorkerID:  ev.WorkerID,
-			Progress:  ev.Progress,
-			Timestamp: ev.Timestamp,
-			Metadata:  ev.Metadata,
-		}
-		return b.cfg.topicFunc(generic)
+		return b.cfg.topicFunc(toGenericEvent(ev))
 	}
 	return fmt.Sprintf("task:%s", ev.TaskID)
+}
+
+// toGenericEvent projects a typed worker event onto Event[any] so callbacks
+// can be type-erased without losing the data payload.
+func toGenericEvent[O any](ev Event[O]) Event[any] {
+	return Event[any]{
+		Type:      ev.Type,
+		TaskID:    ev.TaskID,
+		WorkerID:  ev.WorkerID,
+		Data:      ev.Data,
+		Progress:  ev.Progress,
+		Error:     ev.Error,
+		Timestamp: ev.Timestamp,
+		Metadata:  ev.Metadata,
+	}
 }
