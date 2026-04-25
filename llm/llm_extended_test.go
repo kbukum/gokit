@@ -498,24 +498,10 @@ func TestAdapter_Execute_LargeMessageContent(t *testing.T) {
 // Dialect registration edge cases
 // ---------------------------------------------------------------------------
 
-func TestRegisterDialect_NilDialect(t *testing.T) {
-	dialectsMu.Lock()
-	original := dialects
-	dialects = map[string]Dialect{}
-	dialectsMu.Unlock()
-	defer func() {
-		dialectsMu.Lock()
-		dialects = original
-		dialectsMu.Unlock()
-	}()
-
-	RegisterDialect("nil-d", nil)
-	got, err := GetDialect("nil-d")
-	if err != nil {
-		t.Fatalf("GetDialect: %v", err)
-	}
-	if got != nil {
-		t.Errorf("expected nil dialect, got %v", got)
+func TestDialectRegistry_RejectsNilDialect(t *testing.T) {
+	reg := NewDialectRegistry()
+	if err := reg.Register("nil-d", nil); err == nil {
+		t.Fatal("expected error for nil dialect")
 	}
 }
 

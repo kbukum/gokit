@@ -242,10 +242,14 @@ func TestDialect_ParseStreamChunk_ToolUse(t *testing.T) {
 	}
 }
 
-func TestDialect_RegisteredViaInit(t *testing.T) {
-	d, err := llm.GetDialect("anthropic")
+func TestDialect_RegisterAddsToRegistry(t *testing.T) {
+	reg := llm.NewDialectRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	d, err := reg.Get("anthropic")
 	if err != nil {
-		t.Fatalf("GetDialect(anthropic): %v", err)
+		t.Fatalf("Get(anthropic): %v", err)
 	}
 	if d.Name() != "anthropic" {
 		t.Errorf("expected anthropic dialect, got %q", d.Name())

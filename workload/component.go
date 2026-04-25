@@ -11,14 +11,19 @@ import (
 // Component wraps Manager and implements component.Component for lifecycle management.
 type Component struct {
 	manager     Manager
+	registry    *FactoryRegistry
 	cfg         Config
 	providerCfg any
 	log         *logger.Logger
 }
 
 // NewComponent creates a workload component for use with the component registry.
-func NewComponent(cfg Config, providerCfg any, log *logger.Logger) *Component {
+// registry is mandatory; construct one and register the desired provider(s)
+// (e.g. via [github.com/kbukum/gokit/workload/docker.Register]) before
+// passing it.
+func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) *Component {
 	return &Component{
+		registry:    registry,
 		cfg:         cfg,
 		providerCfg: providerCfg,
 		log:         log.WithComponent("workload"),
@@ -39,7 +44,7 @@ func (c *Component) Start(_ context.Context) error {
 		c.log.Info("workload component is disabled")
 		return nil
 	}
-	m, err := New(c.cfg, c.providerCfg, c.log)
+	m, err := New(c.registry, c.cfg, c.providerCfg, c.log)
 	if err != nil {
 		return fmt.Errorf("workload start: %w", err)
 	}
@@ -87,3 +92,4 @@ func (c *Component) Describe() component.Description {
 		Details: fmt.Sprintf("provider=%s", c.cfg.Provider),
 	}
 }
+

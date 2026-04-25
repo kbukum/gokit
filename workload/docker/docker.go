@@ -15,8 +15,12 @@ import (
 	"github.com/kbukum/gokit/workload"
 )
 
-func init() {
-	workload.RegisterFactory(workload.ProviderDocker, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
+// Register installs the Docker provider into the supplied workload
+// factory registry. Call this once at application startup before
+// invoking [workload.New]. Returns an error if the provider name is
+// already registered.
+func Register(registry *workload.FactoryRegistry) error {
+	return registry.Register(workload.ProviderDocker, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

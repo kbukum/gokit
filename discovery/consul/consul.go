@@ -89,7 +89,7 @@ func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*
 			CAPath:             consulCfg.TLSCAPath,
 			CertFile:           consulCfg.TLS.CertFile,
 			KeyFile:            consulCfg.TLS.KeyFile,
-			InsecureSkipVerify: consulCfg.TLS.SkipVerify,
+			InsecureSkipVerify: consulCfg.TLS.SkipVerify, //nolint:gosec // G402: opt-in via TLSConfig.SkipVerify; mirrors security.TLSConfig semantics.
 		}
 	}
 

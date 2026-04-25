@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed (Breaking API Changes)
+- **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`docker`, `kubernetes`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root. `NewComponent` likewise now takes the registry as its first argument.
+- **llm**: `RegisterDialect()`, `GetDialect()`, and `Dialects()` package-level functions removed. `New(cfg)` is replaced by `New(registry, cfg)` taking an explicit `*DialectRegistry`. Provider packages (`anthropic`, `gemini`, `openai`) no longer register via `init()`; call their `Register(registry)` function instead.
+- **di**: `MustResolve(name string) interface{}` removed from the `Container` interface. Use the generic free function `di.MustResolve[T](container, key)` instead — it provides type safety and works with any `Container` implementation.
+- **config**: `WarningFunc` signature changed from `func(msg string, args ...any)` (printf-style) to `func(msg string, attrs ...slog.Attr)` (structured). Update custom warning loggers to emit structured attributes instead of formatted strings; this aligns config warnings with the rest of gokit's structured logging.
+- **bootstrap**: `Summary.DisplaySummary` no longer writes directly to `os.Stdout`. Output now goes to the writer configured via `bootstrap.WithWriter(io.Writer)` (default still `os.Stdout`). `NewSummaryWithOptions` and `(*Summary).SetWriter` allow injecting a custom writer for testing or redirection.
 - **storage**: `DefaultFactoryRegistry` global and `RegisterFactory()` / `New(cfg, providerCfg, log)` shims removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`local`, `s3`, `supabase`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root.
 - **discovery**: `DefaultProviderRegistry` global, `RegisterProviderFactory()`, and `GetProviderFactory()` shims removed. `NewComponent` now requires an explicit `*ProviderRegistry` as its first argument: `NewComponent(registry, cfg, log, opts...)`. Provider packages (`static`, `consul`) no longer register via `init()`; call their `Register(registry)` function instead. `WithProviderRegistry` option removed.
 - **server/middleware**: `Auth()` and `OptionalAuth()` now return `(gin.HandlerFunc, error)` instead of panicking on misconfiguration. All call sites must handle the returned error.
@@ -15,6 +20,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **di**: `ResolveOrError` removed (was an alias of `Resolve`). Use `Resolve` directly.
 - **server/middleware**: `TenantFromContextOrError` and `ErrNoTenantID` removed. Use `TenantFromContext` (returns `(string, bool)`) or `MustTenantFromContext`.
 - **config**: `Warning` struct and `[]Warning` return value removed from `loadFromResolvedFiles`. Non-fatal warnings are surfaced exclusively through the `WarningFunc` callback.
+
+### Added
+- **bootstrap**: `WithWriter(io.Writer)` option and `(*Summary).SetWriter` method for redirecting summary output (testing, in-memory capture, file logging).
+- **workload**: `FactoryRegistry` type with `Register`, `MustRegister`, `Get`, and `Names`. Mirrors the `storage` package's explicit-registry pattern.
+- **llm**: `DialectRegistry` type with `Register`, `MustRegister`, `Get`, and `Names`.
+- **CI/governance**: `.editorconfig`, `.gitattributes`, `.github/dependabot.yml`, committed `go.work`, `GOVERNANCE.md`, `MAINTAINERS.md`. Expanded `SECURITY.md` with a private vulnerability reporting flow and a supply-chain section.
+- **CI**: pinned `golangci-lint` to a specific tag, added `govulncheck` per module, multi-OS test matrix on representative modules, `-shuffle=on` and race detection by default, fuzz smoke job, and Go-version-consistency check across all `go.mod` files.
+- **lint**: `errorlint`, `nilerr`, `copyloopvar`, `wastedassign`, `sqlclosecheck`, `rowserrcheck`, and govet `shadow` are now enforced.
+- **examples**: `Example*` tests added for `config`, `errors`, `logger`, `pipeline`, `provider`, and `di` for godoc discoverability.
+- **docs**: Added `doc.go` to packages that previously lacked package-level documentation (`database/repository`, `discovery/{consul,static}`, `grpc/{client,interceptor}`, `messaging/kafka/{consumer,producer}`, `server/{endpoint,middleware}`, `storage/{local,s3,supabase}`, `workload/{docker,kubernetes}`).
+- **benchmarks**: All benchmarks now call `b.ReportAllocs()` for allocation visibility.
+
+### Security
+- **gosec**: Removed the global `G402` exclude. TLS configuration sites that intentionally allow `InsecureSkipVerify` now carry a per-site `//nolint:gosec` directive with a justifying comment.
+
+### Migration
+
+- **workload**:
+  ```go
+  // Before
+  import _ "github.com/kbukum/gokit/workload/docker" // side-effect init()
+  mgr, err := workload.New(cfg, dockerCfg, log)
+
+  // After
+  import "github.com/kbukum/gokit/workload/docker"
+
+  reg := workload.NewFactoryRegistry()
+  if err := docker.Register(reg); err != nil { return err }
+  mgr, err := workload.New(reg, cfg, dockerCfg, log)
+  ```
+
+- **llm**:
+  ```go
+  // Before
+  import _ "github.com/kbukum/gokit/llm/providers/openai"
+  adapter, err := llm.New(cfg)
+
+  // After
+  import "github.com/kbukum/gokit/llm/providers/openai"
+
+  reg := llm.NewDialectRegistry()
+  if err := openai.Register(reg); err != nil { return err }
+  adapter, err := llm.New(reg, cfg)
+  ```
+
+- **di.MustResolve**:
+  ```go
+  // Before
+  svc := container.MustResolve("svc").(*MyService)
+
+  // After
+  svc := di.MustResolve[*MyService](container, "svc")
+  ```
+
+- **config.WarningFunc**:
+  ```go
+  // Before
+  warn := func(msg string, args ...any) { log.Printf(msg, args...) }
+
+  // After
+  warn := func(msg string, attrs ...slog.Attr) {
+      slog.LogAttrs(ctx, slog.LevelWarn, msg, attrs...)
+  }
+  ```
+
+- **bootstrap.Summary**:
+  ```go
+  // Before
+  s := bootstrap.NewSummary("svc", "1.0")
+  s.DisplaySummary(reg, c, log) // wrote to stdout
+
+  // After
+  s := bootstrap.NewSummaryWithOptions("svc", "1.0",
+      bootstrap.WithWriter(myWriter))
+  s.DisplaySummary(reg, c, log)
+  ```
 
 ### Breaking Changes
 - **kafka → messaging**: The `gokit/kafka` module has been restructured into `gokit/messaging`

@@ -12,8 +12,7 @@
 *.out
 coverage.html
 
-# Go workspace
-go.work
+# Go workspace lock file (committed go.work is supported; lock is generated)
 go.work.sum
 
 # IDE

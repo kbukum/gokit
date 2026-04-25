@@ -19,7 +19,13 @@ const (
 	Singleton                         // Pre-created instance
 )
 
-// Container defines the interface for a dependency injection container
+// Container defines the interface for a dependency injection container.
+//
+// Type-safe resolution helpers are provided as free generic functions in
+// this package: [Resolve], [MustResolve], [TryResolve]. The interface itself
+// stays untyped so that alternative implementations remain easy to write;
+// callers are expected to use the generic helpers rather than the raw
+// untyped Resolve.
 type Container interface {
 	Register(key string, constructor interface{}) error
 	RegisterLazy(key string, constructor interface{}, options ...LazyOption) error
@@ -31,11 +37,13 @@ type Container interface {
 	// Introspection
 	Registrations() []RegistrationInfo
 
-	// Legacy methods for backward compatibility
+	// Legacy methods kept on the interface for backward compatibility with
+	// existing callers. Prefer the [Resolve], [MustResolve], and
+	// [TryResolve] generic helpers; the older Container.MustResolve method
+	// has been removed from this interface in favour of those helpers.
 	InvalidateCache(name string) error
 	Refresh(name string) (interface{}, error)
 	GetResolver(name string) func() (interface{}, error)
-	MustResolve(name string) interface{}
 }
 
 // RegistrationInfo describes a registered component for introspection.

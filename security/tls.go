@@ -49,7 +49,7 @@ func (c *TLSConfig) Build() (*tls.Config, error) {
 	}
 
 	cfg := &tls.Config{
-		InsecureSkipVerify: c.SkipVerify,
+		InsecureSkipVerify: c.SkipVerify, //nolint:gosec // G402: SkipVerify is opt-in via TLSConfig.SkipVerify, intended for test/dev configs only.
 		ServerName:         c.ServerName,
 		MinVersion:         minVersion,
 	}

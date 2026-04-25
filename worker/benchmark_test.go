@@ -6,6 +6,7 @@ import (
 )
 
 func BenchmarkSchedulerDispatchRoundRobin(b *testing.B) {
+	b.ReportAllocs()
 	d := newDispatcher(RoundRobin)
 	stats := make([]workerStats, 16)
 
@@ -16,6 +17,7 @@ func BenchmarkSchedulerDispatchRoundRobin(b *testing.B) {
 }
 
 func BenchmarkPoolSubmitHotPath(b *testing.B) {
+	b.ReportAllocs()
 	h := HandlerFunc[int, int](func(ctx context.Context, task int, emit func(Event[int])) error {
 		emit(PartialEvent(task + 1))
 		return nil

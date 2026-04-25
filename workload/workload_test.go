@@ -851,23 +851,13 @@ func TestConfig_DefaultLabels(t *testing.T) {
 // ===========================================================================
 
 func TestFactory_RegisterAndCreate(t *testing.T) {
-	// Save and restore global state
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	// Clear and register test factory
-	factories = make(map[string]ManagerFactory)
-	RegisterFactory("test-provider", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	reg := NewFactoryRegistry()
+	reg.MustRegister("test-provider", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
 	cfg := Config{Provider: "test-provider"}
-	mgr, err := New(cfg, nil, testLogger())
+	mgr, err := New(reg, cfg, nil, testLogger())
 	if err != nil {
 		t.Fatalf("New failed: %v", err)
 	}
@@ -877,18 +867,10 @@ func TestFactory_RegisterAndCreate(t *testing.T) {
 }
 
 func TestFactory_UnknownProvider(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
+	reg := NewFactoryRegistry()
 
 	cfg := Config{Provider: "nonexistent"}
-	_, err := New(cfg, nil, testLogger())
+	_, err := New(reg, cfg, nil, testLogger())
 	if err == nil {
 		t.Error("New should fail for unknown provider")
 	}
@@ -898,19 +880,11 @@ func TestFactory_UnknownProvider(t *testing.T) {
 }
 
 func TestFactory_InvalidConfig(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
+	reg := NewFactoryRegistry()
 
 	// Empty provider, even after ApplyDefaults docker won't be registered
 	cfg := Config{Provider: ""}
-	_, err := New(cfg, nil, testLogger())
+	_, err := New(reg, cfg, nil, testLogger())
 	if err == nil {
 		t.Error("New should fail for invalid config")
 	}
@@ -921,21 +895,24 @@ func TestFactory_InvalidConfig(t *testing.T) {
 // ===========================================================================
 
 func TestComponent_Name(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker"}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker"}, nil, testLogger())
 	if comp.Name() != "workload" {
 		t.Errorf("Name = %q", comp.Name())
 	}
 }
 
 func TestComponent_ManagerNilBeforeStart(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker"}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker"}, nil, testLogger())
 	if comp.Manager() != nil {
 		t.Error("Manager should be nil before Start")
 	}
 }
 
 func TestComponent_StartDisabled(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker", Enabled: false}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker", Enabled: false}, nil, testLogger())
 	if err := comp.Start(context.Background()); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
@@ -945,20 +922,12 @@ func TestComponent_StartDisabled(t *testing.T) {
 }
 
 func TestComponent_StartWithRegisteredFactory(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
-	RegisterFactory("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	reg := NewFactoryRegistry()
+	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
-	comp := NewComponent(Config{Provider: "mock", Enabled: true}, nil, testLogger())
+	comp := NewComponent(reg, Config{Provider: "mock", Enabled: true}, nil, testLogger())
 	if err := comp.Start(context.Background()); err != nil {
 		t.Fatalf("Start failed: %v", err)
 	}
@@ -968,17 +937,9 @@ func TestComponent_StartWithRegisteredFactory(t *testing.T) {
 }
 
 func TestComponent_StartUnknownProvider(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
+	reg := NewFactoryRegistry()
 
-	factories = make(map[string]ManagerFactory)
-
-	comp := NewComponent(Config{Provider: "unknown", Enabled: true}, nil, testLogger())
+	comp := NewComponent(reg, Config{Provider: "unknown", Enabled: true}, nil, testLogger())
 	err := comp.Start(context.Background())
 	if err == nil {
 		t.Error("Start with unknown provider should fail")
@@ -986,20 +947,12 @@ func TestComponent_StartUnknownProvider(t *testing.T) {
 }
 
 func TestComponent_Stop(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
-	RegisterFactory("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	reg := NewFactoryRegistry()
+	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
-	comp := NewComponent(Config{Provider: "mock", Enabled: true}, nil, testLogger())
+	comp := NewComponent(reg, Config{Provider: "mock", Enabled: true}, nil, testLogger())
 	comp.Start(context.Background())
 	if err := comp.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop failed: %v", err)
@@ -1010,7 +963,8 @@ func TestComponent_Stop(t *testing.T) {
 }
 
 func TestComponent_HealthDisabled(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker", Enabled: false}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker", Enabled: false}, nil, testLogger())
 	h := comp.Health(context.Background())
 	if h.Status != component.StatusHealthy {
 		t.Errorf("Health.Status = %q, want %q", h.Status, component.StatusHealthy)
@@ -1021,7 +975,8 @@ func TestComponent_HealthDisabled(t *testing.T) {
 }
 
 func TestComponent_HealthNotInitialized(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker", Enabled: true}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker", Enabled: true}, nil, testLogger())
 	h := comp.Health(context.Background())
 	if h.Status != component.StatusUnhealthy {
 		t.Errorf("Health.Status = %q, want %q", h.Status, component.StatusUnhealthy)
@@ -1032,20 +987,12 @@ func TestComponent_HealthNotInitialized(t *testing.T) {
 }
 
 func TestComponent_HealthWithManager(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
-	RegisterFactory("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	reg := NewFactoryRegistry()
+	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
-	comp := NewComponent(Config{Provider: "mock", Enabled: true}, nil, testLogger())
+	comp := NewComponent(reg, Config{Provider: "mock", Enabled: true}, nil, testLogger())
 	comp.Start(context.Background())
 	defer comp.Stop(context.Background())
 
@@ -1056,22 +1003,14 @@ func TestComponent_HealthWithManager(t *testing.T) {
 }
 
 func TestComponent_HealthCheckFails(t *testing.T) {
-	old := make(map[string]ManagerFactory, len(factories))
-	for k, v := range factories {
-		old[k] = v
-	}
-	defer func() {
-		factories = old
-	}()
-
-	factories = make(map[string]ManagerFactory)
+	reg := NewFactoryRegistry()
 	unhealthy := newMockManager()
 	unhealthy.healthy = false
-	RegisterFactory("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return unhealthy, nil
 	})
 
-	comp := NewComponent(Config{Provider: "mock", Enabled: true}, nil, testLogger())
+	comp := NewComponent(reg, Config{Provider: "mock", Enabled: true}, nil, testLogger())
 	comp.Start(context.Background())
 	defer comp.Stop(context.Background())
 
@@ -1085,7 +1024,8 @@ func TestComponent_HealthCheckFails(t *testing.T) {
 }
 
 func TestComponent_Describe(t *testing.T) {
-	comp := NewComponent(Config{Provider: "docker"}, nil, testLogger())
+	reg := NewFactoryRegistry()
+	comp := NewComponent(reg, Config{Provider: "docker"}, nil, testLogger())
 	desc := comp.Describe()
 	if desc.Name != "Workload" {
 		t.Errorf("Describe.Name = %q", desc.Name)

@@ -6,6 +6,7 @@ import (
 )
 
 func BenchmarkPipelineMapOperation(b *testing.B) {
+	b.ReportAllocs()
 	ctx := context.Background()
 
 	b.ResetTimer()

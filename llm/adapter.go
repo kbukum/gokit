@@ -38,12 +38,17 @@ type Adapter struct {
 	maxTokens int
 }
 
-// New creates an LLM adapter from config using the global dialect registry.
-// The config's Dialect field must match a registered dialect name.
-func New(cfg Config) (*Adapter, error) {
+// New creates an LLM adapter from config using the supplied dialect registry.
+// The config's Dialect field must match a name registered in `registry`.
+// Pass an explicit registry built via [NewDialectRegistry] and populated via
+// the driver packages' Register functions.
+func New(registry *DialectRegistry, cfg Config) (*Adapter, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("llm: dialect registry is nil")
+	}
 	cfg.applyDefaults()
 
-	dialect, err := GetDialect(cfg.Dialect)
+	dialect, err := registry.Get(cfg.Dialect)
 	if err != nil {
 		return nil, err
 	}

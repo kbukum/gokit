@@ -66,6 +66,7 @@ func TestOptionalAuth_AllowInvalidTokens(t *testing.T) {
 }
 
 func BenchmarkMiddlewareStackExecution(b *testing.B) {
+	b.ReportAllocs()
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	warn := func(_ *gin.Context, _ string) {}

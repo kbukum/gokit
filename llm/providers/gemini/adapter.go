@@ -27,5 +27,5 @@ func NewAdapter(cfg Config) (*llm.Adapter, error) {
 		llmCfg.Auth = httpclient.APIKeyAuthQuery(cfg.APIKey, "key")
 	}
 
-	return llm.New(llmCfg)
+	return llm.NewWithDialect(&Dialect{}, llmCfg)
 }

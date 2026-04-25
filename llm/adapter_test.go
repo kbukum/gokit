@@ -92,19 +92,10 @@ func (d *mockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
 
 func TestAdapter_New_WithDialect(t *testing.T) {
 	// Register a mock dialect
-	dialectsMu.Lock()
-	original := dialects
-	dialects = map[string]Dialect{}
-	dialectsMu.Unlock()
-	defer func() {
-		dialectsMu.Lock()
-		dialects = original
-		dialectsMu.Unlock()
-	}()
+	reg := NewDialectRegistry()
+	reg.MustRegister("mock", &mockDialect{})
 
-	RegisterDialect("mock", &mockDialect{})
-
-	a, err := New(Config{
+	a, err := New(reg, Config{
 		Dialect: "mock",
 		BaseURL: "http://localhost:12345",
 		Model:   "test-model",
@@ -121,7 +112,7 @@ func TestAdapter_New_WithDialect(t *testing.T) {
 }
 
 func TestAdapter_New_UnknownDialect(t *testing.T) {
-	_, err := New(Config{Dialect: "nonexistent-xyz"})
+	_, err := New(NewDialectRegistry(), Config{Dialect: "nonexistent-xyz"})
 	if err == nil {
 		t.Fatal("expected error for unknown dialect")
 	}

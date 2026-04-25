@@ -1,0 +1,39 @@
+# Auto-detect text files and normalize line endings.
+* text=auto eol=lf
+
+# Go source files
+*.go     text eol=lf diff=golang
+go.mod   text eol=lf
+go.sum   text eol=lf
+
+# Shell scripts
+*.sh     text eol=lf
+
+# Documentation
+*.md     text eol=lf
+*.txt    text eol=lf
+
+# Configuration
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+*.toml   text eol=lf
+
+# Always use CRLF for Windows-specific files (none currently, kept for documentation)
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binary files
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.svg    text eol=lf
+
+# Generated files — ignore in diff and merge stats
+*.pb.go      linguist-generated=true
+*_gen.go     linguist-generated=true
+
+# Vendored / generated test data
+testdata/**  linguist-vendored=true

@@ -16,8 +16,12 @@ import (
 	"github.com/kbukum/gokit/workload"
 )
 
-func init() {
-	workload.RegisterFactory(workload.ProviderKubernetes, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
+// Register installs the Kubernetes provider into the supplied workload
+// factory registry. Call this once at application startup before
+// invoking [workload.New]. Returns an error if the provider name is
+// already registered.
+func Register(registry *workload.FactoryRegistry) error {
+	return registry.Register(workload.ProviderKubernetes, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

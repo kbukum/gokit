@@ -8,8 +8,10 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-func init() {
-	llm.RegisterDialect("openai", &Dialect{})
+// Register installs the OpenAI dialect in the supplied registry.
+// Call once at application startup before invoking [llm.New].
+func Register(registry *llm.DialectRegistry) error {
+	return registry.Register("openai", &Dialect{})
 }
 
 // Dialect implements llm.Dialect for OpenAI-compatible APIs.

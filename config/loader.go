@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -163,8 +164,17 @@ type LoaderConfig struct {
 // LoaderOption is a functional option for LoadConfig.
 type LoaderOption func(*LoaderConfig)
 
-// WarningFunc logs non-fatal configuration loading warnings.
-type WarningFunc func(msg string, args ...any)
+// WarningFunc logs non-fatal configuration loading warnings using
+// structured key/value attributes. The signature is compatible with the
+// pattern used by [log/slog]:
+//
+//	cfg.WarningLogger = func(msg string, attrs ...slog.Attr) {
+//	    logger.LogAttrs(context.Background(), slog.LevelWarn, msg, attrs...)
+//	}
+//
+// Callers should keep msg constant and pass dynamic data via attrs so that
+// log aggregators can group warnings by their message template.
+type WarningFunc func(msg string, attrs ...slog.Attr)
 
 // WithFileSystem sets a custom filesystem for the loader.
 func WithFileSystem(fs FileSystem) LoaderOption {
@@ -223,7 +233,10 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 		v.SetConfigFile(files.ConfigFile)
 		if err := v.ReadInConfig(); err != nil {
 			if warn != nil {
-				warn("[config] warning: failed to load config file %s: %v", files.ConfigFile, err)
+				warn("config: failed to load config file",
+					slog.String("file", files.ConfigFile),
+					slog.String("error", err.Error()),
+				)
 			}
 		}
 	}
@@ -232,7 +245,10 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
 		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
 			if warn != nil {
-				warn("[config] warning: failed to load profile env file %s: %v", files.ProfileEnvFile, err)
+				warn("config: failed to load profile env file",
+					slog.String("file", files.ProfileEnvFile),
+					slog.String("error", err.Error()),
+				)
 			}
 		}
 	}
@@ -245,7 +261,10 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
 			if warn != nil {
-				warn("[config] warning: failed to load .env file %s: %v", files.EnvFile, err)
+				warn("config: failed to load .env file",
+					slog.String("file", files.EnvFile),
+					slog.String("error", err.Error()),
+				)
 			}
 		} else {
 			// Re-bind env vars after loading .env to pick up new variables

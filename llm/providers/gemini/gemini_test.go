@@ -337,10 +337,14 @@ func TestDialect_ParseStreamChunk_FunctionCall(t *testing.T) {
 	}
 }
 
-func TestDialect_RegisteredViaInit(t *testing.T) {
-	d, err := llm.GetDialect("gemini")
+func TestDialect_RegisterAddsToRegistry(t *testing.T) {
+	reg := llm.NewDialectRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	d, err := reg.Get("gemini")
 	if err != nil {
-		t.Fatalf("GetDialect(gemini): %v", err)
+		t.Fatalf("Get(gemini): %v", err)
 	}
 	if d.Name() != "gemini" {
 		t.Errorf("expected gemini dialect, got %q", d.Name())
