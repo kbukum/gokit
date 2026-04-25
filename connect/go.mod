@@ -3,7 +3,7 @@ module github.com/kbukum/gokit/connect
 go 1.25.8
 
 require (
-	connectrpc.com/connect v1.19.1
+	connectrpc.com/connect v1.19.2
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/auth v0.2.0
