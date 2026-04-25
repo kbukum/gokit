@@ -31,11 +31,6 @@ func Resolve[T any](c Container, key string) (T, error) {
 	return result, nil
 }
 
-// ResolveOrError resolves a component with type safety and returns an error on failure.
-func ResolveOrError[T any](c Container, key string) (T, error) {
-	return Resolve[T](c, key)
-}
-
 // TryResolve resolves a component, returns zero value and false if not found.
 func TryResolve[T any](c Container, key string) (T, bool) {
 	var zero T

@@ -24,10 +24,12 @@ func (f fakeTokenValidator) ValidateToken(string) (any, error) {
 func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(OptionalAuth(
-		fakeTokenValidator{err: errors.New("invalid")},
-		WithRejectInvalidTokens(true),
-	))
+	// Default behavior rejects invalid tokens (no WithAllowInvalidTokens needed).
+	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")})
+	if err != nil {
+		t.Fatalf("OptionalAuth() error: %v", err)
+	}
+	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -40,18 +42,43 @@ func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	}
 }
 
+func TestOptionalAuth_AllowInvalidTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h, err := OptionalAuth(
+		fakeTokenValidator{err: errors.New("invalid")},
+		WithAllowInvalidTokens(true),
+	)
+	if err != nil {
+		t.Fatalf("OptionalAuth() error: %v", err)
+	}
+	r.Use(h)
+	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Authorization", "Bearer bad")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
 func BenchmarkMiddlewareStackExecution(b *testing.B) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	warn := func(_ *gin.Context, _ string) {}
-	r.Use(
-		Auth(
-			fakeTokenValidator{claims: map[string]string{"sub": "user"}},
-			WithQueryTokenParam("token"),
-			WithQueryTokenAllowedPaths("/bench"),
-			WithQueryTokenWarningLogger(warn),
-		),
+	h, err := Auth(
+		fakeTokenValidator{claims: map[string]string{"sub": "user"}},
+		WithQueryTokenParam("token"),
+		WithQueryTokenAllowedPaths("/bench"),
+		WithQueryTokenWarningLogger(warn),
 	)
+	if err != nil {
+		b.Fatalf("Auth() error: %v", err)
+	}
+	r.Use(h)
 	r.GET("/bench", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	b.ResetTimer()

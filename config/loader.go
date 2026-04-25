@@ -166,12 +166,6 @@ type LoaderOption func(*LoaderConfig)
 // WarningFunc logs non-fatal configuration loading warnings.
 type WarningFunc func(msg string, args ...any)
 
-// Warning describes a non-fatal warning raised while loading configuration.
-type Warning struct {
-	Message string
-	File    string
-}
-
 // WithFileSystem sets a custom filesystem for the loader.
 func WithFileSystem(fs FileSystem) LoaderOption {
 	return func(lc *LoaderConfig) { lc.FileSystem = fs }
@@ -217,21 +211,17 @@ func LoadConfig(serviceName string, cfg interface{}, opts ...LoaderOption) error
 	resolver := &Resolver{FileSystem: lc.FileSystem}
 	files := resolver.ResolveFiles(serviceName, lc)
 
-	_, err := loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem, lc.WarningLogger)
-	return err
+	return loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem, lc.WarningLogger)
 }
 
 // loadFromResolvedFiles loads configuration from specific files.
-func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem, warn WarningFunc) ([]Warning, error) {
-	warnings := make([]Warning, 0)
+func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem, warn WarningFunc) error {
 	v := viper.New()
 
 	// 1. Load YAML config first (base configuration)
 	if files.ConfigFile != "" && fs.Exists(files.ConfigFile) {
 		v.SetConfigFile(files.ConfigFile)
 		if err := v.ReadInConfig(); err != nil {
-			msg := fmt.Sprintf("[config] warning: failed to load config file %s: %v", files.ConfigFile, err)
-			warnings = append(warnings, Warning{Message: msg, File: files.ConfigFile})
 			if warn != nil {
 				warn("[config] warning: failed to load config file %s: %v", files.ConfigFile, err)
 			}
@@ -241,8 +231,6 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 	// 2. Load profile .env file (environment-specific overrides)
 	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
 		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
-			msg := fmt.Sprintf("[config] warning: failed to load profile env file %s: %v", files.ProfileEnvFile, err)
-			warnings = append(warnings, Warning{Message: msg, File: files.ProfileEnvFile})
 			if warn != nil {
 				warn("[config] warning: failed to load profile env file %s: %v", files.ProfileEnvFile, err)
 			}
@@ -256,8 +244,6 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 	// 4. Load service .env file
 	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
-			msg := fmt.Sprintf("[config] warning: failed to load .env file %s: %v", files.EnvFile, err)
-			warnings = append(warnings, Warning{Message: msg, File: files.EnvFile})
 			if warn != nil {
 				warn("[config] warning: failed to load .env file %s: %v", files.EnvFile, err)
 			}
@@ -274,10 +260,10 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 			mapstructure.StringToSliceHookFunc(","),
 		),
 	)); err != nil {
-		return warnings, fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
+		return fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
 	}
 
-	return warnings, nil
+	return nil
 }
 
 // buildEnvSearchPaths creates a list of paths to search for .env files.

@@ -49,33 +49,16 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 	return f, ok
 }
 
-// DefaultFactoryRegistry is a package-level compatibility shim.
-// New code should prefer injecting an explicit registry into composition roots.
-var DefaultFactoryRegistry = NewFactoryRegistry()
-
-// RegisterFactory registers a storage backend factory in DefaultFactoryRegistry.
-// Implementation packages often call this from init() for backward compatibility.
-func RegisterFactory(name string, f StorageFactory) {
-	DefaultFactoryRegistry.Register(name, f)
-}
-
-// New creates a Storage implementation based on the given Config.
-// The provider field determines which backend is used.
-// providerCfg carries provider-specific settings (e.g. *s3.Config, *supabase.Config).
-// Ensure the desired provider package has been imported (e.g.
-// _ "github.com/kbukum/gokit/storage/local") so its factory is registered.
-func New(cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
-	return NewWithRegistry(DefaultFactoryRegistry, cfg, providerCfg, log)
-}
-
-// NewWithRegistry creates a Storage implementation using the provided registry.
-func NewWithRegistry(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
+// New creates a Storage implementation using the provided registry.
+// The registry is mandatory; pass an explicit *FactoryRegistry with the desired
+// provider registered (e.g. via local.Register, s3.Register, etc.).
+func New(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
+	if registry == nil {
+		return nil, fmt.Errorf("storage: factory registry is nil")
+	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
-	}
-	if registry == nil {
-		return nil, fmt.Errorf("storage: factory registry is nil")
 	}
 
 	l := log.WithComponent("storage")

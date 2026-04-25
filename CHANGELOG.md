@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking API Changes)
+- **storage**: `DefaultFactoryRegistry` global and `RegisterFactory()` / `New(cfg, providerCfg, log)` shims removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`local`, `s3`, `supabase`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root.
+- **discovery**: `DefaultProviderRegistry` global, `RegisterProviderFactory()`, and `GetProviderFactory()` shims removed. `NewComponent` now requires an explicit `*ProviderRegistry` as its first argument: `NewComponent(registry, cfg, log, opts...)`. Provider packages (`static`, `consul`) no longer register via `init()`; call their `Register(registry)` function instead. `WithProviderRegistry` option removed.
+- **server/middleware**: `Auth()` and `OptionalAuth()` now return `(gin.HandlerFunc, error)` instead of panicking on misconfiguration. All call sites must handle the returned error.
+- **server/middleware**: `OptionalAuth` rejects invalid tokens by default (secure-by-default). Use `WithAllowInvalidTokens(true)` to opt in to the previous lax behavior. `WithRejectInvalidTokens` option removed.
+- **di**: `ResolveOrError` removed (was an alias of `Resolve`). Use `Resolve` directly.
+- **server/middleware**: `TenantFromContextOrError` and `ErrNoTenantID` removed. Use `TenantFromContext` (returns `(string, bool)`) or `MustTenantFromContext`.
+- **config**: `Warning` struct and `[]Warning` return value removed from `loadFromResolvedFiles`. Non-fatal warnings are surfaced exclusively through the `WarningFunc` callback.
+
 ### Breaking Changes
 - **kafka → messaging**: The `gokit/kafka` module has been restructured into `gokit/messaging`
   - Abstract interfaces (`Producer`, `Consumer`, `Message`, `Event`) now live in `github.com/kbukum/gokit/messaging`

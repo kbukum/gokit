@@ -14,7 +14,7 @@ func ParsePathUUID(c *gin.Context, name string) (uuid.UUID, error) {
 	raw := c.Param(name)
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.Nil, goerrors.Validation("invalid " + name).WithDetail(name, raw)
+		return uuid.Nil, goerrors.Validation("invalid "+name).WithDetail(name, raw)
 	}
 	return id, nil
 }
@@ -24,7 +24,7 @@ func ParsePathInt(c *gin.Context, name string) (int, error) {
 	raw := c.Param(name)
 	v, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, goerrors.Validation("invalid " + name).WithDetail(name, raw)
+		return 0, goerrors.Validation("invalid "+name).WithDetail(name, raw)
 	}
 	return v, nil
 }
