@@ -25,8 +25,9 @@ func safePath(basePath, path string) (string, error) {
 	return fullPath, nil
 }
 
-func init() {
-	storage.RegisterFactory(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+// Register registers the local storage provider into the given registry.
+func Register(registry *storage.FactoryRegistry) {
+	registry.Register(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

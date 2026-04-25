@@ -23,8 +23,9 @@ type Provider struct {
 	stats  discovery.RegistryStats
 }
 
-func init() {
-	discovery.RegisterProviderFactory("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+// Register registers the consul discovery provider into the given registry.
+func Register(registry *discovery.ProviderRegistry) {
+	registry.Register("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		// Build consul config from generic Config fields + ProviderOptions
 		consulCfg := &Config{
 			Addr:   cfg.Addr,

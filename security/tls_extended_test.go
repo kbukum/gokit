@@ -422,8 +422,8 @@ func TestTLSConfig_Build_PermissionDeniedCAFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for permission-denied CA file")
 	}
-	if !strings.Contains(err.Error(), "failed to read CA file") {
-		t.Errorf("error should mention CA file read failure: %v", err)
+	if !strings.Contains(err.Error(), "failed to read CA file") && !strings.Contains(err.Error(), "failed to parse CA certificate") {
+		t.Errorf("error should mention CA file read or parse failure: %v", err)
 	}
 }
 

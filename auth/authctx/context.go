@@ -44,8 +44,8 @@ func Get[T any](ctx context.Context) (T, bool) {
 }
 
 // MustGet retrieves typed authentication claims from the context.
-// Panics if claims are missing or of the wrong type.
-// Use in handlers where authentication middleware guarantees claims exist.
+//
+// For use in tests and application startup only; never call from HTTP handlers or middleware.
 func MustGet[T any](ctx context.Context) T {
 	claims, ok := Get[T](ctx)
 	if !ok {

@@ -2,12 +2,8 @@ package di
 
 import "fmt"
 
-// MustResolve resolves a component with type safety, panics on error.
-// Use this in handlers when you need a dependency.
-//
-// Example:
-//
-//	botRepo := di.MustResolve[contracts.BotRepository](h.container, shareddi.Shared.BotRepository)
+// MustResolve resolves a component with type safety and panics on error.
+// For use in tests and application startup only; never call from HTTP handlers or middleware.
 func MustResolve[T any](c Container, key string) T {
 	instance, err := c.Resolve(key)
 	if err != nil {
@@ -21,15 +17,7 @@ func MustResolve[T any](c Container, key string) T {
 	return result
 }
 
-// Resolve resolves a component with type safety, returns error on failure.
-// Use this when you want to handle resolution errors gracefully.
-//
-// Example:
-//
-//	botRepo, err := di.Resolve[contracts.BotRepository](c, shareddi.Shared.BotRepository)
-//	if err != nil {
-//	    return fmt.Errorf("failed to get bot repository: %w", err)
-//	}
+// Resolve resolves a component with type safety and returns an error on failure.
 func Resolve[T any](c Container, key string) (T, error) {
 	var zero T
 	instance, err := c.Resolve(key)
@@ -44,13 +32,6 @@ func Resolve[T any](c Container, key string) (T, error) {
 }
 
 // TryResolve resolves a component, returns zero value and false if not found.
-// Use this when a dependency is optional.
-//
-// Example:
-//
-//	if metrics, ok := di.TryResolve[MetricsClient](c, "metrics"); ok {
-//	    metrics.RecordEvent(...)
-//	}
 func TryResolve[T any](c Container, key string) (T, bool) {
 	var zero T
 	instance, err := c.Resolve(key)

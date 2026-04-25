@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -11,14 +13,20 @@ import (
 	"github.com/kbukum/gokit/authz"
 )
 
+// QueryTokenWarningFunc logs a warning whenever query-token authentication is used.
+type QueryTokenWarningFunc func(c *gin.Context, tokenParam string)
+
 // AuthOption configures the Auth middleware.
 type AuthOption func(*authOptions)
 
 type authOptions struct {
-	skipPaths       []string
-	headerName      string
-	scheme          string
-	queryTokenParam string
+	skipPaths               []string
+	headerName              string
+	scheme                  string
+	queryTokenParam         string
+	queryTokenAllowedPaths  []string
+	queryTokenWarningLogger QueryTokenWarningFunc
+	allowInvalidTokens      bool
 }
 
 // WithSkipPaths skips authentication for requests whose path starts with
@@ -39,27 +47,36 @@ func WithScheme(scheme string) AuthOption {
 }
 
 // WithQueryTokenParam enables token extraction from a URL query parameter
-// as a fallback when the header is missing. This is useful for SSE endpoints
-// where browser EventSource clients cannot set custom headers.
+// as a fallback when the header is missing.
 func WithQueryTokenParam(param string) AuthOption {
 	return func(o *authOptions) { o.queryTokenParam = param }
 }
 
-// Auth returns a Gin middleware that validates tokens and stores the parsed
-// claims in the request context. Claims are retrieved in handlers with:
-//
-//	claims, ok := authctx.Get[*MyClaims](c.Request.Context())
-//
-// The validator is any auth.TokenValidator implementation — JWT, OIDC, API key, etc.
-// For JWT, use jwtService.AsValidator().
-func Auth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
-	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
-	for _, opt := range opts {
-		opt(o)
+// WithQueryTokenAllowedPaths sets explicit endpoint paths where query token auth is allowed.
+func WithQueryTokenAllowedPaths(paths ...string) AuthOption {
+	return func(o *authOptions) { o.queryTokenAllowedPaths = paths }
+}
+
+// WithQueryTokenWarningLogger configures a mandatory warning hook for query token auth usage.
+func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
+	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
+}
+
+// WithAllowInvalidTokens configures OptionalAuth to pass through requests with invalid tokens
+// instead of rejecting them with 401. By default (zero value), OptionalAuth rejects invalid tokens.
+// Set to true only when backward-compatible lax behaviour is explicitly required.
+func WithAllowInvalidTokens(allow bool) AuthOption {
+	return func(o *authOptions) { o.allowInvalidTokens = allow }
+}
+
+// Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
+func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
+	o := buildAuthOptions(opts...)
+	if err := o.validateQueryTokenConfig(); err != nil {
+		return nil, err
 	}
 
 	return func(c *gin.Context) {
-		// Skip configured paths
 		path := c.Request.URL.Path
 		for _, skip := range o.skipPaths {
 			if strings.HasPrefix(path, skip) {
@@ -68,37 +85,31 @@ func Auth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 			}
 		}
 
-		// Extract token
 		token, ok := extractToken(c, o)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "authorization required",
-			})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
 			return
 		}
 
-		// Validate
 		claims, err := validator.ValidateToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": "invalid token",
-			})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 
-		// Store claims in request context (type-safe retrieval via authctx.Get[T])
 		ctx := authctx.Set(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
-	}
+	}, nil
 }
 
 // OptionalAuth validates a token if present but allows unauthenticated requests.
-// If valid, claims are stored in context. If absent or invalid, request proceeds.
-func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
-	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
-	for _, opt := range opts {
-		opt(o)
+// By default, an invalid token returns 401. Use WithAllowInvalidTokens(true) to pass through
+// requests with invalid tokens anonymously instead.
+func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
+	o := buildAuthOptions(opts...)
+	if err := o.validateQueryTokenConfig(); err != nil {
+		return nil, err
 	}
 
 	return func(c *gin.Context) {
@@ -110,31 +121,25 @@ func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) gin.Handler
 
 		claims, err := validator.ValidateToken(token)
 		if err != nil {
-			c.Next()
+			if o.allowInvalidTokens {
+				c.Next()
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 
 		ctx := authctx.Set(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
-	}
+	}, nil
 }
 
-// Require is a generic guard middleware. It calls the check function and
-// returns 403 Forbidden if the check returns false.
-//
-// This is the most flexible guard — use it for any authorization logic:
-//
-//	router.Use(middleware.Require(func(c *gin.Context) bool {
-//	    claims, ok := authctx.Get[*MyClaims](c.Request.Context())
-//	    return ok && claims.IsAdmin()
-//	}))
+// Require is a generic guard middleware.
 func Require(check func(c *gin.Context) bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !check(c) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "insufficient permissions",
-			})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			return
 		}
 		c.Next()
@@ -142,52 +147,54 @@ func Require(check func(c *gin.Context) bool) gin.HandlerFunc {
 }
 
 // RequirePermission is a guard middleware that uses an authz.Checker.
-// The subjectExtractor reads the subject (e.g., role name) from the request,
-// and the checker determines if the subject has the required permission.
-//
-// Example:
-//
-//	checker := authz.NewMapChecker(rolePermissions)
-//	router.Use(middleware.RequirePermission(
-//	    checker,
-//	    "article:write",
-//	    func(c *gin.Context) string {
-//	        claims, _ := authctx.Get[*MyClaims](c.Request.Context())
-//	        return claims.Role
-//	    },
-//	))
 func RequirePermission(checker authz.Checker, required string, subjectExtractor func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subject := subjectExtractor(c)
 		if !checker.HasPermission(subject, required) {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error": "insufficient permissions",
-			})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "insufficient permissions"})
 			return
 		}
 		c.Next()
 	}
 }
 
+func buildAuthOptions(opts ...AuthOption) *authOptions {
+	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
+	for _, opt := range opts {
+		opt(o)
+	}
+	return o
+}
+
+func (o *authOptions) validateQueryTokenConfig() error {
+	if o.queryTokenParam == "" {
+		return nil
+	}
+	if len(o.queryTokenAllowedPaths) == 0 {
+		return fmt.Errorf("middleware/auth: query token extraction requires explicit WithQueryTokenAllowedPaths")
+	}
+	if o.queryTokenWarningLogger == nil {
+		return fmt.Errorf("middleware/auth: query token extraction requires WithQueryTokenWarningLogger")
+	}
+	return nil
+}
+
 // extractToken reads the token from the request based on options.
 func extractToken(c *gin.Context, o *authOptions) (string, bool) {
 	header := c.GetHeader(o.headerName)
 	if header != "" {
-		// If no scheme expected, return raw header value
 		if o.scheme == "" {
 			return header, true
 		}
-
-		// Parse "Scheme token" format
 		parts := strings.SplitN(header, " ", 2)
 		if len(parts) == 2 && strings.EqualFold(parts[0], o.scheme) {
 			return parts[1], true
 		}
 	}
 
-	// Fallback to query parameter if configured
-	if o.queryTokenParam != "" {
+	if o.queryTokenParam != "" && slices.Contains(o.queryTokenAllowedPaths, c.Request.URL.Path) {
 		if token := c.Query(o.queryTokenParam); token != "" {
+			o.queryTokenWarningLogger(c, o.queryTokenParam)
 			return token, true
 		}
 	}

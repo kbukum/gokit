@@ -6,6 +6,8 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/logger"
 )
 
 // ---------------------------------------------------------------------------
@@ -187,24 +189,30 @@ func TestByteClient_EmptyData(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNew_UnsupportedProvider(t *testing.T) {
-	// Verify the factory map doesn't contain this provider.
-	if _, ok := factories["nosuchprovider"]; ok {
+	// Verify a fresh registry doesn't contain this provider.
+	registry := NewFactoryRegistry()
+	if _, ok := registry.Get("nosuchprovider"); ok {
 		t.Error("factory should not exist for unsupported provider")
 	}
 }
 
 func TestFactoryRegistry_AddRemove(t *testing.T) {
-	original := len(factories)
-	// We cannot use the real StorageFactory type without importing logger,
-	// so just verify the map mechanics
-	factories["test-provider"] = nil
-	if len(factories) != original+1 {
-		t.Error("add did not increase map size")
+	registry := NewFactoryRegistry()
+	registry.Register("test-provider", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil })
+	if _, ok := registry.Get("test-provider"); !ok {
+		t.Fatal("expected test-provider registration")
 	}
-	delete(factories, "test-provider")
-	if len(factories) != original {
-		t.Error("cleanup failed")
-	}
+}
+
+func TestFactoryRegistry_RegisterDuplicatePanics(t *testing.T) {
+	registry := NewFactoryRegistry()
+	registry.Register("dup", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil })
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic on duplicate registration")
+		}
+	}()
+	registry.Register("dup", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil })
 }
 
 // ---------------------------------------------------------------------------
