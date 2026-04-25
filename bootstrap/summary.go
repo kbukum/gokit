@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -62,6 +64,12 @@ type ClientInfo struct {
 }
 
 // Summary tracks and displays the application bootstrap process.
+//
+// Output is written to the configured io.Writer (default: os.Stdout). Use
+// SetWriter (or the [WithWriter] option on NewSummaryWithOptions) to redirect
+// output — for example to a structured log line, an in-memory buffer for
+// tests, or a file. Library code MUST NOT write directly to stdout; the
+// configurable writer is the supported integration point.
 type Summary struct {
 	serviceName     string
 	version         string
@@ -72,11 +80,31 @@ type Summary struct {
 	routes          []RouteInfo
 	consumers       []ConsumerInfo
 	clients         []ClientInfo
+	writer          io.Writer
 }
 
-// NewSummary creates a new bootstrap summary tracker.
+// SummaryOption configures a Summary at construction time.
+type SummaryOption func(*Summary)
+
+// WithWriter sets the output writer for the summary. The default is os.Stdout.
+// Pass io.Discard to silence the summary entirely.
+func WithWriter(w io.Writer) SummaryOption {
+	return func(s *Summary) {
+		if w != nil {
+			s.writer = w
+		}
+	}
+}
+
+// NewSummary creates a new bootstrap summary tracker that writes to os.Stdout.
+// Use [NewSummaryWithOptions] to inject a custom writer.
 func NewSummary(serviceName, version string) *Summary {
-	return &Summary{
+	return NewSummaryWithOptions(serviceName, version)
+}
+
+// NewSummaryWithOptions creates a new bootstrap summary with the given options.
+func NewSummaryWithOptions(serviceName, version string, opts ...SummaryOption) *Summary {
+	s := &Summary{
 		serviceName:    serviceName,
 		version:        version,
 		components:     make([]ComponentStatus, 0),
@@ -85,6 +113,19 @@ func NewSummary(serviceName, version string) *Summary {
 		routes:         make([]RouteInfo, 0),
 		consumers:      make([]ConsumerInfo, 0),
 		clients:        make([]ClientInfo, 0),
+		writer:         os.Stdout,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// SetWriter overrides the output writer used by [Summary.DisplaySummary].
+// A nil writer is ignored.
+func (s *Summary) SetWriter(w io.Writer) {
+	if w != nil {
+		s.writer = w
 	}
 }
 
@@ -167,13 +208,13 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 	s.collectFromRegistry(ctx, registry)
 
 	// Header
-	fmt.Printf("\n")
-	fmt.Printf("🚀 \033[1;32m%s\033[0m \033[1;36mv%s\033[0m started in \033[33m%.2fs\033[0m\n\n",
+	fmt.Fprintf(s.writer, "\n")
+	fmt.Fprintf(s.writer, "🚀 \033[1;32m%s\033[0m \033[1;36mv%s\033[0m started in \033[33m%.2fs\033[0m\n\n",
 		s.serviceName, s.version, s.startupDuration.Seconds())
 
 	// Infrastructure (auto-discovered from Describable components + manual entries)
 	if len(s.infrastructure) > 0 {
-		fmt.Printf("\033[1m📊 Infrastructure\033[0m\n")
+		fmt.Fprintf(s.writer, "\033[1m📊 Infrastructure\033[0m\n")
 		for i, inf := range s.infrastructure {
 			prefix := treePrefix(i, len(s.infrastructure))
 			icon := statusIcon(inf.Status, inf.Healthy)
@@ -181,13 +222,16 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 			if inf.Port > 0 && !strings.Contains(details, fmt.Sprintf(":%d", inf.Port)) {
 				details = fmt.Sprintf("%s (:%d)", details, inf.Port)
 			}
-			fmt.Printf("   %s %s %s: %s\n", prefix, icon, inf.Name, details)
+			fmt.Fprintf(s.writer, "   %s %s %s: %s\n", prefix, icon, inf.Name, details)
 		}
-		fmt.Printf("\n")
+		fmt.Fprintf(s.writer, "\n")
 	}
 
 	// Component health summary
-	healthResults := registry.HealthAll(ctx)
+	var healthResults []component.Health
+	if registry != nil {
+		healthResults = registry.HealthAll(ctx)
+	}
 	if len(healthResults) > 0 {
 		healthy := 0
 		for _, h := range healthResults {
@@ -197,9 +241,9 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 		}
 		total := len(healthResults)
 		if healthy == total {
-			fmt.Printf("✅ All components healthy (%d/%d)\n", healthy, total)
+			fmt.Fprintf(s.writer, "✅ All components healthy (%d/%d)\n", healthy, total)
 		} else {
-			fmt.Printf("⚠️  Some components have issues (%d/%d healthy)\n", healthy, total)
+			fmt.Fprintf(s.writer, "⚠️  Some components have issues (%d/%d healthy)\n", healthy, total)
 		}
 	}
 
@@ -208,10 +252,10 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 
 	// Business layer (manually tracked — project-specific service details)
 	if len(s.business) > 0 {
-		fmt.Printf("\n\033[1m💼 Business Layer\033[0m\n")
+		fmt.Fprintf(s.writer, "\n\033[1m💼 Business Layer\033[0m\n")
 		for i, b := range s.business {
 			prefix := treePrefix(i, len(s.business))
-			fmt.Printf("   %s %s [%s] (%s)\n", prefix, businessIcon(b.Type), b.Name, b.Status)
+			fmt.Fprintf(s.writer, "   %s %s [%s] (%s)\n", prefix, businessIcon(b.Type), b.Name, b.Status)
 			for j, dep := range b.Dependencies {
 				depPrefix := "│   ├──"
 				if i == len(s.business)-1 {
@@ -224,35 +268,35 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 						depPrefix = "│   └──"
 					}
 				}
-				fmt.Printf("   %s 🔗 %s\n", depPrefix, dep)
+				fmt.Fprintf(s.writer, "   %s 🔗 %s\n", depPrefix, dep)
 			}
 		}
 	}
 
 	// Routes (auto-discovered from RouteProvider components + manual entries)
 	if len(s.routes) > 0 {
-		fmt.Printf("\n\033[1m🌐 Routes (%d)\033[0m\n", len(s.routes))
+		fmt.Fprintf(s.writer, "\n\033[1m🌐 Routes (%d)\033[0m\n", len(s.routes))
 		for i, r := range s.routes {
 			prefix := treePrefix(i, len(s.routes))
-			fmt.Printf("   %s %s%-7s\033[0m %s → %s\n", prefix, methodColor(r.Method), r.Method, r.Path, r.Handler)
+			fmt.Fprintf(s.writer, "   %s %s%-7s\033[0m %s → %s\n", prefix, methodColor(r.Method), r.Method, r.Path, r.Handler)
 		}
 	}
 
 	// Consumers
 	if len(s.consumers) > 0 {
-		fmt.Printf("\n\033[1m📨 Consumers\033[0m\n")
+		fmt.Fprintf(s.writer, "\n\033[1m📨 Consumers\033[0m\n")
 		for i, c := range s.consumers {
 			prefix := treePrefix(i, len(s.consumers))
-			fmt.Printf("   %s %s (group: %s, topic: %s) [%s]\n", prefix, c.Name, c.Group, c.Topic, c.Status)
+			fmt.Fprintf(s.writer, "   %s %s (group: %s, topic: %s) [%s]\n", prefix, c.Name, c.Group, c.Topic, c.Status)
 		}
 	}
 
 	// Clients
 	if len(s.clients) > 0 {
-		fmt.Printf("\n\033[1m🔌 Clients\033[0m\n")
+		fmt.Fprintf(s.writer, "\n\033[1m🔌 Clients\033[0m\n")
 		for i, c := range s.clients {
 			prefix := treePrefix(i, len(s.clients))
-			fmt.Printf("   %s %s → %s [%s] (%s)\n", prefix, c.Name, c.Target, c.Type, c.Status)
+			fmt.Fprintf(s.writer, "   %s %s → %s [%s] (%s)\n", prefix, c.Name, c.Target, c.Type, c.Status)
 		}
 	}
 
@@ -265,7 +309,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 			}
 		}
 		if len(unhealthy) > 0 {
-			fmt.Printf("\n\033[1m🏥 Health Issues\033[0m\n")
+			fmt.Fprintf(s.writer, "\n\033[1m🏥 Health Issues\033[0m\n")
 			for i, h := range unhealthy {
 				prefix := treePrefix(i, len(unhealthy))
 				icon := healthStatusIcon(h.Status)
@@ -273,12 +317,12 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container di.Cont
 				if h.Message != "" {
 					msg = fmt.Sprintf(" — %s", h.Message)
 				}
-				fmt.Printf("   %s %s %s: %s%s\n", prefix, icon, h.Name, strings.ToLower(string(h.Status)), msg)
+				fmt.Fprintf(s.writer, "   %s %s %s: %s%s\n", prefix, icon, h.Name, strings.ToLower(string(h.Status)), msg)
 			}
 		}
 	}
 
-	fmt.Printf("\n")
+	fmt.Fprintf(s.writer, "\n")
 }
 
 // collectFromRegistry auto-discovers infrastructure, routes, and health
@@ -397,7 +441,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 		return
 	}
 
-	fmt.Printf("\n\033[1m📦 DI Container (%d registrations)\033[0m\n", len(regs))
+	fmt.Fprintf(s.writer, "\n\033[1m📦 DI Container (%d registrations)\033[0m\n", len(regs))
 
 	// Count total displayable groups
 	totalGroups := 0
@@ -424,7 +468,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 			cont = " "
 		}
 
-		fmt.Printf("   %s %s %s (%d)\n", groupPrefix, g.icon, g.plural, len(g.items))
+		fmt.Fprintf(s.writer, "   %s %s %s (%d)\n", groupPrefix, g.icon, g.plural, len(g.items))
 		for j, item := range g.items {
 			name := strings.TrimPrefix(item.Key, g.label+".")
 			status := "✅"
@@ -432,21 +476,21 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 				status = "💤"
 			}
 			itemPrefix := treePrefix(j, len(g.items))
-			fmt.Printf("   %s   %s %s %s\n", cont, itemPrefix, status, name)
+			fmt.Fprintf(s.writer, "   %s   %s %s %s\n", cont, itemPrefix, status, name)
 		}
 	}
 
 	if len(infra) > 0 {
 		displayIdx++
 		groupPrefix := treePrefix(displayIdx-1, totalGroups)
-		fmt.Printf("   %s 🔧 infrastructure (%d)\n", groupPrefix, len(infra))
+		fmt.Fprintf(s.writer, "   %s 🔧 infrastructure (%d)\n", groupPrefix, len(infra))
 		for j, item := range infra {
 			status := "✅"
 			if item.Mode == di.Lazy && !item.Initialized {
 				status = "💤"
 			}
 			itemPrefix := treePrefix(j, len(infra))
-			fmt.Printf("      %s %s %s\n", itemPrefix, status, item.Key)
+			fmt.Fprintf(s.writer, "      %s %s %s\n", itemPrefix, status, item.Key)
 		}
 	}
 }

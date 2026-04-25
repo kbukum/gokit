@@ -13,6 +13,13 @@ concurrency:
 permissions:
   contents: read
 
+# NOTE: GitHub Actions are pinned to semver tags. The dependabot configuration
+# in .github/dependabot.yml is configured to update them weekly; once the first
+# PR cycle lands these tags can be upgraded to commit SHAs by Dependabot's
+# `pinDigests` (or via Renovate). The Go version consistency check below
+# guarantees no module-level Go version drift, mitigating one of the two
+# supply-chain dimensions called out in the review.
+
 jobs:
   # ── Stage 1: Discover all Go modules dynamically ──────────────────────────
   discover:
@@ -32,7 +39,25 @@ jobs:
           echo "modules=$modules" >> "$GITHUB_OUTPUT"
           echo "Discovered modules: $modules"
 
-  # ── Stage 2a: Tidy check (single job) ─────────────────────────────────────
+  # ── Stage 2: Go version consistency across all modules ─────────────────────
+  version-check:
+    name: Go Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify uniform Go version across modules
+        run: |
+          versions=$(grep '^go ' $(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*') | awk '{print $NF}' | sort -u)
+          count=$(printf '%s\n' "$versions" | grep -c .)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Multiple Go versions found across modules:"
+            printf '%s\n' "$versions"
+            exit 1
+          fi
+          echo "All modules use Go version: $versions"
+
+  # ── Stage 3a: Tidy + CHANGELOG check ──────────────────────────────────────
   tidy:
     name: Tidy Check
     runs-on: ubuntu-latest
@@ -57,15 +82,28 @@ jobs:
             exit 1
           fi
 
-  # ── Stage 2b: Build + Vet + Test (per module, parallel) ───────────────────
+  # ── Stage 3b: Build + Vet + Test (per module × OS, parallel) ──────────────
   check:
-    name: Check (${{ matrix.module }})
+    name: Check (${{ matrix.module }} / ${{ matrix.os }})
     needs: discover
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         module: ${{ fromJSON(needs.discover.outputs.modules) }}
+        os: [ubuntu-latest]
+        # Cross-platform runs are scoped to a representative module to keep
+        # CI cost bounded. Modules that are platform-sensitive (filesystem,
+        # process, server) can be added to `include`.
+        include:
+          - module: '.'
+            os: macos-latest
+          - module: '.'
+            os: windows-latest
+          - module: 'storage'
+            os: macos-latest
+          - module: 'server'
+            os: macos-latest
     steps:
       - uses: actions/checkout@v6
 
@@ -83,11 +121,19 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go vet ./...
 
-      - name: Test + Coverage
+      - name: Test (race + shuffle)
+        if: matrix.os != 'windows-latest'
         working-directory: ${{ matrix.module }}
-        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Test (no race on Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: ${{ matrix.module }}
+        shell: bash
+        run: go test -shuffle=on -count=1 ./...
 
       - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest'
         uses: codecov/codecov-action@v4
         with:
           files: ${{ matrix.module }}/coverage.out
@@ -96,7 +142,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # ── Stage 2c: Lint (per module, parallel) ─────────────────────────────────
+  # ── Stage 3c: Lint (per module, parallel) ─────────────────────────────────
   lint:
     name: Lint (${{ matrix.module }})
     needs: discover
@@ -117,12 +163,14 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # Pinned to a specific version (was previously `latest`, which can
+          # cause non-deterministic CI failures when a new linter release ships).
+          version: v2.0.0
           working-directory: ${{ matrix.module }}
 
-  # ── Stage 2d: Security Scan ─────────────────────────────────────────────
-  security:
-    name: Security Scan
+  # ── Stage 3d: Security — gosec ─────────────────────────────────────────────
+  gosec:
+    name: gosec
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -137,22 +185,87 @@ jobs:
         with:
           args: -exclude-generated ./...
 
+  # ── Stage 3e: Security — govulncheck per module ───────────────────────────
+  vuln:
+    name: Vuln (${{ matrix.module }})
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
       - name: Run govulncheck
+        working-directory: ${{ matrix.module }}
         run: govulncheck ./...
+
+  # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
+  fuzz:
+    name: Fuzz Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # 30 seconds per target — enough to surface obvious regressions; long
+      # fuzzing campaigns are expected to run in a separate scheduled workflow.
+      - name: Fuzz validation
+        run: go test -run='^$' -fuzz='FuzzValidateUUID' -fuzztime=30s ./validation/
+
+      - name: Fuzz server middleware (auth)
+        working-directory: server
+        run: go test -run='^$' -fuzz='FuzzExtractToken' -fuzztime=30s ./middleware/
+
+      - name: Fuzz server httpx
+        working-directory: server
+        run: |
+          # Discover any Fuzz* in httpx and run them serially.
+          targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' ./httpx/fuzz_test.go | awk '{print $2}' | sort -u || true)
+          for t in $targets; do
+            echo "Running fuzz target $t"
+            go test -run='^$' -fuzz="^${t}$" -fuzztime=30s ./httpx/
+          done
+
+      - name: Fuzz messaging
+        working-directory: messaging
+        run: |
+          targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' ./fuzz_test.go | awk '{print $2}' | sort -u || true)
+          for t in $targets; do
+            echo "Running fuzz target $t"
+            go test -run='^$' -fuzz="^${t}$" -fuzztime=30s ./
+          done
 
   # ── Gate: Aggregate status for branch protection ──────────────────────────
   ci-status:
     name: CI Status
     if: always()
-    needs: [tidy, check, lint, security]
+    needs: [tidy, version-check, check, lint, gosec, vuln, fuzz]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.tidy.result }}" "${{ needs.check.result }}" "${{ needs.lint.result }}" "${{ needs.security.result }}")
+          results=("${{ needs.tidy.result }}" \
+                   "${{ needs.version-check.result }}" \
+                   "${{ needs.check.result }}" \
+                   "${{ needs.lint.result }}" \
+                   "${{ needs.gosec.result }}" \
+                   "${{ needs.vuln.result }}" \
+                   "${{ needs.fuzz.result }}")
           for r in "${results[@]}"; do
             if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
               echo "::error::CI failed — one or more jobs did not succeed."

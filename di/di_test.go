@@ -138,7 +138,7 @@ func TestMustResolveSuccess(t *testing.T) {
 	c := NewContainer()
 	c.RegisterSingleton("val", 42)
 
-	val := c.MustResolve("val")
+	val := MustResolve[int](c, "val")
 	if val != 42 {
 		t.Errorf("expected 42, got %v", val)
 	}
@@ -151,7 +151,7 @@ func TestMustResolvePanics(t *testing.T) {
 			t.Error("expected MustResolve to panic for unregistered component")
 		}
 	}()
-	c.MustResolve("missing")
+	_ = MustResolve[any](c, "missing")
 }
 
 func TestSingletonPriorityOverComponent(t *testing.T) {
