@@ -15,177 +15,40 @@ updates:
         patterns:
           - "*"
 
-  # ── Go modules — root + every sub-module ────────────────────────────────────
+  # ── Go modules — all modules auto-discovered via globs ──────────────────────
+  # Dependabot does NOT read go.work; directories must be listed explicitly.
+  # The wildcard globs below auto-discover modules at 1-level and 2-level depth
+  # so new modules are picked up without editing this file.
   - package-ecosystem: "gomod"
-    directory: "/"
+    directories:
+      - "/"           # root module
+      - "/*"          # 1-level sub-modules (auth, server, storage, …)
+      - "/*/*"        # 2-level sub-modules (bench/storage, llm/providers, */testutil, …)
     schedule:
       interval: "weekly"
     commit-message:
       prefix: "deps"
+      include: "scope"
     labels:
       - "dependencies"
       - "go"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 15
     groups:
       otel:
         patterns:
           - "go.opentelemetry.io/*"
+        group-by: dependency-name
       grpc:
         patterns:
           - "google.golang.org/grpc"
           - "google.golang.org/grpc/*"
           - "google.golang.org/genproto/*"
-
-  - package-ecosystem: "gomod"
-    directory: "/auth"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(auth)"
-    labels:
-      - "dependencies"
-      - "go"
-
-  - package-ecosystem: "gomod"
-    directory: "/authz"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(authz)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/database"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(database)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/redis"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(redis)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/httpclient"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(httpclient)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/messaging"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(messaging)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/storage"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(storage)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/server"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(server)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/grpc"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(grpc)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/discovery"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(discovery)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/connect"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(connect)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/workload"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(workload)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/llm"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(llm)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/llm/providers"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(llm/providers)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/agent"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(agent)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/stateful"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(stateful)"
-    labels:
-      - "dependencies"
-
-  - package-ecosystem: "gomod"
-    directory: "/testutil"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "deps(testutil)"
-    labels:
-      - "dependencies"
+        group-by: dependency-name
+      aws:
+        patterns:
+          - "github.com/aws/*"
+        group-by: dependency-name
+      k8s:
+        patterns:
+          - "k8s.io/*"
+        group-by: dependency-name
