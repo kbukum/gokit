@@ -15,8 +15,9 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
-func init() {
-	storage.RegisterFactory(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+// Register registers the S3 storage provider into the given registry.
+func Register(registry *storage.FactoryRegistry) {
+	registry.Register(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

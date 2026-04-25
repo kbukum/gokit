@@ -26,7 +26,7 @@ type authOptions struct {
 	queryTokenParam         string
 	queryTokenAllowedPaths  []string
 	queryTokenWarningLogger QueryTokenWarningFunc
-	rejectInvalidTokens     bool
+	allowInvalidTokens      bool
 }
 
 // WithSkipPaths skips authentication for requests whose path starts with
@@ -62,17 +62,18 @@ func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
 }
 
-// WithRejectInvalidTokens configures OptionalAuth to reject invalid tokens with 401.
-// Defaults to false for backward compatibility; true is recommended for stricter security.
-func WithRejectInvalidTokens(reject bool) AuthOption {
-	return func(o *authOptions) { o.rejectInvalidTokens = reject }
+// WithAllowInvalidTokens configures OptionalAuth to pass through requests with invalid tokens
+// instead of rejecting them with 401. By default (zero value), OptionalAuth rejects invalid tokens.
+// Set to true only when backward-compatible lax behaviour is explicitly required.
+func WithAllowInvalidTokens(allow bool) AuthOption {
+	return func(o *authOptions) { o.allowInvalidTokens = allow }
 }
 
 // Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
-func Auth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
+func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return func(c *gin.Context) {
@@ -99,15 +100,16 @@ func Auth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
 		ctx := authctx.Set(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
-	}
+	}, nil
 }
 
 // OptionalAuth validates a token if present but allows unauthenticated requests.
-// If RejectInvalidTokens is true, an invalid token returns 401 instead of proceeding anonymously.
-func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) gin.HandlerFunc {
+// By default, an invalid token returns 401. Use WithAllowInvalidTokens(true) to pass through
+// requests with invalid tokens anonymously instead.
+func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return func(c *gin.Context) {
@@ -119,18 +121,18 @@ func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) gin.Handler
 
 		claims, err := validator.ValidateToken(token)
 		if err != nil {
-			if o.rejectInvalidTokens {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			if o.allowInvalidTokens {
+				c.Next()
 				return
 			}
-			c.Next()
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 
 		ctx := authctx.Set(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
-	}
+	}, nil
 }
 
 // Require is a generic guard middleware.

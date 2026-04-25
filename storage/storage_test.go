@@ -2,12 +2,12 @@ package storage
 
 import (
 	"bytes"
-
 	"context"
-	"github.com/kbukum/gokit/logger"
 	"io"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/logger"
 )
 
 // ---------------------------------------------------------------------------
@@ -189,8 +189,9 @@ func TestByteClient_EmptyData(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestNew_UnsupportedProvider(t *testing.T) {
-	// Verify the factory map doesn't contain this provider.
-	if _, ok := DefaultFactoryRegistry.Get("nosuchprovider"); ok {
+	// Verify a fresh registry doesn't contain this provider.
+	registry := NewFactoryRegistry()
+	if _, ok := registry.Get("nosuchprovider"); ok {
 		t.Error("factory should not exist for unsupported provider")
 	}
 }

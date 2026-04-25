@@ -11,14 +11,17 @@ import (
 // Component wraps Storage and implements component.Component for lifecycle management.
 type Component struct {
 	storage     Storage
+	registry    *FactoryRegistry
 	cfg         Config
 	providerCfg any
 	log         *logger.Logger
 }
 
 // NewComponent creates a storage component for use with the component registry.
-func NewComponent(cfg Config, providerCfg any, log *logger.Logger) *Component {
+// registry is mandatory; construct one and register the desired provider(s) before passing it.
+func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) *Component {
 	return &Component{
+		registry:    registry,
 		cfg:         cfg,
 		providerCfg: providerCfg,
 		log:         log.WithComponent("storage"),
@@ -43,7 +46,7 @@ func (c *Component) Start(_ context.Context) error {
 		return nil
 	}
 
-	s, err := New(c.cfg, c.providerCfg, c.log)
+	s, err := New(c.registry, c.cfg, c.providerCfg, c.log)
 	if err != nil {
 		return fmt.Errorf("storage start: %w", err)
 	}

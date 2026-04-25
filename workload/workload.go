@@ -326,9 +326,9 @@ type ImageConfig struct {
 
 // ImageEvent represents an image lifecycle event from the runtime.
 type ImageEvent struct {
-	Action    string    // "pull", "delete", "tag", "untag", "import"
-	ImageRef  string    // Best-effort image reference
-	ImageID   string    // Image ID
+	Action    string // "pull", "delete", "tag", "untag", "import"
+	ImageRef  string // Best-effort image reference
+	ImageID   string // Image ID
 	Timestamp time.Time
 }
 

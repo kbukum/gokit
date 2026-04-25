@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,9 +17,6 @@ type TenantConfig struct {
 type tenantContextKey struct{}
 
 var tenantKey = tenantContextKey{}
-
-// ErrNoTenantID is returned when tenant ID is not present in request context.
-var ErrNoTenantID = errors.New("tenant: ID not found in context")
 
 // Tenant returns a Gin middleware that extracts tenant ID from request headers and stores it in context.
 func Tenant(cfg TenantConfig) gin.HandlerFunc {
@@ -68,13 +64,4 @@ func MustTenantFromContext(ctx context.Context) string {
 		panic("tenant: ID not found in context")
 	}
 	return tenantID
-}
-
-// TenantFromContextOrError retrieves the tenant ID from context and returns an error when missing.
-func TenantFromContextOrError(ctx context.Context) (string, error) {
-	tenantID, ok := TenantFromContext(ctx)
-	if !ok {
-		return "", ErrNoTenantID
-	}
-	return tenantID, nil
 }

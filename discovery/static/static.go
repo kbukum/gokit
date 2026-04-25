@@ -17,14 +17,15 @@ type Provider struct {
 	instances map[string][]discovery.ServiceInstance // keyed by service name
 }
 
-func init() {
-	discovery.RegisterProviderFactory("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+// Register registers the static and k8s discovery providers into the given registry.
+func Register(registry *discovery.ProviderRegistry) {
+	registry.Register("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})
 
 	// k8s uses the static provider as a fallback.
-	discovery.RegisterProviderFactory("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	registry.Register("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})

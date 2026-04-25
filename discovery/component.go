@@ -53,27 +53,6 @@ func (r *ProviderRegistry) Get(name string) (ProviderFactory, bool) {
 	return f, ok
 }
 
-// DefaultProviderRegistry is a package-level compatibility shim.
-// New code should prefer explicit registry wiring in the composition root.
-var DefaultProviderRegistry = NewProviderRegistry()
-
-// RegisterProviderFactory registers a discovery backend factory for the given
-// provider name. Implementation packages often call this from init() for
-// backward compatibility.
-func RegisterProviderFactory(name string, f ProviderFactory) {
-	DefaultProviderRegistry.Register(name, f)
-}
-
-// GetProviderFactory returns the factory registered for the given provider name.
-// Returns an error if no factory is registered.
-func GetProviderFactory(name string) (ProviderFactory, error) {
-	f, ok := DefaultProviderRegistry.Get(name)
-	if !ok {
-		return nil, fmt.Errorf("unsupported discovery provider %q (not registered)", name)
-	}
-	return f, nil
-}
-
 // Component wraps a Registry and Discovery pair and implements
 // component.Component for lifecycle management.
 type Component struct {
@@ -90,16 +69,9 @@ type Component struct {
 // ComponentOption configures discovery component behavior.
 type ComponentOption func(*Component)
 
-// WithProviderRegistry configures the discovery provider registry used by the component.
-func WithProviderRegistry(registry *ProviderRegistry) ComponentOption {
-	return func(c *Component) {
-		if registry != nil {
-			c.providers = registry
-		}
-	}
-}
-
 // WithIPProbeTarget configures fallback UDP probe target for local IP detection.
+// When not set (or empty), UDP probing is disabled and only interface enumeration
+// is used to determine the local IP address.
 func WithIPProbeTarget(addr string) ComponentOption {
 	return func(c *Component) {
 		if addr != "" {
@@ -109,13 +81,17 @@ func WithIPProbeTarget(addr string) ComponentOption {
 }
 
 // NewComponent creates a discovery Component for use with the component registry.
-func NewComponent(cfg Config, log *logger.Logger, opts ...ComponentOption) *Component {
+// registry must not be nil; panics if it is.
+func NewComponent(registry *ProviderRegistry, cfg Config, log *logger.Logger, opts ...ComponentOption) *Component {
+	if registry == nil {
+		panic("discovery: provider registry must not be nil")
+	}
 	c := &Component{
 		cfg:           cfg,
 		log:           log.WithComponent("discovery"),
-		providers:     DefaultProviderRegistry,
+		providers:     registry,
 		localIPFinder: defaultLocalIPFinder,
-		ipProbeTarget: "8.8.8.8:80",
+		ipProbeTarget: "",
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -186,13 +162,23 @@ func (c *Component) Start(ctx context.Context) error {
 			addr = ip
 		}
 
-		svc := &ServiceInfo{ID: c.cfg.Registration.ServiceID, Name: c.cfg.Registration.ServiceName, Address: addr, Port: c.cfg.Registration.ServicePort, Tags: c.cfg.Registration.Tags, Metadata: c.cfg.Registration.Metadata}
+		svc := &ServiceInfo{
+			ID:       c.cfg.Registration.ServiceID,
+			Name:     c.cfg.Registration.ServiceName,
+			Address:  addr,
+			Port:     c.cfg.Registration.ServicePort,
+			Tags:     c.cfg.Registration.Tags,
+			Metadata: c.cfg.Registration.Metadata,
+		}
 
 		if err := c.registerWithRetry(ctx, svc); err != nil {
 			if c.cfg.Registration.Required {
 				return fmt.Errorf("discovery: register self: %w", err)
 			}
-			c.log.Warn("failed to register with discovery — continuing in degraded mode", map[string]interface{}{"error": err.Error(), "service_id": svc.ID})
+			c.log.Warn("failed to register with discovery — continuing in degraded mode", map[string]interface{}{
+				"error":      err.Error(),
+				"service_id": svc.ID,
+			})
 		}
 	}
 
@@ -208,7 +194,9 @@ func (c *Component) Stop(ctx context.Context) error {
 
 	if c.registry != nil && c.cfg.Enabled && c.cfg.Registration.ServiceID != "" {
 		if err := c.registry.Deregister(ctx, c.cfg.Registration.ServiceID); err != nil {
-			c.log.Warn("failed to deregister on stop", map[string]interface{}{"error": err.Error()})
+			c.log.Warn("failed to deregister on stop", map[string]interface{}{
+				"error": err.Error(),
+			})
 		}
 	}
 
@@ -221,27 +209,47 @@ func (c *Component) Stop(ctx context.Context) error {
 // Health returns the current health status of the discovery component.
 func (c *Component) Health(ctx context.Context) component.Health {
 	if c.discovery == nil {
-		return component.Health{Name: c.Name(), Status: component.StatusUnhealthy, Message: "discovery not initialized"}
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusUnhealthy,
+			Message: "discovery not initialized",
+		}
 	}
 
 	if !c.cfg.Enabled {
-		return component.Health{Name: c.Name(), Status: component.StatusHealthy, Message: "disabled (static)"}
+		return component.Health{
+			Name:    c.Name(),
+			Status:  component.StatusHealthy,
+			Message: "disabled (static)",
+		}
 	}
 
 	if c.registry != nil {
 		stats := c.registry.Stats()
 		if stats.RegisteredServices > 0 {
-			return component.Health{Name: c.Name(), Status: component.StatusHealthy}
+			return component.Health{
+				Name:   c.Name(),
+				Status: component.StatusHealthy,
+			}
 		}
 	}
 
-	return component.Health{Name: c.Name(), Status: component.StatusDegraded, Message: "no services registered"}
+	return component.Health{
+		Name:    c.Name(),
+		Status:  component.StatusDegraded,
+		Message: "no services registered",
+	}
 }
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
 	details := fmt.Sprintf("provider=%s service=%s", c.cfg.Provider, c.cfg.Registration.ServiceName)
-	return component.Description{Name: "Discovery", Type: "discovery", Details: details, Port: c.cfg.Registration.ServicePort}
+	return component.Description{
+		Name:    "Discovery",
+		Type:    "discovery",
+		Details: details,
+		Port:    c.cfg.Registration.ServicePort,
+	}
 }
 
 type networkResolver interface {
@@ -269,6 +277,9 @@ func resolveLocalIPv4(resolver networkResolver, probeTarget string) (string, err
 	ip, err := localIPv4FromInterfaces(resolver)
 	if err == nil {
 		return ip, nil
+	}
+	if probeTarget == "" {
+		return "", fmt.Errorf("discovery: failed to detect local IP via interfaces and probe target not configured: %w", err)
 	}
 	return localIPFromUDPProbe(resolver, probeTarget)
 }
@@ -313,7 +324,11 @@ func localIPFromUDPProbe(resolver networkResolver, probeTarget string) (string, 
 		return "", err
 	}
 	defer conn.Close() //nolint:errcheck
-	return conn.LocalAddr().(*net.UDPAddr).IP.String(), nil
+	udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return "", fmt.Errorf("discovery: unexpected local address type %T", conn.LocalAddr())
+	}
+	return udpAddr.IP.String(), nil
 }
 
 // registerWithRetry attempts registration with exponential backoff.
@@ -332,7 +347,12 @@ func (c *Component) registerWithRetry(ctx context.Context, svc *ServiceInfo) err
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if err := c.registry.Register(ctx, svc); err != nil {
 			lastErr = err
-			c.log.Warn("failed to register service", map[string]interface{}{"error": err.Error(), "service_id": svc.ID, "attempt": attempt, "max": maxRetries})
+			c.log.Warn("failed to register service", map[string]interface{}{
+				"error":      err.Error(),
+				"service_id": svc.ID,
+				"attempt":    attempt,
+				"max":        maxRetries,
+			})
 			if attempt < maxRetries {
 				select {
 				case <-ctx.Done():
