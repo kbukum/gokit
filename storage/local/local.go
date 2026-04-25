@@ -25,7 +25,8 @@ func safePath(basePath, path string) (string, error) {
 	return fullPath, nil
 }
 
-func init() {
+// RegisterDefaultFactory registers the local storage provider in the default storage registry.
+func RegisterDefaultFactory() {
 	storage.RegisterFactory(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
@@ -41,6 +42,12 @@ func init() {
 		}
 		return NewStorage(c.BasePath)
 	})
+}
+
+func init() {
+	// Backward compatibility shim: keep init registration for existing imports.
+	// New applications should call RegisterDefaultFactory() from composition root.
+	RegisterDefaultFactory()
 }
 
 // Storage implements storage.Storage using the local filesystem.

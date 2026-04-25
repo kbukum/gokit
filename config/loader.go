@@ -157,10 +157,20 @@ type LoaderConfig struct {
 	EnvFile        string // Direct env file path (optional)
 	Profile        string // Profile name (e.g., "development", "docker", "staging")
 	ProfileEnabled bool   // Whether profile loading was explicitly enabled
+	WarningLogger  WarningFunc
 }
 
 // LoaderOption is a functional option for LoadConfig.
 type LoaderOption func(*LoaderConfig)
+
+// WarningFunc logs non-fatal configuration loading warnings.
+type WarningFunc func(msg string, args ...any)
+
+// Warning describes a non-fatal warning raised while loading configuration.
+type Warning struct {
+	Message string
+	File    string
+}
 
 // WithFileSystem sets a custom filesystem for the loader.
 func WithFileSystem(fs FileSystem) LoaderOption {
@@ -187,6 +197,11 @@ func WithProfile(profile string) LoaderOption {
 	}
 }
 
+// WithWarningLogger sets a warning logger callback for non-fatal loader issues.
+func WithWarningLogger(fn WarningFunc) LoaderOption {
+	return func(lc *LoaderConfig) { lc.WarningLogger = fn }
+}
+
 // LoadConfig loads configuration for a service into the provided cfg struct.
 // It searches for config.yml and .env files in standard locations, binds
 // environment variables, and unmarshals the result into cfg.
@@ -202,25 +217,35 @@ func LoadConfig(serviceName string, cfg interface{}, opts ...LoaderOption) error
 	resolver := &Resolver{FileSystem: lc.FileSystem}
 	files := resolver.ResolveFiles(serviceName, lc)
 
-	return loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem)
+	_, err := loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem, lc.WarningLogger)
+	return err
 }
 
 // loadFromResolvedFiles loads configuration from specific files.
-func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem) error {
+func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem, warn WarningFunc) ([]Warning, error) {
+	warnings := make([]Warning, 0)
 	v := viper.New()
 
 	// 1. Load YAML config first (base configuration)
 	if files.ConfigFile != "" && fs.Exists(files.ConfigFile) {
 		v.SetConfigFile(files.ConfigFile)
 		if err := v.ReadInConfig(); err != nil {
-			fmt.Printf("[config] warning: failed to load config file %s: %v\n", files.ConfigFile, err)
+			msg := fmt.Sprintf("[config] warning: failed to load config file %s: %v", files.ConfigFile, err)
+			warnings = append(warnings, Warning{Message: msg, File: files.ConfigFile})
+			if warn != nil {
+				warn("[config] warning: failed to load config file %s: %v", files.ConfigFile, err)
+			}
 		}
 	}
 
 	// 2. Load profile .env file (environment-specific overrides)
 	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
 		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
-			fmt.Printf("[config] warning: failed to load profile env file %s: %v\n", files.ProfileEnvFile, err)
+			msg := fmt.Sprintf("[config] warning: failed to load profile env file %s: %v", files.ProfileEnvFile, err)
+			warnings = append(warnings, Warning{Message: msg, File: files.ProfileEnvFile})
+			if warn != nil {
+				warn("[config] warning: failed to load profile env file %s: %v", files.ProfileEnvFile, err)
+			}
 		}
 	}
 
@@ -231,7 +256,11 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 	// 4. Load service .env file
 	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
-			fmt.Printf("[config] warning: failed to load .env file %s: %v\n", files.EnvFile, err)
+			msg := fmt.Sprintf("[config] warning: failed to load .env file %s: %v", files.EnvFile, err)
+			warnings = append(warnings, Warning{Message: msg, File: files.EnvFile})
+			if warn != nil {
+				warn("[config] warning: failed to load .env file %s: %v", files.EnvFile, err)
+			}
 		} else {
 			// Re-bind env vars after loading .env to pick up new variables
 			autoBindEnvVars(v)
@@ -245,10 +274,10 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 			mapstructure.StringToSliceHookFunc(","),
 		),
 	)); err != nil {
-		return fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
+		return warnings, fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
 	}
 
-	return nil
+	return warnings, nil
 }
 
 // buildEnvSearchPaths creates a list of paths to search for .env files.

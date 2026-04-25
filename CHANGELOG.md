@@ -149,7 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **httpclient**: Enhanced request handling and REST client functionality
 
 ### Fixed
-- **discovery**: Standardized Go version to 1.25.0 (was 1.25.5 in discovery and discovery/testutil)
+- **discovery**: Standardized Go version to 1.25.8 (was 1.25.5 in discovery and discovery/testutil)
 
 ## [0.1.2] - 2026-02-24
 
@@ -191,14 +191,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **server**: Renamed `ServerComponent` to `Component` to avoid stuttering.
 - **resilience**: Updated `ExecuteWithResult` to accept `context.Context` as the first parameter.
 - **various**: Updated multiple functions to accept configuration by pointer to improve performance and satisfy linters.
-
-## [Unreleased]
-
-### Added
-- Core module: errors, config, logger, util, version, encryption, validation, di, resilience, observability, sse, provider, pipeline, component, bootstrap, security
-- Sub-modules: database, redis, kafka, storage, server, grpc, discovery, connect, httpclient, workload, auth, authz, process
-- Provider pattern with generic Registry/Manager/Selector
-- Pull-based pipeline with Throttle, Batch, Debounce, and Window operators
-- Unified HTTP server (Gin + h2c) with middleware and endpoint sub-packages
-- Connect-Go integration module for RPC alongside REST
-- Multi-module architecture: core stays lightweight, heavy deps in sub-modules
