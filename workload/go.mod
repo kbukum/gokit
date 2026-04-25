@@ -8,9 +8,9 @@ require (
 	github.com/docker/go-connections v0.7.0
 	github.com/kbukum/gokit v0.2.0
 	github.com/opencontainers/image-spec v1.1.1
-	k8s.io/api v0.35.3
+	k8s.io/api v0.36.0
 	k8s.io/apimachinery v0.36.0
-	k8s.io/client-go v0.35.3
+	k8s.io/client-go v0.36.0
 )
 
 require (
