@@ -3,6 +3,7 @@ version: "2"
 linters:
   default: standard
   enable:
+    # --- Existing ---
     - misspell
     - unconvert
     - unparam
@@ -18,6 +19,15 @@ linters:
     - exhaustive
     - unused
     - ineffassign
+    # --- New: error handling discipline ---
+    - errorlint
+    - nilerr
+    # --- New: bug-prone patterns ---
+    - copyloopvar
+    - wastedassign
+    # --- New: SQL safety ---
+    - sqlclosecheck
+    - rowserrcheck
   exclusions:
     rules:
       - path: "_test\\.go"
@@ -28,8 +38,15 @@ linters:
           - unparam
           - unused
           - gocritic
+          - errorlint
+      # Bootstrap summary intentionally writes to a configurable writer.
+      - path: "bootstrap/summary\\.go"
+        linters:
+          - errcheck
   settings:
     govet:
+      enable:
+        - shadow
       disable:
         - fieldalignment
     gocritic:
@@ -46,15 +63,21 @@ linters:
       locale: US
     gosec:
       excludes:
-        - G115
-        - G404
-        - G306
-        - G402  # TLS InsecureSkipVerify - intentional for test/dev configs
-        - G304  # File paths from variables - required for storage abstraction
-        - G117  # Exported struct fields matching secret patterns - config structs need these fields
-        - G704  # SSRF via taint analysis - HTTP clients use configured base URLs
+        - G115  # Integer overflow conversion — too noisy across the codebase.
+        - G404  # math/rand is acceptable for non-security paths (jitter, IDs).
+        - G306  # File permissions — flagged at specific call sites where 0644 is intentional.
+        - G304  # File paths from variables — required for storage abstraction.
+        - G117  # Exported struct fields matching secret patterns — config structs need these fields.
+        # G402 (TLS InsecureSkipVerify) is intentionally NOT excluded here.
+        # Per-site //nolint:gosec comments document the opt-in semantics at
+        # security/tls.go and discovery/consul/consul.go.
+        - G704  # SSRF via taint analysis — HTTP clients use configured base URLs.
     exhaustive:
       default-signifies-exhaustive: true
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
 
 issues:
   max-issues-per-linter: 0

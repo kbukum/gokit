@@ -1,7 +1,7 @@
 # gokit
 
 [![CI](https://github.com/kbukum/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/kbukum/gokit/actions/workflows/ci.yml)
-[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://go.dev/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/kbukum/gokit.svg)](https://pkg.go.dev/github.com/kbukum/gokit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **A modular Go toolkit for building production services.**
