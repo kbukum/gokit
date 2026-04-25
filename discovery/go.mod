@@ -1,10 +1,10 @@
 module github.com/kbukum/gokit/discovery
 
-go 1.25.8
+go 1.26
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/hashicorp/consul/api v1.33.7
+	github.com/hashicorp/consul/api v1.34.2
 	github.com/kbukum/gokit v0.2.0
 )
 
