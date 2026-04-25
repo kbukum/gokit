@@ -34,8 +34,8 @@ func TestClient_Send_Success(t *testing.T) {
 	// Verify message is in channel
 	select {
 	case msg := <-client.Events():
-		if string(msg) != "test message" {
-			t.Errorf("expected 'test message', got '%s'", string(msg))
+		if string(msg.Data) != "test message" {
+			t.Errorf("expected 'test message', got '%s'", string(msg.Data))
 		}
 	default:
 		t.Error("expected message in channel")
@@ -151,8 +151,8 @@ func TestHub_BroadcastToPattern_ExactMatch(t *testing.T) {
 	// client1 should receive
 	select {
 	case msg := <-client1.Events():
-		if string(msg) != "message for abc" {
-			t.Errorf("expected 'message for abc', got '%s'", string(msg))
+		if string(msg.Data) != "message for abc" {
+			t.Errorf("expected 'message for abc', got '%s'", string(msg.Data))
 		}
 	default:
 		t.Error("client1 should have received message")
@@ -187,8 +187,8 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	// client1 should receive
 	select {
 	case msg := <-client1.Events():
-		if string(msg) != "message for executions" {
-			t.Errorf("client1: expected 'message for executions', got '%s'", string(msg))
+		if string(msg.Data) != "message for executions" {
+			t.Errorf("client1: expected 'message for executions', got '%s'", string(msg.Data))
 		}
 	default:
 		t.Error("client1 should have received message")
@@ -197,8 +197,8 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	// client2 should receive
 	select {
 	case msg := <-client2.Events():
-		if string(msg) != "message for executions" {
-			t.Errorf("client2: expected 'message for executions', got '%s'", string(msg))
+		if string(msg.Data) != "message for executions" {
+			t.Errorf("client2: expected 'message for executions', got '%s'", string(msg.Data))
 		}
 	default:
 		t.Error("client2 should have received message")
@@ -530,5 +530,85 @@ func TestEventTypeConstants(t *testing.T) {
 	}
 	if EventTypeMetric != "metric" {
 		t.Errorf("expected 'metric', got %q", EventTypeMetric)
+	}
+}
+
+// TestHub_Broadcast_NamedEvent verifies that Broadcast(event, data) delivers
+// to all connected clients with the SSE `event:` line set, and is glob-matched
+// against "*". This is the path the frontend EventSource named-event
+// listeners (`source.addEventListener(name, ...)`) actually fire on.
+func TestHub_Broadcast_NamedEvent(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	c1 := NewClient("u-1")
+	c2 := NewClient("u-2")
+	hub.Register(c1)
+	hub.Register(c2)
+	time.Sleep(10 * time.Millisecond)
+
+	hub.Broadcast("notifications.new", []byte(`{"id":"x"}`))
+	time.Sleep(10 * time.Millisecond)
+
+	for _, c := range []*Client{c1, c2} {
+		select {
+		case f := <-c.Events():
+			if f.Event != "notifications.new" {
+				t.Errorf("client %s: expected event 'notifications.new', got %q", c.ID(), f.Event)
+			}
+			if string(f.Data) != `{"id":"x"}` {
+				t.Errorf("client %s: unexpected data %q", c.ID(), string(f.Data))
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Errorf("client %s: timed out waiting for frame", c.ID())
+		}
+	}
+}
+
+// TestServeSSE_WritesEventLine verifies the wire format includes the
+// `event: <name>` line so browser EventSource named-event listeners fire.
+func TestServeSSE_WritesEventLine(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ServeSSE(hub, w, r, "wire-test")
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, http.NoBody)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("connect failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Drain initial connected event.
+	buf := make([]byte, 4096)
+	if _, err := resp.Body.Read(buf); err != nil {
+		t.Fatalf("read connect: %v", err)
+	}
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		hub.Broadcast("test.event", []byte(`{"k":1}`))
+	}()
+
+	// Read the broadcast frame.
+	n, err := resp.Body.Read(buf)
+	if err != nil {
+		t.Fatalf("read frame: %v", err)
+	}
+	frame := string(buf[:n])
+	if !strings.Contains(frame, "event: test.event\n") {
+		t.Errorf("missing `event:` line in wire frame: %q", frame)
+	}
+	if !strings.Contains(frame, `data: {"k":1}`) {
+		t.Errorf("missing data line: %q", frame)
 	}
 }

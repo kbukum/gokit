@@ -7,11 +7,21 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
+// Frame represents a single SSE event payload — an optional named event
+// type plus the raw data bytes. When Event is non-empty, ServeSSE writes an
+// `event: <name>` line so browser EventSource named-event listeners
+// (`source.addEventListener("X", ...)`) fire. When empty, the frame is sent
+// as a generic `message` event.
+type Frame struct {
+	Event string
+	Data  []byte
+}
+
 // Client represents a connected SSE client.
 type Client struct {
 	id       string            // Unique client ID
 	metadata map[string]string // Optional metadata (userID, sessionID, etc.)
-	events   chan []byte       // Channel for sending events to client
+	events   chan Frame        // Channel for sending events to client
 }
 
 // ClientOption configures a Client.
@@ -42,7 +52,7 @@ func NewClient(id string, opts ...ClientOption) *Client {
 	c := &Client{
 		id:       id,
 		metadata: make(map[string]string),
-		events:   make(chan []byte, 256), // Buffered channel
+		events:   make(chan Frame, 256), // Buffered channel
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -75,16 +85,23 @@ func (c *Client) SessionID() string {
 	return c.metadata["session_id"]
 }
 
-// Events returns the channel for receiving events.
-func (c *Client) Events() <-chan []byte {
+// Events returns the channel for receiving event frames.
+func (c *Client) Events() <-chan Frame {
 	return c.events
 }
 
-// Send sends data to the client's event channel.
-// Returns false if the channel is full (client is slow).
+// Send sends raw data to the client as a generic SSE `message` event
+// (no named event line). Returns false if the channel is full.
 func (c *Client) Send(data []byte) bool {
+	return c.SendFrame(Frame{Data: data})
+}
+
+// SendFrame sends a typed SSE frame. When frame.Event is non-empty, the
+// browser's named-event listener for that event fires; otherwise the
+// default `message` listener fires. Returns false if the channel is full.
+func (c *Client) SendFrame(frame Frame) bool {
 	select {
-	case c.events <- data:
+	case c.events <- frame:
 		return true
 	default:
 		// Channel full, client is too slow
@@ -112,9 +129,18 @@ type Hub struct {
 }
 
 // Message represents a message to broadcast.
+//
+// Pattern selects which clients receive the message — glob-matched against
+// each client's ID (e.g. "execution:*" or "execution:abc123"). Use "*" to
+// reach every connected client.
+//
+// Event, when non-empty, becomes the SSE `event:` line so browser
+// EventSource named-event listeners (`source.addEventListener("X", ...)`)
+// fire. Leave empty for a generic `message` event.
 type Message struct {
-	Pattern string // Glob pattern for matching clients
-	Data    []byte // Event data to send
+	Pattern string
+	Event   string
+	Data    []byte
 }
 
 // NewHub creates a new SSE hub.
@@ -160,7 +186,7 @@ func (h *Hub) Run() {
 			})
 
 		case msg := <-h.broadcast:
-			h.broadcastWithPattern(msg.Pattern, msg.Data)
+			h.dispatch(msg)
 		}
 	}
 }
@@ -205,8 +231,25 @@ func (h *Hub) Unregister(client *Client) {
 	}
 }
 
-// BroadcastToPattern sends data to all clients matching the pattern.
+// Broadcast sends a typed event to ALL connected clients. The event name
+// becomes the SSE `event:` line so browser EventSource named-event
+// listeners (`source.addEventListener(event, ...)`) fire.
+//
+// This is the primary API for global notifications (e.g. "notifications.new",
+// "catalog.pull.completed"). For per-resource fan-out where only some
+// subscribers should receive the message, use BroadcastToPattern with a
+// caller-defined client ID convention.
+func (h *Hub) Broadcast(event string, data []byte) {
+	h.broadcast <- &Message{
+		Pattern: "*",
+		Event:   event,
+		Data:    data,
+	}
+}
+
+// BroadcastToPattern sends data to all clients whose ID matches pattern.
 // Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123").
+// Use Broadcast for global, event-typed notifications.
 func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	h.broadcast <- &Message{
 		Pattern: pattern,
@@ -214,24 +257,35 @@ func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	}
 }
 
-// broadcastWithPattern sends data to matching clients.
-// This is called from the hub's main goroutine.
-func (h *Hub) broadcastWithPattern(pattern string, data []byte) {
+// BroadcastFrame sends a typed frame to all clients whose ID matches
+// pattern. Use Broadcast for the common "deliver to everyone" case.
+func (h *Hub) BroadcastFrame(pattern string, frame Frame) {
+	h.broadcast <- &Message{
+		Pattern: pattern,
+		Event:   frame.Event,
+		Data:    frame.Data,
+	}
+}
+
+// dispatch routes a Message to matching clients. Called from the hub's
+// main goroutine.
+func (h *Hub) dispatch(msg *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	frame := Frame{Event: msg.Event, Data: msg.Data}
 	matchCount := 0
 	for clientID, client := range h.clients {
-		matched, err := filepath.Match(pattern, clientID)
+		matched, err := filepath.Match(msg.Pattern, clientID)
 		if err != nil {
 			logger.Error("[SSE_HUB] Pattern match error", map[string]interface{}{
-				"pattern": pattern,
+				"pattern": msg.Pattern,
 				"error":   err.Error(),
 			})
 			continue
 		}
 		if matched {
-			if client.Send(data) {
+			if client.SendFrame(frame) {
 				matchCount++
 			}
 		}
@@ -240,15 +294,17 @@ func (h *Hub) broadcastWithPattern(pattern string, data []byte) {
 	if matchCount > 0 {
 		logger.Debug("[SSE_HUB] Broadcast sent",
 			map[string]interface{}{
-				"pattern":     pattern,
+				"pattern":     msg.Pattern,
+				"event":       msg.Event,
 				"match_count": matchCount,
-				"data_size":   len(data),
+				"data_size":   len(msg.Data),
 			},
 		)
 	} else {
 		logger.Debug("[SSE_HUB] No clients matched pattern",
 			map[string]interface{}{
-				"pattern":       pattern,
+				"pattern":       msg.Pattern,
+				"event":         msg.Event,
 				"total_clients": len(h.clients),
 			},
 		)

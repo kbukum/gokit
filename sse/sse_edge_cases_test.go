@@ -61,8 +61,8 @@ func TestEdge_PatternMatching_SpecialCharacters(t *testing.T) {
 
 	select {
 	case msg := <-c1.Events():
-		if string(msg) != "hit" {
-			t.Errorf("expected 'hit', got %q", string(msg))
+		if string(msg.Data) != "hit" {
+			t.Errorf("expected 'hit', got %q", string(msg.Data))
 		}
 	default:
 		t.Error("c1 should have received the message")
@@ -113,8 +113,8 @@ func TestEdge_PatternMatching_EmptyClientID(t *testing.T) {
 
 	select {
 	case msg := <-c.Events():
-		if string(msg) != "hit" {
-			t.Errorf("expected 'hit', got %q", string(msg))
+		if string(msg.Data) != "hit" {
+			t.Errorf("expected 'hit', got %q", string(msg.Data))
 		}
 	default:
 		t.Error("empty pattern should match empty client ID")
@@ -143,8 +143,8 @@ func TestEdge_PatternMatching_QuestionMarkWildcard(t *testing.T) {
 	for _, c := range []*Client{c1, c2} {
 		select {
 		case msg := <-c.Events():
-			if string(msg) != "hit" {
-				t.Errorf("client %s: expected 'hit', got %q", c.ID(), string(msg))
+			if string(msg.Data) != "hit" {
+				t.Errorf("client %s: expected 'hit', got %q", c.ID(), string(msg.Data))
 			}
 		default:
 			t.Errorf("client %s should have matched 'a?'", c.ID())
@@ -179,8 +179,8 @@ func TestEdge_PatternMatching_CharacterClass(t *testing.T) {
 	for _, c := range []*Client{c1, c2} {
 		select {
 		case msg := <-c.Events():
-			if string(msg) != "hit" {
-				t.Errorf("client %s: expected 'hit', got %q", c.ID(), string(msg))
+			if string(msg.Data) != "hit" {
+				t.Errorf("client %s: expected 'hit', got %q", c.ID(), string(msg.Data))
 			}
 		default:
 			t.Errorf("client %s should match '[ab]'", c.ID())
@@ -220,8 +220,8 @@ func TestEdge_LargePayloadBroadcast(t *testing.T) {
 
 	select {
 	case msg := <-c.Events():
-		if len(msg) != 1<<20 {
-			t.Errorf("expected 1MB payload, got %d bytes", len(msg))
+		if len(msg.Data) != 1<<20 {
+			t.Errorf("expected 1MB payload, got %d bytes", len(msg.Data))
 		}
 	case <-time.After(time.Second):
 		t.Error("timed out waiting for large payload")
@@ -396,8 +396,8 @@ func TestEdge_ConcurrentBroadcastAndSubscription(t *testing.T) {
 
 	select {
 	case msg := <-c.Events():
-		if string(msg) != "still alive" {
-			t.Errorf("expected 'still alive', got %q", string(msg))
+		if string(msg.Data) != "still alive" {
+			t.Errorf("expected 'still alive', got %q", string(msg.Data))
 		}
 	default:
 		t.Error("hub should still be operational after churn")
@@ -604,8 +604,8 @@ func TestEdge_ConcurrentBroadcastOrdering(t *testing.T) {
 		select {
 		case msg := <-c.Events():
 			expected := fmt.Sprintf("%d", i)
-			if string(msg) != expected {
-				t.Fatalf("at index %d: expected %q, got %q", i, expected, string(msg))
+			if string(msg.Data) != expected {
+				t.Fatalf("at index %d: expected %q, got %q", i, expected, string(msg.Data))
 			}
 		case <-time.After(time.Second):
 			t.Fatalf("timed out waiting for message %d", i)

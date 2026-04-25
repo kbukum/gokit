@@ -90,7 +90,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			})
 			return
 
-		case event, ok := <-client.Events():
+		case frame, ok := <-client.Events():
 			if !ok {
 				// Channel closed, client unregistered
 				logger.Debug("[SSE] Events channel closed", map[string]interface{}{
@@ -98,12 +98,18 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 				})
 				return
 			}
-			// Send event in SSE format: data: {...}\n\n
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", event)
+			// Send SSE frame: optional `event:` line + `data:` payload.
+			// Browser EventSource named-event listeners only fire when the
+			// frame includes an `event:` line matching the listener name.
+			if frame.Event != "" {
+				_, _ = fmt.Fprintf(w, "event: %s\n", frame.Event)
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
 			flusher.Flush()
 			logger.Debug("[SSE] Event sent", map[string]interface{}{
 				"client_id": clientID,
-				"data_size": len(event),
+				"event":     frame.Event,
+				"data_size": len(frame.Data),
 			})
 
 		case <-keepAlive.C:
