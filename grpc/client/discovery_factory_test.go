@@ -126,6 +126,7 @@ func TestDiscoveryConnectionFactoryImplementsInterface(t *testing.T) {
 
 // BenchmarkDiscoveryConnectionFactoryNewConn benchmarks connection creation.
 func BenchmarkDiscoveryConnectionFactoryNewConn(b *testing.B) {
+	b.ReportAllocs()
 	log := testLogger()
 	mockDisc := NewMockDiscovery()
 
