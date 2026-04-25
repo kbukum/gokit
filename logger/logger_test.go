@@ -113,7 +113,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestGetGlobalLoggerDefault(t *testing.T) {
-	globalLogger = nil
+	resetGlobalForTest()
 	l := GetGlobalLogger()
 	if l == nil {
 		t.Fatal("expected default global logger to be created")

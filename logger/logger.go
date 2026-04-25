@@ -284,6 +284,15 @@ func SetGlobalLogger(l *Logger) {
 	globalLogger = l
 }
 
+// resetGlobalForTest resets the global logger state so GetGlobalLogger's
+// sync.Once can fire again. Only for use in tests.
+func resetGlobalForTest() {
+	globalLoggerMu.Lock()
+	defer globalLoggerMu.Unlock()
+	globalLogger = nil
+	globalLoggerOnce = sync.Once{}
+}
+
 // GetGlobalLogger returns the global logger, creating a default one if needed.
 func GetGlobalLogger() *Logger {
 	globalLoggerMu.RLock()
