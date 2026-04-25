@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/schema
 
-go 1.25.5
+go 1.25.8
 
 require github.com/invopop/jsonschema v0.13.0
 

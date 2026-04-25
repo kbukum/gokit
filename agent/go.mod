@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/agent
 
-go 1.25.5
+go 1.25.8
 
 require (
 	github.com/kbukum/gokit/hook v0.1.0

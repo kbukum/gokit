@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/storage
 
-go 1.25.5
+go 1.25.8
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.5
