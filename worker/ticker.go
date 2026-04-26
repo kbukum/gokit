@@ -84,7 +84,7 @@ func (w *TickerWorker) Start(_ context.Context) error {
 	w.done = make(chan struct{})
 	w.running.Store(true)
 
-	go w.loop(ctx)
+	go w.loop(ctx) //nolint:contextcheck // ticker loop is long-lived and detached from the lifecycle Start ctx
 	return nil
 }
 

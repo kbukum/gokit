@@ -58,7 +58,12 @@ func (p *OTLPProvider) Shutdown(ctx context.Context) error {
 }
 
 // EmitLog sends a log record to the OTLP collector.
-func (p *OTLPProvider) EmitLog(level, message string, fields map[string]interface{}) {
+//
+// ctx is propagated to the OTel exporter so that cancellation, deadlines, and
+// trace correlation flow through to telemetry. Pass context.Background() only
+// for emit sites where no request-scoped context is available (e.g. startup
+// banners, signal handlers).
+func (p *OTLPProvider) EmitLog(ctx context.Context, level, message string, fields map[string]interface{}) {
 	if p == nil || p.logger == nil {
 		return
 	}
@@ -77,7 +82,7 @@ func (p *OTLPProvider) EmitLog(level, message string, fields map[string]interfac
 		rec.AddAttributes(attrs...)
 	}
 
-	p.logger.Emit(context.Background(), rec)
+	p.logger.Emit(ctx, rec)
 }
 
 // mapSeverity converts a log level string to an OTel Severity.

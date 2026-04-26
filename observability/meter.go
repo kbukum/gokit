@@ -79,7 +79,7 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 		otel.SetMeterProvider(mp)
 	}
 
-	logger.Info("meter initialized", logger.Fields(
+	logger.InfoCtx(ctx, "meter initialized", logger.Fields(
 		"service", config.ServiceName,
 		"endpoint", config.Endpoint,
 		"interval", config.Interval.String(),

@@ -119,7 +119,7 @@ func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error)
 
 	// Task context is canceled if either the caller cancels or the pool shuts down.
 	taskCtx, taskCancel := context.WithCancel(ctx)
-	context.AfterFunc(p.poolCtx, taskCancel)
+	context.AfterFunc(p.poolCtx, taskCancel) //nolint:contextcheck // pool ctx is intentionally separate to allow shutdown to cancel in-flight tasks
 	handle := newTaskHandle[O](taskCancel, p.cfg.EventBuffer)
 	p.totalTasks.Add(1)
 

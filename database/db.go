@@ -56,13 +56,13 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 			sqlDB, sqlErr := db.DB()
 			if sqlErr != nil {
 				err = sqlErr
-				log.Warn("Failed to get underlying sql.DB", map[string]interface{}{
+				log.WarnCtx(ctx, "Failed to get underlying sql.DB", map[string]interface{}{
 					"error":   sqlErr.Error(),
 					"attempt": attempt,
 				})
 			} else if pingErr := sqlDB.PingContext(ctx); pingErr != nil {
 				err = pingErr
-				log.Warn("Database ping failed", map[string]interface{}{
+				log.WarnCtx(ctx, "Database ping failed", map[string]interface{}{
 					"error":   pingErr.Error(),
 					"attempt": attempt,
 				})
@@ -76,7 +76,7 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 					sqlDB.SetConnMaxIdleTime(idleTime)
 				}
 
-				log.Info("Database connection established", map[string]interface{}{
+				log.InfoCtx(ctx, "Database connection established", map[string]interface{}{
 					"attempt": attempt,
 				})
 				return &DB{GormDB: db, log: log, cfg: cfg}, nil
@@ -85,7 +85,7 @@ func NewWithContext(ctx context.Context, dialector interface{}, cfg Config, log 
 
 		if attempt < cfg.MaxRetries {
 			backoff := time.Duration(attempt) * time.Second
-			log.Warn("Database connection attempt failed, retrying", map[string]interface{}{
+			log.WarnCtx(ctx, "Database connection attempt failed, retrying", map[string]interface{}{
 				"attempt": attempt,
 				"error":   err.Error(),
 				"backoff": backoff.String(),
@@ -123,7 +123,7 @@ func (d *DB) Close() error {
 	if err != nil {
 		return err
 	}
-	d.log.Debug("Closing database connection")
+	d.log.Debug("Closing database connection") //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 	d.closed = true
 	return sqlDB.Close()
 }
@@ -153,7 +153,7 @@ func (d *DB) WithContext(ctx context.Context) *gorm.DB {
 
 // AutoMigrate runs GORM auto-migration for the given models.
 func (d *DB) AutoMigrate(models ...interface{}) error {
-	d.log.Info("Running auto-migration", map[string]interface{}{
+	d.log.Info("Running auto-migration", map[string]interface{}{ //nolint:contextcheck // AutoMigrate is a synchronous schema operation without a request context
 		"models": len(models),
 	})
 	for _, model := range models {
@@ -161,7 +161,7 @@ func (d *DB) AutoMigrate(models ...interface{}) error {
 			return fmt.Errorf("failed to migrate %T: %w", model, err)
 		}
 	}
-	d.log.Info("Auto-migration completed")
+	d.log.Info("Auto-migration completed") //nolint:contextcheck // AutoMigrate is a synchronous schema operation without a request context
 	return nil
 }
 
@@ -183,7 +183,7 @@ func (d *DB) WithTransaction(ctx context.Context, fn TransactionFunc) error {
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
-			d.log.Error("Transaction rolled back due to panic", map[string]interface{}{
+			d.log.ErrorCtx(ctx, "Transaction rolled back due to panic", map[string]interface{}{
 				"panic": fmt.Sprintf("%v", r),
 			})
 			panic(r)

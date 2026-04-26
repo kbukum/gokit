@@ -89,9 +89,9 @@ func (n *loggingNode) Run(ctx context.Context, state *State) (any, error) {
 
 	if err != nil {
 		fields["error"] = err.Error()
-		n.log.Error("dag node failed", fields)
+		n.log.ErrorCtx(ctx, "dag node failed", fields)
 	} else {
-		n.log.Debug("dag node completed", fields)
+		n.log.DebugCtx(ctx, "dag node completed", fields)
 	}
 
 	return result, err

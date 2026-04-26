@@ -122,7 +122,7 @@ func (a *App[C]) Run(ctx context.Context) error {
 	}
 
 	// Block until shutdown signal
-	a.Logger.Info("Application ready — waiting for shutdown signal")
+	a.Logger.InfoCtx(ctx, "Application ready — waiting for shutdown signal")
 	a.WaitForSignal(ctx)
 
 	// Graceful shutdown
@@ -160,7 +160,7 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 	go func() {
 		select {
 		case sig := <-sigCh:
-			a.Logger.Info("Received signal — canceling task", map[string]interface{}{
+			a.Logger.InfoCtx(taskCtx, "Received signal — canceling task", map[string]interface{}{
 				"signal": sig.String(),
 			})
 			cancel()
@@ -186,7 +186,7 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 func (a *App[C]) startup(ctx context.Context) error {
 	start := time.Now()
 
-	a.Logger.Info("Starting application", map[string]interface{}{
+	a.Logger.InfoCtx(ctx, "Starting application", map[string]interface{}{
 		"name":    a.Name,
 		"version": a.Version,
 	})
@@ -217,7 +217,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 
 	// Ready check — verify all components are healthy
 	if err := a.ReadyCheck(ctx); err != nil {
-		a.Logger.Warn("Ready check reported issues", map[string]interface{}{
+		a.Logger.WarnCtx(ctx, "Ready check reported issues", map[string]interface{}{
 			"error": err.Error(),
 		})
 	}
@@ -236,13 +236,13 @@ func (a *App[C]) startup(ctx context.Context) error {
 
 // initialize starts all registered components (Phase 1).
 func (a *App[C]) initialize(ctx context.Context) error {
-	a.Logger.Debug("Phase 1: Starting components")
+	a.Logger.DebugCtx(ctx, "Phase 1: Starting components")
 
 	if err := a.Components.StartAll(ctx); err != nil {
 		return fmt.Errorf("failed to start components: %w", err)
 	}
 
-	a.Logger.Debug("Phase 1: All components started")
+	a.Logger.DebugCtx(ctx, "Phase 1: All components started")
 	return nil
 }
 
@@ -258,7 +258,7 @@ func (a *App[C]) configure(ctx context.Context) error {
 		return nil
 	}
 
-	a.Logger.Debug("Phase 2: Running configuration callbacks", map[string]interface{}{
+	a.Logger.DebugCtx(ctx, "Phase 2: Running configuration callbacks", map[string]interface{}{
 		"count": len(a.onConfigure),
 	})
 
@@ -268,7 +268,7 @@ func (a *App[C]) configure(ctx context.Context) error {
 		}
 	}
 
-	a.Logger.Debug("Phase 2: Configuration complete")
+	a.Logger.DebugCtx(ctx, "Phase 2: Configuration complete")
 	return nil
 }
 
@@ -280,12 +280,12 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 
 	select {
 	case sig := <-sigCh:
-		a.Logger.Info("Received shutdown signal — graceful shutdown starting", map[string]interface{}{
+		a.Logger.InfoCtx(ctx, "Received shutdown signal — graceful shutdown starting", map[string]interface{}{
 			"signal": sig.String(),
 		})
 		return sig
 	case <-ctx.Done():
-		a.Logger.Info("Context canceled — shutting down")
+		a.Logger.InfoCtx(ctx, "Context canceled — shutting down")
 		return nil
 	}
 }
@@ -319,7 +319,7 @@ func (a *App[C]) stop() error {
 // shutdownWith runs the actual shutdown sequence. If ctx has no deadline,
 // gracefulTimeout is applied so a misbehaving Stop cannot block forever.
 func (a *App[C]) shutdownWith(parent context.Context) error {
-	a.Logger.Info("Shutting down application", map[string]interface{}{
+	a.Logger.InfoCtx(parent, "Shutting down application", map[string]interface{}{
 		"timeout": a.gracefulTimeout.String(),
 	})
 
@@ -334,7 +334,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Run OnStop hooks before stopping components
 	if err := runHooks(ctx, a.onStop); err != nil {
-		a.Logger.Error("OnStop hook error", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "OnStop hook error", map[string]interface{}{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
@@ -342,7 +342,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Stop all components (reverse order)
 	if err := a.Components.StopAll(ctx); err != nil {
-		a.Logger.Error("Shutdown completed with errors", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "Shutdown completed with errors", map[string]interface{}{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
@@ -350,12 +350,12 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Close DI container (lazy components only — singletons are component-managed)
 	if err := a.Container.Close(); err != nil {
-		a.Logger.Error("DI container close error", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]interface{}{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
 	}
 
-	a.Logger.Info("Application shutdown complete")
+	a.Logger.InfoCtx(ctx, "Application shutdown complete")
 	return errors.Join(shutdownErrs...)
 }

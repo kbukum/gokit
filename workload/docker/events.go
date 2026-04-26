@@ -35,7 +35,7 @@ func (m *Manager) WatchEvents(ctx context.Context, filter workload.ListFilter) (
 				if !ok {
 					return
 				}
-				m.log.Error("docker event stream error", map[string]interface{}{"error": err.Error()})
+				m.log.ErrorCtx(ctx, "docker event stream error", map[string]interface{}{"error": err.Error()})
 				return
 			case evt, ok := <-eventsResult.Messages:
 				if !ok {

@@ -90,7 +90,7 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start inner server: %w", err)
 	}
 
-	dsc.log.Debug("Starting service registration", map[string]interface{}{
+	dsc.log.DebugCtx(ctx, "Starting service registration", map[string]interface{}{
 		"service_id":   dsc.serviceID,
 		"service_name": dsc.svcInfo.Name,
 		"address":      dsc.svcInfo.Address,
@@ -99,19 +99,19 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 
 	// Register with discovery
 	if err := dsc.registry.Register(ctx, dsc.svcInfo); err != nil {
-		dsc.log.Error("Failed to register with discovery", map[string]interface{}{
+		dsc.log.ErrorCtx(ctx, "Failed to register with discovery", map[string]interface{}{
 			"error": err.Error(),
 		})
 		// Stop the server if registration fails
 		if stopErr := dsc.inner.Stop(ctx); stopErr != nil {
-			dsc.log.Warn("Failed to stop server after registration failure", map[string]interface{}{
+			dsc.log.WarnCtx(ctx, "Failed to stop server after registration failure", map[string]interface{}{
 				"error": stopErr.Error(),
 			})
 		}
 		return fmt.Errorf("failed to register service: %w", err)
 	}
 
-	dsc.log.Debug("Service registered with discovery", map[string]interface{}{
+	dsc.log.DebugCtx(ctx, "Service registered with discovery", map[string]interface{}{
 		"service_id": dsc.serviceID,
 	})
 	return nil
@@ -119,11 +119,11 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 
 // Stop deregisters from discovery, then stops the inner server.
 func (dsc *DiscoveryServerComponent) Stop(ctx context.Context) error {
-	dsc.log.Debug("Stopping discovery-server component")
+	dsc.log.DebugCtx(ctx, "Stopping discovery-server component")
 
 	// Deregister from discovery
 	if err := dsc.registry.Deregister(ctx, dsc.serviceID); err != nil {
-		dsc.log.Warn("Failed to deregister from discovery", map[string]interface{}{
+		dsc.log.WarnCtx(ctx, "Failed to deregister from discovery", map[string]interface{}{
 			"error": err.Error(),
 		})
 		// Continue to stop the server even if deregistration fails
@@ -134,7 +134,7 @@ func (dsc *DiscoveryServerComponent) Stop(ctx context.Context) error {
 		return fmt.Errorf("failed to stop inner server: %w", err)
 	}
 
-	dsc.log.Debug("Discovery-server component stopped")
+	dsc.log.DebugCtx(ctx, "Discovery-server component stopped")
 	return nil
 }
 

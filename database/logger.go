@@ -45,25 +45,25 @@ func (l *gormLoggerAdapter) LogMode(level gormlogger.LogLevel) gormlogger.Interf
 	return &gormLoggerAdapter{log: l.log, logLevel: level, slowThreshold: l.slowThreshold}
 }
 
-func (l *gormLoggerAdapter) Info(_ context.Context, msg string, data ...interface{}) {
+func (l *gormLoggerAdapter) Info(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= gormlogger.Info {
-		l.log.Info(fmt.Sprintf(msg, data...))
+		l.log.InfoCtx(ctx, fmt.Sprintf(msg, data...))
 	}
 }
 
-func (l *gormLoggerAdapter) Warn(_ context.Context, msg string, data ...interface{}) {
+func (l *gormLoggerAdapter) Warn(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= gormlogger.Warn {
-		l.log.Warn(fmt.Sprintf(msg, data...))
+		l.log.WarnCtx(ctx, fmt.Sprintf(msg, data...))
 	}
 }
 
-func (l *gormLoggerAdapter) Error(_ context.Context, msg string, data ...interface{}) {
+func (l *gormLoggerAdapter) Error(ctx context.Context, msg string, data ...interface{}) {
 	if l.logLevel >= gormlogger.Error {
-		l.log.Error(fmt.Sprintf(msg, data...))
+		l.log.ErrorCtx(ctx, fmt.Sprintf(msg, data...))
 	}
 }
 
-func (l *gormLoggerAdapter) Trace(_ context.Context, begin time.Time, fc func() (string, int64), err error) {
+func (l *gormLoggerAdapter) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	if l.logLevel <= gormlogger.Silent {
 		return
 	}
@@ -73,20 +73,20 @@ func (l *gormLoggerAdapter) Trace(_ context.Context, begin time.Time, fc func() 
 
 	switch {
 	case err != nil && !errors.Is(err, gorm.ErrRecordNotFound) && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded):
-		l.log.Error("Query error", map[string]interface{}{
+		l.log.ErrorCtx(ctx, "Query error", map[string]interface{}{
 			"sql": sql, "duration": elapsed.String(), "rows": rows, "error": err.Error(),
 		})
 	case err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)):
 		// Client disconnected / request timed out — log at debug only.
-		l.log.Debug("Query canceled", map[string]interface{}{
+		l.log.DebugCtx(ctx, "Query canceled", map[string]interface{}{
 			"sql": sql, "duration": elapsed.String(), "error": err.Error(),
 		})
 	case elapsed > l.slowThreshold:
-		l.log.Warn("Slow query", map[string]interface{}{
+		l.log.WarnCtx(ctx, "Slow query", map[string]interface{}{
 			"sql": sql, "duration": elapsed.String(), "rows": rows,
 		})
 	case l.logLevel >= gormlogger.Info:
-		l.log.Debug("Query", map[string]interface{}{
+		l.log.DebugCtx(ctx, "Query", map[string]interface{}{
 			"sql": sql, "duration": elapsed.String(), "rows": rows,
 		})
 	}

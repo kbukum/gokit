@@ -85,7 +85,7 @@ func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOp
 		pullOpts.RegistryAuth = encoded
 	}
 
-	m.log.Info("pulling image", map[string]interface{}{"image": ref})
+	m.log.InfoCtx(ctx, "pulling image", map[string]interface{}{"image": ref})
 
 	reader, err := m.client.ImagePull(ctx, ref, pullOpts)
 	if err != nil {

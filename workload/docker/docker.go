@@ -75,7 +75,7 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger
 
 // Deploy creates and starts a Docker container.
 func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*workload.DeployResult, error) {
-	m.log.Info("deploying workload", map[string]interface{}{
+	m.log.InfoCtx(ctx, "deploying workload", map[string]interface{}{
 		"name":  req.Name,
 		"image": req.Image,
 	})
@@ -102,7 +102,7 @@ func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*work
 		return nil, fmt.Errorf("docker: start container: %w", err)
 	}
 
-	m.log.Info("workload deployed", map[string]interface{}{
+	m.log.InfoCtx(ctx, "workload deployed", map[string]interface{}{
 		"id":   resp.ID[:12],
 		"name": req.Name,
 	})

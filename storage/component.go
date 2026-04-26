@@ -42,11 +42,11 @@ func (c *Component) Name() string { return "storage" }
 // Start initializes the storage backend.
 func (c *Component) Start(_ context.Context) error {
 	if !c.cfg.Enabled {
-		c.log.Info("storage component is disabled")
+		c.log.Info("storage component is disabled") //nolint:contextcheck // lifecycle Start has no request context
 		return nil
 	}
 
-	s, err := New(c.registry, c.cfg, c.providerCfg, c.log)
+	s, err := New(c.registry, c.cfg, c.providerCfg, c.log) //nolint:contextcheck // storage init has no request context
 	if err != nil {
 		return fmt.Errorf("storage start: %w", err)
 	}

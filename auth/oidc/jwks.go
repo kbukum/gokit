@@ -69,8 +69,8 @@ func (c *jwksCache) isStale() bool {
 	return c.keys == nil || time.Since(c.fetchedAt) > c.cacheTTL
 }
 
-func (c *jwksCache) refresh(client *http.Client) error {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, c.jwksURI, http.NoBody)
+func (c *jwksCache) refresh(ctx context.Context, client *http.Client) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.jwksURI, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create JWKS request: %w", err)
 	}
@@ -110,8 +110,6 @@ func (c *jwksCache) refresh(client *http.Client) error {
 // enforce the JWK's declared `alg` matches the token's header alg
 // (alg-confusion defense — closes F-002).
 func (v *Verifier) getKey(ctx context.Context, kid string) (*jwk, error) {
-	_ = ctx // reserved for context-aware HTTP calls
-
 	// Try cache first
 	if !v.jwks.isStale() {
 		if k, ok := v.jwks.getKey(kid); ok {
@@ -120,7 +118,7 @@ func (v *Verifier) getKey(ctx context.Context, kid string) (*jwk, error) {
 	}
 
 	// Refresh JWKS
-	if err := v.jwks.refresh(v.config.HTTPClient); err != nil {
+	if err := v.jwks.refresh(ctx, v.config.HTTPClient); err != nil {
 		return nil, err
 	}
 

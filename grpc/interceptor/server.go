@@ -27,7 +27,7 @@ func UnaryServerLoggingInterceptor(log *logger.Logger) grpc.UnaryServerIntercept
 		svc := path.Dir(info.FullMethod)[1:]
 		method := path.Base(info.FullMethod)
 
-		log.Debug("gRPC request started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC request started", map[string]interface{}{
 			"service": svc,
 			"method":  method,
 		})
@@ -45,10 +45,10 @@ func UnaryServerLoggingInterceptor(log *logger.Logger) grpc.UnaryServerIntercept
 			st := status.Convert(err)
 			fields["status"] = st.Code().String()
 			fields["error"] = st.Message()
-			log.Error("gRPC request failed", fields)
+			log.ErrorCtx(ctx, "gRPC request failed", fields)
 		} else {
 			fields["status"] = "OK"
-			log.Debug("gRPC request completed", fields)
+			log.DebugCtx(ctx, "gRPC request completed", fields)
 		}
 
 		return resp, err

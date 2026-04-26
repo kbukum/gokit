@@ -54,7 +54,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 		return fmt.Errorf("no initializer for component: %s", b.name)
 	}
 
-	logger.Debug("Initializing lazy component", map[string]interface{}{
+	logger.DebugCtx(ctx, "Initializing lazy component", map[string]interface{}{
 		"component": b.name,
 	})
 
@@ -66,7 +66,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 	b.initialized = true
 	b.lastError = nil
 
-	logger.Debug("Lazy component initialized", map[string]interface{}{
+	logger.DebugCtx(ctx, "Lazy component initialized", map[string]interface{}{
 		"component": b.name,
 	})
 	return nil

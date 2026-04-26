@@ -38,22 +38,22 @@ func (c *Component) Name() string { return "redis" }
 // If Addr is empty, the component starts in a no-op state (useful when Redis is optional).
 func (c *Component) Start(ctx context.Context) error {
 	if c.cfg.Addr == "" {
-		c.log.Info("Redis address not configured, skipping")
+		c.log.InfoCtx(ctx, "Redis address not configured, skipping")
 		return nil
 	}
 
-	client, err := New(c.cfg, c.log)
+	client, err := New(c.cfg, c.log) //nolint:contextcheck // New constructs a redis client lazily without a request context
 	if err != nil {
 		return fmt.Errorf("redis start: %w", err)
 	}
 
 	if err := client.Ping(ctx); err != nil {
-		_ = client.Close()
+		_ = client.Close() //nolint:contextcheck // Close is invoked from rollback without a request context
 		return fmt.Errorf("redis start ping: %w", err)
 	}
 
 	c.client = client
-	c.log.Debug("Redis component started")
+	c.log.DebugCtx(ctx, "Redis component started")
 	return nil
 }
 
@@ -62,8 +62,8 @@ func (c *Component) Stop(_ context.Context) error {
 	if c.client == nil {
 		return nil
 	}
-	c.log.Debug("Redis component stopping")
-	return c.client.Close()
+	c.log.Debug("Redis component stopping") //nolint:contextcheck // Stop is invoked from lifecycle without a request context
+	return c.client.Close()                 //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 }
 
 // Health returns the current health status of the Redis connection.
