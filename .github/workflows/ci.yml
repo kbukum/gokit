@@ -258,7 +258,8 @@ jobs:
       # `accept_reachable: true` plus a tracking issue in `references`.
       - name: Run govulncheck (with documented suppressions)
         working-directory: ${{ matrix.module }}
-        run: "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "${{ matrix.module }}" -- ./...
+        run: |
+          "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "${{ matrix.module }}" -- ./...
 
   # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
   fuzz:
