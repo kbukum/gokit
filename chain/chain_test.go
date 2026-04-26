@@ -48,6 +48,7 @@ func (o *cleanupTracker) Name() string { return o.id }
 func (o *cleanupTracker) Execute(_ context.Context, input any, _ chain.ProgressFn) (any, error) {
 	return input, nil
 }
+
 func (o *cleanupTracker) Cleanup(_ context.Context, _ any) error {
 	o.cleaned.Store(true)
 	return nil
@@ -162,9 +163,9 @@ func TestCancellationMarksRemainingCancelled(t *testing.T) {
 
 	for _, step := range result.Steps {
 		if step.Status != chain.StatusCancelled {
-			t.Errorf("step %s: expected cancelled, got %s", step.StepID, step.Status)
+			t.Errorf("step %s: expected canceled, got %s", step.StepID, step.Status)
 		}
-		if step.Error != "chain cancelled" {
+		if step.Error != "chain canceled" {
 			t.Errorf("step %s: expected error 'chain cancelled', got %q", step.StepID, step.Error)
 		}
 	}

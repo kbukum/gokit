@@ -386,7 +386,7 @@ func TestFactory_EncryptorInterface(t *testing.T) {
 				t.Fatalf("New: %v", err)
 			}
 			// Verify the returned value satisfies the Encryptor interface
-			var _ = enc
+			_ = enc
 
 			ct, err := enc.Encrypt("interface test")
 			if err != nil {

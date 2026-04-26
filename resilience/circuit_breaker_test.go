@@ -23,7 +23,6 @@ func TestCircuitBreaker_AllowsRequestsWhenClosed(t *testing.T) {
 		called = true
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -110,7 +109,6 @@ func TestCircuitBreaker_ClosesAfterSuccessInHalfOpen(t *testing.T) {
 	err := cb.Execute(func() error {
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

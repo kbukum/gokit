@@ -86,7 +86,8 @@ func TestRunSigtermSigkillEscalation(t *testing.T) {
 	start := time.Now()
 	_, err := process.Run(ctx, process.Command{
 		Binary: "sh",
-		Args: []string{"-c",
+		Args: []string{
+			"-c",
 			"trap '' TERM; sleep 60",
 		},
 		GracePeriod: 300 * time.Millisecond,

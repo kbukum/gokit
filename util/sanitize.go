@@ -6,10 +6,8 @@ import (
 	"unicode"
 )
 
-var (
-	// unsafePatternRegex detects common SQL injection and XSS patterns.
-	unsafePatternRegex = regexp.MustCompile(`(?i)(--|;|'|"|<script|<\/script|javascript:|on\w+=|union\s+select|drop\s+table|insert\s+into|delete\s+from|update\s+.+\s+set)`)
-)
+// unsafePatternRegex detects common SQL injection and XSS patterns.
+var unsafePatternRegex = regexp.MustCompile(`(?i)(--|;|'|"|<script|<\/script|javascript:|on\w+=|union\s+select|drop\s+table|insert\s+into|delete\s+from|update\s+.+\s+set)`)
 
 // SanitizeString trims whitespace and removes control characters from s.
 func SanitizeString(s string) string {

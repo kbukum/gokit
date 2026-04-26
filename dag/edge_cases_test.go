@@ -235,7 +235,6 @@ func TestContextTimeout_PerNodeSimulation(t *testing.T) {
 
 	engine := &Engine{}
 	result, err := engine.ExecuteBatch(ctx, g, NewState())
-
 	// Either the engine returns a context error or the node captures it
 	if err != nil {
 		return // context error propagated at engine level — pass

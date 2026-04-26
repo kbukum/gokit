@@ -28,12 +28,14 @@ func (m *mockComponent) Start(ctx context.Context) error {
 	}
 	return m.startErr
 }
+
 func (m *mockComponent) Stop(ctx context.Context) error {
 	if m.stopOrder != nil {
 		*m.stopOrder = append(*m.stopOrder, m.name)
 	}
 	return m.stopErr
 }
+
 func (m *mockComponent) Health(ctx context.Context) Health {
 	return m.health
 }
@@ -319,6 +321,7 @@ func (s *slowComponent) Start(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (s *slowComponent) Stop(ctx context.Context) error {
 	if s.stopOrder != nil {
 		*s.stopOrder = append(*s.stopOrder, s.name)
@@ -331,6 +334,7 @@ func (s *slowComponent) Stop(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (s *slowComponent) Health(ctx context.Context) Health {
 	return Health{Name: s.name, Status: StatusHealthy}
 }

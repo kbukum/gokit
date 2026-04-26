@@ -124,7 +124,6 @@ func TestRateLimiter_Execute(t *testing.T) {
 		called = true
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

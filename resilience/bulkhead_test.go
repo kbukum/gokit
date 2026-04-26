@@ -275,7 +275,6 @@ func TestExecuteWithResult(t *testing.T) {
 	result, err := ExecuteWithResult(context.Background(), b, func() (int, error) {
 		return 42, nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

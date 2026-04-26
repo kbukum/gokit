@@ -8,8 +8,7 @@ import (
 )
 
 func saveAndRestore() func() {
-	origVersion, origCommit, origBranch, origBuildTime, origGoVersion :=
-		Version, GitCommit, GitBranch, BuildTime, GoVersion
+	origVersion, origCommit, origBranch, origBuildTime, origGoVersion := Version, GitCommit, GitBranch, BuildTime, GoVersion
 	return func() {
 		Version = origVersion
 		GitCommit = origCommit

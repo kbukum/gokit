@@ -16,7 +16,6 @@ func TestRetry_SucceedsOnFirstAttempt(t *testing.T) {
 		callCount++
 		return "success", nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -43,7 +42,6 @@ func TestRetry_SucceedsAfterRetry(t *testing.T) {
 		}
 		return "success", nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -185,7 +183,6 @@ func TestRetryFunc(t *testing.T) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -204,7 +201,6 @@ func TestRetryWithBackoff(t *testing.T) {
 		}
 		return 42, nil
 	})
-
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}

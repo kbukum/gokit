@@ -125,17 +125,21 @@ func (p *initCloseProvider) IsAvailable(_ context.Context) bool { return p.initi
 func (p *initCloseProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }
+
 func (p *initCloseProvider) Init(_ context.Context) error {
 	p.initialized = true
 	return nil
 }
+
 func (p *initCloseProvider) Close(_ context.Context) error {
 	p.closed = true
 	return nil
 }
 
-var _ provider.Initializable = (*initCloseProvider)(nil)
-var _ provider.Closeable = (*initCloseProvider)(nil)
+var (
+	_ provider.Initializable = (*initCloseProvider)(nil)
+	_ provider.Closeable     = (*initCloseProvider)(nil)
+)
 
 // --- Tests ---
 
@@ -196,8 +200,8 @@ func TestDuplex(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if err := stream.Send("hello"); err != nil {
-		t.Fatalf("send error: %v", err)
+	if sendErr := stream.Send("hello"); sendErr != nil {
+		t.Fatalf("send error: %v", sendErr)
 	}
 	v, err := stream.Recv()
 	if err != nil {

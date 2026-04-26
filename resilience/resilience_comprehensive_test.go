@@ -534,7 +534,6 @@ func TestRetry_LargeMaxAttemptsImmediateSuccess(t *testing.T) {
 		}
 		return "", errors.New("once")
 	})
-
 	if err != nil {
 		t.Errorf("expected success, got %v", err)
 	}
@@ -1317,7 +1316,6 @@ func TestIntegration_AllFourPatterns(t *testing.T) {
 			})
 		})
 	})
-
 	if err != nil {
 		t.Errorf("expected success through all four patterns, got %v", err)
 	}

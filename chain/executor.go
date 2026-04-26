@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Config controls chain execution behaviour.
+// Config controls chain execution behavior.
 type Config struct {
 	// CleanupOnFailure runs Cleanup on completed steps in reverse order when
 	// a later step fails. Default: true.
@@ -64,7 +64,7 @@ func (e *Executor) Execute(ctx context.Context, input any, progress ChainProgres
 				results = append(results, StepResult{
 					StepID: remaining.ID(),
 					Status: StatusCancelled,
-					Error:  "chain cancelled",
+					Error:  "chain canceled",
 				})
 			}
 			break

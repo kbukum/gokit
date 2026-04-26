@@ -69,7 +69,7 @@ func (e *AppError) ToProblemDetail() ProblemDetail {
 func codeToTitle(code ErrorCode) string {
 	parts := strings.Split(string(code), "_")
 	for i, p := range parts {
-		if len(p) == 0 {
+		if p == "" {
 			continue
 		}
 		runes := []rune(strings.ToLower(p))
