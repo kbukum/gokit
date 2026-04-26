@@ -181,15 +181,15 @@ func (w *windowedIterator[O, R]) Next(ctx context.Context) (val R, ok bool, err 
 
 	window := make([]O, 0, w.windowSize)
 	for len(window) < w.windowSize {
-		val, ok, err := w.inner.Next(ctx)
-		if err != nil {
-			return zero, false, err
+		v, ok2, innerErr := w.inner.Next(ctx)
+		if innerErr != nil {
+			return zero, false, innerErr
 		}
-		if !ok {
+		if !ok2 {
 			w.done = true
 			break
 		}
-		window = append(window, val)
+		window = append(window, v)
 	}
 
 	if len(window) == 0 {

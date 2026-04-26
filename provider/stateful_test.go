@@ -331,9 +331,11 @@ type errorStore struct {
 func (s *errorStore) Load(_ context.Context, _ string) (*chatState, error) {
 	return nil, s.loadErr
 }
+
 func (s *errorStore) Save(_ context.Context, _ string, _ *chatState, _ time.Duration) error {
 	return s.saveErr
 }
+
 func (s *errorStore) Delete(_ context.Context, _ string) error {
 	return s.deleteErr
 }

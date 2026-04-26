@@ -61,6 +61,7 @@ func (c *trackingComponent) Start(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (c *trackingComponent) Stop(ctx context.Context) error {
 	c.stopped.Store(true)
 	if c.order != nil {
@@ -68,6 +69,7 @@ func (c *trackingComponent) Stop(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (c *trackingComponent) Health(ctx context.Context) component.Health {
 	if c.started.Load() && !c.stopped.Load() {
 		return component.Health{Name: c.name, Status: component.StatusHealthy}
@@ -595,7 +597,6 @@ func TestIntegration_Resilience_Provider_RetryWithProvider(t *testing.T) {
 		}
 		return "success", nil
 	})
-
 	if err != nil {
 		t.Fatalf("expected success after retries, got: %v", err)
 	}

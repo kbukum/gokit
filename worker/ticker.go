@@ -12,7 +12,7 @@ import (
 // TickerFunc is the callback invoked on every tick.
 type TickerFunc func(ctx context.Context) error
 
-// TickerOption configures optional TickerWorker behaviour.
+// TickerOption configures optional TickerWorker behavior.
 type TickerOption func(*TickerWorker)
 
 // WithRunOnStart causes the worker to execute fn once immediately when

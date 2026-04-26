@@ -244,7 +244,6 @@ func TestEdge_SlowClient_BufferOverflow(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Send 300 messages (buffer is 256) — some should be dropped
-	dropped := 0
 	for i := 0; i < 300; i++ {
 		hub.BroadcastToPattern("test:slow", []byte(fmt.Sprintf("msg-%d", i)))
 	}
@@ -260,7 +259,7 @@ func TestEdge_SlowClient_BufferOverflow(t *testing.T) {
 		}
 	}
 done:
-	dropped = 300 - received
+	dropped := 300 - received
 	if dropped <= 0 {
 		t.Errorf("expected some messages to be dropped, but all %d were received", received)
 	}

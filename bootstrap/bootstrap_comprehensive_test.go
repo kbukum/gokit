@@ -43,6 +43,7 @@ func (s *slowComponent) Start(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (s *slowComponent) Stop(ctx context.Context) error {
 	select {
 	case <-time.After(s.stopDelay):
@@ -68,6 +69,7 @@ func (o *orderTrackingComponent) Start(ctx context.Context) error {
 	*o.order = append(*o.order, o.name+":start")
 	return o.startErr
 }
+
 func (o *orderTrackingComponent) Stop(ctx context.Context) error {
 	*o.order = append(*o.order, o.name+":stop")
 	return o.stopErr
@@ -409,7 +411,6 @@ func TestReadyCheckWarningDoesNotBlockStartup(t *testing.T) {
 		taskRan = true
 		return nil
 	})
-
 	// Ready check issues a warning but startup should still succeed
 	if err != nil {
 		t.Fatalf("RunTask should succeed despite degraded component: %v", err)

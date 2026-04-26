@@ -39,9 +39,9 @@ func NewKeyedPool[K comparable, I, O any](pool *Pool[I, O]) *KeyedPool[K, I, O] 
 // new task. Otherwise the task is submitted to the underlying pool and the
 // fresh handle is recorded under key until it completes.
 //
-// Cancellation semantics: cancelling the returned handle (or the underlying
+// Cancellation semantics: canceling the returned handle (or the underlying
 // task) cancels the single shared attempt for ALL attached observers — this
-// is the expected behaviour for coalesced work.
+// is the expected behavior for coalesced work.
 func (k *KeyedPool[K, I, O]) SubmitOrAttach(ctx context.Context, key K, task I) (handle *TaskHandle[O], attached bool, err error) {
 	k.mu.Lock()
 	if existing, ok := k.inflight[key]; ok {

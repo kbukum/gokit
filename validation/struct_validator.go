@@ -1,6 +1,7 @@
 package validation
 
 import (
+	stderrors "errors"
 	"reflect"
 	"strings"
 	"sync"
@@ -41,7 +42,8 @@ func Validate(s any) error {
 		return nil
 	}
 
-	validationErrors, ok := err.(validator.ValidationErrors)
+	var validationErrors validator.ValidationErrors
+	ok := stderrors.As(err, &validationErrors)
 	if !ok {
 		return errors.Validation("validation failed")
 	}

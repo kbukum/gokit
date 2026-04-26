@@ -32,10 +32,12 @@ func (m *mockComponent) Start(ctx context.Context) error {
 	m.started = true
 	return m.startErr
 }
+
 func (m *mockComponent) Stop(ctx context.Context) error {
 	m.stopped = true
 	return m.stopErr
 }
+
 func (m *mockComponent) Health(ctx context.Context) component.Health {
 	return m.health
 }

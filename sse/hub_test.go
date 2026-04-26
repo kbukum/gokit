@@ -590,8 +590,8 @@ func TestServeSSE_WritesEventLine(t *testing.T) {
 
 	// Drain initial connected event.
 	buf := make([]byte, 4096)
-	if _, err := resp.Body.Read(buf); err != nil {
-		t.Fatalf("read connect: %v", err)
+	if _, readErr := resp.Body.Read(buf); readErr != nil {
+		t.Fatalf("read connect: %v", readErr)
 	}
 
 	go func() {

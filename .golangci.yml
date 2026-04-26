@@ -19,13 +19,13 @@ linters:
     - exhaustive
     - unused
     - ineffassign
-    # --- New: error handling discipline ---
+    # --- Error handling discipline ---
     - errorlint
     - nilerr
-    # --- New: bug-prone patterns ---
+    # --- Bug-prone patterns ---
     - copyloopvar
     - wastedassign
-    # --- New: SQL safety ---
+    # --- SQL safety ---
     - sqlclosecheck
     - rowserrcheck
   exclusions:
@@ -39,10 +39,14 @@ linters:
           - unused
           - gocritic
           - errorlint
-      # Bootstrap summary intentionally writes to a configurable writer.
+      # bootstrap/summary.go intentionally calls fmt.Fprintf on a configurable
+      # writer; errors are surfaced through the writer's contract, not
+      # propagated. Was: whole-file errcheck exclusion (F-079 #81); now
+      # scoped to the specific call pattern.
       - path: "bootstrap/summary\\.go"
         linters:
           - errcheck
+        source: "fmt\\.Fprint"
   settings:
     govet:
       enable:
@@ -56,22 +60,21 @@ linters:
         - performance
       disabled-checks:
         - hugeParam
-        - paramTypeCombine  # Prefer explicit types for each parameter for clarity
+        - paramTypeCombine
     nakedret:
       max-func-lines: 30
     misspell:
       locale: US
     gosec:
       excludes:
+        # Codes valid for the pinned golangci-lint (v2.9.0) gosec.
         - G115  # Integer overflow conversion — too noisy across the codebase.
-        - G404  # math/rand is acceptable for non-security paths (jitter, IDs).
+        - G404  # math/rand acceptable for non-security paths (jitter, IDs).
         - G306  # File permissions — flagged at specific call sites where 0644 is intentional.
         - G304  # File paths from variables — required for storage abstraction.
-        - G117  # Exported struct fields matching secret patterns — config structs need these fields.
-        # G402 (TLS InsecureSkipVerify) is intentionally NOT excluded here.
+        # G402 (TLS InsecureSkipVerify) is intentionally NOT excluded.
         # Per-site //nolint:gosec comments document the opt-in semantics at
         # security/tls.go and discovery/consul/consul.go.
-        - G704  # SSRF via taint analysis — HTTP clients use configured base URLs.
     exhaustive:
       default-signifies-exhaustive: true
     errorlint:
@@ -87,6 +90,7 @@ formatters:
   enable:
     - gofmt
     - goimports
+    - gofumpt   # F-080 #81: stricter formatter, superset of gofmt.
   settings:
     goimports:
       local-prefixes:

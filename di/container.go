@@ -40,7 +40,7 @@ type Container interface {
 	// Legacy methods kept on the interface for backward compatibility with
 	// existing callers. Prefer the [Resolve], [MustResolve], and
 	// [TryResolve] generic helpers; the older Container.MustResolve method
-	// has been removed from this interface in favour of those helpers.
+	// has been removed from this interface in favor of those helpers.
 	InvalidateCache(name string) error
 	Refresh(name string) (interface{}, error)
 	GetResolver(name string) func() (interface{}, error)

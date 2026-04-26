@@ -197,9 +197,11 @@ func (p *healthCheckProvider) Name() string { return p.name }
 func (p *healthCheckProvider) IsAvailable(_ context.Context) bool {
 	return p.status.Status == provider.StatusHealthy
 }
+
 func (p *healthCheckProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }
+
 func (p *healthCheckProvider) Health(_ context.Context) provider.HealthStatus {
 	return p.status
 }
@@ -736,6 +738,7 @@ func (p *slowInitProvider) IsAvailable(_ context.Context) bool { return true }
 func (p *slowInitProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }
+
 func (p *slowInitProvider) Init(ctx context.Context) error {
 	select {
 	case <-time.After(p.initDelay):
@@ -1216,6 +1219,7 @@ func (p *slowHealthProvider) IsAvailable(_ context.Context) bool { return true }
 func (p *slowHealthProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }
+
 func (p *slowHealthProvider) Health(ctx context.Context) provider.HealthStatus {
 	select {
 	case <-time.After(p.delay):
