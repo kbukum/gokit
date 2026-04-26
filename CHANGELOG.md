@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **bench**: per-package `Benchmark*` coverage for the hot paths flagged by the OSS-review perf gap (#50, F-020). Package count grew from 5 → 15; benchmark count from 5 → 42. New benchmarks live in:
+  - `registry` — Register/Get/Lookup/Names/Each
+  - `di` — Container Register, Resolve (interface + generic + Must variants), Provide, ResolveKey
+  - `validation` — fluent validator chains, struct validator, UUID, pattern
+  - `chain` — Executor.Execute (1/4/16/64 ops), Builder.Build
+  - `dag` — BuildLevels, ExecuteBatch (chain + fan, 4/16/64 nodes)
+  - `tool` — Registry Register/Get/Call
+  - `workload` / `storage` / `discovery` / `llm` — factory/dialect Register & Get
+  - `auth/oidc` — JWKS getKey hit/miss, RSA publicKey decode, RS256 verifyRSA
+- **ci**: `.github/workflows/bench.yml` extended to iterate over every gokit module that has benchmarks (was root-only); benchstat still runs head-vs-base and remains advisory until the baseline stabilises.
+
+### Added
 - **registry** (NEW package): generic `Registry[T any]` consolidating the previously ad-hoc registries in `auth`, `discovery`, `storage`, `tool`, `workload`, and `llm`. `Register` returns an error on empty name, nil value, or duplicate name; `Names()` returns sorted; `Each` iterates deterministically. (#45)
 - **di**: typed-key DI surface layered on top of `UnifiedContainer`:
   - `Key[T any]`, `NameKey[T](name)` — opaque, type-parameterised keys. The full key embeds `reflect.Type` of `T`, so two `Key[T]` of different concrete types with the same `name` cannot collide.
