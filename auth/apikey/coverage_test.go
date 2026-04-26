@@ -380,9 +380,11 @@ func (s *memStore) Create(_ context.Context, k *apikey.Key) error {
 	s.byID[k.ID] = k
 	return nil
 }
+
 func (s *memStore) GetByHash(_ context.Context, _ string) (*apikey.Key, error) {
 	return nil, errNotFound
 }
+
 func (s *memStore) GetByID(ctx context.Context, id string) (*apikey.Key, error) {
 	if s.getByID != nil {
 		return s.getByID(ctx, id)
