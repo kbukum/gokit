@@ -18,14 +18,17 @@ type Provider struct {
 }
 
 // Register registers the static and k8s discovery providers into the given registry.
-func Register(registry *discovery.ProviderRegistry) {
-	registry.Register("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+// It returns an error if either provider name is already registered.
+func Register(reg *discovery.ProviderRegistry) error {
+	if err := reg.Register("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	// k8s uses the static provider as a fallback.
-	registry.Register("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	return reg.Register("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})

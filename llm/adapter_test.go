@@ -94,7 +94,7 @@ func (d *mockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
 func TestAdapter_New_WithDialect(t *testing.T) {
 	// Register a mock dialect
 	reg := NewDialectRegistry()
-	reg.MustRegister("mock", &mockDialect{})
+	mustReg(t, reg, "mock", &mockDialect{})
 
 	a, err := New(reg, Config{
 		Dialect: "mock",

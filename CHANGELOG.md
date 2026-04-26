@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- **registry** (NEW package): generic `Registry[T any]` consolidating the previously ad-hoc registries in `auth`, `discovery`, `storage`, `tool`, `workload`, and `llm`. `Register` returns an error on empty name, nil value, or duplicate name; `Names()` returns sorted; `Each` iterates deterministically. (#45)
+- **di**: typed-key DI surface layered on top of `UnifiedContainer`:
+  - `Key[T any]`, `NameKey[T](name)` — opaque, type-parameterised keys. The full key embeds `reflect.Type` of `T`, so two `Key[T]` of different concrete types with the same `name` cannot collide.
+  - `Provide[T](c, key, ctor)` / `ProvideSingleton[T](c, key, value)` — generic registration; constructor signature is validated up front (must return `T` or `(T, error)`).
+  - `ResolveKey[T](c, key)` / `MustResolveKey[T](c, key)` — generic resolution, no type assertions in caller code. (#43)
+
+### Changed (Breaking API Changes)
+- **auth**: `Registry.Register` now returns `error` on duplicate registration instead of silently overwriting. `Registry.MustGet` removed — use `Get`.
+- **tool**: `Registry.MustRegister` removed — use `Register` (which returns `error`). (#46)
+- **workload**: `FactoryRegistry.MustRegister` removed — use `Register`. (#46)
+- **llm**: `DialectRegistry.MustRegister` removed — use `Register`. (#46)
+- **storage**: `FactoryRegistry.Register` now returns `error` (was panic on duplicate). Provider `Register` functions (`local.Register`, `s3.Register`, `supabase.Register`) likewise return `error`.
+- **discovery**: `ProviderRegistry.Register` now returns `error` (was panic). `NewComponent(registry, cfg, log, opts...)` now returns `(*Component, error)` — previously panicked. Provider `Register` functions (`static.Register`, `consul.Register`) return `error`.
+- **di**: `UnifiedContainer.MustResolve` method removed. The free function `di.MustResolve[T](container, key)` is **kept** (issue #46 explicitly allows `Must*` for `init()` / test / CLI scope, where this helper is idiomatic).
+- **auth/authctx**: `MustGet[T]` removed — use `Get[T]`. (#46)
+- **server/middleware**: `MustTenantFromContext` removed — use `TenantFromContext`. (#46)
+- **agent**: `MustPromptTemplate` and `PromptBuilder.MustBuild` removed — use `NewPromptTemplate` / `Build`. (#46)
+
+### Internal
+- All 6 first-party registries are now thin wrappers around `registry.Registry[T]`. Subsequent registries should use the shared package directly.
 
 ## [0.2.0] - 2026-04-25
 

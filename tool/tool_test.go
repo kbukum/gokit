@@ -308,8 +308,8 @@ func TestRegistry_DuplicateName(t *testing.T) {
 
 func TestRegistry_List(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("a", "Tool A", doSearch).AsCallable())
-	reg.MustRegister(tool.FromFunc("b", "Tool B", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("a", "Tool A", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("b", "Tool B", doSearch).AsCallable())
 
 	defs := reg.List()
 	if len(defs) != 2 {
@@ -319,7 +319,7 @@ func TestRegistry_List(t *testing.T) {
 
 func TestRegistry_Call(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("search", "Search", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("search", "Search", doSearch).AsCallable())
 
 	result, err := reg.Call(tool.Background(), "search", json.RawMessage(`{"query":"test"}`))
 	if err != nil {
@@ -345,9 +345,9 @@ func TestRegistry_CallNotFound(t *testing.T) {
 
 func TestRegistry_Search(t *testing.T) {
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("search_videos", "Search for videos", doSearch).AsCallable())
-	reg.MustRegister(tool.FromFunc("clip_media", "Clip media content", doSearch).AsCallable())
-	reg.MustRegister(tool.FromFunc("analyze", "Analyze content quality", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("search_videos", "Search for videos", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("clip_media", "Clip media content", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("analyze", "Analyze content quality", doSearch).AsCallable())
 
 	defs := reg.Search("search")
 	if len(defs) != 1 {
@@ -386,10 +386,10 @@ func TestRegistry_CallBatch(t *testing.T) {
 
 	reg := tool.NewRegistry()
 
-	reg.MustRegister(&readOnlyCallable{
+	mustReg(t, reg, &readOnlyCallable{
 		Callable: tool.FromFunc("read_tool", "Reads data", readFn).AsCallable(),
 	})
-	reg.MustRegister(tool.FromFunc("write_tool", "Writes data", writeFn).AsCallable())
+	mustReg(t, reg, tool.FromFunc("write_tool", "Writes data", writeFn).AsCallable())
 
 	calls := []tool.BatchCall{
 		{Name: "read_tool", ID: "c1", Input: json.RawMessage(`{"query":"a"}`)},
@@ -421,13 +421,13 @@ func TestRegistry_CallBatch(t *testing.T) {
 func TestRegistry_Filter(t *testing.T) {
 	reg := tool.NewRegistry()
 
-	reg.MustRegister(tool.FromFunc("search", "Search", doSearch).
+	mustReg(t, reg, tool.FromFunc("search", "Search", doSearch).
 		WithAnnotations(tool.Annotations{Category: "discovery", Tags: []string{"search"}}).
 		AsCallable())
-	reg.MustRegister(tool.FromFunc("clip", "Clip", doSearch).
+	mustReg(t, reg, tool.FromFunc("clip", "Clip", doSearch).
 		WithAnnotations(tool.Annotations{Category: "media"}).
 		AsCallable())
-	reg.MustRegister(tool.FromFunc("other", "Other", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("other", "Other", doSearch).AsCallable())
 
 	defs := reg.Filter(tool.WithCategory("discovery"))
 	if len(defs) != 1 {
@@ -459,16 +459,16 @@ func TestAnnotations_ExecutionHint(t *testing.T) {
 func TestRegistry_FilterByExecutionHint(t *testing.T) {
 	reg := tool.NewRegistry()
 
-	reg.MustRegister(tool.FromFunc("validate", "Validate", doSearch).
+	mustReg(t, reg, tool.FromFunc("validate", "Validate", doSearch).
 		WithAnnotations(tool.Annotations{ExecutionHint: "ui"}).
 		AsCallable())
-	reg.MustRegister(tool.FromFunc("process", "Process", doSearch).
+	mustReg(t, reg, tool.FromFunc("process", "Process", doSearch).
 		WithAnnotations(tool.Annotations{ExecutionHint: "backend"}).
 		AsCallable())
-	reg.MustRegister(tool.FromFunc("submit", "Submit", doSearch).
+	mustReg(t, reg, tool.FromFunc("submit", "Submit", doSearch).
 		WithAnnotations(tool.Annotations{ExecutionHint: "hybrid"}).
 		AsCallable())
-	reg.MustRegister(tool.FromFunc("plain", "Plain", doSearch).AsCallable())
+	mustReg(t, reg, tool.FromFunc("plain", "Plain", doSearch).AsCallable())
 
 	defs := reg.Filter(tool.WithExecutionHint("ui"))
 	if len(defs) != 1 || defs[0].Name != "validate" {
@@ -617,4 +617,12 @@ func TestAsProvider(t *testing.T) {
 	if out.Total != 2 {
 		t.Errorf("expected total=2, got %d", out.Total)
 	}
+}
+
+// mustReg registers t on reg, failing the test on error.
+func mustReg(tb testing.TB, reg *tool.Registry, c tool.Callable) {
+tb.Helper()
+if err := reg.Register(c); err != nil {
+tb.Fatalf("register: %v", err)
+}
 }

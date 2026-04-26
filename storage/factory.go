@@ -2,9 +2,9 @@ package storage
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/registry"
 )
 
 // StorageFactory creates a Storage implementation from core config and
@@ -14,56 +14,44 @@ type StorageFactory func(cfg Config, providerCfg any, log *logger.Logger) (Stora
 
 // FactoryRegistry stores storage factories by provider name.
 type FactoryRegistry struct {
-	mu        sync.RWMutex
-	factories map[string]StorageFactory
+	inner *registry.Registry[StorageFactory]
 }
 
 // NewFactoryRegistry creates an isolated storage factory registry.
 func NewFactoryRegistry() *FactoryRegistry {
-	return &FactoryRegistry{factories: make(map[string]StorageFactory)}
+	return &FactoryRegistry{inner: registry.New[StorageFactory]("storage")}
 }
 
 // Register stores a storage backend factory for the given provider name.
-// It panics if name or factory are invalid, or if a duplicate name is registered.
-func (r *FactoryRegistry) Register(name string, f StorageFactory) {
-	if name == "" {
-		panic("storage: provider name cannot be empty")
-	}
-	if f == nil {
-		panic(fmt.Sprintf("storage: factory %q cannot be nil", name))
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, exists := r.factories[name]; exists {
-		panic(fmt.Sprintf("storage: factory %q already registered", name))
-	}
-	r.factories[name] = f
+// It returns an error if name or factory are invalid, or if a duplicate
+// name is registered.
+//
+// Note: prior versions panicked on duplicate; callers must now check the
+// returned error.
+func (r *FactoryRegistry) Register(name string, f StorageFactory) error {
+	return r.inner.Register(name, f)
 }
 
 // Get returns a storage factory by provider name.
 func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.factories[name]
-	return f, ok
+	return r.inner.Get(name)
 }
 
 // New creates a Storage implementation using the provided registry.
 // The registry is mandatory; pass an explicit *FactoryRegistry with the desired
 // provider registered (e.g. via local.Register, s3.Register, etc.).
-func New(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
+func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if registry == nil {
+	if reg == nil {
 		return nil, fmt.Errorf("storage: factory registry is nil")
 	}
 
 	l := log.WithComponent("storage")
 
-	f, ok := registry.Get(cfg.Provider)
+	f, ok := reg.Get(cfg.Provider)
 	if !ok {
 		return nil, fmt.Errorf("storage: unsupported provider %q (not registered)", cfg.Provider)
 	}

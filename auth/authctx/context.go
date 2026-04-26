@@ -10,7 +10,8 @@
 //
 //	// Retrieve claims (in handlers)
 //	claims, ok := authctx.Get[*MyClaims](ctx)
-//	claims := authctx.MustGet[*MyClaims](ctx) // panics if missing
+//	// or, with a propagated error:
+//	claims, err := authctx.GetOrError[*MyClaims](ctx)
 package authctx
 
 import (
@@ -41,17 +42,6 @@ func Get[T any](ctx context.Context) (T, bool) {
 	}
 	claims, ok := val.(T)
 	return claims, ok
-}
-
-// MustGet retrieves typed authentication claims from the context.
-//
-// For use in tests and application startup only; never call from HTTP handlers or middleware.
-func MustGet[T any](ctx context.Context) T {
-	claims, ok := Get[T](ctx)
-	if !ok {
-		panic("authctx: claims not found in context or wrong type")
-	}
-	return claims
 }
 
 // ErrNoClaims is returned when claims are not found in the context.

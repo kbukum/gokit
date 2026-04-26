@@ -16,8 +16,9 @@ import (
 )
 
 // Register registers the Supabase storage provider into the given registry.
-func Register(registry *storage.FactoryRegistry) {
-	registry.Register(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+// It returns an error if the provider is already registered.
+func Register(reg *storage.FactoryRegistry) error {
+	return reg.Register(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

@@ -462,18 +462,6 @@ func (c *UnifiedContainer) GetResolver(name string) func() (interface{}, error) 
 	}
 }
 
-// MustResolve resolves name and panics on failure. Prefer the generic
-// package-level [MustResolve] helper for type-safe resolution; this method
-// exists for callers that hold only the [Container] interface and need an
-// untyped panic-on-error variant (e.g., framework wiring code).
-func (c *UnifiedContainer) MustResolve(name string) interface{} {
-	instance, err := c.Resolve(name)
-	if err != nil {
-		panic(err)
-	}
-	return instance
-}
-
 // Helper functions and options
 func WithRetryPolicy(policy *RetryPolicy) LazyOption {
 	return func(reg *ComponentRegistration) {

@@ -2,7 +2,8 @@ package llm
 
 import (
 	"fmt"
-	"sync"
+
+	"github.com/kbukum/gokit/registry"
 )
 
 // StreamFormat indicates how a provider delivers streaming responses.
@@ -60,59 +61,30 @@ type Dialect interface {
 // application startup. Pass the populated registry to [NewWithRegistry]
 // to create an [Adapter] that resolves its dialect from the registry.
 type DialectRegistry struct {
-	mu       sync.RWMutex
-	dialects map[string]Dialect
+	inner *registry.Registry[Dialect]
 }
 
 // NewDialectRegistry creates an isolated dialect registry.
 func NewDialectRegistry() *DialectRegistry {
-	return &DialectRegistry{dialects: make(map[string]Dialect)}
+	return &DialectRegistry{inner: registry.New[Dialect]("llm")}
 }
 
 // Register adds a dialect to the registry. It returns an error on
 // programmer errors (empty name, nil dialect, duplicate name).
 func (r *DialectRegistry) Register(name string, d Dialect) error {
-	if name == "" {
-		return fmt.Errorf("llm: dialect name cannot be empty")
-	}
-	if d == nil {
-		return fmt.Errorf("llm: dialect %q cannot be nil", name)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, exists := r.dialects[name]; exists {
-		return fmt.Errorf("llm: dialect %q already registered", name)
-	}
-	r.dialects[name] = d
-	return nil
-}
-
-// MustRegister is like [DialectRegistry.Register] but panics on error.
-// Intended for application startup where a failed registration is fatal.
-func (r *DialectRegistry) MustRegister(name string, d Dialect) {
-	if err := r.Register(name, d); err != nil {
-		panic(err)
-	}
+	return r.inner.Register(name, d)
 }
 
 // Get retrieves a dialect by name.
 func (r *DialectRegistry) Get(name string) (Dialect, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	d, ok := r.dialects[name]
+	d, ok := r.inner.Get(name)
 	if !ok {
 		return nil, fmt.Errorf("llm: unknown dialect %q (forgot to register?)", name)
 	}
 	return d, nil
 }
 
-// Names returns the names of all registered dialects.
+// Names returns the names of all registered dialects in deterministic order.
 func (r *DialectRegistry) Names() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.dialects))
-	for name := range r.dialects {
-		names = append(names, name)
-	}
-	return names
+	return r.inner.Names()
 }

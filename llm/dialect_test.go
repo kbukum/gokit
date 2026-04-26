@@ -39,8 +39,8 @@ func TestDialectRegistry_Names(t *testing.T) {
 	t.Parallel()
 
 	reg := NewDialectRegistry()
-	reg.MustRegister("alpha", &mockDialect{name: "alpha"})
-	reg.MustRegister("beta", &mockDialect{name: "beta"})
+	mustReg(t, reg, "alpha", &mockDialect{name: "alpha"})
+	mustReg(t, reg, "beta", &mockDialect{name: "beta"})
 
 	names := reg.Names()
 	sort.Strings(names)
@@ -78,16 +78,10 @@ func TestDialectRegistry_RejectNilOrEmpty(t *testing.T) {
 	}
 }
 
-func TestDialectRegistry_MustRegisterPanicsOnError(t *testing.T) {
-	t.Parallel()
-
-	reg := NewDialectRegistry()
-	reg.MustRegister("ok", &mockDialect{name: "ok"})
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic on duplicate MustRegister")
-		}
-	}()
-	reg.MustRegister("ok", &mockDialect{name: "ok"})
+// mustReg registers d on reg, failing the test on error.
+func mustReg(tb testing.TB, reg *DialectRegistry, name string, d Dialect) {
+	tb.Helper()
+	if err := reg.Register(name, d); err != nil {
+		tb.Fatalf("register %q: %v", name, err)
+	}
 }

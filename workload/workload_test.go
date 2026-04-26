@@ -852,7 +852,7 @@ func TestConfig_DefaultLabels(t *testing.T) {
 
 func TestFactory_RegisterAndCreate(t *testing.T) {
 	reg := NewFactoryRegistry()
-	reg.MustRegister("test-provider", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "test-provider", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -923,7 +923,7 @@ func TestComponent_StartDisabled(t *testing.T) {
 
 func TestComponent_StartWithRegisteredFactory(t *testing.T) {
 	reg := NewFactoryRegistry()
-	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -948,7 +948,7 @@ func TestComponent_StartUnknownProvider(t *testing.T) {
 
 func TestComponent_Stop(t *testing.T) {
 	reg := NewFactoryRegistry()
-	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -988,7 +988,7 @@ func TestComponent_HealthNotInitialized(t *testing.T) {
 
 func TestComponent_HealthWithManager(t *testing.T) {
 	reg := NewFactoryRegistry()
-	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -1006,7 +1006,7 @@ func TestComponent_HealthCheckFails(t *testing.T) {
 	reg := NewFactoryRegistry()
 	unhealthy := newMockManager()
 	unhealthy.healthy = false
-	reg.MustRegister("mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
 		return unhealthy, nil
 	})
 
@@ -1198,4 +1198,12 @@ func TestComponent_ImplementsComponent(t *testing.T) {
 
 func TestComponent_ImplementsDescribable(t *testing.T) {
 	var _ component.Describable = (*Component)(nil)
+}
+
+// mustReg registers f on reg, failing the test on error.
+func mustReg(tb testing.TB, reg *FactoryRegistry, name string, f ManagerFactory) {
+tb.Helper()
+if err := reg.Register(name, f); err != nil {
+tb.Fatalf("register: %v", err)
+}
 }

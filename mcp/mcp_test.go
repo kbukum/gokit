@@ -46,7 +46,7 @@ func failHandler(_ context.Context, _ struct{}) (struct{}, error) {
 func newTestRegistry(t *testing.T) *tool.Registry {
 	t.Helper()
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("add", "Add two numbers", addHandler).AsCallable())
+	mustReg(t, reg, tool.FromFunc("add", "Add two numbers", addHandler).AsCallable())
 
 	greetTool := tool.FromFunc("greet", "Greet someone", greetHandler)
 	greetTool.Def.ReadOnly = true
@@ -54,9 +54,9 @@ func newTestRegistry(t *testing.T) *tool.Registry {
 		Title:         "Greeting Tool",
 		OpenWorldHint: boolPtr(false),
 	}
-	reg.MustRegister(greetTool.AsCallable())
+	mustReg(t, reg, greetTool.AsCallable())
 
-	reg.MustRegister(tool.FromFunc("fail", "Always fails", failHandler).AsCallable())
+	mustReg(t, reg, tool.FromFunc("fail", "Always fails", failHandler).AsCallable())
 	return reg
 }
 
@@ -176,7 +176,7 @@ func TestRoundTrip(t *testing.T) {
 func TestServerWithPrefix(t *testing.T) {
 	ctx := context.Background()
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("search", "Search things", greetHandler).AsCallable())
+	mustReg(t, reg, tool.FromFunc("search", "Search things", greetHandler).AsCallable())
 
 	server := kitMcp.NewServer("test", "1.0.0", reg, kitMcp.WithPrefix("svc_"))
 
@@ -208,7 +208,7 @@ func TestServerWithPrefix(t *testing.T) {
 func TestClientWithPrefix(t *testing.T) {
 	ctx := context.Background()
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("calc", "Calculate", addHandler).AsCallable())
+	mustReg(t, reg, tool.FromFunc("calc", "Calculate", addHandler).AsCallable())
 
 	server := kitMcp.NewServer("test", "1.0.0", reg)
 
@@ -257,7 +257,7 @@ func TestClientWithPrefix(t *testing.T) {
 func TestValidation(t *testing.T) {
 	ctx := context.Background()
 	reg := tool.NewRegistry()
-	reg.MustRegister(tool.FromFunc("add", "Add numbers", addHandler).AsCallable())
+	mustReg(t, reg, tool.FromFunc("add", "Add numbers", addHandler).AsCallable())
 
 	server := kitMcp.NewServer("test", "1.0.0", reg)
 
@@ -358,7 +358,7 @@ func TestConvertDefinition(t *testing.T) {
 	testTool := tool.FromFunc("test_tool", "A test tool", greetHandler)
 	testTool.Def.ReadOnly = true
 	testTool.Def.Annotations = def.Annotations
-	reg.MustRegister(testTool.AsCallable())
+	mustReg(t, reg, testTool.AsCallable())
 
 	// Verify the definition is correct
 	defs := reg.List()
@@ -380,3 +380,10 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 }
 
 func boolPtr(v bool) *bool { return &v }
+
+func mustReg(tb testing.TB, reg *tool.Registry, c tool.Callable) {
+tb.Helper()
+if err := reg.Register(c); err != nil {
+tb.Fatalf("register: %v", err)
+}
+}

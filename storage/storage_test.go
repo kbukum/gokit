@@ -199,23 +199,24 @@ func TestNew_UnsupportedProvider(t *testing.T) {
 func TestFactoryRegistry_AddRemove(t *testing.T) {
 	registry := NewFactoryRegistry()
 	//nolint:nilnil // test stub factory: no storage and no error
-	registry.Register("test-provider", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil })
+	if err := registry.Register("test-provider", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil }); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
 	if _, ok := registry.Get("test-provider"); !ok {
 		t.Fatal("expected test-provider registration")
 	}
 }
 
-func TestFactoryRegistry_RegisterDuplicatePanics(t *testing.T) {
+func TestFactoryRegistry_RegisterDuplicateErrors(t *testing.T) {
 	registry := NewFactoryRegistry()
 	//nolint:nilnil // test stub factory: no storage and no error
 	stub := func(Config, any, *logger.Logger) (Storage, error) { return nil, nil }
-	registry.Register("dup", stub)
-	defer func() {
-		if recover() == nil {
-			t.Fatal("expected panic on duplicate registration")
-		}
-	}()
-	registry.Register("dup", stub)
+	if err := registry.Register("dup", stub); err != nil {
+		t.Fatalf("first Register: %v", err)
+	}
+	if err := registry.Register("dup", stub); err == nil {
+		t.Fatal("expected error on duplicate registration")
+	}
 }
 
 // ---------------------------------------------------------------------------
