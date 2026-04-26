@@ -7,17 +7,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/workload"
 )
 
 // SystemInfo returns host-level system information from the Docker daemon.
 func (m *Manager) SystemInfo(ctx context.Context) (*workload.SystemInfo, error) {
-	info, err := m.client.Info(ctx)
+	infoResult, err := m.client.Info(ctx, client.InfoOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: system info: %w", err)
 	}
+	info := infoResult.Info
 
 	si := &workload.SystemInfo{
 		OS:              info.OSType,
@@ -45,14 +46,21 @@ func (m *Manager) SystemInfo(ctx context.Context) (*workload.SystemInfo, error) 
 
 // DiskUsage returns Docker disk usage broken down by category.
 func (m *Manager) DiskUsage(ctx context.Context) (*workload.DiskUsage, error) {
-	du, err := m.client.DiskUsage(ctx, types.DiskUsageOptions{})
+	du, err := m.client.DiskUsage(ctx, client.DiskUsageOptions{
+		Images:     true,
+		Containers: true,
+		Volumes:    true,
+		BuildCache: true,
+		Verbose:    true,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("docker: disk usage: %w", err)
 	}
 
 	result := &workload.DiskUsage{}
 
-	for _, img := range du.Images {
+	for i := range du.Images.Items {
+		img := &du.Images.Items[i]
 		entry := workload.ImageDiskEntry{
 			ID:         img.ID,
 			RepoTags:   img.RepoTags,
@@ -66,28 +74,29 @@ func (m *Manager) DiskUsage(ctx context.Context) (*workload.DiskUsage, error) {
 		result.ImagesSize += img.Size
 	}
 
-	for _, c := range du.Containers {
-		result.ContainersSize += c.SizeRw
+	for i := range du.Containers.Items {
+		result.ContainersSize += du.Containers.Items[i].SizeRw
 	}
 
-	for _, v := range du.Volumes {
-		if v.UsageData.Size > 0 {
+	for _, v := range du.Volumes.Items {
+		if v.UsageData != nil && v.UsageData.Size > 0 {
 			result.VolumesSize += v.UsageData.Size
 		}
 	}
 
-	for _, bc := range du.BuildCache {
+	for i := range du.BuildCache.Items {
+		bc := &du.BuildCache.Items[i]
 		if !bc.Shared {
 			result.BuildCacheSize += bc.Size
 		}
 	}
 
 	// Best-effort filesystem capacity for local daemons.
-	info, infoErr := m.client.Info(ctx)
-	if infoErr == nil && info.DockerRootDir != "" {
-		result.DataRootPath = info.DockerRootDir
+	infoResult, infoErr := m.client.Info(ctx, client.InfoOptions{})
+	if infoErr == nil && infoResult.Info.DockerRootDir != "" {
+		result.DataRootPath = infoResult.Info.DockerRootDir
 		if isLocal(m.cfg.Host) {
-			if total, free, ok := statfs(info.DockerRootDir); ok {
+			if total, free, ok := statfs(infoResult.Info.DockerRootDir); ok {
 				result.DataRootTotal = total
 				result.DataRootFree = free
 			}

@@ -7,9 +7,8 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/workload"
@@ -55,15 +54,13 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger
 		client.WithHost(cfg.Host),
 	}
 	if cfg.APIVersion != "" {
-		opts = append(opts, client.WithVersion(cfg.APIVersion))
-	} else {
-		opts = append(opts, client.WithAPIVersionNegotiation())
+		opts = append(opts, client.WithAPIVersion(cfg.APIVersion))
 	}
 	if cfg.TLS != nil && cfg.TLS.IsEnabled() {
 		opts = append(opts, client.WithTLSClientConfig(cfg.TLS.CAFile, cfg.TLS.CertFile, cfg.TLS.KeyFile))
 	}
 
-	cli, err := client.NewClientWithOpts(opts...)
+	cli, err := client.New(opts...)
 	if err != nil {
 		return nil, fmt.Errorf("docker: create client: %w", err)
 	}
@@ -89,13 +86,19 @@ func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*work
 
 	containerCfg, hostCfg, networkCfg, platform := m.buildContainerConfig(req)
 
-	resp, err := m.client.ContainerCreate(ctx, containerCfg, hostCfg, networkCfg, platform, req.Name)
+	resp, err := m.client.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config:           containerCfg,
+		HostConfig:       hostCfg,
+		NetworkingConfig: networkCfg,
+		Platform:         platform,
+		Name:             req.Name,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("docker: create container: %w", err)
 	}
 
-	if err := m.client.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		_ = m.client.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+	if _, err := m.client.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
+		_, _ = m.client.ContainerRemove(ctx, resp.ID, client.ContainerRemoveOptions{Force: true})
 		return nil, fmt.Errorf("docker: start container: %w", err)
 	}
 
@@ -114,32 +117,35 @@ func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*work
 // Stop gracefully stops a Docker container.
 func (m *Manager) Stop(ctx context.Context, id string) error {
 	timeout := 30
-	return m.client.ContainerStop(ctx, id, container.StopOptions{Timeout: &timeout})
+	_, err := m.client.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: &timeout})
+	return err
 }
 
 // Remove removes a Docker container.
 func (m *Manager) Remove(ctx context.Context, id string) error {
-	return m.client.ContainerRemove(ctx, id, container.RemoveOptions{
+	_, err := m.client.ContainerRemove(ctx, id, client.ContainerRemoveOptions{
 		RemoveVolumes: true,
 		Force:         true,
 	})
+	return err
 }
 
 // Restart restarts a Docker container.
 func (m *Manager) Restart(ctx context.Context, id string) error {
 	timeout := 30
-	return m.client.ContainerRestart(ctx, id, container.StopOptions{Timeout: &timeout})
+	_, err := m.client.ContainerRestart(ctx, id, client.ContainerRestartOptions{Timeout: &timeout})
+	return err
 }
 
 // Wait blocks until the container exits and returns the exit status.
 func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, error) {
-	statusCh, errCh := m.client.ContainerWait(ctx, id, container.WaitConditionNotRunning)
+	waitResult := m.client.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 	select {
-	case err := <-errCh:
+	case err := <-waitResult.Error:
 		if err != nil {
 			return nil, fmt.Errorf("docker: wait: %w", err)
 		}
-	case status := <-statusCh:
+	case status := <-waitResult.Result:
 		result := &workload.WaitResult{StatusCode: status.StatusCode}
 		if status.Error != nil {
 			result.Error = status.Error.Message
@@ -159,7 +165,7 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 
 // Status returns the current status of a Docker container.
 func (m *Manager) Status(ctx context.Context, id string) (*workload.WorkloadStatus, error) {
-	info, err := m.client.ContainerInspect(ctx, id)
+	res, err := m.client.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			return &workload.WorkloadStatus{
@@ -169,51 +175,65 @@ func (m *Manager) Status(ctx context.Context, id string) (*workload.WorkloadStat
 		}
 		return nil, fmt.Errorf("docker: inspect container: %w", err)
 	}
+	info := res.Container
 
 	ws := &workload.WorkloadStatus{
-		ID:      info.ID,
-		Name:    strings.TrimPrefix(info.Name, "/"),
-		Image:   info.Config.Image,
-		Running: info.State.Running,
-		Healthy: info.State.Running,
+		ID:   info.ID,
+		Name: strings.TrimPrefix(info.Name, "/"),
+	}
+	if info.Config != nil {
+		ws.Image = info.Config.Image
 	}
 
-	if info.State.Health != nil {
-		ws.Healthy = info.State.Health.Status == "healthy"
-	}
-
-	switch {
-	case info.State.Running:
-		ws.Status = workload.StatusRunning
-	case info.State.Restarting:
-		ws.Status = workload.StatusRestarting
-	case info.State.ExitCode != 0:
-		ws.Status = workload.StatusError
-	default:
+	state := info.State
+	if state == nil {
 		ws.Status = workload.StatusStopped
+		ws.Restarts = info.RestartCount
+		return ws, nil
 	}
-
-	ws.ExitCode = info.State.ExitCode
-	ws.Message = info.State.Status
+	applyState(ws, state)
 	ws.Restarts = info.RestartCount
-
-	if info.State.StartedAt != "" {
-		if t, err := time.Parse(time.RFC3339Nano, info.State.StartedAt); err == nil {
-			ws.StartedAt = t
-		}
-	}
-	if info.State.FinishedAt != "" {
-		if t, err := time.Parse(time.RFC3339Nano, info.State.FinishedAt); err == nil {
-			ws.StoppedAt = t
-		}
-	}
 
 	return ws, nil
 }
 
+// applyState copies fields from a Docker container State onto the workload
+// status. Extracted to keep [Manager.Status] within nestif's complexity
+// budget; State pointers are derived from a single ContainerInspect response
+// so the helper is intentionally narrow and not exported.
+func applyState(ws *workload.WorkloadStatus, state *container.State) {
+	ws.Running = state.Running
+	ws.Healthy = state.Running
+	if state.Health != nil {
+		ws.Healthy = state.Health.Status == "healthy"
+	}
+	switch {
+	case state.Running:
+		ws.Status = workload.StatusRunning
+	case state.Restarting:
+		ws.Status = workload.StatusRestarting
+	case state.ExitCode != 0:
+		ws.Status = workload.StatusError
+	default:
+		ws.Status = workload.StatusStopped
+	}
+	ws.ExitCode = state.ExitCode
+	ws.Message = string(state.Status)
+	if state.StartedAt != "" {
+		if t, err := time.Parse(time.RFC3339Nano, state.StartedAt); err == nil {
+			ws.StartedAt = t
+		}
+	}
+	if state.FinishedAt != "" {
+		if t, err := time.Parse(time.RFC3339Nano, state.FinishedAt); err == nil {
+			ws.StoppedAt = t
+		}
+	}
+}
+
 // List returns containers matching the filter.
 func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workload.WorkloadInfo, error) {
-	f := filters.NewArgs()
+	f := make(client.Filters)
 	for k, v := range filter.Labels {
 		f.Add("label", fmt.Sprintf("%s=%s", k, v))
 	}
@@ -224,7 +244,7 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 		f.Add("status", filter.Status)
 	}
 
-	containers, err := m.client.ContainerList(ctx, container.ListOptions{
+	listResult, err := m.client.ContainerList(ctx, client.ContainerListOptions{
 		All:     true,
 		Filters: f,
 	})
@@ -232,6 +252,7 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 		return nil, fmt.Errorf("docker: list containers: %w", err)
 	}
 
+	containers := listResult.Items
 	infos := make([]workload.WorkloadInfo, len(containers))
 	for i := range containers {
 		name := ""
@@ -242,7 +263,7 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 			ID:      containers[i].ID,
 			Name:    name,
 			Image:   containers[i].Image,
-			Status:  containers[i].State,
+			Status:  string(containers[i].State),
 			Labels:  containers[i].Labels,
 			Created: time.Unix(containers[i].Created, 0),
 		}
@@ -252,7 +273,7 @@ func (m *Manager) List(ctx context.Context, filter workload.ListFilter) ([]workl
 
 // HealthCheck verifies Docker is available.
 func (m *Manager) HealthCheck(ctx context.Context) error {
-	_, err := m.client.Ping(ctx)
+	_, err := m.client.Ping(ctx, client.PingOptions{})
 	if err != nil {
 		return fmt.Errorf("docker: health check failed: %w", err)
 	}

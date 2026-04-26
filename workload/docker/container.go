@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/netip"
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/go-connections/nat"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/kbukum/gokit/workload"
@@ -39,17 +39,20 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 	}
 
 	// Ports
-	exposedPorts := nat.PortSet{}
-	portBindings := nat.PortMap{}
+	exposedPorts := network.PortSet{}
+	portBindings := network.PortMap{}
 	for _, p := range req.Ports {
 		proto := p.Protocol
 		if proto == "" {
 			proto = "tcp"
 		}
-		containerPort := nat.Port(fmt.Sprintf("%d/%s", p.Container, proto))
+		containerPort, ok := network.PortFrom(uint16(p.Container), network.IPProtocol(proto))
+		if !ok {
+			continue
+		}
 		exposedPorts[containerPort] = struct{}{}
 		if p.Host > 0 {
-			portBindings[containerPort] = []nat.PortBinding{
+			portBindings[containerPort] = []network.PortBinding{
 				{HostPort: strconv.Itoa(p.Host)},
 			}
 		}
@@ -96,7 +99,11 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 			hostCfg.ExtraHosts = append(hostCfg.ExtraHosts, fmt.Sprintf("%s:%s", host, ip))
 		}
 		if len(req.Network.DNS) > 0 {
-			hostCfg.DNS = req.Network.DNS
+			for _, d := range req.Network.DNS {
+				if addr, err := netip.ParseAddr(d); err == nil {
+					hostCfg.DNS = append(hostCfg.DNS, addr)
+				}
+			}
 		}
 	}
 
@@ -129,13 +136,16 @@ func (m *Manager) ensureImage(ctx context.Context, imageName, platform string) e
 
 	m.log.Info("pulling image", map[string]interface{}{"image": imageName})
 
-	pullOpts := image.PullOptions{}
+	pullOpts := client.ImagePullOptions{}
 	plat := platform
 	if plat == "" {
 		plat = m.cfg.Platform
 	}
 	if plat != "" {
-		pullOpts.Platform = plat
+		parts := strings.SplitN(plat, "/", 2)
+		if len(parts) == 2 {
+			pullOpts.Platforms = []ocispec.Platform{{OS: parts[0], Architecture: parts[1]}}
+		}
 	}
 
 	reader, err := m.client.ImagePull(ctx, imageName, pullOpts)
