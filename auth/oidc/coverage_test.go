@@ -81,7 +81,6 @@ func TestConfig_Validate(t *testing.T) {
 		{"valid", oidc.Config{Enabled: true, Issuer: "https://x", ClientID: "c"}, true, ""},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := tc.c.Validate()
@@ -391,8 +390,8 @@ func newRSATestKit(t *testing.T) *rsaTestKit {
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		kit.hits.Add(1)
-		nB := base64.RawURLEncoding.EncodeToString(priv.PublicKey.N.Bytes())
-		eBig := big.NewInt(int64(priv.PublicKey.E))
+		nB := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())
+		eBig := big.NewInt(int64(priv.E))
 		eB := base64.RawURLEncoding.EncodeToString(eBig.Bytes())
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"keys": []map[string]any{{
@@ -637,8 +636,8 @@ func TestVerifier_Verify_AlgMismatchWithJWK(t *testing.T) {
 		})
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
-		nB := base64.RawURLEncoding.EncodeToString(priv.PublicKey.N.Bytes())
-		eB := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.PublicKey.E)).Bytes())
+		nB := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())
+		eB := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.E)).Bytes())
 		// Lie about alg → say ES256 even though it's an RSA key.
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"keys": []map[string]any{{
@@ -759,8 +758,15 @@ func TestVerifier_Verify_ES256(t *testing.T) {
 		})
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
-		xB := base64.RawURLEncoding.EncodeToString(priv.PublicKey.X.Bytes())
-		yB := base64.RawURLEncoding.EncodeToString(priv.PublicKey.Y.Bytes())
+		// Avoid the deprecated ecdsa.PublicKey.X/Y fields by exporting via
+		// crypto/ecdh's uncompressed point encoding (0x04 || X || Y).
+		ecdhPub, err := priv.PublicKey.ECDH()
+		if err != nil {
+			t.Fatalf("ECDH conversion: %v", err)
+		}
+		raw := ecdhPub.Bytes() // 65 bytes for P-256
+		xB := base64.RawURLEncoding.EncodeToString(raw[1:33])
+		yB := base64.RawURLEncoding.EncodeToString(raw[33:65])
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"keys": []map[string]any{{
 				"kty": "EC", "kid": "ec1", "alg": "ES256", "use": "sig",
