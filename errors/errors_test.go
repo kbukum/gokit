@@ -636,7 +636,8 @@ func TestToProblemDetail_TitleCase(t *testing.T) {
 }
 
 func TestSetTypeBaseURI(t *testing.T) {
-	t.Parallel()
+	// Mutates package-global typeBaseURI; cannot run in parallel with
+	// other tests that read GetTypeBaseURI (e.g. TestToProblemDetail_*).
 	original := GetTypeBaseURI()
 	defer SetTypeBaseURI(original)
 
@@ -653,7 +654,7 @@ func TestSetTypeBaseURI(t *testing.T) {
 }
 
 func TestSetTypeBaseURI_AlreadyHasSlash(t *testing.T) {
-	t.Parallel()
+	// Mutates package-global typeBaseURI; see TestSetTypeBaseURI.
 	original := GetTypeBaseURI()
 	defer SetTypeBaseURI(original)
 

@@ -1,7 +1,7 @@
 package sse
 
 import (
-	"path/filepath"
+	"path"
 	"sync"
 
 	"github.com/kbukum/gokit/logger"
@@ -280,7 +280,7 @@ func (h *Hub) dispatch(msg *Message) {
 	frame := Frame{Event: msg.Event, Data: msg.Data}
 	matchCount := 0
 	for clientID, client := range h.clients {
-		matched, err := filepath.Match(msg.Pattern, clientID)
+		matched, err := path.Match(msg.Pattern, clientID)
 		if err != nil {
 			logger.Error("[SSE_HUB] Pattern match error", map[string]interface{}{
 				"pattern": msg.Pattern,

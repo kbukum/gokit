@@ -3,6 +3,7 @@ package httpx_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -18,7 +19,7 @@ func FuzzParseBoolQuery(f *testing.F) {
 	f.Fuzz(func(t *testing.T, raw string) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/?flag="+raw, http.NoBody)
+		c.Request = httptest.NewRequest(http.MethodGet, "/?flag="+url.QueryEscape(raw), http.NoBody)
 		_ = httpx.BoolQuery(c, "flag", false)
 	})
 }
