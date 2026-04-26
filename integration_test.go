@@ -1,3 +1,10 @@
+//go:build integration
+
+// Integration suite — exercises cross-package contracts (config↔component,
+// provider↔pipeline, resilience↔errors, …). Slow and dependency-heavy; gated
+// behind the `integration` build tag so the default `go test ./...` (and CI
+// `check` job) stay fast. Run with `make test-integration` or
+// `go test -tags=integration ./...`.
 package gokit_test
 
 import (

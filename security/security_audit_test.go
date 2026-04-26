@@ -2,6 +2,7 @@ package security_test
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,22 +27,16 @@ func TestAppError_Error_DoesNotLeakSecrets(t *testing.T) {
 		errFunc func() *goerrors.AppError
 	}{
 		{
-			name: "unauthorized does not contain credentials",
-			errFunc: func() *goerrors.AppError {
-				return goerrors.Unauthorized("Authentication required.")
-			},
+			name:    "unauthorized does not contain credentials",
+			errFunc: func() *goerrors.AppError { return goerrors.Unauthorized("Authentication required.") },
 		},
 		{
-			name: "invalid token does not reveal valid token",
-			errFunc: func() *goerrors.AppError {
-				return goerrors.InvalidToken()
-			},
+			name:    "invalid token does not reveal valid token",
+			errFunc: goerrors.InvalidToken,
 		},
 		{
-			name: "token expired does not reveal expiry details",
-			errFunc: func() *goerrors.AppError {
-				return goerrors.TokenExpired()
-			},
+			name:    "token expired does not reveal expiry details",
+			errFunc: goerrors.TokenExpired,
 		},
 		{
 			name: "internal error wraps cause safely",
@@ -341,7 +336,7 @@ func TestAppError_Unwrap_ChainPreserved(t *testing.T) {
 
 	original := fmt.Errorf("root cause")
 	err := goerrors.Internal(original)
-	if err.Unwrap() != original {
+	if !errors.Is(err.Unwrap(), original) {
 		t.Error("Unwrap should return the original cause")
 	}
 }
@@ -372,7 +367,7 @@ func TestAppError_Retryable_CorrectCodes(t *testing.T) {
 		func() *goerrors.AppError { return goerrors.ServiceUnavailable("x") },
 		func() *goerrors.AppError { return goerrors.ConnectionFailed("x") },
 		func() *goerrors.AppError { return goerrors.Timeout("x") },
-		func() *goerrors.AppError { return goerrors.RateLimited() },
+		goerrors.RateLimited,
 	}
 	for _, fn := range retryable {
 		err := fn()
@@ -385,8 +380,8 @@ func TestAppError_Retryable_CorrectCodes(t *testing.T) {
 		func() *goerrors.AppError { return goerrors.Unauthorized("x") },
 		func() *goerrors.AppError { return goerrors.Forbidden("x") },
 		func() *goerrors.AppError { return goerrors.NotFound("x", "1") },
-		func() *goerrors.AppError { return goerrors.TokenExpired() },
-		func() *goerrors.AppError { return goerrors.InvalidToken() },
+		goerrors.TokenExpired,
+		goerrors.InvalidToken,
 	}
 	for _, fn := range notRetryable {
 		err := fn()

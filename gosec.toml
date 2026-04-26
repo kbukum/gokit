@@ -1,0 +1,27 @@
+# gosec configuration — single source of truth for the gosec analyzer that
+# runs as part of golangci-lint. The standalone `securego/gosec` GitHub Action
+# was dropped (F-005 #35) because it does not honour `//nolint:gosec`
+# annotations and was therefore silently weakening the security posture by
+# requiring duplicate `// #nosec` markers everywhere.
+#
+# Excludes here mirror `linters.settings.gosec.excludes` in `.golangci.yml`.
+# Keep the two lists in sync.
+global:
+  # `// #nosec` comments are the documented opt-in mechanism for the few
+  # legitimate sites (e.g. security/tls.go, discovery/consul/consul.go).
+  nosec: enabled
+  # Audit mode lets //nolint:gosec stand even when running gosec directly.
+  audit: enabled
+
+# Rule-level configuration. The CWE-rule mapping below documents intent;
+# changes here MUST be reflected in .golangci.yml settings.gosec.excludes.
+rules:
+  G115:
+    enabled: false  # Integer overflow conversion — too noisy across codebase.
+  G304:
+    enabled: false  # File paths from variables — required for storage abstraction.
+  G306:
+    enabled: false  # File permissions — opt-in at specific 0644 call sites.
+  G404:
+    enabled: false  # math/rand acceptable for non-security paths (jitter, IDs).
+  # G402 (TLS InsecureSkipVerify) intentionally enabled — opt-in per call site.

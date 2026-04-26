@@ -48,7 +48,7 @@ func TestParsePathUUID(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/items/"+tc.param, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, "/items/"+tc.param, http.NoBody)
 			c.Params = gin.Params{{Key: "id", Value: tc.param}}
 
 			got, err := httpx.ParsePathUUID(c, "id")
@@ -104,7 +104,7 @@ func TestParsePathInt(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/items/"+tc.param, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, "/items/"+tc.param, http.NoBody)
 			c.Params = gin.Params{{Key: "id", Value: tc.param}}
 
 			got, err := httpx.ParsePathInt(c, "id")
@@ -144,7 +144,7 @@ func TestIntQuery(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, tc.url, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tc.url, http.NoBody)
 
 			got := httpx.IntQuery(c, tc.key, tc.def)
 			assert.Equal(t, tc.want, got)
@@ -172,7 +172,7 @@ func TestStringQuery(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, tc.url, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tc.url, http.NoBody)
 
 			got := httpx.StringQuery(c, tc.key, tc.def)
 			assert.Equal(t, tc.want, got)
@@ -203,7 +203,7 @@ func TestBoolQuery(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, tc.url, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tc.url, http.NoBody)
 
 			got := httpx.BoolQuery(c, tc.key, tc.def)
 			assert.Equal(t, tc.want, got)

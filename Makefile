@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage lint vet fmt tidy update update-go check clean help \
+.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check clean help \
        tag tag-push tag-force list-tags ci ci-test ci-lint ensure-act
 
 GOMOD := ./gomod.sh
@@ -16,6 +16,11 @@ build:
 ## Run tests (M=<module>, T=<test pattern>)
 test:
 	@$(GOMOD) cmd "go test -race -count=1 $(if $(T),-run $(T))" $(_M)
+
+## Run integration suite (gated by `//go:build integration`).
+## Slow / dependency-heavy; not part of `make test` or default CI `check`.
+test-integration:
+	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M)
 
 ## Run tests with coverage (M=<module>, T=<test pattern>)
 test-coverage:
@@ -109,6 +114,7 @@ help:
 	@echo "Development:"
 	@echo "  make build    [M=]            Build packages"
 	@echo "  make test     [M=] [T=]       Run tests"
+	@echo "  make test-integration [M=]    Run integration suite (//go:build integration)"
 	@echo "  make test-coverage [M=] [T=]  Run tests with coverage"
 	@echo "  make lint     [M=]            Run golangci-lint"
 	@echo "  make vet      [M=]            Run go vet"

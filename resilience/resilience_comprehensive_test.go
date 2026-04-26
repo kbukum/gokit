@@ -550,17 +550,17 @@ func TestRetry_LargeMaxAttemptsImmediateSuccess(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBulkhead_ExactlyMaxConcurrentAllSucceed(t *testing.T) {
-	const max = 5
+	const maxConcurrent = 5
 	b := NewBulkhead(BulkheadConfig{
 		Name:          "exact",
-		MaxConcurrent: max,
+		MaxConcurrent: maxConcurrent,
 	})
 
 	var running int32
 	var maxRunning int32
 	var wg sync.WaitGroup
 
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -583,25 +583,25 @@ func TestBulkhead_ExactlyMaxConcurrentAllSucceed(t *testing.T) {
 	}
 	wg.Wait()
 
-	if int(maxRunning) != max {
-		t.Errorf("expected peak concurrency %d, got %d", max, maxRunning)
+	if int(maxRunning) != maxConcurrent {
+		t.Errorf("expected peak concurrency %d, got %d", maxConcurrent, maxRunning)
 	}
 }
 
 func TestBulkhead_MaxConcurrentPlusOneRejected(t *testing.T) {
-	const max = 2
+	const maxConcurrent = 2
 	b := NewBulkhead(BulkheadConfig{
 		Name:          "plus-one",
-		MaxConcurrent: max,
+		MaxConcurrent: maxConcurrent,
 		MaxWait:       0,
 	})
 
-	started := make(chan struct{}, max)
+	started := make(chan struct{}, maxConcurrent)
 	release := make(chan struct{})
 	var wg sync.WaitGroup
 
 	// Fill all slots.
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxConcurrent; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -612,11 +612,11 @@ func TestBulkhead_MaxConcurrentPlusOneRejected(t *testing.T) {
 			})
 		}()
 	}
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxConcurrent; i++ {
 		<-started
 	}
 
-	// The (max+1)th call should be rejected.
+	// The (maxConcurrent+1)th call should be rejected.
 	err := b.Execute(context.Background(), func() error { return nil })
 	if !errors.Is(err, ErrBulkheadFull) {
 		t.Errorf("expected ErrBulkheadFull, got %v", err)
@@ -766,10 +766,10 @@ func TestBulkhead_PanicReleasesSlot(t *testing.T) {
 
 func TestBulkhead_ConcurrentReleaseAcquireRace(t *testing.T) {
 	t.Parallel()
-	const max = 3
+	const maxConcurrent = 3
 	b := NewBulkhead(BulkheadConfig{
 		Name:          "race",
-		MaxConcurrent: max,
+		MaxConcurrent: maxConcurrent,
 		MaxWait:       100 * time.Millisecond,
 	})
 
@@ -786,16 +786,16 @@ func TestBulkhead_ConcurrentReleaseAcquireRace(t *testing.T) {
 	}
 	wg.Wait()
 
-	if b.Available() != max {
-		t.Errorf("expected %d available after all done, got %d", max, b.Available())
+	if b.Available() != maxConcurrent {
+		t.Errorf("expected %d available after all done, got %d", maxConcurrent, b.Available())
 	}
 }
 
 func TestBulkhead_AvailableAccuracyDuringExecution(t *testing.T) {
-	const max = 5
+	const maxConcurrent = 5
 	b := NewBulkhead(BulkheadConfig{
 		Name:          "avail",
-		MaxConcurrent: max,
+		MaxConcurrent: maxConcurrent,
 	})
 
 	started := make(chan struct{})
@@ -821,15 +821,15 @@ func TestBulkhead_AvailableAccuracyDuringExecution(t *testing.T) {
 	if got := b.InUse(); got != 3 {
 		t.Errorf("expected 3 in use, got %d", got)
 	}
-	if got := b.MaxConcurrent(); got != max {
-		t.Errorf("expected MaxConcurrent=%d, got %d", max, got)
+	if got := b.MaxConcurrent(); got != maxConcurrent {
+		t.Errorf("expected MaxConcurrent=%d, got %d", maxConcurrent, got)
 	}
 
 	close(release)
 	time.Sleep(10 * time.Millisecond)
 
-	if got := b.Available(); got != max {
-		t.Errorf("expected %d available after release, got %d", max, got)
+	if got := b.Available(); got != maxConcurrent {
+		t.Errorf("expected %d available after release, got %d", maxConcurrent, got)
 	}
 }
 

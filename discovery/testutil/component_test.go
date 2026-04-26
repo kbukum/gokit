@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kbukum/gokit/component"
@@ -61,7 +62,7 @@ func TestComponent_DiscoverAndRegister(t *testing.T) {
 
 	// Unknown service
 	_, err = comp.Discover(ctx, "unknown")
-	if err != discovery.ErrServiceNotFound {
+	if !errors.Is(err, discovery.ErrServiceNotFound) {
 		t.Errorf("Discover(unknown) = %v, want ErrServiceNotFound", err)
 	}
 
@@ -117,7 +118,7 @@ func TestComponent_ResetSnapshotRestore(t *testing.T) {
 		t.Fatalf("Reset() failed: %v", rErr)
 	}
 	_, err = comp.Discover(ctx, "svc")
-	if err != discovery.ErrServiceNotFound {
+	if !errors.Is(err, discovery.ErrServiceNotFound) {
 		t.Errorf("After Reset: Discover() = %v, want ErrServiceNotFound", err)
 	}
 }

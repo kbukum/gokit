@@ -122,7 +122,7 @@ func TestBindQuery(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/?"+tc.query, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, "/?"+tc.query, http.NoBody)
 
 			got, err := httpx.BindQuery[searchQuery](c)
 

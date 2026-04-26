@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -88,7 +89,7 @@ func TestChainHandlers_ErrorPropagation(t *testing.T) {
 
 	chain := ChainHandlers(base, mw)
 	err := chain(context.Background(), Message{})
-	if err != sentinel {
+	if !errors.Is(err, sentinel) {
 		t.Errorf("error = %v, want %v", err, sentinel)
 	}
 	if !sawError {

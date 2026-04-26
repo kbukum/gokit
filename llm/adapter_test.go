@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -134,7 +135,7 @@ func TestAdapter_NewWithDialect(t *testing.T) {
 
 func TestAdapter_NewWithDialect_NilDialect(t *testing.T) {
 	_, err := NewWithDialect(nil, Config{})
-	if err != ErrNoDialect {
+	if !errors.Is(err, ErrNoDialect) {
 		t.Errorf("expected ErrNoDialect, got %v", err)
 	}
 }

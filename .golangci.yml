@@ -41,6 +41,11 @@ linters:
     - nestif
   exclusions:
     rules:
+      # Test files have a narrower exclusion list than before (F-022 #52).
+      # `errcheck`, `gosec`, `noctx`, `unparam` and `unused` remain disabled
+      # in tests as a pragmatic concession (test setup intentionally ignores
+      # close errors, uses weak rand, etc.). `gocritic` and `errorlint` were
+      # removed from the blanket — they catch real bugs in test code too.
       - path: "_test\\.go"
         linters:
           - errcheck
@@ -48,8 +53,6 @@ linters:
           - noctx
           - unparam
           - unused
-          - gocritic
-          - errorlint
       # bootstrap/summary.go intentionally calls fmt.Fprintf on a configurable
       # writer; errors are surfaced through the writer's contract, not
       # propagated. Was: whole-file errcheck exclusion (F-079 #81); now
@@ -85,6 +88,9 @@ linters:
     gosec:
       excludes:
         # Codes valid for the pinned golangci-lint (v2.9.0) gosec.
+        # Mirrored by gosec.toml for the `// #nosec`-honouring annotations
+        # path. Standalone gosec CI job removed (F-005 #35) — golangci-lint's
+        # gosec is the single source of truth.
         - G115  # Integer overflow conversion — too noisy across the codebase.
         - G404  # math/rand acceptable for non-security paths (jitter, IDs).
         - G306  # File permissions — flagged at specific call sites where 0644 is intentional.

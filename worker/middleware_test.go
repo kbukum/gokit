@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -87,10 +88,7 @@ func TestWithRecovery(t *testing.T) {
 	}
 
 	var panicErr *worker.PanicError
-	if pe, ok := err.(*worker.PanicError); ok {
-		panicErr = pe
-	}
-	if panicErr == nil {
+	if !errors.As(err, &panicErr) {
 		t.Fatalf("expected PanicError, got %T", err)
 	}
 }
@@ -105,7 +103,7 @@ func TestWithRecoveryErrorPanic(t *testing.T) {
 	wrapped := worker.WithRecovery[string, string]()(h)
 
 	err := wrapped.Handle(context.Background(), "test", func(worker.Event[string]) {})
-	if err != context.DeadlineExceeded {
+	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected DeadlineExceeded, got %v", err)
 	}
 }

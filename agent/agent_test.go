@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -384,7 +385,7 @@ func (m *modelCapturingProvider) CountTokens(msgs []llm.Message) int {
 func TestFailStrategy(t *testing.T) {
 	s := agent.FailStrategy{}
 	_, err := s.Compact(nil, 0)
-	if err != agent.ErrContextExceeded {
+	if !errors.Is(err, agent.ErrContextExceeded) {
 		t.Errorf("expected ErrContextExceeded, got %v", err)
 	}
 }

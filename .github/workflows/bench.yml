@@ -1,0 +1,88 @@
+name: Bench
+
+# Performance regression gate (F-021 #51).
+#
+# Runs benchmarks on the PR head and the merge-base, then uses `benchstat` to
+# compute deltas. Initially advisory (does NOT fail CI on regression) so the
+# baseline can stabilise; flip the `continue-on-error` to `false` once a
+# threshold policy is agreed (target: fail on >5% time/op or >10% allocs/op
+# at p<0.05).
+#
+# Scope is intentionally narrow today (root module benchmarks). As benchmark
+# coverage expands per F-020 #50, additional modules can be added to the
+# matrix.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**/*.go'
+      - '**/go.mod'
+      - '.github/workflows/bench.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchstat:
+    name: benchstat
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Run benchmarks (PR head)
+        id: head
+        run: |
+          set -euo pipefail
+          if ! grep -rqE '^func Benchmark' --include='*_test.go' . ; then
+            echo "no benchmarks in repo — skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./... | tee head.txt
+
+      - name: Checkout merge-base
+        if: steps.head.outputs.skip != 'true'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          base=$(git merge-base HEAD origin/${{ github.base_ref }})
+          echo "Merge base: $base"
+          git checkout "$base"
+
+      - name: Run benchmarks (base)
+        if: steps.head.outputs.skip != 'true'
+        run: go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./... | tee base.txt
+
+      - name: Compare with benchstat
+        if: steps.head.outputs.skip != 'true'
+        continue-on-error: true  # advisory; flip to false after baseline stabilises
+        run: |
+          benchstat base.txt head.txt | tee benchstat.txt
+
+      - name: Upload reports
+        if: steps.head.outputs.skip != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: benchstat
+          path: |
+            base.txt
+            head.txt
+            benchstat.txt
+          if-no-files-found: warn

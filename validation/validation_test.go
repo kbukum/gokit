@@ -1,13 +1,14 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
-	"github.com/kbukum/gokit/errors"
+	appErrors "github.com/kbukum/gokit/errors"
 )
 
 func TestValidatorRequired(t *testing.T) {
@@ -945,9 +946,9 @@ func TestStructValidate_MultipleFieldErrors(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	appErr, ok := err.(*errors.AppError)
-	if !ok {
-		t.Fatalf("expected *errors.AppError, got %T", err)
+	var appErr *appErrors.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected *appErrors.AppError, got %T", err)
 	}
 	fields, ok := appErr.Details["fields"].([]FieldError)
 	if !ok {
@@ -1387,8 +1388,8 @@ func TestValidate_AppErrorProperties(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected error")
 	}
-	if appErr.Code != errors.ErrCodeInvalidInput {
-		t.Errorf("expected code %q, got %q", errors.ErrCodeInvalidInput, appErr.Code)
+	if appErr.Code != appErrors.ErrCodeInvalidInput {
+		t.Errorf("expected code %q, got %q", appErrors.ErrCodeInvalidInput, appErr.Code)
 	}
 	if appErr.HTTPStatus != 422 {
 		t.Errorf("expected HTTP 422, got %d", appErr.HTTPStatus)
@@ -1404,11 +1405,11 @@ func TestStructValidate_ReturnsAppError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	appErr, ok := err.(*errors.AppError)
-	if !ok {
-		t.Fatalf("expected *errors.AppError, got %T", err)
+	var appErr *appErrors.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected *appErrors.AppError, got %T", err)
 	}
-	if appErr.Code != errors.ErrCodeInvalidInput {
+	if appErr.Code != appErrors.ErrCodeInvalidInput {
 		t.Errorf("expected INVALID_INPUT, got %q", appErr.Code)
 	}
 }

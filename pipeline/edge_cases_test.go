@@ -348,7 +348,7 @@ func TestComplexChain_ParallelFanOutTapReduce(t *testing.T) {
 		tapCount.Add(1)
 		return nil
 	}
-	tapped := TapEach(fan, tapFn, tapFn)
+	tapped := TapEach(fan, tapFn, tapFn) //nolint:gocritic // intentional: testing with duplicate argument
 
 	got, err := Collect(context.Background(), tapped)
 	if err != nil {

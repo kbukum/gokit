@@ -2,7 +2,7 @@ package errors
 
 import (
 	"encoding/json"
-	stderrors "errors"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -67,7 +67,7 @@ func TestAppError_Internal_Success(t *testing.T) {
 	if err.HTTPStatus != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", err.HTTPStatus)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Error("expected cause to be set")
 	}
 	if err.Retryable {
@@ -123,7 +123,7 @@ func TestAppError_InvalidInput_Success(t *testing.T) {
 func TestAppError_WithCause_Chain(t *testing.T) {
 	cause := fmt.Errorf("root cause")
 	err := NotFound("item", "1").WithCause(cause)
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Error("expected cause to be set via WithCause")
 	}
 	if !strings.Contains(err.Error(), "root cause") {
@@ -199,7 +199,7 @@ func TestAppError_Error_Format(t *testing.T) {
 func TestAppError_Unwrap_Success(t *testing.T) {
 	cause := fmt.Errorf("underlying")
 	err := Internal(cause)
-	if err.Unwrap() != cause {
+	if !errors.Is(err.Unwrap(), cause) {
 		t.Error("Unwrap should return the cause")
 	}
 
@@ -340,7 +340,7 @@ func TestWrap_PlainError(t *testing.T) {
 	if got.Code != ErrCodeInternal {
 		t.Errorf("expected INTERNAL_ERROR, got %s", got.Code)
 	}
-	if got.Cause != plain {
+	if !errors.Is(got.Cause, plain) {
 		t.Error("expected cause to be the original error")
 	}
 }
@@ -372,8 +372,8 @@ func TestAppError_ImplementsErrorInterface(t *testing.T) {
 	}
 
 	var appErr *AppError
-	if !stderrors.As(err, &appErr) {
-		t.Error("stderrors.As should work with AppError")
+	if !errors.As(err, &appErr) {
+		t.Error("errors.As should work with AppError")
 	}
 }
 
@@ -415,7 +415,7 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 		ErrCodeServiceUnavailable: func() *AppError { return ServiceUnavailable("svc") },
 		ErrCodeConnectionFailed:   func() *AppError { return ConnectionFailed("db") },
 		ErrCodeTimeout:            func() *AppError { return Timeout("op") },
-		ErrCodeRateLimited:        func() *AppError { return RateLimited() },
+		ErrCodeRateLimited:        RateLimited,
 		ErrCodeNotFound:           func() *AppError { return NotFound("res", "1") },
 		ErrCodeAlreadyExists:      func() *AppError { return AlreadyExists("res") },
 		ErrCodeConflict:           func() *AppError { return Conflict("reason") },
@@ -424,8 +424,8 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 		ErrCodeInvalidFormat:      func() *AppError { return InvalidFormat("f", "fmt") },
 		ErrCodeUnauthorized:       func() *AppError { return Unauthorized("") },
 		ErrCodeForbidden:          func() *AppError { return Forbidden("") },
-		ErrCodeTokenExpired:       func() *AppError { return TokenExpired() },
-		ErrCodeInvalidToken:       func() *AppError { return InvalidToken() },
+		ErrCodeTokenExpired:       TokenExpired,
+		ErrCodeInvalidToken:       InvalidToken,
 		ErrCodeInternal:           func() *AppError { return Internal(nil) },
 		ErrCodeDatabaseError:      func() *AppError { return DatabaseError(nil) },
 		ErrCodeExternalService:    func() *AppError { return ExternalServiceError("ext", nil) },
@@ -527,7 +527,7 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		ErrCodeServiceUnavailable: func() *AppError { return ServiceUnavailable("svc") },
 		ErrCodeConnectionFailed:   func() *AppError { return ConnectionFailed("db") },
 		ErrCodeTimeout:            func() *AppError { return Timeout("op") },
-		ErrCodeRateLimited:        func() *AppError { return RateLimited() },
+		ErrCodeRateLimited:        RateLimited,
 		ErrCodeNotFound:           func() *AppError { return NotFound("res", "1") },
 		ErrCodeAlreadyExists:      func() *AppError { return AlreadyExists("res") },
 		ErrCodeConflict:           func() *AppError { return Conflict("reason") },
@@ -536,8 +536,8 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		ErrCodeInvalidFormat:      func() *AppError { return InvalidFormat("f", "fmt") },
 		ErrCodeUnauthorized:       func() *AppError { return Unauthorized("") },
 		ErrCodeForbidden:          func() *AppError { return Forbidden("") },
-		ErrCodeTokenExpired:       func() *AppError { return TokenExpired() },
-		ErrCodeInvalidToken:       func() *AppError { return InvalidToken() },
+		ErrCodeTokenExpired:       TokenExpired,
+		ErrCodeInvalidToken:       InvalidToken,
 		ErrCodeInternal:           func() *AppError { return Internal(nil) },
 		ErrCodeDatabaseError:      func() *AppError { return DatabaseError(nil) },
 		ErrCodeExternalService:    func() *AppError { return ExternalServiceError("ext", nil) },
@@ -758,7 +758,7 @@ func TestConstructor_ExternalServiceError_Details(t *testing.T) {
 	if err.Details["service"] != "stripe" {
 		t.Errorf("service = %v, want stripe", err.Details["service"])
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Error("cause should be set")
 	}
 }
@@ -848,7 +848,7 @@ func TestBuilderChain_WithCause_PreservesOriginal(t *testing.T) {
 	if err.Details["resource"] != "item" {
 		t.Error("details should be preserved")
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Error("cause should be set")
 	}
 }
@@ -899,7 +899,7 @@ func TestBuilderChain_FullChain(t *testing.T) {
 	if err.Code != ErrCodeNotFound {
 		t.Error("code should be preserved")
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Error("cause should be set")
 	}
 	if err.Details["attempt"] != 3 {
@@ -927,7 +927,7 @@ func TestBuilderChain_WithCause_ReplacesExisting(t *testing.T) {
 	cause1 := fmt.Errorf("first")
 	cause2 := fmt.Errorf("second")
 	err := Internal(cause1).WithCause(cause2)
-	if err.Cause != cause2 {
+	if !errors.Is(err.Cause, cause2) {
 		t.Error("WithCause should replace existing cause")
 	}
 }
@@ -1086,7 +1086,7 @@ func TestErrorsIs_WithAppError(t *testing.T) {
 	t.Parallel()
 	cause := fmt.Errorf("sentinel")
 	err := Internal(cause)
-	if !stderrors.Is(err, cause) {
+	if !errors.Is(err, cause) {
 		t.Error("errors.Is should find the cause through Unwrap")
 	}
 }
@@ -1097,7 +1097,7 @@ func TestErrorsAs_WithAppError(t *testing.T) {
 	wrapped := fmt.Errorf("outer: %w", orig)
 
 	var target *AppError
-	if !stderrors.As(wrapped, &target) {
+	if !errors.As(wrapped, &target) {
 		t.Fatal("errors.As should find AppError through fmt.Errorf wrap")
 	}
 	if target.Code != ErrCodeForbidden {
@@ -1151,10 +1151,10 @@ func TestUnwrap_ChainedCause(t *testing.T) {
 	root := fmt.Errorf("root")
 	mid := fmt.Errorf("mid: %w", root)
 	err := Internal(mid)
-	if err.Unwrap() != mid {
+	if !errors.Is(err.Unwrap(), mid) {
 		t.Error("Unwrap should return the direct cause")
 	}
-	if !stderrors.Is(err, root) {
+	if !errors.Is(err, root) {
 		t.Error("errors.Is should find the root cause through the chain")
 	}
 }

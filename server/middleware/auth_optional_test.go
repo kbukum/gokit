@@ -32,7 +32,7 @@ func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer bad")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -52,7 +52,7 @@ func TestOptionalAuth_NoTokenPasses(t *testing.T) {
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -80,7 +80,7 @@ func BenchmarkMiddlewareStackExecution(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/bench?token=abc", nil)
+		req := httptest.NewRequest(http.MethodGet, "/bench?token=abc", http.NoBody)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {

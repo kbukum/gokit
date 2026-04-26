@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -335,7 +336,8 @@ func TestMiddlewareChainPanicRecovery(t *testing.T) {
 	}
 
 	// WithRecovery wraps non-error panics as *PanicError
-	if _, ok := herr.(*worker.PanicError); !ok {
+	var panicErr *worker.PanicError
+	if !errors.As(herr, &panicErr) {
 		t.Fatalf("expected *PanicError, got %T: %v", herr, herr)
 	}
 }
@@ -374,7 +376,7 @@ func TestSupervisorMaxRestartsWithFastBackoff(t *testing.T) {
 		}
 		for range handle.Events() {
 		}
-		handle.Result() //nolint:errcheck
+		handle.Result() //nolint:errcheck // intentional in test cleanup
 	}
 
 	// Next submit should fail: no healthy workers
@@ -456,7 +458,7 @@ func TestPoolEventsAggregation(t *testing.T) {
 	for _, h := range handles {
 		for range h.Events() {
 		}
-		h.Result() //nolint:errcheck
+		h.Result() //nolint:errcheck // intentional in test cleanup
 	}
 
 	if err := pool.Stop(context.Background()); err != nil {
@@ -530,7 +532,7 @@ func TestSupervisorRestartAlways(t *testing.T) {
 	handle, _ := pool.Submit(context.Background(), -1)
 	for range handle.Events() {
 	}
-	handle.Result() //nolint:errcheck
+	handle.Result() //nolint:errcheck // intentional in test cleanup
 
 	// Successful task should still work since policy is RestartAlways
 	handle2, err := pool.Submit(context.Background(), 42)
