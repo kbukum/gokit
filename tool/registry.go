@@ -5,69 +5,46 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/kbukum/gokit/registry"
 )
 
 // Registry manages a collection of callable tools.
 // It is concurrent-safe for reads and writes.
 type Registry struct {
-	tools map[string]Callable
-	mu    sync.RWMutex
+	inner *registry.Registry[Callable]
 }
 
 // NewRegistry creates an empty tool registry.
 func NewRegistry() *Registry {
-	return &Registry{
-		tools: make(map[string]Callable),
-	}
+	return &Registry{inner: registry.New[Callable]("tool")}
 }
 
 // Register adds a tool to the registry.
 // Returns an error if a tool with the same name already exists.
 func (r *Registry) Register(t Callable) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	name := t.Definition().Name
-	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool %q already registered", name)
+	if t == nil {
+		return fmt.Errorf("tool: callable must not be nil")
 	}
-	r.tools[name] = t
-	return nil
-}
-
-// MustRegister registers a tool and panics on error.
-func (r *Registry) MustRegister(t Callable) {
-	if err := r.Register(t); err != nil {
-		panic(err)
-	}
+	return r.inner.Register(t.Definition().Name, t)
 }
 
 // Get retrieves a tool by name.
 func (r *Registry) Get(name string) (Callable, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	t, ok := r.tools[name]
-	return t, ok
+	return r.inner.Get(name)
 }
 
 // List returns the definitions of all registered tools.
 func (r *Registry) List() []Definition {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	defs := make([]Definition, 0, len(r.tools))
-	for _, t := range r.tools {
+	defs := make([]Definition, 0, r.inner.Len())
+	r.inner.Each(func(_ string, t Callable) {
 		defs = append(defs, t.Definition())
-	}
+	})
 	return defs
 }
 
 // Len returns the number of registered tools.
-func (r *Registry) Len() int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return len(r.tools)
-}
+func (r *Registry) Len() int { return r.inner.Len() }
 
 // Call invokes a tool by name with raw JSON input.
 func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Result, error) {
@@ -149,30 +126,20 @@ func (r *Registry) CallBatch(ctx *Context, calls []BatchCall) []BatchResult {
 
 // Names returns the names of all registered tools.
 func (r *Registry) Names() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	names := make([]string, 0, len(r.tools))
-	for name := range r.tools {
-		names = append(names, name)
-	}
-	return names
+	return r.inner.Names()
 }
 
 // Search returns definitions matching a keyword query against name and description.
 func (r *Registry) Search(query string) []Definition {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	q := strings.ToLower(query)
 	var result []Definition
-	for _, t := range r.tools {
+	r.inner.Each(func(_ string, t Callable) {
 		def := t.Definition()
 		if strings.Contains(strings.ToLower(def.Name), q) ||
 			strings.Contains(strings.ToLower(def.Description), q) {
 			result = append(result, def)
 		}
-	}
+	})
 	return result
 }
 
@@ -182,17 +149,13 @@ func (r *Registry) Filter(opts ...FilterOption) []Definition {
 	for _, opt := range opts {
 		opt(cfg)
 	}
-
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
 	var result []Definition
-	for _, t := range r.tools {
+	r.inner.Each(func(_ string, t Callable) {
 		def := t.Definition()
 		if matchesFilter(def, cfg) {
 			result = append(result, def)
 		}
-	}
+	})
 	return result
 }
 

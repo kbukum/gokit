@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/registry"
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
@@ -18,39 +18,25 @@ type ProviderFactory func(cfg Config, log *logger.Logger) (Registry, Discovery, 
 
 // ProviderRegistry stores discovery provider factories by name.
 type ProviderRegistry struct {
-	mu        sync.RWMutex
-	factories map[string]ProviderFactory
+	inner *registry.Registry[ProviderFactory]
 }
 
 // NewProviderRegistry creates an isolated discovery provider registry.
 func NewProviderRegistry() *ProviderRegistry {
-	return &ProviderRegistry{factories: make(map[string]ProviderFactory)}
+	return &ProviderRegistry{inner: registry.New[ProviderFactory]("discovery")}
 }
 
 // Register stores a discovery provider factory.
-// It panics for invalid input or duplicate names.
-func (r *ProviderRegistry) Register(name string, f ProviderFactory) {
-	if name == "" {
-		panic("discovery: provider name cannot be empty")
-	}
-	if f == nil {
-		panic(fmt.Sprintf("discovery: factory %q cannot be nil", name))
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, exists := r.factories[name]; exists {
-		panic(fmt.Sprintf("discovery: provider factory %q already registered", name))
-	}
-	r.factories[name] = f
+// It returns an error for invalid input (empty name, nil factory) or duplicate names.
+//
+// Note: prior versions panicked; callers must now check the returned error.
+func (r *ProviderRegistry) Register(name string, f ProviderFactory) error {
+	return r.inner.Register(name, f)
 }
 
 // Get returns a discovery provider factory by name.
 func (r *ProviderRegistry) Get(name string) (ProviderFactory, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	f, ok := r.factories[name]
-	return f, ok
+	return r.inner.Get(name)
 }
 
 // Component wraps a Registry and Discovery pair and implements
@@ -81,22 +67,22 @@ func WithIPProbeTarget(addr string) ComponentOption {
 }
 
 // NewComponent creates a discovery Component for use with the component registry.
-// registry must not be nil; panics if it is.
-func NewComponent(registry *ProviderRegistry, cfg Config, log *logger.Logger, opts ...ComponentOption) *Component {
-	if registry == nil {
-		panic("discovery: provider registry must not be nil")
+// reg must not be nil; an error is returned if it is.
+func NewComponent(reg *ProviderRegistry, cfg Config, log *logger.Logger, opts ...ComponentOption) (*Component, error) {
+	if reg == nil {
+		return nil, fmt.Errorf("discovery: provider registry must not be nil")
 	}
 	c := &Component{
 		cfg:           cfg,
 		log:           log.WithComponent("discovery"),
-		providers:     registry,
+		providers:     reg,
 		localIPFinder: defaultLocalIPFinder,
 		ipProbeTarget: "",
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
-	return c
+	return c, nil
 }
 
 // ensure Component satisfies component.Component.

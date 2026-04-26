@@ -3,95 +3,88 @@ package auth
 import (
 	"fmt"
 	"sync"
+
+	"github.com/kbukum/gokit/registry"
 )
 
 // Registry is a thread-safe registry of named TokenValidator instances.
 // Projects register their validators (JWT, OIDC, API key, etc.) by name
 // and retrieve them in middleware or interceptors.
 //
+// Registry is a thin wrapper around the shared
+// [github.com/kbukum/gokit/registry.Registry] type that adds
+// auth-specific "default validator" semantics.
+//
 // Usage:
 //
 //	reg := auth.NewRegistry()
-//	reg.Register("jwt", jwtSvc.AsValidator())
-//	reg.Register("apikey", auth.TokenValidatorFunc(myAPIKeyValidator))
-//	reg.SetDefault("jwt")
+//	if err := reg.Register("jwt", jwtSvc.AsValidator()); err != nil { ... }
+//	if err := reg.Register("apikey", auth.TokenValidatorFunc(myAPIKeyValidator)); err != nil { ... }
+//	if err := reg.SetDefault("jwt"); err != nil { ... }
 //
 //	// In middleware setup
 //	validator, _ := reg.Default()
 type Registry struct {
+	inner       *registry.Registry[TokenValidator]
 	mu          sync.RWMutex
-	validators  map[string]TokenValidator
 	defaultName string
 }
 
 // NewRegistry creates a new empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{
-		validators: make(map[string]TokenValidator),
-	}
+	return &Registry{inner: registry.New[TokenValidator]("auth")}
 }
 
-// Register adds a named TokenValidator to the registry.
-// If this is the first validator registered, it becomes the default.
-func (r *Registry) Register(name string, v TokenValidator) {
+// Register adds a named TokenValidator. It returns an error if name is
+// empty, the validator is nil, or name is already registered. If this is
+// the first successful registration, the validator becomes the default.
+//
+// Note: prior versions silently overwrote duplicates and returned no error.
+// Callers that relied on this behavior must Unregister or use a fresh
+// Registry.
+func (r *Registry) Register(name string, v TokenValidator) error {
+	if err := r.inner.Register(name, v); err != nil {
+		return err
+	}
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.validators[name] = v
 	if r.defaultName == "" {
 		r.defaultName = name
 	}
+	r.mu.Unlock()
+	return nil
 }
 
 // Get returns the TokenValidator registered under the given name.
 // Returns nil and false if not found.
 func (r *Registry) Get(name string) (TokenValidator, bool) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	v, ok := r.validators[name]
-	return v, ok
-}
-
-// MustGet returns the TokenValidator registered under the given name.
-// Panics if the name is not registered.
-func (r *Registry) MustGet(name string) TokenValidator {
-	v, ok := r.Get(name)
-	if !ok {
-		panic(fmt.Sprintf("auth: validator %q not registered", name))
-	}
-	return v
+	return r.inner.Get(name)
 }
 
 // Default returns the default TokenValidator.
 // The default is the first registered validator unless overridden with SetDefault.
 func (r *Registry) Default() (TokenValidator, bool) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	if r.defaultName == "" {
+	name := r.defaultName
+	r.mu.RUnlock()
+	if name == "" {
 		return nil, false
 	}
-	v, ok := r.validators[r.defaultName]
-	return v, ok
+	return r.inner.Get(name)
 }
 
 // SetDefault sets the default validator by name.
 // The name must already be registered.
 func (r *Registry) SetDefault(name string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if _, ok := r.validators[name]; !ok {
+	if _, ok := r.inner.Get(name); !ok {
 		return fmt.Errorf("auth: validator %q not registered", name)
 	}
+	r.mu.Lock()
 	r.defaultName = name
+	r.mu.Unlock()
 	return nil
 }
 
-// Names returns all registered validator names.
+// Names returns all registered validator names in deterministic (sorted) order.
 func (r *Registry) Names() []string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.validators))
-	for name := range r.validators {
-		names = append(names, name)
-	}
-	return names
+	return r.inner.Names()
 }

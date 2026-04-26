@@ -13,7 +13,7 @@
 // # Server Example
 //
 //	registry := tool.NewRegistry()
-//	registry.MustRegister(myTool.AsCallable())
+//	if err := registry.Register(myTool.AsCallable()); err != nil { return err }
 //
 //	server := mcpkit.NewServer("my-service", "1.0.0", registry)
 //	server.Run(ctx, &mcp.StdioTransport{})

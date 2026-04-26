@@ -55,13 +55,3 @@ func TenantFromContext(ctx context.Context) (string, bool) {
 func SetTenantInContext(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, tenantKey, tenantID)
 }
-
-// MustTenantFromContext retrieves the tenant ID from context and panics if missing.
-// For use in tests and application startup only; never call from HTTP handlers or middleware.
-func MustTenantFromContext(ctx context.Context) string {
-	tenantID, ok := TenantFromContext(ctx)
-	if !ok {
-		panic("tenant: ID not found in context")
-	}
-	return tenantID
-}

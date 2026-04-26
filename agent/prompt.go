@@ -69,16 +69,6 @@ func NewPromptTemplate(name, tmpl string) (*PromptTemplate, error) {
 	return &PromptTemplate{tmpl: t}, nil
 }
 
-// MustPromptTemplate is like NewPromptTemplate but panics on parse error.
-// Use for templates known at compile time.
-func MustPromptTemplate(name, tmpl string) *PromptTemplate {
-	pt, err := NewPromptTemplate(name, tmpl)
-	if err != nil {
-		panic(err)
-	}
-	return pt
-}
-
 // Render executes the template with the given data and returns the result.
 func (pt *PromptTemplate) Render(data any) (string, error) {
 	var buf bytes.Buffer
@@ -159,13 +149,4 @@ func (b *PromptBuilder) Build() (string, error) {
 		parts = append(parts, s.content)
 	}
 	return strings.Join(parts, b.separator), nil
-}
-
-// MustBuild is like Build but panics on error.
-func (b *PromptBuilder) MustBuild() string {
-	result, err := b.Build()
-	if err != nil {
-		panic(err)
-	}
-	return result
 }

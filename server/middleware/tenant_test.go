@@ -106,26 +106,12 @@ func TestTenantFromContext_NotFound(t *testing.T) {
 	}
 }
 
-func TestMustTenantFromContext_Panics(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", http.NoBody)
-
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Errorf("Expected panic when tenant not found")
-		}
-	}()
-
-	MustTenantFromContext(req.Context())
-}
-
-func TestMustTenantFromContext_Success(t *testing.T) {
+func TestTenantFromContext_Set(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	ctx := context.WithValue(req.Context(), tenantKey, "tenant-456")
-
-	tenantID := MustTenantFromContext(ctx)
-	if tenantID != "tenant-456" {
-		t.Errorf("Expected tenant-456, got %s", tenantID)
+	tenantID, ok := TenantFromContext(ctx)
+	if !ok || tenantID != "tenant-456" {
+		t.Errorf("Expected tenant-456,true; got %s,%v", tenantID, ok)
 	}
 }
 

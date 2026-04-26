@@ -34,17 +34,14 @@ func TestNew_InvalidTemplate(t *testing.T) {
 	}
 }
 
-func TestMustNew_Panics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic for invalid template")
-		}
-	}()
-	agent.MustPromptTemplate("bad", "{{.Unclosed")
+func TestNew_InvalidReturnsError(t *testing.T) {
+	if _, err := agent.NewPromptTemplate("bad", "{{.Unclosed"); err == nil {
+		t.Fatal("expected error for invalid template")
+	}
 }
 
 func TestMustNew_Valid(t *testing.T) {
-	pt := agent.MustPromptTemplate("ok", "static prompt")
+	pt := mustTmpl(t, "ok", "static prompt")
 	got, err := pt.Render(nil)
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -55,7 +52,7 @@ func TestMustNew_Valid(t *testing.T) {
 }
 
 func TestRender_Error(t *testing.T) {
-	pt := agent.MustPromptTemplate("err", "{{.Missing.Field}}")
+	pt := mustTmpl(t, "err", "{{.Missing.Field}}")
 	_, err := pt.Render(struct{}{})
 	if err == nil {
 		t.Fatal("expected render error for missing field")
@@ -66,7 +63,7 @@ func TestRender_Error(t *testing.T) {
 }
 
 func TestRenderToMessage(t *testing.T) {
-	pt := agent.MustPromptTemplate("sys", "You are {{.Role}}.")
+	pt := mustTmpl(t, "sys", "You are {{.Role}}.")
 	msg, err := pt.RenderToMessage(struct{ Role string }{"a helpful assistant"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -84,7 +81,7 @@ func TestRenderToMessage(t *testing.T) {
 }
 
 func TestRenderToMessage_Error(t *testing.T) {
-	pt := agent.MustPromptTemplate("err", "{{.Missing.Field}}")
+	pt := mustTmpl(t, "err", "{{.Missing.Field}}")
 	_, err := pt.RenderToMessage(struct{}{})
 	if err == nil {
 		t.Fatal("expected error")
@@ -94,7 +91,7 @@ func TestRenderToMessage_Error(t *testing.T) {
 // --- Built-in Function Tests ---
 
 func TestFunc_Join(t *testing.T) {
-	pt := agent.MustPromptTemplate("join", `{{join .Items ", "}}`)
+	pt := mustTmpl(t, "join", `{{join .Items ", "}}`)
 	got, err := pt.Render(struct{ Items []string }{[]string{"a", "b", "c"}})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -105,7 +102,7 @@ func TestFunc_Join(t *testing.T) {
 }
 
 func TestFunc_Upper(t *testing.T) {
-	pt := agent.MustPromptTemplate("upper", `{{upper .Text}}`)
+	pt := mustTmpl(t, "upper", `{{upper .Text}}`)
 	got, err := pt.Render(struct{ Text string }{"hello"})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -116,7 +113,7 @@ func TestFunc_Upper(t *testing.T) {
 }
 
 func TestFunc_Lower(t *testing.T) {
-	pt := agent.MustPromptTemplate("lower", `{{lower .Text}}`)
+	pt := mustTmpl(t, "lower", `{{lower .Text}}`)
 	got, err := pt.Render(struct{ Text string }{"HELLO"})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -127,7 +124,7 @@ func TestFunc_Lower(t *testing.T) {
 }
 
 func TestFunc_Trim(t *testing.T) {
-	pt := agent.MustPromptTemplate("trim", `{{trim .Text}}`)
+	pt := mustTmpl(t, "trim", `{{trim .Text}}`)
 	got, err := pt.Render(struct{ Text string }{"  hello  "})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -138,7 +135,7 @@ func TestFunc_Trim(t *testing.T) {
 }
 
 func TestFunc_Indent(t *testing.T) {
-	pt := agent.MustPromptTemplate("indent", `{{indent 4 .Text}}`)
+	pt := mustTmpl(t, "indent", `{{indent 4 .Text}}`)
 	got, err := pt.Render(struct{ Text string }{"line1\nline2\nline3"})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -150,7 +147,7 @@ func TestFunc_Indent(t *testing.T) {
 }
 
 func TestFunc_Indent_PreservesBlankLines(t *testing.T) {
-	pt := agent.MustPromptTemplate("indent-blank", `{{indent 2 .Text}}`)
+	pt := mustTmpl(t, "indent-blank", `{{indent 2 .Text}}`)
 	got, err := pt.Render(struct{ Text string }{"a\n\nb"})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -162,7 +159,7 @@ func TestFunc_Indent_PreservesBlankLines(t *testing.T) {
 }
 
 func TestFunc_ToJSON(t *testing.T) {
-	pt := agent.MustPromptTemplate("json", `{{toJSON .Data}}`)
+	pt := mustTmpl(t, "json", `{{toJSON .Data}}`)
 	data := struct {
 		Data map[string]string
 	}{
@@ -178,7 +175,7 @@ func TestFunc_ToJSON(t *testing.T) {
 }
 
 func TestFunc_Default_UsesValue(t *testing.T) {
-	pt := agent.MustPromptTemplate("def-val", `{{default "fallback" .Name}}`)
+	pt := mustTmpl(t, "def-val", `{{default "fallback" .Name}}`)
 	got, err := pt.Render(struct{ Name string }{"Alice"})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -189,7 +186,7 @@ func TestFunc_Default_UsesValue(t *testing.T) {
 }
 
 func TestFunc_Default_UsesFallback(t *testing.T) {
-	pt := agent.MustPromptTemplate("def-fb", `{{default "fallback" .Name}}`)
+	pt := mustTmpl(t, "def-fb", `{{default "fallback" .Name}}`)
 	got, err := pt.Render(struct{ Name string }{""})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -200,7 +197,7 @@ func TestFunc_Default_UsesFallback(t *testing.T) {
 }
 
 func TestFunc_Default_NilUsesFallback(t *testing.T) {
-	pt := agent.MustPromptTemplate("def-nil", `{{default "none" .Val}}`)
+	pt := mustTmpl(t, "def-nil", `{{default "none" .Val}}`)
 	got, err := pt.Render(map[string]any{"Val": nil})
 	if err != nil {
 		t.Fatalf("render error: %v", err)
@@ -268,7 +265,7 @@ func TestPromptBuilder_SectionIf_False(t *testing.T) {
 }
 
 func TestPromptBuilder_SectionTemplate(t *testing.T) {
-	tmpl := agent.MustPromptTemplate("ctx", "Current page: {{.Page}}")
+	tmpl := mustTmpl(t, "ctx", "Current page: {{.Page}}")
 	got, err := agent.NewPromptBuilder().
 		Section("role", "You are a page assistant.").
 		SectionTemplate("context", tmpl, struct{ Page string }{"Home"}).
@@ -283,7 +280,7 @@ func TestPromptBuilder_SectionTemplate(t *testing.T) {
 }
 
 func TestPromptBuilder_SectionTemplate_Error(t *testing.T) {
-	tmpl := agent.MustPromptTemplate("bad", "{{.Missing.Deep}}")
+	tmpl := mustTmpl(t, "bad", "{{.Missing.Deep}}")
 	_, err := agent.NewPromptBuilder().
 		SectionTemplate("broken", tmpl, struct{}{}).
 		Build()
@@ -305,31 +302,32 @@ func TestPromptBuilder_Empty(t *testing.T) {
 	}
 }
 
-func TestPromptBuilder_MustBuild(t *testing.T) {
-	got := agent.NewPromptBuilder().
+func TestPromptBuilder_Build(t *testing.T) {
+	got, err := agent.NewPromptBuilder().
 		Section("a", "hello").
-		MustBuild()
+		Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
 	if got != "hello" {
 		t.Errorf("got %q, want %q", got, "hello")
 	}
 }
 
-func TestPromptBuilder_MustBuild_Panics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic from MustBuild")
-		}
-	}()
-	tmpl := agent.MustPromptTemplate("bad", "{{.Missing.Deep}}")
-	agent.NewPromptBuilder().
+func TestPromptBuilder_Build_PropagatesError(t *testing.T) {
+	tmpl := mustTmpl(t, "bad", "{{.Missing.Deep}}")
+	_, err := agent.NewPromptBuilder().
 		SectionTemplate("broken", tmpl, struct{}{}).
-		MustBuild()
+		Build()
+	if err == nil {
+		t.Fatal("expected Build to propagate template render error")
+	}
 }
 
 // --- Integration: Config with SystemPromptTemplate ---
 
 func TestConfig_SystemPromptTemplate(t *testing.T) {
-	tmpl := agent.MustPromptTemplate("sys", "You help with {{.Topic}}. Be {{.Style}}.")
+	tmpl := mustTmpl(t, "sys", "You help with {{.Topic}}. Be {{.Style}}.")
 	data := struct {
 		Topic string
 		Style string
@@ -346,7 +344,7 @@ func TestConfig_SystemPromptTemplate(t *testing.T) {
 }
 
 func TestPromptTemplate_ComplexExample(t *testing.T) {
-	tmpl := agent.MustPromptTemplate("complex", `You are a {{.Role}} assistant.
+	tmpl := mustTmpl(t, "complex", `You are a {{.Role}} assistant.
 {{- if .Tools}}
 
 Available tools:
@@ -384,4 +382,14 @@ Rules:
 	if !strings.Contains(got, "- Be concise") {
 		t.Errorf("should contain rules, got %q", got)
 	}
+}
+
+// mustTmpl parses a template, failing the test on error.
+func mustTmpl(tb testing.TB, name, src string) *agent.PromptTemplate {
+tb.Helper()
+pt, err := agent.NewPromptTemplate(name, src)
+if err != nil {
+tb.Fatalf("NewPromptTemplate(%q): %v", name, err)
+}
+return pt
 }
