@@ -297,19 +297,38 @@ func (a *App[C]) Startup(ctx context.Context) error {
 	return a.startup(ctx)
 }
 
-// Shutdown performs graceful shutdown. Use when managing your own lifecycle.
+// Shutdown performs graceful shutdown using the supplied ctx. If ctx has no
+// deadline, the configured gracefulTimeout is applied. If ctx has a deadline
+// shorter than gracefulTimeout, ctx wins.
+//
+// Use when managing your own lifecycle (e.g. when not relying on signal
+// handling via Run).
 func (a *App[C]) Shutdown(ctx context.Context) error {
-	return a.stop()
+	return a.shutdownWith(ctx)
 }
 
-// stop gracefully shuts down all components within the graceful timeout.
+// stop is invoked by the internal signal handler. It seeds shutdown with a
+// fresh context bounded by gracefulTimeout because the original Run ctx is
+// already canceled by the time we get here.
 func (a *App[C]) stop() error {
+	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
+	defer cancel()
+	return a.shutdownWith(ctx)
+}
+
+// shutdownWith runs the actual shutdown sequence. If ctx has no deadline,
+// gracefulTimeout is applied so a misbehaving Stop cannot block forever.
+func (a *App[C]) shutdownWith(parent context.Context) error {
 	a.Logger.Info("Shutting down application", map[string]interface{}{
 		"timeout": a.gracefulTimeout.String(),
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
-	defer cancel()
+	ctx := parent
+	var cancel context.CancelFunc
+	if _, hasDeadline := parent.Deadline(); !hasDeadline {
+		ctx, cancel = context.WithTimeout(parent, a.gracefulTimeout)
+		defer cancel()
+	}
 
 	var shutdownErrs []error
 

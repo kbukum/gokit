@@ -28,6 +28,8 @@ linters:
     # --- SQL safety ---
     - sqlclosecheck
     - rowserrcheck
+    # --- Architecture / layering ---
+    - depguard
   exclusions:
     rules:
       - path: "_test\\.go"
@@ -81,6 +83,42 @@ linters:
       errorf: true
       asserts: true
       comparison: true
+    depguard:
+      # Enforce architectural layering: foundation packages must not import
+      # transport packages. Closes F-014; prevents F-012 (worker → sse) from
+      # recurring.
+      #
+      # Tiers:
+      #   foundation : transport-agnostic primitives & utilities
+      #   transport  : protocol-specific adapters (HTTP, SSE, gRPC, etc.)
+      #   integration: composes foundation + transport
+      #   (integration packages may import either; not enforced here)
+      rules:
+        foundation:
+          list-mode: lax
+          files:
+            - "$gokit/worker/**/*.go"
+            - "$gokit/errors/**/*.go"
+            - "$gokit/logger/**/*.go"
+            - "$gokit/validation/**/*.go"
+            - "$gokit/hook/**/*.go"
+            - "$gokit/util/**/*.go"
+            - "$gokit/version/**/*.go"
+            - "$gokit/encryption/**/*.go"
+            - "$gokit/schema/**/*.go"
+            - "$gokit/resilience/**/*.go"
+            - "$gokit/httpclient/**/*.go"
+          deny:
+            - pkg: github.com/kbukum/gokit/sse
+              desc: "foundation packages must not import transport (sse). Define a local interface and accept any concrete that satisfies it. See F-012."
+            - pkg: github.com/kbukum/gokit/server
+              desc: "foundation packages must not import transport (server)."
+            - pkg: github.com/kbukum/gokit/grpc
+              desc: "foundation packages must not import transport (grpc)."
+            - pkg: github.com/kbukum/gokit/connect
+              desc: "foundation packages must not import transport (connect)."
+            - pkg: github.com/kbukum/gokit/bootstrap
+              desc: "foundation packages must not import integration (bootstrap)."
 
 issues:
   max-issues-per-linter: 0
