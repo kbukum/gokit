@@ -386,10 +386,10 @@ Rules:
 
 // mustTmpl parses a template, failing the test on error.
 func mustTmpl(tb testing.TB, name, src string) *agent.PromptTemplate {
-tb.Helper()
-pt, err := agent.NewPromptTemplate(name, src)
-if err != nil {
-tb.Fatalf("NewPromptTemplate(%q): %v", name, err)
-}
-return pt
+	tb.Helper()
+	pt, err := agent.NewPromptTemplate(name, src)
+	if err != nil {
+		tb.Fatalf("NewPromptTemplate(%q): %v", name, err)
+	}
+	return pt
 }

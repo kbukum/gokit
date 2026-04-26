@@ -382,8 +382,8 @@ func mustJSON(t *testing.T, v any) json.RawMessage {
 func boolPtr(v bool) *bool { return &v }
 
 func mustReg(tb testing.TB, reg *tool.Registry, c tool.Callable) {
-tb.Helper()
-if err := reg.Register(c); err != nil {
-tb.Fatalf("register: %v", err)
-}
+	tb.Helper()
+	if err := reg.Register(c); err != nil {
+		tb.Fatalf("register: %v", err)
+	}
 }
