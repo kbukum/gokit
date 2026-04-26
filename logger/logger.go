@@ -36,13 +36,14 @@ func Init(cfg *Config) {
 	}
 
 	level, _ := zerolog.ParseLevel(cfg.Level)
-	zerolog.SetGlobalLevel(level)
-
+	// Intentionally do NOT call zerolog.SetGlobalLevel here. It is process-wide
+	// shared mutable state that races with concurrent loggers and tests, and
+	// per-instance levels are already applied in New() and below.
 	l := New(cfg, name)
 	SetGlobalLogger(l)
 
 	if cfg.Format == "console" || cfg.Format == FormatPretty {
-		log.Logger = newConsoleLogger(cfg, name)
+		log.Logger = newConsoleLogger(cfg, name).Level(level)
 	}
 }
 
