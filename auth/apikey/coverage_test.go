@@ -13,6 +13,13 @@ import (
 	"github.com/kbukum/gokit/auth/apikey"
 )
 
+// errUnreachable is returned by validator stubs whose code paths the test
+// asserts are not executed; keeping it sentinel keeps nilnil happy.
+var errUnreachable = errors.New("unreachable")
+
+// errNotFound is returned by store stubs when a record genuinely doesn't exist.
+var errNotFound = errors.New("not found")
+
 // ─── Generate / Hash ───────────────────────────────────────────────────────
 
 func TestGenerate_ProducesUniqueKeysWithCorrectShape(t *testing.T) {
@@ -72,7 +79,9 @@ func TestGenerate_EmptyPrefix(t *testing.T) {
 
 func TestHash_Deterministic(t *testing.T) {
 	t.Parallel()
-	if apikey.Hash("foo") != apikey.Hash("foo") {
+	a := apikey.Hash("foo")
+	b := apikey.Hash("foo")
+	if a != b {
 		t.Error("Hash must be deterministic")
 	}
 	if apikey.Hash("foo") == apikey.Hash("bar") {
@@ -108,7 +117,6 @@ func TestKey_IsExpiredPastGrace(t *testing.T) {
 		{"no expiry, past grace", apikey.Key{GraceEndsAt: &past}, true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.k.IsExpiredPastGrace(); got != tc.want {
@@ -181,12 +189,12 @@ func TestMiddleware_NoHeader_PassesThrough(t *testing.T) {
 	t.Parallel()
 	v := &fakeValidator{fn: func(_ context.Context, _ string) (*apikey.Key, error) {
 		t.Fatal("validator should not be called when header is absent")
-		return nil, nil
+		return nil, errUnreachable
 	}}
 	h := &recordingHandler{}
 	m := apikey.Middleware(v)(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, req)
 
@@ -213,7 +221,7 @@ func TestMiddleware_ValidKey_PopulatesContextAndCallsNext(t *testing.T) {
 	h := &recordingHandler{}
 	m := apikey.Middleware(v)(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req.Header.Set("X-API-Key", "secret")
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, req)
@@ -234,7 +242,7 @@ func TestMiddleware_InvalidKey_Returns401(t *testing.T) {
 	h := &recordingHandler{}
 	m := apikey.Middleware(v)(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req.Header.Set("X-API-Key", "secret")
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, req)
@@ -261,7 +269,7 @@ func TestMiddleware_WithHeader_OverridesDefault(t *testing.T) {
 	m := apikey.Middleware(v, apikey.WithHeader("X-Secret"))(h)
 
 	// Default header ignored.
-	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req.Header.Set("X-API-Key", "ignored")
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, req)
@@ -272,7 +280,7 @@ func TestMiddleware_WithHeader_OverridesDefault(t *testing.T) {
 	// Custom header honored.
 	h2 := &recordingHandler{}
 	m2 := apikey.Middleware(v, apikey.WithHeader("X-Secret"))(h2)
-	req2 := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/x", http.NoBody)
 	req2.Header.Set("X-Secret", "real")
 	w2 := httptest.NewRecorder()
 	m2.ServeHTTP(w2, req2)
@@ -285,13 +293,13 @@ func TestMiddleware_WithSkipPaths_BypassesValidator(t *testing.T) {
 	t.Parallel()
 	v := &fakeValidator{fn: func(_ context.Context, _ string) (*apikey.Key, error) {
 		t.Fatal("validator should not run on skipped path")
-		return nil, nil
+		return nil, errUnreachable
 	}}
 	h := &recordingHandler{}
 	m := apikey.Middleware(v, apikey.WithSkipPaths("/health", "/public/"))(h)
 
 	for _, path := range []string{"/health", "/public/anything"} {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
 		req.Header.Set("X-API-Key", "secret-but-ignored")
 		w := httptest.NewRecorder()
 		m.ServeHTTP(w, req)
@@ -312,7 +320,7 @@ func TestMiddleware_WithSkipPaths_NonMatchingPath_StillValidates(t *testing.T) {
 	h := &recordingHandler{}
 	m := apikey.Middleware(v, apikey.WithSkipPaths("/health"))(h)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/x", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/x", http.NoBody)
 	req.Header.Set("X-API-Key", "secret")
 	w := httptest.NewRecorder()
 	m.ServeHTTP(w, req)
@@ -372,7 +380,9 @@ func (s *memStore) Create(_ context.Context, k *apikey.Key) error {
 	s.byID[k.ID] = k
 	return nil
 }
-func (s *memStore) GetByHash(_ context.Context, _ string) (*apikey.Key, error) { return nil, nil }
+func (s *memStore) GetByHash(_ context.Context, _ string) (*apikey.Key, error) {
+	return nil, errNotFound
+}
 func (s *memStore) GetByID(ctx context.Context, id string) (*apikey.Key, error) {
 	if s.getByID != nil {
 		return s.getByID(ctx, id)
