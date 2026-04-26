@@ -33,22 +33,31 @@ updates:
       - "dependencies"
       - "go"
     open-pull-requests-limit: 15
+    cooldown:
+      default-days: 3
+      semver-major-days: 14
+      semver-minor-days: 7
     groups:
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
       otel:
         patterns:
           - "go.opentelemetry.io/*"
-        group-by: dependency-name
       grpc:
         patterns:
           - "google.golang.org/grpc"
           - "google.golang.org/grpc/*"
           - "google.golang.org/genproto/*"
-        group-by: dependency-name
+          - "google.golang.org/protobuf"
       aws:
         patterns:
           - "github.com/aws/*"
-        group-by: dependency-name
       k8s:
         patterns:
           - "k8s.io/*"
-        group-by: dependency-name
+      # Security updates always ship in their own PR (fast lane).
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
