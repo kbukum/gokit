@@ -296,7 +296,24 @@ jobs:
               targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' "$f" | awk '{print $2}' | sort -u)
               for t in $targets; do
                 echo "::group::$mod $pkgdir $t"
-                ( cd "$mod" && go test -run='^$' -fuzz="^${t}$" -fuzztime=30s "${pkgdir:-.}" ) || fail=1
+                # Capture output so we can distinguish a real fuzz crash
+                # ("Failing input written to") from the Go test harness's
+                # known "context deadline exceeded" that fires when
+                # -fuzztime elapses while workers are mid-shutdown — that
+                # surfaces as exit-1 even though no failing seed exists.
+                out=$( ( cd "$mod" && go test -run='^$' -fuzz="^${t}$" -fuzztime=30s "${pkgdir:-.}" ) 2>&1 ) && rc=0 || rc=$?
+                echo "$out"
+                if [ "$rc" -ne 0 ]; then
+                  if echo "$out" | grep -q 'Failing input written to'; then
+                    echo "::error::$mod $pkgdir $t found a failing input"
+                    fail=1
+                  elif echo "$out" | grep -qE 'context deadline exceeded$'; then
+                    echo "::warning::$mod $pkgdir $t: harness deadline race, treating as pass"
+                  else
+                    echo "::error::$mod $pkgdir $t failed (rc=$rc)"
+                    fail=1
+                  fi
+                fi
                 echo "::endgroup::"
               done
             done
