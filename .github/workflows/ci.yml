@@ -177,7 +177,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Run gosec
-        uses: securego/gosec@5e5517beec77b8228ba43ec8d7cc22d82ed31924  # v2.25.0
+        uses: securego/gosec@223e19b8856e00f02cc67804499a83f77e208f3c  # v2.25.0
         with:
           args: -nosec -exclude=G115,G118,G204,G304,G306,G402,G404,G704 -exclude-generated ./...
 
