@@ -591,6 +591,9 @@ func TestCascade_TraceCompleteness(t *testing.T) {
 			b.AddNode("frequency", newTestProviderWithMeta("frequency",
 				provider.Meta{"cost": 0.01},
 				func(_ context.Context, _ analysisInput) (analysisResult, error) {
+					// Tiny sleep so TotalDuration registers a positive
+					// value on platforms with coarse clocks (Windows ~16 ms).
+					time.Sleep(1 * time.Millisecond)
 					return analysisResult{Confidence: 0.96}, nil
 				}))
 			b.AdvanceWhen(func(r analysisResult) bool { return r.Confidence < 0.95 })
