@@ -8,7 +8,7 @@ Every package has its own `README.md` with API examples — start there for deta
 
 | Go version | gokit version |
 |------------|---------------|
-| 1.25+      | v0.1.2+       |
+| 1.26+      | v0.1.2+       |
 
 ## Core Packages
 
