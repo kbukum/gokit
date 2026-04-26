@@ -1,0 +1,113 @@
+# Releasing
+
+The mechanical steps to cut a release of `gokit`. For *what* counts as a
+breaking change vs a feature vs a fix, see `policy/SEMVER.md` and
+`policy/DEPRECATION.md`.
+
+## Prerequisites
+
+- You are listed in `MAINTAINERS.md` and have push access to `kbukum/gokit`.
+- Your local clone is on `main` with no uncommitted changes.
+- `git`, `gh`, and `go` are on your `$PATH`.
+- Your commits are GPG-signed (`git config commit.gpgsign true`) — release
+  tags must be signed.
+
+## 1. Decide the version
+
+```sh
+# What's the latest tag?
+git tag --sort=-v:refname | head -1
+
+# What changed since then?
+git log --oneline $(git describe --tags --abbrev=0)..HEAD
+```
+
+Use the [SEMVER policy](./policy/SEMVER.md) to pick the next version. While
+in `0.x`, every release with a breaking change in the `[Unreleased]`
+CHANGELOG section bumps MINOR; otherwise PATCH.
+
+## 2. Update the CHANGELOG
+
+1. Open `CHANGELOG.md`.
+2. Replace `## [Unreleased]` with `## [vX.Y.Z] - YYYY-MM-DD`.
+3. Add a fresh empty `## [Unreleased]` section above it.
+4. If `[Unreleased]` is empty, refuse to release — there is nothing to ship.
+5. Update the link reference at the bottom of the file (if present).
+
+The `tag-modules.sh` script will refuse to tag if `[Unreleased]` is the only
+populated section, or if `[vX.Y.Z]` for the version you're cutting doesn't
+exist in the file.
+
+## 3. Tag every module
+
+```sh
+./tag-modules.sh vX.Y.Z          # local-only dry run
+./tag-modules.sh vX.Y.Z --push   # push tags to origin
+```
+
+The script will:
+- Refuse to run with a dirty working tree (`git status --porcelain` non-empty).
+- Refuse to overwrite existing tags unless `--force` is passed.
+- Refuse if `CHANGELOG.md` lacks a `## [vX.Y.Z]` section.
+- Create signed annotated tags (`git tag -s -a vX.Y.Z -m "..."`) using your
+  configured GPG key.
+- Tag the root and every sub-module in lock-step.
+
+## 4. Cut the GitHub Release
+
+Once the tag is on `origin`, generate release notes from the CHANGELOG and
+create the GitHub Release via `gh`:
+
+```sh
+./scripts/release-notes.sh vX.Y.Z > /tmp/notes.md
+gh release create vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/notes.md
+```
+
+The release-notes script extracts the matching CHANGELOG section verbatim
+and prepends a generated summary line and a link to the full diff.
+
+GitHub Releases are mandatory; downstream tooling (`go install`, `dependabot`,
+`pkg.go.dev`) only surface signal when both the tag *and* the Release exist.
+
+## 5. Verify on `pkg.go.dev`
+
+```sh
+gh browse --no-browser
+# then visit
+#   https://pkg.go.dev/github.com/kbukum/gokit@vX.Y.Z
+```
+
+Trigger a re-fetch if needed:
+
+```sh
+GOPROXY=https://proxy.golang.org go list -m github.com/kbukum/gokit@vX.Y.Z
+```
+
+## 6. Announce
+
+- Post in the project's discussion / README "Latest" section.
+- Open a "post-release smoke test" issue against the next sprint milestone.
+
+## Hotfix releases
+
+Hotfixes follow the same flow but skip the `[Unreleased]` rotation if the
+fix is targeted at an older line:
+
+```sh
+git checkout v0.2.0
+git checkout -b hotfix/v0.2.1
+# … apply fix …
+# add a `## [0.2.1] - YYYY-MM-DD` section to CHANGELOG.md
+./tag-modules.sh v0.2.1 --push
+```
+
+## Pre-releases
+
+```sh
+./tag-modules.sh v0.3.0-rc.1 --push
+gh release create v0.3.0-rc.1 --prerelease --title "v0.3.0-rc.1" \
+  --notes-file /tmp/notes.md
+```
+
+Pre-releases bypass the CHANGELOG check (the `-rc.N` / `-beta.N` suffix is
+detected by `tag-modules.sh`).

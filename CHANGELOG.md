@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.2.0] - 2026-04-25
+
+> Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
+> This entry back-fills the previous `[Unreleased]` section verbatim. From
+> this release on, every tag MUST be accompanied by a corresponding CHANGELOG
+> entry — enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
+>
+> The `kafka/v0.2.0` and `kafka/testutil/v0.2.0` tags are orphans from when
+> the kafka provider lived at `/kafka`; the package now lives at
+> `/messaging/kafka` and is versioned in lock-step with `messaging`.
+
 ### Changed (Breaking API Changes)
 - **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`docker`, `kubernetes`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root. `NewComponent` likewise now takes the registry as its first argument.
 - **llm**: `RegisterDialect()`, `GetDialect()`, and `Dialects()` package-level functions removed. `New(cfg)` is replaced by `New(registry, cfg)` taking an explicit `*DialectRegistry`. Provider packages (`anthropic`, `gemini`, `openai`) no longer register via `init()`; call their `Register(registry)` function instead.
