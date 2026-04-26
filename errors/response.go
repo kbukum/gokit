@@ -8,12 +8,14 @@ import (
 )
 
 // typeBaseURI holds the configurable base URI for problem type URIs.
-// Default: "https://gokit.dev/errors/"
-var typeBaseURI atomic.Value
+//
+// Default: "https://gokit.dev/errors/". The default is materialized on first
+// read (lazy) rather than at package init() to avoid registering side effects
+// in the package import graph (F-066). Callers that need a different base
+// must call SetTypeBaseURI before any error response is rendered.
+const defaultTypeBaseURI = "https://gokit.dev/errors/"
 
-func init() {
-	typeBaseURI.Store("https://gokit.dev/errors/")
-}
+var typeBaseURI atomic.Value
 
 // SetTypeBaseURI sets the base URI used when constructing ProblemDetail.Type.
 // The uri is normalised to always end with "/".
@@ -24,8 +26,14 @@ func SetTypeBaseURI(uri string) {
 	typeBaseURI.Store(uri)
 }
 
-// GetTypeBaseURI returns the current base URI.
+// GetTypeBaseURI returns the current base URI, materializing the default on
+// first call.
 func GetTypeBaseURI() string {
+	if v := typeBaseURI.Load(); v != nil {
+		return v.(string)
+	}
+	// CAS-style lazy init: only one goroutine wins, others observe the value.
+	typeBaseURI.CompareAndSwap(nil, defaultTypeBaseURI)
 	return typeBaseURI.Load().(string)
 }
 

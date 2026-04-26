@@ -165,6 +165,11 @@ jobs:
           working-directory: ${{ matrix.module }}
 
   # ── Stage 3d: Security — gosec ─────────────────────────────────────────────
+  # Defense-in-depth: gosec also runs as part of `lint` (via golangci-lint).
+  # This standalone job uses the upstream gosec rule set unaltered; the excludes
+  # below MUST mirror `gosec.excludes` in .golangci.yml so the two checkers
+  # agree (F-068). G402/G404/G306 are NOT excluded — site-level //nolint:gosec
+  # documents intentional opt-ins (e.g. security/tls.go, discovery/consul/consul.go).
   gosec:
     name: gosec
     runs-on: ubuntu-latest
@@ -179,7 +184,8 @@ jobs:
       - name: Run gosec
         uses: securego/gosec@223e19b8856e00f02cc67804499a83f77e208f3c  # v2.25.0
         with:
-          args: -nosec -exclude=G115,G118,G204,G304,G306,G402,G404,G704 -exclude-generated ./...
+          # Excludes mirror .golangci.yml gosec.excludes. Keep in sync.
+          args: -exclude=G115,G304,G404,G306 -exclude-generated ./...
 
   # ── Stage 3e: Security — govulncheck per module ───────────────────────────
   vuln:

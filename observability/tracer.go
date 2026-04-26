@@ -32,6 +32,12 @@ type TracerConfig struct {
 	Insecure bool
 	// SampleRate is the sampling rate (0.0 to 1.0).
 	SampleRate float64
+	// SkipGlobalRegistration, when true, prevents InitTracer from mutating the
+	// global otel.SetTracerProvider / otel.SetTextMapPropagator state. Callers
+	// that want to thread the returned *TracerProvider through DI can opt out
+	// of process-global state. Defaults to false to preserve the convenient
+	// "init once, instrument anywhere via observability.Tracer(...)" pattern.
+	SkipGlobalRegistration bool
 }
 
 // DefaultTracerConfig returns sensible defaults for development.
@@ -82,11 +88,13 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 		sdktrace.WithSampler(sampler),
 	)
 
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	if !config.SkipGlobalRegistration {
+		otel.SetTracerProvider(tp)
+		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		))
+	}
 
 	logger.Info("tracer initialized", logger.Fields(
 		"service", config.ServiceName,
