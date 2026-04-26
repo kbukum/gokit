@@ -8,14 +8,14 @@ package authz
 //
 // permission is the required permission string (e.g., "article:write").
 type Checker interface {
-	HasPermission(subject string, permission string) bool
+	HasPermission(subject, permission string) bool
 }
 
 // CheckerFunc is an adapter to use ordinary functions as Checker.
-type CheckerFunc func(subject string, permission string) bool
+type CheckerFunc func(subject, permission string) bool
 
 // HasPermission implements Checker.
-func (f CheckerFunc) HasPermission(subject string, permission string) bool {
+func (f CheckerFunc) HasPermission(subject, permission string) bool {
 	return f(subject, permission)
 }
 
@@ -38,7 +38,7 @@ func NewMapChecker(permissions map[string][]string) *MapChecker {
 }
 
 // HasPermission implements Checker.
-func (c *MapChecker) HasPermission(subject string, required string) bool {
+func (c *MapChecker) HasPermission(subject, required string) bool {
 	patterns, ok := c.permissions[subject]
 	if !ok {
 		return false

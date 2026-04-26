@@ -5,5 +5,7 @@ import (
 )
 
 // compile-time assertions
-var _ provider.RequestResponse[Request, *Response] = (*Adapter)(nil)
-var _ provider.Closeable = (*Adapter)(nil)
+var (
+	_ provider.RequestResponse[Request, *Response] = (*Adapter)(nil)
+	_ provider.Closeable                           = (*Adapter)(nil)
+)

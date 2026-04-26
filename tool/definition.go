@@ -49,8 +49,9 @@ type Annotations struct {
 	Tags []string `json:"tags,omitempty"`
 	// ExecutionHint tells the frontend how to handle the tool result.
 	// "ui"      — tool only validates/extracts params; frontend drives the action.
-	// "backend" — tool executes a real operation; result is authoritative.
+	// "backend" — tool executes a real operation; result is authoritative (default).
 	// "hybrid"  — tool executes backend AND frontend should refresh/navigate.
-	// Empty string defaults to "backend" for backward compatibility.
+	// An empty string is treated as "backend" — the most common case for
+	// server-resident tools — so producers don't have to set it explicitly.
 	ExecutionHint string `json:"executionHint,omitempty"`
 }

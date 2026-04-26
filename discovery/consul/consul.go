@@ -228,7 +228,11 @@ func (c *Provider) Watch(ctx context.Context, serviceName string) (<-chan []disc
 				c.log.Warn("consul watch error", map[string]interface{}{
 					"service": serviceName, "error": err.Error(),
 				})
-				time.Sleep(time.Second)
+				select {
+				case <-time.After(time.Second):
+				case <-ctx.Done():
+					return
+				}
 				continue
 			}
 

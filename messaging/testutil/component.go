@@ -29,8 +29,10 @@ type MockProducer struct {
 	publishErr error
 }
 
-var _ messaging.ProducerCloser = (*MockProducer)(nil)
-var _ messaging.Producer = (*MockProducer)(nil)
+var (
+	_ messaging.ProducerCloser = (*MockProducer)(nil)
+	_ messaging.Producer       = (*MockProducer)(nil)
+)
 
 // WriteMessage records a message (legacy helper).
 func (p *MockProducer) WriteMessage(topic string, key, value []byte) {
@@ -75,7 +77,7 @@ func (p *MockProducer) Publish(_ context.Context, topic string, event messaging.
 }
 
 // PublishJSON marshals value as JSON and records it.
-func (p *MockProducer) PublishJSON(_ context.Context, topic string, key string, value interface{}) error {
+func (p *MockProducer) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -98,7 +100,7 @@ func (p *MockProducer) PublishJSON(_ context.Context, topic string, key string, 
 }
 
 // PublishBinary records raw bytes.
-func (p *MockProducer) PublishBinary(_ context.Context, topic string, key string, data []byte) error {
+func (p *MockProducer) PublishBinary(_ context.Context, topic, key string, data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -247,8 +249,10 @@ type Component struct {
 	mu        sync.RWMutex
 }
 
-var _ component.Component = (*Component)(nil)
-var _ gokittestutil.TestComponent = (*Component)(nil)
+var (
+	_ component.Component         = (*Component)(nil)
+	_ gokittestutil.TestComponent = (*Component)(nil)
+)
 
 // NewComponent creates a new mock test component with the given name.
 func NewComponent(name string) *Component {

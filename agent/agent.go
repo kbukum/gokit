@@ -195,7 +195,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 		defer close(ch)
 
 		// send delivers an event respecting ctx cancellation. Returns false if
-		// the caller has stopped reading or ctx was cancelled, in which case
+		// the caller has stopped reading or ctx was canceled, in which case
 		// the goroutine should unwind.
 		send := func(evt Event) bool {
 			select {

@@ -4,11 +4,15 @@ import (
 	msgtestutil "github.com/kbukum/gokit/messaging/testutil"
 )
 
-// Type aliases — re-export generic test types for backward compatibility.
-// All types are defined in messaging/testutil and reused here.
-type Message = msgtestutil.Message
-type MockProducer = msgtestutil.MockProducer
-type MockConsumer = msgtestutil.MockConsumer
+// Kafka-specific convenience re-exports. The underlying mock types live in
+// [github.com/kbukum/gokit/messaging/testutil] (transport-agnostic); these
+// aliases let Kafka tests import from a single kafka-flavored package without
+// pulling the generic testutil import in every test file.
+type (
+	Message      = msgtestutil.Message
+	MockProducer = msgtestutil.MockProducer
+	MockConsumer = msgtestutil.MockConsumer
+)
 
 // NewMockConsumer creates a mock consumer for the given topic.
 var NewMockConsumer = msgtestutil.NewMockConsumer

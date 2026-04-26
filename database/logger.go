@@ -78,7 +78,7 @@ func (l *gormLoggerAdapter) Trace(_ context.Context, begin time.Time, fc func() 
 		})
 	case err != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)):
 		// Client disconnected / request timed out — log at debug only.
-		l.log.Debug("Query cancelled", map[string]interface{}{
+		l.log.Debug("Query canceled", map[string]interface{}{
 			"sql": sql, "duration": elapsed.String(), "error": err.Error(),
 		})
 	case elapsed > l.slowThreshold:

@@ -21,10 +21,12 @@ type Component struct {
 	mu        sync.RWMutex
 }
 
-var _ component.Component = (*Component)(nil)
-var _ testutil.TestComponent = (*Component)(nil)
-var _ discovery.Registry = (*Component)(nil)
-var _ discovery.Discovery = (*Component)(nil)
+var (
+	_ component.Component    = (*Component)(nil)
+	_ testutil.TestComponent = (*Component)(nil)
+	_ discovery.Registry     = (*Component)(nil)
+	_ discovery.Discovery    = (*Component)(nil)
+)
 
 // NewComponent creates a new in-memory discovery test component.
 func NewComponent() *Component {

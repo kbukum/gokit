@@ -19,10 +19,12 @@ type stubProducer struct {
 func (p *stubProducer) Publish(_ context.Context, _ string, _ Event, _ ...string) error {
 	return p.err
 }
-func (p *stubProducer) PublishJSON(_ context.Context, _ string, _ string, _ interface{}) error {
+
+func (p *stubProducer) PublishJSON(_ context.Context, _, _ string, _ interface{}) error {
 	return p.err
 }
-func (p *stubProducer) PublishBinary(_ context.Context, topic string, key string, data []byte) error {
+
+func (p *stubProducer) PublishBinary(_ context.Context, topic, key string, data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.err != nil {

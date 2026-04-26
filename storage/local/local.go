@@ -67,8 +67,8 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0o750); err != nil {
-		return fmt.Errorf("storage: create directory: %w", err)
+	if mErr := os.MkdirAll(filepath.Dir(fullPath), 0o750); mErr != nil {
+		return fmt.Errorf("storage: create directory: %w", mErr)
 	}
 
 	f, err := os.Create(fullPath)
@@ -172,7 +172,6 @@ func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, er
 		}
 		return nil
 	})
-
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []storage.FileInfo{}, nil

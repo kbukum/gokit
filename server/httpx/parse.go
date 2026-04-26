@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
 	goerrors "github.com/kbukum/gokit/errors"
 )
 
@@ -43,7 +44,7 @@ func IntQuery(c *gin.Context, key string, def int) int {
 }
 
 // StringQuery returns a query parameter or the default value.
-func StringQuery(c *gin.Context, key string, def string) string {
+func StringQuery(c *gin.Context, key, def string) string {
 	s := c.Query(key)
 	if s == "" {
 		return def

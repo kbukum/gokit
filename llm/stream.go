@@ -3,6 +3,7 @@ package llm
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 
 	"github.com/kbukum/gokit/httpclient"
@@ -35,7 +36,7 @@ func (a *Adapter) readSSEStream(ctx context.Context, reader sse.Reader, ch chan<
 	for {
 		event, err := reader.Next()
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				select {
 				case ch <- StreamChunk{Err: err}:
 				case <-ctx.Done():

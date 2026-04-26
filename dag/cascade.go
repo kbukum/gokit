@@ -17,7 +17,7 @@ type CascadeBuilder[I, O any] struct {
 	stages      []*stageSpec[I, O]
 	finalStage  *stageSpec[I, O]
 	onFailure   StageFailurePolicy
-	mergeFunc   func(accumulated O, stageResult O) O
+	mergeFunc   func(accumulated, stageResult O) O
 	orderFunc   OrderStrategy
 	maxParallel int
 }
@@ -143,7 +143,7 @@ func (c *CascadeBuilder[I, O]) OnStageFailure(policy StageFailurePolicy) *Cascad
 }
 
 // MergeStrategy sets how results from each stage are accumulated.
-func (c *CascadeBuilder[I, O]) MergeStrategy(fn func(accumulated O, stageResult O) O) *CascadeBuilder[I, O] {
+func (c *CascadeBuilder[I, O]) MergeStrategy(fn func(accumulated, stageResult O) O) *CascadeBuilder[I, O] {
 	c.mergeFunc = fn
 	return c
 }
@@ -183,7 +183,7 @@ type Cascade[I, O any] struct {
 	stages      []*stageSpec[I, O]
 	finalStage  *stageSpec[I, O]
 	onFailure   StageFailurePolicy
-	mergeFunc   func(accumulated O, stageResult O) O
+	mergeFunc   func(accumulated, stageResult O) O
 	orderFunc   OrderStrategy
 	maxParallel int
 }

@@ -163,7 +163,7 @@ func TestConfig_Validate_MissingDSN(t *testing.T) {
 		t.Error("Validate() should fail with empty DSN")
 	}
 
-	expectedMsg := "database DSN is required"
+	expectedMsg := "database: either dsn or host is required"
 	if err.Error() != expectedMsg {
 		t.Errorf("Error message = %q, want %q", err.Error(), expectedMsg)
 	}

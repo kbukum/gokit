@@ -40,7 +40,7 @@ func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 
 // SetLevel dynamically sets a module's log level.
 // An unrecognized level string is silently ignored.
-func (m *ModuleLevelManager) SetLevel(module string, level string) {
+func (m *ModuleLevelManager) SetLevel(module, level string) {
 	parsed, err := zerolog.ParseLevel(strings.ToLower(level))
 	if err != nil {
 		return

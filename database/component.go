@@ -79,7 +79,7 @@ func (c *Component) Start(ctx context.Context) error {
 		return nil
 	}
 
-	var dialectorFactory = sqlite.Open
+	dialectorFactory := sqlite.Open
 
 	if c.driverFunc != nil {
 		dialectorFactory = c.driverFunc

@@ -698,7 +698,7 @@ func TestIntegration_Logger_Config_LoggerWithContext(t *testing.T) {
 
 func TestIntegration_Pipeline_Reduce(t *testing.T) {
 	p := pipeline.FromSlice([]int{1, 2, 3, 4, 5})
-	sumPipeline := pipeline.Reduce(p, 0, func(acc int, v int) int { return acc + v })
+	sumPipeline := pipeline.Reduce(p, 0, func(acc, v int) int { return acc + v })
 
 	ctx := context.Background()
 	results, err := pipeline.Collect(ctx, sumPipeline)

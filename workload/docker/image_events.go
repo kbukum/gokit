@@ -56,7 +56,10 @@ func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEve
 }
 
 // imageRefFromEvent extracts the best image reference from a Docker event,
-// falling back through available fields.
+// falling back through available fields. The deprecated [events.Message.From]
+// is consulted last for compatibility with older Docker engines that don't
+// populate Actor.Attributes; current engines always set Actor attributes so
+// the deprecated read is harmless and documented as a defensive fallback.
 func imageRefFromEvent(evt events.Message) string {
 	if name := evt.Actor.Attributes["name"]; name != "" {
 		return name
@@ -64,8 +67,8 @@ func imageRefFromEvent(evt events.Message) string {
 	if img := evt.Actor.Attributes["image"]; img != "" {
 		return img
 	}
-	if evt.From != "" {
-		return evt.From
+	if evt.From != "" { //nolint:staticcheck // SA1019: kept as fallback for older Docker engines
+		return evt.From //nolint:staticcheck // SA1019: see above
 	}
 	return evt.Actor.ID
 }

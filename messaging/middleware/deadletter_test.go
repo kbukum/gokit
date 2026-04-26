@@ -20,12 +20,14 @@ type mockPublisher struct {
 func (m *mockPublisher) Publish(_ context.Context, _ string, _ messaging.Event, _ ...string) error {
 	return m.err
 }
+
 func (m *mockPublisher) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
 	m.lastTopic = topic
 	m.lastKey = key
 	m.lastValue = value
 	return m.err
 }
+
 func (m *mockPublisher) PublishBinary(_ context.Context, _, _ string, _ []byte) error {
 	return m.err
 }

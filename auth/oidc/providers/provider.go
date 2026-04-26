@@ -85,7 +85,9 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 	if p.cfg.PostExchangeHook != nil {
 		hooked, err := p.cfg.PostExchangeHook(ctx, resolveClient(p.cfg.HTTPClient), cfg, result)
 		if err != nil {
-			return result, nil // fall back to original token if hook fails
+			// Fall back to the original token if the hook fails — the hook is an
+			// optional enrichment step (e.g., Instagram long-lived token exchange).
+			return result, nil //nolint:nilerr // intentional fallback
 		}
 		return hooked, nil
 	}
@@ -148,7 +150,9 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	// Run post-userinfo hook if configured (e.g., GitHub email fallback)
 	if p.cfg.PostUserInfoHook != nil {
 		if err := p.cfg.PostUserInfoHook(ctx, accessToken, info); err != nil {
-			return info, nil // return what we have if hook fails
+			// Return what we have if the hook fails — the hook is an optional
+			// enrichment step (e.g., GitHub email fallback).
+			return info, nil //nolint:nilerr // intentional fallback
 		}
 	}
 

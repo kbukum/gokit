@@ -140,7 +140,7 @@ func (dm *DegradationManager) IsHealthy() bool {
 //   - StateHalfOpen → Degraded
 //   - StateOpen    → Unhealthy
 func (dm *DegradationManager) OnCircuitBreakerStateChange(serviceName string) func(string, State, State) {
-	return func(_ string, _ State, to State) {
+	return func(_ string, _, to State) {
 		switch to {
 		case StateClosed:
 			dm.UpdateService(serviceName, Healthy)

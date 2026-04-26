@@ -1,0 +1,10 @@
+# https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+# Closes F-080 sub-finding: no config.yml to disable blank issues / steer reporters.
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/kbukum/gokit/discussions
+    about: Ask a question, propose an idea, or share usage patterns.
+  - name: Security vulnerability
+    url: https://github.com/kbukum/gokit/security/advisories/new
+    about: Report security issues privately via GitHub Security Advisories. Do NOT open a public issue.

@@ -36,14 +36,16 @@ func testLogger() *logger.Logger {
 
 func mockInvoker(retErr error) grpc.UnaryInvoker {
 	return func(ctx context.Context, method string, req, reply interface{},
-		cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		cc *grpc.ClientConn, opts ...grpc.CallOption,
+	) error {
 		return retErr
 	}
 }
 
 func deadlineCapturingInvoker(captured *time.Time) grpc.UnaryInvoker {
 	return func(ctx context.Context, method string, req, reply interface{},
-		cc *grpc.ClientConn, opts ...grpc.CallOption) error {
+		cc *grpc.ClientConn, opts ...grpc.CallOption,
+	) error {
 		if dl, ok := ctx.Deadline(); ok {
 			*captured = dl
 		}
@@ -55,7 +57,8 @@ type mockClientStream struct{ grpc.ClientStream }
 
 func mockStreamer(stream grpc.ClientStream, retErr error) grpc.Streamer {
 	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn,
-		method string, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		method string, opts ...grpc.CallOption,
+	) (grpc.ClientStream, error) {
 		return stream, retErr
 	}
 }

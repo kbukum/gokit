@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"sync"
 
+	"google.golang.org/grpc/resolver"
+
 	disc "github.com/kbukum/gokit/discovery"
 	"github.com/kbukum/gokit/logger"
-	"google.golang.org/grpc/resolver"
 )
 
 // discoveryResolver watches a discovery backend and pushes address updates to gRPC.
@@ -101,7 +102,8 @@ func (r *discoveryResolver) updateAddresses(instances []disc.ServiceInstance) {
 	}
 
 	addrs := make([]resolver.Address, 0, len(instances))
-	for _, inst := range instances {
+	for i := range instances {
+		inst := &instances[i]
 		addrs = append(addrs, resolver.Address{
 			Addr:       fmt.Sprintf("%s:%d", inst.Address, inst.Port),
 			ServerName: inst.Name,

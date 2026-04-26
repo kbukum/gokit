@@ -24,7 +24,7 @@ func (f fakeTokenValidator) ValidateToken(string) (any, error) {
 func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	// Default behavior rejects invalid tokens (no WithAllowInvalidTokens needed).
+	// OptionalAuth always rejects a present-but-invalid token (secure-by-default).
 	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")})
 	if err != nil {
 		t.Fatalf("OptionalAuth() error: %v", err)
@@ -42,13 +42,10 @@ func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	}
 }
 
-func TestOptionalAuth_AllowInvalidTokens(t *testing.T) {
+func TestOptionalAuth_NoTokenPasses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, err := OptionalAuth(
-		fakeTokenValidator{err: errors.New("invalid")},
-		WithAllowInvalidTokens(true),
-	)
+	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")})
 	if err != nil {
 		t.Fatalf("OptionalAuth() error: %v", err)
 	}
@@ -56,7 +53,6 @@ func TestOptionalAuth_AllowInvalidTokens(t *testing.T) {
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.Header.Set("Authorization", "Bearer bad")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

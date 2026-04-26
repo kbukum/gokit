@@ -177,8 +177,8 @@ func TestAdapter_Do_Multipart(t *testing.T) {
 			t.Errorf("Content-Type = %q, want multipart/form-data", mediaType)
 		}
 
-		if err := r.ParseMultipartForm(1 << 20); err != nil {
-			t.Fatalf("ParseMultipartForm error: %v", err)
+		if pErr := r.ParseMultipartForm(1 << 20); pErr != nil {
+			t.Fatalf("ParseMultipartForm error: %v", pErr)
 		}
 
 		if got := r.FormValue("model"); got != "large-v3" {

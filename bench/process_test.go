@@ -147,7 +147,7 @@ func TestFromProcessInterface(t *testing.T) {
 	t.Parallel()
 
 	// Ensure FromProcess returns something that satisfies Evaluator[string].
-	var _ = FromProcess(
+	_ = FromProcess(
 		"test",
 		func(s Sample[string]) process.Command {
 			return process.Command{Binary: "echo"}

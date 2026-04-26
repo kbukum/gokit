@@ -1,0 +1,53 @@
+name: Release
+
+# Release workflow: tag push → goreleaser → SBOM + cosign + GitHub Release.
+# Closes F-037 (no release/SBOM/cosign workflow), F-055 (no goreleaser),
+# F-056 (gh release list empty despite tags).
+#
+# Trigger: push of any vX.Y.Z tag (root module). Per-submodule tags
+# (e.g. kafka/v0.2.0) are handled separately by tag-modules.sh and do
+# not trigger a release here.
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write   # publish release assets
+  packages: write   # in case we publish OCI artifacts later
+  id-token: write   # cosign keyless signing via OIDC
+
+jobs:
+  goreleaser:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install cyclonedx-gomod (SBOM generator)
+        run: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.7.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6e057b6926d9aa9e7a5a76a40450a05beb073 # v3.7.0
+        with:
+          cosign-release: "v2.4.1"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

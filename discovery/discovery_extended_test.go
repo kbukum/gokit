@@ -806,7 +806,7 @@ func TestClient_OptionalServiceFailure(t *testing.T) {
 // ── Endpoint alias ──────────────────────────────────────────────────
 
 func TestEndpoint_IsAlias(t *testing.T) {
-	var e = ServiceInstance{ID: "ep-1"}
+	e := ServiceInstance{ID: "ep-1"}
 	if e.ID != "ep-1" {
 		t.Error("Endpoint alias should be interchangeable with ServiceInstance")
 	}

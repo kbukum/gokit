@@ -64,7 +64,7 @@ func (m Meta) Duration(key string) (time.Duration, bool) {
 }
 
 // Bool returns the value for key as a bool.
-func (m Meta) Bool(key string) (val bool, ok bool) {
+func (m Meta) Bool(key string) (val, ok bool) {
 	v, ok := m[key]
 	if !ok {
 		return false, false

@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -97,7 +98,7 @@ func (c *Component) startConsumer(cr messaging.ConsumerRunner) {
 	c.wg.Add(1)
 	go func() {
 		defer c.wg.Done()
-		if err := cr.Consume(c.consumeCtx); err != nil && err != context.Canceled {
+		if err := cr.Consume(c.consumeCtx); err != nil && !errors.Is(err, context.Canceled) {
 			c.log.Error("Consumer stopped with error", map[string]interface{}{
 				"topic": cr.Topic(),
 				"error": err.Error(),
@@ -128,7 +129,6 @@ func (c *Component) Stop(_ context.Context) error {
 	// Close all consumers in parallel (offset commit + connection teardown)
 	var closeWg sync.WaitGroup
 	for _, cr := range c.consumers {
-		cr := cr
 		closeWg.Add(1)
 		go func() {
 			defer closeWg.Done()

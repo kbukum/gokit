@@ -23,8 +23,10 @@ type Component struct {
 }
 
 // Ensure Component implements the required interfaces
-var _ component.Component = (*Component)(nil)
-var _ testutil.TestComponent = (*Component)(nil)
+var (
+	_ component.Component    = (*Component)(nil)
+	_ testutil.TestComponent = (*Component)(nil)
+)
 
 // NewComponent creates a new test database component.
 // By default, it uses SQLite in-memory database.

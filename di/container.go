@@ -37,10 +37,12 @@ type Container interface {
 	// Introspection
 	Registrations() []RegistrationInfo
 
-	// Legacy methods kept on the interface for backward compatibility with
-	// existing callers. Prefer the [Resolve], [MustResolve], and
-	// [TryResolve] generic helpers; the older Container.MustResolve method
-	// has been removed from this interface in favor of those helpers.
+	// Cache & lifecycle controls. These are first-class operations on a DI
+	// container — not legacy: callers reload config-driven singletons via
+	// [Container.InvalidateCache]/[Container.Refresh], and adapters that need
+	// a deferred resolution closure use [Container.GetResolver]. Type-safe
+	// resolution (where a generic helper is more ergonomic) is provided by the
+	// package-level [Resolve], [MustResolve], and [TryResolve] helpers.
 	InvalidateCache(name string) error
 	Refresh(name string) (interface{}, error)
 	GetResolver(name string) func() (interface{}, error)
@@ -415,7 +417,11 @@ func (c *UnifiedContainer) Close() error {
 	return nil
 }
 
-// Legacy methods for backward compatibility
+// Cache & lifecycle controls — see [Container] interface docs.
+
+// InvalidateCache drops the cached instance for a registered component (or removes
+// a registered singleton). The next [Container.Resolve] call will re-run the
+// constructor. Returns an error if the name is not registered.
 func (c *UnifiedContainer) InvalidateCache(name string) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -437,6 +443,8 @@ func (c *UnifiedContainer) InvalidateCache(name string) error {
 	return fmt.Errorf("component '%s' not registered", name)
 }
 
+// Refresh invalidates the cached instance for name and resolves it again,
+// returning the freshly constructed value. Useful after configuration changes.
 func (c *UnifiedContainer) Refresh(name string) (interface{}, error) {
 	if err := c.InvalidateCache(name); err != nil {
 		return nil, err
@@ -444,12 +452,20 @@ func (c *UnifiedContainer) Refresh(name string) (interface{}, error) {
 	return c.Resolve(name)
 }
 
+// GetResolver returns a closure that resolves the named component lazily on
+// each call. Adapter code that must hand out a `func() (interface{}, error)`
+// (e.g., third-party plug-in loaders) uses this instead of capturing the
+// container directly.
 func (c *UnifiedContainer) GetResolver(name string) func() (interface{}, error) {
 	return func() (interface{}, error) {
 		return c.Resolve(name)
 	}
 }
 
+// MustResolve resolves name and panics on failure. Prefer the generic
+// package-level [MustResolve] helper for type-safe resolution; this method
+// exists for callers that hold only the [Container] interface and need an
+// untyped panic-on-error variant (e.g., framework wiring code).
 func (c *UnifiedContainer) MustResolve(name string) interface{} {
 	instance, err := c.Resolve(name)
 	if err != nil {
@@ -532,7 +548,9 @@ func (cb *CircuitBreaker) RecordFailure() {
 	}
 }
 
-// NewSimpleContainer creates the new unified container (backward compatibility)
+// NewSimpleContainer is an alias for [NewContainer] retained as the canonical
+// constructor name used by application bootstrap code. Both return the same
+// [*UnifiedContainer] type satisfying [Container].
 func NewSimpleContainer() Container {
 	return NewContainer()
 }

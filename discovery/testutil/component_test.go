@@ -103,8 +103,8 @@ func TestComponent_ResetSnapshotRestore(t *testing.T) {
 	})
 
 	// Restore
-	if err := comp.Restore(ctx, snap); err != nil {
-		t.Fatalf("Restore() failed: %v", err)
+	if rErr := comp.Restore(ctx, snap); rErr != nil {
+		t.Fatalf("Restore() failed: %v", rErr)
 	}
 
 	instances, _ := comp.Discover(ctx, "svc")
@@ -113,8 +113,8 @@ func TestComponent_ResetSnapshotRestore(t *testing.T) {
 	}
 
 	// Reset
-	if err := comp.Reset(ctx); err != nil {
-		t.Fatalf("Reset() failed: %v", err)
+	if rErr := comp.Reset(ctx); rErr != nil {
+		t.Fatalf("Reset() failed: %v", rErr)
 	}
 	_, err = comp.Discover(ctx, "svc")
 	if err != discovery.ErrServiceNotFound {

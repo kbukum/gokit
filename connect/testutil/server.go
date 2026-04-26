@@ -11,8 +11,10 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-var _ component.Component = (*Server)(nil)
-var _ testutil.TestComponent = (*Server)(nil)
+var (
+	_ component.Component    = (*Server)(nil)
+	_ testutil.TestComponent = (*Server)(nil)
+)
 
 // Server is a test server for ConnectRPC handlers backed by httptest.Server.
 // It implements both component.Component and testutil.TestComponent.

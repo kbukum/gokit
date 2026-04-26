@@ -43,7 +43,7 @@ func (r *OperationRegistry[T]) Bind(binding OperationBinding) {
 // It filters by operation ID, then by tier (empty Tiers = all tiers),
 // sorts by priority (lower first), and returns the first provider that
 // can be created via the underlying Registry.
-func (r *OperationRegistry[T]) Resolve(operationID string, tier string) (T, error) {
+func (r *OperationRegistry[T]) Resolve(operationID, tier string) (T, error) {
 	r.mu.RLock()
 	bindings, ok := r.bindings[operationID]
 	if !ok || len(bindings) == 0 {

@@ -86,7 +86,9 @@ func makeToolHandler(toolName string, registry *tool.Registry) sdkmcp.ToolHandle
 
 		result, err := callable.Call(toolCtx, input)
 		if err != nil {
-			return &sdkmcp.CallToolResult{
+			// MCP convention: tool execution errors are surfaced to the client
+			// as IsError content payloads, not as transport-level errors.
+			return &sdkmcp.CallToolResult{ //nolint:nilerr // intentional MCP error envelope
 				IsError: true,
 				Content: []sdkmcp.Content{
 					&sdkmcp.TextContent{Text: err.Error()},

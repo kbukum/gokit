@@ -71,8 +71,8 @@ func TestInstrumentHandler_Success(t *testing.T) {
 	}
 
 	// errors_total should be absent or 0
-	if et, ok := metrics["kafka_consumer_errors_total"]; ok {
-		if sumData, ok := et.Data.(metricdata.Sum[int64]); ok {
+	if et, etOk := metrics["kafka_consumer_errors_total"]; etOk {
+		if sumData, sumOk := et.Data.(metricdata.Sum[int64]); sumOk {
 			for _, dp := range sumData.DataPoints {
 				if dp.Value != 0 {
 					t.Errorf("errors_total = %d, want 0 on success", dp.Value)

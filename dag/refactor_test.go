@@ -646,7 +646,8 @@ func TestEngine_NoNodeDefs_BackwardCompatible(t *testing.T) {
 			}),
 		},
 		Edges: []Edge{{From: "a", To: "b"}},
-		// NodeDefs is nil — backward compatibility
+		// NodeDefs left nil — exercises the zero-value fallback path that
+		// falls back to per-step Handler functions when no NodeDef registry exists.
 	}
 
 	engine := &Engine{}

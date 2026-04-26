@@ -303,5 +303,7 @@ func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Durati
 }
 
 // compile-time check
-var _ storage.Storage = (*Storage)(nil)
-var _ storage.SignedURLProvider = (*Storage)(nil)
+var (
+	_ storage.Storage           = (*Storage)(nil)
+	_ storage.SignedURLProvider = (*Storage)(nil)
+)

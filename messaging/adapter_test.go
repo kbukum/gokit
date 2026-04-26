@@ -23,7 +23,7 @@ func (p *adapterProducer) Publish(_ context.Context, _ string, _ Event, _ ...str
 	return nil
 }
 
-func (p *adapterProducer) PublishJSON(_ context.Context, _ string, _ string, _ interface{}) error {
+func (p *adapterProducer) PublishJSON(_ context.Context, _, _ string, _ interface{}) error {
 	return nil
 }
 

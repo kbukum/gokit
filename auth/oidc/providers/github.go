@@ -33,7 +33,7 @@ var GitHubDefaultScopes = []string{"read:user", "user:email"}
 //	})
 func NewGitHub(cfg ProviderConfig) *GenericProvider {
 	return NewGeneric(GenericConfig{
-		ProviderConfig:   withDefaultScopes(cfg, GitHubDefaultScopes...),
+		ProviderConfig:   WithDefaultScopes(cfg, GitHubDefaultScopes...),
 		ProviderName:     "github",
 		Label:            "GitHub",
 		Type:             "identity",
@@ -65,7 +65,7 @@ func newGitHubEmailFallback(emailsEndpoint string) func(ctx context.Context, acc
 
 		email, verified, err := fetchGitHubPrimaryEmail(ctx, emailsEndpoint, accessToken)
 		if err != nil {
-			return nil // non-fatal — return what we have
+			return nil //nolint:nilerr // non-fatal — return what we already have
 		}
 		info.Email = email
 		info.EmailVerified = verified

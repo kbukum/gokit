@@ -30,7 +30,6 @@ func TestRetryHandler_SucceedsFirstAttempt(t *testing.T) {
 	wrapped := RetryHandler(handler, cfg)
 	msg := messaging.Message{Topic: "t", Headers: map[string]string{}}
 	err := wrapped(context.Background(), msg)
-
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -60,7 +59,6 @@ func TestRetryHandler_RetriesOnError(t *testing.T) {
 	wrapped := RetryHandler(handler, cfg)
 	msg := messaging.Message{Topic: "t", Headers: map[string]string{}}
 	err := wrapped(context.Background(), msg)
-
 	if err != nil {
 		t.Fatalf("expected no error after retries, got %v", err)
 	}
