@@ -621,8 +621,8 @@ func TestAsProvider(t *testing.T) {
 
 // mustReg registers t on reg, failing the test on error.
 func mustReg(tb testing.TB, reg *tool.Registry, c tool.Callable) {
-tb.Helper()
-if err := reg.Register(c); err != nil {
-tb.Fatalf("register: %v", err)
-}
+	tb.Helper()
+	if err := reg.Register(c); err != nil {
+		tb.Fatalf("register: %v", err)
+	}
 }

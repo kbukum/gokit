@@ -172,7 +172,7 @@ func (m *MockOAuthServer) handleToken(w http.ResponseWriter, r *http.Request) {
 			params = body
 		}
 	} else {
-		if err := r.ParseForm(); err != nil {
+		if err := r.ParseForm(); err != nil { //nolint:gosec // G120: testutil OIDC server; request bodies are bounded by the test harness
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}

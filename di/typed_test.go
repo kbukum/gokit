@@ -9,8 +9,10 @@ import (
 	"github.com/kbukum/gokit/di"
 )
 
-type svc struct{ N int }
-type other struct{ N int }
+type (
+	svc   struct{ N int }
+	other struct{ N int }
+)
 
 var (
 	svcKey   = di.NameKey[*svc]("svc")
@@ -85,7 +87,7 @@ func TestProvide_RejectsBadCtor(t *testing.T) {
 	}{
 		{"not a function", "hello"},
 		{"wrong return type", func() *other { return &other{} }},
-		{"too many returns", func() (*svc, error, int) { return nil, nil, 0 }},
+		{"too many returns", func() (*svc, error, int) { return nil, nil, 0 }}, //nolint:nilnil,staticcheck // test case intentionally exercises invalid ctor shape
 		{"second not error", func() (*svc, *svc) { return nil, nil }},
 		{"nil ctor", nil},
 	}

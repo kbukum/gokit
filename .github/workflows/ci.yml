@@ -198,11 +198,10 @@ jobs:
         with:
           # Pinned to a specific version (was previously `latest`, which can
           # cause non-deterministic CI failures when a new linter release ships).
-          # NOTE: golangci-lint-action v9 requires >= v2.1.0. Pinned to v2.1.0
-          # (the minimum compatible version) to keep this PR scoped strictly
-          # to restoring CI; later bumps that enable additional linters should
-          # come in their own PR with the corresponding code fixes.
-          version: v2.1.0
+          # NOTE: golangci-lint-action v9 requires >= v2.1.0, and the linter
+          # binary must be built with a Go version >= our toolchain (1.26.x),
+          # so we pin to v2.11.4 (the current latest as of this commit).
+          version: v2.11.4
           working-directory: ${{ matrix.module }}
 
   # ── Stage 3d: Security — gosec ─────────────────────────────────────────────
