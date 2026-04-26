@@ -7,7 +7,6 @@ import (
 	"io"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/kbukum/gokit/process"
@@ -66,15 +65,14 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 			cmd.Stdin = task.Stdin
 		}
 
-		// Process group isolation for tree kill (mirrors process.Run setup)
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		// Process group isolation for tree kill (mirrors process.Run setup).
+		// Platform-specific: Unix uses Setpgid; Windows is a no-op.
+		process.ConfigureSysProcAttr(cmd)
 
-		// Graceful shutdown: SIGTERM first, then SIGKILL after grace period
+		// Graceful shutdown: SIGTERM first (Unix) or os.Process.Kill (Windows),
+		// then SIGKILL after grace period via WaitDelay.
 		cmd.Cancel = func() error {
-			if cmd.Process == nil {
-				return nil
-			}
-			return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+			return process.TerminateGracefully(cmd)
 		}
 		cmd.WaitDelay = cfg.Command.GracePeriod
 

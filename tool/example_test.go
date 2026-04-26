@@ -19,7 +19,7 @@ type AddOutput struct {
 }
 
 // ExampleFromFunc shows the most common way to build a typed tool from a plain
-// Go function. Schema generation and JSON (de)serialisation are handled by
+// Go function. Schema generation and JSON (de)serialization are handled by
 // FromFunc — your function works in real Go types.
 func ExampleFromFunc() {
 	add := tool.FromFunc("add", "Add two integers",
