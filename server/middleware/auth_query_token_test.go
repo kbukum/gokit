@@ -37,7 +37,7 @@ func TestExtractToken_QueryParam(t *testing.T) {
 
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, tt.queryURL, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tt.queryURL, http.NoBody)
 			if tt.header != "" {
 				c.Request.Header.Set(tt.opts.headerName, tt.header)
 			}

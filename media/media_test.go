@@ -382,7 +382,7 @@ func TestDetect_PolyglotPDFJPEG(t *testing.T) {
 	header := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
 	padding := make([]byte, 100)
 	pdfSig := []byte("%PDF-1.4")
-	data := append(header, append(padding, pdfSig...)...)
+	data := append(append(header, padding...), pdfSig...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
 	assertInfo(t, info, Image, "jpeg", "image/jpeg")
 }
@@ -397,7 +397,7 @@ func TestDetect_NullBytePadding(t *testing.T) {
 
 func TestDetect_ScriptInsidePNG(t *testing.T) {
 	header := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
-	data := append(header, []byte(`<script>alert("xss")</script>`)...)
+	data := append(header, []byte(`<script>alert("xss")</script>`)...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
 	assertInfo(t, info, Image, "png", "image/png")
 }
@@ -418,7 +418,7 @@ func TestDetect_RepeatedMagicBytes(t *testing.T) {
 	// JPEG header followed by PNG header — first detector (JPEG) wins.
 	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
 	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
-	data := append(jpeg, png...)
+	data := append(jpeg, png...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
 	assertInfo(t, info, Image, "jpeg", "image/jpeg")
 }
@@ -434,7 +434,7 @@ func TestDetect_MaxDetectBytesLimit(t *testing.T) {
 	for i := range garbage {
 		garbage[i] = 0x01
 	}
-	data := append(text, garbage...)
+	data := append(text, garbage...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
 	assertInfo(t, info, Text, "txt", "text/plain")
 }

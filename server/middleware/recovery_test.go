@@ -21,7 +21,7 @@ func TestRecovery_PanicReturnsCanonicalError(t *testing.T) {
 	}))
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	req := httptest.NewRequest(http.MethodGet, "/panic", http.NoBody)
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
@@ -43,7 +43,7 @@ func TestRecovery_NoPanicPassesThrough(t *testing.T) {
 	}))
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	req := httptest.NewRequest(http.MethodGet, "/ok", http.NoBody)
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)

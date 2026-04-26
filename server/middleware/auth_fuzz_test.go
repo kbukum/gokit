@@ -20,7 +20,7 @@ func FuzzExtractToken(f *testing.F) {
 		var req *http.Request
 		func() {
 			defer func() { recover() }() //nolint:errcheck // intentional: skip panics from invalid fuzz inputs
-			req = httptest.NewRequest(http.MethodGet, rawURL, nil)
+			req = httptest.NewRequest(http.MethodGet, rawURL, http.NoBody)
 		}()
 		if req == nil {
 			t.Skip("invalid request")

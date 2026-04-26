@@ -106,7 +106,7 @@ func TestNewClient_AppliesDefaults(t *testing.T) {
 	conn, err := NewClient(cfg, log)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	defer conn.Close()
+	conn.Close()
 }
 
 func TestNewClient_ValidationFailure_EmptyAddr(t *testing.T) {
@@ -152,7 +152,7 @@ func TestNewClient_WithCallTimeout(t *testing.T) {
 	conn, err := NewClient(cfg, log)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	defer conn.Close()
+	conn.Close()
 }
 
 func TestNewClient_WithKeepalive(t *testing.T) {
@@ -169,7 +169,7 @@ func TestNewClient_WithKeepalive(t *testing.T) {
 	conn, err := NewClient(cfg, log)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	defer conn.Close()
+	conn.Close()
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ func TestNewAdapter_InsecureConfig(t *testing.T) {
 	adapter, err := NewAdapter(cfg, log)
 	require.NoError(t, err)
 	require.NotNil(t, adapter)
-	defer adapter.Close(context.Background())
+	adapter.Close(context.Background())
 }
 
 func TestNewAdapter_ValidationFailure(t *testing.T) {
@@ -615,7 +615,7 @@ func TestDefaultConnectionFactory_NewConn(t *testing.T) {
 	conn, err := factory.NewConn("my-svc")
 	require.NoError(t, err)
 	require.NotNil(t, conn)
-	defer conn.Close()
+	conn.Close()
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -311,7 +312,7 @@ func TestClassifyStatusCode_BodyPreserved(t *testing.T) {
 func TestError_Unwrap_Chaining(t *testing.T) {
 	inner := fmt.Errorf("connection refused")
 	e := NewConnectionError(inner)
-	if e.Unwrap() != inner {
+	if !errors.Is(e.Unwrap(), inner) {
 		t.Error("Unwrap did not return inner error")
 	}
 }
@@ -631,14 +632,14 @@ func TestAuth_APIKeyQuery_SpecialChars(t *testing.T) {
 
 func TestAuth_NilApply(t *testing.T) {
 	cfg := &AuthConfig{Type: AuthCustom, Apply: nil}
-	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	req, _ := http.NewRequest("GET", "http://example.com", http.NoBody)
 	// Should not panic
 	cfg.apply(req)
 }
 
 func TestAuth_APIKey_EmptyName_FallsBackToDefault(t *testing.T) {
 	cfg := &AuthConfig{Type: AuthAPIKey, Key: "secret", In: "header", Name: ""}
-	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	req, _ := http.NewRequest("GET", "http://example.com", http.NoBody)
 	cfg.apply(req)
 	if req.Header.Get("X-API-Key") != "secret" {
 		t.Error("empty name should fallback to X-API-Key")

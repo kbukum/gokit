@@ -18,7 +18,7 @@ func TestWrapResilienceError_Nil(t *testing.T) {
 func TestWrapResilienceError_AlreadyAppError(t *testing.T) {
 	original := goerrors.NotFound("user", "123")
 	err := wrapResilienceError(original)
-	if err != original {
+	if !errors.Is(err, original) {
 		t.Error("existing AppErrors should pass through unchanged")
 	}
 }
@@ -92,7 +92,7 @@ func TestWrapResilienceError_DeadlineExceeded(t *testing.T) {
 func TestWrapResilienceError_Unknown(t *testing.T) {
 	original := errors.New("some unknown error")
 	err := wrapResilienceError(original)
-	if err != original {
+	if !errors.Is(err, original) {
 		t.Error("unknown errors should be returned as-is")
 	}
 }

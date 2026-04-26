@@ -81,7 +81,7 @@ func TestStartupGate(t *testing.T) {
 				c.Status(http.StatusOK)
 			})
 
-			c.Request = httptest.NewRequest(http.MethodGet, tt.path, nil)
+			c.Request = httptest.NewRequest(http.MethodGet, tt.path, http.NoBody)
 			r.ServeHTTP(w, c.Request)
 
 			if w.Code != tt.wantStatus {

@@ -341,7 +341,7 @@ func TestParseIncludes_WhitespaceHandling(t *testing.T) {
 // --- ParseFromRequest / parseCondition ---
 
 func makeRequest(queryString string) *http.Request {
-	r := httptest.NewRequest("GET", "/?"+queryString, nil)
+	r := httptest.NewRequest("GET", "/?"+queryString, http.NoBody)
 	return r
 }
 

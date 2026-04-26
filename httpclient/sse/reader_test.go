@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func TestReader_MultipleEvents(t *testing.T) {
 	}
 
 	_, err = r.Next()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected io.EOF, got %v", err)
 	}
 }
@@ -124,7 +125,7 @@ func TestReader_EmptyStream(t *testing.T) {
 	defer r.Close()
 
 	_, err := r.Next()
-	if err != io.EOF {
+	if !errors.Is(err, io.EOF) {
 		t.Errorf("expected io.EOF, got %v", err)
 	}
 }

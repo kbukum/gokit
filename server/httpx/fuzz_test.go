@@ -18,7 +18,7 @@ func FuzzParseBoolQuery(f *testing.F) {
 	f.Fuzz(func(t *testing.T, raw string) {
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
-		c.Request = httptest.NewRequest(http.MethodGet, "/?flag="+raw, nil)
+		c.Request = httptest.NewRequest(http.MethodGet, "/?flag="+raw, http.NoBody)
 		_ = httpx.BoolQuery(c, "flag", false)
 	})
 }

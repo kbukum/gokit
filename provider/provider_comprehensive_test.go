@@ -48,7 +48,7 @@ type errorAtNIterator struct {
 	errAt int
 }
 
-func (it *errorAtNIterator) Next(_ context.Context) (int, bool, error) {
+func (it *errorAtNIterator) Next(_ context.Context) (val int, ok bool, err error) {
 	if it.pos >= len(it.items) {
 		return 0, false, nil
 	}
@@ -73,7 +73,7 @@ type blockingIterator struct {
 	closeErr error
 }
 
-func (it *blockingIterator) Next(ctx context.Context) (int, bool, error) {
+func (it *blockingIterator) Next(ctx context.Context) (val int, ok bool, err error) {
 	if it.pos >= len(it.items) {
 		return 0, false, nil
 	}

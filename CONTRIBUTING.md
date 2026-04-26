@@ -108,7 +108,39 @@ make ci                      # run full CI pipeline locally (requires Docker)
 - **Config pattern**: Each module that needs configuration uses a `Config` struct with `ApplyDefaults()` and `Validate()` methods
 - **Validation**: Plain Go validation — no external validator library
 - **Naming**: Follow Go conventions; avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
-- **Testing**: Use `-race -count=1`; use table-driven tests where appropriate
+- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any
+  test that exercises >1 input/expected pair. Pattern:
+
+  ```go
+  func TestThing(t *testing.T) {
+      t.Parallel()
+      tests := []struct {
+          name    string
+          in      Input
+          want    Output
+          wantErr bool
+      }{
+          {name: "happy path", in: Input{...}, want: Output{...}},
+          {name: "validation error", in: Input{...}, wantErr: true},
+      }
+      for _, tt := range tests {
+          t.Run(tt.name, func(t *testing.T) {
+              t.Parallel()
+              got, err := DoThing(tt.in)
+              if (err != nil) != tt.wantErr {
+                  t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
+              }
+              if !reflect.DeepEqual(got, tt.want) {
+                  t.Errorf("got = %v, want = %v", got, tt.want)
+              }
+          })
+      }
+  }
+  ```
+
+  Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted
+  to a `[]struct` slice when adjacent cases share setup, assertions, or
+  inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
 
 ## Versioning & Releases
 

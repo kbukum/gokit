@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -336,7 +337,7 @@ func TestClient_Do_CircuitBreaker(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected circuit breaker error")
 	}
-	if err != resilience.ErrCircuitOpen {
+	if !errors.Is(err, resilience.ErrCircuitOpen) {
 		t.Errorf("expected ErrCircuitOpen, got %v", err)
 	}
 }

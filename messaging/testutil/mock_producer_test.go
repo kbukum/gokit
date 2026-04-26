@@ -16,16 +16,20 @@ func TestMockProducer_SetError(t *testing.T) {
 	p.SetError(injected)
 
 	ctx := context.Background()
-	if err := p.PublishJSON(ctx, "t", "k", "v"); err != injected {
+	err := p.PublishJSON(ctx, "t", "k", "v")
+	if !errors.Is(err, injected) {
 		t.Errorf("PublishJSON error = %v, want %v", err, injected)
 	}
-	if err := p.PublishBinary(ctx, "t", "k", nil); err != injected {
+	err = p.PublishBinary(ctx, "t", "k", nil)
+	if !errors.Is(err, injected) {
 		t.Errorf("PublishBinary error = %v, want %v", err, injected)
 	}
-	if err := p.Publish(ctx, "t", messaging.Event{}, "k"); err != injected {
+	err = p.Publish(ctx, "t", messaging.Event{}, "k")
+	if !errors.Is(err, injected) {
 		t.Errorf("Publish error = %v, want %v", err, injected)
 	}
-	if err := p.Send(ctx, messaging.Message{}); err != injected {
+	err = p.Send(ctx, messaging.Message{})
+	if !errors.Is(err, injected) {
 		t.Errorf("Send error = %v, want %v", err, injected)
 	}
 

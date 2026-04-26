@@ -960,7 +960,7 @@ func TestMiddleware_CORS_PreflightPassthrough(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	req, _ := http.NewRequest("OPTIONS", ts.URL+"/api/data", nil)
+	req, _ := http.NewRequest("OPTIONS", ts.URL+"/api/data", http.NoBody)
 	req.Header.Set("Origin", "http://localhost:3000")
 	req.Header.Set("Access-Control-Request-Method", "POST")
 

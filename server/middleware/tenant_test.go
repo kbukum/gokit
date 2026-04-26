@@ -14,7 +14,7 @@ func TestTenant_ExtractedFromHeader(t *testing.T) {
 	middleware := Tenant(cfg)
 
 	// Create a test request with tenant header
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	req.Header.Set("X-Tenant-ID", "tenant-123")
 	w := httptest.NewRecorder()
 
@@ -37,7 +37,7 @@ func TestTenant_MissingWithRequired(t *testing.T) {
 	cfg := TenantConfig{HeaderName: "X-Tenant-ID", Required: true}
 	middleware := Tenant(cfg)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	w := httptest.NewRecorder()
 
 	c, _ := gin.CreateTestContext(w)
@@ -57,7 +57,7 @@ func TestTenant_MissingWithFallback(t *testing.T) {
 	cfg := TenantConfig{HeaderName: "X-Tenant-ID", Required: false, Fallback: "default-tenant"}
 	middleware := Tenant(cfg)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	w := httptest.NewRecorder()
 
 	c, _ := gin.CreateTestContext(w)
@@ -79,7 +79,7 @@ func TestTenant_MissingNotRequired(t *testing.T) {
 	cfg := TenantConfig{HeaderName: "X-Tenant-ID", Required: false}
 	middleware := Tenant(cfg)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	w := httptest.NewRecorder()
 
 	c, _ := gin.CreateTestContext(w)
@@ -98,7 +98,7 @@ func TestTenant_MissingNotRequired(t *testing.T) {
 }
 
 func TestTenantFromContext_NotFound(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	tenantID, ok := TenantFromContext(req.Context())
 
 	if ok || tenantID != "" {
@@ -107,7 +107,7 @@ func TestTenantFromContext_NotFound(t *testing.T) {
 }
 
 func TestMustTenantFromContext_Panics(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 
 	defer func() {
 		r := recover()
@@ -120,7 +120,7 @@ func TestMustTenantFromContext_Panics(t *testing.T) {
 }
 
 func TestMustTenantFromContext_Success(t *testing.T) {
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	ctx := context.WithValue(req.Context(), tenantKey, "tenant-456")
 
 	tenantID := MustTenantFromContext(ctx)
@@ -133,7 +133,7 @@ func TestTenant_DefaultHeaderName(t *testing.T) {
 	cfg := TenantConfig{} // Empty HeaderName should default to "X-Tenant-ID"
 	middleware := Tenant(cfg)
 
-	req := httptest.NewRequest("GET", "/test", nil)
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
 	req.Header.Set("X-Tenant-ID", "tenant-789")
 	w := httptest.NewRecorder()
 

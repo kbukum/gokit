@@ -19,7 +19,16 @@ type KeyedPool[K comparable, I, O any] struct {
 	pool *Pool[I, O]
 
 	mu       sync.Mutex
-	inflight map[K]*TaskHandle[O]
+	inflight map[K]*keyedEntry[O]
+}
+
+// keyedEntry tracks an in-flight submission. `ready` is closed once `handle`
+// is populated (or `err` is set) so racing callers under the same key can
+// wait without holding the global pool mutex during pool.Submit.
+type keyedEntry[O any] struct {
+	ready  chan struct{}
+	handle *TaskHandle[O]
+	err    error
 }
 
 // NewKeyedPool wraps an existing Pool with a keyed coalescer.
@@ -30,7 +39,7 @@ type KeyedPool[K comparable, I, O any] struct {
 func NewKeyedPool[K comparable, I, O any](pool *Pool[I, O]) *KeyedPool[K, I, O] {
 	return &KeyedPool[K, I, O]{
 		pool:     pool,
-		inflight: make(map[K]*TaskHandle[O]),
+		inflight: make(map[K]*keyedEntry[O]),
 	}
 }
 
@@ -42,31 +51,59 @@ func NewKeyedPool[K comparable, I, O any](pool *Pool[I, O]) *KeyedPool[K, I, O] 
 // Cancellation semantics: canceling the returned handle (or the underlying
 // task) cancels the single shared attempt for ALL attached observers — this
 // is the expected behavior for coalesced work.
+//
+// Concurrency: the global mutex is released across pool.Submit (F-076 #64);
+// racing callers for the same key reserve a sentinel entry and wait on its
+// `ready` channel, so submissions for different keys never serialize on each
+// other.
 func (k *KeyedPool[K, I, O]) SubmitOrAttach(ctx context.Context, key K, task I) (handle *TaskHandle[O], attached bool, err error) {
 	k.mu.Lock()
 	if existing, ok := k.inflight[key]; ok {
 		k.mu.Unlock()
-		return existing, true, nil
+		// Wait for the first submitter to publish (or fail). Honor ctx so a
+		// stuck submission cannot pin this caller indefinitely.
+		select {
+		case <-existing.ready:
+		case <-ctx.Done():
+			return nil, false, ctx.Err()
+		}
+		if existing.err != nil {
+			return nil, false, existing.err
+		}
+		return existing.handle, true, nil
 	}
-	// Reserve the slot before submitting so a racing caller sees it. We hold
-	// the lock through Submit to make "first submitter wins" deterministic.
+
+	// Reserve the slot before releasing the lock so concurrent callers
+	// observe an in-flight entry and attach instead of double-submitting.
+	entry := &keyedEntry[O]{ready: make(chan struct{})}
+	k.inflight[key] = entry
+	k.mu.Unlock()
+
 	h, submitErr := k.pool.Submit(ctx, task)
 	if submitErr != nil {
+		k.mu.Lock()
+		// Defensive: only clear if our entry is still the current one.
+		if cur, ok := k.inflight[key]; ok && cur == entry {
+			delete(k.inflight, key)
+		}
 		k.mu.Unlock()
+		entry.err = submitErr
+		close(entry.ready)
 		return nil, false, submitErr
 	}
-	k.inflight[key] = h
-	k.mu.Unlock()
+
+	entry.handle = h
+	close(entry.ready)
 
 	// Auto-evict on completion. Spawned once per real submission; we accept
 	// the goroutine cost as the price of map cleanliness.
 	go func() {
 		<-h.Done()
 		k.mu.Lock()
-		// Defensive: only evict if the same handle is still recorded — a
+		// Defensive: only evict if the same entry is still recorded — a
 		// retry submission after Done() but before this goroutine ran could
 		// have replaced it.
-		if cur, ok := k.inflight[key]; ok && cur == h {
+		if cur, ok := k.inflight[key]; ok && cur == entry {
 			delete(k.inflight, key)
 		}
 		k.mu.Unlock()
@@ -75,13 +112,28 @@ func (k *KeyedPool[K, I, O]) SubmitOrAttach(ctx context.Context, key K, task I) 
 	return h, false, nil
 }
 
-// Get returns the in-flight handle for key, if any. The boolean is false when
-// no task is currently running under that key.
+// Get returns the in-flight handle for key, if any. The boolean is false
+// when no task is observably in flight under that key — including the brief
+// window where SubmitOrAttach has reserved an entry but pool.Submit has not
+// yet published the handle. Callers that need to attach to a pending
+// submission should use SubmitOrAttach, which waits on the entry's ready
+// channel and observes the published handle.
 func (k *KeyedPool[K, I, O]) Get(key K) (*TaskHandle[O], bool) {
 	k.mu.Lock()
-	defer k.mu.Unlock()
-	h, ok := k.inflight[key]
-	return h, ok
+	entry, ok := k.inflight[key]
+	k.mu.Unlock()
+	if !ok {
+		return nil, false
+	}
+	select {
+	case <-entry.ready:
+	default:
+		return nil, false
+	}
+	if entry.err != nil || entry.handle == nil {
+		return nil, false
+	}
+	return entry.handle, true
 }
 
 // Cancel cancels the in-flight task for key. Returns true when a task was
@@ -89,9 +141,7 @@ func (k *KeyedPool[K, I, O]) Get(key K) (*TaskHandle[O], bool) {
 // happens via the Done watcher once the task observes the cancellation and
 // returns.
 func (k *KeyedPool[K, I, O]) Cancel(key K) bool {
-	k.mu.Lock()
-	h, ok := k.inflight[key]
-	k.mu.Unlock()
+	h, ok := k.Get(key)
 	if !ok {
 		return false
 	}
@@ -99,7 +149,8 @@ func (k *KeyedPool[K, I, O]) Cancel(key K) bool {
 	return true
 }
 
-// Active returns the number of currently in-flight tasks.
+// Active returns the number of currently in-flight tasks (including entries
+// whose Submit is still in progress).
 func (k *KeyedPool[K, I, O]) Active() int {
 	k.mu.Lock()
 	defer k.mu.Unlock()

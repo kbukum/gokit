@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -43,7 +44,7 @@ func TestError_Error(t *testing.T) {
 func TestError_Unwrap(t *testing.T) {
 	inner := NewValidationError("bad input")
 	outer := &Error{Code: ErrCodeServer, Message: "wrapped", Err: inner}
-	if outer.Unwrap() != inner {
+	if !errors.Is(outer.Unwrap(), inner) {
 		t.Error("Unwrap did not return inner error")
 	}
 }
