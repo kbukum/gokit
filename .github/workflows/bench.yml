@@ -1,16 +1,17 @@
-name: Bench
+# Bench
 
-# Performance regression gate (F-021 #51).
+# Performance regression gate (F-021 #51, F-020 #50).
 #
-# Runs benchmarks on the PR head and the merge-base, then uses `benchstat` to
-# compute deltas. Initially advisory (does NOT fail CI on regression) so the
+# Runs benchmarks across every gokit module that contains `Benchmark*`
+# functions, then uses `benchstat` to compare PR head against the merge
+# base. Initially advisory (does NOT fail CI on regression) so the
 # baseline can stabilise; flip the `continue-on-error` to `false` once a
 # threshold policy is agreed (target: fail on >5% time/op or >10% allocs/op
 # at p<0.05).
 #
-# Scope is intentionally narrow today (root module benchmarks). As benchmark
-# coverage expands per F-020 #50, additional modules can be added to the
-# matrix.
+# Coverage (#50): root + auth, discovery, grpc, llm, server, storage,
+# tool, workload. Add new modules to MODULES below as benchmark coverage
+# grows.
 
 on:
   pull_request:
@@ -28,11 +29,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Space-separated list of module directories with benchmarks. The "root"
+  # module is represented as "." . Keep this in sync with `find -name go.mod`
+  # for any module that has `^func Benchmark` in a *_test.go file.
+  MODULES: ". auth discovery grpc llm server storage tool workload"
+
 jobs:
   benchstat:
     name: benchstat
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout PR head
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
@@ -56,7 +63,14 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./... | tee head.txt
+          : > head.txt
+          for m in $MODULES; do
+            if grep -rqE '^func Benchmark' --include='*_test.go' "$m" ; then
+              echo "::group::bench $m (head)"
+              (cd "$m" && go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./...) | tee -a head.txt
+              echo "::endgroup::"
+            fi
+          done
 
       - name: Checkout merge-base
         if: steps.head.outputs.skip != 'true'
@@ -68,7 +82,18 @@ jobs:
 
       - name: Run benchmarks (base)
         if: steps.head.outputs.skip != 'true'
-        run: go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./... | tee base.txt
+        run: |
+          set -euo pipefail
+          : > base.txt
+          for m in $MODULES; do
+            # Skip modules that don't exist on the base or have no benchmarks
+            # yet — keeps the comparison stable across coverage growth.
+            if [ -d "$m" ] && grep -rqE '^func Benchmark' --include='*_test.go' "$m" ; then
+              echo "::group::bench $m (base)"
+              (cd "$m" && go test -run='^$' -bench=. -benchmem -count=6 -benchtime=1s ./...) | tee -a base.txt
+              echo "::endgroup::"
+            fi
+          done
 
       - name: Compare with benchstat
         if: steps.head.outputs.skip != 'true'
