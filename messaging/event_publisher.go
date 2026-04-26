@@ -23,7 +23,7 @@ func NewEventPublisher(producer Producer, source string) *EventPublisher {
 //
 // An Event envelope is built with a fresh UUID, UTC timestamp,
 // the configured source, and data marshaled from the generic payload.
-func (p *EventPublisher) Publish(ctx context.Context, topic string, eventType string, data interface{}) error {
+func (p *EventPublisher) Publish(ctx context.Context, topic, eventType string, data interface{}) error {
 	event, err := NewEvent[interface{}](eventType, p.source, data)
 	if err != nil {
 		return err
@@ -34,7 +34,7 @@ func (p *EventPublisher) Publish(ctx context.Context, topic string, eventType st
 // PublishKeyed sends a typed payload with an explicit partition key.
 //
 // The key is set both as the Event.Subject and the Kafka partition key.
-func (p *EventPublisher) PublishKeyed(ctx context.Context, topic string, eventType string, data interface{}, key string) error {
+func (p *EventPublisher) PublishKeyed(ctx context.Context, topic, eventType string, data interface{}, key string) error {
 	event, err := NewEvent[interface{}](eventType, p.source, data, key)
 	if err != nil {
 		return err

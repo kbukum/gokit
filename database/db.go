@@ -192,7 +192,7 @@ func (d *DB) WithTransaction(ctx context.Context, fn TransactionFunc) error {
 
 	if err := fn(tx); err != nil {
 		if rbErr := tx.Rollback().Error; rbErr != nil {
-			return fmt.Errorf("transaction failed: %w, rollback failed: %v", err, rbErr)
+			return fmt.Errorf("transaction failed: %w (rollback also failed: %w)", err, rbErr)
 		}
 		return err
 	}

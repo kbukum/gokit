@@ -49,7 +49,7 @@ type RegistrationConfig struct {
 	// Enabled toggles self-registration.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// Required controls startup behaviour when registration fails.
+	// Required controls startup behavior when registration fails.
 	// When true (the default), the service will retry with backoff and
 	// ultimately fail to start if registration cannot be completed —
 	// appropriate for staging/production where an undiscoverable service

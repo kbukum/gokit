@@ -76,7 +76,7 @@ func (rl *RateLimiterInstance) Stop() {
 
 // Allow checks whether the given key is permitted another request at the given RPM.
 // Returns (allowed, limit, remaining, retryAfterSecs, resetUnix).
-func (rl *RateLimiterInstance) Allow(key string, rpm int) (allowed bool, limit int, remaining int, retryAfterSecs float64, resetUnix int64) {
+func (rl *RateLimiterInstance) Allow(key string, rpm int) (allowed bool, limit, remaining int, retryAfterSecs float64, resetUnix int64) {
 	now := rl.nowFunc()
 
 	val, _ := rl.buckets.LoadOrStore(key, newTokenBucket(rpm, now))

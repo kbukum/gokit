@@ -121,7 +121,7 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 }
 
 // ensureImage pulls the image if not present locally.
-func (m *Manager) ensureImage(ctx context.Context, imageName string, platform string) error {
+func (m *Manager) ensureImage(ctx context.Context, imageName, platform string) error {
 	_, err := m.client.ImageInspect(ctx, imageName)
 	if err == nil {
 		return nil

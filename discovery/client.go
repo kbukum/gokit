@@ -105,7 +105,6 @@ func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...s
 				})
 			}
 			instances = fb
-			err = nil
 		} else if err != nil {
 			crit := c.cfg.Criticality[serviceName]
 			if crit == CriticalityRequired {

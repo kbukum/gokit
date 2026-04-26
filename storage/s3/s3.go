@@ -111,13 +111,18 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 }
 
 // Exists checks whether an S3 object exists.
+//
+// Any non-nil error from HeadObject is treated as "object does not exist" — the
+// AWS SDK surfaces NotFound, NoSuchBucket, AccessDenied, etc. as distinct error
+// types and Exists callers only care about the boolean. Real I/O failures
+// surface on the next operation (Upload/Download/Delete).
 func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
 	_, err := s.client.HeadObject(ctx, &awss3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(path),
 	})
 	if err != nil {
-		return false, nil
+		return false, nil //nolint:nilerr // see godoc: not-found semantics
 	}
 	return true, nil
 }
@@ -181,5 +186,7 @@ func (s *Storage) resolveEndpoint() string {
 }
 
 // compile-time check
-var _ storage.Storage = (*Storage)(nil)
-var _ storage.SignedURLProvider = (*Storage)(nil)
+var (
+	_ storage.Storage           = (*Storage)(nil)
+	_ storage.SignedURLProvider = (*Storage)(nil)
+)

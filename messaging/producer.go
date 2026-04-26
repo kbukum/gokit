@@ -10,8 +10,8 @@ import "context"
 //   - PublishBinary: raw bytes (protobuf, avro, etc. — zero encoding overhead)
 type Producer interface {
 	Publish(ctx context.Context, topic string, event Event, key ...string) error
-	PublishJSON(ctx context.Context, topic string, key string, value interface{}) error
-	PublishBinary(ctx context.Context, topic string, key string, data []byte) error
+	PublishJSON(ctx context.Context, topic, key string, value interface{}) error
+	PublishBinary(ctx context.Context, topic, key string, data []byte) error
 	Close() error
 }
 

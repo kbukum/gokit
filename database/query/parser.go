@@ -185,6 +185,11 @@ func intOrDefault(s string, def int) int {
 	return def
 }
 
+// clamp confines v to the inclusive range [lower, upper]. The lower bound is
+// passed even when callers currently always supply 1 so the helper stays
+// generic for future call sites that need a different minimum.
+//
+//nolint:unparam // see godoc — lower kept for API generality
 func clamp(v, lower, upper int) int {
 	if v < lower {
 		return lower

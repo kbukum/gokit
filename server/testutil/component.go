@@ -29,8 +29,10 @@ type Component struct {
 	mu      sync.RWMutex
 }
 
-var _ component.Component = (*Component)(nil)
-var _ testutil.TestComponent = (*Component)(nil)
+var (
+	_ component.Component    = (*Component)(nil)
+	_ testutil.TestComponent = (*Component)(nil)
+)
 
 // NewComponent creates a new test server component.
 func NewComponent() *Component {

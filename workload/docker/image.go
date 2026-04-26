@@ -86,7 +86,7 @@ func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOp
 	if err != nil {
 		return fmt.Errorf("docker: pull image %s: %w", ref, err)
 	}
-	defer reader.Close() //nolint:errcheck
+	defer reader.Close() //nolint:errcheck // best-effort close of pull progress stream
 
 	if o.onProgress != nil {
 		scanner := bufio.NewScanner(reader)
@@ -110,7 +110,8 @@ func (m *Manager) ImageList(ctx context.Context) ([]ImageInfo, error) {
 		return nil, fmt.Errorf("docker: list images: %w", err)
 	}
 	result := make([]ImageInfo, 0, len(imgs))
-	for _, img := range imgs {
+	for i := range imgs {
+		img := &imgs[i]
 		result = append(result, ImageInfo{
 			ID:       img.ID,
 			RepoTags: img.RepoTags,

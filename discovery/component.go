@@ -264,6 +264,7 @@ func (stdNetworkResolver) Interfaces() ([]net.Interface, error) { return net.Int
 func (stdNetworkResolver) InterfaceAddrs(iface net.Interface) ([]net.Addr, error) {
 	return iface.Addrs()
 }
+
 func (stdNetworkResolver) Dial(network, address string) (net.Conn, error) {
 	dialer := &net.Dialer{}
 	return dialer.Dial(network, address)
@@ -323,7 +324,7 @@ func localIPFromUDPProbe(resolver networkResolver, probeTarget string) (string, 
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close() //nolint:errcheck
+	defer conn.Close() //nolint:errcheck // best-effort close on UDP socket used only for local IP detection
 	udpAddr, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok {
 		return "", fmt.Errorf("discovery: unexpected local address type %T", conn.LocalAddr())

@@ -63,7 +63,7 @@ func TestManagedConsumer_StartAndStop(t *testing.T) {
 		t.Fatal("expected running after Start")
 	}
 
-	if err := mc.Stop(); err != nil {
+	if err := mc.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop returned error: %v", err)
 	}
 
@@ -88,7 +88,7 @@ func TestManagedConsumer_DoubleStart_Noop(t *testing.T) {
 	if err := mc.Start(ctx); err != nil {
 		t.Fatalf("first Start returned error: %v", err)
 	}
-	defer mc.Stop()
+	defer mc.Stop(context.Background())
 
 	time.Sleep(50 * time.Millisecond)
 
@@ -111,7 +111,7 @@ func TestManagedConsumer_StopWhenNotRunning_Noop(t *testing.T) {
 	})
 
 	// Stop before ever starting should return nil
-	if err := mc.Stop(); err != nil {
+	if err := mc.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop when not running returned error: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestManagedConsumer_IsRunning_StateTransitions(t *testing.T) {
 	}
 
 	// Phase 3: stop
-	if err := mc.Stop(); err != nil {
+	if err := mc.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop error: %v", err)
 	}
 

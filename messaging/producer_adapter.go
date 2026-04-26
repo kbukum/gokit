@@ -15,8 +15,10 @@ type ProducerProviderAdapter struct {
 	producer Producer
 }
 
-var _ provider.Provider = (*ProducerProviderAdapter)(nil)
-var _ provider.Sink[Message] = (*ProducerProviderAdapter)(nil)
+var (
+	_ provider.Provider      = (*ProducerProviderAdapter)(nil)
+	_ provider.Sink[Message] = (*ProducerProviderAdapter)(nil)
+)
 
 // NewProducerProviderAdapter wraps a Producer as a provider.Provider and Sink.
 func NewProducerProviderAdapter(name string, p Producer) *ProducerProviderAdapter {

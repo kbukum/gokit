@@ -134,7 +134,9 @@ func (p *ExistsProvider) Execute(ctx context.Context, req ExistsRequest) (*Exist
 }
 
 // compile-time checks
-var _ provider.RequestResponse[UploadRequest, struct{}] = (*UploadProvider)(nil)
-var _ provider.RequestResponse[DownloadRequest, *DownloadResponse] = (*DownloadProvider)(nil)
-var _ provider.RequestResponse[DeleteRequest, struct{}] = (*DeleteProvider)(nil)
-var _ provider.RequestResponse[ExistsRequest, *ExistsResponse] = (*ExistsProvider)(nil)
+var (
+	_ provider.RequestResponse[UploadRequest, struct{}]            = (*UploadProvider)(nil)
+	_ provider.RequestResponse[DownloadRequest, *DownloadResponse] = (*DownloadProvider)(nil)
+	_ provider.RequestResponse[DeleteRequest, struct{}]            = (*DeleteProvider)(nil)
+	_ provider.RequestResponse[ExistsRequest, *ExistsResponse]     = (*ExistsProvider)(nil)
+)

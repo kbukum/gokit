@@ -56,7 +56,9 @@ func NewProvider(endpoints []discovery.StaticEndpoint) *Provider {
 		if !ep.Healthy && ep.Address != "" {
 			inst.Health = discovery.HealthUnhealthy
 		}
-		// Ensure protocol is in tags for backward compatibility
+		// Mirror the protocol into Tags/Metadata when not already provided so
+		// downstream filters (e.g., resolver tag-match) can select instances
+		// by protocol without callers having to populate both fields.
 		if ep.Protocol != "" {
 			if inst.Tags == nil {
 				inst.Tags = []string{ep.Protocol}

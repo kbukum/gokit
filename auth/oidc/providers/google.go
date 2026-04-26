@@ -14,7 +14,7 @@ var GoogleDefaultScopes = []string{"openid", "email", "profile"}
 // All fields have sensible defaults; override any by setting them in cfg.
 func NewGoogle(cfg ProviderConfig) *GenericProvider {
 	return NewGeneric(GenericConfig{
-		ProviderConfig:   withDefaultScopes(cfg, GoogleDefaultScopes...),
+		ProviderConfig:   WithDefaultScopes(cfg, GoogleDefaultScopes...),
 		ProviderName:     "google",
 		Label:            "Google",
 		Type:             "identity",

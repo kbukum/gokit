@@ -242,7 +242,7 @@ func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messag
 }
 
 // PublishJSON marshals value as JSON and sends it to the broker.
-func (p *InMemoryProducer) PublishJSON(_ context.Context, topic string, key string, value interface{}) error {
+func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
@@ -265,7 +265,7 @@ func (p *InMemoryProducer) PublishJSON(_ context.Context, topic string, key stri
 }
 
 // PublishBinary sends raw bytes to the broker.
-func (p *InMemoryProducer) PublishBinary(_ context.Context, topic string, key string, data []byte) error {
+func (p *InMemoryProducer) PublishBinary(_ context.Context, topic, key string, data []byte) error {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()

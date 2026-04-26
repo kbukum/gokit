@@ -67,8 +67,10 @@ type Config struct {
 	LogLevel string `yaml:"log_level" mapstructure:"log_level"`
 }
 
-// BuildDSN constructs a PostgreSQL DSN from structured fields.
-// If DSN is already set, it is returned as-is (backward compatible).
+// BuildDSN constructs a PostgreSQL DSN from structured fields. A pre-set
+// [Config.DSN] (e.g., a connection string supplied verbatim from a secret
+// store) takes precedence over the individual host/port/user/etc. fields and
+// is returned unchanged.
 func (c *Config) BuildDSN() string {
 	if c.DSN != "" {
 		return c.DSN

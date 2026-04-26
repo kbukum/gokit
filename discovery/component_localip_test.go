@@ -21,9 +21,11 @@ func (f fakeNetResolver) Interfaces() ([]net.Interface, error) {
 	}
 	return f.ifaces, nil
 }
+
 func (f fakeNetResolver) InterfaceAddrs(iface net.Interface) ([]net.Addr, error) {
 	return f.addrs[iface.Index], nil
 }
+
 func (f fakeNetResolver) Dial(_, _ string) (net.Conn, error) {
 	if f.dialErr != nil {
 		return nil, f.dialErr

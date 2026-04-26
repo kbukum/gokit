@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.25+**
+- **Go 1.26+**
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
@@ -93,7 +93,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 1. Create `yourmod/` with its own `go.mod`:
    ```
    module github.com/kbukum/gokit/yourmod
-   go 1.25.0
+   go 1.26.0
    require github.com/kbukum/gokit v0.1.2
    replace github.com/kbukum/gokit => ../
    ```

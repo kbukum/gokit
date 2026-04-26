@@ -101,14 +101,27 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, err
 	}
 
 	// Get the signing key from JWKS
-	key, err := v.getKey(ctx, kid)
+	jwkEntry, err := v.getKey(ctx, kid)
 	if err != nil {
 		return nil, fmt.Errorf("oidc: get signing key: %w", err)
 	}
 
+	// Alg-confusion defense (F-002): if the JWK declares an algorithm,
+	// the token's header alg MUST match it. Prevents an attacker from
+	// presenting a token signed with a different algorithm than the key
+	// was issued for.
+	if jwkEntry.Alg != "" && jwkEntry.Alg != alg {
+		return nil, fmt.Errorf("oidc: token alg %q does not match JWK alg %q (kid=%q)", alg, jwkEntry.Alg, kid)
+	}
+
+	key, err := jwkEntry.publicKey()
+	if err != nil {
+		return nil, fmt.Errorf("oidc: parse signing key: %w", err)
+	}
+
 	// Verify signature
-	if err := verifySignature(rawIDToken, alg, key); err != nil {
-		return nil, fmt.Errorf("oidc: verify signature: %w", err)
+	if vErr := verifySignature(rawIDToken, alg, key); vErr != nil {
+		return nil, fmt.Errorf("oidc: verify signature: %w", vErr)
 	}
 
 	// Decode payload

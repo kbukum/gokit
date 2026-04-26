@@ -30,9 +30,11 @@ type Component struct {
 	mu      sync.RWMutex
 }
 
-var _ component.Component = (*Component)(nil)
-var _ testutil.TestComponent = (*Component)(nil)
-var _ storage.Storage = (*Component)(nil)
+var (
+	_ component.Component    = (*Component)(nil)
+	_ testutil.TestComponent = (*Component)(nil)
+	_ storage.Storage        = (*Component)(nil)
+)
 
 // NewComponent creates a new in-memory storage test component.
 func NewComponent() *Component {

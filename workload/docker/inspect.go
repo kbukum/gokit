@@ -11,8 +11,12 @@ import (
 )
 
 // ImageInspect returns detailed metadata for a specific image.
+//
+// Uses the deprecated ImageInspectWithRaw because the kit also returns the raw
+// JSON via the Raw field on some adapters; migrating to the new
+// ImageInspect/ImageInspectWithRawResponse split is tracked separately.
 func (m *Manager) ImageInspect(ctx context.Context, ref string) (*workload.ImageDetail, error) {
-	raw, _, err := m.client.ImageInspectWithRaw(ctx, ref)
+	raw, _, err := m.client.ImageInspectWithRaw(ctx, ref) //nolint:staticcheck // SA1019: tracked migration; see godoc
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			return nil, fmt.Errorf("docker: image %s not found: %w", ref, err)

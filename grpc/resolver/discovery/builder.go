@@ -1,9 +1,10 @@
 package discovery
 
 import (
+	"google.golang.org/grpc/resolver"
+
 	"github.com/kbukum/gokit/discovery"
 	"github.com/kbukum/gokit/logger"
-	"google.golang.org/grpc/resolver"
 )
 
 const defaultScheme = "consul"

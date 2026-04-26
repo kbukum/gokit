@@ -2,11 +2,16 @@ package messaging
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
 	"github.com/kbukum/gokit/logger"
 )
+
+// DefaultStopTimeout bounds ManagedConsumer.Stop when the caller's ctx has
+// no deadline. Prevents a stuck consumer from blocking shutdown forever.
+const DefaultStopTimeout = 10 * time.Second
 
 // ManagedConsumer wraps a Consumer with background lifecycle management.
 // It runs the consume loop in a goroutine and provides Start/Stop/IsRunning.
@@ -61,7 +66,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 		defer close(m.done)
 
 		if err := m.consumer.Consume(consumeCtx, m.handler); err != nil {
-			if err != context.Canceled {
+			if !errors.Is(err, context.Canceled) {
 				m.log.Error("Managed consumer stopped with error", map[string]interface{}{
 					"topic": m.topic,
 					"error": err.Error(),
@@ -81,8 +86,16 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully stops the consumer and waits for the goroutine to finish.
-func (m *ManagedConsumer) Stop() error {
+// Stop gracefully stops the consumer using the supplied ctx for the wait
+// budget. If ctx has no deadline, DefaultStopTimeout (10s) is applied as a
+// bounded fallback so a stuck consumer cannot block shutdown forever.
+//
+// A nil ctx is treated as context.Background() with the default timeout.
+func (m *ManagedConsumer) Stop(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	m.mu.Lock()
 	if !m.isRunning {
 		m.mu.Unlock()
@@ -100,11 +113,18 @@ func (m *ManagedConsumer) Stop() error {
 	m.mu.Unlock()
 
 	if done != nil {
+		waitCtx := ctx
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			var cancel context.CancelFunc
+			waitCtx, cancel = context.WithTimeout(ctx, DefaultStopTimeout)
+			defer cancel()
+		}
 		select {
 		case <-done:
-		case <-time.After(10 * time.Second):
+		case <-waitCtx.Done():
 			m.log.Warn("Managed consumer stop timed out", map[string]interface{}{
 				"topic": m.topic,
+				"err":   waitCtx.Err().Error(),
 			})
 		}
 	}

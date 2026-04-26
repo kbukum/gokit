@@ -12,8 +12,10 @@ import (
 )
 
 // compile-time assertions
-var _ provider.Provider = (*Adapter)(nil)
-var _ provider.Closeable = (*Adapter)(nil)
+var (
+	_ provider.Provider  = (*Adapter)(nil)
+	_ provider.Closeable = (*Adapter)(nil)
+)
 
 // Adapter manages a gRPC connection and implements the provider.Provider interface.
 // Unlike HTTP, gRPC adapters don't do request mapping — proto handles types.

@@ -106,14 +106,16 @@ func (c *jwksCache) refresh(client *http.Client) error {
 	return nil
 }
 
-// getKey retrieves a signing key, refreshing JWKS if needed.
-func (v *Verifier) getKey(ctx context.Context, kid string) (crypto.PublicKey, error) {
+// getKey retrieves a JWK (not just the public key) so callers can also
+// enforce the JWK's declared `alg` matches the token's header alg
+// (alg-confusion defense — closes F-002).
+func (v *Verifier) getKey(ctx context.Context, kid string) (*jwk, error) {
 	_ = ctx // reserved for context-aware HTTP calls
 
 	// Try cache first
 	if !v.jwks.isStale() {
 		if k, ok := v.jwks.getKey(kid); ok {
-			return k.publicKey()
+			return k, nil
 		}
 	}
 
@@ -126,7 +128,7 @@ func (v *Verifier) getKey(ctx context.Context, kid string) (crypto.PublicKey, er
 	if !ok {
 		return nil, fmt.Errorf("key %q not found in JWKS", kid)
 	}
-	return k.publicKey()
+	return k, nil
 }
 
 // publicKey converts a JWK to a Go crypto.PublicKey.

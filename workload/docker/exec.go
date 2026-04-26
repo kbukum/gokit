@@ -32,8 +32,8 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 	defer resp.Close()
 
 	var stdout, stderr bytes.Buffer
-	if _, err := stdcopy.StdCopy(&stdout, &stderr, resp.Reader); err != nil {
-		return nil, fmt.Errorf("docker: exec read output: %w", err)
+	if _, copyErr := stdcopy.StdCopy(&stdout, &stderr, resp.Reader); copyErr != nil {
+		return nil, fmt.Errorf("docker: exec read output: %w", copyErr)
 	}
 
 	inspect, err := m.client.ContainerExecInspect(ctx, execResp.ID)

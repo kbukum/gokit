@@ -166,7 +166,7 @@ func (p *Producer) Close() error {
 }
 
 // PublishJSON marshals value as JSON and publishes it to the given topic.
-func (p *Producer) PublishJSON(ctx context.Context, topic string, key string, value interface{}) error {
+func (p *Producer) PublishJSON(ctx context.Context, topic, key string, value interface{}) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)
@@ -183,7 +183,7 @@ func (p *Producer) PublishJSON(ctx context.Context, topic string, key string, va
 }
 
 // PublishBinary publishes raw bytes to the given topic (e.g. protobuf, avro).
-func (p *Producer) PublishBinary(ctx context.Context, topic string, key string, data []byte) error {
+func (p *Producer) PublishBinary(ctx context.Context, topic, key string, data []byte) error {
 	msg := kafkago.Message{
 		Topic: topic,
 		Key:   []byte(key),

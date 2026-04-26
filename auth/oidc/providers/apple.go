@@ -46,7 +46,7 @@ type AppleConfig struct {
 //   - User's name is only sent on the first authorization (in the `user` form field)
 func NewApple(cfg AppleConfig) *GenericProvider {
 	gcfg := GenericConfig{
-		ProviderConfig:    withDefaultScopes(cfg.ProviderConfig, AppleDefaultScopes...),
+		ProviderConfig:    WithDefaultScopes(cfg.ProviderConfig, AppleDefaultScopes...),
 		ProviderName:      "apple",
 		Label:             "Apple",
 		Type:              "identity",

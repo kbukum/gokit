@@ -26,7 +26,6 @@ type authOptions struct {
 	queryTokenParam         string
 	queryTokenAllowedPaths  []string
 	queryTokenWarningLogger QueryTokenWarningFunc
-	allowInvalidTokens      bool
 }
 
 // WithSkipPaths skips authentication for requests whose path starts with
@@ -60,13 +59,6 @@ func WithQueryTokenAllowedPaths(paths ...string) AuthOption {
 // WithQueryTokenWarningLogger configures a mandatory warning hook for query token auth usage.
 func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
-}
-
-// WithAllowInvalidTokens configures OptionalAuth to pass through requests with invalid tokens
-// instead of rejecting them with 401. By default (zero value), OptionalAuth rejects invalid tokens.
-// Set to true only when backward-compatible lax behaviour is explicitly required.
-func WithAllowInvalidTokens(allow bool) AuthOption {
-	return func(o *authOptions) { o.allowInvalidTokens = allow }
 }
 
 // Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
@@ -103,9 +95,10 @@ func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, e
 	}, nil
 }
 
-// OptionalAuth validates a token if present but allows unauthenticated requests.
-// By default, an invalid token returns 401. Use WithAllowInvalidTokens(true) to pass through
-// requests with invalid tokens anonymously instead.
+// OptionalAuth validates a token if present but allows unauthenticated requests
+// (no Authorization header / empty token) to proceed. A *present but invalid* token
+// is always rejected with 401 — this is a deliberate secure-by-default contract:
+// callers that want pass-through-on-failure should use no auth middleware at all.
 func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
@@ -121,10 +114,6 @@ func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.Handle
 
 		claims, err := validator.ValidateToken(token)
 		if err != nil {
-			if o.allowInvalidTokens {
-				c.Next()
-				return
-			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}

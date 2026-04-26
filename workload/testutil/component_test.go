@@ -13,7 +13,7 @@ func TestComponent_Interfaces(t *testing.T) {
 	comp := NewComponent()
 	var _ component.Component = comp
 	var _ testutil.TestComponent = comp
-	var _ = comp.Manager()
+	_ = comp.Manager()
 }
 
 func TestComponent_Lifecycle(t *testing.T) {

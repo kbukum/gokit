@@ -63,8 +63,8 @@ func (c *ContentAddressableStorage) Store(ctx context.Context, reader io.Reader,
 	// the streaming Storage interface without requiring seek support.
 	var buf bytes.Buffer
 	tee := io.TeeReader(reader, h)
-	if _, err := io.Copy(&buf, tee); err != nil {
-		return "", false, fmt.Errorf("content addressable: hash read: %w", err)
+	if _, copyErr := io.Copy(&buf, tee); copyErr != nil {
+		return "", false, fmt.Errorf("content addressable: hash read: %w", copyErr)
 	}
 
 	hashStr := hex.EncodeToString(h.Sum(nil))

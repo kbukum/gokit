@@ -102,8 +102,10 @@ type Component struct {
 	started bool
 }
 
-var _ component.Component = (*Component)(nil)
-var _ testutil.TestComponent = (*Component)(nil)
+var (
+	_ component.Component    = (*Component)(nil)
+	_ testutil.TestComponent = (*Component)(nil)
+)
 
 // NewComponent creates a new test DAG component.
 func NewComponent(graph *dag.Graph) *Component {

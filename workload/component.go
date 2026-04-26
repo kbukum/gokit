@@ -92,4 +92,3 @@ func (c *Component) Describe() component.Description {
 		Details: fmt.Sprintf("provider=%s", c.cfg.Provider),
 	}
 }
-

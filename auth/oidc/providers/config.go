@@ -172,14 +172,13 @@ type GenericConfig struct {
 	HTTPClient *http.Client
 }
 
-// WithDefaultScopes returns a copy of cfg with default scopes if none are set.
-// Exported so app-level provider constructors can use the same pattern.
+// WithDefaultScopes returns a copy of cfg with default scopes applied if
+// cfg.Scopes is empty. Provider constructors (GitHub, Google, Apple, etc.)
+// use this to layer their well-known default scope set without overriding
+// caller-supplied values.
 func WithDefaultScopes(cfg ProviderConfig, defaults ...string) ProviderConfig {
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = defaults
 	}
 	return cfg
 }
-
-// withDefaultScopes is an internal alias for backward compatibility.
-var withDefaultScopes = WithDefaultScopes

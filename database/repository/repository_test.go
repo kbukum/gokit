@@ -58,8 +58,8 @@ func TestRepository_FullCRUD(t *testing.T) {
 
 	// Update
 	got.Name = "Alicia"
-	if err := repo.Update(ctx, got); err != nil {
-		t.Fatalf("Update: %v", err)
+	if uErr := repo.Update(ctx, got); uErr != nil {
+		t.Fatalf("Update: %v", uErr)
 	}
 	updated, _ := repo.GetByID(ctx, "crud1")
 	if updated.Name != "Alicia" {
@@ -73,8 +73,8 @@ func TestRepository_FullCRUD(t *testing.T) {
 	}
 
 	// Delete
-	if err := repo.Delete(ctx, "crud1"); err != nil {
-		t.Fatalf("Delete: %v", err)
+	if dErr := repo.Delete(ctx, "crud1"); dErr != nil {
+		t.Fatalf("Delete: %v", dErr)
 	}
 	count, _ = repo.Count(ctx)
 	if count != 0 {

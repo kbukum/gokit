@@ -34,8 +34,8 @@ func Rotate(ctx context.Context, store Store, oldKeyID string, cfg RotationConfi
 		return nil, fmt.Errorf("apikey: old key not found: %w", err)
 	}
 
-	if err := Validate(oldKey); err != nil {
-		return nil, fmt.Errorf("apikey: cannot rotate: %w", err)
+	if vErr := Validate(oldKey); vErr != nil {
+		return nil, fmt.Errorf("apikey: cannot rotate: %w", vErr)
 	}
 
 	newResult, err := Generate(cfg.Prefix)

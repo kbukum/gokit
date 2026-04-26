@@ -8,7 +8,7 @@ import (
 
 // Masker is the interface for sensitive data masking adapters.
 type Masker interface {
-	MaskValue(key string, value string) string
+	MaskValue(key, value string) string
 }
 
 // MaskingConfig contains configuration for sensitive data masking.
@@ -133,7 +133,7 @@ func buildDefaultValuePatterns() []valuePattern {
 // MaskValue masks a single value based on its field key and content.
 // If the key matches a sensitive field name, the full replacement is returned.
 // Otherwise each value pattern is tested and the first match wins.
-func (m *DefaultMasker) MaskValue(key string, value string) string {
+func (m *DefaultMasker) MaskValue(key, value string) string {
 	// 1. Field-name match (case-insensitive).
 	if _, ok := m.fieldNames[strings.ToLower(key)]; ok {
 		if m.preserveLast > 0 && len(value) > m.preserveLast {

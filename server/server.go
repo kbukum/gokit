@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"time"
 
@@ -198,11 +199,44 @@ func (s *Server) ApplyMiddleware() {
 	s.httpServer.Handler = h2c.NewHandler(middleware.Chain(stack...)(s.mux), h2s)
 }
 
-// RegisterDefaultEndpoints registers the standard /health, /info, and /metrics endpoints.
+// RegisterDefaultEndpoints registers the standard observability endpoints:
+//   - GET /health   — full Health response with component statuses
+//   - GET /healthz  — alias for /health (k8s convention)
+//   - GET /livez    — liveness probe (process is up)
+//   - GET /readyz   — readiness probe (component-aware)
+//   - GET /info     — build/runtime info
+//   - GET /metrics  — Prometheus exposition
+//
+// Closes F-060 (no /healthz//readyz handler shipped despite full Health
+// taxonomy in observability/).
 func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.HealthChecker) {
-	s.engine.GET("/health", endpoint.Health(serviceName, checker))
+	healthHandler := endpoint.Health(serviceName, checker)
+	s.engine.GET("/health", healthHandler)
+	s.engine.GET("/healthz", healthHandler)
+	s.engine.GET("/livez", endpoint.Liveness(serviceName))
+	s.engine.GET("/readyz", endpoint.Readiness(serviceName, checker))
 	s.engine.GET("/info", endpoint.Info(serviceName))
 	s.engine.GET("/metrics", endpoint.Metrics())
+}
+
+// RegisterPprof mounts net/http/pprof handlers under /debug/pprof. Only
+// enable in non-public environments (the handlers expose runtime state).
+//
+// Closes F-070 sub-finding: no net/http/pprof integration.
+func (s *Server) RegisterPprof() {
+	pprofGroup := s.engine.Group("/debug/pprof")
+	pprofGroup.GET("/", gin.WrapF(pprof.Index))
+	pprofGroup.GET("/cmdline", gin.WrapF(pprof.Cmdline))
+	pprofGroup.GET("/profile", gin.WrapF(pprof.Profile))
+	pprofGroup.POST("/symbol", gin.WrapF(pprof.Symbol))
+	pprofGroup.GET("/symbol", gin.WrapF(pprof.Symbol))
+	pprofGroup.GET("/trace", gin.WrapF(pprof.Trace))
+	pprofGroup.GET("/allocs", gin.WrapH(pprof.Handler("allocs")))
+	pprofGroup.GET("/block", gin.WrapH(pprof.Handler("block")))
+	pprofGroup.GET("/goroutine", gin.WrapH(pprof.Handler("goroutine")))
+	pprofGroup.GET("/heap", gin.WrapH(pprof.Handler("heap")))
+	pprofGroup.GET("/mutex", gin.WrapH(pprof.Handler("mutex")))
+	pprofGroup.GET("/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
 }
 
 // MountDocsFromConfig mounts interactive API documentation using Scalar UI
@@ -228,7 +262,8 @@ func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
 	}
 
 	var spec []byte
-	if dc.SpecFile != "" {
+	switch {
+	case dc.SpecFile != "":
 		data, err := readSpecFile(dc.SpecFile)
 		if err != nil {
 			s.log.Error("Failed to load OpenAPI spec file", map[string]interface{}{
@@ -238,9 +273,9 @@ func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
 			return
 		}
 		spec = data
-	} else if len(specJSON) > 0 && specJSON[0] != nil {
+	case len(specJSON) > 0 && specJSON[0] != nil:
 		spec = specJSON[0]
-	} else {
+	default:
 		s.log.Warn("API docs enabled but no spec provided — set docs.spec_file or pass spec bytes")
 		return
 	}

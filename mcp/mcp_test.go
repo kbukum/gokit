@@ -311,8 +311,8 @@ func TestRegisterRemoteTools(t *testing.T) {
 	// Register all remote tools into a local registry
 	localReg := tool.NewRegistry()
 	for _, c := range callables {
-		if err := localReg.Register(c); err != nil {
-			t.Fatalf("register: %v", err)
+		if rErr := localReg.Register(c); rErr != nil {
+			t.Fatalf("register: %v", rErr)
 		}
 	}
 

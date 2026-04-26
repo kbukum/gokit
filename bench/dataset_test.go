@@ -179,8 +179,8 @@ func TestDatasetLoaderCustomManifestFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "custom.json"), data, 0o644); err != nil {
-		t.Fatal(err)
+	if wErr := os.WriteFile(filepath.Join(dir, "custom.json"), data, 0o644); wErr != nil {
+		t.Fatal(wErr)
 	}
 
 	loader := NewDatasetLoader(dir, stringMapper, WithManifestFile("custom.json"))

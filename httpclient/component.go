@@ -16,8 +16,10 @@ type Component struct {
 }
 
 // compile-time assertions
-var _ component.Component = (*Component)(nil)
-var _ component.Describable = (*Component)(nil)
+var (
+	_ component.Component   = (*Component)(nil)
+	_ component.Describable = (*Component)(nil)
+)
 
 // NewComponent creates a new HTTP adapter component.
 // The adapter is created lazily in Start().

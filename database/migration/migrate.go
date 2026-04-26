@@ -25,6 +25,7 @@ package migration
 import (
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -59,7 +60,7 @@ func MigrateUp(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc D
 	if err != nil {
 		return err
 	}
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate up: %w", err)
 	}
 	return nil
@@ -73,7 +74,7 @@ func MigrateDown(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc
 	if err != nil {
 		return err
 	}
-	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate down: %w", err)
 	}
 	return nil
@@ -96,7 +97,7 @@ func MigrateSteps(gormDB *gorm.DB, migrationsFS embed.FS, path string, n int, dr
 	if err != nil {
 		return err
 	}
-	if err := m.Steps(n); err != nil && err != migrate.ErrNoChange {
+	if err := m.Steps(n); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate steps: %w", err)
 	}
 	return nil
@@ -110,8 +111,8 @@ func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFun
 	if err != nil {
 		return err
 	}
-	if err := m.Drop(); err != nil {
-		return fmt.Errorf("migrate drop: %w", err)
+	if dropErr := m.Drop(); dropErr != nil {
+		return fmt.Errorf("migrate drop: %w", dropErr)
 	}
 
 	// Re-create migrator after drop (schema_migrations was dropped)
@@ -119,7 +120,7 @@ func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFun
 	if err != nil {
 		return err
 	}
-	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrate up after reset: %w", err)
 	}
 	return nil
