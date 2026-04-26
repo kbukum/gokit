@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/workload"
 )
 
 // Logs retrieves log output from a Docker container.
 func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions) ([]string, error) {
-	logOpts := container.LogsOptions{
+	logOpts := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 	}
@@ -50,7 +50,7 @@ func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions)
 
 // StreamLogs implements LogStreamer for real-time log streaming.
 func (m *Manager) StreamLogs(ctx context.Context, id string, opts workload.LogOptions) (io.ReadCloser, error) {
-	logOpts := container.LogsOptions{
+	logOpts := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     true,

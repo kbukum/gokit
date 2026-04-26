@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
+	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/workload"
 )
 
 // WatchEvents watches Docker container lifecycle events and emits WorkloadEvents.
 func (m *Manager) WatchEvents(ctx context.Context, filter workload.ListFilter) (<-chan workload.WorkloadEvent, error) {
-	f := filters.NewArgs()
+	f := make(client.Filters)
 	f.Add("type", string(events.ContainerEventType))
 	for k, v := range filter.Labels {
 		f.Add("label", fmt.Sprintf("%s=%s", k, v))
@@ -22,7 +22,7 @@ func (m *Manager) WatchEvents(ctx context.Context, filter workload.ListFilter) (
 		f.Add("container", filter.Name)
 	}
 
-	eventCh, errCh := m.client.Events(ctx, events.ListOptions{Filters: f})
+	eventsResult := m.client.Events(ctx, client.EventsListOptions{Filters: f})
 
 	out := make(chan workload.WorkloadEvent, 64)
 	go func() {
@@ -31,13 +31,13 @@ func (m *Manager) WatchEvents(ctx context.Context, filter workload.ListFilter) (
 			select {
 			case <-ctx.Done():
 				return
-			case err, ok := <-errCh:
+			case err, ok := <-eventsResult.Err:
 				if !ok {
 					return
 				}
 				m.log.Error("docker event stream error", map[string]interface{}{"error": err.Error()})
 				return
-			case evt, ok := <-eventCh:
+			case evt, ok := <-eventsResult.Messages:
 				if !ok {
 					return
 				}

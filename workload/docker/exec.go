@@ -6,26 +6,27 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/workload"
 )
 
 // Exec executes a command inside a running container.
 func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.ExecResult, error) {
-	execCfg := container.ExecOptions{
+	execCfg := client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
 	}
 
-	execResp, err := m.client.ContainerExecCreate(ctx, id, execCfg)
+	execResp, err := m.client.ExecCreate(ctx, id, execCfg)
 	if err != nil {
 		return nil, fmt.Errorf("docker: exec create: %w", err)
 	}
 
-	resp, err := m.client.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	resp, err := m.client.ExecAttach(ctx, execResp.ID, client.ExecAttachOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: exec attach: %w", err)
 	}
@@ -36,7 +37,7 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 		return nil, fmt.Errorf("docker: exec read output: %w", copyErr)
 	}
 
-	inspect, err := m.client.ContainerExecInspect(ctx, execResp.ID)
+	inspect, err := m.client.ExecInspect(ctx, execResp.ID, client.ExecInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: exec inspect: %w", err)
 	}
@@ -50,7 +51,7 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 
 // Stats returns resource usage statistics for a container.
 func (m *Manager) Stats(ctx context.Context, id string) (*workload.WorkloadStats, error) {
-	resp, err := m.client.ContainerStats(ctx, id, false)
+	resp, err := m.client.ContainerStats(ctx, id, client.ContainerStatsOptions{Stream: false})
 	if err != nil {
 		return nil, fmt.Errorf("docker: stats: %w", err)
 	}

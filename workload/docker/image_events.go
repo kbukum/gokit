@@ -4,21 +4,21 @@ import (
 	"context"
 	"time"
 
-	"github.com/docker/docker/api/types/events"
-	"github.com/docker/docker/api/types/filters"
+	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/workload"
 )
 
 // WatchImageEvents streams image lifecycle events (pull, delete, tag, untag).
 func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEventFilter) (<-chan workload.ImageEvent, error) {
-	f := filters.NewArgs()
+	f := make(client.Filters)
 	f.Add("type", string(events.ImageEventType))
 	for _, action := range filter.Actions {
 		f.Add("event", action)
 	}
 
-	eventCh, errCh := m.client.Events(ctx, events.ListOptions{Filters: f})
+	eventsResult := m.client.Events(ctx, client.EventsListOptions{Filters: f})
 
 	out := make(chan workload.ImageEvent, 64)
 	go func() {
@@ -27,13 +27,13 @@ func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEve
 			select {
 			case <-ctx.Done():
 				return
-			case err, ok := <-errCh:
+			case err, ok := <-eventsResult.Err:
 				if !ok {
 					return
 				}
 				m.log.Error("docker image event stream error", map[string]interface{}{"error": err.Error()})
 				return
-			case evt, ok := <-eventCh:
+			case evt, ok := <-eventsResult.Messages:
 				if !ok {
 					return
 				}
@@ -56,19 +56,13 @@ func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEve
 }
 
 // imageRefFromEvent extracts the best image reference from a Docker event,
-// falling back through available fields. The deprecated [events.Message.From]
-// is consulted last for compatibility with older Docker engines that don't
-// populate Actor.Attributes; current engines always set Actor attributes so
-// the deprecated read is harmless and documented as a defensive fallback.
+// falling back through available fields.
 func imageRefFromEvent(evt events.Message) string {
 	if name := evt.Actor.Attributes["name"]; name != "" {
 		return name
 	}
 	if img := evt.Actor.Attributes["image"]; img != "" {
 		return img
-	}
-	if evt.From != "" { //nolint:staticcheck // SA1019: kept as fallback for older Docker engines
-		return evt.From //nolint:staticcheck // SA1019: see above
 	}
 	return evt.Actor.ID
 }

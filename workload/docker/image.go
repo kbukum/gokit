@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/registry"
+	"github.com/moby/moby/api/types/registry"
+	"github.com/moby/moby/client"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // ImageInfo describes a local Docker image.
@@ -68,9 +70,12 @@ func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOp
 		platform = m.cfg.Platform
 	}
 
-	pullOpts := image.PullOptions{}
+	pullOpts := client.ImagePullOptions{}
 	if platform != "" {
-		pullOpts.Platform = platform
+		parts := strings.SplitN(platform, "/", 2)
+		if len(parts) == 2 {
+			pullOpts.Platforms = []ocispec.Platform{{OS: parts[0], Architecture: parts[1]}}
+		}
 	}
 	if o.authConfig != nil {
 		encoded, err := encodeAuth(o.authConfig)
@@ -105,10 +110,11 @@ func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOp
 
 // ImageList returns all local images.
 func (m *Manager) ImageList(ctx context.Context) ([]ImageInfo, error) {
-	imgs, err := m.client.ImageList(ctx, image.ListOptions{})
+	listResult, err := m.client.ImageList(ctx, client.ImageListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: list images: %w", err)
 	}
+	imgs := listResult.Items
 	result := make([]ImageInfo, 0, len(imgs))
 	for i := range imgs {
 		img := &imgs[i]
@@ -124,7 +130,7 @@ func (m *Manager) ImageList(ctx context.Context) ([]ImageInfo, error) {
 
 // ImageRemove removes a local image.
 func (m *Manager) ImageRemove(ctx context.Context, ref string, force bool) error {
-	_, err := m.client.ImageRemove(ctx, ref, image.RemoveOptions{Force: force, PruneChildren: true})
+	_, err := m.client.ImageRemove(ctx, ref, client.ImageRemoveOptions{Force: force, PruneChildren: true})
 	if err != nil {
 		return fmt.Errorf("docker: remove image %s: %w", ref, err)
 	}
