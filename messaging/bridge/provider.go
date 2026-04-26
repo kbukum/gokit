@@ -88,7 +88,7 @@ type consumerIterator struct {
 }
 
 func (it *consumerIterator) start() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is retained on iterator and invoked in Stop()/once-Do
 	it.cancel = cancel
 
 	go func() {

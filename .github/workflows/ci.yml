@@ -83,6 +83,11 @@ jobs:
     name: Check (${{ matrix.module }} / ${{ matrix.os }})
     needs: discover
     runs-on: ${{ matrix.os }}
+    # Lift secret to job-level env so step-level `if:` can reference it via
+    # `env.CODECOV_TOKEN`. The `secrets.*` context is not available in step
+    # `if:` expressions, but `env.*` is.
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -155,13 +160,13 @@ jobs:
         run: go test -shuffle=on -count=1 ./...
 
       # F-054 #62: codecov upload is gated and now fails CI when it fails.
-      # Fork PRs cannot read repo secrets, so `secrets.CODECOV_TOKEN` is
-      # empty there — we skip the upload entirely to avoid spurious red
-      # builds. Internal PRs and pushes to `main` enforce upload success.
-      # NOTE: `env.*` is NOT available in step `if:` (env is injected after
-      # the condition is evaluated); use `secrets.*` directly.
+      # Fork PRs cannot read repo secrets, so `CODECOV_TOKEN` is empty there
+      # — we skip the upload entirely to avoid spurious red builds. Internal
+      # PRs and pushes to `main` enforce upload success.
+      # NOTE: `secrets.*` is NOT available in step `if:`; we lift the token
+      # to job-level `env:` (see top of this job) and check `env.*` here.
       - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest' && secrets.CODECOV_TOKEN != ''
+        if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6.0.0
         with:
           files: ${{ matrix.module }}/coverage.out
@@ -193,7 +198,10 @@ jobs:
         with:
           # Pinned to a specific version (was previously `latest`, which can
           # cause non-deterministic CI failures when a new linter release ships).
-          version: v2.0.0
+          # NOTE: golangci-lint-action v9 requires >= v2.1.0, and the linter
+          # binary must be built with a Go version >= our toolchain (1.26.x),
+          # so we pin to v2.11.4 (the current latest as of this commit).
+          version: v2.11.4
           working-directory: ${{ matrix.module }}
 
   # ── Stage 3d: Security — gosec ─────────────────────────────────────────────

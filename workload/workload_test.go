@@ -1202,8 +1202,8 @@ func TestComponent_ImplementsDescribable(t *testing.T) {
 
 // mustReg registers f on reg, failing the test on error.
 func mustReg(tb testing.TB, reg *FactoryRegistry, name string, f ManagerFactory) {
-tb.Helper()
-if err := reg.Register(name, f); err != nil {
-tb.Fatalf("register: %v", err)
-}
+	tb.Helper()
+	if err := reg.Register(name, f); err != nil {
+		tb.Fatalf("register: %v", err)
+	}
 }

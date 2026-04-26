@@ -379,7 +379,7 @@ func TestDetect_PHPInsideGIF(t *testing.T) {
 }
 
 func TestDetect_PolyglotPDFJPEG(t *testing.T) {
-	header := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
+	header := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10} //nolint:prealloc // test fixture; readability over micro-perf
 	padding := make([]byte, 100)
 	pdfSig := []byte("%PDF-1.4")
 	data := append(append(header, padding...), pdfSig...) //nolint:gocritic // intentional: creating new slice for test data
@@ -396,7 +396,7 @@ func TestDetect_NullBytePadding(t *testing.T) {
 }
 
 func TestDetect_ScriptInsidePNG(t *testing.T) {
-	header := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
+	header := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}      //nolint:prealloc // test fixture; readability over micro-perf
 	data := append(header, []byte(`<script>alert("xss")</script>`)...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
 	assertInfo(t, info, Image, "png", "image/png")
@@ -416,7 +416,7 @@ func TestDetect_ExactlyFourBytes(t *testing.T) {
 
 func TestDetect_RepeatedMagicBytes(t *testing.T) {
 	// JPEG header followed by PNG header — first detector (JPEG) wins.
-	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10} //nolint:prealloc // test fixture; readability over micro-perf
 	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
 	data := append(jpeg, png...) //nolint:gocritic // intentional: creating new slice for test data
 	info := Detect(data)
@@ -426,7 +426,7 @@ func TestDetect_RepeatedMagicBytes(t *testing.T) {
 func TestDetect_MaxDetectBytesLimit(t *testing.T) {
 	// First 4096 bytes are printable text; bytes beyond are control chars.
 	// isText only checks the first 4096 bytes, so it should still be text.
-	text := make([]byte, 4096)
+	text := make([]byte, 4096) //nolint:prealloc // test fixture; readability over micro-perf
 	for i := range text {
 		text[i] = 'A'
 	}

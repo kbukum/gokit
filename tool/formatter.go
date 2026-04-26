@@ -120,7 +120,7 @@ func formatMarkdownTable(_ string, result *Result) (string, error) {
 			if i > 0 {
 				b.WriteString(" | ")
 			}
-			b.WriteString(fmt.Sprintf("%v", row[c]))
+			fmt.Fprintf(&b, "%v", row[c])
 		}
 		b.WriteString(" |\n")
 	}

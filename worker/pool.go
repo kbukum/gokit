@@ -80,7 +80,7 @@ type Pool[I, O any] struct {
 // NewPool creates a new worker pool with the given handler and configuration.
 func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 	cfg = cfg.withDefaults()
-	poolCtx, cancel := context.WithCancel(context.Background())
+	poolCtx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is retained on Pool and invoked in Stop()
 
 	p := &Pool[I, O]{
 		handler:  handler,

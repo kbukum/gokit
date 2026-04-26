@@ -8,7 +8,7 @@ import (
 )
 
 func benchFactory(_ Config, _ any, _ *logger.Logger) (Manager, error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil // benchmark stub: no error path exercised
 }
 
 func registerFactories(b *testing.B, n int) *FactoryRegistry {
