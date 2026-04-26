@@ -4,6 +4,14 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/kbukum/gokit.svg)](https://pkg.go.dev/github.com/kbukum/gokit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+> **Sibling projects.** gokit is one of three sibling toolkits that intentionally
+> mirror each other in module structure, naming, and patterns:
+> [**gokit**](https://github.com/kbukum/gokit) (Go, this repo) ·
+> [**rskit**](https://github.com/kbukum/rskit) (Rust) ·
+> [**pykit**](https://github.com/kbukum/pykit) (Python). Changes to public
+> abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks)
+> are evaluated for parity across all three.
+
 **A modular Go toolkit for building production services.**
 
 gokit provides a shared foundation across Go services — config, logging, resilience, observability, dependency injection, and infrastructure adapters — so teams can focus on business logic instead of reinventing plumbing.
@@ -345,62 +353,6 @@ This means:
 - Core can ship breaking changes without touching sub-modules (and vice versa).
 - Each module follows [semver](https://semver.org/) on its own timeline.
 
-## Cross-Kit Comparison
-
-gokit, [rskit](https://github.com/kbukum/rskit) (Rust), and [pykit](https://github.com/kbukum/pykit) (Python) share the same module structure and design philosophy. The table below shows capability coverage across all three kits.
-
-| Capability | gokit | rskit | pykit |
-|---|---|---|---|
-| Errors | ✅ `errors` | ✅ `rskit-errors` | ✅ `pykit-errors` |
-| Config | ✅ `config` | ✅ `rskit-config` | ✅ `pykit-config` |
-| Logging | ✅ `logger` | ✅ `rskit-logging` | ✅ `pykit-logging` |
-| Validation | ✅ `validation` | ✅ `rskit-validation` | ✅ `pykit-validation` |
-| Encryption | ✅ `encryption` | ✅ `rskit-encryption` | ✅ `pykit-encryption` |
-| Utilities | ✅ `util` | ❌ | ✅ `pykit-util` |
-| Version | ✅ `version` | ❌ | ✅ `pykit-version` |
-| Media | ✅ `media` | ✅ `rskit-media` | ✅ `pykit-media` |
-| Security | ✅ `security` | ❌ | ✅ `pykit-security` |
-| DI | ✅ `di` | ✅ `rskit-di` | ✅ `pykit-di` |
-| Component | ✅ `component` | ❌ | ✅ `pykit-component` |
-| Bootstrap | ✅ `bootstrap` | ✅ `rskit-bootstrap` | ✅ `pykit-bootstrap` |
-| Provider | ✅ `provider` | ✅ `rskit-provider` | ✅ `pykit-provider` |
-| Resilience | ✅ `resilience` | ✅ `rskit-resilience` | ✅ `pykit-resilience` |
-| Observability | ✅ `observability` | ✅ `rskit-observability` | ✅ `pykit-observability` |
-| Pipeline | ✅ `pipeline` | ✅ `rskit-pipeline` | ✅ `pykit-pipeline` |
-| DAG | ✅ `dag` | ✅ `rskit-dag` | ✅ `pykit-dag` |
-| Worker | ✅ `worker` | ✅ `rskit-worker` | ✅ `pykit-worker` |
-| SSE | ✅ `sse` | ✅ `rskit-sse` | ✅ `pykit-sse` |
-| Stateful | ✅ `stateful` | ❌ | ✅ `pykit-stateful` |
-| Auth | ✅ `auth` | ✅ `rskit-auth` | ✅ `pykit-auth` |
-| Authz | ✅ `authz` | ✅ `rskit-authz` | ✅ `pykit-authz` |
-| Database | ✅ `database` | ✅ `rskit-database` | ✅ `pykit-database` |
-| Redis / Cache | ✅ `redis` | ✅ `rskit-cache` | ✅ `pykit-redis` |
-| Storage / File | ✅ `storage` | ✅ `rskit-file` | ✅ `pykit-storage` |
-| Messaging | ✅ `messaging` | ✅ `rskit-messaging` | ✅ `pykit-messaging` |
-| HTTP Client | ✅ `httpclient` | ✅ `rskit-httpclient` | ✅ `pykit-httpclient` |
-| Server | ✅ `server` | ✅ `rskit-http`, `rskit-server` | ✅ `pykit-server` |
-| gRPC Client | ✅ `grpc` | ✅ `rskit-grpc-client` | ✅ `pykit-grpc` |
-| Connect | ✅ `connect` | ❌ | ❌ |
-| Discovery | ✅ `discovery` | ✅ `rskit-discovery` | ✅ `pykit-discovery` |
-| Process | ✅ `process` | ✅ `rskit-process` | ✅ `pykit-process` |
-| Workload | ✅ `workload` | ❌ | ✅ `pykit-workload` |
-| Test Utilities | ✅ `testutil` | ✅ `rskit-testutil` | ✅ `pykit-testutil` |
-| LLM | ✅ `llm` | ✅ `rskit-llm` | ✅ `pykit-llm` |
-| LLM Providers | ❌ | ✅ `rskit-llm-providers` | ✅ `pykit-llm-providers` |
-| Agent | ✅ `agent` | ✅ `rskit-agent` | ✅ `pykit-agent` |
-| Tool | ✅ `tool` | ✅ `rskit-tool` | ✅ `pykit-tool` |
-| MCP | ✅ `mcp` | ✅ `rskit-mcp` | ✅ `pykit-mcp` |
-| Hook | ✅ `hook` | ✅ `rskit-hook` | ✅ `pykit-hook` |
-| Schema | ✅ `schema` | ✅ `rskit-schema` | ✅ `pykit-schema` |
-| Explain | ✅ `explain` | ✅ `rskit-explain` | ✅ `pykit-explain` |
-| Bench | ✅ `bench` | ✅ `rskit-bench` | ✅ `pykit-bench` |
-| Dataset | ❌ | ✅ `rskit-dataset` | ✅ `pykit-dataset` |
-| Embedding | ✅ `embedding` | ✅ `rskit-embedding` | ✅ `pykit-embedding` |
-| Vector Store | ✅ `vectorstore` | ✅ `rskit-vector-store` | ✅ `pykit-vector-store` |
-| Inference | ❌ | ✅ `rskit-inference` | ✅ `pykit-triton` |
-| CLI | ❌ | ✅ `rskit-cli` | ❌ |
-| Metrics | ❌ | ❌ | ✅ `pykit-metrics` |
-
 ## Development
 
 ```bash
@@ -416,6 +368,23 @@ make tidy     # go mod tidy for core + all sub-modules
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow, coding standards, and how to submit pull requests.
 
 We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Project Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, coding standards, PR process |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant v2.1 |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting & supply-chain policy |
+| [GOVERNANCE.md](GOVERNANCE.md) | Roles, decision making, sibling-parity contract |
+| [MAINTAINERS.md](MAINTAINERS.md) | Current maintainers, areas, succession |
+| [CHANGELOG.md](CHANGELOG.md) | Keep-a-Changelog history |
+| [docs/RELEASING.md](docs/RELEASING.md) | Mechanical release process |
+| [docs/VERSIONING.md](docs/VERSIONING.md) | Multi-module versioning guide |
+| [docs/policy/SEMVER.md](docs/policy/SEMVER.md) | Semantic-versioning policy |
+| [docs/policy/DEPRECATION.md](docs/policy/DEPRECATION.md) | Deprecation lifecycle |
+| [docs/adr/](docs/adr/) | Architecture Decision Records |
+| [INTEGRATION.md](INTEGRATION.md) | Integration patterns across modules |
 
 ## License
 

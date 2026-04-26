@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Documentation & Project Hygiene
+- README: sibling-projects callout and `Project Documentation` index linking
+  every governance doc.
+
 ### Added
 - **registry** (NEW package): generic `Registry[T any]` consolidating the previously ad-hoc registries in `auth`, `discovery`, `storage`, `tool`, `workload`, and `llm`. `Register` returns an error on empty name, nil value, or duplicate name; `Names()` returns sorted; `Each` iterates deterministically. (#45)
 - **di**: typed-key DI surface layered on top of `UnifiedContainer`:

@@ -56,7 +56,9 @@ func WithQueryTokenAllowedPaths(paths ...string) AuthOption {
 	return func(o *authOptions) { o.queryTokenAllowedPaths = paths }
 }
 
-// WithQueryTokenWarningLogger configures a mandatory warning hook for query token auth usage.
+// WithQueryTokenWarningLogger configures an optional hook invoked each time a
+// token is extracted from a query parameter. Use this for audit logging when
+// query-token auth is a fallback rather than the primary mechanism.
 func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
 }
@@ -162,9 +164,6 @@ func (o *authOptions) validateQueryTokenConfig() error {
 	if len(o.queryTokenAllowedPaths) == 0 {
 		return fmt.Errorf("middleware/auth: query token extraction requires explicit WithQueryTokenAllowedPaths")
 	}
-	if o.queryTokenWarningLogger == nil {
-		return fmt.Errorf("middleware/auth: query token extraction requires WithQueryTokenWarningLogger")
-	}
 	return nil
 }
 
@@ -183,7 +182,9 @@ func extractToken(c *gin.Context, o *authOptions) (string, bool) {
 
 	if o.queryTokenParam != "" && slices.Contains(o.queryTokenAllowedPaths, c.Request.URL.Path) {
 		if token := c.Query(o.queryTokenParam); token != "" {
-			o.queryTokenWarningLogger(c, o.queryTokenParam)
+			if o.queryTokenWarningLogger != nil {
+				o.queryTokenWarningLogger(c, o.queryTokenParam)
+			}
 			return token, true
 		}
 	}
