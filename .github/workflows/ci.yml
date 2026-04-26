@@ -249,9 +249,16 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-      - name: Run govulncheck (fail on any reachable vuln)
+      # Use a wrapper that supports a documented suppression list. Some
+      # advisories have no upstream fix and are not reachable in our usage
+      # (e.g. server-side daemon CVEs imported transitively via a client
+      # library). Every suppression must be justified in
+      # .github/govulncheck-suppressions.json with a scoped module list, an
+      # expiry date, and references. Reachable findings additionally require
+      # `accept_reachable: true` plus a tracking issue in `references`.
+      - name: Run govulncheck (with documented suppressions)
         working-directory: ${{ matrix.module }}
-        run: govulncheck ./...
+        run: "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "${{ matrix.module }}" -- ./...
 
   # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
   fuzz:
