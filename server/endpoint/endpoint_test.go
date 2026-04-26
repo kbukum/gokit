@@ -27,12 +27,11 @@ func newRouter(path string, h gin.HandlerFunc) *gin.Engine {
 }
 
 // do executes a GET request against the router and returns the recorder + decoded JSON body.
-func do(t *testing.T, r *gin.Engine, path string) (*httptest.ResponseRecorder, map[string]any) {
+func do(t *testing.T, r *gin.Engine, path string) (rec *httptest.ResponseRecorder, body map[string]any) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	var body map[string]any
 	if w.Body.Len() > 0 {
 		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 			t.Fatalf("decode response: %v\nbody=%s", err, w.Body.String())
@@ -165,7 +164,7 @@ func TestHealth_PassesRequestContext(t *testing.T) {
 	})
 	r.GET("/health", endpoint.Health("svc", checker))
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
