@@ -760,9 +760,9 @@ func TestVerifier_Verify_ES256(t *testing.T) {
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, r *http.Request) {
 		// Avoid the deprecated ecdsa.PublicKey.X/Y fields by exporting via
 		// crypto/ecdh's uncompressed point encoding (0x04 || X || Y).
-		ecdhPub, err := priv.PublicKey.ECDH()
-		if err != nil {
-			t.Fatalf("ECDH conversion: %v", err)
+		ecdhPub, ecdhErr := priv.PublicKey.ECDH()
+		if ecdhErr != nil {
+			t.Fatalf("ECDH conversion: %v", ecdhErr)
 		}
 		raw := ecdhPub.Bytes() // 65 bytes for P-256
 		xB := base64.RawURLEncoding.EncodeToString(raw[1:33])
