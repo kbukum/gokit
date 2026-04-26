@@ -18,23 +18,52 @@ permissions:
 # comment in lock-step. Do not relax to floating tags.
 
 jobs:
-  # ── Stage 1: Discover all Go modules dynamically ──────────────────────────
+  # ── Stage 1: Discover affected modules ────────────────────────────────────
+  # On `pull_request`, only modules that contain a changed file (plus their
+  # in-repo reverse-dependency closure) flow into the per-module matrices.
+  # On `push` to main, or when CI/build-config files change, the script
+  # falls back to the full module list. See scripts/affected_modules.py
+  # for the full trigger list.
   discover:
     name: Discover Modules
     runs-on: ubuntu-latest
     outputs:
-      modules: ${{ steps.find.outputs.modules }}
+      modules: ${{ steps.compute.outputs.modules }}
+      check_includes: ${{ steps.compute.outputs.check_includes }}
+      is_full: ${{ steps.compute.outputs.is_full }}
+      reason: ${{ steps.compute.outputs.reason }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
+        with:
+          # Full history so we can diff against any merge-base.
+          fetch-depth: 0
 
-      - name: Find all Go modules
-        id: find
+      - name: Resolve base SHA
+        id: base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.base_ref }}
         run: |
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort \
-            | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "modules=$modules" >> "$GITHUB_OUTPUT"
-          echo "Discovered modules: $modules"
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
+            echo "sha=$PR_BASE_SHA" >> "$GITHUB_OUTPUT"
+            echo "Using PR base SHA: $PR_BASE_SHA"
+          elif [ -n "$PR_BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "$PR_BASE_REF" || true
+            sha=$(git rev-parse "origin/$PR_BASE_REF" 2>/dev/null || echo "")
+            echo "sha=$sha" >> "$GITHUB_OUTPUT"
+            echo "Using base ref $PR_BASE_REF -> $sha"
+          else
+            echo "sha=" >> "$GITHUB_OUTPUT"
+            echo "No base ref (push or unknown event); script will full-rebuild."
+          fi
+
+      - name: Compute affected modules
+        id: compute
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: python3 scripts/affected_modules.py
 
   # ── Stage 2: Go version consistency across all modules ─────────────────────
   version-check:
@@ -78,10 +107,11 @@ jobs:
             exit 1
           fi
 
-  # ── Stage 3b: Build + Vet + Test (per module × OS, parallel) ──────────────
+  # ── Stage 3b: Build + Vet + Test (per affected module × OS, parallel) ────
   check:
     name: Check (${{ matrix.module }} / ${{ matrix.os }})
     needs: discover
+    if: matrix.module != '__noop__'
     runs-on: ${{ matrix.os }}
     # Lift secret to job-level env so step-level `if:` can reference it via
     # `env.CODECOV_TOKEN`. The `secrets.*` context is not available in step
@@ -90,42 +120,13 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     strategy:
       fail-fast: false
+      # Single explicit `include:` matrix dimension. The discover job emits
+      # one row per (module, os) pair, including cross-OS extras from
+      # scripts/affected_modules.py:CROSS_OS_EXTRAS, filtered to modules
+      # actually affected by the diff. This avoids the surprise that
+      # GitHub's matrix.include adds rows on top of `matrix.module`/`os`.
       matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
-        os: [ubuntu-latest]
-        # Cross-platform runs are scoped to a representative module to keep
-        # CI cost bounded. Modules that are platform-sensitive (filesystem,
-        # process, server) can be added to `include`.
-        include:
-          - module: '.'
-            os: macos-latest
-          - module: '.'
-            os: windows-latest
-          - module: 'storage'
-            os: macos-latest
-          - module: 'server'
-            os: macos-latest
-          # F-053 #62: cross-OS coverage for the most platform-sensitive
-          # modules. Workload (process), httpclient (TCP timing) and grpc
-          # (network stack) historically diverge between Linux and macOS.
-          - module: 'workload'
-            os: macos-latest
-          - module: 'httpclient'
-            os: macos-latest
-          - module: 'grpc'
-            os: macos-latest
-          - module: 'auth'
-            os: macos-latest
-          # linux/arm64 smoke for the root + heaviest sub-modules. Uses the
-          # GitHub-hosted ARM64 runner (ubuntu-24.04-arm). Keeps cost bounded
-          # by only running on the modules most likely to contain
-          # arch-sensitive code (cgo, atomics, unsafe).
-          - module: '.'
-            os: ubuntu-24.04-arm
-          - module: 'database'
-            os: ubuntu-24.04-arm
-          - module: 'storage'
-            os: ubuntu-24.04-arm
+        include: ${{ fromJSON(needs.discover.outputs.check_includes) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
@@ -175,10 +176,11 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # ── Stage 3c: Lint (per module, parallel) ─────────────────────────────────
+  # ── Stage 3c: Lint (per affected module, parallel) ────────────────────────
   lint:
     name: Lint (${{ matrix.module }})
     needs: discover
+    if: matrix.module != '__noop__'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -225,10 +227,11 @@ jobs:
   # exclude list is mirrored in `.golangci.yml` (settings.gosec.excludes) and
   # `gosec.toml` (so a developer running gosec directly gets the same rules).
 
-  # ── Stage 3e: Security — govulncheck per module ───────────────────────────
+  # ── Stage 3e: Security — govulncheck per affected module ──────────────────
   vuln:
     name: Vuln (${{ matrix.module }})
     needs: discover
+    if: matrix.module != '__noop__'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -318,12 +321,16 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [tidy, version-check, check, lint, vuln, fuzz, integration]
+    needs: [discover, tidy, version-check, check, lint, vuln, fuzz, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.tidy.result }}" \
+          # `skipped` is acceptable: it means a matrix job had only the
+          # __noop__ row (PR didn't touch any module's source). Only hard
+          # failures and cancellations should block.
+          results=("${{ needs.discover.result }}" \
+                   "${{ needs.tidy.result }}" \
                    "${{ needs.version-check.result }}" \
                    "${{ needs.check.result }}" \
                    "${{ needs.lint.result }}" \
