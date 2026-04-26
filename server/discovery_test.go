@@ -109,7 +109,7 @@ func TestDiscoveryServerComponent_LifecycleSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify deregistration
-	assert.Len(t, registry.registered, 0)
+	assert.Empty(t, registry.registered)
 }
 
 // TestDiscoveryServerComponent_NameAndComponents verifies component properties.
@@ -176,11 +176,11 @@ func TestDiscoveryServerComponent_RegistrationFailure(t *testing.T) {
 	// Start should fail due to registration error
 	ctx := context.Background()
 	err = dsc.Start(ctx)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to register service")
 
 	// Verify nothing was registered
-	assert.Len(t, registry.registered, 0)
+	assert.Empty(t, registry.registered)
 }
 
 // TestDiscoveryServerComponent_DeregistrationError tests that deregistration errors don't prevent shutdown.
@@ -246,7 +246,7 @@ func TestDiscoveryServerComponent_NilRegistry(t *testing.T) {
 		nil,
 		log,
 	)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "registry cannot be nil")
 	assert.Nil(t, dsc)
 }
@@ -267,7 +267,7 @@ func TestDiscoveryServerComponent_NilInnerComponent(t *testing.T) {
 		nil,
 		log,
 	)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "inner component cannot be nil")
 	assert.Nil(t, dsc)
 }
@@ -296,7 +296,7 @@ func TestDiscoveryServerComponent_LocalIPResolution(t *testing.T) {
 		log,
 	)
 	// Currently expects address to be provided
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, dsc)
 }
 
@@ -367,5 +367,5 @@ func TestDiscoveryServerComponent_MultipleInstances(t *testing.T) {
 	err = dsc2.Stop(ctx)
 	require.NoError(t, err)
 
-	assert.Len(t, registry.registered, 0)
+	assert.Empty(t, registry.registered)
 }

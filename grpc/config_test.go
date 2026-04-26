@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/kbukum/gokit/security"
 )
@@ -90,21 +91,21 @@ func TestApplyDefaults_Idempotent(t *testing.T) {
 func TestValidate_ValidConfig(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: 1024, MaxSendMsgSize: 1024}
-	assert.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.Validate())
 }
 
 func TestValidate_AfterApplyDefaults(t *testing.T) {
 	t.Parallel()
 	cfg := Config{}
 	cfg.ApplyDefaults()
-	assert.NoError(t, cfg.Validate(), "defaults should produce a valid config")
+	require.NoError(t, cfg.Validate(), "defaults should produce a valid config")
 }
 
 func TestValidate_EmptyAddr(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "", MaxRecvMsgSize: 1024, MaxSendMsgSize: 1024}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "addr must not be empty")
 }
 
@@ -112,7 +113,7 @@ func TestValidate_NegativeMaxRecvMsgSize(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: -1, MaxSendMsgSize: 1024}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "max_recv_msg_size must be positive")
 }
 
@@ -120,7 +121,7 @@ func TestValidate_ZeroMaxRecvMsgSize(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: 0, MaxSendMsgSize: 1024}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "max_recv_msg_size must be positive")
 }
 
@@ -128,7 +129,7 @@ func TestValidate_NegativeMaxSendMsgSize(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: 1024, MaxSendMsgSize: -1}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "max_send_msg_size must be positive")
 }
 
@@ -136,7 +137,7 @@ func TestValidate_ZeroMaxSendMsgSize(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: 1024, MaxSendMsgSize: 0}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "max_send_msg_size must be positive")
 }
 
@@ -149,7 +150,7 @@ func TestValidate_TLSCertWithoutKey(t *testing.T) {
 		TLS:            &security.TLSConfig{CertFile: "/cert.pem"},
 	}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cert_file and key_file must be provided together")
 }
 
@@ -162,14 +163,14 @@ func TestValidate_TLSKeyWithoutCert(t *testing.T) {
 		TLS:            &security.TLSConfig{KeyFile: "/key.pem"},
 	}
 	err := cfg.Validate()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cert_file and key_file must be provided together")
 }
 
 func TestValidate_NilTLS(t *testing.T) {
 	t.Parallel()
 	cfg := Config{Addr: "host:50051", MaxRecvMsgSize: 1024, MaxSendMsgSize: 1024, TLS: nil}
-	assert.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.Validate())
 }
 
 func TestValidate_ValidTLSSkipVerify(t *testing.T) {
@@ -180,7 +181,7 @@ func TestValidate_ValidTLSSkipVerify(t *testing.T) {
 		MaxSendMsgSize: 1024,
 		TLS:            &security.TLSConfig{SkipVerify: true},
 	}
-	assert.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.Validate())
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +197,7 @@ func TestAddress_ReturnsAddr(t *testing.T) {
 func TestAddress_EmptyAddr(t *testing.T) {
 	t.Parallel()
 	cfg := Config{}
-	assert.Equal(t, "", cfg.Address())
+	assert.Empty(t, cfg.Address())
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +221,7 @@ func TestConfig_AllFieldsSet(t *testing.T) {
 		CallTimeout: 10 * time.Second,
 	}
 
-	assert.NoError(t, cfg.Validate())
+	require.NoError(t, cfg.Validate())
 	assert.Equal(t, "prod.example.com:443", cfg.Address())
 	assert.Equal(t, "my-service", cfg.Name)
 	assert.True(t, cfg.Enabled)

@@ -148,6 +148,12 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+	// Wait blocks until the container exits and returns the exit status.
+	// Returns (nil, nil) only on the unreachable post-select fall-through; the
+	// three real arms each return.
+	//
+	//nolint:nilnil // unreachable defensive return; staticcheck flow analysis
+	// confirms select arms cover all paths.
 	return nil, nil
 }
 

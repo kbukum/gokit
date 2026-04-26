@@ -301,7 +301,7 @@ type mockStream struct {
 func (m *mockStream) Name() string                       { return m.name }
 func (m *mockStream) IsAvailable(_ context.Context) bool { return true }
 func (m *mockStream) Execute(_ context.Context, _ string) (Iterator[string], error) {
-	return nil, nil
+	return nil, nil //nolint:nilnil // test mock: no iterator and no error
 }
 
 func TestWithStreamMeta(t *testing.T) {

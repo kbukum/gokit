@@ -346,7 +346,7 @@ func TestEngine_ContextCancellation(t *testing.T) {
 	g := &Graph{
 		Nodes: map[string]Node{
 			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
-				return nil, nil
+				return nil, nil //nolint:nilnil // test fixture: node returns no result, no error
 			}),
 		},
 	}

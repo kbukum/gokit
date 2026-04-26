@@ -776,6 +776,7 @@ func TestComponentNameSpecialChars(t *testing.T) {
 	r := NewRegistry()
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			c := &mockComponent{name: name, health: Health{Name: name, Status: StatusHealthy}}
 			if err := r.Register(c); err != nil {
 				t.Fatalf("failed to register %q: %v", name, err)

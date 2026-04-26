@@ -34,6 +34,8 @@ func (s *TypedStore[C]) fullKey(key string) string {
 }
 
 // Load deserializes JSON from Redis. Returns (nil, nil) if key doesn't exist.
+//
+//nolint:nilnil // documented "key not found" sentinel of TypedStore.Load.
 func (s *TypedStore[C]) Load(ctx context.Context, key string) (*C, error) {
 	raw, err := s.client.Get(ctx, s.fullKey(key))
 	if err != nil {

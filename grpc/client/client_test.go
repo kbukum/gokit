@@ -121,7 +121,7 @@ func TestNewClient_ValidationFailure_EmptyAddr(t *testing.T) {
 	log := testLogger()
 
 	conn, err := NewClient(cfg, log)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 	assert.Contains(t, err.Error(), "max_recv_msg_size must be positive")
 }
@@ -138,7 +138,7 @@ func TestNewClient_ValidationFailure_BadTLS(t *testing.T) {
 	log := testLogger()
 
 	conn, err := NewClient(cfg, log)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, conn)
 }
 
@@ -195,7 +195,7 @@ func TestNewAdapter_ValidationFailure(t *testing.T) {
 	log := testLogger()
 
 	adapter, err := NewAdapter(cfg, log)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, adapter)
 }
 
@@ -272,13 +272,13 @@ func TestAdapter_Close(t *testing.T) {
 	require.NoError(t, err)
 
 	err = adapter.Close(context.Background())
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestAdapter_Close_NilConn(t *testing.T) {
 	t.Parallel()
 	adapter := &Adapter{conn: nil}
-	assert.NoError(t, adapter.Close(context.Background()))
+	require.NoError(t, adapter.Close(context.Background()))
 }
 
 func TestClientOf(t *testing.T) {
@@ -308,13 +308,13 @@ func TestLazyClient_GetClient_Success(t *testing.T) {
 	lc := NewLazyClient("test-svc", factory, newMockGRPCClient, testLogger())
 
 	client, err := lc.GetClient()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, client.conn)
 	assert.Equal(t, int32(1), factory.calls.Load(), "factory should be called once")
 
 	// Second call reuses cached client
 	client2, err := lc.GetClient()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, client, client2)
 	assert.Equal(t, int32(1), factory.calls.Load(), "factory should still be called only once")
 }
@@ -327,7 +327,7 @@ func TestLazyClient_GetClient_FactoryError(t *testing.T) {
 	lc := NewLazyClient("bad-svc", factory, newMockGRPCClient, testLogger())
 
 	_, err := lc.GetClient()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect to bad-svc")
 }
 
@@ -350,11 +350,11 @@ func TestLazyClient_GetClient_RetryAfterError(t *testing.T) {
 
 	// First call fails
 	_, err := lc.GetClient()
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	// Second call succeeds
 	client, err := lc.GetClient()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, client.conn)
 }
 
@@ -373,7 +373,7 @@ func TestLazyClient_Close(t *testing.T) {
 
 	// Close
 	err = lc.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, lc.IsConnected())
 }
 
@@ -384,7 +384,7 @@ func TestLazyClient_Close_NotInitialized(t *testing.T) {
 	lc := NewLazyClient("svc", factory, newMockGRPCClient, testLogger())
 
 	err := lc.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestLazyClient_IsConnected(t *testing.T) {
@@ -421,7 +421,7 @@ func TestLazyClient_Reset(t *testing.T) {
 	assert.True(t, lc.IsConnected())
 
 	err = lc.Reset()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, lc.IsConnected())
 }
 
@@ -462,7 +462,7 @@ func TestLazyClient_ConcurrentGetClient(t *testing.T) {
 	wg.Wait()
 
 	for _, err := range errs {
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 	// Factory should have been called exactly once due to double-check locking
 	assert.Equal(t, int32(1), factory.calls.Load())
@@ -478,7 +478,7 @@ func TestLazyClient_NoLogger(t *testing.T) {
 	lc := NewLazyClient("svc", factory, newMockGRPCClient)
 
 	client, err := lc.GetClient()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, client.conn)
 }
 
@@ -493,7 +493,7 @@ func TestClientOptionsBuilder_Build(t *testing.T) {
 	builder := NewClientOptionsBuilder(&cfg)
 
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts, "should produce dial options")
 }
 
@@ -504,7 +504,7 @@ func TestClientOptionsBuilder_WithLoggingDisabled(t *testing.T) {
 	builder := NewClientOptionsBuilder(&cfg).WithLogging(false)
 
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 }
 
@@ -522,7 +522,7 @@ func TestClientOptionsBuilder_WithRetryPolicy(t *testing.T) {
 	builder := NewClientOptionsBuilder(&cfg).WithRetryPolicy(policy)
 
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 }
 
@@ -533,7 +533,7 @@ func TestClientOptionsBuilder_NilRetryPolicy(t *testing.T) {
 	builder := NewClientOptionsBuilder(&cfg).WithRetryPolicy(nil)
 
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 }
 
@@ -551,7 +551,7 @@ func TestClientOptionsBuilder_WithCustomInterceptors(t *testing.T) {
 
 	builder := NewClientOptionsBuilder(&cfg).WithUnaryInterceptor(customUnary)
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 	_ = called // used to verify the interceptor is wired
 }
@@ -568,7 +568,7 @@ func TestClientOptionsBuilder_WithStreamInterceptor(t *testing.T) {
 
 	builder := NewClientOptionsBuilder(&cfg).WithStreamInterceptor(customStream)
 	opts, err := builder.Build()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 }
 
@@ -597,7 +597,7 @@ func TestDefaultRetryPolicy(t *testing.T) {
 	assert.Equal(t, 4, p.MaxAttempts)
 	assert.Equal(t, "0.1s", p.InitialBackoff)
 	assert.Equal(t, "1s", p.MaxBackoff)
-	assert.Equal(t, 2.0, p.BackoffMultiplier)
+	assert.InEpsilon(t, 2.0, p.BackoffMultiplier, 1e-9)
 	assert.True(t, p.WaitForReady)
 }
 
@@ -630,7 +630,7 @@ func TestOpenStreamWithTimeout_Success(t *testing.T) {
 	}
 
 	result, err := OpenStreamWithTimeout(context.Background(), time.Second, opener)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "hello-stream", result)
 }
 
@@ -643,7 +643,7 @@ func TestOpenStreamWithTimeout_Timeout(t *testing.T) {
 	}
 
 	result, err := OpenStreamWithTimeout(context.Background(), 50*time.Millisecond, opener)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream connection timeout")
 	assert.Empty(t, result)
 }
@@ -663,8 +663,8 @@ func TestOpenStreamWithTimeout_ContextCanceled(t *testing.T) {
 	}()
 
 	result, err := OpenStreamWithTimeout(ctx, 5*time.Second, opener)
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, context.Canceled)
+	require.Error(t, err)
+	require.ErrorIs(t, err, context.Canceled)
 	assert.Empty(t, result)
 }
 
@@ -676,7 +676,7 @@ func TestOpenStreamWithTimeout_ZeroTimeout(t *testing.T) {
 	}
 
 	result, err := OpenStreamWithTimeout(context.Background(), 0, opener)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "immediate", result)
 }
 
@@ -688,7 +688,7 @@ func TestOpenStreamWithTimeout_NegativeTimeout(t *testing.T) {
 	}
 
 	result, err := OpenStreamWithTimeout(context.Background(), -1*time.Second, opener)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "immediate", result)
 }
 
@@ -700,7 +700,7 @@ func TestOpenStreamWithTimeout_OpenerError(t *testing.T) {
 	}
 
 	result, err := OpenStreamWithTimeout(context.Background(), time.Second, opener)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream creation failed")
 	assert.Empty(t, result)
 }
@@ -713,7 +713,7 @@ func TestTryOpenStream_Success(t *testing.T) {
 	}
 
 	result, err := TryOpenStream(context.Background(), time.Second, opener)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 42, result)
 }
 
@@ -726,6 +726,6 @@ func TestTryOpenStream_Timeout(t *testing.T) {
 	}
 
 	result, err := TryOpenStream(context.Background(), 50*time.Millisecond, opener)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, 0, result)
 }

@@ -27,6 +27,12 @@ func NewMemoryStore[C any]() *MemoryStore[C] {
 }
 
 // Load retrieves state. Returns (nil, nil) if key doesn't exist or has expired.
+//
+// Store contract — callers branch on the value, not on a typed error. Using
+// a sentinel error here would force every caller to errors.Is on the hot
+// read path. See provider.Store interface docs.
+//
+//nolint:nilnil // (nil, nil) is the documented "not found" sentinel of the
 func (s *MemoryStore[C]) Load(_ context.Context, key string) (*C, error) {
 	s.mu.RLock()
 	entry, ok := s.items[key]

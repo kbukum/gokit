@@ -77,7 +77,7 @@ func TestUnaryTimeoutInterceptor_AppliesTimeout(t *testing.T) {
 	err := interceptor(context.Background(), "/pkg.Svc/Method", nil, nil,
 		cc, deadlineCapturingInvoker(&captured))
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, captured.IsZero(), "deadline should have been set")
 	assert.WithinDuration(t, time.Now().Add(500*time.Millisecond), captured, 100*time.Millisecond)
 }
@@ -96,7 +96,7 @@ func TestUnaryTimeoutInterceptor_PreservesExistingDeadline(t *testing.T) {
 	err := interceptor(ctx, "/pkg.Svc/Method", nil, nil,
 		cc, deadlineCapturingInvoker(&captured))
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, existingDeadline.Unix(), captured.Unix(),
 		"existing deadline should NOT be overridden")
 }
@@ -111,7 +111,7 @@ func TestUnaryTimeoutInterceptor_ZeroTimeout(t *testing.T) {
 	err := interceptor(context.Background(), "/pkg.Svc/Method", nil, nil,
 		cc, deadlineCapturingInvoker(&captured))
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, captured.IsZero(), "zero timeout should not set a deadline")
 }
 
@@ -141,7 +141,7 @@ func TestUnaryLoggingInterceptor_Success(t *testing.T) {
 
 	err := interceptor(context.Background(), "/my.pkg.Svc/GetUser", nil, nil,
 		cc, mockInvoker(nil))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestUnaryLoggingInterceptor_Error(t *testing.T) {
@@ -155,7 +155,7 @@ func TestUnaryLoggingInterceptor_Error(t *testing.T) {
 	err := interceptor(context.Background(), "/my.pkg.Svc/GetUser", nil, nil,
 		cc, mockInvoker(grpcErr))
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, grpcErr, err, "error should be passed through")
 }
 
@@ -174,7 +174,7 @@ func TestStreamLoggingInterceptor_Success(t *testing.T) {
 	stream, err := interceptor(context.Background(), desc, cc,
 		"/my.pkg.Svc/StreamEvents", mockStreamer(&mockClientStream{}, nil))
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, stream)
 }
 
@@ -190,7 +190,7 @@ func TestStreamLoggingInterceptor_Error(t *testing.T) {
 	stream, err := interceptor(context.Background(), desc, cc,
 		"/my.pkg.Svc/StreamEvents", mockStreamer(nil, grpcErr))
 
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, stream)
 }
 

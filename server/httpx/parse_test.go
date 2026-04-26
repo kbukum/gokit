@@ -1,7 +1,6 @@
 package httpx_test
 
 import (
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -57,7 +56,7 @@ func TestParsePathUUID(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				var appErr *apperrors.AppError
-				require.True(t, errors.As(err, &appErr))
+				require.ErrorAs(t, err, &appErr)
 				assert.Equal(t, apperrors.ErrCodeInvalidInput, appErr.Code)
 				assert.Equal(t, uuid.Nil, got)
 			} else {
@@ -113,7 +112,7 @@ func TestParsePathInt(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				var appErr *apperrors.AppError
-				require.True(t, errors.As(err, &appErr))
+				require.ErrorAs(t, err, &appErr)
 				assert.Equal(t, 0, got)
 			} else {
 				require.NoError(t, err)

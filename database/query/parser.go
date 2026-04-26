@@ -36,24 +36,17 @@ func ParseFromRequest(r *http.Request, config Config) Params {
 	}
 
 	// Check page size params in priority order: pageSize > page_size > per_page
-	if ps := q.Get("pageSize"); ps != "" {
+	for _, key := range []string{"pageSize", "page_size", "per_page"} {
+		ps := q.Get(key)
+		if ps == "" {
+			continue
+		}
 		if ps == "-1" || ps == "all" {
 			params.NoPagination = true
 		} else {
 			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
 		}
-	} else if ps := q.Get("page_size"); ps != "" {
-		if ps == "-1" || ps == "all" {
-			params.NoPagination = true
-		} else {
-			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
-		}
-	} else if ps := q.Get("per_page"); ps != "" {
-		if ps == "-1" || ps == "all" {
-			params.NoPagination = true
-		} else {
-			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
-		}
+		break
 	}
 
 	if filterStr := q.Get("filter"); filterStr != "" {

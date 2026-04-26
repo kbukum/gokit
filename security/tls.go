@@ -32,7 +32,13 @@ type TLSConfig struct {
 }
 
 // Build creates a *tls.Config from the configuration.
-// Returns nil if no TLS settings are configured (all fields are zero values).
+// Returns (nil, nil) if no TLS settings are configured (all fields are zero
+// values) — callers treat that as "no TLS" rather than a typed error.
+//
+// this builder; making it a sentinel error would force every transport setup
+// site to errors.Is for a non-error condition.
+//
+//nolint:nilnil // (nil, nil) is the documented "no TLS configured" signal of
 func (c *TLSConfig) Build() (*tls.Config, error) {
 	if c == nil {
 		return nil, nil

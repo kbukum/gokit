@@ -2,7 +2,6 @@ package httpx_test
 
 import (
 	"bytes"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -78,7 +77,7 @@ func TestBindJSON(t *testing.T) {
 			if tc.wantErr {
 				require.Error(t, err)
 				var appErr *apperrors.AppError
-				require.True(t, errors.As(err, &appErr))
+				require.ErrorAs(t, err, &appErr)
 				assert.Equal(t, tc.errCode, appErr.Code)
 				assert.Nil(t, got)
 			} else {
