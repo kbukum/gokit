@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -339,6 +340,12 @@ func TestRetry_BackoffTimingVerification(t *testing.T) {
 }
 
 func TestRetry_JitterBoundsVerification(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Test asserts 5–15 ms gaps with ±15 ms tolerance, but Windows'
+		// timer granularity (~16 ms) snaps sleeps onto coarse ticks and
+		// blows past the upper bound. Tracked in #114.
+		t.Skip("Windows clock resolution coarser than test tolerances")
+	}
 	const jitter = 0.5
 	cfg := RetryConfig{
 		MaxAttempts:    20,
