@@ -276,7 +276,7 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 		}, nil
 	case llm.SystemMessage:
 		// System messages are handled via systemInstruction, skip in contents
-		return nil, nil
+		return nil, nil //nolint:nilnil // signals "no contents entry to emit"
 	case llm.ToolResultMessage:
 		return map[string]any{
 			"role": "user",

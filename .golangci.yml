@@ -30,6 +30,15 @@ linters:
     - rowserrcheck
     # --- Architecture / layering ---
     - depguard
+    # --- Test discipline (F-053, partial) ---
+    # Conservative permissive defaults — these catch new code that is clearly
+    # wrong without forcing a sweep over legacy tests. The remaining linters
+    # from the original finding (paralleltest, contextcheck, revive) require
+    # large-scale fixups and are tracked separately.
+    - tparallel
+    - testifylint
+    - nilnil
+    - nestif
   exclusions:
     rules:
       - path: "_test\\.go"
@@ -67,6 +76,12 @@ linters:
       max-func-lines: 30
     misspell:
       locale: US
+    nestif:
+      # Default min-complexity is 5; bump to 8 to focus on truly hairy nested
+      # branches and avoid churn on legitimate domain logic (tree rendering,
+      # build-info parsing, cascade error fan-out). Sites above 8 should be
+      # extracted into helpers.
+      min-complexity: 8
     gosec:
       excludes:
         # Codes valid for the pinned golangci-lint (v2.9.0) gosec.

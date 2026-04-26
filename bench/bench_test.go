@@ -124,6 +124,11 @@ func branchBEvaluator() bench.Evaluator[string] {
 
 // ── end-to-end test ──────────────────────────────────────────────────────────
 
+// TestEndToEnd runs the full bench pipeline through dataset → run → store →
+// compare → report → viz. The sub-stages share state intentionally (each step
+// consumes outputs from the previous), so subtests cannot run in parallel.
+//
+//nolint:tparallel // sub-stages are sequential by design
 func TestEndToEnd(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

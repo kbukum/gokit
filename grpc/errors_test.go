@@ -30,7 +30,7 @@ func TestFromGRPC_ConnectionError(t *testing.T) {
 
 	assert.Equal(t, apperrors.ErrCodeServiceUnavailable, appErr.Code)
 	assert.True(t, appErr.Retryable)
-	assert.NotNil(t, appErr.Cause)
+	require.Error(t, appErr.Cause)
 }
 
 func TestFromGRPC_NonStatusError(t *testing.T) {
@@ -170,7 +170,7 @@ func TestFromGRPC_StatusCodes(t *testing.T) {
 			assert.Equal(t, tc.wantCode, appErr.Code, "error code")
 			assert.Equal(t, tc.wantHTTP, appErr.HTTPStatus, "HTTP status")
 			assert.Equal(t, tc.wantRetry, appErr.Retryable, "retryable")
-			assert.NotNil(t, appErr.Cause, "cause should be set")
+			require.Error(t, appErr.Cause, "cause should be set")
 
 			if tc.wantContains != "" {
 				assert.Contains(t, appErr.Message, tc.wantContains, "message content")
@@ -185,7 +185,7 @@ func TestFromGRPC_StatusCodes(t *testing.T) {
 
 func TestToGRPCStatus_NilError(t *testing.T) {
 	t.Parallel()
-	assert.Nil(t, ToGRPCStatus(nil))
+	require.NoError(t, ToGRPCStatus(nil))
 }
 
 func TestToGRPCStatus_AllAppErrorCodes(t *testing.T) {
@@ -222,7 +222,7 @@ func TestToGRPCStatus_AllAppErrorCodes(t *testing.T) {
 			appErr := &apperrors.AppError{Code: tc.appCode, Message: "test msg"}
 			grpcErr := ToGRPCStatus(appErr)
 
-			require.NotNil(t, grpcErr)
+			require.Error(t, grpcErr)
 			st, ok := status.FromError(grpcErr)
 			require.True(t, ok, "should be a gRPC status")
 			assert.Equal(t, tc.wantGRPC, st.Code(), "gRPC code")

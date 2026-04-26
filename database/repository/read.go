@@ -53,7 +53,10 @@ func (r *ReadRepository[T, ID]) WithTx(tx *gorm.DB) *ReadRepository[T, ID] {
 }
 
 // GetByID retrieves a single entity by its primary key.
-// Returns (nil, nil) if the entity is not found.
+// Returns (nil, nil) if the entity is not found — callers branch on the
+// pointer rather than on a typed error so the read hot-path stays cheap.
+//
+//nolint:nilnil // documented "not found" sentinel of ReadRepository contract.
 func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) {
 	var entity T
 	if err := r.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", r.idField), id).First(&entity).Error; err != nil {
@@ -86,6 +89,8 @@ func (r *ReadRepository[T, ID]) Count(ctx context.Context) (int64, error) {
 
 // FindOneBy retrieves a single entity matching field == value.
 // Returns (nil, nil) if no matching entity is found.
+//
+//nolint:nilnil // mirrors GetByID's "not found" sentinel; see method docs.
 func (r *ReadRepository[T, ID]) FindOneBy(ctx context.Context, field string, value any) (*T, error) {
 	var entity T
 	if err := r.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", field), value).First(&entity).Error; err != nil {

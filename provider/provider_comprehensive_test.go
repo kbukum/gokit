@@ -1081,6 +1081,7 @@ func TestMetaProvider_InterfaceSatisfaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			mp, ok := tt.provider.(provider.MetaProvider)
 			if !ok {
 				t.Fatalf("%s should implement MetaProvider", tt.name)
@@ -1139,6 +1140,7 @@ func TestHealthStatus_Transitions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
+			t.Parallel()
 			if got := tt.status.String(); got != tt.expected {
 				t.Fatalf("Status(%d).String() = %q, want %q", tt.status, got, tt.expected)
 			}

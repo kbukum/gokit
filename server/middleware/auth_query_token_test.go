@@ -8,9 +8,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Subtests share a `warned` flag and a single httptest recorder factory, so
+// they cannot run in parallel. The parent t.Parallel() is intentionally
+// omitted to keep the test deterministic.
+//
+//nolint:tparallel // subtests share mutable state by design (warned flag)
 func TestExtractToken_QueryParam(t *testing.T) {
-	t.Parallel()
-
 	warned := false
 	warn := func(_ *gin.Context, _ string) { warned = true }
 	tests := []struct {
