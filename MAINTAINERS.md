@@ -9,6 +9,24 @@ responsible for code review, releases, and project direction.
 |-----------|-------------|-------------------|
 | K. Bukum  | @kbukum     | All packages      |
 
+## Bus Factor: 1 — Co-Maintainers Wanted
+
+gokit currently has a **single core maintainer**. This is a known sustainability
+risk for a project of this size (34 modules). We are actively looking for
+contributors interested in becoming co-maintainers, particularly in the
+following areas:
+
+- **Transport/protocol packages**: `grpc`, `connect`, `sse`, `server`
+- **Messaging**: `messaging/kafka`, `messaging/managed`
+- **Observability**: `observability`, `logger`
+- **Security**: `auth`, `auth/oidc`, `encryption`
+- **Storage**: `storage/*`, `cache/*`
+
+If you are interested, please open an issue using the
+[engineering review template](.github/ISSUE_TEMPLATE/) describing your area
+of interest and recent contributions, or start by picking up issues labelled
+`good-first-issue` / `help-wanted`.
+
 ## How Maintainers Are Added
 
 New maintainers are added by the existing core maintainers via a pull request

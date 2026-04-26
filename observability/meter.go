@@ -28,6 +28,9 @@ type MeterConfig struct {
 	Insecure bool
 	// Interval is the metric export interval.
 	Interval time.Duration
+	// SkipGlobalRegistration, when true, prevents InitMeter from mutating the
+	// global otel.SetMeterProvider state. See TracerConfig.SkipGlobalRegistration.
+	SkipGlobalRegistration bool
 }
 
 // DefaultMeterConfig returns sensible defaults for development.
@@ -72,7 +75,9 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 		sdkmetric.WithResource(res),
 	)
 
-	otel.SetMeterProvider(mp)
+	if !config.SkipGlobalRegistration {
+		otel.SetMeterProvider(mp)
+	}
 
 	logger.Info("meter initialized", logger.Fields(
 		"service", config.ServiceName,

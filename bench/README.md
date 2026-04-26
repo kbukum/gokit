@@ -2,6 +2,10 @@
 
 **General-purpose accuracy and quality benchmarking framework for Go**
 
+> **Note**: This package is for **model/system quality evaluation** (accuracy,
+> ranking, calibration, regression), not Go micro-benchmarks. For CPU/memory
+> micro-benchmarks see `go test -bench` and the per-package `*_test.go` files.
+
 Think of `bench` as `testing.B` for classification accuracy, ranking quality, probability
 calibration, and regression error. Evaluators are backed by gokit **providers**, datasets
 flow through **pipelines**, and metrics are fully pluggable.
