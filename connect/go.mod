@@ -2,6 +2,8 @@ module github.com/kbukum/gokit/connect
 
 go 1.26.0
 
+toolchain go1.26.2
+
 require (
 	connectrpc.com/connect v1.19.2
 	github.com/golang-jwt/jwt/v5 v5.3.1

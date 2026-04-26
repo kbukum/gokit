@@ -2,6 +2,8 @@ module github.com/kbukum/gokit
 
 go 1.26.0
 
+toolchain go1.26.2
+
 require (
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/go-viper/mapstructure/v2 v2.5.0

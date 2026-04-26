@@ -13,12 +13,9 @@ concurrency:
 permissions:
   contents: read
 
-# NOTE: GitHub Actions are pinned to semver tags. The dependabot configuration
-# in .github/dependabot.yml is configured to update them weekly; once the first
-# PR cycle lands these tags can be upgraded to commit SHAs by Dependabot's
-# `pinDigests` (or via Renovate). The Go version consistency check below
-# guarantees no module-level Go version drift, mitigating one of the two
-# supply-chain dimensions called out in the review.
+# All third-party actions are pinned by 40-char SHA. Dependabot is configured
+# (see .github/dependabot.yml) to bump both the SHA and the trailing version
+# comment in lock-step. Do not relax to floating tags.
 
 jobs:
   # ── Stage 1: Discover all Go modules dynamically ──────────────────────────
@@ -28,7 +25,7 @@ jobs:
     outputs:
       modules: ${{ steps.find.outputs.modules }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Find all Go modules
         id: find
@@ -44,7 +41,7 @@ jobs:
     name: Go Version Consistency
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Verify uniform Go version across modules
         run: |
@@ -62,19 +59,18 @@ jobs:
     name: Tidy Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Validate CHANGELOG unreleased heading
         run: ./scripts/check_changelog_unreleased.sh
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
 
       - name: Verify modules are tidy
         run: |
-          chmod +x ./gomod.sh
           ./gomod.sh tidy
           if [ -n "$(git status --porcelain -- '*.mod' '*.sum')" ]; then
             echo "::error::go.mod/go.sum are not tidy. Run 'make tidy' and commit the changes."
@@ -105,10 +101,10 @@ jobs:
           - module: 'server'
             os: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
@@ -134,7 +130,7 @@ jobs:
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6.0.0
         with:
           files: ${{ matrix.module }}/coverage.out
           flags: ${{ matrix.module }}
@@ -152,16 +148,16 @@ jobs:
       matrix:
         module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v9.0.0
         with:
           # Pinned to a specific version (was previously `latest`, which can
           # cause non-deterministic CI failures when a new linter release ships).
@@ -173,15 +169,15 @@ jobs:
     name: gosec
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
 
       - name: Run gosec
-        uses: securego/gosec@master
+        uses: securego/gosec@5e5517beec77b8228ba43ec8d7cc22d82ed31924  # v2.25.0
         with:
           args: -nosec -exclude=G115,G118,G204,G304,G306,G402,G404,G704 -exclude-generated ./...
 
@@ -190,23 +186,26 @@ jobs:
     name: Vuln (${{ matrix.module }})
     needs: discover
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
         module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
           cache-dependency-path: ${{ matrix.module }}/go.sum
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-      - name: Run govulncheck
+      - name: Run govulncheck (fail on any reachable vuln)
         working-directory: ${{ matrix.module }}
         run: govulncheck ./...
 
@@ -214,41 +213,41 @@ jobs:
   fuzz:
     name: Fuzz Smoke
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
 
-      # 30 seconds per target — enough to surface obvious regressions; long
-      # fuzzing campaigns are expected to run in a separate scheduled workflow.
-      - name: Fuzz validation
-        run: go test -run='^$' -fuzz='FuzzValidateUUID' -fuzztime=30s ./validation/
-
-      - name: Fuzz server middleware (auth)
-        working-directory: server
-        run: go test -run='^$' -fuzz='FuzzExtractToken' -fuzztime=30s ./middleware/
-
-      - name: Fuzz server httpx
-        working-directory: server
+      # 30s per target — surfaces obvious regressions; long campaigns run in
+      # a separate scheduled workflow. Targets are discovered dynamically so
+      # newly-added FuzzXxx are picked up without editing CI.
+      - name: Discover and run fuzz targets
         run: |
-          # Discover any Fuzz* in httpx and run them serially.
-          targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' ./httpx/fuzz_test.go | awk '{print $2}' | sort -u || true)
-          for t in $targets; do
-            echo "Running fuzz target $t"
-            go test -run='^$' -fuzz="^${t}$" -fuzztime=30s ./httpx/
+          set -euo pipefail
+          # Find every (module_dir, package_dir, FuzzName) triple in the repo.
+          mapfile -t mods < <(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' | sed 's|/go.mod$||' | sort)
+          fail=0
+          for mod in "${mods[@]}"; do
+            mapfile -t files < <(grep -rlE '^func Fuzz[A-Za-z0-9_]+' "$mod" --include='*_test.go' 2>/dev/null || true)
+            for f in "${files[@]}"; do
+              # package path relative to module (./pkg) and fuzz target names
+              pkgdir=$(dirname "${f#$mod/}")
+              [ "$pkgdir" = "." ] || pkgdir="./$pkgdir"
+              [ "$pkgdir" = "" ] && pkgdir="."
+              targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' "$f" | awk '{print $2}' | sort -u)
+              for t in $targets; do
+                echo "::group::$mod $pkgdir $t"
+                ( cd "$mod" && go test -run='^$' -fuzz="^${t}$" -fuzztime=30s "${pkgdir:-.}" ) || fail=1
+                echo "::endgroup::"
+              done
+            done
           done
-
-      - name: Fuzz messaging
-        working-directory: messaging
-        run: |
-          targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' ./fuzz_test.go | awk '{print $2}' | sort -u || true)
-          for t in $targets; do
-            echo "Running fuzz target $t"
-            go test -run='^$' -fuzz="^${t}$" -fuzztime=30s ./
-          done
+          exit $fail
 
   # ── Gate: Aggregate status for branch protection ──────────────────────────
   ci-status:

@@ -2,6 +2,8 @@ module github.com/kbukum/gokit/bench
 
 go 1.26.0
 
+toolchain go1.26.2
+
 require (
 	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.2.0
