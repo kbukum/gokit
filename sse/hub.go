@@ -239,31 +239,35 @@ func (h *Hub) Unregister(client *Client) {
 // "catalog.pull.completed"). For per-resource fan-out where only some
 // subscribers should receive the message, use BroadcastToPattern with a
 // caller-defined client ID convention.
+//
+// Returns immediately if the hub has been stopped (drops the message).
 func (h *Hub) Broadcast(event string, data []byte) {
-	h.broadcast <- &Message{
-		Pattern: "*",
-		Event:   event,
-		Data:    data,
+	select {
+	case h.broadcast <- &Message{Pattern: "*", Event: event, Data: data}:
+	case <-h.done:
 	}
 }
 
 // BroadcastToPattern sends data to all clients whose ID matches pattern.
 // Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123").
 // Use Broadcast for global, event-typed notifications.
+//
+// Returns immediately if the hub has been stopped (drops the message).
 func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
-	h.broadcast <- &Message{
-		Pattern: pattern,
-		Data:    data,
+	select {
+	case h.broadcast <- &Message{Pattern: pattern, Data: data}:
+	case <-h.done:
 	}
 }
 
 // BroadcastFrame sends a typed frame to all clients whose ID matches
 // pattern. Use Broadcast for the common "deliver to everyone" case.
+//
+// Returns immediately if the hub has been stopped (drops the message).
 func (h *Hub) BroadcastFrame(pattern string, frame Frame) {
-	h.broadcast <- &Message{
-		Pattern: pattern,
-		Event:   frame.Event,
-		Data:    frame.Data,
+	select {
+	case h.broadcast <- &Message{Pattern: pattern, Event: frame.Event, Data: frame.Data}:
+	case <-h.done:
 	}
 }
 

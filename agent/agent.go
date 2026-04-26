@@ -194,12 +194,24 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 	go func() {
 		defer close(ch)
 
+		// send delivers an event respecting ctx cancellation. Returns false if
+		// the caller has stopped reading or ctx was cancelled, in which case
+		// the goroutine should unwind.
+		send := func(evt Event) bool {
+			select {
+			case ch <- evt:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
+
 		msgs := make([]llm.Message, len(messages))
 		copy(msgs, messages)
 
 		// Check for slash commands before the LLM loop.
 		if result, handled := a.handleCommand(ctx, msgs); handled {
-			ch <- CompleteEvent{Result: *result}
+			send(CompleteEvent{Result: *result})
 			return
 		}
 
@@ -219,11 +231,13 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				return
 			}
 
-			ch <- TurnStartEvent{Turn: turn}
+			if !send(TurnStartEvent{Turn: turn}) {
+				return
+			}
 
 			if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
 				a.saveMemory(ctx, msgs)
-				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
+				send(CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)})
 				return
 			}
 
@@ -231,7 +245,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 
 			if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
 				a.saveMemory(ctx, msgs)
-				ch <- CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)}
+				send(CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)})
 				return
 			} else if hr.Action == hook.ActionModify {
 				if modified, ok := hr.ModifiedData.(llm.CompletionRequest); ok {
@@ -249,7 +263,9 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			// Collect the streamed response
 			var resp *llm.CompletionResponse
 			for event := range streamCh {
-				ch <- LLMStreamEvent{Event: event}
+				if !send(LLMStreamEvent{Event: event}) {
+					return
+				}
 				if mc, ok := event.(llm.MessageComplete); ok {
 					resp = &mc.Response
 				}
@@ -266,30 +282,38 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 
 			if !resp.HasToolCalls() {
 				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
-				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
+				if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
+					return
+				}
 				a.saveMemory(ctx, msgs)
-				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn)}
+				send(CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn)})
 				return
 			}
 
 			// Emit executing events for all tools
 			for _, tc := range resp.Message.ToolCalls {
 				input := json.RawMessage(tc.Function.Arguments)
-				ch <- ToolExecutingEvent{ToolUseID: tc.ID, Name: tc.Function.Name, Input: input}
+				if !send(ToolExecutingEvent{ToolUseID: tc.ID, Name: tc.Function.Name, Input: input}) {
+					return
+				}
 			}
 
 			// Execute tools (parallel when safe)
 			toolResults := a.executeTools(ctx, resp.Message.ToolCalls)
 			for _, tr := range toolResults {
-				ch <- ToolCompleteEvent{ToolUseID: tr.id, Name: tr.name, Result: tr.result, Err: tr.err}
+				if !send(ToolCompleteEvent{ToolUseID: tr.id, Name: tr.name, Result: tr.result, Err: tr.err}) {
+					return
+				}
 				msgs = append(msgs, llm.ToolResultMsg(tr.id, tr.content, tr.isError))
 			}
 
 			if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
 				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
-				ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
+				if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
+					return
+				}
 				a.saveMemory(ctx, msgs)
-				ch <- CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget)}
+				send(CompleteEvent{Result: *a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget)})
 				return
 			}
 
@@ -302,11 +326,15 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				msgs = compacted
 				newTokens := a.config.Provider.CountTokens(msgs)
 				a.emitHook(ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
-				ch <- ContextCompactedEvent{OldTokens: oldTokens, NewTokens: newTokens}
+				if !send(ContextCompactedEvent{OldTokens: oldTokens, NewTokens: newTokens}) {
+					return
+				}
 			}
 
 			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
-			ch <- TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}
+			if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
+				return
+			}
 		}
 
 		var finalMsg llm.AssistantMessage
@@ -317,7 +345,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			}
 		}
 		a.saveMemory(ctx, msgs)
-		ch <- CompleteEvent{Result: *a.buildResult(msgs, finalMsg, totalUsage, a.config.MaxTurns, StopMaxTurns)}
+		send(CompleteEvent{Result: *a.buildResult(msgs, finalMsg, totalUsage, a.config.MaxTurns, StopMaxTurns)})
 	}()
 
 	return ch, nil

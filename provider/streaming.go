@@ -68,7 +68,10 @@ func newMergedIterator[T any](parent context.Context, iters []Iterator[T]) *merg
 			for {
 				val, ok, err := it.Next(ctx)
 				if err != nil {
-					ch <- mergedItem[T]{err: err}
+					select {
+					case ch <- mergedItem[T]{err: err}:
+					case <-ctx.Done():
+					}
 					return
 				}
 				if !ok {
