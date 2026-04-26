@@ -5,9 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-
-	"github.com/kbukum/gokit/sse"
 )
+
+// Broadcaster is the minimal SSE-style fan-out abstraction the worker
+// package depends on. Defined locally so the worker package stays
+// transport-agnostic — anything matching this method set (notably
+// *sse.Hub) satisfies it without an import edge.
+type Broadcaster interface {
+	BroadcastToPattern(pattern string, data []byte)
+}
 
 // SSEBridgeOption configures an SSEBridge.
 type SSEBridgeOption func(*sseBridgeConfig)
@@ -42,12 +48,12 @@ func WithEnvelope(fn func(event Event[any]) any) SSEBridgeOption {
 // real-time progress streaming.
 type SSEBridge[I, O any] struct {
 	pool        *Pool[I, O]
-	broadcaster sse.Broadcaster
+	broadcaster Broadcaster
 	cfg         sseBridgeConfig
 }
 
 // NewSSEBridge creates a bridge that forwards pool events to an SSE broadcaster.
-func NewSSEBridge[I, O any](pool *Pool[I, O], broadcaster sse.Broadcaster, opts ...SSEBridgeOption) *SSEBridge[I, O] {
+func NewSSEBridge[I, O any](pool *Pool[I, O], broadcaster Broadcaster, opts ...SSEBridgeOption) *SSEBridge[I, O] {
 	cfg := sseBridgeConfig{}
 	for _, opt := range opts {
 		opt(&cfg)
