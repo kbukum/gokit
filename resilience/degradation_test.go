@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewDegradationManager(t *testing.T) {
@@ -67,7 +68,11 @@ func TestDegradationManager_LastChangeUpdatesOnHealthChange(t *testing.T) {
 		t.Error("LastChange should not change when health stays the same")
 	}
 
-	// Different health → LastChange should update.
+	// Different health → LastChange should update. On low-resolution
+	// clocks (notably Windows, ~16ms granularity) consecutive time.Now()
+	// calls can return the same instant, so allow the clock to advance
+	// before the change so the LastChange comparison is meaningful.
+	time.Sleep(20 * time.Millisecond)
 	dm.UpdateService("api", Degraded)
 	third := dm.ServiceStatus("api")
 

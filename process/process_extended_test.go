@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -24,6 +25,11 @@ func TestRunNonexistentWorkingDir(t *testing.T) {
 }
 
 func TestRunVeryLongArgs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Windows command-line is capped at ~32 KiB; this test exercises a
+		// 100 KB argument which is well within Unix limits but not Windows'.
+		t.Skip("Windows command-line length limit is too small for this test")
+	}
 	longArg := strings.Repeat("x", 100_000)
 	result, err := process.Run(context.Background(), process.Command{
 		Binary: "echo",
