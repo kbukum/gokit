@@ -26,7 +26,7 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.Debug("gRPC call started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC call started", map[string]interface{}{
 			"service": service,
 			"method":  methodName,
 			"target":  cc.Target(),
@@ -46,10 +46,10 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 			st := status.Convert(err)
 			fields["status"] = st.Code().String()
 			fields["error"] = st.Message()
-			log.Error("gRPC call failed", fields)
+			log.ErrorCtx(ctx, "gRPC call failed", fields)
 		} else {
 			fields["status"] = "OK"
-			log.Debug("gRPC call completed", fields)
+			log.DebugCtx(ctx, "gRPC call completed", fields)
 		}
 
 		return err
@@ -71,7 +71,7 @@ func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterce
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.Debug("gRPC stream started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC stream started", map[string]interface{}{
 			"service":        service,
 			"method":         methodName,
 			"target":         cc.Target(),
@@ -93,10 +93,10 @@ func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterce
 			st := status.Convert(err)
 			fields["status"] = st.Code().String()
 			fields["error"] = st.Message()
-			log.Error("gRPC stream failed", fields)
+			log.ErrorCtx(ctx, "gRPC stream failed", fields)
 		} else {
 			fields["status"] = "STARTED"
-			log.Debug("gRPC stream established", fields)
+			log.DebugCtx(ctx, "gRPC stream established", fields)
 		}
 
 		return stream, err

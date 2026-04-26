@@ -58,7 +58,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 	m.done = make(chan struct{})
 	m.mu.Unlock()
 
-	m.log.Info("Starting managed consumer", map[string]interface{}{
+	m.log.InfoCtx(ctx, "Starting managed consumer", map[string]interface{}{
 		"topic": m.topic,
 	})
 
@@ -67,7 +67,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 
 		if err := m.consumer.Consume(consumeCtx, m.handler); err != nil {
 			if !errors.Is(err, context.Canceled) {
-				m.log.Error("Managed consumer stopped with error", map[string]interface{}{
+				m.log.ErrorCtx(consumeCtx, "Managed consumer stopped with error", map[string]interface{}{
 					"topic": m.topic,
 					"error": err.Error(),
 				})
@@ -78,7 +78,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 		m.isRunning = false
 		m.mu.Unlock()
 
-		m.log.Info("Managed consumer stopped", map[string]interface{}{
+		m.log.InfoCtx(consumeCtx, "Managed consumer stopped", map[string]interface{}{
 			"topic": m.topic,
 		})
 	}()
@@ -91,7 +91,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 // bounded fallback so a stuck consumer cannot block shutdown forever.
 //
 // A nil ctx is treated as context.Background() with the default timeout.
-func (m *ManagedConsumer) Stop(ctx context.Context) error {
+func (m *ManagedConsumer) Stop(ctx context.Context) error { //nolint:contextcheck // defensive nil-ctx handling intentionally seeds context.Background when caller passes nil
 	if ctx == nil {
 		ctx = context.Background()
 	}

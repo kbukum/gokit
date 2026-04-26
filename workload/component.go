@@ -41,10 +41,10 @@ func (c *Component) Name() string { return "workload" }
 
 func (c *Component) Start(_ context.Context) error {
 	if !c.cfg.Enabled {
-		c.log.Info("workload component is disabled")
+		c.log.Info("workload component is disabled") //nolint:contextcheck // lifecycle Start has no request context
 		return nil
 	}
-	m, err := New(c.registry, c.cfg, c.providerCfg, c.log)
+	m, err := New(c.registry, c.cfg, c.providerCfg, c.log) //nolint:contextcheck // workload init has no request context
 	if err != nil {
 		return fmt.Errorf("workload start: %w", err)
 	}

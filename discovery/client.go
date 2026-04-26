@@ -100,7 +100,7 @@ func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...s
 		// Try static fallback
 		if fb, ok := c.fallback[serviceName]; ok && len(fb) > 0 {
 			if err != nil {
-				c.log.Debug("primary discovery failed, using static fallback", map[string]interface{}{
+				c.log.DebugCtx(ctx, "primary discovery failed, using static fallback", map[string]interface{}{
 					"service": serviceName, "error": err.Error(),
 				})
 			}

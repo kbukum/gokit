@@ -24,7 +24,7 @@ func LoggingInterceptor(log *logger.Logger) connect.UnaryInterceptorFunc {
 			start := time.Now()
 			procedure := req.Spec().Procedure
 
-			log.WithContext(ctx).Debug("RPC call started", map[string]interface{}{
+			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]interface{}{
 				"procedure": procedure,
 			})
 
@@ -42,10 +42,10 @@ func LoggingInterceptor(log *logger.Logger) connect.UnaryInterceptorFunc {
 					fields["code"] = connectErr.Code().String()
 				}
 				fields["error"] = err.Error()
-				log.WithContext(ctx).Error("RPC call failed", fields)
+				log.WithContext(ctx).ErrorCtx(ctx, "RPC call failed", fields)
 			} else {
 				fields["code"] = "ok"
-				log.WithContext(ctx).Debug("RPC call completed", fields)
+				log.WithContext(ctx).DebugCtx(ctx, "RPC call completed", fields)
 			}
 
 			return resp, err

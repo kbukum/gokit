@@ -48,7 +48,7 @@ func (m *Manager) deployJob(ctx context.Context, ns string, req workload.DeployR
 		return nil, fmt.Errorf("kubernetes: create job: %w", err)
 	}
 
-	m.log.Info("workload deployed as Job", map[string]interface{}{
+	m.log.InfoCtx(ctx, "workload deployed as Job", map[string]interface{}{
 		"name":      created.Name,
 		"namespace": ns,
 	})
@@ -91,7 +91,7 @@ func (m *Manager) deployPod(ctx context.Context, ns string, req workload.DeployR
 		return nil, fmt.Errorf("kubernetes: create pod: %w", err)
 	}
 
-	m.log.Info("workload deployed as Pod", map[string]interface{}{
+	m.log.InfoCtx(ctx, "workload deployed as Pod", map[string]interface{}{
 		"name":      created.Name,
 		"namespace": ns,
 	})

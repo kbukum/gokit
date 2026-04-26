@@ -43,7 +43,7 @@ func (c *Component) Start(_ context.Context) error {
 	defer c.mu.Unlock()
 
 	c.wg.Add(1)
-	go func() {
+	go func() { //nolint:contextcheck // hub event loop is long-lived and outlives the caller context
 		defer c.wg.Done()
 		c.hub.Run()
 	}()

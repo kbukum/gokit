@@ -33,12 +33,13 @@ linters:
     # --- Test discipline (F-053, partial) ---
     # Conservative permissive defaults — these catch new code that is clearly
     # wrong without forcing a sweep over legacy tests. The remaining linters
-    # from the original finding (paralleltest, contextcheck, revive) require
-    # large-scale fixups and are tracked separately.
+    # from the original finding (paralleltest, revive) require large-scale
+    # fixups and are tracked separately. contextcheck enabled per #99.
     - tparallel
     - testifylint
     - nilnil
     - nestif
+    - contextcheck
   exclusions:
     rules:
       # Test files have a narrower exclusion list than before (F-022 #52).
@@ -46,6 +47,8 @@ linters:
       # in tests as a pragmatic concession (test setup intentionally ignores
       # close errors, uses weak rand, etc.). `gocritic` and `errorlint` were
       # removed from the blanket — they catch real bugs in test code too.
+      # `contextcheck` is exempted for tests: each table row legitimately
+      # creates its own context.Background() / context.WithTimeout root.
       - path: "_test\\.go"
         linters:
           - errcheck
@@ -53,6 +56,7 @@ linters:
           - noctx
           - unparam
           - unused
+          - contextcheck
       # bootstrap/summary.go intentionally calls fmt.Fprintf on a configurable
       # writer; errors are surfaced through the writer's contract, not
       # propagated. Was: whole-file errcheck exclusion (F-079 #81); now

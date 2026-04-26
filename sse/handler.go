@@ -23,7 +23,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	// Check SSE support (requires http.Flusher interface)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		logger.Error("[SSE] Streaming not supported", map[string]interface{}{
+		logger.ErrorCtx(r.Context(), "[SSE] Streaming not supported", map[string]interface{}{
 			"client_id": clientID,
 		})
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -35,7 +35,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	// terminated by the server's WriteTimeout setting.
 	rc := http.NewResponseController(w)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		logger.Warn("[SSE] Could not disable write deadline", map[string]interface{}{
+		logger.WarnCtx(r.Context(), "[SSE] Could not disable write deadline", map[string]interface{}{
 			"client_id": clientID,
 			"error":     err.Error(),
 		})
@@ -67,7 +67,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", connectedData)
 	flusher.Flush()
 
-	logger.Debug("[SSE] Client connected", map[string]interface{}{
+	logger.DebugCtx(r.Context(), "[SSE] Client connected", map[string]interface{}{
 		"client_id":   clientID,
 		"user_id":     client.UserID(),
 		"session_id":  client.SessionID(),
@@ -84,7 +84,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		select {
 		case <-ctx.Done():
 			// Client disconnected (browser closed, network issue, etc.)
-			logger.Debug("[SSE] Client disconnected", map[string]interface{}{
+			logger.DebugCtx(ctx, "[SSE] Client disconnected", map[string]interface{}{
 				"client_id": clientID,
 				"reason":    ctx.Err().Error(),
 			})
@@ -93,7 +93,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		case frame, ok := <-client.Events():
 			if !ok {
 				// Channel closed, client unregistered
-				logger.Debug("[SSE] Events channel closed", map[string]interface{}{
+				logger.DebugCtx(ctx, "[SSE] Events channel closed", map[string]interface{}{
 					"client_id": clientID,
 				})
 				return
@@ -106,7 +106,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			}
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
 			flusher.Flush()
-			logger.Debug("[SSE] Event sent", map[string]interface{}{
+			logger.DebugCtx(ctx, "[SSE] Event sent", map[string]interface{}{
 				"client_id": clientID,
 				"event":     frame.Event,
 				"data_size": len(frame.Data),
@@ -117,7 +117,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			// This keeps the connection alive through proxies and load balancers
 			_, _ = fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
 			flusher.Flush()
-			logger.Debug("[SSE] Keep-alive sent", map[string]interface{}{
+			logger.DebugCtx(ctx, "[SSE] Keep-alive sent", map[string]interface{}{
 				"client_id": clientID,
 			})
 		}

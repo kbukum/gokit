@@ -231,40 +231,68 @@ func (l *Logger) GetLogger() zerolog.Logger {
 }
 
 // Debug logs a debug message.
+//
+// For request- or operation-scoped logging that should propagate cancellation
+// and trace correlation to OTLP, prefer DebugCtx.
 func (l *Logger) Debug(msg string, fields ...map[string]interface{}) {
+	l.DebugCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API; callers with a ctx in scope should use DebugCtx
+}
+
+// DebugCtx logs a debug message and propagates ctx to the OTLP exporter.
+func (l *Logger) DebugCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
 	event := l.logger.Debug()
 	l.addFields(event, fields...)
 	event.Msg(msg)
-	l.emitOTLP("debug", msg, fields...)
+	l.emitOTLP(ctx, "debug", msg, fields...)
 }
 
-// Info logs an info message.
+// Info logs an info message. Prefer InfoCtx when a context is in scope.
 func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
+	l.InfoCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+}
+
+// InfoCtx logs an info message and propagates ctx to the OTLP exporter.
+func (l *Logger) InfoCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
 	event := l.logger.Info()
 	l.addFields(event, fields...)
 	event.Msg(msg)
-	l.emitOTLP("info", msg, fields...)
+	l.emitOTLP(ctx, "info", msg, fields...)
 }
 
-// Warn logs a warning message.
+// Warn logs a warning message. Prefer WarnCtx when a context is in scope.
 func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
+	l.WarnCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+}
+
+// WarnCtx logs a warning message and propagates ctx to the OTLP exporter.
+func (l *Logger) WarnCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
 	event := l.logger.Warn()
 	l.addFields(event, fields...)
 	event.Msg(msg)
-	l.emitOTLP("warn", msg, fields...)
+	l.emitOTLP(ctx, "warn", msg, fields...)
 }
 
-// Error logs an error message.
+// Error logs an error message. Prefer ErrorCtx when a context is in scope.
 func (l *Logger) Error(msg string, fields ...map[string]interface{}) {
+	l.ErrorCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+}
+
+// ErrorCtx logs an error message and propagates ctx to the OTLP exporter.
+func (l *Logger) ErrorCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
 	event := l.logger.Error()
 	l.addFields(event, fields...)
 	event.Msg(msg)
-	l.emitOTLP("error", msg, fields...)
+	l.emitOTLP(ctx, "error", msg, fields...)
 }
 
-// Fatal logs a fatal message and exits.
+// Fatal logs a fatal message and exits. Prefer FatalCtx when a context is in scope.
 func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
-	l.emitOTLP("fatal", msg, fields...)
+	l.FatalCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+}
+
+// FatalCtx logs a fatal message and exits, propagating ctx to the OTLP exporter.
+func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	l.emitOTLP(ctx, "fatal", msg, fields...)
 	event := l.logger.Fatal()
 	l.addFields(event, fields...)
 	event.Msg(msg)
@@ -324,23 +352,43 @@ func GetLoggerZ() zerolog.Logger {
 // Package-level convenience functions delegate to the global logger.
 
 func Debug(msg string, fields ...map[string]interface{}) {
-	GetGlobalLogger().Debug(msg, fields...)
+	GetGlobalLogger().Debug(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
+}
+
+func DebugCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	GetGlobalLogger().DebugCtx(ctx, msg, fields...)
 }
 
 func Info(msg string, fields ...map[string]interface{}) {
-	GetGlobalLogger().Info(msg, fields...)
+	GetGlobalLogger().Info(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
+}
+
+func InfoCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	GetGlobalLogger().InfoCtx(ctx, msg, fields...)
 }
 
 func Warn(msg string, fields ...map[string]interface{}) {
-	GetGlobalLogger().Warn(msg, fields...)
+	GetGlobalLogger().Warn(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
+}
+
+func WarnCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	GetGlobalLogger().WarnCtx(ctx, msg, fields...)
 }
 
 func Error(msg string, fields ...map[string]interface{}) {
-	GetGlobalLogger().Error(msg, fields...)
+	GetGlobalLogger().Error(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
+}
+
+func ErrorCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	GetGlobalLogger().ErrorCtx(ctx, msg, fields...)
 }
 
 func Fatal(msg string, fields ...map[string]interface{}) {
-	GetGlobalLogger().Fatal(msg, fields...)
+	GetGlobalLogger().Fatal(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
+}
+
+func FatalCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+	GetGlobalLogger().FatalCtx(ctx, msg, fields...)
 }
 
 // WithContext returns a context-enriched logger from the global logger.
@@ -355,7 +403,7 @@ func WithComponent(name string) *Logger {
 
 // --- internal helpers ---
 
-func (l *Logger) emitOTLP(level, msg string, fields ...map[string]interface{}) {
+func (l *Logger) emitOTLP(ctx context.Context, level, msg string, fields ...map[string]interface{}) {
 	if l.otlpProvider == nil {
 		return
 	}
@@ -365,7 +413,7 @@ func (l *Logger) emitOTLP(level, msg string, fields ...map[string]interface{}) {
 			merged[k] = v
 		}
 	}
-	l.otlpProvider.EmitLog(level, msg, merged)
+	l.otlpProvider.EmitLog(ctx, level, msg, merged)
 }
 
 func (l *Logger) addFields(event *zerolog.Event, fields ...map[string]interface{}) {

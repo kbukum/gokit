@@ -35,9 +35,9 @@ func (l *loggingRR[I, O]) Execute(ctx context.Context, input I) (O, error) {
 
 	if err != nil {
 		fields["error"] = err.Error()
-		l.log.Error("provider execute failed", fields)
+		l.log.ErrorCtx(ctx, "provider execute failed", fields)
 	} else {
-		l.log.Debug("provider execute ok", fields)
+		l.log.DebugCtx(ctx, "provider execute ok", fields)
 	}
 
 	return output, err

@@ -71,7 +71,7 @@ func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, 
 	m.providers[name] = instance
 	m.mu.Unlock()
 	m.registry.Set(name, instance)
-	m.log.Info("provider initialized with resilience", map[string]interface{}{"provider": name})
+	m.log.InfoCtx(ctx, "provider initialized with resilience", map[string]interface{}{"provider": name})
 	return nil
 }
 
@@ -94,7 +94,7 @@ func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg
 	m.providers[name] = instance
 	m.mu.Unlock()
 	m.registry.Set(name, instance)
-	m.log.Info("provider initialized", map[string]interface{}{"provider": name})
+	m.log.InfoCtx(ctx, "provider initialized", map[string]interface{}{"provider": name})
 	return nil
 }
 
@@ -171,7 +171,7 @@ func (m *Manager[T]) CloseAll(ctx context.Context) error {
 			if err := c.Close(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("close provider %q: %w", name, err))
 			} else {
-				m.log.Info("provider closed", map[string]interface{}{"provider": name})
+				m.log.InfoCtx(ctx, "provider closed", map[string]interface{}{"provider": name})
 			}
 		}
 	}

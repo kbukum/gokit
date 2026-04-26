@@ -82,7 +82,7 @@ func (p *Producer) initWriter() error {
 		Compression:  kafka.ResolveCompression(p.cfg.Compression),
 		WriteTimeout: kafka.ParseDuration(p.cfg.WriteTimeout),
 		ErrorLogger: kafkago.LoggerFunc(func(msg string, args ...interface{}) {
-			p.log.Error("writer: "+msg, map[string]interface{}{
+			p.log.Error("writer: "+msg, map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
 				"args": fmt.Sprintf("%v", args),
 			})
 		}),
@@ -110,7 +110,7 @@ func (p *Producer) ensureWriter() error {
 
 // WriteMessages sends one or more messages to Kafka with retry logic.
 func (p *Producer) WriteMessages(ctx context.Context, msgs ...kafkago.Message) error {
-	if err := p.ensureWriter(); err != nil {
+	if err := p.ensureWriter(); err != nil { //nolint:contextcheck // lazy writer init has no request context; underlying error logger annotated separately
 		return err
 	}
 

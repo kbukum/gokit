@@ -106,7 +106,7 @@ func (c *Component) Start(ctx context.Context) error {
 	c.cfg.ApplyDefaults()
 
 	if !c.cfg.Enabled {
-		c.log.Info("discovery disabled, using static provider")
+		c.log.InfoCtx(ctx, "discovery disabled, using static provider")
 		f, ok := c.providers.Get("static")
 		if !ok {
 			return fmt.Errorf("discovery: static provider not registered")
@@ -161,7 +161,7 @@ func (c *Component) Start(ctx context.Context) error {
 			if c.cfg.Registration.Required {
 				return fmt.Errorf("discovery: register self: %w", err)
 			}
-			c.log.Warn("failed to register with discovery — continuing in degraded mode", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to register with discovery — continuing in degraded mode", map[string]interface{}{
 				"error":      err.Error(),
 				"service_id": svc.ID,
 			})
@@ -170,17 +170,17 @@ func (c *Component) Start(ctx context.Context) error {
 
 	c.client = c.buildClient()
 
-	c.log.Debug("discovery component started", map[string]interface{}{"provider": c.cfg.Provider})
+	c.log.DebugCtx(ctx, "discovery component started", map[string]interface{}{"provider": c.cfg.Provider})
 	return nil
 }
 
 // Stop deregisters the local service and releases resources.
 func (c *Component) Stop(ctx context.Context) error {
-	c.log.Debug("discovery component stopping")
+	c.log.DebugCtx(ctx, "discovery component stopping")
 
 	if c.registry != nil && c.cfg.Enabled && c.cfg.Registration.ServiceID != "" {
 		if err := c.registry.Deregister(ctx, c.cfg.Registration.ServiceID); err != nil {
-			c.log.Warn("failed to deregister on stop", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to deregister on stop", map[string]interface{}{
 				"error": err.Error(),
 			})
 		}
@@ -334,7 +334,7 @@ func (c *Component) registerWithRetry(ctx context.Context, svc *ServiceInfo) err
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if err := c.registry.Register(ctx, svc); err != nil {
 			lastErr = err
-			c.log.Warn("failed to register service", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to register service", map[string]interface{}{
 				"error":      err.Error(),
 				"service_id": svc.ID,
 				"attempt":    attempt,

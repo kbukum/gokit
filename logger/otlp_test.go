@@ -200,7 +200,7 @@ func TestEmitLogFieldConversion(t *testing.T) {
 		"user":  "bob",
 		"count": 5,
 	}
-	p.EmitLog("info", "hello world", fields)
+	p.EmitLog(context.Background(), "info", "hello world", fields)
 
 	if len(exp.records) != 1 {
 		t.Fatalf("expected 1 record, got %d", len(exp.records))
@@ -237,7 +237,7 @@ func TestEmitLogNilProvider(t *testing.T) {
 
 	// Should not panic.
 	var p *OTLPProvider
-	p.EmitLog("info", "should not panic", nil)
+	p.EmitLog(context.Background(), "info", "should not panic", nil)
 }
 
 func TestShutdownNilProvider(t *testing.T) {
@@ -255,7 +255,7 @@ func TestShutdownGraceful(t *testing.T) {
 	exp := &inMemoryExporter{}
 	p := newTestOTLPProvider(exp)
 
-	p.EmitLog("info", "before shutdown", nil)
+	p.EmitLog(context.Background(), "info", "before shutdown", nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

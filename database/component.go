@@ -75,7 +75,7 @@ func (c *Component) Name() string { return "database" }
 // The context is used for connection retries and can be canceled to abort startup.
 func (c *Component) Start(ctx context.Context) error {
 	if !c.cfg.Enabled {
-		c.log.Info("Database component is disabled")
+		c.log.InfoCtx(ctx, "Database component is disabled")
 		return nil
 	}
 
@@ -95,7 +95,7 @@ func (c *Component) Start(ctx context.Context) error {
 	c.db = db
 
 	if c.cfg.AutoMigrate && len(c.models) > 0 {
-		if err := c.db.AutoMigrate(c.models...); err != nil {
+		if err := c.db.AutoMigrate(c.models...); err != nil { //nolint:contextcheck // AutoMigrate is a synchronous schema operation without a request context
 			return fmt.Errorf("database auto-migrate: %w", err)
 		}
 	}
@@ -108,7 +108,7 @@ func (c *Component) Stop(_ context.Context) error {
 	if c.db == nil {
 		return nil
 	}
-	return c.db.Close()
+	return c.db.Close() //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 }
 
 // Health returns the current health status of the database.

@@ -74,7 +74,7 @@ func (s *consumerStream) Execute(_ context.Context, _ struct{}) (provider.Iterat
 		ch:       make(chan messaging.Message, 64),
 		done:     make(chan struct{}),
 	}
-	iter.start()
+	iter.start() //nolint:contextcheck // iterator runs as a long-lived bridge goroutine detached from the Execute caller
 	return iter, nil
 }
 

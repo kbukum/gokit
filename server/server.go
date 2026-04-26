@@ -110,7 +110,7 @@ func (s *Server) Handler() http.Handler {
 // Start binds the port and begins serving. It returns once the listener is
 // bound so the caller knows the port is ready; serving continues in a goroutine.
 func (s *Server) Start(ctx context.Context) error {
-	s.log.Debug("Starting HTTP server", map[string]interface{}{
+	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]interface{}{
 		"addr": s.httpServer.Addr,
 	})
 
@@ -121,7 +121,7 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	s.listener = listener
 
-	go func() {
+	go func() { //nolint:contextcheck // serve goroutine outlives the Start ctx
 		if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			s.log.Error("Server error", map[string]interface{}{
 				"error": err.Error(),
@@ -129,7 +129,7 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
-	s.log.Info("HTTP server started", map[string]interface{}{
+	s.log.InfoCtx(ctx, "HTTP server started", map[string]interface{}{
 		"addr": s.httpServer.Addr,
 	})
 	return nil
@@ -137,19 +137,19 @@ func (s *Server) Start(ctx context.Context) error {
 
 // Stop gracefully shuts down the server with a 5-second deadline.
 func (s *Server) Stop(ctx context.Context) error {
-	s.log.Debug("Shutting down HTTP server")
+	s.log.DebugCtx(ctx, "Shutting down HTTP server")
 
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.log.Error("Server shutdown error", map[string]interface{}{
+		s.log.ErrorCtx(ctx, "Server shutdown error", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return fmt.Errorf("server shutdown error: %w", err)
 	}
 
-	s.log.Debug("HTTP server shut down successfully")
+	s.log.DebugCtx(ctx, "HTTP server shut down successfully")
 	return nil
 }
 

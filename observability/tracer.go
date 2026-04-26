@@ -96,7 +96,7 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 		))
 	}
 
-	logger.Info("tracer initialized", logger.Fields(
+	logger.InfoCtx(ctx, "tracer initialized", logger.Fields(
 		"service", config.ServiceName,
 		"endpoint", config.Endpoint,
 		"sample_rate", config.SampleRate,

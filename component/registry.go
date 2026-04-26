@@ -96,7 +96,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Debug("Starting components", map[string]interface{}{
+	logger.DebugCtx(ctx, "Starting components", map[string]interface{}{
 		"pending": len(pending),
 		"total":   total,
 	})
@@ -107,9 +107,9 @@ func (r *Registry) StartAll(ctx context.Context) error {
 	for _, entry := range pending {
 		name := entry.component.Name()
 
-		logger.Debug("Starting component", map[string]interface{}{"component": name})
+		logger.DebugCtx(ctx, "Starting component", map[string]interface{}{"component": name})
 		if err := entry.component.Start(ctx); err != nil {
-			logger.Error("Component start failed", map[string]interface{}{
+			logger.ErrorCtx(ctx, "Component start failed", map[string]interface{}{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -122,10 +122,10 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		r.mu.Unlock()
 		startedThisCall = append(startedThisCall, entry)
 
-		logger.Debug("Component started", map[string]interface{}{"component": name})
+		logger.DebugCtx(ctx, "Component started", map[string]interface{}{"component": name})
 	}
 
-	logger.Info("All components started successfully")
+	logger.InfoCtx(ctx, "All components started successfully")
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 		name := entry.component.Name()
 		stopCtx, cancel := stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
-			logger.Error("Rollback stop failed", map[string]interface{}{
+			logger.ErrorCtx(ctx, "Rollback stop failed", map[string]interface{}{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -169,22 +169,22 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	}
 	r.mu.RUnlock()
 
-	logger.Info("Stopping all components")
+	logger.InfoCtx(ctx, "Stopping all components")
 
 	var errs []error
 	for _, entry := range toStop {
 		name := entry.component.Name()
-		logger.Debug("Stopping component", map[string]interface{}{"component": name})
+		logger.DebugCtx(ctx, "Stopping component", map[string]interface{}{"component": name})
 
 		stopCtx, cancel := stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
 			errs = append(errs, fmt.Errorf("failed to stop %s: %w", name, err))
-			logger.Error("Component stop failed", map[string]interface{}{
+			logger.ErrorCtx(ctx, "Component stop failed", map[string]interface{}{
 				"component": name,
 				"error":     err.Error(),
 			})
 		} else {
-			logger.Info("Component stopped", map[string]interface{}{"component": name})
+			logger.InfoCtx(ctx, "Component stopped", map[string]interface{}{"component": name})
 		}
 		cancel()
 
@@ -197,7 +197,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		return fmt.Errorf("shutdown errors: %v", errs)
 	}
 
-	logger.Info("All components stopped successfully")
+	logger.InfoCtx(ctx, "All components stopped successfully")
 	return nil
 }
 

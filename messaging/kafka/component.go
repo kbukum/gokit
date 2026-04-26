@@ -85,11 +85,11 @@ func (c *Component) Start(ctx context.Context) error {
 	c.consumeCtx = consumeCtx
 
 	for _, cr := range c.consumers {
-		c.startConsumer(cr)
+		c.startConsumer(cr) //nolint:contextcheck // consumer goroutines run on the detached consumeCtx, not the Start ctx
 	}
 
 	c.running = true
-	c.log.Debug("Kafka component started")
+	c.log.DebugCtx(ctx, "Kafka component started")
 	return nil
 }
 
@@ -118,7 +118,7 @@ func (c *Component) Stop(_ context.Context) error {
 		return nil
 	}
 
-	c.log.Debug("Kafka component stopping")
+	c.log.Debug("Kafka component stopping") //nolint:contextcheck // Stop is invoked from lifecycle without a request context
 
 	// Cancel shared context — all consumer goroutines exit their Consume loops in parallel
 	if c.cancelFn != nil {
@@ -332,7 +332,7 @@ func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) erro
 	for i, t := range topics {
 		created[i] = t.Topic
 	}
-	c.log.Debug("Kafka topics ensured", map[string]interface{}{
+	c.log.DebugCtx(ctx, "Kafka topics ensured", map[string]interface{}{
 		"topics": created,
 	})
 

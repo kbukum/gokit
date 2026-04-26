@@ -47,7 +47,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 	rateLimitedErrLogger := kafkago.LoggerFunc(func(msg string, args ...interface{}) {
 		n := errCount.Add(1)
 		if n == 1 {
-			clog.Warn("Kafka connection issue (retrying automatically)", map[string]interface{}{
+			clog.Warn("Kafka connection issue (retrying automatically)", map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
 				"topic":   topic,
 				"groupID": cfg.GroupID,
 			})
@@ -86,7 +86,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 // Consume reads messages in a loop, calling handler for each one.
 // It blocks until ctx is canceled or an unrecoverable error occurs.
 func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
-	c.log.Debug("Starting consume loop", map[string]interface{}{
+	c.log.DebugCtx(ctx, "Starting consume loop", map[string]interface{}{
 		"topic":   c.topic,
 		"groupID": c.groupID,
 	})
@@ -109,7 +109,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 
 			c.failures = 0
 			if c.errCount.Load() > 0 {
-				c.log.Info("Kafka connection recovered", map[string]interface{}{
+				c.log.InfoCtx(ctx, "Kafka connection recovered", map[string]interface{}{
 					"topic":   c.topic,
 					"groupID": c.groupID,
 				})
@@ -119,7 +119,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 			domainMsg := kafka.FromKafkaMessage(msg)
 
 			if err := handler(ctx, domainMsg); err != nil {
-				c.log.Error("Message processing failed", map[string]interface{}{
+				c.log.ErrorCtx(ctx, "Message processing failed", map[string]interface{}{
 					"error":  err.Error(),
 					"topic":  domainMsg.Topic,
 					"offset": domainMsg.Offset,
@@ -132,7 +132,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 func (c *Consumer) handleFailure(ctx context.Context, err error) error {
 	c.failures++
 	if c.failures <= 3 {
-		c.log.Error("Kafka read error", map[string]interface{}{
+		c.log.ErrorCtx(ctx, "Kafka read error", map[string]interface{}{
 			"error":    err.Error(),
 			"failures": c.failures,
 			"topic":    c.topic,
