@@ -277,7 +277,17 @@ jobs:
           mapfile -t mods < <(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' | sed 's|/go.mod$||' | sort)
           fail=0
           for mod in "${mods[@]}"; do
-            mapfile -t files < <(grep -rlE '^func Fuzz[A-Za-z0-9_]+' "$mod" --include='*_test.go' 2>/dev/null || true)
+            # Build prune args so grep does not recurse into nested modules
+            # (otherwise fuzz targets in submodules get discovered twice:
+            # once via their own module, once via the parent's recursive scan).
+            prune_args=()
+            for other in "${mods[@]}"; do
+              [ "$other" = "$mod" ] && continue
+              case "$other" in
+                "$mod"/*) prune_args+=( --exclude-dir="$(basename "$other")" ) ;;
+              esac
+            done
+            mapfile -t files < <(grep -rlE '^func Fuzz[A-Za-z0-9_]+' "$mod" --include='*_test.go' "${prune_args[@]}" 2>/dev/null || true)
             for f in "${files[@]}"; do
               # package path relative to module (./pkg) and fuzz target names
               pkgdir=$(dirname "${f#$mod/}")
