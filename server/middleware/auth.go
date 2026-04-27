@@ -185,6 +185,10 @@ func extractToken(c *gin.Context, o *authOptions) (string, bool) {
 			if o.queryTokenWarningLogger != nil {
 				o.queryTokenWarningLogger(c, o.queryTokenParam)
 			}
+			// Strip the token from the URL so it is not logged, cached, or forwarded.
+			q := c.Request.URL.Query()
+			q.Del(o.queryTokenParam)
+			c.Request.URL.RawQuery = q.Encode()
 			return token, true
 		}
 	}
