@@ -9,7 +9,7 @@ func BenchmarkValidator_HappyPath(b *testing.B) {
 			Required("name", "alice").
 			MaxLength("name", "alice", 64).
 			MinLength("name", "alice", 1).
-			Range("age", 30, 0, 120).
+			InRange("age", 30, 0, 120).
 			OneOf("role", "admin", []string{"admin", "user", "guest"})
 		if err := v.Validate(); err != nil {
 			b.Fatalf("validate: %v", err)
@@ -23,7 +23,7 @@ func BenchmarkValidator_FailFast(b *testing.B) {
 		v := New().
 			Required("name", "").
 			MaxLength("name", "", 0).
-			Range("age", 999, 0, 120)
+			InRange("age", 999, 0, 120)
 		if err := v.Validate(); err == nil {
 			b.Fatal("expected error")
 		}

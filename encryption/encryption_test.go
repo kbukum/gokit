@@ -121,8 +121,10 @@ func TestDifferentKeysProduceDifferentCiphertexts(t *testing.T) {
 func TestNewServiceDifferentKeysNotEqual(t *testing.T) {
 	svc1, _ := NewService("key1")
 	svc2, _ := NewService("key2")
-	if svc1.gcm == svc2.gcm {
-		t.Error("different keys should produce different GCM instances")
+	ct, _ := svc1.Encrypt("test")
+	_, err := svc2.Decrypt(ct)
+	if err == nil {
+		t.Error("different keys should not decrypt each other's ciphertext")
 	}
 }
 

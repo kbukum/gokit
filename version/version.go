@@ -16,8 +16,8 @@ var (
 	GoVersion = ""    // Go version used for build
 )
 
-// Info represents version information
-type Info struct {
+// VersionInfo represents version information
+type VersionInfo struct {
 	Version   string    `json:"version"`
 	GitCommit string    `json:"git_commit"`
 	GitBranch string    `json:"git_branch"`
@@ -29,8 +29,8 @@ type Info struct {
 }
 
 // GetVersionInfo returns comprehensive version information
-func GetVersionInfo() *Info {
-	info := &Info{
+func GetVersionInfo() *VersionInfo {
+	info := &VersionInfo{
 		Version:   Version,
 		GitCommit: GitCommit,
 		GitBranch: GitBranch,
@@ -73,12 +73,6 @@ func GetVersionInfo() *Info {
 				}
 			}
 		}
-	}
-
-	// If we still don't have build time, use current time for dev builds
-	if info.BuildDate.IsZero() {
-		info.BuildDate = time.Now().UTC()
-		info.BuildTime = info.BuildDate.Format(time.RFC3339)
 	}
 
 	return info
