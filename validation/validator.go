@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -122,24 +121,24 @@ func (v *Validator) MinLength(field, value string, minLen int) *Validator {
 	return v
 }
 
-// InRange checks if a number is within an inclusive range.
-func (v *Validator) InRange(field string, value, minVal, maxVal int) *Validator {
+// Range checks if a number is within a range.
+func (v *Validator) Range(field string, value, minVal, maxVal int) *Validator {
 	if value < minVal || value > maxVal {
 		v.AddError(field, fmt.Sprintf("must be between %d and %d", minVal, maxVal))
 	}
 	return v
 }
 
-// MinValue checks if a number meets the minimum value.
-func (v *Validator) MinValue(field string, value, minVal int) *Validator {
+// Min checks if a number meets minimum value.
+func (v *Validator) Min(field string, value, minVal int) *Validator {
 	if value < minVal {
 		v.AddError(field, fmt.Sprintf("must be at least %d", minVal))
 	}
 	return v
 }
 
-// MaxValue checks if a number does not exceed the maximum value.
-func (v *Validator) MaxValue(field string, value, maxVal int) *Validator {
+// Max checks if a number is within max value.
+func (v *Validator) Max(field string, value, maxVal int) *Validator {
 	if value > maxVal {
 		v.AddError(field, fmt.Sprintf("must be %d or less", maxVal))
 	}
@@ -151,36 +150,9 @@ func (v *Validator) Pattern(field, value, pattern string) *Validator {
 	if value == "" {
 		return v
 	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		panic(fmt.Sprintf("validation: invalid regex pattern %q: %v", pattern, err))
-	}
-	if !re.MatchString(value) {
+	matched, err := regexp.MatchString(pattern, value)
+	if err != nil || !matched {
 		v.AddError(field, "does not match required format")
-	}
-	return v
-}
-
-// Email checks if a string is a valid email address.
-func (v *Validator) Email(field, value string) *Validator {
-	if value == "" {
-		return v
-	}
-	// Simple email validation: local@domain.tld
-	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
-	if !emailRegex.MatchString(value) {
-		v.AddError(field, "must be a valid email address")
-	}
-	return v
-}
-
-// URL checks if a string is a valid HTTP or HTTPS URL.
-func (v *Validator) URL(field, value string) *Validator {
-	if value == "" {
-		return v
-	}
-	if !strings.HasPrefix(value, "http://") && !strings.HasPrefix(value, "https://") {
-		v.AddError(field, "must be a valid URL")
 	}
 	return v
 }
@@ -203,48 +175,6 @@ func (v *Validator) OneOf(field, value string, allowed []string) *Validator {
 func (v *Validator) Custom(condition bool, field, message string) *Validator {
 	if !condition {
 		v.AddError(field, message)
-	}
-	return v
-}
-
-// Before checks that value (RFC 3339 datetime string) is strictly before deadline.
-// Empty values are skipped (use Required first).
-func (v *Validator) Before(field, value, deadline string) *Validator {
-	if value == "" {
-		return v
-	}
-	t, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		v.AddError(field, "must be a valid datetime")
-		return v
-	}
-	d, err := time.Parse(time.RFC3339, deadline)
-	if err != nil {
-		return v
-	}
-	if !t.Before(d) {
-		v.AddError(field, fmt.Sprintf("must be before %s", deadline))
-	}
-	return v
-}
-
-// After checks that value (RFC 3339 datetime string) is strictly after floor.
-// Empty values are skipped (use Required first).
-func (v *Validator) After(field, value, floor string) *Validator {
-	if value == "" {
-		return v
-	}
-	t, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		v.AddError(field, "must be a valid datetime")
-		return v
-	}
-	f, err := time.Parse(time.RFC3339, floor)
-	if err != nil {
-		return v
-	}
-	if !t.After(f) {
-		v.AddError(field, fmt.Sprintf("must be after %s", floor))
 	}
 	return v
 }

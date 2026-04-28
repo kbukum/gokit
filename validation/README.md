@@ -48,8 +48,7 @@ func main() {
 | `FieldError` | Individual field validation error |
 | `New()` | Create a new Validator |
 | `Required()` / `RequiredUUID()` / `OptionalUUID()` | Presence checks |
-| `MinLength()` / `MaxLength()` / `InRange()` / `MinValue()` / `MaxValue()` | Size/range rules |
-| `Email()` / `URL()` | Email and URL format checks |
+| `MinLength()` / `MaxLength()` / `Range()` / `Min()` / `Max()` | Size/range rules |
 | `Pattern()` / `OneOf()` / `Custom()` | Pattern, enum, and custom rules |
 | `Validate(s any)` | Struct tag validation using `validate` tags |
 | `ValidateUUID()` | Parse and validate UUID string |

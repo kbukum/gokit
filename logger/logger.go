@@ -69,9 +69,6 @@ func New(cfg *Config, serviceName string) *Logger {
 	if cfg.Caller {
 		zl = zl.With().Caller().Logger()
 	}
-	if cfg.Stacktrace {
-		zl = zl.With().Stack().Logger()
-	}
 
 	zl = zl.Level(level)
 

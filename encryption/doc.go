@@ -1,10 +1,8 @@
-// Package encryption provides symmetric encryption and decryption for
+// Package encryption provides AES-GCM encryption and decryption for
 // sensitive data in gokit applications.
 //
-// It supports AES-256-GCM (default) and ChaCha20-Poly1305 algorithms with
-// PBKDF2-SHA256 key derivation (600,000 iterations, random 16-byte salt).
-//
-// Ciphertext format: base64(salt[16] || nonce[12] || ciphertext)
+// It supports automatic key derivation from passphrases using SHA-256
+// hashing, producing 256-bit keys for AES-GCM authenticated encryption.
 //
 // # Usage
 //

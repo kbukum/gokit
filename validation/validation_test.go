@@ -109,19 +109,19 @@ func TestValidatorMinLength(t *testing.T) {
 
 func TestValidatorRange(t *testing.T) {
 	v := New()
-	v.InRange("age", 25, 18, 100)
+	v.Range("age", 25, 18, 100)
 	if v.HasErrors() {
 		t.Error("expected no error for value in range")
 	}
 
 	v2 := New()
-	v2.InRange("age", 5, 18, 100)
+	v2.Range("age", 5, 18, 100)
 	if !v2.HasErrors() {
 		t.Error("expected error for value below range")
 	}
 
 	v3 := New()
-	v3.InRange("age", 101, 18, 100)
+	v3.Range("age", 101, 18, 100)
 	if !v3.HasErrors() {
 		t.Error("expected error for value above range")
 	}
@@ -129,20 +129,20 @@ func TestValidatorRange(t *testing.T) {
 
 func TestValidatorMinMax(t *testing.T) {
 	v := New()
-	v.MinValue("count", 5, 1)
-	v.MaxValue("count", 5, 10)
+	v.Min("count", 5, 1)
+	v.Max("count", 5, 10)
 	if v.HasErrors() {
 		t.Error("expected no errors")
 	}
 
 	v2 := New()
-	v2.MinValue("count", 0, 1)
+	v2.Min("count", 0, 1)
 	if !v2.HasErrors() {
 		t.Error("expected error for value below min")
 	}
 
 	v3 := New()
-	v3.MaxValue("count", 11, 10)
+	v3.Max("count", 11, 10)
 	if !v3.HasErrors() {
 		t.Error("expected error for value above max")
 	}
@@ -232,7 +232,7 @@ func TestValidatorValidate(t *testing.T) {
 
 func TestValidatorChaining(t *testing.T) {
 	v := New()
-	result := v.Required("name", "John").MaxLength("name", "John", 100).MinValue("age", 25, 18)
+	result := v.Required("name", "John").MaxLength("name", "John", 100).Min("age", 25, 18)
 	if result != v {
 		t.Error("expected chaining to return same validator")
 	}
@@ -452,7 +452,7 @@ func TestMin_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			v := New()
-			v.MinValue("f", tt.value, tt.minVal)
+			v.Min("f", tt.value, tt.minVal)
 			if got := v.HasErrors(); got != tt.wantErr {
 				t.Errorf("Min(%d, %d): HasErrors() = %v, want %v",
 					tt.value, tt.minVal, got, tt.wantErr)
@@ -480,7 +480,7 @@ func TestMax_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			v := New()
-			v.MaxValue("f", tt.value, tt.maxVal)
+			v.Max("f", tt.value, tt.maxVal)
 			if got := v.HasErrors(); got != tt.wantErr {
 				t.Errorf("Max(%d, %d): HasErrors() = %v, want %v",
 					tt.value, tt.maxVal, got, tt.wantErr)
@@ -512,7 +512,7 @@ func TestRange_TableDriven(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			v := New()
-			v.InRange("f", tt.value, tt.minVal, tt.maxVal)
+			v.Range("f", tt.value, tt.minVal, tt.maxVal)
 			if got := v.HasErrors(); got != tt.wantErr {
 				t.Errorf("Range(%d, %d, %d): HasErrors() = %v, want %v",
 					tt.value, tt.minVal, tt.maxVal, got, tt.wantErr)
@@ -534,6 +534,7 @@ func TestPattern_TableDriven(t *testing.T) {
 		{"empty value skips", "", `^[a-z]+$`, false},
 		{"email-like pattern", "a@b.com", `^.+@.+\..+$`, false},
 		{"partial match rejected", "123abc", `^[a-z]+$`, true},
+		{"invalid regex reports error", "test", `[invalid`, true},
 		{"unicode pattern", "日本語", `^[\p{Han}\p{Hiragana}\p{Katakana}]+$`, false},
 		{"dot matches char", "a", `.`, false},
 	}
@@ -701,9 +702,9 @@ func TestChainingReturnsSameInstance(t *testing.T) {
 		Required("a", "val").
 		MinLength("b", "val", 1).
 		MaxLength("c", "val", 100).
-		MinValue("d", 5, 0).
-		MaxValue("e", 5, 10).
-		InRange("f", 5, 0, 10).
+		Min("d", 5, 0).
+		Max("e", 5, 10).
+		Range("f", 5, 0, 10).
 		Pattern("g", "abc", `^[a-z]+$`).
 		OneOf("h", "x", []string{"x", "y"}).
 		RequiredUUID("i", uuid.New().String()).
@@ -741,7 +742,7 @@ func TestMultipleErrors_Collected(t *testing.T) {
 	v := New()
 	v.Required("name", "")
 	v.Required("email", "")
-	v.MinValue("age", -1, 0)
+	v.Min("age", -1, 0)
 	v.MaxLength("bio", strings.Repeat("x", 300), 255)
 
 	errs := v.Errors()
@@ -764,7 +765,7 @@ func TestValidate_MultipleErrors_AppErrorContainsAll(t *testing.T) {
 	v := New()
 	v.Required("first_name", "")
 	v.Required("last_name", "")
-	v.MinValue("score", -10, 0)
+	v.Min("score", -10, 0)
 
 	appErr := v.Validate()
 	if appErr == nil {
@@ -1174,9 +1175,9 @@ func TestEdge_ExtremelyLargeStringInput(t *testing.T) {
 func TestEdge_ZeroIntValues(t *testing.T) {
 	t.Parallel()
 	v := New()
-	v.MinValue("f", 0, 0)
-	v.MaxValue("f", 0, 0)
-	v.InRange("f", 0, 0, 0)
+	v.Min("f", 0, 0)
+	v.Max("f", 0, 0)
+	v.Range("f", 0, 0, 0)
 	if v.HasErrors() {
 		t.Error("zero should pass min=0, max=0, range(0,0)")
 	}
@@ -1438,118 +1439,5 @@ func TestValidator_ConcurrentStructValidation(t *testing.T) {
 	}
 	for i := 0; i < 50; i++ {
 		<-done
-	}
-}
-
-func TestValidatorEmail(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		value   string
-		wantErr bool
-	}{
-		{"valid email", "user@example.com", false},
-		{"valid with plus", "user+tag@example.com", false},
-		{"valid subdomain", "user@sub.example.com", false},
-		{"missing @", "userexample.com", true},
-		{"missing domain", "user@", true},
-		{"missing local", "@example.com", true},
-		{"no tld", "user@example", true},
-		{"empty skipped", "", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			v := New()
-			v.Email("email", tt.value)
-			if got := v.HasErrors(); got != tt.wantErr {
-				t.Errorf("Email(%q): HasErrors() = %v, want %v", tt.value, got, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidatorURL(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		value   string
-		wantErr bool
-	}{
-		{"valid http", "http://example.com", false},
-		{"valid https", "https://example.com", false},
-		{"no scheme", "example.com", true},
-		{"ftp scheme", "ftp://example.com", true},
-		{"empty skipped", "", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			v := New()
-			v.URL("url", tt.value)
-			if got := v.HasErrors(); got != tt.wantErr {
-				t.Errorf("URL(%q): HasErrors() = %v, want %v", tt.value, got, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestPatternPanicsOnInvalidRegex(t *testing.T) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			t.Fatal("expected panic for invalid regex pattern")
-		}
-		msg := fmt.Sprintf("%v", r)
-		if !strings.Contains(msg, "invalid regex pattern") {
-			t.Errorf("unexpected panic message: %s", msg)
-		}
-	}()
-	New().Pattern("field", "value", "[invalid")
-}
-
-func TestValidatorBefore(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		deadline  string
-		wantError bool
-	}{
-		{"before_passes", "2024-01-01T00:00:00Z", "2025-01-01T00:00:00Z", false},
-		{"equal_fails", "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", true},
-		{"after_fails", "2026-01-01T00:00:00Z", "2025-01-01T00:00:00Z", true},
-		{"empty_skipped", "", "2025-01-01T00:00:00Z", false},
-		{"invalid_value_fails", "not-a-date", "2025-01-01T00:00:00Z", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := New().Before("t", tt.value, tt.deadline)
-			if v.HasErrors() != tt.wantError {
-				t.Errorf("HasErrors=%v, want %v", v.HasErrors(), tt.wantError)
-			}
-		})
-	}
-}
-
-func TestValidatorAfter(t *testing.T) {
-	tests := []struct {
-		name      string
-		value     string
-		floor     string
-		wantError bool
-	}{
-		{"after_passes", "2026-01-01T00:00:00Z", "2025-01-01T00:00:00Z", false},
-		{"equal_fails", "2025-01-01T00:00:00Z", "2025-01-01T00:00:00Z", true},
-		{"before_fails", "2024-01-01T00:00:00Z", "2025-01-01T00:00:00Z", true},
-		{"empty_skipped", "", "2025-01-01T00:00:00Z", false},
-		{"invalid_value_fails", "garbage", "2025-01-01T00:00:00Z", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			v := New().After("t", tt.value, tt.floor)
-			if v.HasErrors() != tt.wantError {
-				t.Errorf("HasErrors=%v, want %v", v.HasErrors(), tt.wantError)
-			}
-		})
 	}
 }

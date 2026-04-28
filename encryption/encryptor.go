@@ -33,7 +33,7 @@ func WithAlgorithm(alg Algorithm) Option {
 // New creates an Encryptor with the given key and options.
 // Default algorithm is AES-256-GCM. Use WithAlgorithm to select ChaCha20-Poly1305.
 //
-// The key is derived using PBKDF2-SHA256 for the chosen algorithm.
+// The key is hashed to the required length for the chosen algorithm.
 func New(key string, opts ...Option) (Encryptor, error) {
 	o := &options{algorithm: AlgorithmAESGCM}
 	for _, opt := range opts {
