@@ -387,7 +387,7 @@ func TestIntegration_Validation_Errors_ProducesCorrectAppError(t *testing.T) {
 func TestIntegration_Validation_Errors_MultipleFieldErrors(t *testing.T) {
 	v := validation.New()
 	v.Required("username", "")
-	v.Min("age", 10, 18)
+	v.MinValue("age", 10, 18)
 	v.Pattern("contact", "invalid", `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
 	appErr := v.Validate()
@@ -417,7 +417,7 @@ func TestIntegration_Validation_Errors_PassingValidation(t *testing.T) {
 func TestIntegration_Validation_Errors_ChainedValidation(t *testing.T) {
 	v := validation.New()
 	v.Required("id", "abc-123")
-	v.Max("name", 3, 100) // length 3 <= 100, passes
+	v.MaxValue("name", 3, 100) // length 3 <= 100, passes
 	v.Required("role", "admin")
 
 	appErr := v.Validate()
