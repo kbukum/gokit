@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logger"
 )
 
@@ -47,8 +46,6 @@ type ServiceConfig struct {
 	Name        string        `yaml:"name" mapstructure:"name"`
 	Environment string        `yaml:"environment" mapstructure:"environment"`
 	Version     string        `yaml:"version" mapstructure:"version"`
-	Address     string        `yaml:"address" mapstructure:"address"`
-	Port        int           `yaml:"port" mapstructure:"port"`
 	Debug       bool          `yaml:"debug" mapstructure:"debug"`
 	Logging     logger.Config `yaml:"logging" mapstructure:"logging"`
 }
@@ -71,12 +68,6 @@ func (c *ServiceConfig) ApplyDefaults() {
 	if c.Environment == "" {
 		c.Environment = "development"
 	}
-	if c.Address == "" {
-		c.Address = "0.0.0.0"
-	}
-	if c.Port == 0 {
-		c.Port = 50051
-	}
 	if c.Environment == "development" {
 		c.Debug = true
 	}
@@ -98,7 +89,7 @@ func (c *ServiceConfig) ApplyDefaults() {
 // Override this in embedding structs and call c.ServiceConfig.Validate() first.
 func (c *ServiceConfig) Validate() error {
 	if c.Name == "" {
-		return errors.Validation("config.name is required")
+		return fmt.Errorf("config.name is required")
 	}
 	validEnvs := []string{"development", "staging", "production"}
 	found := false
@@ -109,10 +100,10 @@ func (c *ServiceConfig) Validate() error {
 		}
 	}
 	if !found {
-		return errors.Validation(fmt.Sprintf("config.environment must be one of [development, staging, production] (got: %s)", c.Environment))
+		return fmt.Errorf("config.environment must be one of [development, staging, production] (got: %s)", c.Environment)
 	}
 	if err := c.Logging.Validate(); err != nil {
-		return errors.Validation(fmt.Sprintf("config.logging: %v", err))
+		return fmt.Errorf("config.logging: %w", err)
 	}
 	return nil
 }

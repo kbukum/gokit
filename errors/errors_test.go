@@ -218,7 +218,7 @@ func TestAppError_Constructors_Table(t *testing.T) {
 		retryable bool
 	}{
 		{"ServiceUnavailable", ServiceUnavailable("api"), ErrCodeServiceUnavailable, http.StatusServiceUnavailable, true},
-		{"ConnectionFailed", ConnectionFailed("db"), ErrCodeConnectionFailed, http.StatusBadGateway, true},
+		{"ConnectionFailed", ConnectionFailed("db"), ErrCodeConnectionFailed, http.StatusServiceUnavailable, true},
 		{"Timeout", Timeout("query"), ErrCodeTimeout, http.StatusGatewayTimeout, true},
 		{"RateLimited", RateLimited(), ErrCodeRateLimited, http.StatusTooManyRequests, true},
 		{"AlreadyExists", AlreadyExists("user"), ErrCodeAlreadyExists, http.StatusConflict, false},
@@ -227,7 +227,7 @@ func TestAppError_Constructors_Table(t *testing.T) {
 		{"InvalidFormat", InvalidFormat("date", "RFC3339"), ErrCodeInvalidFormat, http.StatusUnprocessableEntity, false},
 		{"InvalidToken", InvalidToken(), ErrCodeInvalidToken, http.StatusUnauthorized, false},
 		{"DatabaseError", DatabaseError(nil), ErrCodeDatabaseError, http.StatusInternalServerError, false},
-		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusInternalServerError, true},
+		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusBadGateway, true},
 		{"Validation", Validation("bad input"), ErrCodeInvalidInput, http.StatusUnprocessableEntity, false},
 	}
 
@@ -389,7 +389,7 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 	}{
 		// Connection/Availability (retryable)
 		{ErrCodeServiceUnavailable, http.StatusServiceUnavailable},
-		{ErrCodeConnectionFailed, http.StatusBadGateway},
+		{ErrCodeConnectionFailed, http.StatusServiceUnavailable},
 		{ErrCodeTimeout, http.StatusGatewayTimeout},
 		{ErrCodeRateLimited, http.StatusTooManyRequests},
 		// Resource
@@ -408,7 +408,7 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 		// Internal
 		{ErrCodeInternal, http.StatusInternalServerError},
 		{ErrCodeDatabaseError, http.StatusInternalServerError},
-		{ErrCodeExternalService, http.StatusInternalServerError},
+		{ErrCodeExternalService, http.StatusBadGateway},
 	}
 
 	constructorForCode := map[ErrorCode]func() *AppError{
@@ -505,7 +505,7 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		status      int
 	}{
 		{ErrCodeServiceUnavailable, "https://gokit.dev/errors/service-unavailable", http.StatusServiceUnavailable},
-		{ErrCodeConnectionFailed, "https://gokit.dev/errors/connection-failed", http.StatusBadGateway},
+		{ErrCodeConnectionFailed, "https://gokit.dev/errors/connection-failed", http.StatusServiceUnavailable},
 		{ErrCodeTimeout, "https://gokit.dev/errors/timeout", http.StatusGatewayTimeout},
 		{ErrCodeRateLimited, "https://gokit.dev/errors/rate-limited", http.StatusTooManyRequests},
 		{ErrCodeNotFound, "https://gokit.dev/errors/not-found", http.StatusNotFound},
@@ -520,7 +520,7 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		{ErrCodeInvalidToken, "https://gokit.dev/errors/invalid-token", http.StatusUnauthorized},
 		{ErrCodeInternal, "https://gokit.dev/errors/internal-error", http.StatusInternalServerError},
 		{ErrCodeDatabaseError, "https://gokit.dev/errors/database-error", http.StatusInternalServerError},
-		{ErrCodeExternalService, "https://gokit.dev/errors/external-service-error", http.StatusInternalServerError},
+		{ErrCodeExternalService, "https://gokit.dev/errors/external-service-error", http.StatusBadGateway},
 	}
 
 	constructorForCode := map[ErrorCode]func() *AppError{

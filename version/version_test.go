@@ -28,7 +28,7 @@ func TestGetVersionInfoDefaults(t *testing.T) {
 
 	info := GetVersionInfo()
 	if info == nil {
-		t.Fatal("expected non-nil VersionInfo")
+		t.Fatal("expected non-nil Info")
 	}
 	if info.Version != "dev" {
 		t.Errorf("expected version 'dev', got %q", info.Version)
@@ -36,7 +36,9 @@ func TestGetVersionInfoDefaults(t *testing.T) {
 	if info.IsRelease {
 		t.Error("dev should not be a release")
 	}
-	// BuildDate may be populated from VCS info or may be zero for dev builds.
+	if info.BuildDate.IsZero() {
+		t.Error("BuildDate should not be zero")
+	}
 }
 
 func TestGetVersionInfoWithBuildTime(t *testing.T) {
@@ -450,10 +452,10 @@ func TestGetVersionInfoBuildTimeEdgeCases(t *testing.T) {
 	tests := []struct {
 		name      string
 		buildTime string
-		wantZero  bool // true if BuildDate should fall back to VCS or stay zero
+		wantZero  bool // true if BuildDate should fall back (not parsed from buildTime)
 	}{
 		{"empty", "", true},
-		{"zero_time", "0001-01-01T00:00:00Z", true}, // parses to Go zero time
+		{"zero_time", "0001-01-01T00:00:00Z", true}, // parses to Go zero time, overwritten by now()
 		{"far_future", "2099-12-31T23:59:59Z", false},
 	}
 
@@ -468,9 +470,10 @@ func TestGetVersionInfoBuildTimeEdgeCases(t *testing.T) {
 
 			info := GetVersionInfo()
 			if tc.wantZero {
-				// When BuildTime is empty or zero, BuildDate may be populated from
-				// VCS info (if running in a git repo) or may remain zero. We no
-				// longer fall back to time.Now() for deterministic dev builds.
+				// When BuildTime is empty, BuildDate is populated from VCS or now()
+				if info.BuildDate.IsZero() {
+					t.Error("BuildDate should not be zero even with empty BuildTime")
+				}
 			} else {
 				parsed, err := time.Parse(time.RFC3339, tc.buildTime)
 				if err != nil {
@@ -492,8 +495,14 @@ func TestGetFullVersionAllEmpty(t *testing.T) {
 	BuildTime = ""
 	GoVersion = ""
 
-	// Should not panic; output depends on VCS info from debug.ReadBuildInfo
-	_ = GetFullVersion()
+	fv := GetFullVersion()
+	// Should not panic and should produce some output with "(built ...)"
+	if fv == "" {
+		t.Error("full version should not be empty even with all empty fields")
+	}
+	if !strings.Contains(fv, "built") {
+		t.Errorf("expected 'built' in full version, got %q", fv)
+	}
 }
 
 // JSON round-trip
@@ -510,12 +519,12 @@ func TestInfoJSON_RoundTrip(t *testing.T) {
 
 	data, err := json.Marshal(original)
 	if err != nil {
-		t.Fatalf("failed to marshal VersionInfo: %v", err)
+		t.Fatalf("failed to marshal Info: %v", err)
 	}
 
-	var restored VersionInfo
+	var restored Info
 	if err := json.Unmarshal(data, &restored); err != nil {
-		t.Fatalf("failed to unmarshal VersionInfo: %v", err)
+		t.Fatalf("failed to unmarshal Info: %v", err)
 	}
 
 	if restored.Version != original.Version {

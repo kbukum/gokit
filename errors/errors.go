@@ -86,7 +86,7 @@ func ServiceUnavailable(service string) *AppError {
 func ConnectionFailed(service string) *AppError {
 	return &AppError{
 		Code: ErrCodeConnectionFailed, Message: fmt.Sprintf("Unable to connect to %s. Please verify the service is running.", service),
-		HTTPStatus: http.StatusBadGateway, Retryable: true,
+		HTTPStatus: http.StatusServiceUnavailable, Retryable: true,
 		Details: map[string]any{"service": service},
 	}
 }
@@ -233,17 +233,8 @@ func DatabaseError(cause error) *AppError {
 func ExternalServiceError(service string, cause error) *AppError {
 	return &AppError{
 		Code: ErrCodeExternalService, Message: fmt.Sprintf("The %s service encountered an error. Please try again.", service),
-		HTTPStatus: http.StatusInternalServerError, Retryable: true,
+		HTTPStatus: http.StatusBadGateway, Retryable: true,
 		Details: map[string]any{"service": service}, Cause: cause,
-	}
-}
-
-// Canceled creates a new AppError for an operation that was canceled.
-func Canceled(operation string) *AppError {
-	return &AppError{
-		Code: ErrCodeCanceled, Message: fmt.Sprintf("The %s operation was canceled.", operation),
-		HTTPStatus: 499, Retryable: false,
-		Details: map[string]any{"operation": operation},
 	}
 }
 

@@ -8,8 +8,11 @@ import (
 )
 
 // typeBaseURI holds the configurable base URI for problem type URIs.
-// Callers that need a different base must call SetTypeBaseURI before
-// any error response is rendered.
+//
+// Default: "https://gokit.dev/errors/". The default is materialized on first
+// read (lazy) rather than at package init() to avoid registering side effects
+// in the package import graph (F-066). Callers that need a different base
+// must call SetTypeBaseURI before any error response is rendered.
 const defaultTypeBaseURI = "https://gokit.dev/errors/"
 
 var typeBaseURI atomic.Value

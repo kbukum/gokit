@@ -317,8 +317,8 @@ func pathsByPrefix(path, fileName string) []string {
 	}
 }
 
-// autoBindEnvVars binds environment variables to Viper using BindEnv so config
-// file values still take precedence over environment variables when expected.
+// autoBindEnvVars binds environment variables to Viper using BindEnv (correct precedence)
+// instead of Set (which has the highest precedence and would override config file values).
 // Only binds variables that match known config key patterns.
 func autoBindEnvVars(v *viper.Viper) {
 	for _, env := range os.Environ() {

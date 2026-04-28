@@ -10,11 +10,11 @@
 //	    Name  string `validate:"required,min=2"`
 //	    Email string `validate:"required,email"`
 //	}
-//	err := validation.Validate(cmd)
+//	err := validation.ValidateStruct(cmd)
 //
 // # Programmatic Validation
 //
 //	v := validation.New()
-//	v.Custom(name != "", "name", "name is required")
-//	appErr := v.Validate()
+//	v.Check(name != "", "name", "name is required")
+//	err := v.Error()
 package validation
