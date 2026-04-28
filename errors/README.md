@@ -6,7 +6,7 @@ Unified application error handling with HTTP status codes, error codes, and retr
 
 The `errors` module provides a structured approach to error handling across Go microservices. It moves away from simple string-based errors towards a machine-readable `AppError` type that includes semantic error codes, HTTP status mappings, and metadata.
 
-This design follows best practices such as RFC 7807 (Problem Details for HTTP APIs) and Google AIP-193. It allows services to communicate clearly about what went wrong, whether the client should retry, and provides structured details that can be easily parsed by frontend applications or observability tools.
+This design follows best practices such as RFC 9457 (Problem Details for HTTP APIs) and Google AIP-193. It allows services to communicate clearly about what went wrong, whether the client should retry, and provides structured details that can be easily parsed by frontend applications or observability tools.
 
 ## Installation
 
@@ -36,7 +36,7 @@ func main() {
 
 	// Check if it's an AppError and convert to response
 	if appErr, ok := errors.AsAppError(err); ok {
-		resp := appErr.ToResponse()
+		resp := appErr.ToProblemDetail()
 		// Send resp as JSON to the client
 		fmt.Printf("Response: %+v\n", resp)
 	}
@@ -55,7 +55,7 @@ This module does not require external configuration. It uses a predefined set of
 |-------|------|-------------|
 | `AppError` | `struct` | The core error type implementing the `error` interface. |
 | `ErrorCode` | `string` | A machine-readable string representing the error category. |
-| `ErrorResponse` | `struct` | The JSON-serializable structure for API responses. |
+| `ProblemDetail` | `struct` | RFC 9457 Problem Details response type for JSON serialization. |
 
 ### Common Constructors
 
@@ -75,18 +75,22 @@ The `ErrorCode` type defines all machine-readable error categories:
 |------|-------------|-----------|
 | `NOT_FOUND` | 404 | No |
 | `ALREADY_EXISTS` | 409 | No |
+| `CONFLICT` | 409 | No |
 | `INVALID_INPUT` | 422 | No |
 | `MISSING_FIELD` | 422 | No |
 | `INVALID_FORMAT` | 422 | No |
 | `UNAUTHORIZED` | 401 | No |
 | `FORBIDDEN` | 403 | No |
-| `INTERNAL` | 500 | No |
+| `TOKEN_EXPIRED` | 401 | No |
+| `INVALID_TOKEN` | 401 | No |
+| `INTERNAL_ERROR` | 500 | No |
 | `DATABASE_ERROR` | 500 | No |
+| `EXTERNAL_SERVICE_ERROR` | 500 | Yes |
 | `SERVICE_UNAVAILABLE` | 503 | Yes |
-| `CONNECTION_FAILED` | 503 | Yes |
+| `CONNECTION_FAILED` | 502 | Yes |
 | `TIMEOUT` | 504 | Yes |
 | `RATE_LIMITED` | 429 | Yes |
-| `EXTERNAL_SERVICE_ERROR` | 502 | Yes |
+| `CANCELED` | 499 | No |
 
 ### Builder Methods
 
@@ -94,17 +98,17 @@ The `ErrorCode` type defines all machine-readable error categories:
 - `WithDetail(key string, value any)`: Adds a single piece of metadata.
 - `WithDetails(map[string]any)`: Merges multiple pieces of metadata.
 
-### RFC 7807 Support
+### RFC 9457 Support
 
-Convert any `AppError` to an [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7807) response:
+Convert any `AppError` to an [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457) response:
 
 ```go
 appErr := errors.NotFound("user", "abc-123")
-rfc := appErr.ToRFC7807()
-// RFC7807Response{Type, Title, Status, Detail, Instance}
+rfc := appErr.ToProblemDetail()
+// ProblemDetail{Type, Title, Status, Detail, Instance, Code, Retryable, Details}
 ```
 
-The `RFC7807Response` struct includes `Type`, `Title`, `Status`, `Detail`, and `Instance` fields suitable for direct JSON serialization in HTTP APIs.
+The `ProblemDetail` struct includes `Type`, `Title`, `Status`, `Detail`, `Instance`, `Code`, `Retryable`, and `Details` fields suitable for direct JSON serialization in HTTP APIs.
 
 ## Advanced Usage
 
