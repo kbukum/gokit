@@ -42,8 +42,8 @@ go build -ldflags "-X github.com/kbukum/gokit/version.Version=1.2.3 \
 
 | Name | Description |
 |------|-------------|
-| `Info` | Struct with Version, GitCommit, GitBranch, BuildTime, GoVersion |
-| `GetVersionInfo()` | Returns full `*Info` struct |
+| `VersionInfo` | Struct with Version, GitCommit, GitBranch, BuildTime, GoVersion |
+| `GetVersionInfo()` | Returns full `*VersionInfo` struct |
 | `GetShortVersion()` | Returns `version-commit` string |
 | `GetFullVersion()` | Returns detailed version string |
 | `Version` / `GitCommit` / `GitBranch` / `BuildTime` | Linker-injected variables |
