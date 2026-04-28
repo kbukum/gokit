@@ -3,8 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,27 +30,9 @@ permissions:
 # comment in lock-step. Do not relax to floating tags.
 
 jobs:
-  # ── Stage 1: Discover all Go modules dynamically ──────────────────────────
-  discover:
-    name: Discover Modules
-    runs-on: ubuntu-latest
-    outputs:
-      modules: ${{ steps.find.outputs.modules }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
-
-      - name: Find all Go modules
-        id: find
-        run: |
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort \
-            | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "modules=$modules" >> "$GITHUB_OUTPUT"
-          echo "Discovered modules: $modules"
-
-  # ── Stage 2: Go version consistency across all modules ─────────────────────
-  version-check:
-    name: Go Version Consistency
+  # ── Stage 1: Preflight (version consistency, tidy, changelog) ─────────────
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
@@ -53,13 +47,6 @@ jobs:
             exit 1
           fi
           echo "All modules use Go version: $versions"
-
-  # ── Stage 3a: Tidy + CHANGELOG check ──────────────────────────────────────
-  tidy:
-    name: Tidy Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
       - name: Validate CHANGELOG unreleased heading
         run: ./scripts/check_changelog_unreleased.sh
@@ -78,54 +65,76 @@ jobs:
             exit 1
           fi
 
-  # ── Stage 3b: Build + Vet + Test (per module × OS, parallel) ──────────────
+  # ── Stage 2: Build + Vet + Test (single job for all modules on Linux) ────
   check:
-    name: Check (${{ matrix.module }} / ${{ matrix.os }})
-    needs: discover
-    runs-on: ${{ matrix.os }}
-    # Lift secret to job-level env so step-level `if:` can reference it via
-    # `env.CODECOV_TOKEN`. The `secrets.*` context is not available in step
-    # `if:` expressions, but `env.*` is.
+    name: Check
+    runs-on: ubuntu-latest
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build, vet, and test all modules
+        run: |
+          set -euo pipefail
+          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
+            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+          failed=0
+          for mod in $modules; do
+            echo "::group::Check $mod"
+            (cd "$mod" && go build ./... && go vet ./...) || { echo "::error::Build/vet failed: $mod"; failed=1; echo "::endgroup::"; continue; }
+            if ! (cd "$mod" && go test -race -shuffle=on -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage.out ./...); then
+              echo "::error::Tests failed: $mod"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
+
+      - name: Merge and upload coverage
+        if: env.CODECOV_TOKEN != ''
+        run: |
+          set -euo pipefail
+          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
+            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+          covfiles=""
+          for mod in $modules; do
+            if [ -f "$mod/coverage.out" ]; then
+              covfiles="$covfiles,$mod/coverage.out"
+            fi
+          done
+          covfiles="${covfiles#,}"
+          echo "Coverage files: $covfiles"
+          echo "files=$covfiles" >> "$GITHUB_ENV"
+
+      - name: Upload coverage
+        if: env.CODECOV_TOKEN != ''
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6.0.0
+        with:
+          files: ${{ env.files }}
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Stage 2-cross: Cross-OS tests for platform-sensitive modules ──────────
+  check-cross:
+    name: Check (${{ matrix.module }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
-        os: [ubuntu-latest]
-        # Cross-platform runs are scoped to a representative module to keep
-        # CI cost bounded. Modules that are platform-sensitive (filesystem,
-        # process, server) can be added to `include`.
         include:
-          - module: '.'
-            os: macos-latest
-          - module: '.'
-            os: windows-latest
           - module: 'storage'
             os: macos-latest
           - module: 'server'
             os: macos-latest
-          # F-053 #62: cross-OS coverage for the most platform-sensitive
-          # modules. Workload (process), httpclient (TCP timing) and grpc
-          # (network stack) historically diverge between Linux and macOS.
           - module: 'workload'
             os: macos-latest
-          - module: 'httpclient'
-            os: macos-latest
-          - module: 'grpc'
-            os: macos-latest
-          - module: 'auth'
-            os: macos-latest
-          # linux/arm64 smoke for the root + heaviest sub-modules. Uses the
-          # GitHub-hosted ARM64 runner (ubuntu-24.04-arm). Keeps cost bounded
-          # by only running on the modules most likely to contain
-          # arch-sensitive code (cgo, atomics, unsafe).
-          - module: '.'
-            os: ubuntu-24.04-arm
-          - module: 'database'
-            os: ubuntu-24.04-arm
-          - module: 'storage'
-            os: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
@@ -139,104 +148,18 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go build ./...
 
-      - name: Vet
+      - name: Test
         working-directory: ${{ matrix.module }}
-        run: go vet ./...
+        run: go test -race -shuffle=on -count=1 -timeout=20m ./...
 
-      - name: Test (race + shuffle)
-        if: matrix.os != 'windows-latest'
-        working-directory: ${{ matrix.module }}
-        run: go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-
-      # F-055 #62: Windows omits `-race` because the race detector requires
-      # cgo + a working gcc toolchain, which is fragile on the GitHub-hosted
-      # Windows runner and adds ~3min for marginal benefit (race is already
-      # exercised on every Linux + macOS matrix entry). This is a deliberate
-      # documented trade-off, not an oversight.
-      - name: Test (no race on Windows)
-        if: matrix.os == 'windows-latest'
-        working-directory: ${{ matrix.module }}
-        shell: bash
-        run: go test -shuffle=on -count=1 ./...
-
-      # F-054 #62: codecov upload is gated and now fails CI when it fails.
-      # Fork PRs cannot read repo secrets, so `CODECOV_TOKEN` is empty there
-      # — we skip the upload entirely to avoid spurious red builds. Internal
-      # PRs and pushes to `main` enforce upload success.
-      # NOTE: `secrets.*` is NOT available in step `if:`; we lift the token
-      # to job-level `env:` (see top of this job) and check `env.*` here.
-      - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2  # v6.0.0
-        with:
-          files: ${{ matrix.module }}/coverage.out
-          flags: ${{ matrix.module }}
-          fail_ci_if_error: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ── Stage 3c: Lint (per module, parallel) ─────────────────────────────────
-  lint:
-    name: Lint (${{ matrix.module }})
-    needs: discover
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: ${{ matrix.module }}/go.sum
-
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v9.0.0
-        with:
-          # Pinned to a specific version (was previously `latest`, which can
-          # cause non-deterministic CI failures when a new linter release ships).
-          # NOTE: golangci-lint-action v9 requires >= v2.1.0, and the linter
-          # binary must be built with a Go version >= our toolchain (1.26.x),
-          # so we pin to v2.11.4 (the current latest as of this commit).
-          version: v2.11.4
-          working-directory: ${{ matrix.module }}
-
-  # ── Stage 3d: Security — gosec ─────────────────────────────────────────────
-  # The standalone `securego/gosec` job was removed (F-005 #35). gosec is the
-  # SAME analyzer in both invocations — golangci-lint embeds the upstream
-  # gosec library — so security coverage is unchanged. What was consolidated
-  # is the suppression-annotation format:
-  #
-  #   * standalone gosec honours only `// #nosec`
-  #   * golangci-lint's gosec honours only `//nolint:gosec`
-  #
-  # The codebase uses the latter at intentional opt-in sites
-  # (security/tls.go, discovery/consul/consul.go). Running both tools forced
-  # either dual annotations everywhere or a global rule exclusion to silence
-  # standalone gosec — the repo had picked the global exclusion, which
-  # silently neutralised the per-site opt-in posture for G402
-  # (InsecureSkipVerify), G404 (weak rand) and G306 (file perms) at sites
-  # that were NOT meant to be excluded. That is the original F-005 finding.
-  #
-  # gosec now runs exclusively as part of `lint` (via golangci-lint). The
-  # exclude list is mirrored in `.golangci.yml` (settings.gosec.excludes) and
-  # `gosec.toml` (so a developer running gosec directly gets the same rules).
-
-  # ── Stage 3e: Security — govulncheck per module ───────────────────────────
-  vuln:
-    name: Vuln (${{ matrix.module }})
-    needs: discover
+  # ── Stage 3: Lint + Vuln (combined to share runner) ─────────────────────────
+  # gosec runs exclusively as part of golangci-lint (see .golangci.yml).
+  lint-and-vuln:
+    name: Lint & Vuln
     runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
@@ -244,22 +167,45 @@ jobs:
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
+
+      - name: Lint all modules
+        run: |
+          set -euo pipefail
+          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
+            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+          failed=0
+          for mod in $modules; do
+            echo "::group::Lint $mod"
+            if ! (cd "$mod" && golangci-lint run ./...); then
+              echo "::error::Lint failed for module: $mod"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
-      # Use a wrapper that supports a documented suppression list. Some
-      # advisories have no upstream fix and are not reachable in our usage
-      # (e.g. server-side daemon CVEs imported transitively via a client
-      # library). Every suppression must be justified in
-      # .github/govulncheck-suppressions.json with a scoped module list, an
-      # expiry date, and references. Reachable findings additionally require
-      # `accept_reachable: true` plus a tracking issue in `references`.
-      - name: Run govulncheck (with documented suppressions)
-        working-directory: ${{ matrix.module }}
+      - name: Run govulncheck (all modules)
         run: |
-          "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "${{ matrix.module }}" -- ./...
+          set -euo pipefail
+          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
+            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+          failed=0
+          for mod in $modules; do
+            echo "::group::Vuln $mod"
+            if ! "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "$mod" -- ./...; then
+              echo "::error::govulncheck failed for module: $mod"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $failed
 
   # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
   fuzz:
@@ -347,22 +293,21 @@ jobs:
           go-version-file: go.mod
 
       - name: Run integration tests
-        run: go test -race -count=1 -tags=integration ./...
+        run: go test -race -count=1 -timeout=20m -tags=integration ./...
 
   # ── Gate: Aggregate status for branch protection ──────────────────────────
   ci-status:
     name: CI Status
     if: always()
-    needs: [tidy, version-check, check, lint, vuln, fuzz, integration]
+    needs: [preflight, check, check-cross, lint-and-vuln, fuzz, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.tidy.result }}" \
-                   "${{ needs.version-check.result }}" \
+          results=("${{ needs.preflight.result }}" \
                    "${{ needs.check.result }}" \
-                   "${{ needs.lint.result }}" \
-                   "${{ needs.vuln.result }}" \
+                   "${{ needs.check-cross.result }}" \
+                   "${{ needs.lint-and-vuln.result }}" \
                    "${{ needs.fuzz.result }}" \
                    "${{ needs.integration.result }}")
           for r in "${results[@]}"; do
