@@ -13,10 +13,14 @@ import (
 )
 
 const (
-	saltSize     = 16
-	pbkdf2Iter   = 600_000
-	pbkdf2KeyLen = 32
+	saltSize          = 16
+	defaultPBKDF2Iter = 600_000
+	pbkdf2KeyLen      = 32
 )
+
+// pbkdf2Iter is the iteration count used for key derivation.
+// Defaults to 600k for production security; tests may reduce via WithIterations.
+var pbkdf2Iter = defaultPBKDF2Iter
 
 // Service handles encryption/decryption of sensitive data using AES-256-GCM.
 type Service struct {
