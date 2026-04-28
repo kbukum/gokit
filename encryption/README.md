@@ -1,6 +1,6 @@
 # encryption
 
-AES-256-GCM encryption and decryption service for sensitive data.
+Symmetric encryption for gokit applications with AES-256-GCM and ChaCha20-Poly1305.
 
 ## Install
 
@@ -19,20 +19,19 @@ import (
 )
 
 func main() {
-    svc, err := encryption.NewService("my-secret-key")
+    // Default: AES-256-GCM
+    enc, err := encryption.New("my-secret-passphrase")
     if err != nil {
         panic(err)
     }
 
-    // Encrypt
-    ciphertext, err := svc.Encrypt("sensitive data")
+    ciphertext, err := enc.Encrypt("sensitive data")
     if err != nil {
         panic(err)
     }
     fmt.Println(ciphertext) // base64-encoded
 
-    // Decrypt
-    plaintext, err := svc.Decrypt(ciphertext)
+    plaintext, err := enc.Decrypt(ciphertext)
     if err != nil {
         panic(err)
     }
@@ -40,14 +39,48 @@ func main() {
 }
 ```
 
+## Algorithms
+
+| Algorithm | Constant | Best For |
+|-----------|----------|----------|
+| AES-256-GCM (default) | `AlgorithmAESGCM` | CPUs with AES-NI hardware acceleration |
+| ChaCha20-Poly1305 | `AlgorithmChaCha20` | CPUs without AES-NI (ARM, older x86) |
+
+```go
+// Explicit algorithm selection
+enc, err := encryption.New("key", encryption.WithAlgorithm(encryption.AlgorithmChaCha20))
+```
+
+## Key Derivation
+
+Keys are derived from passphrases using **PBKDF2-SHA256** with:
+- **600,000 iterations** (OWASP 2023 recommendation)
+- **Random 16-byte salt** per encryption operation
+
+## Ciphertext Format
+
+```
+base64(salt[16] || nonce[12] || ciphertext)
+```
+
+The salt is prepended to the ciphertext so decryption can extract it and re-derive the key.
+
 ## Key Types & Functions
 
 | Name | Description |
 |------|-------------|
-| `Service` | AES-256-GCM encryption/decryption service |
-| `NewService(key string)` | Create service (key is SHA-256 hashed to 32 bytes) |
-| `Encrypt(plaintext string)` | Encrypt to base64-encoded ciphertext |
-| `Decrypt(ciphertext string)` | Decrypt from base64-encoded ciphertext |
+| `Encryptor` | Interface: `Encrypt(string) (string, error)` and `Decrypt(string) (string, error)` |
+| `New(key, ...Option)` | Factory: creates an `Encryptor` for the chosen algorithm |
+| `WithAlgorithm(alg)` | Option: selects encryption algorithm |
+| `Service` | AES-256-GCM implementation |
+| `ChaCha20Service` | ChaCha20-Poly1305 implementation |
+
+## Security Considerations
+
+- Each encryption generates a unique random salt and nonce
+- PBKDF2 with 600k iterations resists brute-force and rainbow table attacks
+- Both algorithms provide authenticated encryption (AEAD)
+- The same plaintext encrypted twice produces different ciphertext
 
 ---
 

@@ -23,7 +23,7 @@ func TestErrorCode_GRPCCode(t *testing.T) {
 		{"TokenExpired", ErrCodeTokenExpired, codes.Unauthenticated},
 		{"InvalidToken", ErrCodeInvalidToken, codes.Unauthenticated},
 		{"Forbidden", ErrCodeForbidden, codes.PermissionDenied},
-		{"Conflict", ErrCodeConflict, codes.FailedPrecondition},
+		{"Conflict", ErrCodeConflict, codes.Aborted},
 		{"Timeout", ErrCodeTimeout, codes.DeadlineExceeded},
 		{"RateLimited", ErrCodeRateLimited, codes.ResourceExhausted},
 		{"ServiceUnavailable", ErrCodeServiceUnavailable, codes.Unavailable},
@@ -31,6 +31,7 @@ func TestErrorCode_GRPCCode(t *testing.T) {
 		{"Internal", ErrCodeInternal, codes.Internal},
 		{"DatabaseError", ErrCodeDatabaseError, codes.Internal},
 		{"ExternalService", ErrCodeExternalService, codes.Internal},
+		{"Canceled", ErrCodeCanceled, codes.Canceled},
 		{"Unknown code defaults to Internal", ErrorCode("UNKNOWN"), codes.Internal},
 	}
 

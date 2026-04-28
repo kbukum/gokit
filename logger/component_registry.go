@@ -8,7 +8,7 @@ import (
 
 // ComponentRegistry tracks components during bootstrap for summary display.
 type ComponentRegistry struct {
-	mu             sync.Mutex
+	mu             sync.RWMutex
 	startTime      time.Time
 	infrastructure []InfraComponent
 	services       []ServiceComponent
@@ -81,8 +81,7 @@ func NewComponentRegistry() *ComponentRegistry {
 	}
 }
 
-// SetAPIPrefix sets the API prefix (for example "/api/v1") so route grouping
-// can be done using the configured prefix instead of hard-coded values.
+// SetAPIPrefix sets the API prefix (for example "/api/v1") for route grouping.
 func (r *ComponentRegistry) SetAPIPrefix(prefix string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -91,8 +90,8 @@ func (r *ComponentRegistry) SetAPIPrefix(prefix string) {
 
 // APIPrefix returns the configured API prefix.
 func (r *ComponentRegistry) APIPrefix() string {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.apiPrefix
 }
 
@@ -172,36 +171,36 @@ func (r *ComponentRegistry) RegisterConsumer(name, groupID, topic string, partit
 
 // Infrastructure returns all registered infrastructure components.
 func (r *ComponentRegistry) Infrastructure() []InfraComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]InfraComponent(nil), r.infrastructure...)
 }
 
 // Services returns all registered service components.
 func (r *ComponentRegistry) Services() []ServiceComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]ServiceComponent(nil), r.services...)
 }
 
 // Repositories returns all registered repository components.
 func (r *ComponentRegistry) Repositories() []RepositoryComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]RepositoryComponent(nil), r.repositories...)
 }
 
 // Clients returns all registered client components.
 func (r *ComponentRegistry) Clients() []ClientComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]ClientComponent(nil), r.clients...)
 }
 
 // Handlers returns all registered handler components.
 func (r *ComponentRegistry) Handlers() []HandlerComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]HandlerComponent(nil), r.handlers...)
 }
 
@@ -214,7 +213,7 @@ func (r *ComponentRegistry) SetHandlers(handlers []HandlerComponent) {
 
 // Consumers returns all registered consumer components.
 func (r *ComponentRegistry) Consumers() []ConsumerComponent {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return append([]ConsumerComponent(nil), r.consumers...)
 }
