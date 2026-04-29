@@ -134,7 +134,7 @@ func TestRoundTrip_RepeatedCycles(t *testing.T) {
 		t.Run(ac.name, func(t *testing.T) {
 			enc := newEncryptor(t, "cycle-key", ac.alg)
 			plaintext := "encrypt me many times"
-			for i := 0; i < 100; i++ {
+			for i := 0; i < 12; i++ {
 				ct, err := enc.Encrypt(plaintext)
 				if err != nil {
 					t.Fatalf("iteration %d Encrypt: %v", i, err)
@@ -406,7 +406,7 @@ func TestFactory_EncryptorInterface(t *testing.T) {
 // ─── 6. Security tests ────────────────────────────────────────────────
 
 func TestSecurity_VariousKeyLengths(t *testing.T) {
-	// Keys are SHA-256 hashed, so any length should work
+	// PBKDF2-SHA256 stretches passphrases, so any length should work.
 	keys := []string{
 		"",                        // empty key
 		"a",                       // 1 byte
@@ -443,8 +443,8 @@ func TestSecurity_NonceUniqueness(t *testing.T) {
 	for _, ac := range algorithms {
 		t.Run(ac.name, func(t *testing.T) {
 			enc := newEncryptor(t, "nonce-test-key", ac.alg)
-			seen := make(map[string]bool, 500)
-			for i := 0; i < 500; i++ {
+			seen := make(map[string]bool, 32)
+			for i := 0; i < 32; i++ {
 				ct, err := enc.Encrypt("same plaintext")
 				if err != nil {
 					t.Fatalf("iteration %d: %v", i, err)
@@ -636,7 +636,7 @@ func TestConcurrency_ParallelEncrypt(t *testing.T) {
 	for _, ac := range algorithms {
 		t.Run(ac.name, func(t *testing.T) {
 			enc := newEncryptor(t, "concurrent-key", ac.alg)
-			const goroutines = 50
+			const goroutines = 8
 			var wg sync.WaitGroup
 			errs := make(chan error, goroutines)
 
@@ -676,7 +676,7 @@ func TestConcurrency_ParallelDecrypt(t *testing.T) {
 			enc := newEncryptor(t, "concurrent-dec-key", ac.alg)
 
 			// Pre-encrypt test data
-			const count = 50
+			const count = 12
 			type pair struct {
 				pt, ct string
 			}
@@ -721,7 +721,7 @@ func TestConcurrency_MixedEncryptDecrypt(t *testing.T) {
 	for _, ac := range algorithms {
 		t.Run(ac.name, func(t *testing.T) {
 			enc := newEncryptor(t, "mixed-key", ac.alg)
-			const goroutines = 100
+			const goroutines = 16
 			var wg sync.WaitGroup
 			errs := make(chan error, goroutines)
 

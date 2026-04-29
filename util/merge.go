@@ -1,25 +1,24 @@
 package util
 
-// DeepMerge recursively merges override into base (override wins).
-// Returns a new map — neither input is mutated.
+// DeepMerge recursively merges override into base.
 // When both values for a key are map[string]any they are merged recursively;
-// otherwise the override value replaces the base.
+// otherwise the override value replaces the base. Neither input is mutated.
 func DeepMerge(base, override map[string]any) map[string]any {
-	result := make(map[string]any, len(base))
+	result := make(map[string]any, len(base)+len(override))
 	for k, v := range base {
 		result[k] = v
 	}
-	for k, overVal := range override {
-		baseVal, exists := result[k]
+	for k, ov := range override {
+		bv, exists := result[k]
 		if exists {
-			baseMap, baseOk := baseVal.(map[string]any)
-			overMap, overOk := overVal.(map[string]any)
-			if baseOk && overOk {
-				result[k] = DeepMerge(baseMap, overMap)
+			bm, bOK := bv.(map[string]any)
+			om, oOK := ov.(map[string]any)
+			if bOK && oOK {
+				result[k] = DeepMerge(bm, om)
 				continue
 			}
 		}
-		result[k] = overVal
+		result[k] = ov
 	}
 	return result
 }

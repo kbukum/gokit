@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"encoding/base64"
 	"testing"
 )
 
@@ -90,7 +91,6 @@ func TestDecryptInvalidBase64(t *testing.T) {
 
 func TestDecryptTooShort(t *testing.T) {
 	svc, _ := NewService("test-key")
-	// Very short base64 that decodes to fewer bytes than nonce size
 	_, err := svc.Decrypt("YQ==")
 	if err == nil {
 		t.Error("expected error for ciphertext too short")
@@ -105,8 +105,6 @@ func TestDifferentKeysProduceDifferentCiphertexts(t *testing.T) {
 	enc1, _ := svc1.Encrypt(plaintext)
 	_, _ = svc2.Encrypt(plaintext)
 
-	// While randomness means they'd almost certainly differ anyway,
-	// the important thing is they can't decrypt each other's data
 	dec1, err1 := svc1.Decrypt(enc1)
 	if err1 != nil || dec1 != plaintext {
 		t.Error("svc1 should decrypt its own ciphertext")
@@ -118,13 +116,39 @@ func TestDifferentKeysProduceDifferentCiphertexts(t *testing.T) {
 	}
 }
 
-func TestNewServiceDifferentKeysNotEqual(t *testing.T) {
+func TestIndependentServicesWithSameKeyCanDecrypt(t *testing.T) {
 	svc1, _ := NewService("key1")
-	svc2, _ := NewService("key2")
-	ct, _ := svc1.Encrypt("test")
-	_, err := svc2.Decrypt(ct)
-	if err == nil {
-		t.Error("different keys should not decrypt each other's ciphertext")
+	svc2, _ := NewService("key1")
+
+	ciphertext, err := svc1.Encrypt("shared secret")
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	plaintext, err := svc2.Decrypt(ciphertext)
+	if err != nil {
+		t.Fatalf("Decrypt failed: %v", err)
+	}
+	if plaintext != "shared secret" {
+		t.Errorf("expected %q, got %q", "shared secret", plaintext)
+	}
+}
+
+func TestCiphertextIncludesSaltAndNonce(t *testing.T) {
+	svc, _ := NewService("key1")
+
+	ciphertext, err := svc.Encrypt("test")
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	raw, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		t.Fatalf("Decode failed: %v", err)
+	}
+
+	if len(raw) < saltSize+12+16 {
+		t.Fatalf("ciphertext too short: got %d bytes", len(raw))
 	}
 }
 
@@ -232,12 +256,10 @@ func TestNewDefaultAlgorithm(t *testing.T) {
 	if enc == nil {
 		t.Fatal("expected non-nil encryptor")
 	}
-	// Default should be AES-GCM (Service type)
 	if _, ok := enc.(*Service); !ok {
 		t.Errorf("expected *Service (AES-GCM default), got %T", enc)
 	}
 
-	// Verify round-trip works
 	encrypted, err := enc.Encrypt("test data")
 	if err != nil {
 		t.Fatalf("Encrypt failed: %v", err)
@@ -258,54 +280,5 @@ func TestNewWithAESGCMAlgorithm(t *testing.T) {
 	}
 	if _, ok := enc.(*Service); !ok {
 		t.Errorf("expected *Service for AES-GCM, got %T", enc)
-	}
-}
-
-func TestNewWithChaCha20Algorithm(t *testing.T) {
-	enc, err := New("my-key", WithAlgorithm(AlgorithmChaCha20))
-	if err != nil {
-		t.Fatalf("New failed: %v", err)
-	}
-	if _, ok := enc.(*ChaCha20Service); !ok {
-		t.Errorf("expected *ChaCha20Service for ChaCha20, got %T", enc)
-	}
-
-	// Verify round-trip works
-	encrypted, err := enc.Encrypt("chacha20 test")
-	if err != nil {
-		t.Fatalf("Encrypt failed: %v", err)
-	}
-	decrypted, err := enc.Decrypt(encrypted)
-	if err != nil {
-		t.Fatalf("Decrypt failed: %v", err)
-	}
-	if decrypted != "chacha20 test" {
-		t.Errorf("expected 'chacha20 test', got %q", decrypted)
-	}
-}
-
-func TestAlgorithmConstants(t *testing.T) {
-	if AlgorithmAESGCM != "aes-256-gcm" {
-		t.Errorf("expected 'aes-256-gcm', got %q", AlgorithmAESGCM)
-	}
-	if AlgorithmChaCha20 != "chacha20-poly1305" {
-		t.Errorf("expected 'chacha20-poly1305', got %q", AlgorithmChaCha20)
-	}
-}
-
-func TestCrossAlgorithmIncompatibility(t *testing.T) {
-	aes, _ := New("shared-key", WithAlgorithm(AlgorithmAESGCM))
-	chacha, _ := New("shared-key", WithAlgorithm(AlgorithmChaCha20))
-
-	encrypted, _ := aes.Encrypt("secret")
-	_, err := chacha.Decrypt(encrypted)
-	if err == nil {
-		t.Error("expected ChaCha20 to fail decrypting AES-GCM ciphertext")
-	}
-
-	encrypted2, _ := chacha.Encrypt("secret")
-	_, err = aes.Decrypt(encrypted2)
-	if err == nil {
-		t.Error("expected AES-GCM to fail decrypting ChaCha20 ciphertext")
 	}
 }

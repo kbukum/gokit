@@ -1,6 +1,6 @@
 // Package errors provides unified error handling for Go services.
 // It implements structured error types with error codes, HTTP status mapping,
-// and retryable detection following RFC 7807 and Google AIP-193.
+// and retryable detection following RFC 9457 and Google AIP-193.
 package errors
 
 import (
@@ -241,7 +241,7 @@ func ExternalServiceError(service string, cause error) *AppError {
 // Canceled creates a new AppError for an operation that was canceled.
 func Canceled(operation string) *AppError {
 	return &AppError{
-		Code: ErrCodeCanceled, Message: fmt.Sprintf("The %s operation was canceled.", operation),
+		Code: ErrCodeCancelled, Message: fmt.Sprintf("The %s operation was cancelled.", operation),
 		HTTPStatus: 499, Retryable: false,
 		Details: map[string]any{"operation": operation},
 	}
@@ -263,4 +263,13 @@ func Wrap(err error) *AppError {
 // FormatResourceError creates a not-found error with a formatted identifier.
 func FormatResourceError(resource string, id any) *AppError {
 	return NotFound(resource, fmt.Sprintf("%v", id))
+}
+
+// Cancelled creates a new AppError for an operation cancelled by the caller or system.
+func Cancelled(operation string) *AppError {
+	return &AppError{
+		Code: ErrCodeCancelled, Message: fmt.Sprintf("Operation '%s' was cancelled.", operation),
+		HTTPStatus: 499, Retryable: false,
+		Details: map[string]any{"operation": operation},
+	}
 }
