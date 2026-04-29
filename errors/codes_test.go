@@ -31,7 +31,7 @@ func TestErrorCode_GRPCCode(t *testing.T) {
 		{"Internal", ErrCodeInternal, codes.Internal},
 		{"DatabaseError", ErrCodeDatabaseError, codes.Internal},
 		{"ExternalService", ErrCodeExternalService, codes.Internal},
-		{"Cancelled", ErrCodeCancelled, codes.Canceled},
+		{"Canceled", ErrCodeCanceled, codes.Canceled},
 		{"Unknown code defaults to Internal", ErrorCode("UNKNOWN"), codes.Internal},
 	}
 

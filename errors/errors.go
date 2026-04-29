@@ -241,7 +241,7 @@ func ExternalServiceError(service string, cause error) *AppError {
 // Canceled creates a new AppError for an operation that was canceled.
 func Canceled(operation string) *AppError {
 	return &AppError{
-		Code: ErrCodeCancelled, Message: fmt.Sprintf("The %s operation was cancelled.", operation),
+		Code: ErrCodeCanceled, Message: fmt.Sprintf("The %s operation was canceled.", operation),
 		HTTPStatus: 499, Retryable: false,
 		Details: map[string]any{"operation": operation},
 	}
@@ -265,11 +265,4 @@ func FormatResourceError(resource string, id any) *AppError {
 	return NotFound(resource, fmt.Sprintf("%v", id))
 }
 
-// Cancelled creates a new AppError for an operation cancelled by the caller or system.
-func Cancelled(operation string) *AppError {
-	return &AppError{
-		Code: ErrCodeCancelled, Message: fmt.Sprintf("Operation '%s' was cancelled.", operation),
-		HTTPStatus: 499, Retryable: false,
-		Details: map[string]any{"operation": operation},
-	}
-}
+

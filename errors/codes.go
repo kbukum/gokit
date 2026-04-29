@@ -61,8 +61,8 @@ const (
 
 // Lifecycle errors
 const (
-	// ErrCodeCancelled indicates the operation was cancelled by the caller or system.
-	ErrCodeCancelled ErrorCode = "CANCELLED"
+	// ErrCodeCanceled indicates the operation was canceled by the caller or system.
+	ErrCodeCanceled ErrorCode = "CANCELED"
 )
 
 var retryableCodes = map[ErrorCode]bool{
@@ -105,5 +105,5 @@ var grpcCodeMap = map[ErrorCode]codes.Code{
 	ErrCodeInternal:           codes.Internal,
 	ErrCodeDatabaseError:      codes.Internal,
 	ErrCodeExternalService:    codes.Internal,
-	ErrCodeCancelled:          codes.Canceled,
+	ErrCodeCanceled:           codes.Canceled,
 }
