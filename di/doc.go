@@ -1,16 +1,19 @@
 // Package di provides a dependency injection container for gokit applications.
 //
-// It supports eager, lazy, and singleton registration modes with type-safe
-// resolution using Go generics. The container enables decoupled architecture
-// by managing service dependencies and their lifecycle.
+// The primary API uses type-safe keys ([Key]) with generics:
 //
-// # Registration
+//	var loggerKey = di.NameKey[*logger.Logger]("logger")
 //
-//	di.Register[MyService](container, func() (*MyService, error) {
-//	    return NewMyService(), nil
-//	})
+//	// Registration
+//	di.Provide(c, loggerKey, func() (*logger.Logger, error) { return logger.New() })
+//	di.ProvideSingleton(c, loggerKey, existingLogger)
+//	di.ProvideTransient(c, loggerKey, func() (*logger.Logger, error) { return logger.New() })
 //
-// # Resolution
+//	// Resolution
+//	log, err := di.ResolveKey(c, loggerKey)
+//	log := di.MustResolveKey(c, loggerKey)  // panics on error; startup/tests only
 //
-//	svc := di.MustResolve[MyService](container)
+// The container supports eager, lazy, singleton, and transient registration
+// modes. Circular dependency detection is built in. Constructor injection is
+// the only supported pattern (no setter injection, no service locator).
 package di

@@ -3,9 +3,8 @@ package provider
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
-
-	"github.com/kbukum/gokit/logger"
 )
 
 // Manager provides the main API for working with providers,
@@ -16,23 +15,40 @@ type Manager[T Provider] struct {
 	selector    Selector[T]
 	providers   map[string]T
 	defaultName string
-	log         *logger.Logger
+	log         *slog.Logger
+}
+
+// ManagerOption configures a Manager.
+type ManagerOption[T Provider] func(*Manager[T])
+
+// WithLogger sets the logger for the Manager. If not provided, a default
+// no-op logger is used.
+func WithLogger[T Provider](l *slog.Logger) ManagerOption[T] {
+	return func(m *Manager[T]) {
+		if l != nil {
+			m.log = l
+		}
+	}
 }
 
 // NewManager creates a Manager backed by the given registry and selector.
-func NewManager[T Provider](registry *Registry[T], selector Selector[T]) *Manager[T] {
-	return &Manager[T]{
+func NewManager[T Provider](registry *Registry[T], selector Selector[T], opts ...ManagerOption[T]) *Manager[T] {
+	m := &Manager[T]{
 		registry:  registry,
 		selector:  selector,
 		providers: make(map[string]T),
-		log:       logger.Get("provider"),
+		log:       slog.Default(),
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // Register adds a factory to the underlying registry.
 func (m *Manager[T]) Register(name string, factory Factory[T]) {
 	m.registry.RegisterFactory(name, factory)
-	m.log.Info("factory registered", map[string]interface{}{"provider": name})
+	m.log.Info("factory registered", "provider", name)
 }
 
 // Initialize creates a provider from its factory, calls Init() if the
@@ -71,7 +87,7 @@ func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, 
 	m.providers[name] = instance
 	m.mu.Unlock()
 	m.registry.Set(name, instance)
-	m.log.InfoCtx(ctx, "provider initialized with resilience", map[string]interface{}{"provider": name})
+	m.log.InfoContext(ctx, "provider initialized with resilience", "provider", name)
 	return nil
 }
 
@@ -94,7 +110,7 @@ func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg
 	m.providers[name] = instance
 	m.mu.Unlock()
 	m.registry.Set(name, instance)
-	m.log.InfoCtx(ctx, "provider initialized", map[string]interface{}{"provider": name})
+	m.log.InfoContext(ctx, "provider initialized", "provider", name)
 	return nil
 }
 
@@ -134,7 +150,7 @@ func (m *Manager[T]) SetDefault(name string) error {
 		return fmt.Errorf("provider %q not initialized", name)
 	}
 	m.defaultName = name
-	m.log.Info("default provider set", map[string]interface{}{"provider": name})
+	m.log.Info("default provider set", "provider", name)
 	return nil
 }
 
@@ -171,7 +187,7 @@ func (m *Manager[T]) CloseAll(ctx context.Context) error {
 			if err := c.Close(ctx); err != nil {
 				errs = append(errs, fmt.Errorf("close provider %q: %w", name, err))
 			} else {
-				m.log.InfoCtx(ctx, "provider closed", map[string]interface{}{"provider": name})
+				m.log.InfoContext(ctx, "provider closed", "provider", name)
 			}
 		}
 	}

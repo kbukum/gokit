@@ -2,6 +2,7 @@ package component
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -15,14 +16,16 @@ import (
 // pass a tighter deadline by attaching one to ctx.
 const DefaultStopTimeout = 10 * time.Second
 
-// componentEntry holds a component and its started state.
+// componentEntry holds a component and its lifecycle state.
 type componentEntry struct {
 	component Component
-	started   bool
+	state     State
 }
 
 // Registry manages component lifecycle with deterministic ordering.
 // Components are started in registration order and stopped in reverse order.
+// Each component tracks a formal lifecycle state (Created → Starting →
+// Running → Stopping → Stopped | Failed).
 type Registry struct {
 	entries []*componentEntry
 	lookup  map[string]*componentEntry
@@ -53,7 +56,7 @@ func (r *Registry) Register(c Component) error {
 		return fmt.Errorf("component %s already registered", name)
 	}
 
-	entry := &componentEntry{component: c}
+	entry := &componentEntry{component: c, state: StateCreated}
 	r.entries = append(r.entries, entry)
 	r.lookup[name] = entry
 
@@ -63,9 +66,20 @@ func (r *Registry) Register(c Component) error {
 	return nil
 }
 
+// State returns the lifecycle state of a named component.
+// Returns StateCreated and false if the component is not registered.
+func (r *Registry) State(name string) (State, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if entry, exists := r.lookup[name]; exists {
+		return entry.state, true
+	}
+	return StateCreated, false
+}
+
 // StartAll starts all not-yet-started components in registration order.
 //
-// It is safe to call multiple times — already-started components are
+// It is safe to call multiple times — already-running components are
 // skipped. This supports two-phase startup where infrastructure
 // components are started first and application-layer components
 // (registered during configure) are started in a second pass.
@@ -85,7 +99,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 	r.mu.RLock()
 	pending := make([]*componentEntry, 0, len(r.entries))
 	for _, entry := range r.entries {
-		if !entry.started {
+		if entry.state == StateCreated || entry.state == StateStopped || entry.state == StateFailed {
 			pending = append(pending, entry)
 		}
 	}
@@ -107,8 +121,16 @@ func (r *Registry) StartAll(ctx context.Context) error {
 	for _, entry := range pending {
 		name := entry.component.Name()
 
+		r.mu.Lock()
+		entry.state = StateStarting
+		r.mu.Unlock()
+
 		logger.DebugCtx(ctx, "Starting component", map[string]interface{}{"component": name})
 		if err := entry.component.Start(ctx); err != nil {
+			r.mu.Lock()
+			entry.state = StateFailed
+			r.mu.Unlock()
+
 			logger.ErrorCtx(ctx, "Component start failed", map[string]interface{}{
 				"component": name,
 				"error":     err.Error(),
@@ -118,7 +140,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		}
 
 		r.mu.Lock()
-		entry.started = true
+		entry.state = StateRunning
 		r.mu.Unlock()
 		startedThisCall = append(startedThisCall, entry)
 
@@ -135,6 +157,11 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
 		name := entry.component.Name()
+
+		r.mu.Lock()
+		entry.state = StateStopping
+		r.mu.Unlock()
+
 		stopCtx, cancel := stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
 			logger.ErrorCtx(ctx, "Rollback stop failed", map[string]interface{}{
@@ -143,18 +170,19 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 			})
 		}
 		cancel()
+
 		r.mu.Lock()
-		entry.started = false
+		entry.state = StateStopped
 		r.mu.Unlock()
 	}
 }
 
-// StopAll gracefully stops all components in reverse registration order.
+// StopAll gracefully stops all running components in reverse registration order.
 //
 // Each Component.Stop runs with the caller's ctx; if ctx has no deadline,
-// DefaultStopTimeout is applied per-component as a safety net (closes
-// F-075: hardcoded shutdown deadlines no longer clobber a caller-supplied
-// deadline).
+// DefaultStopTimeout is applied per-component as a safety net.
+// Errors are aggregated via errors.Join so callers can inspect individual
+// failures with errors.Is/errors.As.
 func (r *Registry) StopAll(ctx context.Context) error {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -163,7 +191,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	r.mu.RLock()
 	toStop := make([]*componentEntry, 0, len(r.entries))
 	for i := len(r.entries) - 1; i >= 0; i-- {
-		if r.entries[i].started {
+		if r.entries[i].state == StateRunning {
 			toStop = append(toStop, r.entries[i])
 		}
 	}
@@ -174,6 +202,11 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	var errs []error
 	for _, entry := range toStop {
 		name := entry.component.Name()
+
+		r.mu.Lock()
+		entry.state = StateStopping
+		r.mu.Unlock()
+
 		logger.DebugCtx(ctx, "Stopping component", map[string]interface{}{"component": name})
 
 		stopCtx, cancel := stopContext(ctx)
@@ -189,16 +222,53 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		cancel()
 
 		r.mu.Lock()
-		entry.started = false
+		entry.state = StateStopped
 		r.mu.Unlock()
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("shutdown errors: %v", errs)
+		return errors.Join(errs...)
 	}
 
 	logger.InfoCtx(ctx, "All components stopped successfully")
 	return nil
+}
+
+// StopAllDetailed gracefully stops all running components and returns
+// per-component results. This provides structured error information for
+// callers that need to know which specific components failed.
+func (r *Registry) StopAllDetailed(ctx context.Context) []StopResult {
+	r.lifecycleMu.Lock()
+	defer r.lifecycleMu.Unlock()
+
+	r.mu.RLock()
+	toStop := make([]*componentEntry, 0, len(r.entries))
+	for i := len(r.entries) - 1; i >= 0; i-- {
+		if r.entries[i].state == StateRunning {
+			toStop = append(toStop, r.entries[i])
+		}
+	}
+	r.mu.RUnlock()
+
+	results := make([]StopResult, 0, len(toStop))
+	for _, entry := range toStop {
+		name := entry.component.Name()
+
+		r.mu.Lock()
+		entry.state = StateStopping
+		r.mu.Unlock()
+
+		stopCtx, cancel := stopContext(ctx)
+		err := entry.component.Stop(stopCtx)
+		cancel()
+
+		r.mu.Lock()
+		entry.state = StateStopped
+		r.mu.Unlock()
+
+		results = append(results, StopResult{Name: name, Err: err})
+	}
+	return results
 }
 
 // stopContext returns a context for an individual Component.Stop call. If
@@ -212,13 +282,19 @@ func stopContext(parent context.Context) (context.Context, context.CancelFunc) {
 }
 
 // HealthAll returns health status for all registered components.
+// The snapshot is taken under the read lock, but Health() calls are made
+// without holding the lock to avoid blocking registration or lifecycle ops.
 func (r *Registry) HealthAll(ctx context.Context) []Health {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	snapshot := make([]Component, len(r.entries))
+	for i, entry := range r.entries {
+		snapshot[i] = entry.component
+	}
+	r.mu.RUnlock()
 
-	results := make([]Health, 0, len(r.entries))
-	for _, entry := range r.entries {
-		results = append(results, entry.component.Health(ctx))
+	results := make([]Health, 0, len(snapshot))
+	for _, c := range snapshot {
+		results = append(results, c.Health(ctx))
 	}
 	return results
 }

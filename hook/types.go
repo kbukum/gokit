@@ -1,5 +1,7 @@
 package hook
 
+import "context"
+
 // EventType identifies the kind of hook event.
 // Applications define their own EventType constants.
 type EventType string
@@ -33,6 +35,8 @@ type Result struct {
 	ModifiedData any
 	// Reason explains why execution was aborted (Action == Abort).
 	Reason string
+	// Err reports an error from the handler without aborting dispatch.
+	Err error
 }
 
 // Continue returns a Result that lets execution proceed.
@@ -40,9 +44,19 @@ func Continue() Result {
 	return Result{Action: ActionContinue}
 }
 
+// ContinueWithError returns a Result that lets execution proceed but records an error.
+func ContinueWithError(err error) Result {
+	return Result{Action: ActionContinue, Err: err}
+}
+
 // Abort returns a Result that stops execution.
 func Abort(reason string) Result {
 	return Result{Action: ActionAbort, Reason: reason}
+}
+
+// AbortWithError returns a Result that stops execution with an error.
+func AbortWithError(reason string, err error) Result {
+	return Result{Action: ActionAbort, Reason: reason, Err: err}
 }
 
 // Modify returns a Result that replaces event data.
@@ -51,4 +65,5 @@ func Modify(data any) Result {
 }
 
 // Handler processes a hook event and returns a result.
-type Handler func(Event) Result
+// The context carries deadlines, cancellation, and request-scoped values.
+type Handler func(ctx context.Context, event Event) Result

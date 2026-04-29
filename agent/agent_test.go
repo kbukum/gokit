@@ -264,7 +264,7 @@ func TestAgent_ToolError(t *testing.T) {
 func TestAgent_HookAbortOnTurnStart(t *testing.T) {
 	provider := newMockProvider(textResponse("should not reach"))
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventTurnStart, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventTurnStart, func(ctx context.Context, e hook.Event) hook.Result {
 		return hook.Abort("blocked by policy")
 	})
 
@@ -293,7 +293,7 @@ func TestAgent_HookAbortOnPreToolCall(t *testing.T) {
 	)
 	tools := makeMockTool("dangerous", "should not run")
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventPreToolCall, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventPreToolCall, func(ctx context.Context, e hook.Event) hook.Result {
 		pre := e.(agent.PreToolCall)
 		if pre.Name == "dangerous" {
 			return hook.Abort("tool blocked")
@@ -337,7 +337,7 @@ func TestAgent_HookModifyPreLLMCall(t *testing.T) {
 	wrapper := &modelCapturingProvider{inner: origProvider, captured: &capturedModel}
 
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventPreLLMCall, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventPreLLMCall, func(ctx context.Context, e hook.Event) hook.Result {
 		pre := e.(agent.PreLLMCall)
 		modified := pre.Request
 		modified.Model = "gpt-4-turbo"
@@ -678,7 +678,7 @@ func TestAgent_ParallelTools(t *testing.T) {
 
 	var parallelHookFired bool
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventToolsParallelized, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventToolsParallelized, func(ctx context.Context, e hook.Event) hook.Result {
 		parallelHookFired = true
 		tp := e.(agent.ToolsParallelized)
 		if tp.Count != 2 {
@@ -753,7 +753,7 @@ func TestAgent_MemoryHookFired(t *testing.T) {
 
 	var loaded bool
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventMemoryLoaded, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventMemoryLoaded, func(ctx context.Context, e hook.Event) hook.Result {
 		loaded = true
 		ml := e.(agent.MemoryLoaded)
 		if ml.SessionID != "sess-1" {
@@ -915,7 +915,7 @@ func TestAgent_ContextCompaction(t *testing.T) {
 
 	var compactedHookFired bool
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventContextCompacted, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventContextCompacted, func(ctx context.Context, e hook.Event) hook.Result {
 		compactedHookFired = true
 		return hook.Continue()
 	})

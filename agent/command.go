@@ -150,7 +150,7 @@ func builtinClear(ctx context.Context, _ string, a *Agent) (string, error) {
 	return "Conversation memory cleared.", nil
 }
 
-func builtinModel(_ context.Context, args string, a *Agent) (string, error) {
+func builtinModel(ctx context.Context, args string, a *Agent) (string, error) {
 	args = strings.TrimSpace(args)
 	if args == "" {
 		current := a.GetModel()
@@ -161,7 +161,7 @@ func builtinModel(_ context.Context, args string, a *Agent) (string, error) {
 	}
 	prev := a.GetModel()
 	a.SetModel(args)
-	a.emitHook(ModelSwitched{
+	a.emitHook(ctx, ModelSwitched{
 		PreviousModel: prev,
 		NewModel:      args,
 		Reason:        "command",

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,8 +17,9 @@ type RegistrationMode int
 
 const (
 	Eager     RegistrationMode = iota // Initialize immediately on registration
-	Lazy                              // Initialize on first resolve
+	Lazy                              // Initialize on first resolve (cached)
 	Singleton                         // Pre-created instance
+	Transient                         // New instance per resolve (never cached)
 )
 
 // Container defines the interface for a dependency injection container.
@@ -30,6 +33,7 @@ type Container interface {
 	Register(key string, constructor interface{}) error
 	RegisterLazy(key string, constructor interface{}, options ...LazyOption) error
 	RegisterEager(key string, constructor interface{}) error
+	RegisterTransient(key string, constructor interface{}) error
 	Resolve(key string) (interface{}, error)
 	RegisterSingleton(key string, instance interface{}) error
 	Close() error
@@ -60,6 +64,10 @@ type UnifiedContainer struct {
 	components map[string]*ComponentRegistration
 	singletons map[string]interface{}
 	mutex      sync.RWMutex
+	// resolving tracks keys currently being resolved to detect circular dependencies.
+	// Each goroutine gets its own set via goroutine-local tracking.
+	resolvingMu sync.Mutex
+	resolving   map[uint64]map[string]bool
 }
 
 type ComponentRegistration struct {
@@ -110,6 +118,7 @@ func NewContainer() Container {
 	return &UnifiedContainer{
 		components: make(map[string]*ComponentRegistration),
 		singletons: make(map[string]interface{}),
+		resolving:  make(map[uint64]map[string]bool),
 	}
 }
 
@@ -173,6 +182,22 @@ func (c *UnifiedContainer) RegisterSingleton(key string, instance interface{}) e
 	return nil
 }
 
+// RegisterTransient registers a constructor that creates a new instance on every Resolve call.
+// The result is never cached.
+func (c *UnifiedContainer) RegisterTransient(key string, constructor interface{}) error {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	registration := &ComponentRegistration{
+		key:         key,
+		constructor: constructor,
+		mode:        Transient,
+	}
+
+	c.components[key] = registration
+	return nil
+}
+
 // Resolve gets a component instance
 func (c *UnifiedContainer) Resolve(key string) (interface{}, error) {
 	// Check singletons first
@@ -189,7 +214,62 @@ func (c *UnifiedContainer) Resolve(key string) (interface{}, error) {
 		return nil, fmt.Errorf("component not registered: %s", key)
 	}
 
+	// Circular dependency detection
+	gid := goroutineID()
+	if err := c.pushResolving(gid, key); err != nil {
+		return nil, err
+	}
+	defer c.popResolving(gid, key)
+
 	return c.resolveComponent(registration)
+}
+
+// goroutineID extracts the goroutine ID from the runtime stack.
+func goroutineID() uint64 {
+	var buf [64]byte
+	n := runtime.Stack(buf[:], false)
+	// Stack starts with "goroutine NNN [..."
+	s := string(buf[:n])
+	s = strings.TrimPrefix(s, "goroutine ")
+	var id uint64
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			break
+		}
+		id = id*10 + uint64(c-'0')
+	}
+	return id
+}
+
+// pushResolving marks key as being resolved on this goroutine. Returns an error
+// if a cycle is detected.
+func (c *UnifiedContainer) pushResolving(gid uint64, key string) error {
+	c.resolvingMu.Lock()
+	defer c.resolvingMu.Unlock()
+
+	set, ok := c.resolving[gid]
+	if !ok {
+		set = make(map[string]bool)
+		c.resolving[gid] = set
+	}
+	if set[key] {
+		return fmt.Errorf("circular dependency detected: resolving %q is already in progress on this goroutine", key)
+	}
+	set[key] = true
+	return nil
+}
+
+// popResolving removes the key from the goroutine's resolving set.
+func (c *UnifiedContainer) popResolving(gid uint64, key string) {
+	c.resolvingMu.Lock()
+	defer c.resolvingMu.Unlock()
+
+	if set, ok := c.resolving[gid]; ok {
+		delete(set, key)
+		if len(set) == 0 {
+			delete(c.resolving, gid)
+		}
+	}
 }
 
 func (c *UnifiedContainer) resolveComponent(registration *ComponentRegistration) (interface{}, error) {
@@ -198,6 +278,8 @@ func (c *UnifiedContainer) resolveComponent(registration *ComponentRegistration)
 		return c.resolveEager(registration)
 	case Lazy:
 		return c.resolveLazy(registration)
+	case Transient:
+		return c.resolveTransient(registration)
 	default:
 		return nil, fmt.Errorf("unknown registration mode for component: %s", registration.key)
 	}
@@ -234,6 +316,11 @@ func (c *UnifiedContainer) resolveLazy(registration *ComponentRegistration) (int
 	return c.initializeWithRetry(registration)
 }
 
+// resolveTransient creates a new instance every time. No caching.
+func (c *UnifiedContainer) resolveTransient(registration *ComponentRegistration) (interface{}, error) {
+	return c.callConstructor(registration.constructor)
+}
+
 func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistration) (interface{}, error) {
 	var lastError error
 	backoffMs := registration.retryPolicy.InitialBackoffMs
@@ -262,6 +349,11 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 		instance, err := c.callConstructor(registration.constructor)
 		if err != nil {
 			lastError = err
+			// Circular dependency errors are deterministic — retrying won't help.
+			if strings.Contains(err.Error(), "circular dependency detected") {
+				return nil, fmt.Errorf("failed to initialize component '%s': %w",
+					registration.key, err)
+			}
 			registration.circuitBreaker.RecordFailure()
 			logger.Debug("Lazy component initialization failed", map[string]interface{}{
 				"component": registration.key,
