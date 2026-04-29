@@ -14,7 +14,7 @@ const (
 	StatusCompleted StepStatus = "completed"
 	StatusFailed    StepStatus = "failed"
 	StatusSkipped   StepStatus = "skipped"
-	StatusCanceled StepStatus = "canceled"
+	StatusCanceled  StepStatus = "canceled"
 )
 
 // StepProgress is a progress update for a single step.

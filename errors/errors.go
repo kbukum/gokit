@@ -264,5 +264,3 @@ func Wrap(err error) *AppError {
 func FormatResourceError(resource string, id any) *AppError {
 	return NotFound(resource, fmt.Sprintf("%v", id))
 }
-
-
