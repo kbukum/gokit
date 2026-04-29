@@ -172,3 +172,134 @@ func TestKey_ContextType(t *testing.T) {
 		t.Fatalf("ResolveKey: %v", err)
 	}
 }
+
+func TestProvideTransient_NewInstancePerResolve(t *testing.T) {
+	c := di.NewContainer()
+	calls := 0
+	err := di.ProvideTransient(c, svcKey, func() *svc {
+		calls++
+		return &svc{N: calls}
+	})
+	if err != nil {
+		t.Fatalf("ProvideTransient: %v", err)
+	}
+
+	a, err := di.ResolveKey(c, svcKey)
+	if err != nil {
+		t.Fatalf("first resolve: %v", err)
+	}
+	b, err := di.ResolveKey(c, svcKey)
+	if err != nil {
+		t.Fatalf("second resolve: %v", err)
+	}
+
+	if a == b {
+		t.Fatal("transient should return different pointers")
+	}
+	if a.N != 1 || b.N != 2 {
+		t.Fatalf("a.N=%d b.N=%d; constructor should be called each time", a.N, b.N)
+	}
+}
+
+func TestProvideTransient_NilCtorRejected(t *testing.T) {
+	c := di.NewContainer()
+	if err := di.ProvideTransient(c, svcKey, nil); err == nil {
+		t.Fatal("expected error for nil ctor")
+	}
+}
+
+func TestProvideTransient_BadCtorRejected(t *testing.T) {
+	c := di.NewContainer()
+	if err := di.ProvideTransient(c, svcKey, "not-a-func"); err == nil {
+		t.Fatal("expected error for non-function ctor")
+	}
+}
+
+func TestCircularDependencyDetection(t *testing.T) {
+	c := di.NewContainer()
+	keyA := di.NameKey[*svc]("a")
+	keyB := di.NameKey[*svc]("b")
+
+	// A depends on B
+	if err := di.Provide(c, keyA, func(c di.Container) (*svc, error) {
+		_, err := di.ResolveKey(c, keyB)
+		if err != nil {
+			return nil, err
+		}
+		return &svc{N: 1}, nil
+	}); err != nil {
+		t.Fatalf("Provide A: %v", err)
+	}
+
+	// B depends on A — circular
+	if err := di.Provide(c, keyB, func(c di.Container) (*svc, error) {
+		_, err := di.ResolveKey(c, keyA)
+		if err != nil {
+			return nil, err
+		}
+		return &svc{N: 2}, nil
+	}); err != nil {
+		t.Fatalf("Provide B: %v", err)
+	}
+
+	_, err := di.ResolveKey(c, keyA)
+	if err == nil {
+		t.Fatal("expected circular dependency error")
+	}
+	if !strings.Contains(err.Error(), "circular") {
+		t.Fatalf("expected 'circular' in error, got: %v", err)
+	}
+}
+
+func TestCircularDependencyDetection_SelfReference(t *testing.T) {
+	c := di.NewContainer()
+	selfKey := di.NameKey[*svc]("self")
+
+	if err := di.Provide(c, selfKey, func(c di.Container) (*svc, error) {
+		_, err := di.ResolveKey(c, selfKey)
+		if err != nil {
+			return nil, err
+		}
+		return &svc{N: 1}, nil
+	}); err != nil {
+		t.Fatalf("Provide: %v", err)
+	}
+
+	_, err := di.ResolveKey(c, selfKey)
+	if err == nil {
+		t.Fatal("expected circular dependency error for self-reference")
+	}
+	if !strings.Contains(err.Error(), "circular") {
+		t.Fatalf("expected 'circular' in error, got: %v", err)
+	}
+}
+
+func TestTransient_NoCachingEvenAfterError(t *testing.T) {
+	c := di.NewContainer()
+	calls := 0
+	err := di.ProvideTransient(c, svcKey, func() (*svc, error) {
+		calls++
+		if calls == 1 {
+			return nil, errors.New("first call fails")
+		}
+		return &svc{N: calls}, nil
+	})
+	if err != nil {
+		t.Fatalf("ProvideTransient: %v", err)
+	}
+
+	// First resolve fails
+	_, err = di.ResolveKey(c, svcKey)
+	if err == nil {
+		t.Fatal("expected first resolve to fail")
+	}
+
+	// Second resolve succeeds (no cached error)
+	got, err := di.ResolveKey(c, svcKey)
+	if err != nil {
+		t.Fatalf("second resolve: %v", err)
+	}
+	if got.N != 2 {
+		t.Fatalf("got.N = %d want 2", got.N)
+	}
+}

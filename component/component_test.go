@@ -508,8 +508,8 @@ func TestStopAllErrorAggregationFormat(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "shutdown errors") {
-		t.Errorf("expected 'shutdown errors' prefix, got: %s", msg)
+	if !strings.Contains(msg, "cache") {
+		t.Errorf("expected 'cache' in error, got: %s", msg)
 	}
 	if !strings.Contains(msg, "db timeout") {
 		t.Errorf("expected 'db timeout' in error, got: %s", msg)
@@ -1249,5 +1249,180 @@ func TestRouteStruct(t *testing.T) {
 	r := Route{Method: "POST", Path: "/api/v1/users", Handler: "CreateUser"}
 	if r.Method != "POST" || r.Path != "/api/v1/users" || r.Handler != "CreateUser" {
 		t.Errorf("unexpected route: %+v", r)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle state machine tests
+// ---------------------------------------------------------------------------
+
+func TestStateString(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		state State
+		want  string
+	}{
+		{StateCreated, "created"},
+		{StateStarting, "starting"},
+		{StateRunning, "running"},
+		{StateStopping, "stopping"},
+		{StateStopped, "stopped"},
+		{StateFailed, "failed"},
+		{State(99), "unknown"},
+	}
+	for _, tc := range tests {
+		if got := tc.state.String(); got != tc.want {
+			t.Errorf("State(%d).String() = %q, want %q", tc.state, got, tc.want)
+		}
+	}
+}
+
+func TestStateTransitions_HappyPath(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	c := &mockComponent{
+		name:   "svc",
+		health: Health{Name: "svc", Status: StatusHealthy},
+	}
+	r.Register(c)
+
+	// After registration: Created
+	state, ok := r.State("svc")
+	if !ok || state != StateCreated {
+		t.Fatalf("expected Created, got %v", state)
+	}
+
+	// After StartAll: Running
+	r.StartAll(context.Background())
+	state, _ = r.State("svc")
+	if state != StateRunning {
+		t.Fatalf("expected Running, got %v", state)
+	}
+
+	// After StopAll: Stopped
+	r.StopAll(context.Background())
+	state, _ = r.State("svc")
+	if state != StateStopped {
+		t.Fatalf("expected Stopped, got %v", state)
+	}
+}
+
+func TestStateTransitions_StartFailure(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	c := &mockComponent{
+		name:     "fail",
+		startErr: fmt.Errorf("boom"),
+		health:   Health{Name: "fail", Status: StatusUnhealthy},
+	}
+	r.Register(c)
+
+	err := r.StartAll(context.Background())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	state, _ := r.State("fail")
+	if state != StateFailed {
+		t.Fatalf("expected Failed after start error, got %v", state)
+	}
+}
+
+func TestStateTransitions_RollbackOnPartialFailure(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	r.Register(&mockComponent{
+		name:   "a",
+		health: Health{Name: "a", Status: StatusHealthy},
+	})
+	r.Register(&mockComponent{
+		name:     "b",
+		startErr: fmt.Errorf("b failed"),
+		health:   Health{Name: "b", Status: StatusUnhealthy},
+	})
+
+	r.StartAll(context.Background())
+
+	// 'a' was started then rolled back → Stopped
+	stateA, _ := r.State("a")
+	if stateA != StateStopped {
+		t.Errorf("expected 'a' Stopped after rollback, got %v", stateA)
+	}
+
+	// 'b' failed → Failed
+	stateB, _ := r.State("b")
+	if stateB != StateFailed {
+		t.Errorf("expected 'b' Failed, got %v", stateB)
+	}
+}
+
+func TestState_UnknownComponent(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	_, ok := r.State("nonexistent")
+	if ok {
+		t.Error("expected ok=false for unknown component")
+	}
+}
+
+func TestStopAllDetailed(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	r.Register(&mockComponent{
+		name:   "ok",
+		health: Health{Name: "ok", Status: StatusHealthy},
+	})
+	r.Register(&mockComponent{
+		name:    "fail",
+		stopErr: fmt.Errorf("stop error"),
+		health:  Health{Name: "fail", Status: StatusHealthy},
+	})
+	r.StartAll(context.Background())
+
+	results := r.StopAllDetailed(context.Background())
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+
+	// Results are in reverse order (fail first, then ok)
+	var okResult, failResult StopResult
+	for _, sr := range results {
+		switch sr.Name {
+		case "ok":
+			okResult = sr
+		case "fail":
+			failResult = sr
+		}
+	}
+
+	if okResult.Err != nil {
+		t.Errorf("expected nil error for 'ok', got %v", okResult.Err)
+	}
+	if failResult.Err == nil {
+		t.Error("expected error for 'fail'")
+	}
+}
+
+func TestRestartAfterStop(t *testing.T) {
+	t.Parallel()
+	r := NewRegistry()
+	c := &mockComponent{
+		name:   "restartable",
+		health: Health{Name: "restartable", Status: StatusHealthy},
+	}
+	r.Register(c)
+
+	r.StartAll(context.Background())
+	r.StopAll(context.Background())
+
+	// Should be able to start again after stop
+	err := r.StartAll(context.Background())
+	if err != nil {
+		t.Fatalf("expected restart to succeed, got: %v", err)
+	}
+
+	state, _ := r.State("restartable")
+	if state != StateRunning {
+		t.Errorf("expected Running after restart, got %v", state)
 	}
 }

@@ -153,11 +153,7 @@ func TestOnStartHook(t *testing.T) {
 		return nil
 	})
 
-	if len(app.onStart) != 1 {
-		t.Errorf("expected 1 onStart hook, got %d", len(app.onStart))
-	}
-
-	err := runHooks(context.Background(), app.onStart)
+	err := app.emitLifecycleHooks(context.Background(), EventStart)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
 	}
@@ -175,7 +171,7 @@ func TestOnReadyHook(t *testing.T) {
 		return nil
 	})
 
-	err := runHooks(context.Background(), app.onReady)
+	err := app.emitLifecycleHooks(context.Background(), EventReady)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
 	}
@@ -193,7 +189,7 @@ func TestOnStopHook(t *testing.T) {
 		return nil
 	})
 
-	err := runHooks(context.Background(), app.onStop)
+	err := app.emitLifecycleHooks(context.Background(), EventStop)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
 	}
@@ -211,31 +207,33 @@ func TestMultipleHooks(t *testing.T) {
 		func(ctx context.Context) error { order = append(order, "second"); return nil },
 	)
 
-	runHooks(context.Background(), app.onStart)
+	app.emitLifecycleHooks(context.Background(), EventStart)
 	if len(order) != 2 || order[0] != "first" || order[1] != "second" {
 		t.Errorf("expected [first, second], got %v", order)
 	}
 }
 
 func TestHookError(t *testing.T) {
-	hooks := []Hook{
-		func(ctx context.Context) error { return fmt.Errorf("hook failed") },
-	}
-	err := runHooks(context.Background(), hooks)
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnStart(func(ctx context.Context) error { return fmt.Errorf("hook failed") })
+	err := app.emitLifecycleHooks(context.Background(), EventStart)
 	if err == nil {
 		t.Error("expected error from failing hook")
 	}
 }
 
 func TestHookErrorStopsExecution(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
 	secondCalled := false
-	hooks := []Hook{
+	app.OnStart(
 		func(ctx context.Context) error { return fmt.Errorf("fail") },
 		func(ctx context.Context) error { secondCalled = true; return nil },
-	}
-	runHooks(context.Background(), hooks)
+	)
+	app.emitLifecycleHooks(context.Background(), EventStart)
 	if secondCalled {
-		t.Error("expected second hook not to be called after first fails")
+		t.Error("expected second hook not to be called after first fails (abort)")
 	}
 }
 
@@ -416,7 +414,7 @@ func TestRunTaskWithHooks(t *testing.T) {
 		return nil
 	})
 
-	expected := []string{"start", "configure", "ready", "task", "stop"}
+	expected := []string{"configure", "start", "ready", "task", "stop"}
 	if len(order) != len(expected) {
 		t.Fatalf("expected %v, got %v", expected, order)
 	}

@@ -2,6 +2,44 @@ package component
 
 import "context"
 
+// State represents the lifecycle state of a component.
+type State int
+
+const (
+	// StateCreated is the initial state after registration.
+	StateCreated State = iota
+	// StateStarting indicates the component is currently starting.
+	StateStarting
+	// StateRunning indicates the component started successfully and is operational.
+	StateRunning
+	// StateStopping indicates the component is currently shutting down.
+	StateStopping
+	// StateStopped indicates the component has been shut down.
+	StateStopped
+	// StateFailed indicates the component failed to start or encountered a fatal error.
+	StateFailed
+)
+
+// String returns the human-readable name of a lifecycle state.
+func (s State) String() string {
+	switch s {
+	case StateCreated:
+		return "created"
+	case StateStarting:
+		return "starting"
+	case StateRunning:
+		return "running"
+	case StateStopping:
+		return "stopping"
+	case StateStopped:
+		return "stopped"
+	case StateFailed:
+		return "failed"
+	default:
+		return "unknown"
+	}
+}
+
 // HealthStatus represents the health state of a component.
 type HealthStatus string
 
@@ -20,6 +58,14 @@ type Health struct {
 
 // Component represents a lifecycle-managed infrastructure component.
 // Each infrastructure module (database, redis, kafka, etc.) implements this interface.
+//
+// The canonical lifecycle state machine is:
+//
+//	Created → Starting → Running → Stopping → Stopped
+//	                ↘ Failed
+//
+// Stop() is responsible for draining any inflight work before releasing
+// resources. The framework enforces a per-component timeout via the context.
 type Component interface {
 	// Name returns the unique name of the component for registration.
 	Name() string
@@ -28,10 +74,19 @@ type Component interface {
 	Start(ctx context.Context) error
 
 	// Stop gracefully shuts down the component and releases resources.
+	// Implementations must drain inflight work within the context deadline.
 	Stop(ctx context.Context) error
 
 	// Health returns the current health status of the component.
 	Health(ctx context.Context) Health
+}
+
+// StopResult holds the outcome of stopping a single component.
+type StopResult struct {
+	// Name of the component.
+	Name string
+	// Err is nil on success, non-nil on failure.
+	Err error
 }
 
 // Description holds summary information for the bootstrap display.

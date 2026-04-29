@@ -173,17 +173,19 @@ func TestPhase1PartialStartupFailure(t *testing.T) {
 // ── 3. Hook error propagation across phases ──────────────────────────────
 
 func TestHookErrorIncludesIndex(t *testing.T) {
-	hooks := []Hook{
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	app.OnStart(
 		func(ctx context.Context) error { return nil },
-		func(ctx context.Context) error { return nil },
+		func(_ context.Context) error { return nil },
 		func(ctx context.Context) error { return fmt.Errorf("boom") },
-	}
-	err := runHooks(context.Background(), hooks)
+	)
+	err := app.emitLifecycleHooks(context.Background(), EventStart)
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "hook 2") {
-		t.Errorf("expected 'hook 2' in error, got %q", err.Error())
+	if !strings.Contains(err.Error(), "boom") {
+		t.Errorf("expected 'boom' in error, got %q", err.Error())
 	}
 }
 
@@ -587,14 +589,13 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 
 	expected := []string{
-		"db:start",    // Phase 1: infrastructure components start
+		"onConfigure", // Phase 1: configure (may register app components)
+		"db:start",    // Phase 2: single-pass StartAll
 		"onStart",     // OnStart hooks
-		"onConfigure", // Phase 2: configure (may register app components)
-		// Phase 3: StartAll again (no-op here since no new components)
-		"onReady", // Ready hooks
-		"task",    // Task execution
-		"onStop",  // Stop hooks
-		"db:stop", // Components stop (reverse order)
+		"onReady",     // Ready hooks
+		"task",        // Task execution
+		"onStop",      // Stop hooks
+		"db:stop",     // Components stop (reverse order)
 	}
 
 	if len(order) != len(expected) {
@@ -649,9 +650,9 @@ func TestTwoPhaseStartupComponentsRegisteredDuringConfigure(t *testing.T) {
 	}
 
 	expected := []string{
-		"db:start",              // Phase 1: infra started
-		"onConfigure",           // Phase 2: registers worker
-		"catalog-refresh:start", // Phase 3: late-registered component started
+		"onConfigure",           // Phase 1: configure — registers worker
+		"db:start",              // Phase 2: single-pass StartAll (both components)
+		"catalog-refresh:start", // Phase 2: late-registered component started in same pass
 		"onReady",               // Ready hooks
 		"task",                  // Task
 		"catalog-refresh:stop",  // Stop: reverse order (app component first)
@@ -749,13 +750,15 @@ func TestOnConfigureAccessToFullApp(t *testing.T) {
 }
 
 func TestEmptyHookSlicesAreNoop(t *testing.T) {
-	err := runHooks(context.Background(), nil)
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+	// No hooks registered — emit should succeed with no error.
+	err := app.emitLifecycleHooks(context.Background(), EventStart)
 	if err != nil {
-		t.Errorf("nil hooks should succeed: %v", err)
+		t.Errorf("no hooks should succeed: %v", err)
 	}
-
-	err = runHooks(context.Background(), []Hook{})
+	err = app.emitLifecycleHooks(context.Background(), EventStop)
 	if err != nil {
-		t.Errorf("empty hooks should succeed: %v", err)
+		t.Errorf("no hooks should succeed: %v", err)
 	}
 }

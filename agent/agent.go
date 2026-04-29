@@ -97,7 +97,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		}
 		if len(history) > 0 {
 			msgs = append(history, msgs...)
-			a.emitHook(MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
+			a.emitHook(ctx, MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
 		}
 	}
 
@@ -105,7 +105,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 	for turn := 1; turn <= a.config.MaxTurns; turn++ {
 		// Emit TurnStart hook
-		if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+		if hr := a.emitHook(ctx, TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
 			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		}
@@ -114,7 +114,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		req := a.buildRequest(msgs)
 
 		// Emit PreLLMCall hook
-		if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+		if hr := a.emitHook(ctx, PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
 			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted), nil
 		} else if hr.Action == hook.ActionModify {
@@ -126,12 +126,12 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 		// Call LLM
 		resp, err := a.config.Provider.Complete(ctx, req)
 		if err != nil {
-			a.emitHook(OnError{Err: err, Source: "llm_provider"})
+			a.emitHook(ctx, OnError{Err: err, Source: "llm_provider"})
 			return nil, fmt.Errorf("agent: llm call failed on turn %d: %w", turn, err)
 		}
 
 		// Emit PostLLMCall hook
-		a.emitHook(PostLLMCall{Response: *resp})
+		a.emitHook(ctx, PostLLMCall{Response: *resp})
 
 		// Accumulate usage
 		totalUsage = addUsage(totalUsage, resp.Usage)
@@ -141,7 +141,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 		// If no tool calls, we're done
 		if !resp.HasToolCalls() {
-			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopEndTurn), nil
 		}
@@ -154,7 +154,7 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 
 		// Check token budget
 		if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
-			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 			a.saveMemory(ctx, msgs)
 			return a.buildResult(msgs, resp.Message, totalUsage, turn, StopMaxBudget), nil
 		}
@@ -168,11 +168,11 @@ func (a *Agent) Run(ctx context.Context, messages []llm.Message) (*Result, error
 			}
 			msgs = compacted
 			newTokens := a.config.Provider.CountTokens(msgs)
-			a.emitHook(ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
+			a.emitHook(ctx, ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
 		}
 
 		// Emit TurnEnd hook
-		a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+		a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 	}
 
 	// Reached max turns
@@ -220,7 +220,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			history, err := a.config.Memory.Load(ctx, a.config.SessionID)
 			if err == nil && len(history) > 0 {
 				msgs = append(history, msgs...)
-				a.emitHook(MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
+				a.emitHook(ctx, MemoryLoaded{SessionID: a.config.SessionID, MessageCount: len(history)})
 			}
 		}
 
@@ -235,7 +235,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				return
 			}
 
-			if hr := a.emitHook(TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
+			if hr := a.emitHook(ctx, TurnStart{Turn: turn}); hr.Action == hook.ActionAbort {
 				a.saveMemory(ctx, msgs)
 				send(CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)})
 				return
@@ -243,7 +243,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 
 			req := a.buildRequest(msgs)
 
-			if hr := a.emitHook(PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
+			if hr := a.emitHook(ctx, PreLLMCall{Request: req}); hr.Action == hook.ActionAbort {
 				a.saveMemory(ctx, msgs)
 				send(CompleteEvent{Result: *a.buildResult(msgs, llm.AssistantMessage{}, totalUsage, turn-1, StopAborted)})
 				return
@@ -256,7 +256,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			// Use streaming if provider supports it
 			streamCh, err := a.config.Provider.Stream(ctx, req)
 			if err != nil {
-				a.emitHook(OnError{Err: err, Source: "llm_provider"})
+				a.emitHook(ctx, OnError{Err: err, Source: "llm_provider"})
 				return
 			}
 
@@ -275,13 +275,13 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				return
 			}
 
-			a.emitHook(PostLLMCall{Response: *resp})
+			a.emitHook(ctx, PostLLMCall{Response: *resp})
 
 			totalUsage = addUsage(totalUsage, resp.Usage)
 			msgs = append(msgs, resp.Message)
 
 			if !resp.HasToolCalls() {
-				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+				a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 				if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
 					return
 				}
@@ -308,7 +308,7 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 			}
 
 			if a.config.MaxTokenBudget > 0 && totalTokens(totalUsage) >= a.config.MaxTokenBudget {
-				a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+				a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 				if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
 					return
 				}
@@ -325,13 +325,13 @@ func (a *Agent) Stream(ctx context.Context, messages []llm.Message) (<-chan Even
 				}
 				msgs = compacted
 				newTokens := a.config.Provider.CountTokens(msgs)
-				a.emitHook(ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
+				a.emitHook(ctx, ContextCompacted{OldTokens: oldTokens, NewTokens: newTokens, Strategy: fmt.Sprintf("%T", a.config.ContextStrategy)})
 				if !send(ContextCompactedEvent{OldTokens: oldTokens, NewTokens: newTokens}) {
 					return
 				}
 			}
 
-			a.emitHook(TurnEnd{Turn: turn, Message: resp.Message})
+			a.emitHook(ctx, TurnEnd{Turn: turn, Message: resp.Message})
 			if !send(TurnCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage}) {
 				return
 			}
@@ -380,7 +380,7 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 
 	// Emit PreToolCall hook
 	input := json.RawMessage(tc.Function.Arguments)
-	if hr := a.emitHook(PreToolCall{Name: tc.Function.Name, Input: input}); hr.Action == hook.ActionAbort {
+	if hr := a.emitHook(ctx, PreToolCall{Name: tc.Function.Name, Input: input}); hr.Action == hook.ActionAbort {
 		return nil, fmt.Errorf("tool %q aborted by hook: %s", tc.Function.Name, hr.Reason)
 	}
 
@@ -402,7 +402,7 @@ func (a *Agent) executeTool(ctx context.Context, tc llm.ToolCall) (*tool.Result,
 	}
 
 	// Emit PostToolCall hook
-	a.emitHook(PostToolCall{
+	a.emitHook(ctx, PostToolCall{
 		Name:   tc.Function.Name,
 		Input:  input,
 		Result: result,
@@ -446,7 +446,7 @@ func (a *Agent) executeTools(ctx context.Context, calls []llm.ToolCall) []toolRe
 		for i, tc := range calls {
 			names[i] = tc.Function.Name
 		}
-		a.emitHook(ToolsParallelized{ToolNames: names, Count: len(calls)})
+		a.emitHook(ctx, ToolsParallelized{ToolNames: names, Count: len(calls)})
 
 		var wg sync.WaitGroup
 		for i, tc := range calls {
@@ -482,11 +482,11 @@ func (a *Agent) executeTools(ctx context.Context, calls []llm.ToolCall) []toolRe
 	return results
 }
 
-func (a *Agent) emitHook(event hook.Event) hook.Result {
+func (a *Agent) emitHook(ctx context.Context, event hook.Event) hook.Result {
 	if a.config.Hooks == nil {
 		return hook.Continue()
 	}
-	return a.config.Hooks.Emit(event)
+	return a.config.Hooks.Emit(ctx, event)
 }
 
 func (a *Agent) contextTooLarge(msgs []llm.Message) bool {

@@ -1,11 +1,17 @@
 package hook
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 // Registry manages hook handlers and dispatches events.
 // Handlers are executed sequentially in registration order.
 // An Abort result short-circuits remaining handlers.
 // Modify results chain — each handler sees the previous modification.
+// Panicking handlers are recovered and converted to errors without
+// disrupting dispatch to subsequent handlers.
 type Registry struct {
 	mu       sync.RWMutex
 	handlers map[EventType][]entry
@@ -50,7 +56,9 @@ func (r *Registry) On(eventType EventType, h Handler) func() {
 // Emit dispatches an event to all registered handlers for its type.
 // Handlers run sequentially. First Abort short-circuits.
 // Returns the merged result (last non-Continue result wins).
-func (r *Registry) Emit(event Event) Result {
+// Panicking handlers are recovered: the panic is converted to an error
+// on the Result and dispatch continues to the next handler.
+func (r *Registry) Emit(ctx context.Context, event Event) Result {
 	r.mu.RLock()
 	entries := make([]entry, len(r.handlers[event.Type()]))
 	copy(entries, r.handlers[event.Type()])
@@ -59,18 +67,37 @@ func (r *Registry) Emit(event Event) Result {
 	merged := Continue()
 
 	for _, e := range entries {
-		result := e.handler(event)
+		if err := ctx.Err(); err != nil {
+			return Result{Action: ActionAbort, Reason: "context canceled", Err: err}
+		}
+
+		result := r.safeCall(ctx, e.handler, event)
 		switch result.Action {
 		case ActionAbort:
 			return result
 		case ActionModify:
 			merged = result
 		case ActionContinue:
-			// keep current merged
+			if result.Err != nil {
+				merged.Err = result.Err
+			}
 		}
 	}
 
 	return merged
+}
+
+// safeCall invokes a handler with panic recovery.
+func (r *Registry) safeCall(ctx context.Context, h Handler, event Event) (result Result) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			result = Result{
+				Action: ActionContinue,
+				Err:    fmt.Errorf("hook handler panicked: %v", rv),
+			}
+		}
+	}()
+	return h(ctx, event)
 }
 
 // HasHandlers returns true if any handlers are registered for the event type.
