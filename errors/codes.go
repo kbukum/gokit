@@ -59,10 +59,9 @@ const (
 	ErrCodeExternalService ErrorCode = "EXTERNAL_SERVICE_ERROR"
 )
 
-// Lifecycle errors (not retryable, not a server fault)
+// Lifecycle errors
 const (
-	// ErrCodeCanceled indicates the operation was canceled by the caller or system
-	// before completion (e.g., context cancellation, client disconnect).
+	// ErrCodeCanceled indicates the operation was canceled by the caller or system.
 	ErrCodeCanceled ErrorCode = "CANCELED"
 )
 
@@ -73,7 +72,6 @@ var retryableCodes = map[ErrorCode]bool{
 	ErrCodeRateLimited:        true,
 	ErrCodeExternalService:    true,
 	ErrCodeInternal:           false,
-	ErrCodeCanceled:           false,
 }
 
 // IsRetryableCode returns true if the error code indicates a retryable error.

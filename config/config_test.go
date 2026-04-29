@@ -475,9 +475,9 @@ func TestLoadConfigMissingFileUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error with missing config, got %v", err)
 	}
-	// All fields should be zero values
-	if cfg.Name != "" {
-		t.Errorf("Name = %q, want empty", cfg.Name)
+	// All fields should be zero values except Name (populated from serviceName)
+	if cfg.Name != "missing-service" {
+		t.Errorf("Name = %q, want %q", cfg.Name, "missing-service")
 	}
 }
 
@@ -683,10 +683,13 @@ func TestLoadConfigVeryLongValues(t *testing.T) {
 func TestLoadConfigEmptyServiceName(t *testing.T) {
 	fs := &mockFS{files: map[string]bool{}}
 	var cfg ServiceConfig
-	// Empty service name should not panic or error on load
+	// Empty service name should trigger validation failure (name is required).
 	err := LoadConfig("", &cfg, WithFileSystem(fs))
-	if err != nil {
-		t.Fatalf("LoadConfig should not error with empty service name: %v", err)
+	if err == nil {
+		t.Fatal("LoadConfig with empty service name should return validation error")
+	}
+	if !strings.Contains(err.Error(), "config.name is required") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 

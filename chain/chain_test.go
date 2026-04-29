@@ -139,7 +139,7 @@ func TestFailureTriggersCleanup(t *testing.T) {
 	}
 }
 
-func TestCancellationMarksRemainingCancelled(t *testing.T) {
+func TestCancellationMarksRemainingCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel before the chain runs
 
@@ -162,11 +162,11 @@ func TestCancellationMarksRemainingCancelled(t *testing.T) {
 	}
 
 	for _, step := range result.Steps {
-		if step.Status != chain.StatusCancelled {
+		if step.Status != chain.StatusCanceled {
 			t.Errorf("step %s: expected canceled, got %s", step.StepID, step.Status)
 		}
 		if step.Error != "chain canceled" {
-			t.Errorf("step %s: expected error 'chain cancelled', got %q", step.StepID, step.Error)
+			t.Errorf("step %s: expected error 'chain canceled', got %q", step.StepID, step.Error)
 		}
 	}
 }

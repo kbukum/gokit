@@ -63,7 +63,7 @@ func (e *Executor) Execute(ctx context.Context, input any, progress ChainProgres
 			for _, remaining := range e.operations[i:] {
 				results = append(results, StepResult{
 					StepID: remaining.ID(),
-					Status: StatusCancelled,
+					Status: StatusCanceled,
 					Error:  "chain canceled",
 				})
 			}

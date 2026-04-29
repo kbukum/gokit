@@ -13,14 +13,14 @@ import (
 )
 
 const (
-	saltSize          = 16
-	defaultPBKDF2Iter = 600_000
-	pbkdf2KeyLen      = 32
+	keySize  = 32
+	saltSize = 16
 )
 
-// pbkdf2Iter is the iteration count used for key derivation.
-// Defaults to 600k for production security; tests may reduce via WithIterations.
-var pbkdf2Iter = defaultPBKDF2Iter
+// pbkdf2Iterations is a var (not const) so tests can reduce it for speed.
+var pbkdf2Iterations = 600_000
+
+type aeadFactory func([]byte) (cipher.AEAD, error)
 
 // Service handles encryption/decryption of sensitive data using AES-256-GCM.
 type Service struct {
@@ -28,54 +28,55 @@ type Service struct {
 }
 
 // NewService creates a new encryption service with the given key.
-// The key is derived using PBKDF2-SHA256 with a random salt per operation.
+// The passphrase is stretched with PBKDF2-SHA256 using a random 16-byte salt per encryption.
 func NewService(key string) (*Service, error) {
 	return &Service{passphrase: []byte(key)}, nil
 }
 
-func (s *Service) deriveKey(salt []byte) []byte {
-	return pbkdf2.Key(s.passphrase, salt, pbkdf2Iter, pbkdf2KeyLen, sha256.New)
+func deriveKey(passphrase, salt []byte) []byte {
+	return pbkdf2.Key(passphrase, salt, pbkdf2Iterations, keySize, sha256.New)
 }
 
-// Encrypt encrypts plaintext and returns a base64-encoded result.
-// Format: base64(salt[16] || nonce[12] || ciphertext)
-func (s *Service) Encrypt(plaintext string) (string, error) {
+func newAESGCM(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("create cipher: %w", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, fmt.Errorf("create GCM: %w", err)
+	}
+
+	return gcm, nil
+}
+
+func encryptWithAEAD(passphrase []byte, factory aeadFactory, plaintext string) (string, error) {
 	salt := make([]byte, saltSize)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	keyBytes := s.deriveKey(salt)
-
-	block, err := aes.NewCipher(keyBytes)
+	aead, err := factory(deriveKey(passphrase, salt))
 	if err != nil {
-		return "", fmt.Errorf("create cipher: %w", err)
+		return "", err
 	}
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM: %w", err)
-	}
-
-	nonce := make([]byte, gcm.NonceSize())
+	nonce := make([]byte, aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("generate nonce: %w", err)
 	}
 
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
+	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), nil)
+	payload := make([]byte, 0, len(salt)+len(nonce)+len(ciphertext))
+	payload = append(payload, salt...)
+	payload = append(payload, nonce...)
+	payload = append(payload, ciphertext...)
 
-	// Format: salt || nonce || ciphertext
-	result := make([]byte, 0, len(salt)+len(nonce)+len(ciphertext))
-	result = append(result, salt...)
-	result = append(result, nonce...)
-	result = append(result, ciphertext...)
-
-	return base64.StdEncoding.EncodeToString(result), nil
+	return base64.StdEncoding.EncodeToString(payload), nil
 }
 
-// Decrypt decrypts a base64-encoded ciphertext.
-// Expects format: base64(salt[16] || nonce[12] || ciphertext)
-func (s *Service) Decrypt(ciphertext string) (string, error) {
+func decryptWithAEAD(passphrase []byte, factory aeadFactory, ciphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(ciphertext)
 	if err != nil {
 		return "", fmt.Errorf("decode base64: %w", err)
@@ -86,30 +87,31 @@ func (s *Service) Decrypt(ciphertext string) (string, error) {
 	}
 
 	salt := data[:saltSize]
-	remaining := data[saltSize:]
-
-	keyBytes := s.deriveKey(salt)
-
-	block, err := aes.NewCipher(keyBytes)
+	aead, err := factory(deriveKey(passphrase, salt))
 	if err != nil {
-		return "", fmt.Errorf("create cipher: %w", err)
+		return "", err
 	}
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM: %w", err)
-	}
-
-	nonceSize := gcm.NonceSize()
-	if len(remaining) < nonceSize {
+	nonceSize := aead.NonceSize()
+	if len(data) < saltSize+nonceSize {
 		return "", fmt.Errorf("ciphertext too short")
 	}
 
-	nonce, ciphertextData := remaining[:nonceSize], remaining[nonceSize:]
-	plainBytes, err := gcm.Open(nil, nonce, ciphertextData, nil)
+	nonce, ciphertextData := data[saltSize:saltSize+nonceSize], data[saltSize+nonceSize:]
+	plaintext, err := aead.Open(nil, nonce, ciphertextData, nil)
 	if err != nil {
 		return "", fmt.Errorf("decrypt: %w", err)
 	}
 
-	return string(plainBytes), nil
+	return string(plaintext), nil
+}
+
+// Encrypt encrypts plaintext and returns base64(salt || nonce || ciphertext).
+func (s *Service) Encrypt(plaintext string) (string, error) {
+	return encryptWithAEAD(s.passphrase, newAESGCM, plaintext)
+}
+
+// Decrypt decrypts a base64-encoded ciphertext.
+func (s *Service) Decrypt(ciphertext string) (string, error) {
+	return decryptWithAEAD(s.passphrase, newAESGCM, ciphertext)
 }

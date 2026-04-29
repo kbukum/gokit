@@ -224,6 +224,16 @@ func LoadConfig(serviceName string, cfg interface{}, opts ...LoaderOption) error
 	return loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem, lc.WarningLogger)
 }
 
+// Defaultable is implemented by config structs that have default values.
+type Defaultable interface {
+	ApplyDefaults()
+}
+
+// Validatable is implemented by config structs that support validation.
+type Validatable interface {
+	Validate() error
+}
+
 // loadFromResolvedFiles loads configuration from specific files.
 func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem, warn WarningFunc) error {
 	v := viper.New()
@@ -280,6 +290,29 @@ func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFi
 		),
 	)); err != nil {
 		return fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)
+	}
+
+	// 6. Populate service-name into the config if not already set from the file.
+	type serviceConfigAccessor interface {
+		GetServiceConfig() *ServiceConfig
+	}
+	if sc, ok := cfg.(serviceConfigAccessor); ok {
+		svc := sc.GetServiceConfig()
+		if svc.Name == "" {
+			svc.Name = serviceName
+		}
+	}
+
+	// 7. Apply defaults if the config struct implements Defaultable.
+	if d, ok := cfg.(Defaultable); ok {
+		d.ApplyDefaults()
+	}
+
+	// 8. Validate if the config struct implements Validatable.
+	if v, ok := cfg.(Validatable); ok {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("config validation failed for service %s: %w", serviceName, err)
+		}
 	}
 
 	return nil
