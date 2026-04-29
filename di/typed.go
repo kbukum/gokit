@@ -67,6 +67,21 @@ func ProvideSingleton[T any](c Container, k Key[T], v T) error {
 	return c.RegisterSingleton(k.fullKey(), v)
 }
 
+// ProvideTransient registers a constructor for k that creates a new instance
+// on every [ResolveKey] call. The result is never cached.
+func ProvideTransient[T any](c Container, k Key[T], ctor any) error {
+	if c == nil {
+		return fmt.Errorf("di: container is nil")
+	}
+	if ctor == nil {
+		return fmt.Errorf("di: constructor for %s must not be nil", k.fullKey())
+	}
+	if err := validateCtor[T](ctor); err != nil {
+		return fmt.Errorf("di: provide transient %s: %w", k.fullKey(), err)
+	}
+	return c.RegisterTransient(k.fullKey(), ctor)
+}
+
 // ResolveKey resolves k from c and returns the typed value. It returns an
 // error if the key is not registered or if the resolved value's type does
 // not match T (which can only happen if the container was modified through

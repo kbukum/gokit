@@ -198,7 +198,7 @@ func TestBuiltin_Model_Switch(t *testing.T) {
 
 	var switched bool
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventModelSwitched, func(e hook.Event) hook.Result {
+	hooks.On(agent.EventModelSwitched, func(ctx context.Context, e hook.Event) hook.Result {
 		ms := e.(agent.ModelSwitched)
 		if ms.NewModel == "gpt-4o" && ms.PreviousModel == "" {
 			switched = true

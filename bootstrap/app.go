@@ -11,6 +11,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/hook"
 	"github.com/kbukum/gokit/logger"
 )
 
@@ -37,10 +38,7 @@ type App[C Config] struct {
 
 	gracefulTimeout time.Duration
 	onConfigure     []func(ctx context.Context, app *App[C]) error
-
-	onStart []Hook
-	onReady []Hook
-	onStop  []Hook
+	hooks           *hook.Registry
 }
 
 // NewApp creates a new application instance from a typed config.
@@ -60,6 +58,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		Container:       di.NewContainer(),
 		Components:      component.NewRegistry(),
 		gracefulTimeout: 15 * time.Second,
+		hooks:           hook.NewRegistry(),
 	}
 
 	// Apply options (may override logger, container, timeout).
@@ -71,12 +70,11 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		app.gracefulTimeout = *o.gracefulTimeout
 	}
 
-	// Logger: use custom if provided, otherwise init from config.
+	// Logger: use custom if provided, otherwise create from config (no global state).
 	if o.logger != nil {
 		app.Logger = o.logger
 	} else {
-		logger.Init(&base.Logging)
-		app.Logger = logger.GetGlobalLogger()
+		app.Logger = logger.New(&base.Logging, base.Name)
 	}
 
 	app.Summary = NewSummary(base.Name, base.Version)
@@ -191,28 +189,28 @@ func (a *App[C]) startup(ctx context.Context) error {
 		"version": a.Version,
 	})
 
-	// Phase 1: Initialize — start all registered infrastructure components.
-	if err := a.initialize(ctx); err != nil {
-		return fmt.Errorf("initialization failed: %w", err)
-	}
-
-	// Run OnStart hooks
-	if err := runHooks(ctx, a.onStart); err != nil {
-		return fmt.Errorf("onStart hook failed: %w", err)
-	}
-
-	// Phase 2: Configure — run business-layer setup callbacks.
-	// Configure callbacks may register additional components (workers,
-	// schedulers, background tasks) that depend on infrastructure.
+	// Phase 1: Configure — run business-layer setup callbacks that may register
+	// additional components. This happens before StartAll so that all components
+	// (infrastructure + application) start in a single pass.
 	if err := a.configure(ctx); err != nil {
 		return fmt.Errorf("configuration failed: %w", err)
 	}
 
-	// Phase 3: Start application components — starts any components
-	// registered during Phase 2. Already-started infrastructure
-	// components are skipped (StartAll is idempotent).
+	// Phase 2: Start — single-pass StartAll for all registered components.
 	if err := a.Components.StartAll(ctx); err != nil {
-		return fmt.Errorf("application component startup failed: %w", err)
+		// Partial rollback: run OnStop hooks for cleanup of any resources
+		// that configure callbacks may have set up.
+		if stopErr := a.emitLifecycleHooks(ctx, EventStop); stopErr != nil {
+			a.Logger.ErrorCtx(ctx, "OnStop hook error during startup rollback", map[string]interface{}{
+				"error": stopErr.Error(),
+			})
+		}
+		return fmt.Errorf("component startup failed: %w", err)
+	}
+
+	// Run OnStart hooks
+	if err := a.emitLifecycleHooks(ctx, EventStart); err != nil {
+		return fmt.Errorf("onStart hook failed: %w", err)
 	}
 
 	// Ready check — verify all components are healthy
@@ -223,7 +221,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 	}
 
 	// Run OnReady hooks
-	if err := runHooks(ctx, a.onReady); err != nil {
+	if err := a.emitLifecycleHooks(ctx, EventReady); err != nil {
 		return fmt.Errorf("onReady hook failed: %w", err)
 	}
 
@@ -231,18 +229,6 @@ func (a *App[C]) startup(ctx context.Context) error {
 	a.Summary.SetStartupDuration(time.Since(start))
 	a.DisplaySummary()
 
-	return nil
-}
-
-// initialize starts all registered components (Phase 1).
-func (a *App[C]) initialize(ctx context.Context) error {
-	a.Logger.DebugCtx(ctx, "Phase 1: Starting components")
-
-	if err := a.Components.StartAll(ctx); err != nil {
-		return fmt.Errorf("failed to start components: %w", err)
-	}
-
-	a.Logger.DebugCtx(ctx, "Phase 1: All components started")
 	return nil
 }
 
@@ -332,8 +318,8 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	var shutdownErrs []error
 
-	// Run OnStop hooks before stopping components
-	if err := runHooks(ctx, a.onStop); err != nil {
+	// Run OnStop hooks before stopping components — collect all errors.
+	if err := a.emitLifecycleHooks(ctx, EventStop); err != nil {
 		a.Logger.ErrorCtx(ctx, "OnStop hook error", map[string]interface{}{
 			"error": err.Error(),
 		})
