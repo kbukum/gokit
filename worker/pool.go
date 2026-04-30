@@ -73,12 +73,13 @@ type Pool[I, O any] struct {
 	poolCtx context.Context
 	wg      sync.WaitGroup // tracks worker goroutines
 	supWg   sync.WaitGroup // tracks supervisor goroutine
+	taskWg  sync.WaitGroup // tracks accepted tasks until completion or cancellation
 
 	stopped    atomic.Bool
 	totalTasks atomic.Int64
 	failCount  atomic.Int64
 
-	// mu protects Stop's channel-close sequence (only used on shutdown path)
+	// mu serializes Stop with task acceptance so taskWg cannot race with shutdown waits.
 	mu         sync.Mutex
 	supervisor *supervisor[I, O]
 }
@@ -121,26 +122,44 @@ func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 // Submit sends a task to the pool. Returns a handle to track the task.
 func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error) {
 	if p.stopped.Load() {
-		return nil, fmt.Errorf("worker: pool %q is stopped", p.cfg.Name)
+		return nil, p.stoppedError()
 	}
 
 	// Task context is canceled if either the caller cancels or the pool shuts down.
 	taskCtx, taskCancel := context.WithCancel(ctx)
 	context.AfterFunc(p.poolCtx, taskCancel) //nolint:contextcheck // pool ctx is intentionally separate to allow shutdown to cancel in-flight tasks
 	handle := newTaskHandle[O](taskCancel, p.cfg.EventBuffer)
-	p.totalTasks.Add(1)
-
 	env := taskEnvelope[I, O]{task: task, handle: handle, ctx: taskCtx}
-	if p.supervisor == nil {
-		return p.enqueue(ctx, env)
-	}
 
-	idx := p.pickWorkerForRouting()
-	if idx < 0 {
+	p.mu.Lock()
+	if p.stopped.Load() {
+		p.mu.Unlock()
 		taskCancel()
-		return nil, fmt.Errorf("worker: pool %q has no healthy workers", p.cfg.Name)
+		return nil, p.stoppedError()
 	}
-	return p.enqueueAffinity(ctx, idx, env)
+	p.taskWg.Add(1)
+	p.totalTasks.Add(1)
+	p.mu.Unlock()
+
+	var (
+		submitted *TaskHandle[O]
+		err       error
+	)
+	if p.supervisor == nil {
+		submitted, err = p.enqueue(ctx, env)
+	} else {
+		idx := p.pickWorkerForRouting()
+		if idx < 0 {
+			taskCancel()
+			p.taskWg.Done()
+			return nil, fmt.Errorf("worker: pool %q has no healthy workers", p.cfg.Name)
+		}
+		submitted, err = p.enqueueAffinity(ctx, idx, env)
+	}
+	if err != nil {
+		p.taskWg.Done()
+	}
+	return submitted, err
 }
 
 // SubmitBatch sends multiple tasks. Returns handles in the same order.
@@ -168,42 +187,35 @@ func (p *Pool[I, O]) Events() <-chan Event[O] {
 // Stop performs graceful shutdown: stops accepting tasks, waits for in-flight
 // work to finish within GracePeriod, then force-cancels remaining.
 func (p *Pool[I, O]) Stop(ctx context.Context) error {
-	// Use mutex to serialize Stop calls; atomic swap prevents double-close
 	p.mu.Lock()
 	if !p.stopped.CompareAndSwap(false, true) {
 		p.mu.Unlock()
 		return nil
 	}
-
-	// Close input channels so workers drain remaining tasks.
-	close(p.queue)
-	for _, ch := range p.affinities {
-		close(ch)
-	}
 	p.mu.Unlock()
 
-	// Wait for all workers to finish or grace period to expire
-	done := make(chan struct{})
+	tasksDone := make(chan struct{})
 	go func() {
-		p.wg.Wait()
-		close(done)
+		p.taskWg.Wait()
+		close(tasksDone)
 	}()
 
 	graceCtx, graceCancel := context.WithTimeout(ctx, p.cfg.GracePeriod)
 	defer graceCancel()
 
 	select {
-	case <-done:
-		// All workers finished gracefully
+	case <-tasksDone:
 	case <-graceCtx.Done():
-		// Force cancel remaining work
 		p.cancel()
+		p.drainPending(p.poolCtx.Err())
 		p.wg.Wait()
+		<-tasksDone
 	}
 
-	// Cancel pool context to stop the supervisor goroutine, then wait for it
-	// to exit before closing the events channel.
+	// Input channels are intentionally never closed: Submit callers may already
+	// be past the fast stopped check, so shutdown is signaled only by poolCtx.
 	p.cancel()
+	p.wg.Wait()
 	p.supWg.Wait()
 
 	close(p.events)
@@ -259,30 +271,22 @@ func (p *Pool[I, O]) runWorker(idx int) {
 	affinity := p.affinities[idx]
 	queue := p.queue
 
-	for affinity != nil || queue != nil {
+	for {
 		select {
-		case env, ok := <-affinity:
-			if !ok {
-				affinity = nil
-				continue
-			}
+		case <-p.poolCtx.Done():
+			return
+		case env := <-affinity:
 			p.runEnvelope(workerID, idx, env)
 			continue
 		default:
 		}
 
 		select {
-		case env, ok := <-affinity:
-			if !ok {
-				affinity = nil
-				continue
-			}
+		case <-p.poolCtx.Done():
+			return
+		case env := <-affinity:
 			p.runEnvelope(workerID, idx, env)
-		case env, ok := <-queue:
-			if !ok {
-				queue = nil
-				continue
-			}
+		case env := <-queue:
 			p.runEnvelope(workerID, idx, env)
 		}
 	}
@@ -290,8 +294,38 @@ func (p *Pool[I, O]) runWorker(idx int) {
 
 func (p *Pool[I, O]) runEnvelope(workerID string, idx int, env taskEnvelope[I, O]) {
 	p.stats[idx].active.Add(1)
+	defer p.stats[idx].active.Add(-1)
+	defer p.taskWg.Done()
 	p.executeTask(workerID, idx, env)
-	p.stats[idx].active.Add(-1)
+}
+
+func (p *Pool[I, O]) drainPending(err error) {
+	if err == nil {
+		err = context.Canceled
+	}
+	for _, ch := range p.affinities {
+		p.drainChannel(ch, err)
+	}
+	p.drainChannel(p.queue, err)
+}
+
+func (p *Pool[I, O]) drainChannel(ch chan taskEnvelope[I, O], err error) {
+	for {
+		select {
+		case env := <-ch:
+			env.handle.Cancel()
+			var zero O
+			env.handle.emit(errorEvent[O](err))
+			env.handle.complete(zero, err)
+			p.taskWg.Done()
+		default:
+			return
+		}
+	}
+}
+
+func (p *Pool[I, O]) stoppedError() error {
+	return fmt.Errorf("worker: pool %q is stopped", p.cfg.Name)
 }
 
 // executeTask runs a single task within a worker goroutine.

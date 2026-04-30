@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"errors"
-	"fmt"
 )
 
 func (p *Pool[I, O]) enqueue(ctx context.Context, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
@@ -30,7 +29,7 @@ func (p *Pool[I, O]) enqueueTo(
 			return nil, ctx.Err()
 		case <-p.poolCtx.Done():
 			env.handle.Cancel()
-			return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
+			return nil, p.stoppedError()
 		default:
 			env.handle.Cancel()
 			return nil, ErrQueueFull
@@ -48,7 +47,7 @@ func (p *Pool[I, O]) enqueueTo(
 				return nil, ctx.Err()
 			case <-p.poolCtx.Done():
 				env.handle.Cancel()
-				return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
+				return nil, p.stoppedError()
 			default:
 			}
 
@@ -76,7 +75,7 @@ func (p *Pool[I, O]) enqueueBlocking(
 		return nil, ctx.Err()
 	case <-p.poolCtx.Done():
 		env.handle.Cancel()
-		return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
+		return nil, p.stoppedError()
 	}
 }
 
@@ -86,6 +85,7 @@ func (p *Pool[I, O]) failDroppedTask(env taskEnvelope[I, O]) {
 	droppedErr := ErrTaskDropped
 	env.handle.emit(errorEvent[O](droppedErr))
 	env.handle.complete(zero, droppedErr)
+	p.taskWg.Done()
 	if !errors.Is(droppedErr, context.Canceled) {
 		p.failCount.Add(1)
 	}
