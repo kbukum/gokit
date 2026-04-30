@@ -37,8 +37,11 @@ func NewManager[K comparable, V any](
 	// Start cleanup ticker if TTL is set
 	if ttl > 0 {
 		cleanupInterval := ttl / 4
-		if cleanupInterval < time.Minute {
-			cleanupInterval = time.Minute
+		if cleanupInterval <= 0 {
+			cleanupInterval = ttl
+		}
+		if cleanupInterval < 10*time.Millisecond {
+			cleanupInterval = 10 * time.Millisecond
 		}
 		mgr.cleanupTick = time.NewTicker(cleanupInterval)
 		go mgr.cleanupLoop()

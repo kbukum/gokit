@@ -118,3 +118,43 @@ func TestRunEnv(t *testing.T) {
 		t.Fatalf("expected 'hello123', got %q", out)
 	}
 }
+
+func TestRunScrubEnv(t *testing.T) {
+	t.Setenv("GOKIT_PROCESS_SECRET", "hidden")
+
+	result, err := process.Run(context.Background(), process.Command{
+		Binary:   "sh",
+		Args:     []string{"-c", "echo ${GOKIT_PROCESS_SECRET:-missing}:${EXPLICIT_ONLY:-unset}"},
+		Env:      []string{"EXPLICIT_ONLY=visible"},
+		ScrubEnv: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := strings.TrimSpace(string(result.Stdout)); got != "missing:visible" {
+		t.Fatalf("stdout = %q, want missing:visible", got)
+	}
+}
+
+func TestRunMaxOutputBytes(t *testing.T) {
+	result, err := process.Run(context.Background(), process.Command{
+		Binary:         "sh",
+		Args:           []string{"-c", "printf '1234567890' && printf 'abcdefghij' >&2"},
+		MaxOutputBytes: 4,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := string(result.Stdout); got != "1234" {
+		t.Fatalf("stdout = %q, want 1234", got)
+	}
+	if !result.StdoutTruncated {
+		t.Fatal("expected stdout truncation")
+	}
+	if got := string(result.Stderr); got != "abcd" {
+		t.Fatalf("stderr = %q, want abcd", got)
+	}
+	if !result.StderrTruncated {
+		t.Fatal("expected stderr truncation")
+	}
+}

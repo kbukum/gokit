@@ -14,6 +14,7 @@ type PoolConfig struct {
 	Name        string            `yaml:"name"         mapstructure:"name"`
 	Size        int               `yaml:"size"         mapstructure:"size"`         // fixed pool size (default: runtime.NumCPU)
 	QueueSize   int               `yaml:"queue_size"   mapstructure:"queue_size"`   // bounded task queue (0 = unbuffered)
+	Overflow    OverflowPolicy    `yaml:"overflow"     mapstructure:"overflow"`     // block | reject | drop_oldest (default: block)
 	EventBuffer int               `yaml:"event_buffer" mapstructure:"event_buffer"` // event channel buffer per task (default: 64)
 	GracePeriod time.Duration     `yaml:"grace_period" mapstructure:"grace_period"` // shutdown grace (default: 5s)
 	Dispatch    DispatchStrategy  `yaml:"dispatch"     mapstructure:"dispatch"`     // round_robin | least_loaded (default: round_robin)
@@ -130,14 +131,7 @@ func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error)
 		return nil, fmt.Errorf("worker: pool %q has no healthy workers", p.cfg.Name)
 	}
 	env := taskEnvelope[I, O]{task: task, handle: handle, ctx: taskCtx}
-
-	select {
-	case p.workers[idx] <- env:
-		return handle, nil
-	case <-p.poolCtx.Done():
-		taskCancel()
-		return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
-	}
+	return p.enqueue(ctx, idx, env)
 }
 
 // SubmitBatch sends multiple tasks. Returns handles in the same order.

@@ -13,6 +13,18 @@ var (
 	ErrMaxRetriesExceeded = errors.New("max retries exceeded")
 )
 
+// BackoffStrategy defines how retry delays grow between attempts.
+type BackoffStrategy int
+
+const (
+	// ExponentialBackoff grows delays geometrically using BackoffFactor.
+	ExponentialBackoff BackoffStrategy = iota
+	// ConstantBackoff uses the same delay for every retry.
+	ConstantBackoff
+	// LinearBackoff increases delay linearly by InitialBackoff each retry.
+	LinearBackoff
+)
+
 // RetryConfig configures retry behavior.
 type RetryConfig struct {
 	// MaxAttempts is the maximum number of attempts (including the first).
@@ -21,6 +33,8 @@ type RetryConfig struct {
 	InitialBackoff time.Duration
 	// MaxBackoff is the maximum delay between retries.
 	MaxBackoff time.Duration
+	// Strategy controls how the delay grows between retries.
+	Strategy BackoffStrategy
 	// BackoffFactor is the multiplier for exponential backoff.
 	BackoffFactor float64
 	// Jitter adds randomness to backoff (0.0 to 1.0).
@@ -37,6 +51,7 @@ func DefaultRetryConfig() RetryConfig {
 		MaxAttempts:    3,
 		InitialBackoff: 100 * time.Millisecond,
 		MaxBackoff:     10 * time.Second,
+		Strategy:       ExponentialBackoff,
 		BackoffFactor:  2.0,
 		Jitter:         0.1,
 		RetryIf:        DefaultRetryIf,
@@ -54,21 +69,7 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 	var zero T
 	var lastErr error
 
-	if cfg.MaxAttempts <= 0 {
-		cfg.MaxAttempts = 3
-	}
-	if cfg.InitialBackoff <= 0 {
-		cfg.InitialBackoff = 100 * time.Millisecond
-	}
-	if cfg.MaxBackoff <= 0 {
-		cfg.MaxBackoff = 10 * time.Second
-	}
-	if cfg.BackoffFactor <= 0 {
-		cfg.BackoffFactor = 2.0
-	}
-	if cfg.RetryIf == nil {
-		cfg.RetryIf = DefaultRetryIf
-	}
+	cfg = normalizeRetryConfig(cfg)
 
 	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
 		// Check context before each attempt
@@ -122,24 +123,48 @@ func RetryFunc(ctx context.Context, cfg RetryConfig, fn func() error) error {
 	return err
 }
 
+func normalizeRetryConfig(cfg RetryConfig) RetryConfig {
+	if cfg.MaxAttempts <= 0 {
+		cfg.MaxAttempts = 3
+	}
+	if cfg.InitialBackoff <= 0 {
+		cfg.InitialBackoff = 100 * time.Millisecond
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = 10 * time.Second
+	}
+	if cfg.BackoffFactor <= 0 {
+		cfg.BackoffFactor = 2.0
+	}
+	if cfg.RetryIf == nil {
+		cfg.RetryIf = DefaultRetryIf
+	}
+	return cfg
+}
+
 // calculateBackoff calculates the backoff duration for an attempt.
 func calculateBackoff(attempt int, cfg RetryConfig) time.Duration {
-	// Exponential backoff: initial * factor^(attempt-1)
-	backoffFloat := float64(cfg.InitialBackoff) * math.Pow(cfg.BackoffFactor, float64(attempt-1))
+	cfg = normalizeRetryConfig(cfg)
 
-	// Apply jitter
+	var backoffFloat float64
+	switch cfg.Strategy {
+	case ConstantBackoff:
+		backoffFloat = float64(cfg.InitialBackoff)
+	case LinearBackoff:
+		backoffFloat = float64(cfg.InitialBackoff) * float64(attempt)
+	default:
+		backoffFloat = float64(cfg.InitialBackoff) * math.Pow(cfg.BackoffFactor, float64(attempt-1))
+	}
+
 	if cfg.Jitter > 0 {
 		jitterRange := backoffFloat * cfg.Jitter
-		jitter := (rand.Float64()*2 - 1) * jitterRange // Random between -jitter and +jitter
+		jitter := (rand.Float64()*2 - 1) * jitterRange
 		backoffFloat += jitter
 	}
 
-	// Cap at max backoff
 	if backoffFloat > float64(cfg.MaxBackoff) {
 		backoffFloat = float64(cfg.MaxBackoff)
 	}
-
-	// Ensure positive duration
 	if backoffFloat < 0 {
 		backoffFloat = float64(cfg.InitialBackoff)
 	}
@@ -153,6 +178,7 @@ func RetryWithBackoff[T any](ctx context.Context, maxAttempts int, fn func() (T,
 		MaxAttempts:    maxAttempts,
 		InitialBackoff: 100 * time.Millisecond,
 		MaxBackoff:     5 * time.Second,
+		Strategy:       ExponentialBackoff,
 		BackoffFactor:  2.0,
 		Jitter:         0.1,
 	}, fn)

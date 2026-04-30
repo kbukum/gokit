@@ -2,6 +2,8 @@ package process_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -181,6 +183,27 @@ func TestRunDurationAccuracy(t *testing.T) {
 	}
 	if result.Duration > 2*time.Second {
 		t.Fatalf("duration too long: %v (expected ~200ms)", result.Duration)
+	}
+}
+
+func TestRunNoShellInjection(t *testing.T) {
+	sentinel := filepath.Join("process", "shell-injection-sentinel.txt")
+	_ = os.Remove(sentinel)
+	defer os.Remove(sentinel)
+
+	result, err := process.Run(context.Background(), process.Command{
+		Binary: "printf",
+		Args:   []string{"%s", "$(touch process/shell-injection-sentinel.txt)"},
+		Dir:    "/Users/kbukum/DEV/skillsenselab/gokit",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := string(result.Stdout); got != "$(touch process/shell-injection-sentinel.txt)" {
+		t.Fatalf("stdout = %q", got)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("expected sentinel to be absent, stat err=%v", err)
 	}
 }
 

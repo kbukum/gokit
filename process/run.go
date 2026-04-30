@@ -1,7 +1,6 @@
 package process
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -25,11 +24,12 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 
 	c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 	c.Dir = cmd.Dir
-	c.Env = mergeEnv(cmd.Env)
+	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
 
-	var stdout, stderr bytes.Buffer
-	c.Stdout = &stdout
-	c.Stderr = &stderr
+	stdout := newLimitedBuffer(cmd.MaxOutputBytes)
+	stderr := newLimitedBuffer(cmd.MaxOutputBytes)
+	c.Stdout = stdout
+	c.Stderr = stderr
 
 	if cmd.Stdin != nil {
 		c.Stdin = cmd.Stdin
@@ -54,10 +54,12 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	}
 
 	result := &Result{
-		Stdout:   stdout.Bytes(),
-		Stderr:   stderr.Bytes(),
-		ExitCode: exitCode,
-		Duration: duration,
+		Stdout:          stdout.Bytes(),
+		StdoutTruncated: stdout.Truncated(),
+		Stderr:          stderr.Bytes(),
+		StderrTruncated: stderr.Truncated(),
+		ExitCode:        exitCode,
+		Duration:        duration,
 	}
 
 	if err != nil {
@@ -71,8 +73,11 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	return result, nil
 }
 
-// mergeEnv merges additional env vars with the current environment.
-func mergeEnv(extra []string) []string {
+// mergeEnv prepares the process environment.
+func mergeEnv(extra []string, scrub bool) []string {
+	if scrub {
+		return append([]string{}, extra...)
+	}
 	if len(extra) == 0 {
 		return nil // inherit parent env
 	}

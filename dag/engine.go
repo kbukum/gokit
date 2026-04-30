@@ -12,6 +12,8 @@ import (
 type Engine struct {
 	// MaxParallel limits concurrent nodes per level (0 = unlimited).
 	MaxParallel int
+	// Config applies engine-wide failure behavior. Nil preserves legacy skip-dependent behavior.
+	Config *EngineConfig
 }
 
 // ExecuteBatch runs ALL nodes in dependency order, one-shot.
@@ -86,9 +88,12 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 			if !ok {
 				continue
 			}
-			if (nr.Status == StatusFailed || nr.Status == StatusUnavailable) && g.GetNodeDef(name).EffectiveOnError() == OnErrorFail {
+			if nr.Status != StatusFailed && nr.Status != StatusUnavailable {
+				continue
+			}
+			if e.nodeFailurePolicy(g.GetNodeDef(name)) == FailFast {
 				result.Duration = time.Since(start)
-				return nil, fmt.Errorf("dag: node %q failed with on_error=fail: %w", name, nr.Error)
+				return nil, fmt.Errorf("dag: node %q failed with failure_policy=fail_fast: %w", name, nr.Error)
 			}
 		}
 	}
@@ -107,24 +112,21 @@ func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, resu
 			continue // upstream not yet processed or not in this cycle
 		}
 
-		policy := g.GetNodeDef(upstream).EffectiveOnError()
+		policy := e.nodeFailurePolicy(g.GetNodeDef(upstream))
+		if policy != SkipDependents {
+			continue
+		}
 
 		switch ur.Status {
 		case StatusUnavailable, StatusDepUnavailable:
-			if policy != OnErrorContinue {
-				return StatusDepUnavailable, true
-			}
+			return StatusDepUnavailable, true
 		case StatusFailed, StatusDepFailed:
-			if policy != OnErrorContinue {
-				return StatusDepFailed, true
-			}
+			return StatusDepFailed, true
 		case StatusSkipped, StatusDepSkipped:
 			// Dependency was filtered/skipped this cycle. Only skip the dependent
 			// if the dependency's output isn't available in state from a prior cycle.
 			if _, hasState := state.Get(upstream); !hasState {
-				if policy != OnErrorContinue {
-					return StatusDepSkipped, true
-				}
+				return StatusDepSkipped, true
 			}
 		}
 	}
