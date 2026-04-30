@@ -65,7 +65,7 @@ func TestEngineConfig_FailurePolicy(t *testing.T) {
 	}
 }
 
-func TestEngine_LegacyDefaultStillSkipsDependents(t *testing.T) {
+func TestEngine_ZeroValueDefaultSkipsDependents(t *testing.T) {
 	t.Parallel()
 
 	g := &Graph{

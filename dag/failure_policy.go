@@ -4,12 +4,12 @@ package dag
 type FailurePolicy int
 
 const (
+	// SkipDependents skips nodes whose upstream dependencies failed or were skipped.
+	SkipDependents FailurePolicy = iota
 	// FailFast aborts the DAG after the current level finishes when any node fails.
-	FailFast FailurePolicy = iota
+	FailFast
 	// Continue allows dependents to run even when upstream nodes fail.
 	Continue
-	// SkipDependents skips nodes whose upstream dependencies failed or were skipped.
-	SkipDependents
 )
 
 // EngineConfig configures engine-wide execution behavior.
