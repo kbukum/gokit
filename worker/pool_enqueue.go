@@ -6,13 +6,24 @@ import (
 	"fmt"
 )
 
-func (p *Pool[I, O]) enqueue(ctx context.Context, idx int, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
-	workerCh := p.workers[idx]
+func (p *Pool[I, O]) enqueue(ctx context.Context, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
+	return p.enqueueTo(ctx, p.queue, env, true)
+}
 
+func (p *Pool[I, O]) enqueueAffinity(ctx context.Context, idx int, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
+	return p.enqueueTo(ctx, p.affinities[idx], env, false)
+}
+
+func (p *Pool[I, O]) enqueueTo(
+	ctx context.Context,
+	ch chan taskEnvelope[I, O],
+	env taskEnvelope[I, O],
+	allowDropOldest bool,
+) (*TaskHandle[O], error) {
 	switch p.cfg.Overflow {
-	case Reject:
+	case OverflowReject:
 		select {
-		case workerCh <- env:
+		case ch <- env:
 			return env.handle, nil
 		case <-ctx.Done():
 			env.handle.Cancel()
@@ -24,10 +35,13 @@ func (p *Pool[I, O]) enqueue(ctx context.Context, idx int, env taskEnvelope[I, O
 			env.handle.Cancel()
 			return nil, ErrQueueFull
 		}
-	case DropOldest:
+	case OverflowDropOldest:
+		if !allowDropOldest || cap(ch) == 0 {
+			return p.enqueueBlocking(ctx, ch, env)
+		}
 		for {
 			select {
-			case workerCh <- env:
+			case ch <- env:
 				return env.handle, nil
 			case <-ctx.Done():
 				env.handle.Cancel()
@@ -39,30 +53,30 @@ func (p *Pool[I, O]) enqueue(ctx context.Context, idx int, env taskEnvelope[I, O
 			}
 
 			select {
-			case dropped := <-workerCh:
+			case dropped := <-ch:
 				p.failDroppedTask(dropped)
-			case <-ctx.Done():
-				env.handle.Cancel()
-				return nil, ctx.Err()
-			case <-p.poolCtx.Done():
-				env.handle.Cancel()
-				return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
 			default:
-				env.handle.Cancel()
-				return nil, ErrQueueFull
 			}
 		}
 	default:
-		select {
-		case workerCh <- env:
-			return env.handle, nil
-		case <-ctx.Done():
-			env.handle.Cancel()
-			return nil, ctx.Err()
-		case <-p.poolCtx.Done():
-			env.handle.Cancel()
-			return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
-		}
+		return p.enqueueBlocking(ctx, ch, env)
+	}
+}
+
+func (p *Pool[I, O]) enqueueBlocking(
+	ctx context.Context,
+	ch chan taskEnvelope[I, O],
+	env taskEnvelope[I, O],
+) (*TaskHandle[O], error) {
+	select {
+	case ch <- env:
+		return env.handle, nil
+	case <-ctx.Done():
+		env.handle.Cancel()
+		return nil, ctx.Err()
+	case <-p.poolCtx.Done():
+		env.handle.Cancel()
+		return nil, fmt.Errorf("worker: pool %q shutting down", p.cfg.Name)
 	}
 }
 

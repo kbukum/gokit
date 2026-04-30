@@ -3,99 +3,145 @@ package worker_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kbukum/gokit/worker"
 )
 
-func TestPoolOverflowReject(t *testing.T) {
+func TestPoolOverflowRejectPoolWideCapacity(t *testing.T) {
 	t.Parallel()
 
 	block := make(chan struct{})
-	started := make(chan struct{}, 1)
+	started := make(chan int, 2)
 	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
-		if task == 1 {
-			started <- struct{}{}
+		if task <= 2 {
+			started <- task
 			<-block
 		}
 		return nil
 	})
 
-	pool := worker.NewPool(h, worker.PoolConfig{Name: "reject", Size: 1, QueueSize: 1, Overflow: worker.Reject})
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "reject", Size: 2, QueueSize: 1, Overflow: worker.OverflowReject})
 	defer func() { _ = pool.Stop(context.Background()) }()
+	defer close(block)
 
-	if _, err := pool.Submit(context.Background(), 1); err != nil {
-		t.Fatalf("submit running task: %v", err)
+	for i := 1; i <= 2; i++ {
+		if _, err := pool.Submit(context.Background(), i); err != nil {
+			t.Fatalf("submit running task %d: %v", i, err)
+		}
+		waitStarted(t, started, 1)
 	}
-	<-started
-	if _, err := pool.Submit(context.Background(), 2); err != nil {
+	if _, err := pool.Submit(context.Background(), 3); err != nil {
 		t.Fatalf("submit queued task: %v", err)
 	}
-	if _, err := pool.Submit(context.Background(), 3); !errors.Is(err, worker.ErrQueueFull) {
+	if _, err := pool.Submit(context.Background(), 4); !errors.Is(err, worker.ErrQueueFull) {
 		t.Fatalf("expected ErrQueueFull, got %v", err)
 	}
-	close(block)
 }
 
-func TestPoolOverflowDropOldest(t *testing.T) {
+func TestPoolOverflowDropOldestPoolWideFairness(t *testing.T) {
 	t.Parallel()
 
 	block := make(chan struct{})
-	started := make(chan struct{}, 1)
+	var unblock sync.Once
+	started := make(chan int, 2)
 	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
-		if task == 1 {
-			started <- struct{}{}
+		if task <= 2 {
+			started <- task
 			<-block
 		}
 		return nil
 	})
 
-	pool := worker.NewPool(h, worker.PoolConfig{Name: "drop", Size: 1, QueueSize: 1, Overflow: worker.DropOldest})
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "drop", Size: 2, QueueSize: 2, Overflow: worker.OverflowDropOldest})
 	defer func() { _ = pool.Stop(context.Background()) }()
+	defer unblock.Do(func() { close(block) })
 
-	if _, err := pool.Submit(context.Background(), 1); err != nil {
-		t.Fatalf("submit running task: %v", err)
+	for i := 1; i <= 2; i++ {
+		if _, err := pool.Submit(context.Background(), i); err != nil {
+			t.Fatalf("submit running task %d: %v", i, err)
+		}
+		waitStarted(t, started, 1)
 	}
-	<-started
-	dropped, err := pool.Submit(context.Background(), 2)
+	dropped, err := pool.Submit(context.Background(), 3)
 	if err != nil {
-		t.Fatalf("submit queued task: %v", err)
+		t.Fatalf("submit queued task 3: %v", err)
 	}
-	kept, err := pool.Submit(context.Background(), 3)
+	kept4, err := pool.Submit(context.Background(), 4)
 	if err != nil {
-		t.Fatalf("submit replacement task: %v", err)
+		t.Fatalf("submit queued task 4: %v", err)
+	}
+	kept5, err := pool.Submit(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("submit replacement task 5: %v", err)
 	}
 
 	if _, err := dropped.Result(); !errors.Is(err, worker.ErrTaskDropped) {
-		t.Fatalf("expected dropped task error, got %v", err)
+		t.Fatalf("expected oldest queued task to be dropped, got %v", err)
 	}
-	close(block)
-	if _, err := kept.Result(); err != nil {
-		t.Fatalf("replacement task failed: %v", err)
+	unblock.Do(func() { close(block) })
+	for name, h := range map[string]*worker.TaskHandle[int]{"kept4": kept4, "kept5": kept5} {
+		if _, err := h.Result(); err != nil {
+			t.Fatalf("%s failed: %v", name, err)
+		}
 	}
 }
 
-func TestPoolOverflowBlock(t *testing.T) {
+func TestPoolOverflowRejectImmediateWhenFull(t *testing.T) {
 	t.Parallel()
 
 	block := make(chan struct{})
-	started := make(chan struct{}, 1)
+	started := make(chan int, 1)
 	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
 		if task == 1 {
-			started <- struct{}{}
+			started <- task
 			<-block
 		}
 		return nil
 	})
 
-	pool := worker.NewPool(h, worker.PoolConfig{Name: "block", Size: 1, QueueSize: 1, Overflow: worker.Block})
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "reject-immediate", Size: 1, QueueSize: 1, Overflow: worker.OverflowReject})
 	defer func() { _ = pool.Stop(context.Background()) }()
 
 	if _, err := pool.Submit(context.Background(), 1); err != nil {
 		t.Fatalf("submit running task: %v", err)
 	}
-	<-started
+	waitStarted(t, started, 1)
+	if _, err := pool.Submit(context.Background(), 2); err != nil {
+		t.Fatalf("submit queued task: %v", err)
+	}
+	start := time.Now()
+	if _, err := pool.Submit(context.Background(), 3); !errors.Is(err, worker.ErrQueueFull) {
+		t.Fatalf("expected ErrQueueFull, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("reject took too long: %v", elapsed)
+	}
+	close(block)
+}
+
+func TestPoolOverflowBlockWaits(t *testing.T) {
+	t.Parallel()
+
+	block := make(chan struct{})
+	started := make(chan int, 1)
+	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
+		if task == 1 {
+			started <- task
+			<-block
+		}
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "block", Size: 1, QueueSize: 1, Overflow: worker.OverflowBlock})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	if _, err := pool.Submit(context.Background(), 1); err != nil {
+		t.Fatalf("submit running task: %v", err)
+	}
+	waitStarted(t, started, 1)
 	if _, err := pool.Submit(context.Background(), 2); err != nil {
 		t.Fatalf("submit queued task: %v", err)
 	}
@@ -120,5 +166,16 @@ func TestPoolOverflowBlock(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("submit did not unblock")
+	}
+}
+
+func waitStarted(t *testing.T, ch <-chan int, n int) {
+	t.Helper()
+	for range n {
+		select {
+		case <-ch:
+		case <-time.After(time.Second):
+			t.Fatal("worker did not start task")
+		}
 	}
 }

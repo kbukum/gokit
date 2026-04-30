@@ -31,6 +31,9 @@ func (c PoolConfig) withDefaults() PoolConfig {
 	if c.GracePeriod <= 0 {
 		c.GracePeriod = 5 * time.Second
 	}
+	if c.Overflow == "" {
+		c.Overflow = OverflowBlock
+	}
 	return c
 }
 
@@ -56,9 +59,11 @@ type Pool[I, O any] struct {
 	cfg      PoolConfig
 	dispatch dispatcher
 
-	// Per-worker input channels
-	workers []chan taskEnvelope[I, O]
-	stats   []workerStats
+	// Shared queue is the pool-wide bounded backlog. Affinity channels are
+	// size-1 supervisor steering hints for healthy workers.
+	queue      chan taskEnvelope[I, O]
+	affinities []chan taskEnvelope[I, O]
+	stats      []workerStats
 
 	// Aggregated event channel from all workers
 	events chan Event[O]
@@ -84,18 +89,19 @@ func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 	poolCtx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is retained on Pool and invoked in Stop()
 
 	p := &Pool[I, O]{
-		handler:  handler,
-		cfg:      cfg,
-		dispatch: newDispatcher(cfg.Dispatch),
-		workers:  make([]chan taskEnvelope[I, O], cfg.Size),
-		stats:    make([]workerStats, cfg.Size),
-		events:   make(chan Event[O], cfg.EventBuffer*cfg.Size),
-		cancel:   cancel,
-		poolCtx:  poolCtx,
+		handler:    handler,
+		cfg:        cfg,
+		dispatch:   newDispatcher(cfg.Dispatch),
+		queue:      make(chan taskEnvelope[I, O], cfg.QueueSize),
+		affinities: make([]chan taskEnvelope[I, O], cfg.Size),
+		stats:      make([]workerStats, cfg.Size),
+		events:     make(chan Event[O], cfg.EventBuffer*cfg.Size),
+		cancel:     cancel,
+		poolCtx:    poolCtx,
 	}
 
 	for i := range cfg.Size {
-		p.workers[i] = make(chan taskEnvelope[I, O], cfg.QueueSize)
+		p.affinities[i] = make(chan taskEnvelope[I, O], 1)
 		p.wg.Add(1)
 		go p.runWorker(i)
 	}
@@ -124,14 +130,17 @@ func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error)
 	handle := newTaskHandle[O](taskCancel, p.cfg.EventBuffer)
 	p.totalTasks.Add(1)
 
-	// Dispatch to a worker — supervisor may reject unhealthy workers
-	idx := p.selectWorker()
+	env := taskEnvelope[I, O]{task: task, handle: handle, ctx: taskCtx}
+	if p.supervisor == nil {
+		return p.enqueue(ctx, env)
+	}
+
+	idx := p.pickWorkerForRouting()
 	if idx < 0 {
 		taskCancel()
 		return nil, fmt.Errorf("worker: pool %q has no healthy workers", p.cfg.Name)
 	}
-	env := taskEnvelope[I, O]{task: task, handle: handle, ctx: taskCtx}
-	return p.enqueue(ctx, idx, env)
+	return p.enqueueAffinity(ctx, idx, env)
 }
 
 // SubmitBatch sends multiple tasks. Returns handles in the same order.
@@ -166,8 +175,9 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	// Close worker input channels so they drain remaining tasks
-	for _, ch := range p.workers {
+	// Close input channels so workers drain remaining tasks.
+	close(p.queue)
+	for _, ch := range p.affinities {
 		close(ch)
 	}
 	p.mu.Unlock()
@@ -202,10 +212,11 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 
 // Stats returns current pool statistics.
 func (p *Pool[I, O]) Stats() PoolStats {
-	var active, queued int
+	var active int
+	queued := len(p.queue)
 	for i := range p.stats {
 		active += int(p.stats[i].active.Load())
-		queued += len(p.workers[i])
+		queued += len(p.affinities[i])
 	}
 
 	return PoolStats{
@@ -217,16 +228,13 @@ func (p *Pool[I, O]) Stats() PoolStats {
 	}
 }
 
-// selectWorker picks a healthy worker using the dispatch strategy.
-// If a supervisor is configured, unhealthy workers are skipped.
-// Returns -1 if no healthy worker is available.
-func (p *Pool[I, O]) selectWorker() int {
-	// Stats use atomics — no lock or copy needed
+// pickWorkerForRouting picks a healthy worker for supervisor affinity routing.
+// Without a supervisor, the shared queue provides fairness and dispatch is skipped.
+func (p *Pool[I, O]) pickWorkerForRouting() int {
 	if p.supervisor == nil {
-		return p.dispatch.next(p.stats)
+		return -1
 	}
 
-	// Try the dispatch-selected worker first, then scan for a healthy one
 	idx := p.dispatch.next(p.stats)
 	if p.supervisor.shouldAcceptTask(idx) {
 		return idx
@@ -238,7 +246,7 @@ func (p *Pool[I, O]) selectWorker() int {
 			return candidate
 		}
 	}
-	return -1 // all workers unhealthy
+	return -1
 }
 
 // runWorker is the goroutine loop for a single worker.
@@ -248,14 +256,42 @@ func (p *Pool[I, O]) runWorker(idx int) {
 	defer p.wg.Done()
 
 	workerID := fmt.Sprintf("%s-w%d", p.cfg.Name, idx)
+	affinity := p.affinities[idx]
+	queue := p.queue
 
-	for env := range p.workers[idx] {
-		p.stats[idx].active.Add(1)
+	for affinity != nil || queue != nil {
+		select {
+		case env, ok := <-affinity:
+			if !ok {
+				affinity = nil
+				continue
+			}
+			p.runEnvelope(workerID, idx, env)
+			continue
+		default:
+		}
 
-		p.executeTask(workerID, idx, env)
-
-		p.stats[idx].active.Add(-1)
+		select {
+		case env, ok := <-affinity:
+			if !ok {
+				affinity = nil
+				continue
+			}
+			p.runEnvelope(workerID, idx, env)
+		case env, ok := <-queue:
+			if !ok {
+				queue = nil
+				continue
+			}
+			p.runEnvelope(workerID, idx, env)
+		}
 	}
+}
+
+func (p *Pool[I, O]) runEnvelope(workerID string, idx int, env taskEnvelope[I, O]) {
+	p.stats[idx].active.Add(1)
+	p.executeTask(workerID, idx, env)
+	p.stats[idx].active.Add(-1)
 }
 
 // executeTask runs a single task within a worker goroutine.

@@ -13,31 +13,32 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// 1. RoundRobin dispatch distributes across all workers
+// 1. Shared queue keeps all workers available under blocking work
 // ---------------------------------------------------------------------------
 
-func TestRoundRobinDispatchDistribution(t *testing.T) {
+func TestSharedQueueUsesAvailableWorkers(t *testing.T) {
 	t.Parallel()
 
 	const poolSize = 4
 	var workerHits [poolSize]atomic.Int32
+	block := make(chan struct{})
 
 	h := worker.HandlerFunc[int, int](func(
 		ctx context.Context, task int, emit func(worker.Event[int]),
 	) error {
-		// The WorkerID is set in events — emit a log and capture it
 		emit(worker.LogEvent[int]("hit", nil))
+		<-block
 		return nil
 	})
 
 	pool := worker.NewPool(h, worker.PoolConfig{
-		Name:     "rr-dist",
-		Size:     poolSize,
-		Dispatch: worker.RoundRobin,
+		Name:      "shared-dist",
+		Size:      poolSize,
+		QueueSize: 0,
+		Dispatch:  worker.RoundRobin,
 	})
 	defer func() { _ = pool.Stop(context.Background()) }()
 
-	// Submit exactly poolSize tasks so round-robin hits each worker once
 	handles := make([]*worker.TaskHandle[int], poolSize)
 	for i := range poolSize {
 		var err error
@@ -46,13 +47,13 @@ func TestRoundRobinDispatchDistribution(t *testing.T) {
 			t.Fatalf("submit %d: %v", i, err)
 		}
 	}
+	close(block)
 
 	for _, h := range handles {
 		for e := range h.Events() {
 			if e.Type == worker.EventLog && e.WorkerID != "" {
-				// Parse worker index from "rr-dist-w0" .. "rr-dist-w3"
 				var idx int
-				if _, err := fmt.Sscanf(e.WorkerID, "rr-dist-w%d", &idx); err == nil && idx < poolSize {
+				if _, err := fmt.Sscanf(e.WorkerID, "shared-dist-w%d", &idx); err == nil && idx < poolSize {
 					workerHits[idx].Add(1)
 				}
 			}
