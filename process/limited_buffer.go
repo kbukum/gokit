@@ -3,12 +3,12 @@ package process
 import "bytes"
 
 type limitedBuffer struct {
-	max       int64
+	max       int
 	buf       bytes.Buffer
 	truncated bool
 }
 
-func newLimitedBuffer(limit int64) *limitedBuffer {
+func newLimitedBuffer(limit int) *limitedBuffer {
 	return &limitedBuffer{max: limit}
 }
 
@@ -18,9 +18,9 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 		return len(p), err
 	}
 
-	remaining := b.max - int64(b.buf.Len())
+	remaining := b.max - b.buf.Len()
 	if remaining > 0 {
-		if int64(len(p)) > remaining {
+		if len(p) > remaining {
 			_, _ = b.buf.Write(p[:remaining])
 			b.truncated = true
 			return len(p), nil
