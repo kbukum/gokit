@@ -252,25 +252,14 @@ func (p *Pool[I, O]) runWorker(idx int) {
 	for env := range p.workers[idx] {
 		p.stats[idx].active.Add(1)
 
-		panicked := p.executeTask(workerID, idx, env)
+		p.executeTask(workerID, idx, env)
 
 		p.stats[idx].active.Add(-1)
-
-		// If the task panicked and we have a supervisor, report the crash.
-		// The supervisor decides whether this worker should keep running.
-		if panicked && p.supervisor != nil {
-			p.supervisor.reportCrash(idx, "task panic")
-			// Worker goroutine continues processing next task from its channel.
-			// If the supervisor wants a full restart (e.g., corrupted state),
-			// it can cancel the pool context. For per-task panics the worker
-			// is still healthy — it was just one bad task.
-		}
 	}
 }
 
 // executeTask runs a single task within a worker goroutine.
-// Returns true if the handler panicked.
-func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O]) (panicked bool) {
+func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O]) {
 	handle := env.handle
 
 	// Apply supervisor backoff delay if this worker has recent failures
@@ -282,7 +271,7 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 			case <-env.ctx.Done():
 				t.Stop()
 				handle.complete(*new(O), env.ctx.Err())
-				return false
+				return
 			}
 		}
 	}
@@ -306,10 +295,10 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 
 	// Catch panics so the worker goroutine survives and the task handle is
 	// always completed — callers waiting on handle.Result() or handle.Events()
-	// will never hang.
+	// will never hang. Report crash to supervisor BEFORE completing the handle
+	// so supervisor state is consistent when callers observe task completion.
 	defer func() {
 		if r := recover(); r != nil {
-			panicked = true
 			var result O
 			var err error
 			switch v := r.(type) {
@@ -320,6 +309,9 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 			}
 			p.failCount.Add(1)
 			emit(errorEvent[O](err))
+			if p.supervisor != nil {
+				p.supervisor.reportCrash(idx, r)
+			}
 			handle.complete(result, err)
 		}
 	}()
@@ -335,5 +327,4 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 	}
 
 	handle.complete(result, err)
-	return false
 }
