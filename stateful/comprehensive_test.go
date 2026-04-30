@@ -353,8 +353,8 @@ func TestManager_Cleanup_Expiration(t *testing.T) {
 
 	// Manually cleanup. Background cleanup may already have removed expired accumulators.
 	count := mgr.Cleanup()
-	if count < 0 || count > 2 {
-		t.Errorf("expected cleanup count in [0,2], got %d", count)
+	if count > 2 {
+		t.Errorf("expected cleanup count <= 2, got %d", count)
 	}
 
 	mu.Lock()
