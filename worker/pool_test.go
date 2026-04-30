@@ -269,7 +269,7 @@ func TestPoolSubmitConcurrentWithStopDoesNotPanic(t *testing.T) {
 			handle, err := pool.Submit(context.Background(), task)
 			if err != nil {
 				if !strings.Contains(err.Error(), "is stopped") {
-					errCh <- fmt.Errorf("unexpected submit error: %v", err)
+					errCh <- fmt.Errorf("unexpected submit error: %w", err)
 				}
 				return
 			}
