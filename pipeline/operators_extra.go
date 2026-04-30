@@ -183,11 +183,10 @@ func (it *partitionIter[T]) Close() error {
 
 func (s *partitionState[T]) start(createCtx, firstNextCtx context.Context, p *Pipeline[T]) {
 	s.once.Do(func() {
-		parent := createCtx
-		if parent == nil {
-			parent = context.Background()
+		if createCtx == nil {
+			createCtx = context.Background() //nolint:contextcheck // nil context guard for custom factories
 		}
-		teeCtx, cancel := context.WithCancel(parent)
+		teeCtx, cancel := context.WithCancel(createCtx)
 		s.mu.Lock()
 		s.cancel = cancel
 		s.source = p.create(teeCtx)
@@ -211,9 +210,9 @@ func (s *partitionState[T]) start(createCtx, firstNextCtx context.Context, p *Pi
 func (s *partitionState[T]) consume(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.finish(result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
+			s.finish(ctx, result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
 		} else {
-			s.finish(result[T]{})
+			s.finish(ctx, result[T]{})
 		}
 	}()
 	defer func() {
@@ -228,7 +227,7 @@ func (s *partitionState[T]) consume(ctx context.Context) {
 	for {
 		val, ok, err := s.source.Next(ctx)
 		if err != nil {
-			s.finish(result[T]{err: err})
+			s.finish(ctx, result[T]{err: err})
 			return
 		}
 		if !ok {
@@ -266,11 +265,11 @@ func (s *partitionState[T]) send(ctx context.Context, branch partitionBranch, r 
 	}
 }
 
-func (s *partitionState[T]) finish(terminal result[T]) {
+func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
 	s.finishOnce.Do(func() {
 		if terminal.err != nil {
-			_ = s.send(context.Background(), partitionMatch, terminal)
-			_ = s.send(context.Background(), partitionReject, terminal)
+			_ = s.send(ctx, partitionMatch, terminal)
+			_ = s.send(ctx, partitionReject, terminal)
 		}
 		s.mu.Lock()
 		cancel := s.cancel

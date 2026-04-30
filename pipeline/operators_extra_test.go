@@ -237,7 +237,7 @@ func TestPartitionClosingBothBranchesClosesUpstream(t *testing.T) {
 	}
 }
 
-func collectPartitionPair(ctx context.Context, left, right *Pipeline[int]) ([]int, []int, error) {
+func collectPartitionPair(ctx context.Context, left, right *Pipeline[int]) (leftItems []int, rightItems []int, err error) {
 	type collected struct {
 		items []int
 		err   error
@@ -274,7 +274,7 @@ type countingIter struct {
 	n int
 }
 
-func (it *countingIter) Next(ctx context.Context) (int, bool, error) {
+func (it *countingIter) Next(ctx context.Context) (value int, ok bool, err error) {
 	select {
 	case <-ctx.Done():
 		return 0, false, ctx.Err()
@@ -291,7 +291,7 @@ type blockingCloseIter struct {
 	closed  chan struct{}
 }
 
-func (it *blockingCloseIter) Next(ctx context.Context) (int, bool, error) {
+func (it *blockingCloseIter) Next(ctx context.Context) (value int, ok bool, err error) {
 	select {
 	case <-it.started:
 	default:

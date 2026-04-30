@@ -7,8 +7,10 @@ import (
 	gkerrors "github.com/kbukum/gokit/errors"
 )
 
-var _ encoding.TextMarshaler = OverflowPolicy("")
-var _ encoding.TextUnmarshaler = (*OverflowPolicy)(nil)
+var (
+	_ encoding.TextMarshaler   = OverflowPolicy("")
+	_ encoding.TextUnmarshaler = (*OverflowPolicy)(nil)
+)
 
 // OverflowPolicy controls what happens when the pool queue is full.
 type OverflowPolicy string

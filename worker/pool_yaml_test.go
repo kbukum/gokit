@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/kbukum/gokit/worker"
 	"go.yaml.in/yaml/v3"
+
+	"github.com/kbukum/gokit/worker"
 )
 
 func TestPoolConfigOverflowYAMLDecodeDropOldest(t *testing.T) {
