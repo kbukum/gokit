@@ -122,8 +122,9 @@ const (
 type partitionState[T any] struct {
 	predicate func(T) bool
 
-	once       sync.Once
-	finishOnce sync.Once
+	once            sync.Once
+	finishOnce      sync.Once
+	sourceCloseOnce sync.Once
 
 	mu        sync.Mutex
 	cancel    context.CancelFunc
@@ -215,14 +216,7 @@ func (s *partitionState[T]) consume(ctx context.Context) {
 			s.finish(ctx, result[T]{})
 		}
 	}()
-	defer func() {
-		s.mu.Lock()
-		source := s.source
-		s.mu.Unlock()
-		if source != nil {
-			_ = source.Close()
-		}
-	}()
+	defer func() { _ = s.closeSource() }()
 
 	for {
 		val, ok, err := s.source.Next(ctx)
@@ -284,8 +278,7 @@ func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
 
 func (s *partitionState[T]) closeBranch(branch partitionBranch) error {
 	idx := int(branch)
-	var source Iterator[T]
-	var shouldCloseSource bool
+	shouldCloseSource := false
 	s.mu.Lock()
 	if !s.closed[idx] {
 		s.closed[idx] = true
@@ -296,12 +289,24 @@ func (s *partitionState[T]) closeBranch(branch partitionBranch) error {
 		s.cancel()
 	}
 	if bothClosed && s.sourceSet {
-		source = s.source
 		shouldCloseSource = true
 	}
 	s.mu.Unlock()
 	if shouldCloseSource {
-		return source.Close()
+		return s.closeSource()
 	}
 	return nil
+}
+
+func (s *partitionState[T]) closeSource() error {
+	var err error
+	s.sourceCloseOnce.Do(func() {
+		s.mu.Lock()
+		source := s.source
+		s.mu.Unlock()
+		if source != nil {
+			err = source.Close()
+		}
+	})
+	return err
 }

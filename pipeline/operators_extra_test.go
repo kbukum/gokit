@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -212,10 +213,15 @@ func TestPartitionPredicatePanicSurfacesToBothBranches(t *testing.T) {
 	}
 }
 
-func TestPartitionClosingBothBranchesClosesUpstream(t *testing.T) {
+func TestPartitionClosingBothBranchesClosesUpstreamOnce(t *testing.T) {
 	t.Parallel()
 
-	src := &blockingCloseIter{started: make(chan struct{}), closed: make(chan struct{})}
+	src := &blockingCloseIter{
+		started:      make(chan struct{}),
+		closed:       make(chan struct{}),
+		closedAgain:  make(chan struct{}),
+		nextReturned: make(chan struct{}),
+	}
 	matching, rejected := Partition(From(src), func(v int) bool { return v%2 == 0 })
 	ctx := context.Background()
 	left := matching.Iter(ctx)
@@ -234,6 +240,19 @@ func TestPartitionClosingBothBranchesClosesUpstream(t *testing.T) {
 	case <-src.closed:
 	case <-afterTestTimeout():
 		t.Fatal("upstream was not closed after both partition branches closed")
+	}
+	select {
+	case <-src.nextReturned:
+	case <-afterTestTimeout():
+		t.Fatal("upstream Next did not return after both branches closed")
+	}
+	select {
+	case <-src.closedAgain:
+		t.Fatal("upstream was closed more than once")
+	case <-time.After(25 * time.Millisecond):
+	}
+	if got := src.closeCalls.Load(); got != 1 {
+		t.Fatalf("Close calls = %d, want 1", got)
 	}
 }
 
@@ -287,8 +306,11 @@ func (it *countingIter) Next(ctx context.Context) (value int, ok bool, err error
 func (it *countingIter) Close() error { return nil }
 
 type blockingCloseIter struct {
-	started chan struct{}
-	closed  chan struct{}
+	started      chan struct{}
+	closed       chan struct{}
+	closedAgain  chan struct{}
+	nextReturned chan struct{}
+	closeCalls   atomic.Int32
 }
 
 func (it *blockingCloseIter) Next(ctx context.Context) (value int, ok bool, err error) {
@@ -298,15 +320,16 @@ func (it *blockingCloseIter) Next(ctx context.Context) (value int, ok bool, err 
 		close(it.started)
 	}
 	<-ctx.Done()
+	close(it.nextReturned)
 	return 0, false, ctx.Err()
 }
 
 func (it *blockingCloseIter) Close() error {
-	select {
-	case <-it.closed:
-	default:
+	if it.closeCalls.Add(1) == 1 {
 		close(it.closed)
+		return nil
 	}
+	close(it.closedAgain)
 	return nil
 }
 
