@@ -187,23 +187,27 @@ func TestRunDurationAccuracy(t *testing.T) {
 }
 
 func TestRunNoShellInjection(t *testing.T) {
-	sentinel := filepath.Join("process", "shell-injection-sentinel.txt")
-	_ = os.Remove(sentinel)
-	defer os.Remove(sentinel)
+	t.Parallel()
 
+	tmpDir := t.TempDir()
+	sentinel := filepath.Join(tmpDir, "shell-injection-sentinel.txt")
+
+	// Use echo which is universally available on all platforms.
+	// The shell-injection payload is passed as a literal argument.
 	result, err := process.Run(context.Background(), process.Command{
-		Binary: "printf",
-		Args:   []string{"%s", "$(touch process/shell-injection-sentinel.txt)"},
-		Dir:    "/Users/kbukum/DEV/skillsenselab/gokit",
+		Binary: "echo",
+		Args:   []string{"$(touch " + sentinel + ")"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := string(result.Stdout); got != "$(touch process/shell-injection-sentinel.txt)" {
-		t.Fatalf("stdout = %q", got)
+	// echo should output the literal string, not execute the subcommand.
+	expected := "$(touch " + sentinel + ")\n"
+	if got := string(result.Stdout); got != expected {
+		t.Fatalf("stdout = %q, want %q", got, expected)
 	}
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
-		t.Fatalf("expected sentinel to be absent, stat err=%v", err)
+		t.Fatalf("expected sentinel to be absent (shell injection occurred), stat err=%v", err)
 	}
 }
 
