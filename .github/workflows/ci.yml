@@ -52,6 +52,8 @@ jobs:
               - '**/*.go'
               - '**/go.mod'
               - '**/go.sum'
+              - 'go.work'
+              - 'gomod.sh'
               - 'scripts/**'
               - 'Makefile'
               - '.golangci.yml'
