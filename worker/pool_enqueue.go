@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"errors"
 )
 
 func (p *Pool[I, O]) enqueue(ctx context.Context, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
@@ -10,7 +9,20 @@ func (p *Pool[I, O]) enqueue(ctx context.Context, env taskEnvelope[I, O]) (*Task
 }
 
 func (p *Pool[I, O]) enqueueAffinity(ctx context.Context, idx int, env taskEnvelope[I, O]) (*TaskHandle[O], error) {
-	return p.enqueueTo(ctx, p.affinities[idx], env, false)
+	select {
+	case p.affinities[idx] <- env:
+		return env.handle, nil
+	case <-ctx.Done():
+		env.handle.Cancel()
+		return nil, ctx.Err()
+	case <-p.acceptCtx.Done():
+		env.handle.Cancel()
+		return nil, p.stoppedError()
+	default:
+		// Affinity is only a steering hint under supervision. Fall back to the
+		// shared pool queue so QueueSize/Overflow semantics remain pool-wide.
+		return p.enqueue(ctx, env)
+	}
 }
 
 func (p *Pool[I, O]) enqueueTo(
@@ -27,6 +39,9 @@ func (p *Pool[I, O]) enqueueTo(
 		case <-ctx.Done():
 			env.handle.Cancel()
 			return nil, ctx.Err()
+		case <-p.acceptCtx.Done():
+			env.handle.Cancel()
+			return nil, p.stoppedError()
 		case <-p.poolCtx.Done():
 			env.handle.Cancel()
 			return nil, p.stoppedError()
@@ -38,25 +53,38 @@ func (p *Pool[I, O]) enqueueTo(
 		if !allowDropOldest || cap(ch) == 0 {
 			return p.enqueueBlocking(ctx, ch, env)
 		}
-		for {
-			select {
-			case ch <- env:
-				return env.handle, nil
-			case <-ctx.Done():
-				env.handle.Cancel()
-				return nil, ctx.Err()
-			case <-p.poolCtx.Done():
-				env.handle.Cancel()
-				return nil, p.stoppedError()
-			default:
-			}
-
-			select {
-			case dropped := <-ch:
-				p.failDroppedTask(dropped)
-			default:
-			}
+		select {
+		case ch <- env:
+			return env.handle, nil
+		case <-ctx.Done():
+			env.handle.Cancel()
+			return nil, ctx.Err()
+		case <-p.acceptCtx.Done():
+			env.handle.Cancel()
+			return nil, p.stoppedError()
+		case <-p.poolCtx.Done():
+			env.handle.Cancel()
+			return nil, p.stoppedError()
+		default:
 		}
+
+		select {
+		case dropped := <-ch:
+			p.failDroppedTask(dropped)
+		case <-ctx.Done():
+			env.handle.Cancel()
+			return nil, ctx.Err()
+		case <-p.acceptCtx.Done():
+			env.handle.Cancel()
+			return nil, p.stoppedError()
+		case <-p.poolCtx.Done():
+			env.handle.Cancel()
+			return nil, p.stoppedError()
+		default:
+			// A worker drained the queue between probes; enqueue normally and let
+			// the pool-wide queue semantics decide the outcome.
+		}
+		return p.enqueueBlocking(ctx, ch, env)
 	default:
 		return p.enqueueBlocking(ctx, ch, env)
 	}
@@ -73,6 +101,9 @@ func (p *Pool[I, O]) enqueueBlocking(
 	case <-ctx.Done():
 		env.handle.Cancel()
 		return nil, ctx.Err()
+	case <-p.acceptCtx.Done():
+		env.handle.Cancel()
+		return nil, p.stoppedError()
 	case <-p.poolCtx.Done():
 		env.handle.Cancel()
 		return nil, p.stoppedError()
@@ -86,7 +117,5 @@ func (p *Pool[I, O]) failDroppedTask(env taskEnvelope[I, O]) {
 	env.handle.emit(errorEvent[O](droppedErr))
 	env.handle.complete(zero, droppedErr)
 	p.taskWg.Done()
-	if !errors.Is(droppedErr, context.Canceled) {
-		p.failCount.Add(1)
-	}
+	p.failCount.Add(1)
 }

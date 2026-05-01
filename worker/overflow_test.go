@@ -169,6 +169,106 @@ func TestPoolOverflowBlockWaits(t *testing.T) {
 	}
 }
 
+func TestPoolStopUnblocksBlockedSubmit(t *testing.T) {
+	t.Parallel()
+
+	block := make(chan struct{})
+	var unblock sync.Once
+	started := make(chan int, 1)
+	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
+		if task == 1 {
+			started <- task
+			<-block
+		}
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "stop-unblocks", Size: 1, QueueSize: 1, Overflow: worker.OverflowBlock, GracePeriod: time.Second})
+	defer unblock.Do(func() { close(block) })
+
+	if _, err := pool.Submit(context.Background(), 1); err != nil {
+		t.Fatalf("submit running task: %v", err)
+	}
+	waitStarted(t, started, 1)
+	if _, err := pool.Submit(context.Background(), 2); err != nil {
+		t.Fatalf("submit queued task: %v", err)
+	}
+
+	submitted := make(chan error, 1)
+	go func() {
+		_, err := pool.Submit(context.Background(), 3)
+		submitted <- err
+	}()
+
+	select {
+	case err := <-submitted:
+		t.Fatalf("submit should block before stop, returned early with %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	stopDone := make(chan error, 1)
+	go func() {
+		stopDone <- pool.Stop(context.Background())
+	}()
+
+	select {
+	case err := <-submitted:
+		if err == nil {
+			t.Fatal("blocked submit unexpectedly succeeded during stop")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("blocked submit did not unblock when stop began")
+	}
+
+	unblock.Do(func() { close(block) })
+	if err := <-stopDone; err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+}
+
+func TestSupervisorAffinityFallsBackToSharedQueue(t *testing.T) {
+	t.Parallel()
+
+	block := make(chan struct{})
+	started := make(chan int, 1)
+	h := worker.HandlerFunc[int, int](func(ctx context.Context, task int, emit func(worker.Event[int])) error {
+		if task == 1 {
+			started <- task
+			<-block
+		}
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:      "supervisor-fallback",
+		Size:      1,
+		QueueSize: 2,
+		Overflow:  worker.OverflowReject,
+		Supervisor: &worker.SupervisorConfig{
+			RestartPolicy: worker.RestartAlways,
+		},
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+	defer close(block)
+
+	if _, err := pool.Submit(context.Background(), 1); err != nil {
+		t.Fatalf("submit running task: %v", err)
+	}
+	waitStarted(t, started, 1)
+	if _, err := pool.Submit(context.Background(), 2); err != nil {
+		t.Fatalf("submit first queued task: %v", err)
+	}
+	if _, err := pool.Submit(context.Background(), 3); err != nil {
+		t.Fatalf("submit second queued task via shared fallback: %v", err)
+	}
+	if _, err := pool.Submit(context.Background(), 4); err != nil {
+		t.Fatalf("submit third queued task via shared fallback: %v", err)
+	}
+	if _, err := pool.Submit(context.Background(), 5); !errors.Is(err, worker.ErrQueueFull) {
+		t.Fatalf("expected pool-wide ErrQueueFull after shared queue fills, got %v", err)
+	}
+}
+
 func waitStarted(t *testing.T, ch <-chan int, n int) {
 	t.Helper()
 	for range n {

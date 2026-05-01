@@ -183,10 +183,14 @@ func (e *Engine) executeNode(ctx context.Context, node Node, state *State) NodeR
 }
 
 func (e *Engine) concurrency(levelSize int) int {
-	if e.MaxParallel <= 0 || e.MaxParallel > levelSize {
+	maxParallel := e.MaxParallel
+	if maxParallel <= 0 && e != nil && e.Config != nil {
+		maxParallel = e.Config.MaxParallel
+	}
+	if maxParallel <= 0 || maxParallel > levelSize {
 		return levelSize
 	}
-	return e.MaxParallel
+	return maxParallel
 }
 
 // AsTool wraps a DAG pipeline execution as a provider.RequestResponse.

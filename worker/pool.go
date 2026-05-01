@@ -69,11 +69,13 @@ type Pool[I, O any] struct {
 	events chan Event[O]
 
 	// Pool lifecycle
-	cancel  context.CancelFunc
-	poolCtx context.Context
-	wg      sync.WaitGroup // tracks worker goroutines
-	supWg   sync.WaitGroup // tracks supervisor goroutine
-	taskWg  sync.WaitGroup // tracks accepted tasks until completion or cancellation
+	acceptCancel context.CancelFunc
+	acceptCtx    context.Context
+	cancel       context.CancelFunc
+	poolCtx      context.Context
+	wg           sync.WaitGroup // tracks worker goroutines
+	supWg        sync.WaitGroup // tracks supervisor goroutine
+	taskWg       sync.WaitGroup // tracks accepted tasks until completion or cancellation
 
 	stopped    atomic.Bool
 	totalTasks atomic.Int64
@@ -87,18 +89,21 @@ type Pool[I, O any] struct {
 // NewPool creates a new worker pool with the given handler and configuration.
 func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 	cfg = cfg.withDefaults()
-	poolCtx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is retained on Pool and invoked in Stop()
+	acceptCtx, acceptCancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is retained on Pool and invoked in Stop()
+	poolCtx, cancel := context.WithCancel(context.Background())         //nolint:gosec // G118: cancel is retained on Pool and invoked in Stop()
 
 	p := &Pool[I, O]{
-		handler:    handler,
-		cfg:        cfg,
-		dispatch:   newDispatcher(cfg.Dispatch),
-		queue:      make(chan taskEnvelope[I, O], cfg.QueueSize),
-		affinities: make([]chan taskEnvelope[I, O], cfg.Size),
-		stats:      make([]workerStats, cfg.Size),
-		events:     make(chan Event[O], cfg.EventBuffer*cfg.Size),
-		cancel:     cancel,
-		poolCtx:    poolCtx,
+		handler:      handler,
+		cfg:          cfg,
+		dispatch:     newDispatcher(cfg.Dispatch),
+		queue:        make(chan taskEnvelope[I, O], cfg.QueueSize),
+		affinities:   make([]chan taskEnvelope[I, O], cfg.Size),
+		stats:        make([]workerStats, cfg.Size),
+		events:       make(chan Event[O], cfg.EventBuffer*cfg.Size),
+		acceptCancel: acceptCancel,
+		acceptCtx:    acceptCtx,
+		cancel:       cancel,
+		poolCtx:      poolCtx,
 	}
 
 	for i := range cfg.Size {
@@ -193,6 +198,8 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 		return nil
 	}
 	p.mu.Unlock()
+
+	p.acceptCancel()
 
 	tasksDone := make(chan struct{})
 	go func() {
