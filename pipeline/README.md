@@ -60,7 +60,7 @@ func main() {
 
 ## Operators
 
-### Group 03 operator parity
+### Operator reference
 
 | Canonical operator | gokit symbol | Notes |
 |---|---|---|
