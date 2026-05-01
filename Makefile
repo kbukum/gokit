@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check clean help \
+.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected clean help \
        tag tag-push tag-force list-tags ci ci-test ci-lint ensure-act
 
 GOMOD := ./gomod.sh
@@ -15,7 +15,7 @@ build:
 
 ## Run tests (M=<module>, T=<test pattern>)
 test:
-	@$(GOMOD) cmd "go test -race -count=1 $(if $(T),-run $(T))" $(_M)
+	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M)
 
 ## Run integration suite (gated by `//go:build integration`).
 ## Slow / dependency-heavy; not part of `make test` or default CI `check`.
@@ -78,6 +78,36 @@ list-tags:
 	@echo "==> All version tags:"
 	@git tag -l | sort -V
 
+## Fast check: build + vet + lint only (no tests) — for rapid iteration
+check-fast: build vet lint
+
+## Run tests only for modules affected by current changes (vs main branch)
+test-affected:
+	@echo "==> Detecting affected modules..."
+	@CHANGED=$$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD~1); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changes detected, running all tests"; \
+		$(GOMOD) cmd "go test -race -count=1" $(_M); \
+	else \
+		MODULES=$$(echo "$$CHANGED" | xargs -I{} dirname {} | sort -u | while read dir; do \
+			if [ -f "$$dir/go.mod" ]; then echo "$$dir"; \
+			else \
+				d="$$dir"; \
+				while [ "$$d" != "." ] && [ ! -f "$$d/go.mod" ]; do d=$$(dirname "$$d"); done; \
+				[ -f "$$d/go.mod" ] && echo "$$d"; \
+			fi; \
+		done | sort -u); \
+		if [ -z "$$MODULES" ]; then \
+			echo "No Go module changes detected"; \
+		else \
+			echo "Affected modules: $$MODULES"; \
+			for mod in $$MODULES; do \
+				echo "==> Testing $$mod..."; \
+				cd "$$mod" && go test -race -count=1 ./... && cd - > /dev/null; \
+			done; \
+		fi; \
+	fi
+
 ## Run all checks (build + vet + test) — supports M=<module>
 check: build vet test
 
@@ -112,8 +142,10 @@ help:
 	@echo "Usage: make <target> [M=<module>] [T=<test>]"
 	@echo ""
 	@echo "Development:"
+	@echo "  make help                     Show this help"
 	@echo "  make build    [M=]            Build packages"
 	@echo "  make test     [M=] [T=]       Run tests"
+	@echo "  make test-affected [M=]       Run tests for changed modules vs main"
 	@echo "  make test-integration [M=]    Run integration suite (//go:build integration)"
 	@echo "  make test-coverage [M=] [T=]  Run tests with coverage"
 	@echo "  make lint     [M=]            Run golangci-lint"
@@ -121,6 +153,7 @@ help:
 	@echo "  make fmt      [M=]            Format code"
 	@echo "  make tidy     [M=]            Run go mod tidy"
 	@echo "  make update   [M=]            Update dependencies"
+	@echo "  make check-fast [M=]          Build + vet + lint"
 	@echo "  make check    [M=]            Build + vet + test"
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
