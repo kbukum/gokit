@@ -87,9 +87,17 @@ test-affected:
 	@CHANGED=$$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD~1); \
 	if [ -z "$$CHANGED" ]; then \
 		echo "No changes detected, running all tests"; \
-		$(GOMOD) cmd "go test -race -count=1" $(_M); \
+		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M); \
+	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum)$$'; then \
+		echo "Root go.mod/go.sum changed, running all tests"; \
+		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M); \
 	else \
-		MODULES=$$(echo "$$CHANGED" | xargs -I{} dirname {} | sort -u | while read dir; do \
+		CHANGED=$$(printf '%s\n' "$$CHANGED" | grep -E '\.go$$|(^|/)(go\.mod|go\.sum)$$' || true); \
+		if [ -z "$$CHANGED" ]; then \
+			echo "No Go source changes"; \
+			exit 0; \
+		fi; \
+		MODULES=$$(printf '%s\n' "$$CHANGED" | xargs -I{} dirname {} | sort -u | while read dir; do \
 			if [ -f "$$dir/go.mod" ]; then echo "$$dir"; \
 			else \
 				d="$$dir"; \

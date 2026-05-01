@@ -52,6 +52,7 @@ jobs:
               - '**/*.go'
               - '**/go.mod'
               - '**/go.sum'
+              - 'scripts/**'
               - 'Makefile'
               - '.golangci.yml'
               - '.github/workflows/ci.yml'
