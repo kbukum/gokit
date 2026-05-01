@@ -37,6 +37,7 @@ jobs:
     name: Changes
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       go-code: ${{ steps.filter.outputs.go-code }}

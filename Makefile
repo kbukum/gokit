@@ -101,10 +101,17 @@ test-affected:
 			echo "No Go module changes detected"; \
 		else \
 			echo "Affected modules: $$MODULES"; \
+			failed=0; \
 			for mod in $$MODULES; do \
 				echo "==> Testing $$mod..."; \
-				cd "$$mod" && go test -race -count=1 ./... && cd - > /dev/null; \
+				if ! (cd "$$mod" && go test -race -shuffle=on -count=1 ./...); then \
+					echo "✗ Tests failed in $$mod"; \
+					failed=1; \
+				fi; \
 			done; \
+			if [ "$$failed" -ne 0 ]; then \
+				exit 1; \
+			fi; \
 		fi; \
 	fi
 
@@ -145,7 +152,7 @@ help:
 	@echo "  make help                     Show this help"
 	@echo "  make build    [M=]            Build packages"
 	@echo "  make test     [M=] [T=]       Run tests"
-	@echo "  make test-affected [M=]       Run tests for changed modules vs main"
+	@echo "  make test-affected            Run tests for changed modules vs main"
 	@echo "  make test-integration [M=]    Run integration suite (//go:build integration)"
 	@echo "  make test-coverage [M=] [T=]  Run tests with coverage"
 	@echo "  make lint     [M=]            Run golangci-lint"
