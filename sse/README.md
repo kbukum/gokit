@@ -51,6 +51,18 @@ func main() {
 | `WithUserID()` / `WithSessionID()` / `WithMetadata()` | Client options |
 | `EventType*` | Constants: connected, keepalive, message, error, metric |
 
+## Backpressure semantics
+
+- `Hub` uses a bounded inbound broadcast queue of `DefaultBroadcastBufferSize`.
+- Each client uses a bounded delivery queue of `DefaultClientBufferSize`.
+- Delivery is best-effort, not durable: when a slow client's queue is full, the newest frame is dropped and `SendFrame` returns `false`.
+- Slow clients never block the hub or other subscribers; callers should rely on reconnect + replay from their own durable source when lossless delivery matters.
+
+## Operational notes
+
+- `ServeSSE` sends keepalive comments every `DefaultKeepAliveInterval`.
+- `Hub.Stop()` disconnects all clients and makes subsequent broadcasts no-ops.
+
 ---
 
 [⬅ Back to main README](../README.md)

@@ -2,8 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
+
+	"github.com/kbukum/gokit/resilience"
 )
 
 // StreamOpener is a function type that opens a gRPC stream.
@@ -20,6 +26,7 @@ type StreamOpener[T any] func(ctx context.Context) (T, error)
 //   - If you don't use a timeout, WaitForReady can block indefinitely
 func OpenStreamWithTimeout[T any](
 	ctx context.Context,
+	conn *grpc.ClientConn,
 	connectTimeout time.Duration,
 	opener StreamOpener[T],
 ) (T, error) {
@@ -29,35 +36,50 @@ func OpenStreamWithTimeout[T any](
 		return opener(ctx)
 	}
 
-	type result struct {
-		stream T
-		err    error
+	_, err := resilience.Await(ctx, connectTimeout, func(waitCtx context.Context) (struct{}, error) {
+		return struct{}{}, waitForConnectionReady(waitCtx, conn)
+	})
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			if ctx.Err() != nil {
+				return zero, ctx.Err()
+			}
+			return zero, fmt.Errorf("stream connection timeout after %v: %w", connectTimeout, context.DeadlineExceeded)
+		}
+		return zero, err
 	}
-	resultCh := make(chan result, 1)
-
-	// The opener receives the caller's context so the stream's lifetime is
-	// controlled by the caller, not the connection timeout.
-	go func() {
-		stream, err := opener(ctx)
-		resultCh <- result{stream: stream, err: err}
-	}()
-
-	select {
-	case res := <-resultCh:
-		return res.stream, res.err
-	case <-time.After(connectTimeout):
-		return zero, fmt.Errorf("stream connection timeout after %v", connectTimeout)
-	case <-ctx.Done():
-		return zero, ctx.Err()
-	}
+	return opener(ctx)
 }
 
 // TryOpenStream attempts to open a stream with a short timeout.
-// If it fails, it returns nil and the error without blocking the caller.
+// If it fails, it returns the zero value of T and the error without blocking the caller.
 func TryOpenStream[T any](
 	ctx context.Context,
+	conn *grpc.ClientConn,
 	timeout time.Duration,
 	opener StreamOpener[T],
 ) (T, error) {
-	return OpenStreamWithTimeout(ctx, timeout, opener)
+	return OpenStreamWithTimeout(ctx, conn, timeout, opener)
+}
+
+func waitForConnectionReady(ctx context.Context, conn *grpc.ClientConn) error {
+	if conn == nil {
+		return fmt.Errorf("grpc: client connection is nil")
+	}
+
+	conn.Connect()
+	for {
+		state := conn.GetState()
+		switch state {
+		case connectivity.Ready:
+			return nil
+		case connectivity.Shutdown:
+			return fmt.Errorf("grpc: client connection is shut down")
+		case connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure:
+		}
+
+		if !conn.WaitForStateChange(ctx, state) {
+			return ctx.Err()
+		}
+	}
 }

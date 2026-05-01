@@ -483,6 +483,12 @@ func TestNewRateLimiter_StopAndAllow(t *testing.T) {
 	if retry <= 0 {
 		t.Errorf("retryAfter should be > 0, got %f", retry)
 	}
+
+	rl.Stop()
+	allowed, _, _, _, _ = rl.Allow("after-stop", 1)
+	if !allowed {
+		t.Error("rate limiter should keep making decisions after cleanup shutdown")
+	}
 }
 
 func TestRateLimit_Middleware(t *testing.T) {

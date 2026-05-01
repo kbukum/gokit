@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"time"
 
 	"google.golang.org/grpc"
@@ -10,46 +9,33 @@ import (
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/interceptor"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // ClientOptionsBuilder constructs gRPC dial options from configuration.
-// Provides a fluent interface for building options with best practices.
 type ClientOptionsBuilder struct {
 	config             *grpccfg.Config
 	enableLogging      bool
-	enableMetrics      bool
-	retryPolicy        *RetryPolicy
+	resiliencePolicy   *resilience.Policy
 	customInterceptors []grpc.UnaryClientInterceptor
 	streamInterceptors []grpc.StreamClientInterceptor
 }
 
-// RetryPolicy configures the gRPC retry behavior via service config.
-type RetryPolicy struct {
-	MaxAttempts       int
-	InitialBackoff    string // e.g. "0.1s"
-	MaxBackoff        string // e.g. "1s"
-	BackoffMultiplier float64
-	WaitForReady      bool
-}
-
-// DefaultRetryPolicy returns a sensible default retry policy.
-func DefaultRetryPolicy() *RetryPolicy {
-	return &RetryPolicy{
-		MaxAttempts:       4,
-		InitialBackoff:    "0.1s",
-		MaxBackoff:        "1s",
-		BackoffMultiplier: 2.0,
-		WaitForReady:      true,
-	}
+// DefaultRetryPolicy returns a retry policy aligned with gRPC retryable status codes.
+func DefaultRetryPolicy() *resilience.RetryConfig {
+	cfg := resilience.DefaultRetryConfig()
+	cfg.MaxAttempts = 4
+	cfg.MaxBackoff = time.Second
+	cfg.RetryIf = interceptor.IsRetryable
+	return &cfg
 }
 
 // NewClientOptionsBuilder creates a new options builder from gokit gRPC config.
 func NewClientOptionsBuilder(cfg *grpccfg.Config) *ClientOptionsBuilder {
 	return &ClientOptionsBuilder{
-		config:        cfg,
-		enableLogging: true,
-		enableMetrics: false,
-		retryPolicy:   DefaultRetryPolicy(),
+		config:           cfg,
+		enableLogging:    true,
+		resiliencePolicy: resilience.NewPolicy().WithTimeoutIfUnset(cfg.CallTimeout).WithRetry(*DefaultRetryPolicy()),
 	}
 }
 
@@ -59,9 +45,23 @@ func (b *ClientOptionsBuilder) WithLogging(enabled bool) *ClientOptionsBuilder {
 	return b
 }
 
-// WithRetryPolicy sets a custom retry policy.
-func (b *ClientOptionsBuilder) WithRetryPolicy(p *RetryPolicy) *ClientOptionsBuilder {
-	b.retryPolicy = p
+// WithRetryPolicy sets or disables the retry portion of the client resilience policy.
+func (b *ClientOptionsBuilder) WithRetryPolicy(cfg *resilience.RetryConfig) *ClientOptionsBuilder {
+	if b.resiliencePolicy == nil {
+		b.resiliencePolicy = resilience.NewPolicy().WithTimeoutIfUnset(b.config.CallTimeout)
+	}
+	if cfg == nil {
+		b.resiliencePolicy.Retry = nil
+		return b
+	}
+	copyCfg := *cfg
+	b.resiliencePolicy.Retry = &copyCfg
+	return b
+}
+
+// WithResiliencePolicy replaces the entire client resilience policy.
+func (b *ClientOptionsBuilder) WithResiliencePolicy(policy *resilience.Policy) *ClientOptionsBuilder {
+	b.resiliencePolicy = policy
 	return b
 }
 
@@ -92,17 +92,11 @@ func (b *ClientOptionsBuilder) Build() ([]grpc.DialOption, error) {
 		}),
 	}
 
-	if b.retryPolicy != nil {
-		opts = append(opts, grpc.WithDefaultServiceConfig(b.buildServiceConfig()))
-	}
-
-	// Unary interceptors
 	unary := b.buildUnaryInterceptors()
 	if len(unary) > 0 {
 		opts = append(opts, grpc.WithChainUnaryInterceptor(unary...))
 	}
 
-	// Stream interceptors
 	stream := b.buildStreamInterceptors()
 	if len(stream) > 0 {
 		opts = append(opts, grpc.WithChainStreamInterceptor(stream...))
@@ -111,33 +105,15 @@ func (b *ClientOptionsBuilder) Build() ([]grpc.DialOption, error) {
 	return opts, nil
 }
 
-func (b *ClientOptionsBuilder) buildServiceConfig() string {
-	p := b.retryPolicy
-	return fmt.Sprintf(`{
-		"methodConfig": [{
-			"name": [{"service": ""}],
-			"waitForReady": %t,
-			"retryPolicy": {
-				"maxAttempts": %d,
-				"initialBackoff": "%s",
-				"maxBackoff": "%s",
-				"backoffMultiplier": %.1f,
-				"retryableStatusCodes": ["UNAVAILABLE", "RESOURCE_EXHAUSTED", "ABORTED"]
-			}
-		}],
-		"loadBalancingConfig": [{"round_robin": {}}]
-	}`, p.WaitForReady, p.MaxAttempts, p.InitialBackoff, p.MaxBackoff, p.BackoffMultiplier)
-}
-
 func (b *ClientOptionsBuilder) buildUnaryInterceptors() []grpc.UnaryClientInterceptor {
-	var interceptors []grpc.UnaryClientInterceptor
+	interceptors := make([]grpc.UnaryClientInterceptor, 0, len(b.customInterceptors)+2)
 
-	if b.config.CallTimeout > 0 {
-		interceptors = append(interceptors, interceptor.UnaryClientTimeoutInterceptor(b.config.CallTimeout))
-	}
 	if b.enableLogging {
 		log := logger.NewDefault("grpc-client")
 		interceptors = append(interceptors, interceptor.UnaryClientLoggingInterceptor(log))
+	}
+	if b.resiliencePolicy != nil {
+		interceptors = append(interceptors, interceptor.UnaryClientResilienceInterceptor(b.resiliencePolicy))
 	}
 	interceptors = append(interceptors, b.customInterceptors...)
 	return interceptors

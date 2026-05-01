@@ -14,5 +14,8 @@
 //
 //   - Error mapping between gRPC status codes and gokit errors
 //   - Request/response logging with structured fields
-//   - Timeout enforcement for unary RPCs
+//   - Resilience policy enforcement for unary RPCs
+//
+// When composing interceptors, keep shared cross-cutting order explicit:
+// tracing → logging → auth → validation → handler → metrics.
 package grpc

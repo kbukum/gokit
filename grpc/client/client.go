@@ -11,12 +11,13 @@ import (
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/interceptor"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
 // NewClient creates a gRPC client connection using the provided configuration
 // and logger. It configures keepalive, TLS, message size limits, and attaches
-// logging and timeout interceptors.
+// logging and resilience interceptors.
 func NewClient(cfg grpccfg.Config, log *logger.Logger) (*grpc.ClientConn, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -75,18 +76,19 @@ func buildDialOptions(cfg grpccfg.Config, log *logger.Logger) ([]grpc.DialOption
 		),
 	)
 
-	// Unary interceptors: timeout → logging
-	var unary []grpc.UnaryClientInterceptor
+	// Unary interceptors: logging → resilience
+	unary := []grpc.UnaryClientInterceptor{interceptor.UnaryClientLoggingInterceptor(log)}
 	if cfg.CallTimeout > 0 {
-		unary = append(unary, interceptor.UnaryClientTimeoutInterceptor(cfg.CallTimeout))
+		policy := resilience.NewPolicy().WithTimeoutIfUnset(cfg.CallTimeout)
+		unary = append(unary, interceptor.UnaryClientResilienceInterceptor(policy))
 	}
-	unary = append(unary, interceptor.UnaryClientLoggingInterceptor(log))
-	opts = append(opts, grpc.WithChainUnaryInterceptor(unary...))
-
-	// Stream interceptors: logging
-	opts = append(opts, grpc.WithChainStreamInterceptor(
-		interceptor.StreamClientLoggingInterceptor(log),
-	))
+	opts = append(opts,
+		grpc.WithChainUnaryInterceptor(unary...),
+		// Stream interceptors: logging
+		grpc.WithChainStreamInterceptor(
+			interceptor.StreamClientLoggingInterceptor(log),
+		),
+	)
 
 	return opts, nil
 }

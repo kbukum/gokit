@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
@@ -318,41 +318,23 @@ func localIPFromUDPProbe(resolver networkResolver, probeTarget string) (string, 
 	return udpAddr.IP.String(), nil
 }
 
-// registerWithRetry attempts registration with exponential backoff.
-// Returns nil on success, or the last error after all retries are exhausted.
+// registerWithRetry attempts registration with the shared resilience retry policy.
 func (c *Component) registerWithRetry(ctx context.Context, svc *ServiceInfo) error {
-	maxRetries := c.cfg.Registration.MaxRetries
-	if maxRetries <= 0 {
-		maxRetries = 3
-	}
-	interval := ParseDuration(c.cfg.Registration.RetryInterval)
-	if interval <= 0 {
-		interval = 2 * time.Second
-	}
-
-	var lastErr error
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		if err := c.registry.Register(ctx, svc); err != nil {
-			lastErr = err
+	cfg := c.cfg.Registration.RetryConfig()
+	attempt := 0
+	return resilience.RetryFunc(ctx, cfg, func() error {
+		attempt++
+		err := c.registry.Register(ctx, svc)
+		if err != nil {
 			c.log.WarnCtx(ctx, "failed to register service", map[string]interface{}{
 				"error":      err.Error(),
 				"service_id": svc.ID,
 				"attempt":    attempt,
-				"max":        maxRetries,
+				"max":        cfg.MaxAttempts,
 			})
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(interval):
-				}
-				interval *= 2
-			}
-			continue
 		}
-		return nil
-	}
-	return lastErr
+		return err
+	})
 }
 
 // buildClient derives a high-level Client from the component's Config and Discovery backend.

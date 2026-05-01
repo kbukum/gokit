@@ -474,10 +474,10 @@ func TestTLSConfig_IsEnabled_KeyFileOnlyNotEnabled(t *testing.T) {
 	}
 }
 
-func TestTLSConfig_IsEnabled_MinVersionOnlyNotEnabled(t *testing.T) {
+func TestTLSConfig_IsEnabled_MinVersionOnlyEnabled(t *testing.T) {
 	cfg := &TLSConfig{MinVersion: tls.VersionTLS13}
-	if cfg.IsEnabled() {
-		t.Error("MinVersion alone should not enable TLS")
+	if !cfg.IsEnabled() {
+		t.Error("MinVersion alone should enable TLS")
 	}
 }
 

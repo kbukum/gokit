@@ -3,6 +3,8 @@ package discovery
 import (
 	"fmt"
 	"time"
+
+	"github.com/kbukum/gokit/resilience"
 )
 
 // Config holds service discovery and registration configuration.
@@ -57,12 +59,13 @@ type RegistrationConfig struct {
 	// continues in degraded mode — convenient for local development.
 	Required bool `yaml:"required" mapstructure:"required"`
 
-	// MaxRetries is the number of registration retries before giving up.
+	// MaxRetries is the maximum number of registration attempts.
 	// Defaults to 3. Only meaningful when Required is true.
 	MaxRetries int `yaml:"max_retries" mapstructure:"max_retries"`
 
-	// RetryInterval is the base interval between retries (e.g. "2s").
-	// Each retry doubles the interval (exponential backoff). Defaults to "2s".
+	// RetryInterval is the initial resilience backoff interval (e.g. "2s").
+	// The shared resilience policy applies exponential backoff from this base.
+	// Defaults to "2s".
 	RetryInterval string `yaml:"retry_interval" mapstructure:"retry_interval"`
 
 	// ServiceName is the name used when registering this service.
@@ -156,6 +159,21 @@ func (r *RegistrationConfig) ApplyDefaults() {
 	if r.RetryInterval == "" {
 		r.RetryInterval = "2s"
 	}
+}
+
+// RetryConfig derives the shared resilience retry policy for registration.
+func (r RegistrationConfig) RetryConfig() resilience.RetryConfig {
+	cfg := resilience.DefaultRetryConfig()
+	cfg.MaxAttempts = r.MaxRetries
+	cfg.InitialBackoff = ParseDuration(r.RetryInterval)
+	if cfg.InitialBackoff <= 0 {
+		cfg.InitialBackoff = 2 * time.Second
+	}
+	cfg.MaxBackoff = cfg.InitialBackoff * 8
+	if cfg.MaxBackoff < cfg.InitialBackoff {
+		cfg.MaxBackoff = cfg.InitialBackoff
+	}
+	return cfg
 }
 
 // ApplyDefaults fills zero-valued HealthCheckConfig fields.

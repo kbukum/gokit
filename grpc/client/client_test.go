@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,7 @@ import (
 
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
@@ -44,6 +46,42 @@ func testConn(t *testing.T) *grpc.ClientConn {
 	t.Helper()
 	cc, err := grpc.NewClient("passthrough:///test",
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cc.Close() })
+	return cc
+}
+
+func readyConn(t *testing.T) *grpc.ClientConn {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	server := grpc.NewServer()
+	go func() {
+		_ = server.Serve(listener)
+	}()
+
+	t.Cleanup(func() {
+		server.Stop()
+		_ = listener.Close()
+	})
+
+	cc, err := grpc.NewClient("passthrough:///"+listener.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cc.Close() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	require.NoError(t, waitForConnectionReady(ctx, cc))
+
+	return cc
+}
+
+func unavailableConn(t *testing.T) *grpc.ClientConn {
+	t.Helper()
+
+	cc, err := grpc.NewClient("passthrough:///127.0.0.1:1", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cc.Close() })
 	return cc
@@ -512,12 +550,11 @@ func TestClientOptionsBuilder_WithRetryPolicy(t *testing.T) {
 	t.Parallel()
 
 	cfg := validInsecureConfig()
-	policy := &RetryPolicy{
-		MaxAttempts:       3,
-		InitialBackoff:    "0.2s",
-		MaxBackoff:        "2s",
-		BackoffMultiplier: 1.5,
-		WaitForReady:      false,
+	policy := &resilience.RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: 200 * time.Millisecond,
+		MaxBackoff:     2 * time.Second,
+		BackoffFactor:  1.5,
 	}
 	builder := NewClientOptionsBuilder(&cfg).WithRetryPolicy(policy)
 
@@ -554,6 +591,40 @@ func TestClientOptionsBuilder_WithCustomInterceptors(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, opts)
 	_ = called // used to verify the interceptor is wired
+}
+
+func TestClientOptionsBuilder_CustomUnaryRunsAfterResilience(t *testing.T) {
+	t.Parallel()
+
+	cfg := validInsecureConfig()
+	builder := NewClientOptionsBuilder(&cfg)
+
+	customSawDeadline := false
+	builder.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{},
+		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
+	) error {
+		_, customSawDeadline = ctx.Deadline()
+		return invoker(ctx, method, req, reply, cc, opts...)
+	})
+
+	interceptors := builder.buildUnaryInterceptors()
+	require.GreaterOrEqual(t, len(interceptors), 3)
+
+	cc := testConn(t)
+	var call func(int, context.Context) error
+	call = func(idx int, ctx context.Context) error {
+		if idx == len(interceptors) {
+			return nil
+		}
+		return interceptors[idx](ctx, "/pkg.Svc/Method", nil, nil, cc, func(nextCtx context.Context, method string, req, reply interface{},
+			cc *grpc.ClientConn, opts ...grpc.CallOption,
+		) error {
+			return call(idx+1, nextCtx)
+		})
+	}
+
+	require.NoError(t, call(0, context.Background()))
+	assert.True(t, customSawDeadline, "custom interceptors should run after resilience applies timeout policy")
 }
 
 func TestClientOptionsBuilder_WithStreamInterceptor(t *testing.T) {
@@ -595,10 +666,10 @@ func TestDefaultRetryPolicy(t *testing.T) {
 
 	p := DefaultRetryPolicy()
 	assert.Equal(t, 4, p.MaxAttempts)
-	assert.Equal(t, "0.1s", p.InitialBackoff)
-	assert.Equal(t, "1s", p.MaxBackoff)
-	assert.InEpsilon(t, 2.0, p.BackoffMultiplier, 1e-9)
-	assert.True(t, p.WaitForReady)
+	assert.Equal(t, 100*time.Millisecond, p.InitialBackoff)
+	assert.Equal(t, time.Second, p.MaxBackoff)
+	assert.InEpsilon(t, 2.0, p.BackoffFactor, 1e-9)
+	assert.NotNil(t, p.RetryIf)
 }
 
 // ---------------------------------------------------------------------------
@@ -625,11 +696,15 @@ func TestDefaultConnectionFactory_NewConn(t *testing.T) {
 func TestOpenStreamWithTimeout_Success(t *testing.T) {
 	t.Parallel()
 
+	conn := readyConn(t)
 	opener := func(ctx context.Context) (string, error) {
+		if _, ok := ctx.Deadline(); ok {
+			t.Fatal("stream opener should receive caller context without connect-timeout deadline")
+		}
 		return "hello-stream", nil
 	}
 
-	result, err := OpenStreamWithTimeout(context.Background(), time.Second, opener)
+	result, err := OpenStreamWithTimeout(context.Background(), conn, time.Second, opener)
 	require.NoError(t, err)
 	assert.Equal(t, "hello-stream", result)
 }
@@ -637,23 +712,27 @@ func TestOpenStreamWithTimeout_Success(t *testing.T) {
 func TestOpenStreamWithTimeout_Timeout(t *testing.T) {
 	t.Parallel()
 
+	conn := unavailableConn(t)
+	called := atomic.Bool{}
 	opener := func(ctx context.Context) (string, error) {
-		time.Sleep(2 * time.Second)
+		called.Store(true)
 		return "late", nil
 	}
 
-	result, err := OpenStreamWithTimeout(context.Background(), 50*time.Millisecond, opener)
+	result, err := OpenStreamWithTimeout(context.Background(), conn, 50*time.Millisecond, opener)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream connection timeout")
 	assert.Empty(t, result)
+	assert.False(t, called.Load(), "opener should not run before connection is ready")
 }
 
 func TestOpenStreamWithTimeout_ContextCanceled(t *testing.T) {
 	t.Parallel()
 
+	conn := unavailableConn(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	opener := func(ctx context.Context) (string, error) {
-		time.Sleep(5 * time.Second)
+		t.Fatal("opener should not run after caller cancellation")
 		return "late", nil
 	}
 
@@ -662,7 +741,7 @@ func TestOpenStreamWithTimeout_ContextCanceled(t *testing.T) {
 		cancel()
 	}()
 
-	result, err := OpenStreamWithTimeout(ctx, 5*time.Second, opener)
+	result, err := OpenStreamWithTimeout(ctx, conn, 5*time.Second, opener)
 	require.Error(t, err)
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Empty(t, result)
@@ -675,7 +754,7 @@ func TestOpenStreamWithTimeout_ZeroTimeout(t *testing.T) {
 		return "immediate", nil
 	}
 
-	result, err := OpenStreamWithTimeout(context.Background(), 0, opener)
+	result, err := OpenStreamWithTimeout(context.Background(), nil, 0, opener)
 	require.NoError(t, err)
 	assert.Equal(t, "immediate", result)
 }
@@ -687,7 +766,7 @@ func TestOpenStreamWithTimeout_NegativeTimeout(t *testing.T) {
 		return "immediate", nil
 	}
 
-	result, err := OpenStreamWithTimeout(context.Background(), -1*time.Second, opener)
+	result, err := OpenStreamWithTimeout(context.Background(), nil, -1*time.Second, opener)
 	require.NoError(t, err)
 	assert.Equal(t, "immediate", result)
 }
@@ -695,11 +774,12 @@ func TestOpenStreamWithTimeout_NegativeTimeout(t *testing.T) {
 func TestOpenStreamWithTimeout_OpenerError(t *testing.T) {
 	t.Parallel()
 
+	conn := readyConn(t)
 	opener := func(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("stream creation failed")
 	}
 
-	result, err := OpenStreamWithTimeout(context.Background(), time.Second, opener)
+	result, err := OpenStreamWithTimeout(context.Background(), conn, time.Second, opener)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stream creation failed")
 	assert.Empty(t, result)
@@ -708,11 +788,12 @@ func TestOpenStreamWithTimeout_OpenerError(t *testing.T) {
 func TestTryOpenStream_Success(t *testing.T) {
 	t.Parallel()
 
+	conn := readyConn(t)
 	opener := func(ctx context.Context) (int, error) {
 		return 42, nil
 	}
 
-	result, err := TryOpenStream(context.Background(), time.Second, opener)
+	result, err := TryOpenStream(context.Background(), conn, time.Second, opener)
 	require.NoError(t, err)
 	assert.Equal(t, 42, result)
 }
@@ -720,12 +801,13 @@ func TestTryOpenStream_Success(t *testing.T) {
 func TestTryOpenStream_Timeout(t *testing.T) {
 	t.Parallel()
 
+	conn := unavailableConn(t)
 	opener := func(ctx context.Context) (int, error) {
-		time.Sleep(2 * time.Second)
+		t.Fatal("opener should not run when connection readiness times out")
 		return 0, nil
 	}
 
-	result, err := TryOpenStream(context.Background(), 50*time.Millisecond, opener)
+	result, err := TryOpenStream(context.Background(), conn, 50*time.Millisecond, opener)
 	require.Error(t, err)
 	assert.Equal(t, 0, result)
 }

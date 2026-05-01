@@ -243,8 +243,8 @@ func TestEdge_SlowClient_BufferOverflow(t *testing.T) {
 	hub.Register(slow)
 	time.Sleep(10 * time.Millisecond)
 
-	// Send 300 messages (buffer is 256) — some should be dropped
-	for i := 0; i < 300; i++ {
+	// Send more than the bounded client queue size — some should be dropped.
+	for i := 0; i < DefaultClientBufferSize+44; i++ {
 		hub.BroadcastToPattern("test:slow", []byte(fmt.Sprintf("msg-%d", i)))
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -259,12 +259,12 @@ func TestEdge_SlowClient_BufferOverflow(t *testing.T) {
 		}
 	}
 done:
-	dropped := 300 - received
+	dropped := (DefaultClientBufferSize + 44) - received
 	if dropped <= 0 {
 		t.Errorf("expected some messages to be dropped, but all %d were received", received)
 	}
-	if received > 256 {
-		t.Errorf("received %d messages but buffer is 256", received)
+	if received > DefaultClientBufferSize {
+		t.Errorf("received %d messages but buffer is %d", received, DefaultClientBufferSize)
 	}
 }
 

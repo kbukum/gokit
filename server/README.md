@@ -104,6 +104,27 @@ server.MountDocs(engine,
 | `CORS(CORSConfig)` | Cross-origin resource sharing |
 | `Recovery()` | Panic recovery |
 
+### Middleware ordering
+
+When composing transport concerns, keep the shared order explicit:
+
+1. tracing
+2. logging
+3. auth
+4. validation
+5. handler
+6. metrics
+
+Apply recovery outside that chain so panics from any layer are captured consistently.
+
+### TLS policy
+
+`server` itself is transport-focused and commonly runs behind TLS termination or alongside a gRPC listener. For TLS settings shared across gokit transports, use `security.TLSConfig` with the locked policy:
+
+- minimum supported floor: TLS 1.2
+- default negotiation outcome: TLS 1.3 whenever peers support it
+- explicit floors below TLS 1.2 are rejected
+
 ### `server/endpoint`
 
 | Function | Description |

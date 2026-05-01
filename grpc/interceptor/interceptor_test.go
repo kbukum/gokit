@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,13 +65,13 @@ func mockStreamer(stream grpc.ClientStream, retErr error) grpc.Streamer {
 }
 
 // ---------------------------------------------------------------------------
-// UnaryClientTimeoutInterceptor
+// UnaryClientResilienceInterceptor
 // ---------------------------------------------------------------------------
 
-func TestUnaryTimeoutInterceptor_AppliesTimeout(t *testing.T) {
+func TestUnaryResilienceInterceptor_AppliesTimeoutWhenUnset(t *testing.T) {
 	t.Parallel()
 
-	interceptor := UnaryClientTimeoutInterceptor(500 * time.Millisecond)
+	interceptor := UnaryClientResilienceInterceptor(resilience.NewPolicy().WithTimeoutIfUnset(500 * time.Millisecond))
 	cc := testConn(t)
 
 	var captured time.Time
@@ -82,10 +83,10 @@ func TestUnaryTimeoutInterceptor_AppliesTimeout(t *testing.T) {
 	assert.WithinDuration(t, time.Now().Add(500*time.Millisecond), captured, 100*time.Millisecond)
 }
 
-func TestUnaryTimeoutInterceptor_PreservesExistingDeadline(t *testing.T) {
+func TestUnaryResilienceInterceptor_PreservesExistingDeadline(t *testing.T) {
 	t.Parallel()
 
-	interceptor := UnaryClientTimeoutInterceptor(500 * time.Millisecond)
+	interceptor := UnaryClientResilienceInterceptor(resilience.NewPolicy().WithTimeoutIfUnset(500 * time.Millisecond))
 	cc := testConn(t)
 
 	existingDeadline := time.Now().Add(10 * time.Second)
@@ -101,10 +102,10 @@ func TestUnaryTimeoutInterceptor_PreservesExistingDeadline(t *testing.T) {
 		"existing deadline should NOT be overridden")
 }
 
-func TestUnaryTimeoutInterceptor_ZeroTimeout(t *testing.T) {
+func TestUnaryResilienceInterceptor_NilPolicy(t *testing.T) {
 	t.Parallel()
 
-	interceptor := UnaryClientTimeoutInterceptor(0)
+	interceptor := UnaryClientResilienceInterceptor(nil)
 	cc := testConn(t)
 
 	var captured time.Time
@@ -112,13 +113,14 @@ func TestUnaryTimeoutInterceptor_ZeroTimeout(t *testing.T) {
 		cc, deadlineCapturingInvoker(&captured))
 
 	require.NoError(t, err)
-	assert.True(t, captured.IsZero(), "zero timeout should not set a deadline")
+	assert.True(t, captured.IsZero(), "nil policy should not set a deadline")
 }
 
-func TestUnaryTimeoutInterceptor_PropagatesInvokerError(t *testing.T) {
+func TestUnaryResilienceInterceptor_PropagatesInvokerError(t *testing.T) {
 	t.Parallel()
 
-	interceptor := UnaryClientTimeoutInterceptor(time.Second)
+	policy := resilience.NewPolicy().WithTimeoutIfUnset(time.Second)
+	interceptor := UnaryClientResilienceInterceptor(policy)
 	cc := testConn(t)
 
 	wantErr := status.Error(codes.Internal, "boom")
