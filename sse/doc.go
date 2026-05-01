@@ -7,13 +7,20 @@
 // # Architecture
 //
 //   - Hub: Central event router managing client subscriptions
-//   - Broadcaster: Sends events to all connected clients
-//   - Handler: HTTP handler for SSE endpoint
+//   - Broadcaster: Sends best-effort events to connected clients
+//   - ServeSSE: HTTP handler for SSE endpoints
+//
+// # Backpressure
+//
+// The hub uses bounded queues for both inbound broadcasts and per-client
+// delivery. Slow clients never block the hub: once a client's queue is full,
+// new frames are dropped and the sender receives false from SendFrame.
 //
 // # Usage
 //
 //	hub := sse.NewHub()
 //	go hub.Run()
-//	handler := sse.NewHandler(hub)
-//	router.GET("/events", handler.ServeHTTP)
+//	router.GET("/events", func(w http.ResponseWriter, r *http.Request) {
+//	    sse.ServeSSE(hub, w, r, "tenant:client-1")
+//	})
 package sse

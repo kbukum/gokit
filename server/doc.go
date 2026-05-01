@@ -40,6 +40,10 @@
 //   - BodySize: Request body size limits
 //   - Auth: JWT authentication middleware
 //
+// Shared middleware order for transport concerns is:
+// tracing → logging → auth → validation → handler → metrics.
+// Apply recovery around that chain.
+//
 // # Endpoints
 //
 // Built-in endpoints (server/endpoint):

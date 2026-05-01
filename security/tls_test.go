@@ -58,7 +58,7 @@ func TestTLSConfig_Build_ServerName(t *testing.T) {
 }
 
 func TestTLSConfig_Build_CustomMinVersion(t *testing.T) {
-	cfg := &TLSConfig{SkipVerify: true, MinVersion: tls.VersionTLS13}
+	cfg := &TLSConfig{MinVersion: tls.VersionTLS13}
 	result, err := cfg.Build()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,6 +122,7 @@ func TestTLSConfig_IsEnabled(t *testing.T) {
 		{"ca_file", &TLSConfig{CAFile: "ca.pem"}, true},
 		{"cert_file", &TLSConfig{CertFile: "cert.pem"}, true},
 		{"server_name", &TLSConfig{ServerName: "example.com"}, true},
+		{"min_version", &TLSConfig{MinVersion: tls.VersionTLS13}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -129,6 +130,20 @@ func TestTLSConfig_IsEnabled(t *testing.T) {
 				t.Errorf("IsEnabled() = %v, want %v", got, tt.enabled)
 			}
 		})
+	}
+}
+
+func TestTLSConfig_Validate_RejectsLegacyMinVersion(t *testing.T) {
+	cfg := &TLSConfig{MinVersion: tls.VersionTLS11}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error for legacy TLS min version")
+	}
+}
+
+func TestTLSConfig_Build_RejectsLegacyMinVersion(t *testing.T) {
+	cfg := &TLSConfig{MinVersion: tls.VersionTLS11}
+	if _, err := cfg.Build(); err == nil {
+		t.Fatal("expected build error for legacy TLS min version")
 	}
 }
 

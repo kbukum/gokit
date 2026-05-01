@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"crypto/tls"
 	"testing"
 	"time"
 
@@ -182,6 +183,19 @@ func TestValidate_ValidTLSSkipVerify(t *testing.T) {
 		TLS:            &security.TLSConfig{SkipVerify: true},
 	}
 	require.NoError(t, cfg.Validate())
+}
+
+func TestValidate_RejectsLegacyTLSFloor(t *testing.T) {
+	t.Parallel()
+	cfg := Config{
+		Addr:           "host:50051",
+		MaxRecvMsgSize: 1024,
+		MaxSendMsgSize: 1024,
+		TLS:            &security.TLSConfig{MinVersion: tls.VersionTLS11},
+	}
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "TLS 1.2 or newer")
 }
 
 // ---------------------------------------------------------------------------

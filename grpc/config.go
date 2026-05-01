@@ -30,7 +30,8 @@ type Config struct {
 	MaxSendMsgSize int `mapstructure:"max_send_msg_size"`
 	// Keepalive holds keepalive configuration.
 	Keepalive KeepaliveConfig `mapstructure:"keepalive"`
-	// TLS holds TLS configuration.
+	// TLS holds TLS configuration. The shared security policy enforces a TLS 1.2
+	// floor while default negotiation still prefers TLS 1.3.
 	TLS *security.TLSConfig `mapstructure:"tls"`
 	// Enabled controls whether gRPC is active.
 	Enabled bool `mapstructure:"enabled"`

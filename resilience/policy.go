@@ -6,6 +6,18 @@ import (
 	"time"
 )
 
+// TimeoutMode controls how a policy applies its timeout budget.
+type TimeoutMode int
+
+const (
+	// TimeoutOverrideExisting applies the timeout budget even when the incoming
+	// context already has a deadline, effectively choosing the earlier deadline.
+	TimeoutOverrideExisting TimeoutMode = iota
+	// TimeoutIfUnset applies the timeout budget only when the incoming context
+	// does not already carry a deadline.
+	TimeoutIfUnset
+)
+
 // Policy composes resilience primitives into a single reusable execution policy.
 type Policy struct {
 	Retry          *RetryConfig
@@ -13,6 +25,7 @@ type Policy struct {
 	Bulkhead       *BulkheadConfig
 	RateLimiter    *RateLimiterConfig
 	Timeout        time.Duration
+	timeoutMode    TimeoutMode
 
 	once sync.Once
 	cb   *CircuitBreaker
@@ -52,6 +65,15 @@ func (p *Policy) WithRateLimiter(cfg RateLimiterConfig) *Policy {
 // WithTimeout configures the shared timeout budget for a single execution.
 func (p *Policy) WithTimeout(d time.Duration) *Policy {
 	p.Timeout = d
+	p.timeoutMode = TimeoutOverrideExisting
+	return p
+}
+
+// WithTimeoutIfUnset configures a timeout budget that is only applied when the
+// incoming context does not already carry a deadline.
+func (p *Policy) WithTimeoutIfUnset(d time.Duration) *Policy {
+	p.Timeout = d
+	p.timeoutMode = TimeoutIfUnset
 	return p
 }
 
@@ -103,6 +125,11 @@ func Execute[T any](ctx context.Context, p *Policy, fn func(ctx context.Context)
 	if p.Timeout > 0 {
 		inner := call
 		call = func(callCtx context.Context) (T, error) {
+			if p.timeoutMode == TimeoutIfUnset {
+				if _, ok := callCtx.Deadline(); ok {
+					return inner(callCtx)
+				}
+			}
 			timeoutCtx, cancel := context.WithTimeout(callCtx, p.Timeout)
 			defer cancel()
 			return inner(timeoutCtx)

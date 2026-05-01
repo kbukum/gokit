@@ -9,6 +9,8 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
+const DefaultKeepAliveInterval = 30 * time.Second
+
 // ConnectedEvent is sent when a client successfully connects.
 type ConnectedEvent struct {
 	ClientID  string            `json:"client_id"`
@@ -76,7 +78,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 
 	// Event loop - stream events to client
 	// Keep-alive interval should be less than proxy timeouts (typically 60s).
-	keepAlive := time.NewTicker(30 * time.Second)
+	keepAlive := time.NewTicker(DefaultKeepAliveInterval)
 	defer keepAlive.Stop()
 
 	ctx := r.Context()

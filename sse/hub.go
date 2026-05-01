@@ -7,6 +7,14 @@ import (
 	"github.com/kbukum/gokit/logger"
 )
 
+const (
+	// DefaultClientBufferSize bounds each client's pending frame queue. When the
+	// queue is full, the newest frame is dropped instead of blocking the hub.
+	DefaultClientBufferSize = 256
+	// DefaultBroadcastBufferSize bounds the hub's inbound broadcast queue.
+	DefaultBroadcastBufferSize = 256
+)
+
 // Frame represents a single SSE event payload — an optional named event
 // type plus the raw data bytes. When Event is non-empty, ServeSSE writes an
 // `event: <name>` line so browser EventSource named-event listeners
@@ -52,7 +60,7 @@ func NewClient(id string, opts ...ClientOption) *Client {
 	c := &Client{
 		id:       id,
 		metadata: make(map[string]string),
-		events:   make(chan Frame, 256), // Buffered channel
+		events:   make(chan Frame, DefaultClientBufferSize),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -98,7 +106,9 @@ func (c *Client) Send(data []byte) bool {
 
 // SendFrame sends a typed SSE frame. When frame.Event is non-empty, the
 // browser's named-event listener for that event fires; otherwise the
-// default `message` listener fires. Returns false if the channel is full.
+// default `message` listener fires. The client queue is bounded; when it is
+// full, the new frame is dropped and false is returned so a slow client never
+// blocks the hub or other subscribers.
 func (c *Client) SendFrame(frame Frame) bool {
 	select {
 	case c.events <- frame:
@@ -149,7 +159,7 @@ func NewHub() *Hub {
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
-		broadcast:  make(chan *Message, 256),
+		broadcast:  make(chan *Message, DefaultBroadcastBufferSize),
 		done:       make(chan struct{}),
 	}
 }
@@ -240,7 +250,9 @@ func (h *Hub) Unregister(client *Client) {
 // subscribers should receive the message, use BroadcastToPattern with a
 // caller-defined client ID convention.
 //
-// Returns immediately if the hub has been stopped (drops the message).
+// Returns immediately if the hub has been stopped (drops the message). Delivery
+// is best-effort: slow clients can still drop frames when their bounded queue is
+// full.
 func (h *Hub) Broadcast(event string, data []byte) {
 	select {
 	case h.broadcast <- &Message{Pattern: "*", Event: event, Data: data}:
@@ -252,7 +264,9 @@ func (h *Hub) Broadcast(event string, data []byte) {
 // Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123").
 // Use Broadcast for global, event-typed notifications.
 //
-// Returns immediately if the hub has been stopped (drops the message).
+// Returns immediately if the hub has been stopped (drops the message). Delivery
+// is best-effort: slow clients can still drop frames when their bounded queue is
+// full.
 func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	select {
 	case h.broadcast <- &Message{Pattern: pattern, Data: data}:
@@ -263,7 +277,9 @@ func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 // BroadcastFrame sends a typed frame to all clients whose ID matches
 // pattern. Use Broadcast for the common "deliver to everyone" case.
 //
-// Returns immediately if the hub has been stopped (drops the message).
+// Returns immediately if the hub has been stopped (drops the message). Delivery
+// is best-effort: slow clients can still drop frames when their bounded queue is
+// full.
 func (h *Hub) BroadcastFrame(pattern string, frame Frame) {
 	select {
 	case h.broadcast <- &Message{Pattern: pattern, Event: frame.Event, Data: frame.Data}:

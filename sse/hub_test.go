@@ -45,8 +45,8 @@ func TestClient_Send_Success(t *testing.T) {
 func TestClient_Send_ChannelFull(t *testing.T) {
 	client := NewClient("test:abc123")
 
-	// Fill the channel (size is 256)
-	for i := 0; i < 256; i++ {
+	// Fill the channel to its bounded backpressure limit.
+	for i := 0; i < DefaultClientBufferSize; i++ {
 		client.Send([]byte("msg"))
 	}
 

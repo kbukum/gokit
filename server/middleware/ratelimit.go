@@ -5,10 +5,11 @@ import (
 	"math"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/kbukum/gokit/resilience"
 )
 
 // RateLimitConfig configures the rate limiting middleware.
@@ -22,7 +23,6 @@ type RateLimitConfig struct {
 
 	// LimitFunc resolves both the bucket key and RPM for a request.
 	// When set, KeyFunc and RequestsPerMinute are ignored.
-	// This enables tiered rate limits (e.g. per-user-type).
 	LimitFunc func(*gin.Context) (key string, rpm int)
 
 	// CleanupInterval controls how often stale buckets are evicted.
@@ -49,70 +49,42 @@ func (cfg *RateLimitConfig) applyDefaults() {
 	}
 }
 
-// RateLimiterInstance manages per-key token buckets with background cleanup.
+// RateLimiterInstance adapts the shared resilience keyed limiter for HTTP.
 type RateLimiterInstance struct {
 	cfg     RateLimitConfig
-	buckets sync.Map // map[string]*tokenBucket
-	stopCh  chan struct{}
-	nowFunc func() time.Time // for testing
+	limiter *resilience.KeyedRateLimiter
 }
 
-// NewRateLimiter creates a rate limiter and starts the background eviction goroutine.
+// NewRateLimiter creates a rate limiter.
 func NewRateLimiter(cfg RateLimitConfig) *RateLimiterInstance {
 	cfg.applyDefaults()
-	rl := &RateLimiterInstance{
-		cfg:     cfg,
-		stopCh:  make(chan struct{}),
-		nowFunc: time.Now,
+	return &RateLimiterInstance{
+		cfg: cfg,
+		limiter: resilience.NewKeyedRateLimiter(resilience.KeyedRateLimiterConfig{
+			CleanupInterval: cfg.CleanupInterval,
+			BucketTTL:       cfg.BucketTTL,
+		}),
 	}
-	go rl.cleanup()
-	return rl
 }
 
-// Stop terminates the background cleanup goroutine.
+// Stop releases background cleanup resources. Existing buckets remain usable so
+// in-flight shutdown paths do not race with decision making.
 func (rl *RateLimiterInstance) Stop() {
-	close(rl.stopCh)
+	if rl == nil || rl.limiter == nil {
+		return
+	}
+	rl.limiter.Stop()
 }
 
 // Allow checks whether the given key is permitted another request at the given RPM.
 // Returns (allowed, limit, remaining, retryAfterSecs, resetUnix).
 func (rl *RateLimiterInstance) Allow(key string, rpm int) (allowed bool, limit, remaining int, retryAfterSecs float64, resetUnix int64) {
-	now := rl.nowFunc()
-
-	val, _ := rl.buckets.LoadOrStore(key, newTokenBucket(rpm, now))
-	bucket := val.(*tokenBucket)
-
-	allowed, remaining, retryAfter := bucket.allow(now)
-	resetUnix = now.Add(time.Duration(float64(time.Second) * (float64(rpm-remaining) / (float64(rpm) / 60.0)))).Unix()
-
-	return allowed, rpm, remaining, retryAfter, resetUnix
+	decision := rl.limiter.Allow(key, rpm, time.Minute)
+	return decision.Allowed, decision.Limit, decision.Remaining, decision.RetryAfter.Seconds(), decision.ResetAt.Unix()
 }
 
-func (rl *RateLimiterInstance) cleanup() {
-	ticker := time.NewTicker(rl.cfg.CleanupInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-rl.stopCh:
-			return
-		case <-ticker.C:
-			now := rl.nowFunc()
-			rl.buckets.Range(func(key, value any) bool {
-				b := value.(*tokenBucket)
-				b.mu.Lock()
-				stale := now.Sub(b.lastAccess) > rl.cfg.BucketTTL
-				b.mu.Unlock()
-				if stale {
-					rl.buckets.Delete(key)
-				}
-				return true
-			})
-		}
-	}
-}
-
-// RateLimit returns a Gin middleware that applies per-key token-bucket rate limiting
-// with standard rate limit response headers.
+// RateLimit returns a Gin middleware that applies per-key rate limiting with
+// standard rate limit response headers.
 func RateLimit(limiter *RateLimiterInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key, rpm := resolveKeyAndRPM(c, limiter.cfg)
@@ -153,45 +125,4 @@ func resolveKeyAndRPM(c *gin.Context, cfg RateLimitConfig) (key string, rpm int)
 		return cfg.LimitFunc(c)
 	}
 	return cfg.KeyFunc(c), cfg.RequestsPerMinute
-}
-
-// tokenBucket implements a classic token-bucket algorithm.
-type tokenBucket struct {
-	mu         sync.Mutex
-	tokens     float64
-	maxTokens  float64
-	refillRate float64   // tokens per second
-	lastRefill time.Time // last time tokens were refilled
-	lastAccess time.Time // last time the bucket was used (for TTL eviction)
-}
-
-func newTokenBucket(rpm int, now time.Time) *tokenBucket {
-	maxT := float64(rpm)
-	return &tokenBucket{
-		tokens:     maxT,
-		maxTokens:  maxT,
-		refillRate: maxT / 60.0,
-		lastRefill: now,
-		lastAccess: now,
-	}
-}
-
-// allow consumes one token and returns (allowed, remaining tokens, seconds until next token).
-func (b *tokenBucket) allow(now time.Time) (allowed bool, remaining int, retryAfterSecs float64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	elapsed := now.Sub(b.lastRefill).Seconds()
-	b.tokens = math.Min(b.maxTokens, b.tokens+elapsed*b.refillRate)
-	b.lastRefill = now
-	b.lastAccess = now
-
-	if b.tokens >= 1 {
-		b.tokens--
-		remaining := int(b.tokens)
-		return true, remaining, 0
-	}
-
-	retryAfter := (1 - b.tokens) / b.refillRate
-	return false, 0, retryAfter
 }

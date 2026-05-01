@@ -27,7 +27,7 @@ type TLSConfig struct {
 	ServerName string `yaml:"server_name" mapstructure:"server_name"`
 
 	// MinVersion is the minimum TLS version (e.g., tls.VersionTLS12).
-	// Defaults to TLS 1.2 if not set.
+	// Defaults to a TLS 1.2 floor while allowing the runtime to negotiate TLS 1.3.
 	MinVersion uint16 `yaml:"min_version" mapstructure:"min_version"`
 }
 
@@ -44,7 +44,11 @@ func (c *TLSConfig) Build() (*tls.Config, error) {
 		return nil, nil
 	}
 
-	// Check if any TLS option is set
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Check if any TLS option is set.
 	if !c.hasSettings() {
 		return nil, nil
 	}
@@ -80,6 +84,9 @@ func (c *TLSConfig) Validate() error {
 	if (c.CertFile != "") != (c.KeyFile != "") {
 		return fmt.Errorf("security/tls: both cert_file and key_file must be provided together")
 	}
+	if c.MinVersion != 0 && c.MinVersion < tls.VersionTLS12 {
+		return fmt.Errorf("security/tls: min_version must be TLS 1.2 or newer")
+	}
 	return nil
 }
 
@@ -93,7 +100,7 @@ func (c *TLSConfig) IsEnabled() bool {
 
 // hasSettings checks if any TLS field is set.
 func (c *TLSConfig) hasSettings() bool {
-	return c.SkipVerify || c.CAFile != "" || c.CertFile != "" || c.ServerName != ""
+	return c.SkipVerify || c.CAFile != "" || c.CertFile != "" || c.ServerName != "" || c.MinVersion != 0
 }
 
 // loadCA loads the CA certificate into the TLS config.
