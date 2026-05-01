@@ -17,9 +17,11 @@ on:
       - 'LICENSE'
       - '.github/ISSUE_TEMPLATE/**'
       - '.github/PULL_REQUEST_TEMPLATE/**'
+  merge_group:
+    branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -30,9 +32,38 @@ permissions:
 # comment in lock-step. Do not relax to floating tags.
 
 jobs:
+  # ── Stage 0: Path filter (skip expensive jobs when Go code is unchanged) ──
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go-code: ${{ steps.filter.outputs.go-code }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
+        id: filter
+        with:
+          filters: |
+            go-code:
+              - '**/*.go'
+              - '**/go.mod'
+              - '**/go.sum'
+              - 'go.work'
+              - 'gomod.sh'
+              - 'scripts/**'
+              - 'Makefile'
+              - '.golangci.yml'
+              - '.github/workflows/ci.yml'
+
   # ── Stage 1: Preflight (version consistency, tidy, changelog) ─────────────
   preflight:
     name: Preflight
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
@@ -68,6 +99,8 @@ jobs:
   # ── Stage 2: Build + Vet + Test (single job for all modules on Linux) ────
   check:
     name: Check
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -124,6 +157,8 @@ jobs:
   # ── Stage 2-cross: Cross-OS tests for platform-sensitive modules ──────────
   check-cross:
     name: Check (${{ matrix.module }} / ${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -152,14 +187,15 @@ jobs:
         working-directory: ${{ matrix.module }}
         run: go test -race -shuffle=on -count=1 -timeout=20m ./...
 
-  # ── Stage 3: Lint + Vuln (combined to share runner) ─────────────────────────
+  # ── Stage 3: Lint ───────────────────────────────────────────────────────────
   # gosec runs exclusively as part of golangci-lint (see .golangci.yml).
-  lint-and-vuln:
-    name: Lint & Vuln
+  lint:
+    name: Lint
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
 
@@ -188,6 +224,22 @@ jobs:
           done
           exit $failed
 
+  # ── Stage 3s: Security scan ──────────────────────────────────────────────────
+  security:
+    name: Security
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.0.0
+        with:
+          go-version-file: go.mod
+
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
 
@@ -210,6 +262,8 @@ jobs:
   # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
   fuzz:
     name: Fuzz Smoke
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -277,10 +331,12 @@ jobs:
   # ── Stage 3g: Integration suite (gated by //go:build integration) ─────────
   # Slow / dependency-heavy cross-package tests live under the `integration`
   # build tag (F-019 #49). They are NOT part of the default `check` job so
-  # PR feedback stays fast; this dedicated job runs them on push / PR but
+  # PR feedback stays fast; this dedicated job runs on merge queue / push but
   # does not block merge via the aggregate gate (initially advisory).
   integration:
     name: Integration
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -299,15 +355,17 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [preflight, check, check-cross, lint-and-vuln, fuzz, integration]
+    needs: [changes, preflight, check, check-cross, lint, security, fuzz, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
         run: |
-          results=("${{ needs.preflight.result }}" \
+          results=("${{ needs.changes.result }}" \
+                   "${{ needs.preflight.result }}" \
                    "${{ needs.check.result }}" \
                    "${{ needs.check-cross.result }}" \
-                   "${{ needs.lint-and-vuln.result }}" \
+                   "${{ needs.lint.result }}" \
+                   "${{ needs.security.result }}" \
                    "${{ needs.fuzz.result }}" \
                    "${{ needs.integration.result }}")
           for r in "${results[@]}"; do

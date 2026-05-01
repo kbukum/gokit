@@ -15,6 +15,17 @@ make check   # build + vet + test across all modules
 make lint    # run golangci-lint across all modules
 ```
 
+## Quick Development Workflow
+
+For rapid iteration on a single module:
+```bash
+make help                     # see available targets
+make check-fast M=mymodule    # build + vet + lint only (~10s)
+make test M=mymodule          # run tests for one module
+make test-affected            # test only modules changed vs main
+make check                    # full validation before PR
+```
+
 ## Project Structure
 
 gokit is a **multi-module Go toolkit**. It provides reusable building blocks — not applications.
