@@ -339,6 +339,44 @@ func TestEngine_MaxParallel(t *testing.T) {
 	}
 }
 
+func TestEngine_MaxParallelFromConfig(t *testing.T) {
+	var running atomic.Int32
+	var maxRunning atomic.Int32
+
+	makeNode := func(name string) Node {
+		return newFuncNode(name, func(_ context.Context, _ *State) (any, error) {
+			cur := running.Add(1)
+			for {
+				old := maxRunning.Load()
+				if cur <= old || maxRunning.CompareAndSwap(old, cur) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			running.Add(-1)
+			return name, nil
+		})
+	}
+
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": makeNode("a"),
+			"b": makeNode("b"),
+			"c": makeNode("c"),
+			"d": makeNode("d"),
+		},
+	}
+
+	engine := &Engine{Config: &EngineConfig{MaxParallel: 2}}
+	_, err := engine.ExecuteBatch(context.Background(), g, NewState())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if maxRunning.Load() > 2 {
+		t.Fatalf("expected max 2 concurrent from config, got %d", maxRunning.Load())
+	}
+}
+
 func TestEngine_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

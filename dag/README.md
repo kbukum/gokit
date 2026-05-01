@@ -124,6 +124,26 @@ nodes:
 | `continue` | Dependents run regardless |
 | `fail` | Halt the entire pipeline |
 
+## Execution semantics
+
+### FailurePolicy modes
+
+`EngineConfig.FailurePolicy` controls how batch and streaming execution react to node failures. Node-level `on_error` values from YAML map onto the same behavior and override the engine default for that node.
+
+| Mode | Behavior |
+|---|---|
+| `FailFast` | Stops scheduling new dependency levels after the current level completes with any failed node. Already-running siblings finish. |
+| `Continue` | Records the failure and continues scheduling dependents even when an upstream failed. Use only when downstream nodes can tolerate partial state. |
+| `SkipDependents` | Default. Records the failure and skips nodes that depend on failed or unavailable upstreams. |
+
+### Cycle detection guarantee
+
+`BuildLevels` uses Kahn's algorithm before execution. Any cycle returns an error and prevents execution from starting; the engine never runs a partial cyclic graph. Edges that reference unknown nodes are also rejected during level building.
+
+### Parallelism semantics
+
+Nodes are grouped into dependency levels. Nodes within the same level have no unresolved dependencies between them and may run concurrently. `Engine.MaxParallel` / `EngineConfig.MaxParallel` limits concurrency per level; `0` means no explicit limit beyond the number of ready nodes. Dependent levels start only after the previous level has completed or been skipped according to the active `FailurePolicy`.
+
 ### Schedule Config
 
 Schedules use integer seconds in YAML for readability:

@@ -2,6 +2,8 @@ package process_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -181,6 +183,31 @@ func TestRunDurationAccuracy(t *testing.T) {
 	}
 	if result.Duration > 2*time.Second {
 		t.Fatalf("duration too long: %v (expected ~200ms)", result.Duration)
+	}
+}
+
+func TestRunNoShellInjection(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	sentinel := filepath.Join(tmpDir, "shell-injection-sentinel.txt")
+
+	// Use echo which is universally available on all platforms.
+	// The shell-injection payload is passed as a literal argument.
+	result, err := process.Run(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"$(touch " + sentinel + ")"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// echo should output the literal string, not execute the subcommand.
+	expected := "$(touch " + sentinel + ")\n"
+	if got := string(result.Stdout); got != expected {
+		t.Fatalf("stdout = %q, want %q", got, expected)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("expected sentinel to be absent (shell injection occurred), stat err=%v", err)
 	}
 }
 

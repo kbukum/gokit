@@ -60,6 +60,26 @@ func main() {
 
 ## Operators
 
+### Operator reference
+
+| Canonical operator | gokit symbol | Notes |
+|---|---|---|
+| `map` | `pipeline.Map` | Lazy, ordered one-to-one transform. |
+| `filter` | `pipeline.Filter` | Pulls until a value matches the predicate. |
+| `batch` | `pipeline.Batch` | Emits by size or timeout. |
+| `window` | `pipeline.TumblingWindow` | Fixed-duration non-overlapping windows. |
+| `sliding` | `pipeline.SlidingWindow` | Time-based overlapping windows. |
+| `fan_out` | `pipeline.FanOut` | Runs multiple functions for each input and emits `[]O`. |
+| `parallel` | `pipeline.Parallel` | Concurrent map; output order is not preserved. |
+| `merge` | `pipeline.Merge` | Concurrently merges multiple pipelines. |
+| `partition` | `pipeline.Partition` | Streaming bounded tee into matching/rejected branches. |
+| `throttle` | `pipeline.Throttle` | Drops values that arrive before the interval elapses. |
+| `debounce` | `pipeline.Debounce` | Emits the latest value after a quiet period. |
+| `distinct` | `pipeline.Distinct` | Removes duplicate comparable values. |
+| `take` | `pipeline.Take` | Emits at most the first `n` values. |
+| `skip` | `pipeline.Skip` | Ignores the first `n` values. |
+| `buffer` | `pipeline.Buffer` | Bounded channel between stages; size <= 0 becomes 1. |
+
 ### Synchronous Operators
 
 | Operator | Description |

@@ -3,6 +3,7 @@ package worker_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -232,6 +233,62 @@ func TestPoolSubmitAfterStop(t *testing.T) {
 	_, err := pool.Submit(context.Background(), 1)
 	if err == nil {
 		t.Fatal("expected error when submitting to stopped pool")
+	}
+}
+
+func TestPoolSubmitConcurrentWithStopDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		<-ctx.Done()
+		return ctx.Err()
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:        "submit-stop-race",
+		Size:        1,
+		GracePeriod: 10 * time.Millisecond,
+	})
+
+	const submitters = 128
+	start := make(chan struct{})
+	errCh := make(chan error, submitters)
+	var wg sync.WaitGroup
+	wg.Add(submitters)
+	for i := range submitters {
+		go func(task int) {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					errCh <- fmt.Errorf("submit panic: %v", r)
+				}
+			}()
+			<-start
+			handle, err := pool.Submit(context.Background(), task)
+			if err != nil {
+				if !strings.Contains(err.Error(), "is stopped") {
+					errCh <- fmt.Errorf("unexpected submit error: %w", err)
+				}
+				return
+			}
+			if handle == nil {
+				errCh <- fmt.Errorf("submit returned nil handle without error")
+			}
+		}(i)
+	}
+
+	close(start)
+	if err := pool.Stop(context.Background()); err != nil {
+		t.Fatalf("stop failed: %v", err)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
