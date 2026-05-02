@@ -690,6 +690,39 @@ func TestVerifier_Verify_KIDNotInJWKS(t *testing.T) {
 	}
 }
 
+func TestVerifier_KIDMissRefreshIsThrottled(t *testing.T) {
+	t.Parallel()
+	kit := newRSATestKit(t)
+	v, _ := oidc.NewVerifier(context.Background(), kit.issuer(), oidc.VerifierConfig{
+		ClientID:          "cid",
+		JWKSCacheDuration: time.Hour,
+	})
+
+	warmup := kit.signRS256(t, kit.kid, map[string]any{
+		"iss": kit.issuer(), "sub": "u", "aud": "cid",
+		"exp": float64(time.Now().Add(time.Hour).Unix()),
+	})
+	if _, err := v.Verify(context.Background(), warmup); err != nil {
+		t.Fatalf("warmup Verify: %v", err)
+	}
+
+	missing := kit.signRS256(t, "missing-kid", map[string]any{
+		"iss": kit.issuer(), "sub": "u", "aud": "cid",
+		"exp": float64(time.Now().Add(time.Hour).Unix()),
+	})
+	if _, err := v.Verify(context.Background(), missing); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("first missing Verify: got %v want kid-not-found error", err)
+	}
+	hitsAfterFirstMiss := kit.hits.Load()
+
+	if _, err := v.Verify(context.Background(), missing); err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("second missing Verify: got %v want kid-not-found error", err)
+	}
+	if got := kit.hits.Load(); got != hitsAfterFirstMiss {
+		t.Fatalf("expected throttled JWKS refresh after miss: hits %d -> %d", hitsAfterFirstMiss, got)
+	}
+}
+
 func TestVerifier_Verify_MalformedToken(t *testing.T) {
 	t.Parallel()
 	kit := newRSATestKit(t)

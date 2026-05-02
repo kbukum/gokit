@@ -21,15 +21,18 @@ import (
 	"time"
 )
 
+const jwksForceRefreshCooldown = 30 * time.Second
+
 // jwksCache caches JWKS keys with automatic refresh.
 type jwksCache struct {
 	jwksURI  string
 	client   *http.Client
 	cacheTTL time.Duration
 
-	mu        sync.RWMutex
-	keys      map[string]*jwk
-	fetchedAt time.Time
+	mu                  sync.RWMutex
+	keys                map[string]*jwk
+	fetchedAt           time.Time
+	lastForcedRefreshAt time.Time
 }
 
 // jwk represents a JSON Web Key.
@@ -70,7 +73,17 @@ func (c *jwksCache) isStale() bool {
 	return c.keys == nil || time.Since(c.fetchedAt) > c.cacheTTL
 }
 
-func (c *jwksCache) refresh(ctx context.Context, client *http.Client) error {
+func (c *jwksCache) refresh(ctx context.Context, client *http.Client, force bool) error {
+	if force {
+		c.mu.Lock()
+		if c.keys != nil && !c.lastForcedRefreshAt.IsZero() && time.Since(c.lastForcedRefreshAt) < jwksForceRefreshCooldown {
+			c.mu.Unlock()
+			return nil
+		}
+		c.lastForcedRefreshAt = time.Now()
+		c.mu.Unlock()
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.jwksURI, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("create JWKS request: %w", err)
@@ -116,16 +129,30 @@ func (v *Verifier) getKey(ctx context.Context, kid string) (*jwk, error) {
 		if k, ok := v.jwks.getKey(kid); ok {
 			return k, nil
 		}
+		if err := v.jwks.refresh(ctx, v.config.HTTPClient, true); err != nil {
+			return nil, err
+		}
+		k, ok := v.jwks.getKey(kid)
+		if ok {
+			return k, nil
+		}
+		return nil, fmt.Errorf("key %q not found in JWKS", kid)
 	}
 
-	// Refresh JWKS
-	if err := v.jwks.refresh(ctx, v.config.HTTPClient); err != nil {
+	// Refresh stale JWKS
+	if err := v.jwks.refresh(ctx, v.config.HTTPClient, false); err != nil {
 		return nil, err
 	}
 
 	k, ok := v.jwks.getKey(kid)
 	if !ok {
-		return nil, fmt.Errorf("key %q not found in JWKS", kid)
+		if err := v.jwks.refresh(ctx, v.config.HTTPClient, true); err != nil {
+			return nil, err
+		}
+		k, ok = v.jwks.getKey(kid)
+		if !ok {
+			return nil, fmt.Errorf("key %q not found in JWKS", kid)
+		}
 	}
 	return k, nil
 }
