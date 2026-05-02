@@ -77,12 +77,15 @@ func (s *Service[T]) GenerateRefresh(claims T) (string, error) {
 }
 
 // Parse validates and parses a JWT token string into claims of type T.
-// It verifies the signature, expiry, and optionally issuer/audience.
+// It verifies the signature, expiry, issuer, and audience. The service
+// configuration must include Issuer and Audience, and the token must contain
+// matching iss and aud claims.
 func (s *Service[T]) Parse(tokenString string) (T, error) {
 	return s.parseWithKey(tokenString, s.cfg.verifyKey())
 }
 
-// ParseRefresh validates and parses a refresh token string into claims of type T.
+// ParseRefresh validates and parses a refresh token string into claims of type T
+// using the configured signature, expiry, issuer, and audience checks.
 func (s *Service[T]) ParseRefresh(tokenString string) (T, error) {
 	return s.parseWithKey(tokenString, s.cfg.refreshVerifyKey())
 }
