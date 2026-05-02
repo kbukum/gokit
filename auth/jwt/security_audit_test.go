@@ -1,6 +1,8 @@
 package jwt_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"strings"
 	"testing"
 	"time"
@@ -17,41 +19,48 @@ type AuditClaims struct {
 	UserID string `json:"user_id"`
 }
 
-func TestSecurityAudit_AlgorithmConfusion_HS256RejectedByHS512(t *testing.T) {
+func TestSecurityAudit_DifferentHMACSecret_RejectsToken(t *testing.T) {
 	t.Parallel()
 
-	svc256, err := jwt.NewService(&jwt.Config{
-		Secret: "shared-secret-key-for-audit-test",
-		Method: jwt.HS256,
+	svcA, err := jwt.NewService(&jwt.Config{
+		Secret:             "shared-secret-key-for-audit-test-123",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
-		t.Fatalf("failed to create HS256 service: %v", err)
+		t.Fatalf("failed to create service A: %v", err)
 	}
 
 	claims := &AuditClaims{
 		RegisteredClaims: gojwt.RegisteredClaims{
-			Subject:   "user-123",
-			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(time.Hour)),
+			Subject: "user-123",
 		},
 		UserID: "user-123",
 	}
 
-	token, err := svc256.Generate(claims)
+	// GenerateAccess fills in iss, aud, iat, nbf, exp so the token is well-formed.
+	// The only reason svcB should reject it is the HMAC signature mismatch.
+	token, err := svcA.GenerateAccess(claims)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
-	svc512, err := jwt.NewService(&jwt.Config{
-		Secret: "shared-secret-key-for-audit-test",
-		Method: jwt.HS512,
+	svcB, err := jwt.NewService(&jwt.Config{
+		Secret:             "different-shared-secret-key-for-audit",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
-		t.Fatalf("failed to create HS512 service: %v", err)
+		t.Fatalf("failed to create service B: %v", err)
 	}
 
-	_, err = svc512.Parse(token)
+	_, err = svcB.Parse(token)
 	if err == nil {
-		t.Error("HS256 token was accepted by HS512 service — algorithm confusion vulnerability")
+		t.Error("token signed with service A's HMAC secret was accepted by service B — key isolation failure")
 	}
 }
 
@@ -59,8 +68,11 @@ func TestSecurityAudit_NoneAlgorithm_Rejected(t *testing.T) {
 	t.Parallel()
 
 	svc, err := jwt.NewService(&jwt.Config{
-		Secret: "test-secret-for-none-algorithm1",
-		Method: jwt.HS256,
+		Secret:             "test-secret-for-none-algorithm-1234",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -83,8 +95,11 @@ func TestSecurityAudit_EmptySecret_Rejected(t *testing.T) {
 	t.Parallel()
 
 	_, err := jwt.NewService(&jwt.Config{
-		Secret: "",
-		Method: jwt.HS256,
+		Secret:             "",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err == nil {
 		t.Error("JWT service should reject empty HMAC secret")
@@ -96,8 +111,11 @@ func TestSecurityAudit_ParseError_DoesNotLeakSecret(t *testing.T) {
 
 	secret := "super-secret-jwt-key-must-not-leak-in-errors"
 	svc, err := jwt.NewService(&jwt.Config{
-		Secret: secret,
-		Method: jwt.HS256,
+		Secret:             secret,
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -116,8 +134,11 @@ func TestSecurityAudit_MalformedTokens_ReturnError(t *testing.T) {
 	t.Parallel()
 
 	svc, err := jwt.NewService(&jwt.Config{
-		Secret: "test-secret-for-malformed-tokens",
-		Method: jwt.HS256,
+		Secret:             "test-secret-for-malformed-tokens",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -151,8 +172,11 @@ func TestSecurityAudit_ConcurrentParse_NoRace(t *testing.T) {
 	t.Parallel()
 
 	svc, err := jwt.NewService(&jwt.Config{
-		Secret: "concurrent-test-secret-key-here",
-		Method: jwt.HS256,
+		Secret:             "concurrent-test-secret-key-here1",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
 		t.Fatalf("failed to create service: %v", err)
@@ -177,5 +201,57 @@ func TestSecurityAudit_ConcurrentParse_NoRace(t *testing.T) {
 	}
 	for i := 0; i < 50; i++ {
 		<-done
+	}
+}
+
+// TestSecurityAudit_AlgorithmConfusion_HS256TokenRejectedByRS256Verifier verifies
+// that a token signed with HS256 is rejected when presented to an RS256 service.
+// This is the classic algorithm-confusion attack: a public key (treated as an HMAC
+// secret by the attacker) is used to forge HS256 signatures that an RS256 verifier
+// would accept if alg-from-header trust were used. WithValidMethods prevents this.
+func TestSecurityAudit_AlgorithmConfusion_HS256TokenRejectedByRS256Verifier(t *testing.T) {
+	t.Parallel()
+
+	// Build an RS256 service (signer + verifier).
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate RSA key: %v", err)
+	}
+	rs256Svc, err := jwt.NewService(&jwt.Config{
+		Method:     jwt.RS256,
+		PrivateKey: rsaKey,
+		Issuer:     "issuer",
+		Audience:   []string{"aud"},
+	}, func() *AuditClaims { return &AuditClaims{} })
+	if err != nil {
+		t.Fatalf("create RS256 service: %v", err)
+	}
+
+	// Build a separate HS256 service and generate a token with it.
+	hs256Svc, err := jwt.NewService(&jwt.Config{
+		Secret:             "shared-secret-for-confusion-test-123",
+		Method:             jwt.HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
+	}, func() *AuditClaims { return &AuditClaims{} })
+	if err != nil {
+		t.Fatalf("create HS256 service: %v", err)
+	}
+
+	hs256Token, err := hs256Svc.GenerateAccess(&AuditClaims{
+		RegisteredClaims: gojwt.RegisteredClaims{
+			Subject:   "attacker",
+			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("generate HS256 token: %v", err)
+	}
+
+	// The RS256 verifier must reject the HS256-signed token.
+	_, err = rs256Svc.Parse(hs256Token)
+	if err == nil {
+		t.Error("CRITICAL: RS256 verifier accepted an HS256-signed token — algorithm confusion vulnerability")
 	}
 }

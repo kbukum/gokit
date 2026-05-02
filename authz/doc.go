@@ -1,23 +1,11 @@
-// Package authz provides authorization building blocks.
+// Package authz provides authorization building blocks with explicit default-deny
+// semantics.
 //
-// It defines a Checker interface that projects implement according to their
-// needs — whether that's a simple in-memory map, a database-backed system,
-// Casbin, Oso, or any other authorization engine.
+// The canonical model is RBAC + ABAC:
+//   - RBAC roles contribute hierarchical resource/action permissions
+//   - ABAC policies refine access using subject, resource, and request context
+//   - deny policies override role grants
 //
-// The package also provides pattern matching utilities for wildcard-based
-// permission schemes (e.g., "pipeline:*" matches "pipeline:read").
-//
-// This module has zero external dependencies (standard library only),
-// so it can be used in any project without pulling in authentication
-// or cryptography libraries.
-//
-// Usage:
-//
-//	checker := authz.NewMapChecker(map[string][]string{
-//	    "admin":  {"*:*"},
-//	    "editor": {"article:*", "media:read"},
-//	    "viewer": {"*:read"},
-//	})
-//
-//	allowed := checker.HasPermission("admin", "article:delete") // true
+// The legacy Checker and MapChecker helpers remain available for lightweight
+// wildcard-based permission checks, but Engine is the preferred Group 05 shape.
 package authz

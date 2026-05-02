@@ -31,8 +31,11 @@ func FuzzParse(f *testing.F) {
 		gojwt.RegisteredClaims
 	}
 	cfg := &Config{
-		Method: HS256,
-		Secret: "fuzz-secret-32-bytes-or-more-for-test",
+		Method:             HS256,
+		Secret:             "fuzz-secret-32-bytes-or-more-for-test",
+		AllowSymmetricHMAC: true,
+		Issuer:             "fuzz-issuer",
+		Audience:           []string{"fuzz-audience"},
 	}
 	svc, err := NewService(cfg, func() *fuzzClaims { return &fuzzClaims{} })
 	if err != nil {

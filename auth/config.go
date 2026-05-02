@@ -63,7 +63,7 @@ func (c *Config) Validate() error {
 }
 
 // Describe returns a human-readable one-liner for the startup summary.
-// Example: "JWT(HS256) TTL=15m0s password=bcrypt OIDC(issuer.com)"
+// Example: "JWT(EdDSA) TTL=15m0s password=argon2id OIDC(issuer.com)"
 func (c *Config) Describe() string {
 	if !c.Enabled {
 		return "disabled"

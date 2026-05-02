@@ -40,12 +40,13 @@ func (c *testClaimsWithDefaults) SetDefaults(now time.Time, ttl time.Duration, i
 
 func newTestConfig() *Config {
 	return &Config{
-		Secret:          "test-secret-key-that-is-long-enough",
-		Method:          HS256,
-		Issuer:          "test-issuer",
-		Audience:        []string{"test-audience"},
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: 7 * 24 * time.Hour,
+		Secret:             "test-secret-key-that-is-long-enough",
+		Method:             HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "test-issuer",
+		Audience:           []string{"test-audience"},
+		AccessTokenTTL:     15 * time.Minute,
+		RefreshTokenTTL:    7 * 24 * time.Hour,
 	}
 }
 
@@ -61,7 +62,12 @@ func TestNewService(t *testing.T) {
 }
 
 func TestNewService_MissingSecret(t *testing.T) {
-	cfg := &Config{Method: HS256}
+	cfg := &Config{
+		Method:             HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
+	}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for missing secret")
@@ -211,6 +217,27 @@ func TestGenerateRefresh_UsesRefreshTTL(t *testing.T) {
 	expected := before.Add(7 * 24 * time.Hour)
 	if claims.ExpiresAt.Before(expected.Add(-time.Second)) {
 		t.Error("refresh token TTL seems too short")
+	}
+}
+
+func TestGenerateRefresh_UsesRefreshSecret(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.RefreshSecret = "refresh-secret-key-that-is-long-enough"
+	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	token, err := svc.GenerateRefresh(&testClaims{UserID: "user-1"})
+	if err != nil {
+		t.Fatalf("GenerateRefresh: %v", err)
+	}
+
+	if _, err := svc.Parse(token); err == nil {
+		t.Fatal("expected access-token parser to reject refresh token signed with refresh secret")
+	}
+	if _, err := svc.ParseRefresh(token); err != nil {
+		t.Fatalf("ParseRefresh: %v", err)
 	}
 }
 

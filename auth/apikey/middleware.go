@@ -8,15 +8,15 @@ import (
 // Validator is the interface used by the middleware to validate API keys.
 // Implementations typically hash the key, look it up in the store, and check expiry.
 type Validator interface {
-	ValidateKey(ctx context.Context, plainKey string) (*Key, error)
+	ValidateKey(ctx context.Context, plainKey string, requiredScopes ...string) (*Key, error)
 }
 
 // ValidatorFunc adapts a function to the Validator interface.
-type ValidatorFunc func(ctx context.Context, plainKey string) (*Key, error)
+type ValidatorFunc func(ctx context.Context, plainKey string, requiredScopes ...string) (*Key, error)
 
 // ValidateKey implements Validator.
-func (f ValidatorFunc) ValidateKey(ctx context.Context, plainKey string) (*Key, error) {
-	return f(ctx, plainKey)
+func (f ValidatorFunc) ValidateKey(ctx context.Context, plainKey string, requiredScopes ...string) (*Key, error) {
+	return f(ctx, plainKey, requiredScopes...)
 }
 
 // MiddlewareOption configures the API key middleware.

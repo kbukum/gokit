@@ -73,14 +73,40 @@ func (s *Service[T]) GenerateAccess(claims T) (string, error) {
 // It calls prepareClaims with RefreshTokenTTL before signing.
 func (s *Service[T]) GenerateRefresh(claims T) (string, error) {
 	s.prepareClaims(claims, s.cfg.RefreshTokenTTL)
-	return s.Generate(claims)
+	return s.generateWithKey(claims, s.cfg.refreshSignKey())
 }
 
 // Parse validates and parses a JWT token string into claims of type T.
-// It verifies the signature, expiry, and optionally issuer/audience.
+// It verifies the signature, expiry, issuer, and audience. The service
+// configuration must include Issuer and Audience, and the token must contain
+// matching iss and aud claims.
 func (s *Service[T]) Parse(tokenString string) (T, error) {
+	return s.parseWithKey(tokenString, s.cfg.verifyKey())
+}
+
+// ParseRefresh validates and parses a refresh token string into claims of type T
+// using the configured signature, expiry, issuer, and audience checks.
+func (s *Service[T]) ParseRefresh(tokenString string) (T, error) {
+	return s.parseWithKey(tokenString, s.cfg.refreshVerifyKey())
+}
+
+func (s *Service[T]) generateWithKey(claims T, signKey any) (string, error) {
+	token := gojwt.NewWithClaims(s.cfg.signingMethod(), claims)
+	signed, err := token.SignedString(signKey)
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign token: %w", err)
+	}
+	return signed, nil
+}
+
+func (s *Service[T]) parseWithKey(tokenString string, verifyKey any) (T, error) {
 	claims := s.newEmpty()
-	token, err := gojwt.ParseWithClaims(tokenString, claims, s.keyFunc, s.parserOptions()...)
+	token, err := gojwt.ParseWithClaims(
+		tokenString,
+		claims,
+		s.keyFunc(verifyKey),
+		s.parserOptions()...,
+	)
 	if err != nil {
 		var zero T
 		return zero, fmt.Errorf("jwt: parse token: %w", err)
@@ -93,6 +119,10 @@ func (s *Service[T]) Parse(tokenString string) (T, error) {
 	if !ok {
 		var zero T
 		return zero, errors.New("jwt: unexpected claims type")
+	}
+	if err := s.validateRequiredClaims(parsed); err != nil {
+		var zero T
+		return zero, fmt.Errorf("jwt: %w", err)
 	}
 	return parsed, nil
 }
@@ -115,19 +145,24 @@ func (s *Service[T]) ValidatorFunc() func(string) (any, error) {
 }
 
 // keyFunc is the jwt.Keyfunc used during token parsing.
-func (s *Service[T]) keyFunc(token *gojwt.Token) (interface{}, error) {
-	// Verify signing method matches expected
-	expected := s.cfg.signingMethod()
-	if token.Method.Alg() != expected.Alg() {
-		return nil, fmt.Errorf("jwt: unexpected signing method: %s", token.Method.Alg())
+func (s *Service[T]) keyFunc(verifyKey any) gojwt.Keyfunc {
+	return func(token *gojwt.Token) (interface{}, error) {
+		// Verify signing method matches expected
+		expected := s.cfg.signingMethod()
+		if token.Method.Alg() != expected.Alg() {
+			return nil, fmt.Errorf("jwt: unexpected signing method: %s", token.Method.Alg())
+		}
+		return verifyKey, nil
 	}
-	return s.cfg.verifyKey(), nil
 }
 
 // parserOptions returns jwt.ParserOption based on config.
 func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 	opts := []gojwt.ParserOption{
 		gojwt.WithValidMethods([]string{s.cfg.signingMethod().Alg()}),
+		gojwt.WithLeeway(s.cfg.ClockSkew),
+		gojwt.WithExpirationRequired(),
+		gojwt.WithIssuedAt(),
 	}
 	if s.cfg.Issuer != "" {
 		opts = append(opts, gojwt.WithIssuer(s.cfg.Issuer))
@@ -138,6 +173,30 @@ func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 		}
 	}
 	return opts
+}
+
+func (s *Service[T]) validateRequiredClaims(claims T) error {
+	exp, err := claims.GetExpirationTime()
+	if err != nil || exp == nil {
+		return errors.New("missing required exp claim")
+	}
+	iat, err := claims.GetIssuedAt()
+	if err != nil || iat == nil {
+		return errors.New("missing required iat claim")
+	}
+	nbf, err := claims.GetNotBefore()
+	if err != nil || nbf == nil {
+		return errors.New("missing required nbf claim")
+	}
+	iss, err := claims.GetIssuer()
+	if err != nil || iss == "" {
+		return errors.New("missing required iss claim")
+	}
+	aud, err := claims.GetAudience()
+	if err != nil || len(aud) == 0 {
+		return errors.New("missing required aud claim")
+	}
+	return nil
 }
 
 // prepareClaims sets standard RegisteredClaims fields if they're accessible.

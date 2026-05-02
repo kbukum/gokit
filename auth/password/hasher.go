@@ -1,8 +1,8 @@
 // Package password provides password hashing and verification utilities.
 //
 // It defines a Hasher interface with multiple implementations:
-//   - BcryptHasher: industry-standard bcrypt hashing
-//   - Argon2Hasher: modern argon2id hashing (recommended for new projects)
+//   - BcryptHasher: migration fallback for existing hashes
+//   - Argon2Hasher: modern argon2id hashing (secure default)
 //
 // Usage:
 //
@@ -97,7 +97,7 @@ type Argon2Hasher struct {
 // Argon2Option configures the argon2id hasher.
 type Argon2Option func(*Argon2Hasher)
 
-// WithArgon2Time sets the number of iterations (default: 1).
+// WithArgon2Time sets the number of iterations (default: 3).
 func WithArgon2Time(t uint32) Argon2Option {
 	return func(h *Argon2Hasher) { h.time = t }
 }
@@ -113,10 +113,10 @@ func WithArgon2Threads(t uint8) Argon2Option {
 }
 
 // NewArgon2Hasher creates an argon2id-based password hasher.
-// Defaults follow OWASP recommendations: time=1, memory=64MB, threads=4.
+// Defaults follow the Group 05 baseline: time=3, memory=64MB, threads=4.
 func NewArgon2Hasher(opts ...Argon2Option) *Argon2Hasher {
 	h := &Argon2Hasher{
-		time:    1,
+		time:    3,
 		memory:  64 * 1024,
 		threads: 4,
 		keyLen:  32,

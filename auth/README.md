@@ -1,6 +1,6 @@
 # auth
 
-Authentication building blocks with JWT, password hashing, OIDC verification, and shared token validation interfaces.
+Authentication building blocks with locked JWT policy, Argon2id-first password hashing, OIDC verification, and shared token validation interfaces.
 
 For authorization (permission checking, RBAC), see [authz](../authz/).
 
@@ -48,7 +48,14 @@ router.Use(middleware.Auth(validator))
 ```go
 import "github.com/kbukum/gokit/auth/jwt"
 
-cfg := &jwt.Config{Secret: "my-secret", Method: "HS256", AccessTokenTTL: 15 * time.Minute}
+cfg := &jwt.Config{
+    Method: "EdDSA",
+    PrivateKey: ed25519PrivateKey,
+    PublicKey: ed25519PublicKey,
+    Issuer: "https://auth.example.com",
+    Audience: []string{"api"},
+    AccessTokenTTL: 15 * time.Minute,
+}
 cfg.ApplyDefaults()
 
 svc, _ := jwt.NewService[*MyClaims](cfg, func() *MyClaims { return &MyClaims{} })
@@ -61,7 +68,7 @@ parsed, _ := svc.Parse(token)
 ```go
 import "github.com/kbukum/gokit/auth/password"
 
-hasher := password.NewHasher(password.Config{Algorithm: "bcrypt"})
+hasher := password.NewHasher(password.Config{})
 hash, _ := hasher.Hash("my-password")
 err := hasher.Verify("my-password", hash)
 ```
@@ -113,14 +120,14 @@ auth:
 | `GenerateRefresh(claims)` | Refresh token with configured TTL |
 | `Parse(tokenString)` | Parse and validate a token |
 | `ValidatorFunc()` | Returns `func(string) (any, error)` for middleware |
-| `Config` | Secret, PrivateKeyPath, Method, Issuer, Audience, TTLs |
+| `Config` | Locked signing policy (`RS256`/`ES256`/`EdDSA`, `HS256` explicit-only), issuer, audience, TTLs |
 
 ### `auth/password`
 
 | Symbol | Description |
 |---|---|
 | `Hasher` | Interface — `Hash(password)`, `Verify(password, hash)` |
-| `NewHasher(cfg)` | Factory from config (bcrypt or argon2id) |
+| `NewHasher(cfg)` | Factory from config (Argon2id default, bcrypt fallback) |
 | `GenerateToken(length)` | Cryptographically secure random token |
 | `HashSHA256(input)` | SHA256 hex digest for token storage |
 

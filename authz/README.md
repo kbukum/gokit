@@ -1,65 +1,81 @@
 # authz
 
-Authorization building blocks with pluggable permission checking and wildcard pattern matching.
+Authorization building blocks with a canonical **RBAC + ABAC** engine and explicit default-deny semantics.
 
-This module has **zero external dependencies** (standard library only).
-
-## Install
-
-```bash
-go get github.com/kbukum/gokit/authz@latest
-```
+This module has **zero external dependencies**.
 
 ## Quick Start
-
-### Permission Checking
 
 ```go
 import "github.com/kbukum/gokit/authz"
 
+engine, _ := authz.NewEngine(
+    []authz.Role{
+        {
+            Name: "editor",
+            Inherits: []string{"viewer"},
+            Permissions: []authz.Permission{
+                {Resource: "article", Action: "write"},
+            },
+        },
+        {
+            Name: "viewer",
+            Permissions: []authz.Permission{
+                {Resource: "article", Action: "read"},
+            },
+        },
+    },
+    []authz.Policy{
+        {
+            Name: "same-tenant-only",
+            Effect: authz.EffectAllow,
+            Resources: []string{"article"},
+            Actions: []string{"write"},
+            Conditions: []authz.Condition{{
+                Source: authz.AttributeSourceSubject,
+                Key: "tenant_id",
+                Operator: authz.OperatorEquals,
+                CompareSource: authz.AttributeSourceResource,
+                CompareKey: "tenant_id",
+            }},
+        },
+    },
+)
+
+decision := engine.Authorize(authz.Request{
+    Subject: authz.Subject{
+        ID: "user-1",
+        Roles: []string{"editor"},
+        Attributes: authz.Attributes{"tenant_id": "tenant-a"},
+    },
+    Resource: authz.Resource{
+        Type: "article",
+        Attributes: authz.Attributes{"tenant_id": "tenant-a"},
+    },
+    Action: "write",
+})
+```
+
+## Legacy helper
+
+`MapChecker` remains available for simple wildcard permission maps:
+
+```go
 checker := authz.NewMapChecker(map[string][]string{
-    "admin":  {"*:*"},
-    "editor": {"article:*", "media:read"},
-    "viewer": {"*:read"},
+    "admin": {"*:*"},
 })
-
-checker.HasPermission("admin", "article:delete")  // true
-checker.HasPermission("editor", "article:write")   // true
-checker.HasPermission("viewer", "article:write")   // false
+allowed := checker.HasPermission("admin", "article:delete")
 ```
 
-### Custom Checker
-
-```go
-// Function-based checker
-checker := authz.CheckerFunc(func(subject, permission string) bool {
-    return db.HasPermission(subject, permission)
-})
-
-// Or implement the interface
-type MyChecker struct { /* ... */ }
-func (c *MyChecker) HasPermission(subject, permission string) bool { /* ... */ }
-```
-
-### Pattern Matching
-
-```go
-authz.MatchPattern("article:*", "article:read")   // true
-authz.MatchPattern("*:read", "user:read")          // true
-authz.MatchPattern("*:*", "anything:here")         // true
-authz.MatchPattern("article:read", "article:write") // false
-```
-
-## Key Types & Functions
+## Key Types
 
 | Symbol | Description |
 |---|---|
-| `Checker` | Interface — `HasPermission(subject, permission) bool` |
-| `CheckerFunc` | Adapter for ordinary functions |
-| `NewMapChecker(permissions)` | In-memory map-backed checker with wildcard support |
-| `MatchPattern(pattern, required)` | Wildcard matching (`article:*`, `*:read`) |
-| `MatchAny(patterns, required)` | OR logic across multiple patterns |
-
----
-
-[← Back to main gokit README](../README.md)
+| `Engine` | RBAC + ABAC authorization engine |
+| `Role` | Hierarchical RBAC role with wildcard permissions |
+| `Policy` | ABAC rule with allow/deny effect |
+| `Condition` | Subject/resource/context attribute comparison |
+| `Request` | Canonical authorization request |
+| `Decision` | Authorization result with reason |
+| `Checker` | Lightweight boolean permission interface |
+| `MapChecker` | Legacy wildcard map-backed checker |

@@ -2,28 +2,22 @@ package apikey
 
 import "testing"
 
-// FuzzCompareHash ensures the constant-time hash compare never panics or
-// returns a false-positive on arbitrary plaintext / stored-hash pairs.
-func FuzzCompareHash(f *testing.F) {
-	f.Add("", "")
-	f.Add("plain", "")
-	f.Add("", "deadbeef")
-	f.Add("plain", "not-a-hash")
-	f.Add("plain", Hash("plain"))
-	f.Fuzz(func(t *testing.T, plain, stored string) {
-		_ = CompareHash(plain, stored)
+func FuzzSplitKey(f *testing.F) {
+	f.Add("pk.secret")
+	f.Add("malformed")
+	f.Fuzz(func(t *testing.T, plain string) {
+		_, _, _ = SplitKey(plain)
 	})
 }
 
-// FuzzHash ensures Hash is total over arbitrary inputs.
-func FuzzHash(f *testing.F) {
-	f.Add("")
-	f.Add("short")
-	f.Add(string(make([]byte, 4096)))
+func FuzzDigestCompare(f *testing.F) {
+	hasher, err := NewHasher(HashingConfig{Pepper: "pppppppppppppppppppppppppppppppp"})
+	if err != nil {
+		f.Fatalf("NewHasher: %v", err)
+	}
+	f.Add("pk.secret")
 	f.Fuzz(func(t *testing.T, plain string) {
-		h := Hash(plain)
-		if h == "" {
-			t.Fatalf("Hash returned empty for input len=%d", len(plain))
-		}
+		digest := hasher.Digest(plain)
+		_ = hasher.Compare(plain, digest)
 	})
 }

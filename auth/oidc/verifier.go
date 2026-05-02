@@ -47,7 +47,7 @@ type VerifierConfig struct {
 
 func (c *VerifierConfig) applyDefaults() {
 	if len(c.SupportedSigningAlgs) == 0 {
-		c.SupportedSigningAlgs = []string{"RS256"}
+		c.SupportedSigningAlgs = []string{"RS256", "ES256", "EdDSA"}
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = &http.Client{Timeout: 10 * time.Second}
@@ -153,6 +153,20 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, err
 	return token, nil
 }
 
+// VerifyExpected validates a raw ID token string and enforces expected nonce values.
+func (v *Verifier) VerifyExpected(ctx context.Context, rawIDToken string, expected VerifyExpectations) (*IDToken, error) {
+	token, err := v.Verify(ctx, rawIDToken)
+	if err != nil {
+		return nil, err
+	}
+	if expected.Nonce != "" {
+		if err := ValidateNonce(expected.Nonce, token.Nonce); err != nil {
+			return nil, err
+		}
+	}
+	return token, nil
+}
+
 // IDToken represents a parsed and verified OIDC ID token.
 type IDToken struct {
 	// Issuer is the "iss" claim.
@@ -175,6 +189,11 @@ type IDToken struct {
 
 	// Claims holds all token claims for project-specific extraction.
 	Claims map[string]interface{}
+}
+
+// VerifyExpectations captures caller-side replay-protection expectations.
+type VerifyExpectations struct {
+	Nonce string
 }
 
 // ToUserInfo extracts standard OIDC UserInfo claims from the ID token.

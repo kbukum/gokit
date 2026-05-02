@@ -52,8 +52,8 @@ func TestSecurityAudit_Argon2OWASPDefaults(t *testing.T) {
 	if !strings.Contains(hash, "m=65536") {
 		t.Error("argon2 memory should default to 65536 KiB (64MB)")
 	}
-	if !strings.Contains(hash, "t=1") {
-		t.Error("argon2 time should default to 1 iteration")
+	if !strings.Contains(hash, "t=3") {
+		t.Error("argon2 time should default to 3 iterations")
 	}
 	if !strings.Contains(hash, "p=4") {
 		t.Error("argon2 parallelism should default to 4")
