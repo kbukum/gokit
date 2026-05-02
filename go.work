@@ -19,7 +19,6 @@ use (
 	./embedding
 	./explain
 	./grpc
-	./hook
 	./httpclient
 	./llm
 	./llm/providers
