@@ -30,6 +30,7 @@ type jwksCache struct {
 	cacheTTL time.Duration
 
 	mu                  sync.RWMutex
+	forcedRefreshMu     sync.Mutex
 	keys                map[string]*jwk
 	fetchedAt           time.Time
 	lastForcedRefreshAt time.Time
@@ -75,6 +76,9 @@ func (c *jwksCache) isStale() bool {
 
 func (c *jwksCache) refresh(ctx context.Context, client *http.Client, force bool) error {
 	if force {
+		c.forcedRefreshMu.Lock()
+		defer c.forcedRefreshMu.Unlock()
+
 		c.mu.Lock()
 		if c.keys != nil && !c.lastForcedRefreshAt.IsZero() && time.Since(c.lastForcedRefreshAt) < jwksForceRefreshCooldown {
 			c.mu.Unlock()

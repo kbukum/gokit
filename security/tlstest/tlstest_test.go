@@ -2,6 +2,7 @@ package tlstest
 
 import (
 	"crypto/x509"
+	"encoding/pem"
 	"os"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestGenerateTLSCerts(t *testing.T) {
 	if certs.CACert == nil || certs.CAKey == nil || certs.CertPool == nil {
 		t.Fatal("expected parsed cert material")
 	}
-	if certs.ServerTLS.Certificate == nil {
+	if len(certs.ServerTLS.Certificate) == 0 {
 		t.Fatal("expected loaded tls.Certificate")
 	}
 }
@@ -32,7 +33,11 @@ func TestWriteInvalidPEM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
-	if _, err := x509.ParseCertificate(data); err == nil {
-		t.Fatal("expected raw PEM bytes not to parse directly as DER")
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return
+	}
+	if _, err := x509.ParseCertificate(block.Bytes); err == nil {
+		t.Fatal("expected invalid PEM certificate bytes to fail x509 parsing")
 	}
 }
