@@ -97,6 +97,6 @@ func TestStreamContextCancellation(t *testing.T) {
 		t.Fatal("expected cancellation result")
 	}
 	if result.Duration > 2*time.Second {
-		t.Fatalf("Duration = %v, process was not cancelled promptly", result.Duration)
+		t.Fatalf("Duration = %v, process was not canceled promptly", result.Duration)
 	}
 }

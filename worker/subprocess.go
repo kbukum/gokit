@@ -63,6 +63,9 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 		if maxLineBytes <= 0 {
 			maxLineBytes = defaultSubprocessLineBytes
 		}
+		if cmd.MaxOutputBytes <= 0 {
+			cmd.MaxOutputBytes = maxLineBytes
+		}
 
 		lines := map[process.StreamName]*lineEmitter{
 			process.StreamStdout: {stream: string(process.StreamStdout), maxBytes: maxLineBytes, emit: emit},
