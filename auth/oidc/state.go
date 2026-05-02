@@ -3,8 +3,10 @@ package oidc
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"io"
 )
 
@@ -62,4 +64,35 @@ func GenerateNonce() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// ValidateState rejects missing or mismatched OAuth state values.
+func ValidateState(expected, actual string) error {
+	return validateSecretMatch("state", expected, actual)
+}
+
+// ValidateNonce rejects missing or mismatched OIDC nonce values.
+func ValidateNonce(expected, actual string) error {
+	return validateSecretMatch("nonce", expected, actual)
+}
+
+// ValidatePKCE rejects missing PKCE verifier/challenge data for public clients.
+func ValidatePKCE(pkce *PKCE) error {
+	if pkce == nil {
+		return errors.New("oidc: PKCE is required")
+	}
+	if pkce.CodeVerifier == "" || pkce.CodeChallenge == "" || pkce.CodeChallengeMethod != "S256" {
+		return errors.New("oidc: invalid PKCE parameters")
+	}
+	return nil
+}
+
+func validateSecretMatch(label, expected, actual string) error {
+	if expected == "" || actual == "" {
+		return errors.New("oidc: missing " + label)
+	}
+	if subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) != 1 {
+		return errors.New("oidc: " + label + " mismatch")
+	}
+	return nil
 }

@@ -9,21 +9,21 @@ const (
 	// AlgorithmBcrypt is bcrypt hashing (widely supported, recommended for compatibility).
 	AlgorithmBcrypt Algorithm = "bcrypt"
 
-	// AlgorithmArgon2id is argon2id hashing (modern, recommended for new projects).
+	// AlgorithmArgon2id is argon2id hashing (modern, secure default).
 	AlgorithmArgon2id Algorithm = "argon2id"
 )
 
 // Config configures password hashing behavior.
 // Loadable from YAML/env via mapstructure tags.
 type Config struct {
-	// Algorithm selects the hashing algorithm (default: "bcrypt").
+	// Algorithm selects the hashing algorithm (default: "argon2id").
 	Algorithm Algorithm `mapstructure:"algorithm"`
 
 	// BcryptCost is the bcrypt cost parameter (default: 12, range: 4-31).
 	// Only used when Algorithm is "bcrypt".
 	BcryptCost int `mapstructure:"bcrypt_cost"`
 
-	// Argon2Time is the number of iterations for argon2id (default: 1).
+	// Argon2Time is the number of iterations for argon2id (default: 3).
 	Argon2Time uint32 `mapstructure:"argon2_time"`
 
 	// Argon2Memory is the memory usage in KiB for argon2id (default: 65536 = 64MB).
@@ -39,13 +39,13 @@ type Config struct {
 // ApplyDefaults sets sensible defaults for zero-valued fields.
 func (c *Config) ApplyDefaults() {
 	if c.Algorithm == "" {
-		c.Algorithm = AlgorithmBcrypt
+		c.Algorithm = AlgorithmArgon2id
 	}
 	if c.BcryptCost == 0 {
 		c.BcryptCost = 12
 	}
 	if c.Argon2Time == 0 {
-		c.Argon2Time = 1
+		c.Argon2Time = 3
 	}
 	if c.Argon2Memory == 0 {
 		c.Argon2Memory = 64 * 1024
@@ -65,8 +65,19 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("unsupported algorithm: %s (use bcrypt or argon2id)", c.Algorithm)
 	}
-	if c.BcryptCost < 4 || c.BcryptCost > 31 {
-		return fmt.Errorf("bcrypt_cost must be between 4 and 31 (got: %d)", c.BcryptCost)
+	if c.Algorithm == AlgorithmBcrypt && (c.BcryptCost < 12 || c.BcryptCost > 31) {
+		return fmt.Errorf("bcrypt_cost must be between 12 and 31 (got: %d)", c.BcryptCost)
+	}
+	if c.Algorithm == AlgorithmArgon2id {
+		if c.Argon2Time < 3 {
+			return fmt.Errorf("argon2_time must be >= 3 (got: %d)", c.Argon2Time)
+		}
+		if c.Argon2Memory < 64*1024 {
+			return fmt.Errorf("argon2_memory must be >= 65536 KiB (got: %d)", c.Argon2Memory)
+		}
+		if c.Argon2Threads < 1 {
+			return fmt.Errorf("argon2_threads must be >= 1 (got: %d)", c.Argon2Threads)
+		}
 	}
 	if c.MinLength < 1 {
 		return fmt.Errorf("min_length must be >= 1 (got: %d)", c.MinLength)

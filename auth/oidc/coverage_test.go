@@ -33,7 +33,7 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	if want := []string{"openid", "email", "profile"}; !equalStrings(c.Scopes, want) {
 		t.Errorf("Scopes default: got %v want %v", c.Scopes, want)
 	}
-	if want := []string{"RS256"}; !equalStrings(c.SupportedSigningAlgs, want) {
+	if want := []string{"RS256", "ES256", "EdDSA"}; !equalStrings(c.SupportedSigningAlgs, want) {
 		t.Errorf("SupportedSigningAlgs default: got %v want %v", c.SupportedSigningAlgs, want)
 	}
 	if c.JWKSCacheDuration != time.Hour {

@@ -10,24 +10,22 @@ import (
 
 // ── Algorithm Mismatch Attack ───────────────────────────────────────
 
-func TestParse_AlgorithmMismatch_HS256TokenWithHS512Validator(t *testing.T) {
+func TestParse_DifferentHMACVerifierSecretRejected(t *testing.T) {
 	cfg256 := newTestConfig()
-	cfg256.Method = HS256
 	svc256, _ := NewService(cfg256, func() *testClaims { return &testClaims{} })
 
-	cfg512 := newTestConfig()
-	cfg512.Method = HS512
-	svc512, _ := NewService(cfg512, func() *testClaims { return &testClaims{} })
-
 	token, _ := svc256.GenerateAccess(&testClaims{UserID: "user-1"})
-	_, err := svc512.Parse(token)
+	cfgMismatch := newTestConfig()
+	cfgMismatch.Secret = "different-test-secret-key-that-is-long-enough"
+	svcMismatch, _ := NewService(cfgMismatch, func() *testClaims { return &testClaims{} })
+	_, err := svcMismatch.Parse(token)
 	if err == nil {
-		t.Fatal("expected error when algorithm mismatches (HS256 token validated with HS512)")
+		t.Fatal("expected error when token is parsed with a different verifier secret")
 	}
 }
 
 func TestParse_UnsupportedAlgorithm(t *testing.T) {
-	cfg := &Config{Method: "INVALID"}
+	cfg := &Config{Method: "INVALID", Issuer: "issuer", Audience: []string{"aud"}}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for unsupported signing method")
@@ -87,7 +85,13 @@ func TestParse_ExpiredToken(t *testing.T) {
 // ── Config Validation ───────────────────────────────────────────────
 
 func TestConfig_MissingSecret(t *testing.T) {
-	cfg := &Config{Method: HS256, Secret: ""}
+	cfg := &Config{
+		Method:             HS256,
+		Secret:             "",
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
+	}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for missing HMAC secret")
@@ -95,7 +99,7 @@ func TestConfig_MissingSecret(t *testing.T) {
 }
 
 func TestConfig_RSARequiresKey(t *testing.T) {
-	cfg := &Config{Method: RS256}
+	cfg := &Config{Method: RS256, Issuer: "issuer", Audience: []string{"aud"}}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for RS256 without key")
@@ -103,7 +107,7 @@ func TestConfig_RSARequiresKey(t *testing.T) {
 }
 
 func TestConfig_ESRequiresKey(t *testing.T) {
-	cfg := &Config{Method: ES256}
+	cfg := &Config{Method: ES256, Issuer: "issuer", Audience: []string{"aud"}}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for ES256 without key")
@@ -111,13 +115,22 @@ func TestConfig_ESRequiresKey(t *testing.T) {
 }
 
 func TestConfig_ApplyDefaultsTTL(t *testing.T) {
-	cfg := &Config{Secret: "s", Method: HS256}
+	cfg := &Config{
+		Secret:             "12345678901234567890123456789012",
+		Method:             HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
+	}
 	cfg.ApplyDefaults()
 	if cfg.AccessTokenTTL != 15*time.Minute {
 		t.Errorf("default access TTL should be 15m, got %v", cfg.AccessTokenTTL)
 	}
 	if cfg.RefreshTokenTTL != 7*24*time.Hour {
 		t.Errorf("default refresh TTL should be 7d, got %v", cfg.RefreshTokenTTL)
+	}
+	if cfg.ClockSkew != 30*time.Second {
+		t.Errorf("default clock skew should be 30s, got %v", cfg.ClockSkew)
 	}
 }
 

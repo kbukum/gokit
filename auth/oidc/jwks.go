@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -136,6 +137,8 @@ func (k *jwk) publicKey() (crypto.PublicKey, error) {
 		return k.rsaPublicKey()
 	case "EC":
 		return k.ecPublicKey()
+	case "OKP":
+		return k.okpPublicKey()
 	default:
 		return nil, fmt.Errorf("unsupported key type: %s", k.Kty)
 	}
@@ -189,6 +192,20 @@ func (k *jwk) ecPublicKey() (*ecdsa.PublicKey, error) {
 	}, nil
 }
 
+func (k *jwk) okpPublicKey() (ed25519.PublicKey, error) {
+	if k.Crv != "Ed25519" {
+		return nil, fmt.Errorf("unsupported OKP curve: %s", k.Crv)
+	}
+	pubKey, err := base64.RawURLEncoding.DecodeString(k.X)
+	if err != nil {
+		return nil, fmt.Errorf("decode OKP X: %w", err)
+	}
+	if len(pubKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("invalid Ed25519 public key length: %d", len(pubKey))
+	}
+	return ed25519.PublicKey(pubKey), nil
+}
+
 // --- Signature Verification ---
 
 func verifySignature(rawToken, alg string, key crypto.PublicKey) error {
@@ -206,16 +223,10 @@ func verifySignature(rawToken, alg string, key crypto.PublicKey) error {
 	switch alg {
 	case "RS256":
 		return verifyRSA(signingInput, signature, key, crypto.SHA256)
-	case "RS384":
-		return verifyRSA(signingInput, signature, key, crypto.SHA384)
-	case "RS512":
-		return verifyRSA(signingInput, signature, key, crypto.SHA512)
 	case "ES256":
 		return verifyECDSA(signingInput, signature, key, crypto.SHA256)
-	case "ES384":
-		return verifyECDSA(signingInput, signature, key, crypto.SHA384)
-	case "ES512":
-		return verifyECDSA(signingInput, signature, key, crypto.SHA512)
+	case "EdDSA":
+		return verifyEdDSA(signingInput, signature, key)
 	default:
 		return fmt.Errorf("unsupported algorithm: %s", alg)
 	}
@@ -241,6 +252,17 @@ func verifyECDSA(input string, sig []byte, key crypto.PublicKey, hashAlg crypto.
 
 	if !ecdsa.VerifyASN1(ecKey, h.Sum(nil), sig) {
 		return errors.New("ECDSA signature verification failed")
+	}
+	return nil
+}
+
+func verifyEdDSA(input string, sig []byte, key crypto.PublicKey) error {
+	edKey, ok := key.(ed25519.PublicKey)
+	if !ok {
+		return errors.New("expected Ed25519 public key")
+	}
+	if !ed25519.Verify(edKey, []byte(input), sig) {
+		return errors.New("Ed25519 signature verification failed")
 	}
 	return nil
 }

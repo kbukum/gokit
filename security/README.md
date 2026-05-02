@@ -1,16 +1,22 @@
 # gokit/security
 
-TLS configuration, certificate management, and test helpers for secure transport across gokit modules.
+TLS configuration, secure header policies, and test helpers for secure transport across gokit modules.
 
 ## Overview
 
-The `security` package provides a shared `TLSConfig` type used by HTTP, gRPC, Kafka, and other transport modules. It supports CA certificates, client certificates (mTLS), server name verification, and configurable TLS version minimums. Configuration fields are tagged for YAML and mapstructure, so they integrate directly with gokit's config loading.
+The `security` package provides:
+
+- `TLSConfig` for TLS 1.2+ transport policy, CA bundles, and mTLS
+- `HeadersConfig` for secure-by-default HTTP response headers
+
+Configuration fields are tagged for YAML and mapstructure, so they integrate directly with gokit's config loading.
 
 The locked transport policy is explicit:
 
 - minimum supported floor: TLS 1.2
 - default negotiation outcome: TLS 1.3 whenever both peers support it
 - explicit floors below TLS 1.2 are rejected during validation
+- secure headers default-on: HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
 
 The companion `tlstest` sub-package generates self-signed certificates for integration tests — no external tools or fixtures required.
 
@@ -69,6 +75,19 @@ func main() {
 | `ServerName` | `string` | Override server name for certificate verification (SNI) |
 | `MinVersion` | `uint16` | Minimum TLS version; defaults to TLS 1.2 |
 
+### HeadersConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Disabled` | `bool` | Disable response-header injection entirely |
+| `HSTSMaxAge` | `time.Duration` | Strict-Transport-Security max-age |
+| `DisableHSTSIncludeSubdomains` | `bool` | Omit `includeSubDomains` |
+| `DisableHSTSPreload` | `bool` | Omit `preload` |
+| `ContentSecurityPolicy` | `string` | Content-Security-Policy value |
+| `ReferrerPolicy` | `string` | Referrer-Policy value |
+| `PermissionsPolicy` | `string` | Permissions-Policy value |
+| `XFrameOptions` | `string` | `DENY` or `SAMEORIGIN` |
+
 ### Methods
 
 | Method | Description |
@@ -76,6 +95,8 @@ func main() {
 | `Build() (*tls.Config, error)` | Creates a `*tls.Config`; returns `nil` if no settings are configured |
 | `Validate() error` | Checks that CertFile and KeyFile are both set or both empty |
 | `IsEnabled() bool` | Returns `true` if any TLS setting is configured |
+| `HeaderMap() (map[string]string, error)` | Builds the response-header policy |
+| `Apply(http.Header) error` | Applies headers to an HTTP response |
 
 ## Advanced Usage
 

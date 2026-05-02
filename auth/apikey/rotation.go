@@ -2,60 +2,68 @@ package apikey
 
 import (
 	"context"
-	"fmt"
+	"slices"
 	"time"
 )
 
 // DefaultGracePeriod is the duration old keys remain valid after rotation.
 const DefaultGracePeriod = 7 * 24 * time.Hour
 
-// RotationConfig configures key rotation behavior.
+// RotationConfig configures API key rotation.
 type RotationConfig struct {
-	// GracePeriod is how long the old key stays valid after rotation.
-	// Zero uses DefaultGracePeriod.
 	GracePeriod time.Duration
-
-	// Prefix is the key prefix for newly generated keys.
-	Prefix string
+	NewKeyID    string
+	OwnerID     string
+	Name        string
+	Prefix      string
+	Scopes      []string
+	ExpiresAt   *time.Time
 }
 
-// RotationResult holds the outcome of a key rotation.
+// RotationResult contains the newly issued key and the persisted replacement record.
 type RotationResult struct {
-	NewKey      GenerateResult // The newly generated key
-	OldKeyID    string         // ID of the rotated (old) key
-	GraceEndsAt time.Time      // When the old key stops working
+	Issued      GenerateResult
+	Record      *Key
+	GraceEndsAt time.Time
 }
 
-// Rotate generates a replacement key and sets a grace period on the old one.
-// The old key remains valid until GraceEndsAt.
-func Rotate(ctx context.Context, store Store, oldKeyID string, cfg RotationConfig) (*RotationResult, error) {
-	oldKey, err := store.GetByID(ctx, oldKeyID)
+// RotateKey generates a replacement key and moves the old one into a grace window.
+func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationConfig) (*RotationResult, error) {
+	oldKey, err := m.store.GetByID(ctx, oldKeyID)
 	if err != nil {
-		return nil, fmt.Errorf("apikey: old key not found: %w", err)
+		return nil, err
 	}
-
-	if vErr := Validate(oldKey); vErr != nil {
-		return nil, fmt.Errorf("apikey: cannot rotate: %w", vErr)
-	}
-
-	newResult, err := Generate(cfg.Prefix)
-	if err != nil {
-		return nil, fmt.Errorf("apikey: generate replacement: %w", err)
+	if validateErr := Validate(oldKey); validateErr != nil {
+		return nil, validateErr
 	}
 
 	grace := cfg.GracePeriod
 	if grace <= 0 {
 		grace = DefaultGracePeriod
 	}
-	graceEndsAt := time.Now().Add(grace)
 
-	if err := store.SetGracePeriod(ctx, oldKeyID, graceEndsAt, ""); err != nil {
-		return nil, fmt.Errorf("apikey: set grace period: %w", err)
+	scopes := cfg.Scopes
+	if len(scopes) == 0 {
+		scopes = slices.Clone(oldKey.Scopes)
+	}
+	ownerID := cfg.OwnerID
+	if ownerID == "" {
+		ownerID = oldKey.OwnerID
+	}
+
+	issued, record, err := m.IssueKey(ctx, cfg.NewKeyID, ownerID, cfg.Name, cfg.Prefix, scopes, cfg.ExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+
+	graceEndsAt := time.Now().Add(grace)
+	if err := m.store.SetRotation(ctx, oldKeyID, graceEndsAt, record.ID); err != nil {
+		return nil, err
 	}
 
 	return &RotationResult{
-		NewKey:      *newResult,
-		OldKeyID:    oldKeyID,
+		Issued:      *issued,
+		Record:      record,
 		GraceEndsAt: graceEndsAt,
 	}, nil
 }

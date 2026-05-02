@@ -94,6 +94,10 @@ func (s *Service[T]) Parse(tokenString string) (T, error) {
 		var zero T
 		return zero, errors.New("jwt: unexpected claims type")
 	}
+	if err := s.validateRequiredClaims(parsed); err != nil {
+		var zero T
+		return zero, fmt.Errorf("jwt: %w", err)
+	}
 	return parsed, nil
 }
 
@@ -128,6 +132,9 @@ func (s *Service[T]) keyFunc(token *gojwt.Token) (interface{}, error) {
 func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 	opts := []gojwt.ParserOption{
 		gojwt.WithValidMethods([]string{s.cfg.signingMethod().Alg()}),
+		gojwt.WithLeeway(s.cfg.ClockSkew),
+		gojwt.WithExpirationRequired(),
+		gojwt.WithIssuedAt(),
 	}
 	if s.cfg.Issuer != "" {
 		opts = append(opts, gojwt.WithIssuer(s.cfg.Issuer))
@@ -138,6 +145,30 @@ func (s *Service[T]) parserOptions() []gojwt.ParserOption {
 		}
 	}
 	return opts
+}
+
+func (s *Service[T]) validateRequiredClaims(claims T) error {
+	exp, err := claims.GetExpirationTime()
+	if err != nil || exp == nil {
+		return errors.New("missing required exp claim")
+	}
+	iat, err := claims.GetIssuedAt()
+	if err != nil || iat == nil {
+		return errors.New("missing required iat claim")
+	}
+	nbf, err := claims.GetNotBefore()
+	if err != nil || nbf == nil {
+		return errors.New("missing required nbf claim")
+	}
+	iss, err := claims.GetIssuer()
+	if err != nil || iss == "" {
+		return errors.New("missing required iss claim")
+	}
+	aud, err := claims.GetAudience()
+	if err != nil || len(aud) == 0 {
+		return errors.New("missing required aud claim")
+	}
+	return nil
 }
 
 // prepareClaims sets standard RegisteredClaims fields if they're accessible.

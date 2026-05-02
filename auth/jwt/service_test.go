@@ -40,12 +40,13 @@ func (c *testClaimsWithDefaults) SetDefaults(now time.Time, ttl time.Duration, i
 
 func newTestConfig() *Config {
 	return &Config{
-		Secret:          "test-secret-key-that-is-long-enough",
-		Method:          HS256,
-		Issuer:          "test-issuer",
-		Audience:        []string{"test-audience"},
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: 7 * 24 * time.Hour,
+		Secret:             "test-secret-key-that-is-long-enough",
+		Method:             HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "test-issuer",
+		Audience:           []string{"test-audience"},
+		AccessTokenTTL:     15 * time.Minute,
+		RefreshTokenTTL:    7 * 24 * time.Hour,
 	}
 }
 
@@ -61,7 +62,12 @@ func TestNewService(t *testing.T) {
 }
 
 func TestNewService_MissingSecret(t *testing.T) {
-	cfg := &Config{Method: HS256}
+	cfg := &Config{
+		Method:             HS256,
+		AllowSymmetricHMAC: true,
+		Issuer:             "issuer",
+		Audience:           []string{"aud"},
+	}
 	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
 	if err == nil {
 		t.Fatal("expected error for missing secret")

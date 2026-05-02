@@ -252,8 +252,8 @@ func TestArgon2Hasher_WrongPasswordFails(t *testing.T) {
 
 func TestArgon2Hasher_DefaultsFollowOWASP(t *testing.T) {
 	h := NewArgon2Hasher()
-	if h.time != 1 {
-		t.Errorf("OWASP default time should be 1, got %d", h.time)
+	if h.time != 3 {
+		t.Errorf("default time should be 3, got %d", h.time)
 	}
 	if h.memory != 64*1024 {
 		t.Errorf("OWASP default memory should be 64MB (65536 KiB), got %d", h.memory)
@@ -324,8 +324,8 @@ func TestArgon2Hasher_ConstantTimeComparison(t *testing.T) {
 func TestConfig_ApplyDefaults(t *testing.T) {
 	c := &Config{}
 	c.ApplyDefaults()
-	if c.Algorithm != AlgorithmBcrypt {
-		t.Errorf("default algorithm should be bcrypt, got %s", c.Algorithm)
+	if c.Algorithm != AlgorithmArgon2id {
+		t.Errorf("default algorithm should be argon2id, got %s", c.Algorithm)
 	}
 	if c.BcryptCost != 12 {
 		t.Errorf("default bcrypt cost should be 12, got %d", c.BcryptCost)
@@ -333,8 +333,8 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	if c.MinLength != 8 {
 		t.Errorf("default min length should be 8, got %d", c.MinLength)
 	}
-	if c.Argon2Time != 1 {
-		t.Errorf("default argon2 time should be 1, got %d", c.Argon2Time)
+	if c.Argon2Time != 3 {
+		t.Errorf("default argon2 time should be 3, got %d", c.Argon2Time)
 	}
 	if c.Argon2Memory != 64*1024 {
 		t.Errorf("default argon2 memory should be 65536, got %d", c.Argon2Memory)
@@ -351,10 +351,12 @@ func TestConfig_Validate(t *testing.T) {
 		wantErr bool
 	}{
 		{"valid bcrypt", Config{Algorithm: AlgorithmBcrypt, BcryptCost: 12, MinLength: 8}, false},
-		{"valid argon2id", Config{Algorithm: AlgorithmArgon2id, BcryptCost: 12, MinLength: 8}, false},
+		{"valid argon2id", Config{Algorithm: AlgorithmArgon2id, Argon2Time: 3, Argon2Memory: 64 * 1024, Argon2Threads: 4, MinLength: 8}, false},
 		{"unsupported algorithm", Config{Algorithm: "scrypt", BcryptCost: 12, MinLength: 8}, true},
 		{"bcrypt cost too low", Config{Algorithm: AlgorithmBcrypt, BcryptCost: 3, MinLength: 8}, true},
 		{"bcrypt cost too high", Config{Algorithm: AlgorithmBcrypt, BcryptCost: 32, MinLength: 8}, true},
+		{"argon2 time too low", Config{Algorithm: AlgorithmArgon2id, Argon2Time: 2, Argon2Memory: 64 * 1024, Argon2Threads: 4, MinLength: 8}, true},
+		{"argon2 memory too low", Config{Algorithm: AlgorithmArgon2id, Argon2Time: 3, Argon2Memory: 32 * 1024, Argon2Threads: 4, MinLength: 8}, true},
 		{"min length zero", Config{Algorithm: AlgorithmBcrypt, BcryptCost: 12, MinLength: 0}, true},
 	}
 	for _, tt := range tests {

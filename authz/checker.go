@@ -1,7 +1,8 @@
 package authz
 
-// Checker is the core authorization interface.
-// Projects implement this based on their authorization requirements.
+// Checker is the lightweight authorization interface.
+// Group 05 canonical RBAC + ABAC evaluation is implemented by Engine; Checker
+// remains useful for simple boolean permission gates.
 //
 // subject is typically a role name, user ID, or group — whatever makes sense
 // for the project's authorization model.
@@ -20,7 +21,8 @@ func (f CheckerFunc) HasPermission(subject, permission string) bool {
 }
 
 // MapChecker is a simple in-memory Checker backed by a map of subject → permission patterns.
-// Supports wildcard matching via MatchPattern.
+// Supports wildcard matching via MatchPattern and defaults to deny when no
+// subject or permission pattern matches.
 type MapChecker struct {
 	permissions map[string][]string
 }

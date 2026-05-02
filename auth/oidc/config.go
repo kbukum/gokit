@@ -2,6 +2,8 @@ package oidc
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 )
 
@@ -24,10 +26,17 @@ type Config struct {
 	// RedirectURL is the OAuth2 callback URL.
 	RedirectURL string `mapstructure:"redirect_url"`
 
+	// PublicClient enables OAuth 2.1 public-client validation rules.
+	PublicClient bool `mapstructure:"public_client"`
+
+	// RequirePKCE enforces PKCE for authorization-code flows.
+	RequirePKCE bool `mapstructure:"require_pkce"`
+
 	// Scopes are the OAuth2 scopes to request (default: ["openid", "email", "profile"]).
 	Scopes []string `mapstructure:"scopes"`
 
-	// SupportedSigningAlgs restricts allowed ID token signing algorithms (default: ["RS256"]).
+	// SupportedSigningAlgs restricts allowed ID token signing algorithms
+	// (default: ["RS256", "ES256", "EdDSA"]).
 	SupportedSigningAlgs []string `mapstructure:"supported_signing_algs"`
 
 	// JWKSCacheDuration controls how long JWKS keys are cached (default: "1h").
@@ -45,8 +54,11 @@ func (c *Config) ApplyDefaults() {
 	if len(c.Scopes) == 0 {
 		c.Scopes = []string{"openid", "email", "profile"}
 	}
+	if c.PublicClient && !c.RequirePKCE {
+		c.RequirePKCE = true
+	}
 	if len(c.SupportedSigningAlgs) == 0 {
-		c.SupportedSigningAlgs = []string{"RS256"}
+		c.SupportedSigningAlgs = []string{"RS256", "ES256", "EdDSA"}
 	}
 	if c.JWKSCacheDuration == 0 {
 		c.JWKSCacheDuration = time.Hour
@@ -66,6 +78,15 @@ func (c *Config) Validate() error {
 	}
 	if c.ClientID == "" {
 		return fmt.Errorf("client_id is required")
+	}
+	if c.RedirectURL != "" {
+		parsed, err := url.Parse(c.RedirectURL)
+		if err != nil || !parsed.IsAbs() || parsed.Fragment != "" || strings.Contains(c.RedirectURL, "*") {
+			return fmt.Errorf("redirect_url must be an exact absolute URI without fragments or wildcards")
+		}
+	}
+	if c.PublicClient && c.ClientSecret != "" {
+		return fmt.Errorf("public clients must not configure client_secret")
 	}
 	return nil
 }
