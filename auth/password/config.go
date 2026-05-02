@@ -19,7 +19,7 @@ type Config struct {
 	// Algorithm selects the hashing algorithm (default: "argon2id").
 	Algorithm Algorithm `mapstructure:"algorithm"`
 
-	// BcryptCost is the bcrypt cost parameter (default: 12, range: 4-31).
+	// BcryptCost is the bcrypt cost parameter (default: 12, range: 12-31).
 	// Only used when Algorithm is "bcrypt".
 	BcryptCost int `mapstructure:"bcrypt_cost"`
 
