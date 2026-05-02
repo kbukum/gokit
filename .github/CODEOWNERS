@@ -30,7 +30,7 @@
 /auth/ @kbukum
 /authz/ @kbukum
 /database/ @kbukum
-/redis/ @kbukum
+/cache/ @kbukum
 /httpclient/ @kbukum
 /messaging/ @kbukum
 /storage/ @kbukum

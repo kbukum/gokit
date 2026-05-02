@@ -348,10 +348,10 @@ kafka/
 │   ├── component.go      # Kafka test component
 │   └── broker.go         # Mock broker
 
-redis/
+cache/
 ├── testutil/
-│   ├── component.go      # Redis test component
-│   └── mock.go           # Mock Redis
+│   ├── component.go      # Cache test component
+│   └── mock.go           # Mock cache
 ```
 
 Each module testutil provides domain-specific test helpers while conforming to the `testutil.TestComponent` interface.

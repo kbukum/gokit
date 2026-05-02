@@ -168,7 +168,6 @@ acc.OnFlush = func(ctx context.Context, events []Event) error {
 ### Built-in Stores
 
 - `MemoryStore[V]` - Fast, in-memory (not durable)
-- `RedisStore[V]` - Durable, distributed (TODO)
 
 ### Built-in Measurers
 

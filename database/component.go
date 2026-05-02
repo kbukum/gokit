@@ -4,17 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/util"
 )
-
-// DriverFunc is a factory function that creates a GORM dialector.
-// Standard GORM drivers (postgres.Open, mysql.Open, sqlite.Open) all match this signature.
-type DriverFunc func(dsn string) gorm.Dialector
 
 // Component wraps DB and implements component.Component for lifecycle management.
 type Component struct {
@@ -26,7 +19,7 @@ type Component struct {
 }
 
 // NewComponent creates a database component for use with the component registry.
-// By default, SQLite is used. Call WithDriver to specify a different database.
+// Drivers are opt-in: call WithDriver or WithDriverFromRegistry before Start.
 // The Config.Enabled flag can be used to skip initialization at runtime.
 func NewComponent(cfg Config, log *logger.Logger) *Component {
 	return &Component{
@@ -45,10 +38,19 @@ func NewComponent(cfg Config, log *logger.Logger) *Component {
 //
 //	WithDriver(postgres.Open).
 //	WithAutoMigrate(&User{}, &Post{})
-//
-// If not set, SQLite is used as the default driver (useful for tests).
 func (c *Component) WithDriver(fn DriverFunc) *Component {
 	c.driverFunc = fn
+	return c
+}
+
+// WithDriverFromRegistry selects a registered driver by name.
+func (c *Component) WithDriverFromRegistry(reg *DriverRegistry, name string) *Component {
+	if reg == nil {
+		return c
+	}
+	if fn, ok := reg.Get(name); ok {
+		c.driverFunc = fn
+	}
 	return c
 }
 
@@ -79,13 +81,11 @@ func (c *Component) Start(ctx context.Context) error {
 		return nil
 	}
 
-	dialectorFactory := sqlite.Open
-
-	if c.driverFunc != nil {
-		dialectorFactory = c.driverFunc
+	if c.driverFunc == nil {
+		return fmt.Errorf("database start: driver is not configured; register an adapter and call WithDriver")
 	}
 
-	dialector := dialectorFactory(c.cfg.BuildDSN())
+	dialector := c.driverFunc(c.cfg.BuildDSN())
 
 	// Create connection using the dialector with context support
 	db, err := NewWithContext(ctx, dialector, c.cfg, c.log)

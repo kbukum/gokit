@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document covers the Group 05 security baseline for `auth`, `authz`, `security`, and their interaction with `encryption`.
+This document covers the security baseline for `auth`, `authz`, `security`, and their interaction with `encryption`.
 
 ## Threat model
 

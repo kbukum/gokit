@@ -1,59 +1,41 @@
 # storage
 
-Multi-provider file storage with a unified interface — supports local filesystem, S3, and Supabase.
+Object storage abstraction for gokit.
 
-## Install
+Core contains provider-neutral contracts, explicit `FactoryRegistry`, component integration,
+content-addressable wrappers, and lean local storage. Backend SDK dependencies are isolated
+in opt-in adapter modules such as `storage/s3`.
 
-```bash
-go get github.com/kbukum/gokit/storage@latest
-```
-
-## Quick Start
+## Local default
 
 ```go
-import (
-    "github.com/kbukum/gokit/storage"
-    _ "github.com/kbukum/gokit/storage/s3"       // register s3 provider
-    _ "github.com/kbukum/gokit/storage/supabase"  // register supabase provider
-    "github.com/kbukum/gokit/logger"
-)
+reg := storage.NewFactoryRegistry()
+if err := local.Register(reg); err != nil {
+    return err
+}
 
-log := logger.New()
-comp := storage.NewComponent(storage.Config{
+store, err := storage.New(reg, storage.Config{
+    Provider: storage.ProviderLocal,
     Enabled:  true,
-    Provider: "s3",
-    Bucket:   "my-bucket",
-    Region:   "us-east-1",
-}, log)
-
-comp.Start(ctx)
-defer comp.Stop(ctx)
-
-s := comp.Storage()
-s.Upload(ctx, "docs/file.pdf", reader)
-url, _ := s.URL(ctx, "docs/file.pdf")
-files, _ := s.List(ctx, "docs/")
+}, &local.Config{BasePath: "./data"}, log)
 ```
 
-## Key Types & Functions
+## S3 adapter
 
-| Symbol | Description |
-|---|---|
-| `Storage` | Interface — `Upload`, `Download`, `Delete`, `Exists`, `URL`, `List` |
-| `FileInfo` | Path, Size, LastModified, ContentType |
-| `Config` | Provider name, bucket, region, endpoint, credentials, max file size |
-| `Component` | Managed lifecycle — `Start`, `Stop`, `Health` |
-| `NewComponent(cfg, log)` | Create a managed storage component |
-| `New(cfg, log)` | Create a `Storage` directly via registered factory |
+The S3 adapter is a nested Go module, so AWS SDK dependencies do not enter core.
+Importing it has no side effects; register explicitly:
 
-### Providers
+```go
+import storages3 "github.com/kbukum/gokit/storage/s3"
 
-| Package | Factory |
-|---|---|
-| `storage/local` | `local.NewStorage(basePath)` |
-| `storage/s3` | `s3.NewStorage(ctx, s3.Config{Region, Bucket, ...})` |
-| `storage/supabase` | `supabase.NewStorage(supabase.Config{URL, Bucket, ...})` |
+reg := storage.NewFactoryRegistry()
+if err := storages3.Register(reg); err != nil {
+    return err
+}
+```
 
----
+## Supabase adapter
 
-[← Back to main gokit README](../README.md)
+The current Supabase adapter uses HTTP-only configuration and remains in core without a
+heavy SDK dependency. If a future SDK-backed adapter is introduced, it must move to a nested
+adapter module before adding that dependency.

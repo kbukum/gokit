@@ -9,10 +9,13 @@ use (
 	./authz
 	./bench
 	./bench/storage
+	./cache
+	./cache/redis
 	./connect
 	./connect/testutil
 	./dag/testutil
 	./database
+	./database/sqlite
 	./database/testutil
 	./discovery
 	./discovery/testutil
@@ -24,12 +27,12 @@ use (
 	./llm/providers
 	./mcp
 	./messaging
-	./redis
 	./schema
 	./server
 	./server/testutil
 	./stateful
 	./storage
+	./storage/s3
 	./storage/testutil
 	./testutil
 	./tool

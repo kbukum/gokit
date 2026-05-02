@@ -45,7 +45,7 @@ func TestComponent_Lifecycle(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -106,8 +106,8 @@ func TestComponent_WithDriver(t *testing.T) {
 	}
 }
 
-// TestComponent_DefaultSQLiteDriver tests that SQLite is used by default
-func TestComponent_DefaultSQLiteDriver(t *testing.T) {
+// TestComponent_RequiresExplicitDriver tests that no backend driver is selected by default.
+func TestComponent_RequiresExplicitDriver(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
 		DSN:     ":memory:",
@@ -116,27 +116,17 @@ func TestComponent_DefaultSQLiteDriver(t *testing.T) {
 	log := logger.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
-	// Don't call WithDriver - should use default SQLite
-
 	ctx := context.Background()
 
-	// Should start successfully with default driver
-	if err := comp.Start(ctx); err != nil {
-		t.Fatalf("Start() with default SQLite driver failed: %v", err)
+	if err := comp.Start(ctx); err == nil {
+		t.Fatal("Start() without explicit driver should fail")
 	}
+}
 
-	// Component should have db
-	if db := comp.DB(); db == nil {
-		t.Error("DB() should not be nil after Start with default driver")
-	}
-
-	// Database should be functional
-	if err := comp.DB().Ping(); err != nil {
-		t.Errorf("Ping() failed: %v", err)
-	}
-
-	if err := comp.Stop(ctx); err != nil {
-		t.Fatalf("Stop() failed: %v", err)
+func TestDriverRegistryNoSideEffects(t *testing.T) {
+	reg := NewDriverRegistry()
+	if _, ok := reg.Get("sqlite"); ok {
+		t.Fatal("sqlite registered without explicit adapter Register call")
 	}
 }
 
@@ -149,7 +139,7 @@ func TestComponent_WithAutoMigrate_Enabled(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	// Simple test model
 	type User struct {
@@ -186,7 +176,7 @@ func TestComponent_WithAutoMigrate_Disabled(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	type User struct {
 		ID   uint
@@ -220,7 +210,7 @@ func TestComponent_WithAutoMigrate_Chaining(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	type User struct {
 		ID uint
@@ -240,7 +230,7 @@ func TestComponent_Health_BeforeStart(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -265,7 +255,7 @@ func TestComponent_Health_AfterStart(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -380,7 +370,7 @@ func TestComponent_Stop_BeforeStart(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -431,7 +421,7 @@ func TestComponent_StartWithInvalidDSN(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -465,7 +455,7 @@ func TestComponent_DB_ReturnsValueAfterStart(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 	if err := comp.Start(ctx); err != nil {
@@ -490,7 +480,7 @@ func TestComponent_Disabled(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -527,7 +517,7 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 
@@ -549,7 +539,7 @@ func TestComponent_ContextInHealthCheck(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logger.NewDefault("test")
-	comp := NewComponent(cfg, log)
+	comp := NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	ctx := context.Background()
 	if err := comp.Start(ctx); err != nil {

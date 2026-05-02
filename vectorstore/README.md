@@ -1,11 +1,12 @@
 # vectorstore
 
-Vector similarity search store abstraction with in-memory implementation for gokit.
+Vector similarity search store abstraction with explicit backend registration and an in-memory implementation for gokit.
 
 ## Features
 
 - **Store Interface**: Abstraction for vector similarity search
-- **InMemoryStore**: Thread-safe in-memory implementation with linear scan search using cosine similarity
+- **InMemoryStore**: Thread-safe in-memory implementation with linear scan search
+- **Metrics**: Canonical metric names are `cosine`, `dot`, and `l2`
 - **Filtering**: Support for field-based filtering on search queries
 - **Metadata Support**: Store arbitrary JSON-serializable metadata alongside vectors
 
@@ -23,7 +24,17 @@ import (
 )
 
 func main() {
-	store := vectorstore.NewInMemoryStore()
+	reg := vectorstore.NewFactoryRegistry()
+	if err := vectorstore.RegisterMemory(reg); err != nil {
+		panic(err)
+	}
+	store, err := vectorstore.New(reg, vectorstore.Config{
+		Provider: vectorstore.ProviderMemory,
+		Metric:   vectorstore.MetricCosine,
+	}, nil)
+	if err != nil {
+		panic(err)
+	}
 	ctx := context.Background()
 	
 	// Ensure collection exists

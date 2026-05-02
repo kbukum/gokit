@@ -41,8 +41,8 @@ Every package has its own `README.md` with API examples — start there for deta
 |---|---|---|
 | `auth` | `gokit/auth` | JWT, OIDC, password hashing, token validation |
 | `authz` | `gokit/authz` | Permission checking, wildcard pattern matching |
-| `database` | `gokit/database` | PostgreSQL via GORM — pooling, migrations, health |
-| `redis` | `gokit/redis` | go-redis wrapper with TypedStore and JSON ops |
+| `database` | `gokit/database` | Explicit-driver database component — pooling, migrations, health |
+| `cache` | `gokit/cache` | Cache abstraction with memory default and opt-in Redis adapter |
 | `httpclient` | `gokit/httpclient` | HTTP client with resilience patterns |
 | `messaging` | `gokit/messaging` | Producer/consumer with Kafka + in-memory broker |
 | `storage` | `gokit/storage` | Object storage — local + S3-compatible |
@@ -76,7 +76,7 @@ Every package has its own `README.md` with API examples — start there for deta
 | **Auth & Authz** | auth, authz | Authentication and authorization |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
 | **Data & Flow** | pipeline, dag, sse, media, stateful | Pipelines, DAGs, SSE, media, accumulation |
-| **Infrastructure** | database, redis, messaging, storage | Data stores and messaging |
+| **Infrastructure** | database, cache, messaging, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload, worker | Subprocess and container workloads |
