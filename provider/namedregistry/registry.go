@@ -1,15 +1,5 @@
-// Package registry provides a single, generic, thread-safe named registry
-// used by domain packages (auth, discovery, storage, tool, workload, llm).
-//
-// Domain packages historically each carried their own ad-hoc map+mutex
-// implementation with inconsistent semantics — some panicked on duplicate,
-// some returned an error, and one silently overwrote. This package replaces
-// all of them with a single typed implementation whose Register always
-// returns an error on programmer mistakes (empty name, nil zero value,
-// duplicate name).
-//
-// See OSS-review issue F-015 / #45 and F-016 / #46.
-package registry
+// Package namedregistry provides a lightweight, thread-safe registry for named values.
+package namedregistry
 
 import (
 	"fmt"
@@ -18,18 +8,23 @@ import (
 	"sync"
 )
 
-// Registry is a thread-safe map of named values of type T.
+// Registry is a thread-safe map of named values.
 //
-// The zero value is not usable; construct with [New].
+// Use it for explicit provider, adapter, dialect, or callable registration when
+// the registered value is not itself a Provider. Provider implementations should
+// use provider.Registry instead.
 type Registry[T any] struct {
 	domain string
 	mu     sync.RWMutex
 	items  map[string]T
 }
 
-// New creates an empty Registry. The domain string is used in error messages
-// (e.g. "auth", "discovery") so callers can identify which subsystem produced
-// a registration error.
+type item[T any] struct {
+	name  string
+	value T
+}
+
+// New creates an empty Registry. The domain is used in error messages.
 func New[T any](domain string) *Registry[T] {
 	return &Registry[T]{
 		domain: domain,
@@ -37,9 +32,7 @@ func New[T any](domain string) *Registry[T] {
 	}
 }
 
-// Register adds v under name. It returns an error if name is empty, if v is
-// the zero value of an interface/pointer/func type (nil), or if name is
-// already registered.
+// Register adds v under name.
 func (r *Registry[T]) Register(name string, v T) error {
 	if name == "" {
 		return fmt.Errorf("%s: name must not be empty", r.domain)
@@ -56,8 +49,7 @@ func (r *Registry[T]) Register(name string, v T) error {
 	return nil
 }
 
-// Get returns the value registered under name and a bool indicating whether
-// it was present. Callers that prefer an error should use [Registry.Lookup].
+// Get returns the value registered under name and whether it was present.
 func (r *Registry[T]) Get(name string) (T, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -65,8 +57,7 @@ func (r *Registry[T]) Get(name string) (T, bool) {
 	return v, ok
 }
 
-// Lookup is the error-returning counterpart to [Registry.Get]; intended for
-// call sites that propagate the not-found case as an error.
+// Lookup returns the value registered under name or an error when missing.
 func (r *Registry[T]) Lookup(name string) (T, error) {
 	v, ok := r.Get(name)
 	if !ok {
@@ -76,7 +67,7 @@ func (r *Registry[T]) Lookup(name string) (T, error) {
 	return v, nil
 }
 
-// Names returns the registered names in deterministic (sorted) order.
+// Names returns the registered names in deterministic order.
 func (r *Registry[T]) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -96,18 +87,19 @@ func (r *Registry[T]) Len() int {
 }
 
 // Each calls fn for every registered entry. Iteration order is unspecified.
-// fn must not call back into the registry (which would deadlock on the
-// underlying RWMutex).
 func (r *Registry[T]) Each(fn func(name string, v T)) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	items := make([]item[T], 0, len(r.items))
 	for k, v := range r.items {
-		fn(k, v)
+		items = append(items, item[T]{name: k, value: v})
+	}
+	r.mu.RUnlock()
+
+	for _, item := range items {
+		fn(item.name, item.value)
 	}
 }
 
-// isNil reports whether v carries a nil interface/pointer/func/map/chan/slice
-// payload. Plain value types (struct, string, int, bool, ...) are never nil.
 func isNil[T any](v T) bool {
 	rv := reflect.ValueOf(&v).Elem()
 	switch rv.Kind() {

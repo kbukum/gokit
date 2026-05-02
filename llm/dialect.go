@@ -3,7 +3,7 @@ package llm
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 // StreamFormat indicates how a provider delivers streaming responses.
@@ -61,12 +61,12 @@ type Dialect interface {
 // application startup. Pass the populated registry to [NewWithRegistry]
 // to create an [Adapter] that resolves its dialect from the registry.
 type DialectRegistry struct {
-	inner *registry.Registry[Dialect]
+	inner *namedregistry.Registry[Dialect]
 }
 
 // NewDialectRegistry creates an isolated dialect registry.
 func NewDialectRegistry() *DialectRegistry {
-	return &DialectRegistry{inner: registry.New[Dialect]("llm")}
+	return &DialectRegistry{inner: namedregistry.New[Dialect]("llm")}
 }
 
 // Register adds a dialect to the registry. It returns an error on

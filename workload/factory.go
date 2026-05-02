@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/logger"
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 // ManagerFactory creates a Manager implementation from core config and
@@ -20,12 +20,12 @@ type ManagerFactory func(cfg Config, providerCfg any, log *logger.Logger) (Manag
 // [github.com/kbukum/gokit/workload/docker.Register]) to populate it
 // before passing it to [New].
 type FactoryRegistry struct {
-	inner *registry.Registry[ManagerFactory]
+	inner *namedregistry.Registry[ManagerFactory]
 }
 
 // NewFactoryRegistry creates an isolated workload factory registry.
 func NewFactoryRegistry() *FactoryRegistry {
-	return &FactoryRegistry{inner: registry.New[ManagerFactory]("workload")}
+	return &FactoryRegistry{inner: namedregistry.New[ManagerFactory]("workload")}
 }
 
 // Register stores a workload backend factory for the given provider name.

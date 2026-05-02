@@ -153,3 +153,69 @@ func TestSubprocessHandlerWithEnv(t *testing.T) {
 		t.Fatalf("expected partial event with 'hello_from_env', got %+v", events)
 	}
 }
+
+func TestSubprocessHandlerBoundsLongLines(t *testing.T) {
+	t.Parallel()
+
+	h := worker.NewSubprocessHandler(worker.SubprocessConfig{
+		Command: process.Command{
+			Binary:         "sh",
+			MaxOutputBytes: 4,
+		},
+	})
+
+	var lines []string
+	err := h.Handle(context.Background(), worker.SubprocessInput{
+		Args: []string{"-c", "printf '123456789'"},
+	}, func(event worker.Event[worker.SubprocessOutput]) {
+		if event.Type == worker.EventPartial {
+			lines = append(lines, event.Data.Line)
+		}
+	})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	want := []string{"1234", "5678", "9"}
+	if len(lines) != len(want) {
+		t.Fatalf("lines = %v want %v", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("lines[%d] = %q want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestSubprocessHandlerBoundsLongLinesBeforeNewline(t *testing.T) {
+	t.Parallel()
+
+	h := worker.NewSubprocessHandler(worker.SubprocessConfig{
+		Command: process.Command{
+			Binary:         "sh",
+			MaxOutputBytes: 4,
+		},
+	})
+
+	var lines []string
+	err := h.Handle(context.Background(), worker.SubprocessInput{
+		Args: []string{"-c", "printf '123456789\\n'"},
+	}, func(event worker.Event[worker.SubprocessOutput]) {
+		if event.Type == worker.EventPartial {
+			lines = append(lines, event.Data.Line)
+		}
+	})
+	if err != nil {
+		t.Fatalf("Handle: %v", err)
+	}
+
+	want := []string{"1234", "5678", "9"}
+	if len(lines) != len(want) {
+		t.Fatalf("lines = %v want %v", lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("lines[%d] = %q want %q", i, lines[i], want[i])
+		}
+	}
+}

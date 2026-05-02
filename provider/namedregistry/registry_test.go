@@ -1,19 +1,19 @@
-package registry_test
+package namedregistry_test
 
 import (
 	"strings"
 	"sync"
 	"testing"
 
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 type widget struct{ id int }
 
 type factory func() *widget
 
-func TestRegister_Get(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestRegisterGet(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	w := &widget{id: 1}
 	if err := r.Register("a", w); err != nil {
 		t.Fatalf("Register: %v", err)
@@ -27,29 +27,29 @@ func TestRegister_Get(t *testing.T) {
 	}
 }
 
-func TestRegister_EmptyName(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestRegisterEmptyName(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	err := r.Register("", &widget{})
 	if err == nil || !strings.Contains(err.Error(), "name must not be empty") {
 		t.Fatalf("expected empty-name error, got %v", err)
 	}
 }
 
-func TestRegister_NilValue(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestRegisterNilValue(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	err := r.Register("a", nil)
 	if err == nil || !strings.Contains(err.Error(), "must not be nil") {
 		t.Fatalf("expected nil-value error, got %v", err)
 	}
 
-	rf := registry.New[factory]("test")
+	rf := namedregistry.New[factory]("test")
 	if err := rf.Register("a", nil); err == nil {
 		t.Fatalf("nil func should error")
 	}
 }
 
-func TestRegister_Duplicate(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestRegisterDuplicate(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	if err := r.Register("a", &widget{}); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestRegister_Duplicate(t *testing.T) {
 }
 
 func TestLookup(t *testing.T) {
-	r := registry.New[*widget]("test")
+	r := namedregistry.New[*widget]("test")
 	if _, err := r.Lookup("missing"); err == nil {
 		t.Fatalf("Lookup(missing) should error")
 	}
@@ -72,8 +72,8 @@ func TestLookup(t *testing.T) {
 	}
 }
 
-func TestNames_Sorted(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestNamesSorted(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	for _, n := range []string{"c", "a", "b"} {
 		_ = r.Register(n, &widget{})
 	}
@@ -89,8 +89,8 @@ func TestNames_Sorted(t *testing.T) {
 	}
 }
 
-func TestLen_Each(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestLenEach(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	_ = r.Register("a", &widget{id: 1})
 	_ = r.Register("b", &widget{id: 2})
 	if r.Len() != 2 {
@@ -103,8 +103,25 @@ func TestLen_Each(t *testing.T) {
 	}
 }
 
-func TestRegister_Concurrent(t *testing.T) {
-	r := registry.New[*widget]("test")
+func TestEachDoesNotHoldLockDuringCallback(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
+	_ = r.Register("a", &widget{id: 1})
+
+	r.Each(func(name string, _ *widget) {
+		if name == "a" {
+			if err := r.Register("b", &widget{id: 2}); err != nil {
+				t.Fatalf("Register from Each callback: %v", err)
+			}
+		}
+	})
+
+	if r.Len() != 2 {
+		t.Fatalf("Len = %d want 2", r.Len())
+	}
+}
+
+func TestRegisterConcurrent(t *testing.T) {
+	r := namedregistry.New[*widget]("test")
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
@@ -119,8 +136,8 @@ func TestRegister_Concurrent(t *testing.T) {
 	}
 }
 
-func TestRegister_NonNilStructValueOK(t *testing.T) {
-	r := registry.New[widget]("test")
+func TestRegisterNonNilStructValueOK(t *testing.T) {
+	r := namedregistry.New[widget]("test")
 	if err := r.Register("a", widget{id: 1}); err != nil {
 		t.Fatalf("Register struct value: %v", err)
 	}
