@@ -207,6 +207,11 @@ func (m *Manager) ValidateKey(ctx context.Context, plainKey string, requiredScop
 		return nil, err
 	}
 
+	// Reject malformed prefixes before hitting the store (mirrors generation-time validation).
+	if _, err := validatePrefix(keyPrefix); err != nil {
+		return nil, fmt.Errorf("apikey: invalid key")
+	}
+
 	candidates, err := m.store.ListByPrefix(ctx, keyPrefix)
 	if err != nil {
 		return nil, err

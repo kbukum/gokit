@@ -160,13 +160,21 @@ func (c *Config) Validate() error {
 			return errors.New("private_key or private_key_path is required for EdDSA signing")
 		}
 		if c.PrivateKey != nil {
-			if _, ok := c.PrivateKey.(ed25519.PrivateKey); !ok {
+			pk, ok := c.PrivateKey.(ed25519.PrivateKey)
+			if !ok {
 				return errors.New("private_key must be ed25519.PrivateKey for EdDSA")
+			}
+			if len(pk) != ed25519.PrivateKeySize {
+				return fmt.Errorf("private_key has incorrect length for ed25519: got %d, want %d", len(pk), ed25519.PrivateKeySize)
 			}
 		}
 		if c.PublicKey != nil {
-			if _, ok := c.PublicKey.(ed25519.PublicKey); !ok {
+			pk, ok := c.PublicKey.(ed25519.PublicKey)
+			if !ok {
 				return errors.New("public_key must be ed25519.PublicKey for EdDSA")
+			}
+			if len(pk) != ed25519.PublicKeySize {
+				return fmt.Errorf("public_key has incorrect length for ed25519: got %d, want %d", len(pk), ed25519.PublicKeySize)
 			}
 		}
 	default:
