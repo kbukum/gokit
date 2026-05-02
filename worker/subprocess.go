@@ -100,12 +100,17 @@ func (e *lineEmitter) Write(data []byte) {
 	for {
 		idx := bytes.IndexByte(e.pending, '\n')
 		if idx < 0 {
-			if len(e.pending) >= e.maxBytes {
+			if len(e.pending) > e.maxBytes {
 				e.emitLine(e.pending[:e.maxBytes])
 				e.pending = e.pending[e.maxBytes:]
 				continue
 			}
 			return
+		}
+		if idx > e.maxBytes {
+			e.emitLine(e.pending[:e.maxBytes])
+			e.pending = e.pending[e.maxBytes:]
+			continue
 		}
 		line := bytes.TrimSuffix(e.pending[:idx], []byte("\r"))
 		e.pending = e.pending[idx+1:]

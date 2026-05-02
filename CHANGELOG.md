@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **agent**: `MustPromptTemplate` and `PromptBuilder.MustBuild` removed — use `NewPromptTemplate` / `Build`. (#46)
 
 ### Internal
-- All 6 first-party registries are now thin wrappers around `provider.NamedRegistry[T]`. Subsequent explicit adapter/provider registries should use the canonical provider package directly.
+- All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`. Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
 
 ## [0.2.0] - 2026-04-25
 

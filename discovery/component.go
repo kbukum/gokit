@@ -7,7 +7,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logger"
-	"github.com/kbukum/gokit/provider"
+	"github.com/kbukum/gokit/provider/namedregistry"
 	"github.com/kbukum/gokit/resilience"
 )
 
@@ -18,12 +18,12 @@ type ProviderFactory func(cfg Config, log *logger.Logger) (Registry, Discovery, 
 
 // ProviderRegistry stores discovery provider factories by name.
 type ProviderRegistry struct {
-	inner *provider.NamedRegistry[ProviderFactory]
+	inner *namedregistry.Registry[ProviderFactory]
 }
 
 // NewProviderRegistry creates an isolated discovery provider registry.
 func NewProviderRegistry() *ProviderRegistry {
-	return &ProviderRegistry{inner: provider.NewNamedRegistry[ProviderFactory]("discovery")}
+	return &ProviderRegistry{inner: namedregistry.New[ProviderFactory]("discovery")}
 }
 
 // Register stores a discovery provider factory.
