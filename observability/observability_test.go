@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -187,6 +188,74 @@ func TestStartSpan(t *testing.T) {
 	if ctx == nil {
 		t.Fatal("expected non-nil context")
 	}
+}
+
+func TestStartNamedSpan(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer tp.Shutdown(context.Background())
+	otel.SetTracerProvider(tp)
+
+	_, span := StartNamedSpan(
+		context.Background(),
+		"test-tracer",
+		"test-operation",
+		WithSpanKind(SpanKindConsumer),
+		WithSpanAttributes(
+			StringAttribute("messaging.system", "kafka"),
+			IntAttribute("messaging.kafka.partition", 1),
+		),
+	)
+	span.RecordError(fmt.Errorf("boom"))
+	span.SetError("boom")
+	span.End()
+
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(spans))
+	}
+	if spans[0].Name != "test-operation" {
+		t.Errorf("expected span name test-operation, got %q", spans[0].Name)
+	}
+}
+
+func TestTraceContextCarriers(t *testing.T) {
+	headers := MapCarrier{}
+	headers.Set("traceparent", "value")
+	if headers.Get("traceparent") != "value" {
+		t.Fatal("expected map carrier to store values")
+	}
+	if len(headers.Keys()) != 1 {
+		t.Fatalf("expected one map carrier key, got %d", len(headers.Keys()))
+	}
+
+	httpHeaders := HeaderCarrier(http.Header{})
+	httpHeaders.Set("traceparent", "value")
+	if httpHeaders.Get("traceparent") != "value" {
+		t.Fatal("expected header carrier to store values")
+	}
+	if len(httpHeaders.Keys()) != 1 {
+		t.Fatalf("expected one header carrier key, got %d", len(httpHeaders.Keys()))
+	}
+}
+
+func TestInstrumentWrappers(t *testing.T) {
+	counter, err := NewInt64Counter("test-meter", "test_counter_total",
+		WithInstrumentDescription("test counter"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected counter error: %v", err)
+	}
+	counter.Add(context.Background(), 1, MetricStringAttribute("kind", "test"))
+
+	histogram, err := NewFloat64Histogram("test-meter", "test_duration_seconds",
+		WithInstrumentDescription("test histogram"),
+		WithInstrumentUnit("s"),
+	)
+	if err != nil {
+		t.Fatalf("unexpected histogram error: %v", err)
+	}
+	histogram.Record(context.Background(), 1.5, MetricBoolAttribute("ok", true))
 }
 
 func TestSpanFromContext(t *testing.T) {

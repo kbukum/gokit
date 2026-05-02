@@ -4,11 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/observability"
 )
@@ -31,13 +26,13 @@ func (c kafkaHeaderCarrier) Keys() []string {
 // InjectTraceContext writes the current span's trace context into the
 // provided message headers using the globally registered propagator.
 func InjectTraceContext(ctx context.Context, headers map[string]string) {
-	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier(headers))
+	observability.InjectTraceContext(ctx, kafkaHeaderCarrier(headers))
 }
 
 // ExtractTraceContext reads trace context from message headers and
 // returns a new context carrying the extracted span context.
 func ExtractTraceContext(ctx context.Context, headers map[string]string) context.Context {
-	return otel.GetTextMapPropagator().Extract(ctx, kafkaHeaderCarrier(headers))
+	return observability.ExtractTraceContext(ctx, kafkaHeaderCarrier(headers))
 }
 
 // TracingOption configures TracingHandler behavior.
@@ -75,13 +70,13 @@ func TracingHandler(handler messaging.MessageHandler, opts ...TracingOption) mes
 		ctx = ExtractTraceContext(ctx, msg.Headers)
 
 		spanName := cfg.spanNameFunc(msg)
-		ctx, span := observability.Tracer("kafka.consumer").Start(ctx, spanName,
-			trace.WithSpanKind(trace.SpanKindConsumer),
-			trace.WithAttributes(
-				attribute.String("messaging.system", "kafka"),
-				attribute.String("messaging.destination", msg.Topic),
-				attribute.Int("messaging.kafka.partition", msg.Partition),
-				attribute.String("messaging.kafka.message.key", msg.Key),
+		ctx, span := observability.StartNamedSpan(ctx, "kafka.consumer", spanName,
+			observability.WithSpanKind(observability.SpanKindConsumer),
+			observability.WithSpanAttributes(
+				observability.StringAttribute("messaging.system", "kafka"),
+				observability.StringAttribute("messaging.destination", msg.Topic),
+				observability.IntAttribute("messaging.kafka.partition", msg.Partition),
+				observability.StringAttribute("messaging.kafka.message.key", msg.Key),
 			),
 		)
 		defer span.End()
@@ -89,7 +84,7 @@ func TracingHandler(handler messaging.MessageHandler, opts ...TracingOption) mes
 		err := handler(ctx, msg)
 		if err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			span.SetError(err.Error())
 		}
 
 		return err
