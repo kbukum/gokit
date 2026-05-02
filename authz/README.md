@@ -7,6 +7,8 @@ This module has **zero external dependencies**.
 ## Quick Start
 
 ```go
+import "github.com/kbukum/gokit/authz"
+
 engine, _ := authz.NewEngine(
     []authz.Role{
         {

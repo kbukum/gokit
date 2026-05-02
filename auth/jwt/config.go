@@ -124,6 +124,9 @@ func (c *Config) Validate() error {
 		if len(c.Secret) < minHMACSecretLength {
 			return fmt.Errorf("secret must be at least %d bytes for HS256", minHMACSecretLength)
 		}
+		if c.RefreshSecret != "" && len(c.RefreshSecret) < minHMACSecretLength {
+			return fmt.Errorf("refresh_secret must be at least %d bytes for HS256", minHMACSecretLength)
+		}
 	case RS256:
 		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
 			return errors.New("private_key or private_key_path is required for RS256 signing")
@@ -131,6 +134,11 @@ func (c *Config) Validate() error {
 		if c.PrivateKey != nil {
 			if _, ok := c.PrivateKey.(*rsa.PrivateKey); !ok {
 				return errors.New("private_key must be *rsa.PrivateKey for RS256")
+			}
+		}
+		if c.PublicKey != nil {
+			if _, ok := c.PublicKey.(*rsa.PublicKey); !ok {
+				return errors.New("public_key must be *rsa.PublicKey for RS256")
 			}
 		}
 	case ES256:
@@ -142,6 +150,11 @@ func (c *Config) Validate() error {
 				return errors.New("private_key must be *ecdsa.PrivateKey for ES256")
 			}
 		}
+		if c.PublicKey != nil {
+			if _, ok := c.PublicKey.(*ecdsa.PublicKey); !ok {
+				return errors.New("public_key must be *ecdsa.PublicKey for ES256")
+			}
+		}
 	case EdDSA:
 		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
 			return errors.New("private_key or private_key_path is required for EdDSA signing")
@@ -149,6 +162,11 @@ func (c *Config) Validate() error {
 		if c.PrivateKey != nil {
 			if _, ok := c.PrivateKey.(ed25519.PrivateKey); !ok {
 				return errors.New("private_key must be ed25519.PrivateKey for EdDSA")
+			}
+		}
+		if c.PublicKey != nil {
+			if _, ok := c.PublicKey.(ed25519.PublicKey); !ok {
+				return errors.New("public_key must be ed25519.PublicKey for EdDSA")
 			}
 		}
 	default:
@@ -183,6 +201,13 @@ func (c *Config) signKey() any {
 	}
 }
 
+func (c *Config) refreshSignKey() any {
+	if c.Method == HS256 && c.RefreshSecret != "" {
+		return []byte(c.RefreshSecret)
+	}
+	return c.signKey()
+}
+
 // verifyKey returns the key used for verifying tokens.
 func (c *Config) verifyKey() any {
 	switch c.Method {
@@ -215,4 +240,11 @@ func (c *Config) verifyKey() any {
 	default:
 		return []byte(c.Secret)
 	}
+}
+
+func (c *Config) refreshVerifyKey() any {
+	if c.Method == HS256 && c.RefreshSecret != "" {
+		return []byte(c.RefreshSecret)
+	}
+	return c.verifyKey()
 }

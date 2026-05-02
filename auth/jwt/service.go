@@ -73,14 +73,37 @@ func (s *Service[T]) GenerateAccess(claims T) (string, error) {
 // It calls prepareClaims with RefreshTokenTTL before signing.
 func (s *Service[T]) GenerateRefresh(claims T) (string, error) {
 	s.prepareClaims(claims, s.cfg.RefreshTokenTTL)
-	return s.Generate(claims)
+	return s.generateWithKey(claims, s.cfg.refreshSignKey())
 }
 
 // Parse validates and parses a JWT token string into claims of type T.
 // It verifies the signature, expiry, and optionally issuer/audience.
 func (s *Service[T]) Parse(tokenString string) (T, error) {
+	return s.parseWithKey(tokenString, s.cfg.verifyKey())
+}
+
+// ParseRefresh validates and parses a refresh token string into claims of type T.
+func (s *Service[T]) ParseRefresh(tokenString string) (T, error) {
+	return s.parseWithKey(tokenString, s.cfg.refreshVerifyKey())
+}
+
+func (s *Service[T]) generateWithKey(claims T, signKey any) (string, error) {
+	token := gojwt.NewWithClaims(s.cfg.signingMethod(), claims)
+	signed, err := token.SignedString(signKey)
+	if err != nil {
+		return "", fmt.Errorf("jwt: sign token: %w", err)
+	}
+	return signed, nil
+}
+
+func (s *Service[T]) parseWithKey(tokenString string, verifyKey any) (T, error) {
 	claims := s.newEmpty()
-	token, err := gojwt.ParseWithClaims(tokenString, claims, s.keyFunc, s.parserOptions()...)
+	token, err := gojwt.ParseWithClaims(
+		tokenString,
+		claims,
+		s.keyFunc(verifyKey),
+		s.parserOptions()...,
+	)
 	if err != nil {
 		var zero T
 		return zero, fmt.Errorf("jwt: parse token: %w", err)
@@ -119,13 +142,15 @@ func (s *Service[T]) ValidatorFunc() func(string) (any, error) {
 }
 
 // keyFunc is the jwt.Keyfunc used during token parsing.
-func (s *Service[T]) keyFunc(token *gojwt.Token) (interface{}, error) {
-	// Verify signing method matches expected
-	expected := s.cfg.signingMethod()
-	if token.Method.Alg() != expected.Alg() {
-		return nil, fmt.Errorf("jwt: unexpected signing method: %s", token.Method.Alg())
+func (s *Service[T]) keyFunc(verifyKey any) gojwt.Keyfunc {
+	return func(token *gojwt.Token) (interface{}, error) {
+		// Verify signing method matches expected
+		expected := s.cfg.signingMethod()
+		if token.Method.Alg() != expected.Alg() {
+			return nil, fmt.Errorf("jwt: unexpected signing method: %s", token.Method.Alg())
+		}
+		return verifyKey, nil
 	}
-	return s.cfg.verifyKey(), nil
 }
 
 // parserOptions returns jwt.ParserOption based on config.

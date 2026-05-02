@@ -96,11 +96,21 @@ func TestConfig_Validate_AsymmetricKeyTypes(t *testing.T) {
 	}{
 		{
 			name: "RS256",
-			cfg:  &Config{Method: RS256, PrivateKey: rsaKey, Issuer: "issuer", Audience: []string{"aud"}},
+			cfg:  &Config{Method: RS256, PrivateKey: rsaKey, PublicKey: &rsaKey.PublicKey, Issuer: "issuer", Audience: []string{"aud"}},
 		},
 		{
 			name: "ES256",
-			cfg:  &Config{Method: ES256, PrivateKey: ecKey, Issuer: "issuer", Audience: []string{"aud"}},
+			cfg:  &Config{Method: ES256, PrivateKey: ecKey, PublicKey: &ecKey.PublicKey, Issuer: "issuer", Audience: []string{"aud"}},
+		},
+		{
+			name: "EdDSA",
+			cfg: func() *Config {
+				pub, priv, err := ed25519.GenerateKey(rand.Reader)
+				if err != nil {
+					t.Fatalf("GenerateKey: %v", err)
+				}
+				return &Config{Method: EdDSA, PrivateKey: priv, PublicKey: pub, Issuer: "issuer", Audience: []string{"aud"}}
+			}(),
 		},
 	}
 
@@ -108,6 +118,58 @@ func TestConfig_Validate_AsymmetricKeyTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.cfg.Validate(); err != nil {
 				t.Fatalf("Validate: %v", err)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_PublicKeyTypeMismatchRejected(t *testing.T) {
+	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		cfg  *Config
+	}{
+		{
+			name: "RS256",
+			cfg:  &Config{Method: RS256, PrivateKey: rsaKey, PublicKey: &ecKey.PublicKey, Issuer: "issuer", Audience: []string{"aud"}},
+		},
+		{
+			name: "ES256",
+			cfg:  &Config{Method: ES256, PrivateKey: ecKey, PublicKey: &rsaKey.PublicKey, Issuer: "issuer", Audience: []string{"aud"}},
+		},
+		{
+			name: "EdDSA",
+			cfg:  &Config{Method: EdDSA, PrivateKey: priv, PublicKey: &rsaKey.PublicKey, Issuer: "issuer", Audience: []string{"aud"}},
+		},
+		{
+			name: "HS256 short refresh secret",
+			cfg: &Config{
+				Method:             HS256,
+				Secret:             "12345678901234567890123456789012",
+				RefreshSecret:      "short",
+				AllowSymmetricHMAC: true,
+				Issuer:             "issuer",
+				Audience:           []string{"aud"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.cfg.Validate(); err == nil {
+				t.Fatal("expected validation error")
 			}
 		})
 	}

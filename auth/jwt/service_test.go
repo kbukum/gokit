@@ -220,6 +220,27 @@ func TestGenerateRefresh_UsesRefreshTTL(t *testing.T) {
 	}
 }
 
+func TestGenerateRefresh_UsesRefreshSecret(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.RefreshSecret = "refresh-secret-key-that-is-long-enough"
+	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+
+	token, err := svc.GenerateRefresh(&testClaims{UserID: "user-1"})
+	if err != nil {
+		t.Fatalf("GenerateRefresh: %v", err)
+	}
+
+	if _, err := svc.Parse(token); err == nil {
+		t.Fatal("expected access-token parser to reject refresh token signed with refresh secret")
+	}
+	if _, err := svc.ParseRefresh(token); err != nil {
+		t.Fatalf("ParseRefresh: %v", err)
+	}
+}
+
 func TestFindRegisteredClaims_EmbeddedStruct(t *testing.T) {
 	claims := &testClaims{UserID: "test"}
 	rc := findRegisteredClaims(claims)

@@ -91,7 +91,9 @@ func validateSecretMatch(label, expected, actual string) error {
 	if expected == "" || actual == "" {
 		return errors.New("oidc: missing " + label)
 	}
-	if subtle.ConstantTimeCompare([]byte(expected), []byte(actual)) != 1 {
+	expectedDigest := sha256.Sum256([]byte(expected))
+	actualDigest := sha256.Sum256([]byte(actual))
+	if subtle.ConstantTimeCompare(expectedDigest[:], actualDigest[:]) != 1 {
 		return errors.New("oidc: " + label + " mismatch")
 	}
 	return nil

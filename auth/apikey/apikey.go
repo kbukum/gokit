@@ -135,8 +135,19 @@ func (h *Hasher) Digest(plainKey string) string {
 
 // Compare performs a constant-time comparison against a stored digest.
 func (h *Hasher) Compare(plainKey, storedDigest string) bool {
-	computed := h.Digest(plainKey)
-	return subtle.ConstantTimeCompare([]byte(computed), []byte(storedDigest)) == 1
+	mac := hmac.New(sha256.New, h.pepper)
+	_, _ = mac.Write([]byte(plainKey))
+	computedBytes := mac.Sum(nil)
+
+	decoded, err := hex.DecodeString(storedDigest)
+	var stored [sha256.Size]byte
+	valid := err == nil && len(decoded) == sha256.Size
+	if valid {
+		copy(stored[:], decoded)
+	}
+
+	matched := subtle.ConstantTimeCompare(computedBytes, stored[:]) == 1
+	return valid && matched
 }
 
 // SplitKey separates a plaintext key into prefix and secret components.
