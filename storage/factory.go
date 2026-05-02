@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/logger"
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider"
 )
 
 // StorageFactory creates a Storage implementation from core config and
@@ -14,12 +14,12 @@ type StorageFactory func(cfg Config, providerCfg any, log *logger.Logger) (Stora
 
 // FactoryRegistry stores storage factories by provider name.
 type FactoryRegistry struct {
-	inner *registry.Registry[StorageFactory]
+	inner *provider.NamedRegistry[StorageFactory]
 }
 
 // NewFactoryRegistry creates an isolated storage factory registry.
 func NewFactoryRegistry() *FactoryRegistry {
-	return &FactoryRegistry{inner: registry.New[StorageFactory]("storage")}
+	return &FactoryRegistry{inner: provider.NewNamedRegistry[StorageFactory]("storage")}
 }
 
 // Register stores a storage backend factory for the given provider name.

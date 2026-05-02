@@ -6,18 +6,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Registry manages a collection of callable tools.
 // It is concurrent-safe for reads and writes.
 type Registry struct {
-	inner *registry.Registry[Callable]
+	inner *provider.NamedRegistry[Callable]
 }
 
 // NewRegistry creates an empty tool registry.
 func NewRegistry() *Registry {
-	return &Registry{inner: registry.New[Callable]("tool")}
+	return &Registry{inner: provider.NewNamedRegistry[Callable]("tool")}
 }
 
 // Register adds a tool to the registry.

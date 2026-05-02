@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kbukum/gokit/registry"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Registry is a thread-safe registry of named TokenValidator instances.
 // Projects register their validators (JWT, OIDC, API key, etc.) by name
 // and retrieve them in middleware or interceptors.
 //
-// Registry is a thin wrapper around the shared
-// [github.com/kbukum/gokit/registry.Registry] type that adds
+// Registry is a thin wrapper around the shared provider.NamedRegistry type that adds
 // auth-specific "default validator" semantics.
 //
 // Usage:
@@ -25,14 +24,14 @@ import (
 //	// In middleware setup
 //	validator, _ := reg.Default()
 type Registry struct {
-	inner       *registry.Registry[TokenValidator]
+	inner       *provider.NamedRegistry[TokenValidator]
 	mu          sync.RWMutex
 	defaultName string
 }
 
 // NewRegistry creates a new empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{inner: registry.New[TokenValidator]("auth")}
+	return &Registry{inner: provider.NewNamedRegistry[TokenValidator]("auth")}
 }
 
 // Register adds a named TokenValidator. It returns an error if name is

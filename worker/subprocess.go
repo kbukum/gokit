@@ -1,12 +1,10 @@
 package worker
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
-	"sync"
+	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/process"
@@ -43,7 +41,8 @@ type SubprocessOutput struct {
 
 // NewSubprocessHandler creates a Handler that runs a subprocess and
 // emits each stdout/stderr line as an EventPartial.
-// Uses process group isolation and SIGTERM→SIGKILL graceful shutdown.
+// Uses the process package for argv-only execution, process group isolation,
+// and SIGTERM→SIGKILL graceful shutdown.
 func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, SubprocessOutput] {
 	cfg = cfg.withDefaults()
 
@@ -54,59 +53,21 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 			return fmt.Errorf("worker: subprocess binary is required")
 		}
 
-		cmd := exec.CommandContext(ctx, cfg.Command.Binary, task.Args...) //nolint:gosec // dynamic args are the purpose
-		cmd.Dir = cfg.Command.Dir
+		cmd := cfg.Command
+		cmd.Args = task.Args
+		cmd.Stdin = task.Stdin
 
-		if len(cfg.Command.Env) > 0 {
-			cmd.Env = append(cmd.Environ(), cfg.Command.Env...)
+		lines := map[process.StreamName]*lineEmitter{
+			process.StreamStdout: {stream: string(process.StreamStdout), emit: emit},
+			process.StreamStderr: {stream: string(process.StreamStderr), emit: emit},
 		}
-
-		if task.Stdin != nil {
-			cmd.Stdin = task.Stdin
+		_, err := process.Stream(ctx, cmd, func(chunk process.StreamChunk) {
+			lines[chunk.Stream].Write(chunk.Data)
+		})
+		for _, line := range lines {
+			line.Flush()
 		}
-
-		// Process group isolation for tree kill (mirrors process.Run setup).
-		// Platform-specific: Unix uses Setpgid; Windows is a no-op.
-		process.ConfigureSysProcAttr(cmd)
-
-		// Graceful shutdown: SIGTERM first (Unix) or os.Process.Kill (Windows),
-		// then SIGKILL after grace period via WaitDelay.
-		cmd.Cancel = func() error {
-			return process.TerminateGracefully(cmd)
-		}
-		cmd.WaitDelay = cfg.Command.GracePeriod
-
-		stdout, err := cmd.StdoutPipe()
 		if err != nil {
-			return fmt.Errorf("worker: stdout pipe: %w", err)
-		}
-
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return fmt.Errorf("worker: stderr pipe: %w", err)
-		}
-
-		if err := cmd.Start(); err != nil {
-			return fmt.Errorf("worker: start %s: %w", cfg.Command.Binary, err)
-		}
-
-		// Stream stdout and stderr concurrently
-		var wg sync.WaitGroup
-		wg.Add(2)
-
-		go func() {
-			defer wg.Done()
-			scanLines(stdout, "stdout", emit)
-		}()
-
-		go func() {
-			defer wg.Done()
-			scanLines(stderr, "stderr", emit)
-		}()
-
-		wg.Wait()
-
-		if err := cmd.Wait(); err != nil {
 			if ctx.Err() != nil {
 				return fmt.Errorf("worker: %s killed by context: %w", cfg.Command.Binary, ctx.Err())
 			}
@@ -117,12 +78,35 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 	})
 }
 
-func scanLines(r io.Reader, stream string, emit func(Event[SubprocessOutput])) {
-	scanner := bufio.NewScanner(r)
-	for scanner.Scan() {
-		emit(PartialEvent(SubprocessOutput{
-			Stream: stream,
-			Line:   scanner.Text(),
+type lineEmitter struct {
+	stream  string
+	pending string
+	emit    func(Event[SubprocessOutput])
+}
+
+func (e *lineEmitter) Write(data []byte) {
+	e.pending += string(data)
+	for {
+		idx := strings.IndexByte(e.pending, '\n')
+		if idx < 0 {
+			return
+		}
+		line := strings.TrimSuffix(e.pending[:idx], "\r")
+		e.pending = e.pending[idx+1:]
+		e.emit(PartialEvent(SubprocessOutput{
+			Stream: e.stream,
+			Line:   line,
 		}))
 	}
+}
+
+func (e *lineEmitter) Flush() {
+	if e.pending == "" {
+		return
+	}
+	e.emit(PartialEvent(SubprocessOutput{
+		Stream: e.stream,
+		Line:   strings.TrimSuffix(e.pending, "\r"),
+	}))
+	e.pending = ""
 }
