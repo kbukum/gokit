@@ -244,6 +244,9 @@ func validatePrefix(prefix string) (string, error) {
 	if prefix == "" {
 		return "", fmt.Errorf("apikey: prefix must be non-empty")
 	}
+	if len(prefix) < 3 {
+		return "", fmt.Errorf("apikey: prefix must be at least 3 characters")
+	}
 	for _, r := range prefix {
 		switch {
 		case r >= 'a' && r <= 'z':

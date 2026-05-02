@@ -2,6 +2,7 @@ package apikey
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 )
@@ -29,6 +30,10 @@ type RotationResult struct {
 
 // RotateKey generates a replacement key and moves the old one into a grace window.
 func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationConfig) (*RotationResult, error) {
+	if cfg.NewKeyID == "" {
+		return nil, fmt.Errorf("apikey: NewKeyID is required for rotation")
+	}
+
 	oldKey, err := m.store.GetByID(ctx, oldKeyID)
 	if err != nil {
 		return nil, err
@@ -50,8 +55,16 @@ func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationCo
 	if ownerID == "" {
 		ownerID = oldKey.OwnerID
 	}
+	name := cfg.Name
+	if name == "" {
+		name = oldKey.Name
+	}
+	prefix := cfg.Prefix
+	if prefix == "" {
+		prefix = oldKey.KeyPrefix
+	}
 
-	issued, record, err := m.IssueKey(ctx, cfg.NewKeyID, ownerID, cfg.Name, cfg.Prefix, scopes, cfg.ExpiresAt)
+	issued, record, err := m.IssueKey(ctx, cfg.NewKeyID, ownerID, name, prefix, scopes, cfg.ExpiresAt)
 	if err != nil {
 		return nil, err
 	}

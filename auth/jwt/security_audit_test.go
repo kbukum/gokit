@@ -19,10 +19,10 @@ type AuditClaims struct {
 	UserID string `json:"user_id"`
 }
 
-func TestSecurityAudit_AlgorithmConfusion_HS256RejectedByHS512(t *testing.T) {
+func TestSecurityAudit_DifferentHMACSecret_RejectsToken(t *testing.T) {
 	t.Parallel()
 
-	svc256, err := jwt.NewService(&jwt.Config{
+	svcA, err := jwt.NewService(&jwt.Config{
 		Secret:             "shared-secret-key-for-audit-test-123",
 		Method:             jwt.HS256,
 		AllowSymmetricHMAC: true,
@@ -30,23 +30,24 @@ func TestSecurityAudit_AlgorithmConfusion_HS256RejectedByHS512(t *testing.T) {
 		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
-		t.Fatalf("failed to create HS256 service: %v", err)
+		t.Fatalf("failed to create service A: %v", err)
 	}
 
 	claims := &AuditClaims{
 		RegisteredClaims: gojwt.RegisteredClaims{
-			Subject:   "user-123",
-			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(time.Hour)),
+			Subject: "user-123",
 		},
 		UserID: "user-123",
 	}
 
-	token, err := svc256.Generate(claims)
+	// GenerateAccess fills in iss, aud, iat, nbf, exp so the token is well-formed.
+	// The only reason svcB should reject it is the HMAC signature mismatch.
+	token, err := svcA.GenerateAccess(claims)
 	if err != nil {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
-	svc512, err := jwt.NewService(&jwt.Config{
+	svcB, err := jwt.NewService(&jwt.Config{
 		Secret:             "different-shared-secret-key-for-audit",
 		Method:             jwt.HS256,
 		AllowSymmetricHMAC: true,
@@ -54,12 +55,12 @@ func TestSecurityAudit_AlgorithmConfusion_HS256RejectedByHS512(t *testing.T) {
 		Audience:           []string{"aud"},
 	}, func() *AuditClaims { return &AuditClaims{} })
 	if err != nil {
-		t.Fatalf("failed to create second HS256 service: %v", err)
+		t.Fatalf("failed to create service B: %v", err)
 	}
 
-	_, err = svc512.Parse(token)
+	_, err = svcB.Parse(token)
 	if err == nil {
-		t.Error("HS256 token was accepted by HS512 service — algorithm confusion vulnerability")
+		t.Error("token signed with service A's HMAC secret was accepted by service B — key isolation failure")
 	}
 }
 

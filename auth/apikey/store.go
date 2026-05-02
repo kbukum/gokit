@@ -11,7 +11,10 @@ type Store interface {
 	// Create persists a new API key.
 	Create(ctx context.Context, key *Key) error
 
-	// ListByPrefix retrieves candidate keys that share the display prefix.
+	// ListByPrefix retrieves candidate keys that share the human-readable prefix
+	// (the segment before the first "." in the plaintext key, e.g. "myapp").
+	// The result set is used for constant-time digest comparison; callers should
+	// enforce a minimum prefix length to keep the candidate set small.
 	ListByPrefix(ctx context.Context, keyPrefix string) ([]*Key, error)
 
 	// GetByID retrieves a key by its unique identifier.

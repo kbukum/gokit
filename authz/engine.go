@@ -1,6 +1,9 @@
 package authz
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // Attributes holds request, subject, or resource attributes for ABAC evaluation.
 type Attributes map[string]string
@@ -103,6 +106,7 @@ type Engine struct {
 }
 
 // NewEngine constructs an authorization engine.
+// Inputs are deep-copied so callers cannot mutate engine state after construction.
 func NewEngine(roles []Role, policies []Policy) (*Engine, error) {
 	roleIndex := make(map[string]Role, len(roles))
 	for _, role := range roles {
@@ -112,11 +116,25 @@ func NewEngine(roles []Role, policies []Policy) (*Engine, error) {
 		if _, exists := roleIndex[role.Name]; exists {
 			return nil, fmt.Errorf("authz: duplicate role %q", role.Name)
 		}
-		roleIndex[role.Name] = role
+		roleIndex[role.Name] = Role{
+			Name:        role.Name,
+			Inherits:    slices.Clone(role.Inherits),
+			Permissions: slices.Clone(role.Permissions),
+		}
+	}
+	copiedPolicies := make([]Policy, len(policies))
+	for i, p := range policies {
+		copiedPolicies[i] = Policy{
+			Name:       p.Name,
+			Effect:     p.Effect,
+			Actions:    slices.Clone(p.Actions),
+			Resources:  slices.Clone(p.Resources),
+			Conditions: slices.Clone(p.Conditions),
+		}
 	}
 	return &Engine{
 		roles:    roleIndex,
-		policies: append([]Policy(nil), policies...),
+		policies: copiedPolicies,
 	}, nil
 }
 

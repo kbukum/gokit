@@ -152,7 +152,7 @@ func TestManagerIssueValidateAndRotate(t *testing.T) {
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
 
-	issued, record, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pk", []string{"read"}, nil)
+	issued, record, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pkg", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestManagerIssueValidateAndRotate(t *testing.T) {
 		NewKeyID: "key-2",
 		OwnerID:  "user-1",
 		Name:     "secondary",
-		Prefix:   "pk",
+		Prefix:   "pkg",
 	})
 	if err != nil {
 		t.Fatalf("RotateKey: %v", err)
@@ -194,7 +194,7 @@ func TestManagerValidateRejectsExpiredKey(t *testing.T) {
 
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "expired", "pk", nil, nil)
+	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "expired", "pkg", nil, nil)
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestMiddleware(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager(newMemStore(), testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pk", nil, nil)
+	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pkg", nil, nil)
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}

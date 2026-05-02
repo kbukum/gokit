@@ -111,6 +111,9 @@ func (c *HeadersConfig) HeaderMap() (map[string]string, error) {
 
 // Apply writes the configured security headers onto the provided response header map.
 func (c *HeadersConfig) Apply(header http.Header) error {
+	if header == nil {
+		return fmt.Errorf("security: header map must not be nil")
+	}
 	headers, err := c.HeaderMap()
 	if err != nil {
 		return err
