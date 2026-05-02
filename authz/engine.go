@@ -124,12 +124,23 @@ func NewEngine(roles []Role, policies []Policy) (*Engine, error) {
 	}
 	copiedPolicies := make([]Policy, len(policies))
 	for i, p := range policies {
+		conditions := make([]Condition, len(p.Conditions))
+		for j, condition := range p.Conditions {
+			conditions[j] = Condition{
+				Source:        condition.Source,
+				Key:           condition.Key,
+				Operator:      condition.Operator,
+				Values:        slices.Clone(condition.Values),
+				CompareSource: condition.CompareSource,
+				CompareKey:    condition.CompareKey,
+			}
+		}
 		copiedPolicies[i] = Policy{
 			Name:       p.Name,
 			Effect:     p.Effect,
 			Actions:    slices.Clone(p.Actions),
 			Resources:  slices.Clone(p.Resources),
-			Conditions: slices.Clone(p.Conditions),
+			Conditions: conditions,
 		}
 	}
 	return &Engine{

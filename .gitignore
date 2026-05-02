@@ -5,15 +5,23 @@
 *.so
 *.dylib
 
-# Test binary
+# Test binaries
 *.test
 
-# Output of go coverage
+# Coverage
 *.out
+*.out.tmp
 coverage.html
+coverage.xml
 
-# Go workspace lock file (committed go.work is supported; lock is generated)
+# Go workspace (go.work is committed; lock is generated)
 go.work.sum
+
+# Profiling
+*.prof
+*.pprof
+cpu.prof
+mem.prof
 
 # IDE
 .idea/
@@ -26,13 +34,14 @@ go.work.sum
 .DS_Store
 Thumbs.db
 
-# Vendor (we use modules)
+# Vendor (using modules)
 vendor/
 
 # Build output
 bin/
 dist/
 
+# Docs generated artifacts
 docs/testutil*.md
 
 # Local CI secrets

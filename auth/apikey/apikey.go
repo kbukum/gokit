@@ -100,9 +100,11 @@ func NewHasher(cfg HashingConfig) (*Hasher, error) {
 	}, nil
 }
 
-// Config returns the active hashing configuration.
+// Config returns the active hashing configuration with sensitive fields redacted.
 func (h *Hasher) Config() HashingConfig {
-	return h.config
+	cfg := h.config
+	cfg.Pepper = ""
+	return cfg
 }
 
 // GenerateKey creates a new API key with a validated prefix and peppered digest.

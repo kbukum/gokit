@@ -80,7 +80,6 @@ func (c *jwksCache) refresh(ctx context.Context, client *http.Client, force bool
 			c.mu.Unlock()
 			return nil
 		}
-		c.lastForcedRefreshAt = time.Now()
 		c.mu.Unlock()
 	}
 
@@ -115,6 +114,9 @@ func (c *jwksCache) refresh(ctx context.Context, client *http.Client, force bool
 	c.mu.Lock()
 	c.keys = keys
 	c.fetchedAt = time.Now()
+	if force {
+		c.lastForcedRefreshAt = c.fetchedAt
+	}
 	c.mu.Unlock()
 
 	return nil

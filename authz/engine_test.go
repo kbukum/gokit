@@ -202,6 +202,37 @@ func TestEngine_NewEngineRejectsDuplicateRole(t *testing.T) {
 	}
 }
 
+func TestEngine_NewEngineDeepCopiesConditionValues(t *testing.T) {
+	policies := []Policy{{
+		Name:      "role-guard",
+		Effect:    EffectAllow,
+		Actions:   []string{"read"},
+		Resources: []string{"report"},
+		Conditions: []Condition{{
+			Source:   AttributeSourceContext,
+			Key:      "role",
+			Operator: OperatorOneOf,
+			Values:   []string{"admin"},
+		}},
+	}}
+
+	engine, err := NewEngine(nil, policies)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	policies[0].Conditions[0].Values[0] = "viewer"
+
+	decision := engine.Authorize(Request{
+		Resource: Resource{Type: "report"},
+		Action:   "read",
+		Context:  Attributes{"role": "admin"},
+	})
+	if !decision.Allowed {
+		t.Fatalf("expected engine copy to remain immutable, got %+v", decision)
+	}
+}
+
 func TestEngine_ConditionBranches(t *testing.T) {
 	engine, err := NewEngine(nil, []Policy{{
 		Name:      "resource-id-guard",

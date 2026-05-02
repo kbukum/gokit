@@ -54,6 +54,19 @@ func TestHasherGenerateAndCompare(t *testing.T) {
 	}
 }
 
+func TestHasherConfigRedactsPepper(t *testing.T) {
+	t.Parallel()
+
+	hasher := testHasher(t)
+	cfg := hasher.Config()
+	if cfg.Pepper != "" {
+		t.Fatalf("Config() leaked pepper: %q", cfg.Pepper)
+	}
+	if cfg.EntropyBytes != defaultEntropyBytes {
+		t.Fatalf("EntropyBytes = %d, want %d", cfg.EntropyBytes, defaultEntropyBytes)
+	}
+}
+
 func TestSplitKey(t *testing.T) {
 	t.Parallel()
 
