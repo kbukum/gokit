@@ -18,6 +18,11 @@ type NamedRegistry[T any] struct {
 	items  map[string]T
 }
 
+type namedRegistryItem[T any] struct {
+	name  string
+	value T
+}
+
 // NewNamedRegistry creates an empty NamedRegistry. The domain is used in error messages.
 func NewNamedRegistry[T any](domain string) *NamedRegistry[T] {
 	return &NamedRegistry[T]{
@@ -83,9 +88,14 @@ func (r *NamedRegistry[T]) Len() int {
 // Each calls fn for every registered entry. Iteration order is unspecified.
 func (r *NamedRegistry[T]) Each(fn func(name string, v T)) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	items := make([]namedRegistryItem[T], 0, len(r.items))
 	for k, v := range r.items {
-		fn(k, v)
+		items = append(items, namedRegistryItem[T]{name: k, value: v})
+	}
+	r.mu.RUnlock()
+
+	for _, item := range items {
+		fn(item.name, item.value)
 	}
 }
 

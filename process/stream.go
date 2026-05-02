@@ -26,6 +26,9 @@ type StreamChunk struct {
 }
 
 // Stream executes a subprocess and emits stdout/stderr chunks while it runs.
+// When emit is non-nil, Stream invokes it sequentially from an internal
+// goroutine. The callback should return promptly; a slow callback can still
+// apply backpressure to subprocess pipe reads after the internal buffer fills.
 func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, error) {
 	if cmd.Binary == "" {
 		return nil, fmt.Errorf("process: binary is required")
@@ -67,6 +70,7 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 	stderr := newLimitedBuffer(cmd.MaxOutputBytes)
 
 	var wg sync.WaitGroup
+	var emitWG sync.WaitGroup
 	var copyErr error
 	var copyMu sync.Mutex
 	recordCopyErr := func(err error) {
@@ -80,18 +84,34 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 		}
 	}
 
+	var chunks chan StreamChunk
+	if emit != nil {
+		chunks = make(chan StreamChunk, 64)
+		emitWG.Add(1)
+		go func() {
+			defer emitWG.Done()
+			for chunk := range chunks {
+				emit(chunk)
+			}
+		}()
+	}
+
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		recordCopyErr(copyStream(stdoutPipe, stdout, StreamStdout, emit))
+		recordCopyErr(copyStream(stdoutPipe, stdout, StreamStdout, chunks))
 	}()
 	go func() {
 		defer wg.Done()
-		recordCopyErr(copyStream(stderrPipe, stderr, StreamStderr, emit))
+		recordCopyErr(copyStream(stderrPipe, stderr, StreamStderr, chunks))
 	}()
 
-	waitErr := c.Wait()
 	wg.Wait()
+	waitErr := c.Wait()
+	if chunks != nil {
+		close(chunks)
+		emitWG.Wait()
+	}
 	duration := time.Since(start)
 
 	exitCode := -1
@@ -121,17 +141,22 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 	return result, nil
 }
 
-func copyStream(r io.Reader, capture *limitedBuffer, stream StreamName, emit func(StreamChunk)) error {
+func copyStream(r io.Reader, capture *limitedBuffer, stream StreamName, chunks chan<- StreamChunk) error {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
-			chunk := append([]byte(nil), buf[:n]...)
-			if _, writeErr := capture.Write(chunk); writeErr != nil {
-				return writeErr
-			}
-			if emit != nil {
-				emit(StreamChunk{Stream: stream, Data: chunk})
+			data := buf[:n]
+			if chunks == nil {
+				if _, writeErr := capture.Write(data); writeErr != nil {
+					return writeErr
+				}
+			} else {
+				chunk := append([]byte(nil), data...)
+				if _, writeErr := capture.Write(chunk); writeErr != nil {
+					return writeErr
+				}
+				chunks <- StreamChunk{Stream: stream, Data: chunk}
 			}
 		}
 		if err != nil {

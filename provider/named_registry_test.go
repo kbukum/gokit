@@ -103,6 +103,23 @@ func TestNamedRegistryLenEach(t *testing.T) {
 	}
 }
 
+func TestNamedRegistryEachDoesNotHoldLockDuringCallback(t *testing.T) {
+	r := provider.NewNamedRegistry[*namedRegistryWidget]("test")
+	_ = r.Register("a", &namedRegistryWidget{id: 1})
+
+	r.Each(func(name string, _ *namedRegistryWidget) {
+		if name == "a" {
+			if err := r.Register("b", &namedRegistryWidget{id: 2}); err != nil {
+				t.Fatalf("Register from Each callback: %v", err)
+			}
+		}
+	})
+
+	if r.Len() != 2 {
+		t.Fatalf("Len = %d want 2", r.Len())
+	}
+}
+
 func TestNamedRegistryRegisterConcurrent(t *testing.T) {
 	r := provider.NewNamedRegistry[*namedRegistryWidget]("test")
 	var wg sync.WaitGroup

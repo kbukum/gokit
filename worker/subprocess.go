@@ -1,14 +1,16 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/process"
 )
+
+const defaultSubprocessLineBytes = 1024 * 1024
 
 // SubprocessConfig configures a subprocess-based handler.
 // Uses process.Command for the static command definition; per-task
@@ -57,9 +59,14 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 		cmd.Args = task.Args
 		cmd.Stdin = task.Stdin
 
+		maxLineBytes := cfg.Command.MaxOutputBytes
+		if maxLineBytes <= 0 {
+			maxLineBytes = defaultSubprocessLineBytes
+		}
+
 		lines := map[process.StreamName]*lineEmitter{
-			process.StreamStdout: {stream: string(process.StreamStdout), emit: emit},
-			process.StreamStderr: {stream: string(process.StreamStderr), emit: emit},
+			process.StreamStdout: {stream: string(process.StreamStdout), maxBytes: maxLineBytes, emit: emit},
+			process.StreamStderr: {stream: string(process.StreamStderr), maxBytes: maxLineBytes, emit: emit},
 		}
 		_, err := process.Stream(ctx, cmd, func(chunk process.StreamChunk) {
 			lines[chunk.Stream].Write(chunk.Data)
@@ -79,34 +86,41 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 }
 
 type lineEmitter struct {
-	stream  string
-	pending string
-	emit    func(Event[SubprocessOutput])
+	stream   string
+	pending  []byte
+	maxBytes int
+	emit     func(Event[SubprocessOutput])
 }
 
 func (e *lineEmitter) Write(data []byte) {
-	e.pending += string(data)
+	e.pending = append(e.pending, data...)
 	for {
-		idx := strings.IndexByte(e.pending, '\n')
+		idx := bytes.IndexByte(e.pending, '\n')
 		if idx < 0 {
+			if len(e.pending) >= e.maxBytes {
+				e.emitLine(e.pending[:e.maxBytes])
+				e.pending = e.pending[e.maxBytes:]
+				continue
+			}
 			return
 		}
-		line := strings.TrimSuffix(e.pending[:idx], "\r")
+		line := bytes.TrimSuffix(e.pending[:idx], []byte("\r"))
 		e.pending = e.pending[idx+1:]
-		e.emit(PartialEvent(SubprocessOutput{
-			Stream: e.stream,
-			Line:   line,
-		}))
+		e.emitLine(line)
 	}
 }
 
 func (e *lineEmitter) Flush() {
-	if e.pending == "" {
+	if len(e.pending) == 0 {
 		return
 	}
+	e.emitLine(bytes.TrimSuffix(e.pending, []byte("\r")))
+	e.pending = nil
+}
+
+func (e *lineEmitter) emitLine(line []byte) {
 	e.emit(PartialEvent(SubprocessOutput{
 		Stream: e.stream,
-		Line:   strings.TrimSuffix(e.pending, "\r"),
+		Line:   string(line),
 	}))
-	e.pending = ""
 }
