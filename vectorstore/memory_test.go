@@ -2,6 +2,7 @@ package vectorstore
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 )
@@ -246,6 +247,70 @@ func TestInMemoryStoreSearchLimit(t *testing.T) {
 
 	if len(results) != 2 {
 		t.Errorf("Search() returned %d results, want 2", len(results))
+	}
+}
+
+func TestInMemoryStoreSearchDotMetric(t *testing.T) {
+	store, err := NewInMemoryStoreWithConfig(Config{Metric: MetricDot})
+	if err != nil {
+		t.Fatalf("NewInMemoryStoreWithConfig() error = %v", err)
+	}
+	ctx := context.Background()
+	err = store.EnsureCollection(ctx, "test", 2)
+	if err != nil {
+		t.Fatalf("EnsureCollection() error = %v", err)
+	}
+	err = store.Upsert(ctx, "test", "strong", []float32{2, 0}, NewPointPayload())
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+	err = store.Upsert(ctx, "test", "weak", []float32{0, 1}, NewPointPayload())
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	results, err := store.Search(ctx, "test", []float32{1, 1}, 2, nil)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if results[0].ID != "strong" || results[0].Score != 2 {
+		t.Fatalf("dot ranking = (%s, %v), want (strong, 2)", results[0].ID, results[0].Score)
+	}
+}
+
+func TestInMemoryStoreSearchL2Metric(t *testing.T) {
+	store, err := NewInMemoryStoreWithConfig(Config{Metric: MetricL2})
+	if err != nil {
+		t.Fatalf("NewInMemoryStoreWithConfig() error = %v", err)
+	}
+	ctx := context.Background()
+	err = store.EnsureCollection(ctx, "test", 1)
+	if err != nil {
+		t.Fatalf("EnsureCollection() error = %v", err)
+	}
+	err = store.Upsert(ctx, "test", "near", []float32{1}, NewPointPayload())
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+	err = store.Upsert(ctx, "test", "far", []float32{3}, NewPointPayload())
+	if err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	results, err := store.Search(ctx, "test", []float32{0}, 2, nil)
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if results[0].ID != "near" || results[0].Score != -1 {
+		t.Fatalf("l2 ranking = (%s, %v), want (near, -1)", results[0].ID, results[0].Score)
+	}
+}
+
+func TestInMemoryStoreUnknownMetricReturnsMetricError(t *testing.T) {
+	_, err := NewInMemoryStoreWithConfig(Config{Metric: "unknown"})
+	var metricErr *MetricError
+	if !errors.As(err, &metricErr) {
+		t.Fatalf("NewInMemoryStoreWithConfig() error = %T %[1]v, want MetricError", err)
 	}
 }
 

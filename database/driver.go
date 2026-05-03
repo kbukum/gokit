@@ -16,7 +16,7 @@ type DriverRegistry struct {
 
 // NewDriverRegistry creates an isolated driver registry.
 func NewDriverRegistry() *DriverRegistry {
-	return &DriverRegistry{inner: namedregistry.New[DriverFunc]("database-driver")}
+	return &DriverRegistry{inner: namedregistry.New[DriverFunc]("database")}
 }
 
 // Register stores a driver factory.
