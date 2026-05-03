@@ -2,6 +2,11 @@ package media
 
 import "bytes"
 
+var (
+	ebmlSignature = []byte{0x1A, 0x45, 0xDF, 0xA3}
+	flvSignature  = []byte("FLV")
+)
+
 // detectVideo checks for known video format signatures.
 func detectVideo(data []byte) (Info, bool) {
 	if len(data) < 4 {
@@ -33,7 +38,7 @@ func detectVideo(data []byte) (Info, bool) {
 	}
 
 	// WebM / MKV — EBML header: 0x1A 0x45 0xDF 0xA3
-	if bytes.HasPrefix(data, []byte{0x1A, 0x45, 0xDF, 0xA3}) {
+	if bytes.HasPrefix(data, ebmlSignature) {
 		// Search for DocType in the first bytes.
 		docType := findEBMLDocType(data)
 		switch docType {
@@ -50,7 +55,7 @@ func detectVideo(data []byte) (Info, bool) {
 	}
 
 	// FLV — "FLV" header.
-	if bytes.HasPrefix(data, []byte("FLV")) {
+	if bytes.HasPrefix(data, flvSignature) {
 		return Info{Type: Video, Format: "flv", MimeType: "video/x-flv", Container: "FLV"}, true
 	}
 
