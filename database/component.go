@@ -48,6 +48,7 @@ func (c *Component) WithDriver(fn DriverFunc) *Component {
 // WithDriverFromRegistry selects a registered driver by name.
 func (c *Component) WithDriverFromRegistry(reg *DriverRegistry, name string) *Component {
 	c.driverName = name
+	c.driverFunc = nil
 	if reg == nil {
 		return c
 	}

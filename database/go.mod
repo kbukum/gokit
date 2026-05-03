@@ -8,7 +8,6 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/database/sqlite v0.2.0
 	gorm.io/gorm v1.31.1
 )
 
@@ -24,7 +23,6 @@ require (
 	github.com/lib/pq v1.11.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.39 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -53,10 +51,6 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
-	gorm.io/driver/sqlite v1.6.0 // indirect
 )
 
-replace (
-	github.com/kbukum/gokit => ../
-	github.com/kbukum/gokit/database/sqlite => ./sqlite
-)
+replace github.com/kbukum/gokit => ../

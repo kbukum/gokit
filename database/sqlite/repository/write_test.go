@@ -1,13 +1,15 @@
-package repository
+package repository_test
 
 import (
 	"context"
 	"testing"
+
+	repository "github.com/kbukum/gokit/database/repository"
 )
 
 func TestWriteRepository_Create(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewWriteRepository[testModel, string](db, "test")
+	repo := repository.NewWriteRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	entity := &testModel{ID: "w1", Name: "Alice", Age: 30}
@@ -27,7 +29,7 @@ func TestWriteRepository_Create(t *testing.T) {
 
 func TestWriteRepository_Create_Duplicate(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewWriteRepository[testModel, string](db, "test")
+	repo := repository.NewWriteRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	entity := &testModel{ID: "dup", Name: "First", Age: 1}
@@ -43,7 +45,7 @@ func TestWriteRepository_Create_Duplicate(t *testing.T) {
 
 func TestWriteRepository_Update(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewWriteRepository[testModel, string](db, "test")
+	repo := repository.NewWriteRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	entity := &testModel{ID: "w2", Name: "Bob", Age: 25}
@@ -68,7 +70,7 @@ func TestWriteRepository_Update(t *testing.T) {
 
 func TestWriteRepository_InheritsRead(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewWriteRepository[testModel, string](db, "test")
+	repo := repository.NewWriteRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	// Create via write repo, then use read methods
@@ -94,7 +96,7 @@ func TestWriteRepository_InheritsRead(t *testing.T) {
 
 func TestWriteRepository_WithTx(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewWriteRepository[testModel, string](db, "test")
+	repo := repository.NewWriteRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	tx := db.Begin()

@@ -1,13 +1,15 @@
-package repository
+package repository_test
 
 import (
 	"context"
 	"testing"
+
+	repository "github.com/kbukum/gokit/database/repository"
 )
 
 func TestReadRepository_GetByID(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 	seedModel(t, db, "r1", "Alice", 30)
 
 	ctx := context.Background()
@@ -35,7 +37,7 @@ func TestReadRepository_GetByID(t *testing.T) {
 
 func TestReadRepository_FindOneBy(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 	seedModel(t, db, "r1", "Alice", 30)
 
 	ctx := context.Background()
@@ -63,7 +65,7 @@ func TestReadRepository_FindOneBy(t *testing.T) {
 
 func TestReadRepository_FindAllBy(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 	seedModel(t, db, "r1", "Alice", 30)
 	seedModel(t, db, "r2", "Bob", 30)
 	seedModel(t, db, "r3", "Carol", 25)
@@ -81,7 +83,7 @@ func TestReadRepository_FindAllBy(t *testing.T) {
 
 func TestReadRepository_Count(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 	seedModel(t, db, "r1", "Alice", 30)
 	seedModel(t, db, "r2", "Bob", 25)
 
@@ -98,7 +100,7 @@ func TestReadRepository_Count(t *testing.T) {
 
 func TestReadRepository_DB(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 	if repo.DB() == nil {
 		t.Error("DB() should not be nil")
 	}
@@ -106,7 +108,7 @@ func TestReadRepository_DB(t *testing.T) {
 
 func TestReadRepository_Resource(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "my_resource")
+	repo := repository.NewReadRepository[testModel, string](db, "my_resource")
 	if got := repo.Resource(); got != "my_resource" {
 		t.Errorf("Resource() = %q, want %q", got, "my_resource")
 	}
@@ -114,7 +116,7 @@ func TestReadRepository_Resource(t *testing.T) {
 
 func TestReadRepository_WithTx(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewReadRepository[testModel, string](db, "test")
+	repo := repository.NewReadRepository[testModel, string](db, "test")
 
 	tx := db.Begin()
 	defer tx.Rollback()
@@ -132,7 +134,7 @@ func TestReadRepository_WithIDField(t *testing.T) {
 	db := setupTestDB(t)
 	// Use custom ID field name (still maps to the "id" column via gorm tag,
 	// but tests that WithIDField option is wired correctly)
-	repo := NewReadRepository[testModel, string](db, "test", WithIDField("id"))
+	repo := repository.NewReadRepository[testModel, string](db, "test", repository.WithIDField("id"))
 	seedModel(t, db, "custom1", "Test", 1)
 
 	ctx := context.Background()

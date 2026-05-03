@@ -23,7 +23,7 @@ type collection struct {
 }
 
 // InMemoryStore is an in-memory vector store implementation backed by a simple slice.
-// It performs linear scan search using cosine similarity.
+// It performs linear scan search using the configured similarity metric.
 // Intended for unit tests and prototyping — not suitable for production workloads.
 // Thread-safe via sync.RWMutex.
 type InMemoryStore struct {
@@ -100,7 +100,7 @@ func (s *InMemoryStore) Upsert(ctx context.Context, collectionName, id string, v
 	return nil
 }
 
-// Search searches for similar vectors using cosine similarity.
+// Search searches for similar vectors using the collection's similarity metric.
 func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vector []float32, limit int, filter *SearchFilter) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -108,6 +108,9 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 	col, exists := s.collections[collectionName]
 	if !exists {
 		return nil, fmt.Errorf("collection %q does not exist", collectionName)
+	}
+	if len(vector) != col.Dimensions {
+		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(vector))
 	}
 
 	var results []SearchResult

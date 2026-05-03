@@ -1,4 +1,4 @@
-package database_test
+package sqlite_test
 
 import (
 	"context"
