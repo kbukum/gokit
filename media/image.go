@@ -30,7 +30,8 @@ func detectImage(data []byte) (Info, bool) {
 	}
 
 	// GIF — "GIF87a" or "GIF89a"
-	if bytes.HasPrefix(data, gif87aSignature) || bytes.HasPrefix(data, gif89aSignature) {
+	if len(data) >= len(gif87aSignature) &&
+		(bytes.HasPrefix(data, gif87aSignature) || bytes.HasPrefix(data, gif89aSignature)) {
 		return Info{Type: Image, Format: "gif", MimeType: "image/gif"}, true
 	}
 
