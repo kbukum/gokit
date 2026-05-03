@@ -225,6 +225,16 @@ func TestDetect_ShortData(t *testing.T) {
 	if info.Type != Unknown {
 		t.Errorf("expected Unknown for 3-byte input, got %v", info.Type)
 	}
+
+	// 4 bytes exercise the shortest guarded image/video signatures without
+	// allowing longer detectors to read past the slice.
+	for _, data := range [][]byte{
+		{0xFF, 0xD8, 0xFF, 0x00},
+		{'F', 'L', 'V', 0x00},
+		{0x1A, 0x45, 0xDF, 0xA3},
+	} {
+		_ = Detect(data)
+	}
 }
 
 func TestDetect_TextWithControlChars(t *testing.T) {
