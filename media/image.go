@@ -5,7 +5,8 @@ import "bytes"
 var (
 	jpegSignature          = []byte{0xFF, 0xD8, 0xFF}
 	pngSignature           = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
-	gifSignature           = []byte("GIF")
+	gif87aSignature        = []byte("GIF87a")
+	gif89aSignature        = []byte("GIF89a")
 	bmpSignature           = []byte("BM")
 	tiffLittleEndSignature = []byte{'I', 'I', 0x2A, 0x00}
 	tiffBigEndSignature    = []byte{'M', 'M', 0x00, 0x2A}
@@ -29,7 +30,7 @@ func detectImage(data []byte) (Info, bool) {
 	}
 
 	// GIF — "GIF87a" or "GIF89a"
-	if bytes.HasPrefix(data, gifSignature) {
+	if bytes.HasPrefix(data, gif87aSignature) || bytes.HasPrefix(data, gif89aSignature) {
 		return Info{Type: Image, Format: "gif", MimeType: "image/gif"}, true
 	}
 

@@ -26,6 +26,21 @@ func TestDetect_GIF(t *testing.T) {
 	assertInfo(t, info, Image, "gif", "image/gif")
 }
 
+func TestDetect_GIFRejectsTruncatedHeaders(t *testing.T) {
+	for _, data := range [][]byte{
+		[]byte("GIF"),
+		[]byte("GIF8"),
+		[]byte("GIF89"),
+		[]byte("GIF87"),
+		[]byte("GIF00a"),
+	} {
+		info := Detect(data)
+		if info.Type == Image || info.Format == "gif" {
+			t.Fatalf("expected non-GIF for %q, got %#v", data, info)
+		}
+	}
+}
+
 func TestDetect_WebP(t *testing.T) {
 	data := make([]byte, 12)
 	copy(data[0:4], "RIFF")
