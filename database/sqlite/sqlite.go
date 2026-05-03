@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"github.com/kbukum/gokit/database"
+
 	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

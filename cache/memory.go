@@ -58,7 +58,7 @@ func RegisterMemory(reg *FactoryRegistry) error {
 }
 
 // Get returns a copy of the cached bytes when present and not expired.
-func (s *MemoryStore) Get(_ context.Context, key string) ([]byte, bool, error) {
+func (s *MemoryStore) Get(ctx context.Context, key string) (value []byte, found bool, err error) {
 	s.mu.RLock()
 	item, ok := s.items[key]
 	s.mu.RUnlock()
@@ -66,7 +66,7 @@ func (s *MemoryStore) Get(_ context.Context, key string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	if item.expired(s.clock()) {
-		_ = s.Delete(context.Background(), key)
+		_ = s.Delete(ctx, key)
 		return nil, false, nil
 	}
 	return cloneBytes(item.value), true, nil

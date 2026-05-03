@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -100,10 +101,10 @@ func (c *Client) Ping(ctx context.Context) error {
 }
 
 // Get retrieves a value by key.
-func (c *Client) Get(ctx context.Context, key string) ([]byte, bool, error) {
+func (c *Client) Get(ctx context.Context, key string) (value []byte, found bool, err error) {
 	raw, err := c.rdb.Get(ctx, key).Bytes()
 	if err != nil {
-		if err == goredis.Nil {
+		if errors.Is(err, goredis.Nil) {
 			return nil, false, nil
 		}
 		return nil, false, err

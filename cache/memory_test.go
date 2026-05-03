@@ -106,8 +106,8 @@ func TestTypedStoreLoadSaveDelete(t *testing.T) {
 	if got == nil || got.Count != 7 {
 		t.Fatalf("Load got %+v", got)
 	}
-	if err := typed.Delete(ctx, "k"); err != nil {
-		t.Fatalf("Delete: %v", err)
+	if deleteErr := typed.Delete(ctx, "k"); deleteErr != nil {
+		t.Fatalf("Delete: %v", deleteErr)
 	}
 	got, err = typed.Load(ctx, "k")
 	if err != nil {

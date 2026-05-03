@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/kbukum/gokit/provider/namedregistry"
+
 	"gorm.io/gorm"
 )
 
