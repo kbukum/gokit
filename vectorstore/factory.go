@@ -48,6 +48,6 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any) (Store, error) {
 // RegisterMemory registers the core in-memory backend.
 func RegisterMemory(reg *FactoryRegistry) error {
 	return reg.Register(ProviderMemory, func(cfg Config, _ any) (Store, error) {
-		return NewInMemoryStoreWithConfig(cfg), nil
+		return NewInMemoryStoreWithConfig(cfg)
 	})
 }

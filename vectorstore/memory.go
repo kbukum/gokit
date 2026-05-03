@@ -34,16 +34,20 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new empty in-memory vector store.
 func NewInMemoryStore() *InMemoryStore {
-	return NewInMemoryStoreWithConfig(Config{Metric: DefaultMetric})
+	store, _ := NewInMemoryStoreWithConfig(Config{Metric: DefaultMetric})
+	return store
 }
 
 // NewInMemoryStoreWithConfig creates an in-memory vector store with config.
-func NewInMemoryStoreWithConfig(cfg Config) *InMemoryStore {
+func NewInMemoryStoreWithConfig(cfg Config) (*InMemoryStore, error) {
 	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	return &InMemoryStore{
 		collections: make(map[string]*collection),
 		metric:      cfg.Metric,
-	}
+	}, nil
 }
 
 // EnsureCollection ensures a collection exists, creating it if necessary.
@@ -114,7 +118,7 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 
 		score, err := similarity(col.Metric, vector, point.Vector)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		results = append(results, SearchResult{

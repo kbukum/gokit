@@ -16,6 +16,7 @@ type Component struct {
 	log        *logger.Logger
 	models     []interface{}
 	driverFunc DriverFunc
+	driverName string
 }
 
 // NewComponent creates a database component for use with the component registry.
@@ -40,11 +41,13 @@ func NewComponent(cfg Config, log *logger.Logger) *Component {
 //	WithAutoMigrate(&User{}, &Post{})
 func (c *Component) WithDriver(fn DriverFunc) *Component {
 	c.driverFunc = fn
+	c.driverName = ""
 	return c
 }
 
 // WithDriverFromRegistry selects a registered driver by name.
 func (c *Component) WithDriverFromRegistry(reg *DriverRegistry, name string) *Component {
+	c.driverName = name
 	if reg == nil {
 		return c
 	}
@@ -82,7 +85,10 @@ func (c *Component) Start(ctx context.Context) error {
 	}
 
 	if c.driverFunc == nil {
-		return fmt.Errorf("database start: driver is not configured; register an adapter and call WithDriver")
+		if c.driverName != "" {
+			return fmt.Errorf("database start: driver %q is not configured; register the adapter and call WithDriverFromRegistry or call WithDriver directly", c.driverName)
+		}
+		return fmt.Errorf("database start: driver is not configured; register an adapter and call WithDriverFromRegistry or call WithDriver directly")
 	}
 
 	dialector := c.driverFunc(c.cfg.BuildDSN())

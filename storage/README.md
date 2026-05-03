@@ -9,6 +9,8 @@ in opt-in adapter modules such as `storage/s3`.
 ## Local default
 
 ```go
+import local "github.com/kbukum/gokit/storage/local"
+
 reg := storage.NewFactoryRegistry()
 if err := local.Register(reg); err != nil {
     return err

@@ -15,8 +15,6 @@ func Register(reg *database.DriverRegistry) error {
 }
 
 // Open returns a SQLite GORM dialector.
-func Open(dsn string) database.DriverFunc {
-	return func(_ string) gorm.Dialector {
-		return gormsqlite.Open(dsn)
-	}
+func Open(dsn string) gorm.Dialector {
+	return gormsqlite.Open(dsn)
 }
