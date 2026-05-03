@@ -2,6 +2,7 @@ package vectorstore
 
 import (
 	"context"
+	"fmt"
 )
 
 const (
@@ -52,7 +53,7 @@ type MetricError struct {
 }
 
 func (e *MetricError) Error() string {
-	return "vectorstore: unsupported metric " + e.Metric
+	return fmt.Sprintf("vectorstore: unsupported metric %q (supported: %s, %s, %s)", e.Metric, MetricCosine, MetricDot, MetricL2)
 }
 
 // PointPayload represents the metadata stored alongside each vector point.

@@ -34,8 +34,10 @@ type InMemoryStore struct {
 
 // NewInMemoryStore creates a new empty in-memory vector store.
 func NewInMemoryStore() *InMemoryStore {
-	store, _ := NewInMemoryStoreWithConfig(Config{Metric: DefaultMetric})
-	return store
+	return &InMemoryStore{
+		collections: make(map[string]*collection),
+		metric:      DefaultMetric,
+	}
 }
 
 // NewInMemoryStoreWithConfig creates an in-memory vector store with config.

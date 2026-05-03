@@ -3,9 +3,10 @@ package repository
 import (
 	"testing"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/kbukum/gokit/database/sqlite"
 )
 
 // testModel is a simple model used across all repository tests.

@@ -4,6 +4,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -47,5 +48,30 @@ func TestCoreDoesNotImportDriverSDKs(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk core imports: %v", err)
+	}
+}
+
+func TestCoreModuleDoesNotRequireDriverSDKs(t *testing.T) {
+	t.Parallel()
+
+	deniedModules := []string{
+		"gorm.io/driver/",
+		"github.com/lib/pq",
+		"github.com/go-sql-driver/mysql",
+	}
+	goMod, err := os.ReadFile("go.mod")
+	if err != nil {
+		t.Fatalf("read go.mod: %v", err)
+	}
+	for _, line := range strings.Split(string(goMod), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "//") || strings.Contains(line, "// indirect") {
+			continue
+		}
+		for _, denied := range deniedModules {
+			if strings.Contains(line, denied) {
+				t.Fatalf("database/go.mod directly requires driver SDK %q; move it to an adapter module", line)
+			}
+		}
 	}
 }

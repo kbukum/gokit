@@ -1,4 +1,4 @@
-package database
+package database_test
 
 import (
 	"context"
@@ -6,9 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	. "github.com/kbukum/gokit/database"
+	"github.com/kbukum/gokit/database/sqlite"
 	"github.com/kbukum/gokit/logger"
 )
 
