@@ -1,13 +1,15 @@
-package repository
+package repository_test
 
 import (
 	"context"
 	"testing"
+
+	repository "github.com/kbukum/gokit/database/repository"
 )
 
 func TestRepository_Delete(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	repo.Create(ctx, &testModel{ID: "d1", Name: "ToDelete", Age: 1})
@@ -27,7 +29,7 @@ func TestRepository_Delete(t *testing.T) {
 
 func TestRepository_Delete_NonExistent(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	// Deleting a non-existent record should not error in GORM (affected rows = 0)
@@ -38,7 +40,7 @@ func TestRepository_Delete_NonExistent(t *testing.T) {
 
 func TestRepository_FullCRUD(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	// Create
@@ -93,7 +95,7 @@ func TestRepository_FullCRUD(t *testing.T) {
 
 func TestRepository_InheritsWriteAndRead(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	// All three tiers accessible
@@ -135,7 +137,7 @@ func TestRepository_InheritsWriteAndRead(t *testing.T) {
 
 func TestRepository_WithTx_Commit(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	tx := db.Begin()
@@ -155,7 +157,7 @@ func TestRepository_WithTx_Commit(t *testing.T) {
 
 func TestRepository_WithTx_Rollback(t *testing.T) {
 	db := setupTestDB(t)
-	repo := NewRepository[testModel, string](db, "test")
+	repo := repository.NewRepository[testModel, string](db, "test")
 	ctx := context.Background()
 
 	tx := db.Begin()

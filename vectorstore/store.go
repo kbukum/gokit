@@ -2,7 +2,59 @@ package vectorstore
 
 import (
 	"context"
+	"fmt"
 )
+
+const (
+	// ProviderMemory is the lean in-process vectorstore backend.
+	ProviderMemory = "memory"
+
+	// MetricCosine ranks by cosine similarity.
+	MetricCosine = "cosine"
+	// MetricDot ranks by dot product.
+	MetricDot = "dot"
+	// MetricL2 ranks by negative Euclidean distance, so higher scores are better.
+	MetricL2 = "l2"
+
+	DefaultProvider = ProviderMemory
+	DefaultMetric   = MetricCosine
+)
+
+// Config holds provider-agnostic vectorstore configuration.
+type Config struct {
+	Name     string `mapstructure:"name" json:"name" yaml:"name"`
+	Provider string `mapstructure:"provider" json:"provider" yaml:"provider"`
+	Metric   string `mapstructure:"metric" json:"metric" yaml:"metric"`
+}
+
+// ApplyDefaults fills zero-valued fields.
+func (c *Config) ApplyDefaults() {
+	if c.Provider == "" {
+		c.Provider = DefaultProvider
+	}
+	if c.Metric == "" {
+		c.Metric = DefaultMetric
+	}
+}
+
+// Validate checks provider-agnostic settings.
+func (c *Config) Validate() error {
+	switch c.Metric {
+	case MetricCosine, MetricDot, MetricL2:
+		return nil
+	default:
+		return &MetricError{Metric: c.Metric}
+	}
+}
+
+// MetricError reports an unsupported similarity metric.
+type MetricError struct {
+	Metric string
+}
+
+func (e *MetricError) Error() string {
+	return fmt.Sprintf("vectorstore: unsupported metric %q (supported: %s, %s, %s)", e.Metric, MetricCosine, MetricDot, MetricL2)
+}
 
 // PointPayload represents the metadata stored alongside each vector point.
 type PointPayload struct {

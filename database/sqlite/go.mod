@@ -1,13 +1,13 @@
-module github.com/kbukum/gokit/database
+module github.com/kbukum/gokit/database/sqlite
 
 go 1.26.0
 
 toolchain go1.26.2
 
 require (
-	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit/database v0.2.0
+	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
 )
 
@@ -17,12 +17,13 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/lib/pq v1.11.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-sqlite3 v1.14.39 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -53,4 +54,7 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
 
-replace github.com/kbukum/gokit => ../
+replace (
+	github.com/kbukum/gokit => ../../
+	github.com/kbukum/gokit/database => ../
+)

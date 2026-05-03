@@ -1,16 +1,16 @@
-// Package redis provides a Redis client wrapper built on go-redis
-// with gokit logging, connection pooling, and component lifecycle support.
 package redis
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
 
+	"github.com/kbukum/gokit/cache"
 	"github.com/kbukum/gokit/logger"
 )
 
@@ -101,23 +101,31 @@ func (c *Client) Ping(ctx context.Context) error {
 }
 
 // Get retrieves a value by key.
-func (c *Client) Get(ctx context.Context, key string) (string, error) {
-	return c.rdb.Get(ctx, key).Result()
+func (c *Client) Get(ctx context.Context, key string) (value []byte, found bool, err error) {
+	raw, err := c.rdb.Get(ctx, key).Bytes()
+	if err != nil {
+		if errors.Is(err, goredis.Nil) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return raw, true, nil
 }
 
 // Set stores a value with a key and expiration.
-func (c *Client) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+func (c *Client) Set(ctx context.Context, key string, value []byte, expiration time.Duration) error {
 	return c.rdb.Set(ctx, key, value, expiration).Err()
 }
 
-// Del deletes one or more keys.
-func (c *Client) Del(ctx context.Context, keys ...string) error {
-	return c.rdb.Del(ctx, keys...).Err()
+// Delete deletes key.
+func (c *Client) Delete(ctx context.Context, key string) error {
+	return c.rdb.Del(ctx, key).Err()
 }
 
-// Exists checks if one or more keys exist.
-func (c *Client) Exists(ctx context.Context, keys ...string) (int64, error) {
-	return c.rdb.Exists(ctx, keys...).Result()
+// Exists checks if key exists.
+func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
+	n, err := c.rdb.Exists(ctx, key).Result()
+	return n > 0, err
 }
 
 // GetJSON retrieves and unmarshals a JSON value from Redis.
@@ -139,7 +147,7 @@ func (c *Client) SetJSON(ctx context.Context, key string, val any, ttl time.Dura
 	if err != nil {
 		return fmt.Errorf("redis marshal %q: %w", key, err)
 	}
-	return c.rdb.Set(ctx, key, string(data), ttl).Err()
+	return c.rdb.Set(ctx, key, data, ttl).Err()
 }
 
 // Close closes the Redis connection. Safe to call multiple times.
@@ -162,3 +170,8 @@ func (c *Client) Close() error {
 func (c *Client) Unwrap() *goredis.Client {
 	return c.rdb
 }
+
+var (
+	_ cache.Store      = (*Client)(nil)
+	_ cache.CloseStore = (*Client)(nil)
+)

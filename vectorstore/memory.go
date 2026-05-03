@@ -18,23 +18,38 @@ type storedPoint struct {
 
 type collection struct {
 	Dimensions int
+	Metric     string
 	Points     []*storedPoint
 }
 
 // InMemoryStore is an in-memory vector store implementation backed by a simple slice.
-// It performs linear scan search using cosine similarity.
+// It performs linear scan search using the configured similarity metric.
 // Intended for unit tests and prototyping — not suitable for production workloads.
 // Thread-safe via sync.RWMutex.
 type InMemoryStore struct {
 	mu          sync.RWMutex
 	collections map[string]*collection
+	metric      string
 }
 
 // NewInMemoryStore creates a new empty in-memory vector store.
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		collections: make(map[string]*collection),
+		metric:      DefaultMetric,
 	}
+}
+
+// NewInMemoryStoreWithConfig creates an in-memory vector store with config.
+func NewInMemoryStoreWithConfig(cfg Config) (*InMemoryStore, error) {
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	return &InMemoryStore{
+		collections: make(map[string]*collection),
+		metric:      cfg.Metric,
+	}, nil
 }
 
 // EnsureCollection ensures a collection exists, creating it if necessary.
@@ -45,6 +60,7 @@ func (s *InMemoryStore) EnsureCollection(ctx context.Context, collectionName str
 	if _, exists := s.collections[collectionName]; !exists {
 		s.collections[collectionName] = &collection{
 			Dimensions: dimensions,
+			Metric:     s.metric,
 			Points:     make([]*storedPoint, 0),
 		}
 	}
@@ -84,7 +100,7 @@ func (s *InMemoryStore) Upsert(ctx context.Context, collectionName, id string, v
 	return nil
 }
 
-// Search searches for similar vectors using cosine similarity.
+// Search searches for similar vectors using the collection's similarity metric.
 func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vector []float32, limit int, filter *SearchFilter) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -92,6 +108,9 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 	col, exists := s.collections[collectionName]
 	if !exists {
 		return nil, fmt.Errorf("collection %q does not exist", collectionName)
+	}
+	if len(vector) != col.Dimensions {
+		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(vector))
 	}
 
 	var results []SearchResult
@@ -102,10 +121,9 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 			continue
 		}
 
-		// Compute cosine similarity
-		score, err := cosineSimilarity(vector, point.Vector)
+		score, err := similarity(col.Metric, vector, point.Vector)
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		results = append(results, SearchResult{
@@ -150,12 +168,23 @@ func (s *InMemoryStore) Delete(ctx context.Context, collectionName, id string) e
 	return nil
 }
 
-// cosineSimilarity computes cosine similarity between two vectors.
-func cosineSimilarity(a, b []float32) (float32, error) {
+func similarity(metric string, a, b []float32) (float32, error) {
 	if len(a) != len(b) {
 		return 0, fmt.Errorf("vector length mismatch: %d != %d", len(a), len(b))
 	}
+	switch metric {
+	case MetricCosine:
+		return cosineSimilarity(a, b), nil
+	case MetricDot:
+		return dotProduct(a, b), nil
+	case MetricL2:
+		return -l2Distance(a, b), nil
+	default:
+		return 0, &MetricError{Metric: metric}
+	}
+}
 
+func cosineSimilarity(a, b []float32) float32 {
 	var dot, normA, normB float32
 	for i := range a {
 		dot += a[i] * b[i]
@@ -167,10 +196,27 @@ func cosineSimilarity(a, b []float32) (float32, error) {
 	normB = float32(math.Sqrt(float64(normB)))
 
 	if normA == 0.0 || normB == 0.0 {
-		return 0.0, nil
+		return 0.0
 	}
 
-	return dot / (normA * normB), nil
+	return dot / (normA * normB)
+}
+
+func dotProduct(a, b []float32) float32 {
+	var dot float32
+	for i := range a {
+		dot += a[i] * b[i]
+	}
+	return dot
+}
+
+func l2Distance(a, b []float32) float32 {
+	var sum float32
+	for i := range a {
+		d := a[i] - b[i]
+		sum += d * d
+	}
+	return float32(math.Sqrt(float64(sum)))
 }
 
 // matchesFilter checks if a payload matches all must conditions.

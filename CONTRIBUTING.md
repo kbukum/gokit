@@ -43,7 +43,7 @@ gokit/
 │   ├── go.mod              #  │ Sub-modules — own go.mod
 │   └── testutil/           #  │ Bring in heavier deps (GORM, Kafka, etc.)
 │       └── go.mod          #  │ Each has a `replace ../` for local dev
-├── redis/                  #  │
+├── cache/                  #  │
 ├── messaging/              #  │
 ├── server/                 # ─┘
 ├── gomod.sh                # Cross-module operations script
@@ -64,8 +64,8 @@ All targets support `M=<module>` for targeting a specific module:
 ```bash
 make check                   # build + vet + test everything
 make test                    # test all modules
-make test M=redis            # test only the redis module
-make test M=redis T=TestGet  # run specific test in redis
+make test M=cache            # test only the cache module
+make test M=cache T=TestGet  # run specific test in cache
 make lint                    # lint all modules
 make lint M=provider         # lint only provider
 make tidy                    # go mod tidy across all modules
@@ -162,7 +162,7 @@ make tag-push VERSION=v0.2.0   # tag all modules and push
 make list-tags                  # view all tags
 ```
 
-Tags are created per module (e.g., `v0.2.0`, `redis/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`, which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`, which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
 
 ## CI
 

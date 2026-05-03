@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -177,13 +178,15 @@ func TestPartitionCreateContextCancelTerminatesBranches(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
 	matching, rejected := Partition(FromFunc(func(context.Context) Iterator[int] {
-		return &countingIter{}
+		return &cancelBlockingIter{started: started}
 	}), func(v int) bool { return v%2 == 0 })
 
 	errCh := make(chan error, 2)
 	go func() { _, err := Collect(ctx, matching); errCh <- err }()
 	go func() { _, err := Collect(ctx, rejected); errCh <- err }()
+	<-started
 	cancel()
 
 	for range 2 {
@@ -304,6 +307,19 @@ func (it *countingIter) Next(ctx context.Context) (value int, ok bool, err error
 }
 
 func (it *countingIter) Close() error { return nil }
+
+type cancelBlockingIter struct {
+	once    sync.Once
+	started chan struct{}
+}
+
+func (it *cancelBlockingIter) Next(ctx context.Context) (value int, ok bool, err error) {
+	it.once.Do(func() { close(it.started) })
+	<-ctx.Done()
+	return 0, false, ctx.Err()
+}
+
+func (it *cancelBlockingIter) Close() error { return nil }
 
 type blockingCloseIter struct {
 	started      chan struct{}

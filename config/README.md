@@ -16,7 +16,7 @@ package config
 import (
     gkconfig "github.com/kbukum/gokit/config"
     "github.com/kbukum/gokit/database"
-    "github.com/kbukum/gokit/redis"
+    "github.com/kbukum/gokit/cache"
     "github.com/kbukum/gokit/server"
     "github.com/kbukum/gokit/messaging/kafka"
     "github.com/kbukum/gokit/discovery"
@@ -28,7 +28,7 @@ type ServiceConfig struct {
 
     HTTP      server.Config    `yaml:"server" mapstructure:"server"`
     Database  database.Config  `yaml:"database" mapstructure:"database"`
-    Redis     redis.Config     `yaml:"redis" mapstructure:"redis"`
+    Cache     cache.Config     `yaml:"cache" mapstructure:"cache"`
     Kafka     kafka.Config     `yaml:"kafka" mapstructure:"kafka"`
     Discovery discovery.Config `yaml:"discovery" mapstructure:"discovery"`
 }

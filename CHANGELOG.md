@@ -235,7 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **tests**: 27 LLM adapter tests (81.7% coverage) — adapter, dialect registry, streaming, helpers, types
 - **tests**: 5 multipart encoding tests — fields, files, custom content-type, reader, full adapter integration
 - **tests**: 3 REST provider interface tests — Name/IsAvailable/Close delegation, error classification
-- **docs**: `adapter-derivation-plan.md` — architecture plan for layered adapter composition
+- **docs**: layered adapter composition guide
 
 ## [0.1.4] - 2026-03-01
 
@@ -246,7 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **docs**: CODE_OF_CONDUCT.md based on Contributor Covenant 2.1
 - **docs**: SECURITY.md with responsible disclosure policy
 - **docs**: adapter-guide.md documenting adapter pattern across all modules
-- **docs**: adapter-framework-plan.md for adapter architecture planning
+- **docs**: adapter framework guide
 - **docs**: pipeline/README.md with comprehensive operators guide and 7 usage examples
 - **kafka/producer**: `adapter.go` implementing `provider.Sink[Message]` with Send method
 - **kafka/producer**: Availability checks for producer health monitoring

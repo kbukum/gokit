@@ -4,8 +4,8 @@
 // # Architecture
 //
 // The database module follows gokit's component pattern with a driver-agnostic design.
-// Users provide the database driver (postgres, mysql, sqlite, etc.) via WithDriver(),
-// keeping the module lightweight and flexible.
+// Users provide the database driver (postgres, mysql, sqlite, etc.) via WithDriver()
+// or an explicit DriverRegistry, keeping runtime backend selection adapter-driven.
 //
 // # Quick Start
 //
@@ -33,6 +33,7 @@
 //   - types: Common database types like BaseModel
 //   - migration: File-based database migrations using golang-migrate
 //   - query: Advanced query builders and helpers
+//   - sqlite: Opt-in SQLite driver adapter
 //   - testutil: Testing utilities for database-dependent tests
 //
 // # Optional Component
