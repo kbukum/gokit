@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultBackend        = "memory"
+	DefaultAdapter        = "memory"
 	DefaultMaxInFlight    = 1
 	DefaultDLQSuffix      = ".dlq"
 	DefaultRequestTimeout = "30s"
@@ -19,7 +19,7 @@ const (
 // Config contains transport-agnostic messaging semantics.
 type Config struct {
 	Name              string            `yaml:"name" mapstructure:"name"`
-	Backend           string            `yaml:"backend" mapstructure:"backend"`
+	Adapter           string            `yaml:"adapter" mapstructure:"adapter"`
 	Enabled           *bool             `yaml:"enabled" mapstructure:"enabled"`
 	DeliveryGuarantee DeliveryGuarantee `yaml:"delivery_guarantee" mapstructure:"delivery_guarantee"`
 	CommitStrategy    CommitStrategy    `yaml:"commit_strategy" mapstructure:"commit_strategy"`
@@ -35,8 +35,8 @@ type Config struct {
 
 // ApplyDefaults fills zero-valued config fields with deterministic safe defaults.
 func (c *Config) ApplyDefaults() {
-	if c.Backend == "" {
-		c.Backend = DefaultBackend
+	if c.Adapter == "" {
+		c.Adapter = DefaultAdapter
 	}
 	if c.Enabled == nil {
 		enabled := true
@@ -70,11 +70,11 @@ func (c Config) IsEnabled() bool {
 
 // Validate checks transport-agnostic messaging settings.
 func (c Config) Validate() error {
-	if strings.TrimSpace(c.Backend) == "" {
-		return fmt.Errorf("messaging: backend is required")
+	if strings.TrimSpace(c.Adapter) == "" {
+		return fmt.Errorf("messaging: adapter is required")
 	}
-	if !validName(c.Backend) {
-		return fmt.Errorf("messaging: backend %q must contain only letters, digits, '.', '_' or '-'", c.Backend)
+	if !validName(c.Adapter) {
+		return fmt.Errorf("messaging: adapter %q must contain only letters, digits, '.', '_' or '-'", c.Adapter)
 	}
 	if c.Name != "" && !validName(c.Name) {
 		return fmt.Errorf("messaging: name %q must contain only letters, digits, '.', '_' or '-'", c.Name)

@@ -15,15 +15,15 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
-	if got := reg.ConsumerBackends(); len(got) != 1 || got[0] != "rabbitmq" {
-		t.Fatalf("consumer backends = %v, want [rabbitmq]", got)
+	if got := reg.ConsumerAdapters(); len(got) != 1 || got[0] != "rabbitmq" {
+		t.Fatalf("consumer adapters = %v, want [rabbitmq]", got)
 	}
-	if got := reg.ProducerBackends(); len(got) != 1 || got[0] != "rabbitmq" {
-		t.Fatalf("producer backends = %v, want [rabbitmq]", got)
+	if got := reg.ProducerAdapters(); len(got) != 1 || got[0] != "rabbitmq" {
+		t.Fatalf("producer adapters = %v, want [rabbitmq]", got)
 	}
 
 	cfg := &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}
-	producer, err := reg.NewProducer(context.Background(), messaging.Config{Backend: "rabbitmq"}, cfg, nil)
+	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq"}, cfg, nil)
 	if err != nil {
 		t.Fatalf("new rabbitmq producer: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if closeErr := producer.(interface{ Close() error }).Close(); closeErr != nil {
 		t.Fatalf("close rabbitmq producer: %v", closeErr)
 	}
-	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "rabbitmq", ConsumerGroup: "workers"}, cfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "rabbitmq", ConsumerGroup: "workers"}, cfg, nil, "events")
 	if err != nil {
 		t.Fatalf("new rabbitmq consumer: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestFactoryRejectsWrongConfigType(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Backend: "rabbitmq"}, struct{}{}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq"}, struct{}{}, nil)
 	if err == nil {
 		t.Fatal("expected config type error")
 	}
@@ -133,7 +133,7 @@ func TestRegisterRejectsUnsupportedExactlyOnce(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Backend: "rabbitmq", DeliveryGuarantee: messaging.DeliveryExactlyOnce}, &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryExactlyOnce}, &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}, nil)
 	if err == nil {
 		t.Fatal("expected exactly-once unsupported error")
 	}
@@ -147,7 +147,7 @@ func TestRegisterRejectsAdapterManagedDLQ(t *testing.T) {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
 	_, err := reg.NewProducer(context.Background(), messaging.Config{
-		Backend: "rabbitmq",
+		Adapter: "rabbitmq",
 		DLQ:     messaging.DLQPolicy{Enabled: true},
 	}, &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}, nil)
 	if err == nil {

@@ -9,17 +9,17 @@ import (
 	"github.com/kbukum/gokit/messaging/kafka"
 )
 
-const backendName = "kafka"
+const adapterName = "kafka"
 
 // Register adds a config-free Kafka consumer factory to registry.
 func Register(registry *messaging.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("kafka consumer: messaging registry is nil")
 	}
-	return registry.RegisterConsumer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, log *logger.Logger, topic string) (messaging.Consumer, error) {
-		cfg, ok := providerCfg.(*kafka.Config)
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, log *logger.Logger, topic string) (messaging.Consumer, error) {
+		cfg, ok := adapterCfg.(*kafka.Config)
 		if !ok {
-			return nil, &messaging.ConfigTypeError{Backend: backendName, Expected: "*kafka.Config", Actual: providerCfg}
+			return nil, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*kafka.Config", Actual: adapterCfg}
 		}
 		return NewConsumer(common, *cfg, topic, log) //nolint:contextcheck // factory construction is synchronous; request ctx is owned by Consume
 	})

@@ -8,8 +8,8 @@ func TestConfigApplyDefaultsAndValidate(t *testing.T) {
 	cfg := Config{DLQ: DLQPolicy{Enabled: false}}
 	cfg.ApplyDefaults()
 
-	if cfg.Backend != DefaultBackend {
-		t.Fatalf("backend = %q, want %q", cfg.Backend, DefaultBackend)
+	if cfg.Adapter != DefaultAdapter {
+		t.Fatalf("adapter = %q, want %q", cfg.Adapter, DefaultAdapter)
 	}
 	if !cfg.IsEnabled() {
 		t.Fatal("config should default to enabled")
@@ -29,14 +29,14 @@ func TestConfigValidateRejectsInvalidValues(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]Config{
-		"backend":        {Backend: "bad backend", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"delivery":       {Backend: "memory", DeliveryGuarantee: "never", CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"commit":         {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: "later", MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"inflight":       {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 0, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"timeout":        {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "0s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"consumer_group": {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, ConsumerGroup: "bad group", RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"topic":          {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, Topics: []string{"bad topic"}, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
-		"dlq":            {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: "bad suffix"}},
+		"adapter":        {Adapter: "bad adapter", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"delivery":       {Adapter: "memory", DeliveryGuarantee: "never", CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"commit":         {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: "later", MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"inflight":       {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 0, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"timeout":        {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "0s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"consumer_group": {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, ConsumerGroup: "bad group", RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"topic":          {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, Topics: []string{"bad topic"}, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"dlq":            {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: "bad suffix"}},
 	}
 	for name, cfg := range cases {
 		t.Run(name, func(t *testing.T) {

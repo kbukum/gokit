@@ -24,7 +24,7 @@ type PausableConsumer interface {
 }
 
 // RebalanceAwareConsumer is an optional capability for transports that expose group rebalance hooks.
-// Backends that do not implement it reject rebalance semantics at configuration time or omit this interface.
+// Adapters that do not implement it reject rebalance semantics at configuration time or omit this interface.
 type RebalanceAwareConsumer interface {
 	OnRebalanceStart(func(context.Context) error)
 	OnRebalanceComplete(func(context.Context) error)

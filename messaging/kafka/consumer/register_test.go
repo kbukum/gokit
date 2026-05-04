@@ -15,15 +15,15 @@ func TestRegisterIsExplicitConfigFreeAndConstructs(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register kafka consumer: %v", err)
 	}
-	if got := reg.ConsumerBackends(); len(got) != 1 || got[0] != "kafka" {
-		t.Fatalf("consumer backends = %v, want [kafka]", got)
+	if got := reg.ConsumerAdapters(); len(got) != 1 || got[0] != "kafka" {
+		t.Fatalf("consumer adapters = %v, want [kafka]", got)
 	}
-	if got := reg.ProducerBackends(); len(got) != 0 {
-		t.Fatalf("producer backends = %v, want []", got)
+	if got := reg.ProducerAdapters(); len(got) != 0 {
+		t.Fatalf("producer adapters = %v, want []", got)
 	}
 
 	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
-	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "kafka", ConsumerGroup: "test-group"}, cfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group"}, cfg, nil, "events")
 	if err != nil {
 		t.Fatalf("new kafka consumer: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestFactoryRejectsWrongConfigType(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register kafka consumer: %v", err)
 	}
-	_, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "kafka"}, struct{}{}, nil, "events")
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka"}, struct{}{}, nil, "events")
 	if err == nil {
 		t.Fatal("expected config type error")
 	}
@@ -74,7 +74,7 @@ func TestRegisterRejectsUnsupportedMaxInFlight(t *testing.T) {
 		t.Fatalf("register kafka consumer: %v", err)
 	}
 	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
-	_, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "kafka", ConsumerGroup: "test-group", MaxInFlight: 2}, cfg, nil, "events")
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group", MaxInFlight: 2}, cfg, nil, "events")
 	if err == nil {
 		t.Fatal("expected max_in_flight unsupported error")
 	}

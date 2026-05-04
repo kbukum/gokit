@@ -21,7 +21,7 @@ func TestProducer_Name(t *testing.T) {
 
 func TestProducer_Name_DefaultFromConstructor(t *testing.T) {
 	log := logger.New(&logger.Config{Level: "error"}, "test")
-	p, err := NewLazyProducer(messaging.Config{Backend: "kafka"}, kafka.Config{Brokers: []string{"localhost:9092"}}, log)
+	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka"}, kafka.Config{Brokers: []string{"localhost:9092"}}, log)
 	if err != nil {
 		t.Fatalf("NewLazyProducer() error: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestProducer_IsAvailable_Closed(t *testing.T) {
 func TestNewLazyProducer_Valid(t *testing.T) {
 	log := logger.New(&logger.Config{Level: "error"}, "test")
 	cfg := kafka.Config{Brokers: []string{"localhost:9092"}}
-	p, err := NewLazyProducer(messaging.Config{Backend: "kafka", Name: "events"}, cfg, log)
+	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka", Name: "events"}, cfg, log)
 	if err != nil {
 		t.Fatalf("NewLazyProducer() error: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestNewLazyProducer_Valid(t *testing.T) {
 func TestNewLazyProducer_DisabledCommonConfig(t *testing.T) {
 	log := logger.New(&logger.Config{Level: "error"}, "test")
 	enabled := false
-	_, err := NewLazyProducer(messaging.Config{Backend: "kafka", Enabled: &enabled}, kafka.Config{}, log)
+	_, err := NewLazyProducer(messaging.Config{Adapter: "kafka", Enabled: &enabled}, kafka.Config{}, log)
 	if err == nil {
 		t.Error("expected error when common messaging is disabled")
 	}
@@ -80,7 +80,7 @@ func TestNewLazyProducer_InvalidConfig(t *testing.T) {
 		Brokers:      []string{"localhost:9092"},
 		BatchTimeout: "not-a-duration",
 	}
-	_, err := NewLazyProducer(messaging.Config{Backend: "kafka"}, cfg, log)
+	_, err := NewLazyProducer(messaging.Config{Adapter: "kafka"}, cfg, log)
 	if err == nil {
 		t.Error("expected error for invalid config")
 	}
@@ -116,7 +116,7 @@ func TestProducer_Stats_NilWriter(t *testing.T) {
 
 func TestProducer_WriteMessages_Closed(t *testing.T) {
 	log := logger.New(&logger.Config{Level: "error"}, "test")
-	p, err := NewLazyProducer(messaging.Config{Backend: "kafka"}, kafka.Config{}, log)
+	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka"}, kafka.Config{}, log)
 	if err != nil {
 		t.Fatal(err)
 	}

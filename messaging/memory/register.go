@@ -8,7 +8,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-const backendName = "memory"
+const adapterName = "memory"
 
 // Config contains in-memory adapter settings.
 type Config struct {
@@ -36,8 +36,8 @@ func Register(registry *messaging.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("memory: messaging registry is nil")
 	}
-	if err := registry.RegisterProducer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger) (messaging.Producer, error) {
-		broker, err := brokerFromProviderCfg(providerCfg)
+	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger) (messaging.Producer, error) {
+		broker, err := brokerFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -51,8 +51,8 @@ func Register(registry *messaging.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterConsumer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
-		broker, err := brokerFromProviderCfg(providerCfg)
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
+		broker, err := brokerFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -63,14 +63,14 @@ func Register(registry *messaging.Registry) error {
 	})
 }
 
-func brokerFromProviderCfg(providerCfg any) (*InMemoryBroker, error) {
-	if providerCfg == nil {
+func brokerFromProviderCfg(adapterCfg any) (*InMemoryBroker, error) {
+	if adapterCfg == nil {
 		return NewBroker(), nil
 	}
-	if broker, ok := providerCfg.(*InMemoryBroker); ok {
+	if broker, ok := adapterCfg.(*InMemoryBroker); ok {
 		return broker, nil
 	}
-	if cfg, ok := providerCfg.(*Config); ok {
+	if cfg, ok := adapterCfg.(*Config); ok {
 		out := *cfg
 		out.ApplyDefaults()
 		if err := out.Validate(); err != nil {
@@ -81,7 +81,7 @@ func brokerFromProviderCfg(providerCfg any) (*InMemoryBroker, error) {
 		}
 		return NewBrokerWithBuffer(out.BufferSize), nil
 	}
-	return nil, &messaging.ConfigTypeError{Backend: backendName, Expected: "*memory.InMemoryBroker or *memory.Config", Actual: providerCfg}
+	return nil, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*memory.InMemoryBroker or *memory.Config", Actual: adapterCfg}
 }
 
 func validateCommonConsumer(cfg messaging.Config) error {

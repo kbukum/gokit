@@ -8,7 +8,7 @@ import (
 // ErrClosed is returned when a producer or consumer is used after Close.
 var ErrClosed = errors.New("messaging: closed")
 
-// ErrUnsupported is returned when a backend cannot honor a requested messaging capability.
+// ErrUnsupported is returned when an adapter cannot honor a requested messaging capability.
 var ErrUnsupported = errors.New("messaging: unsupported capability")
 
 // ErrorClassifier categorizes errors for retry/circuit-breaker decisions.

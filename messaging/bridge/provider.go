@@ -11,7 +11,7 @@ import (
 // --- ProducerAsSink ---
 
 // ProducerAsSink wraps a messaging.Producer as a provider.Sink[messaging.Message].
-// Messages are published to the given topic using PublishBinary.
+// The configured topic is applied when the message has no topic.
 func ProducerAsSink(name string, p messaging.Producer, topic string) provider.Sink[messaging.Message] {
 	return &producerSink{name: name, producer: p, topic: topic}
 }
@@ -26,7 +26,10 @@ func (s *producerSink) Name() string                       { return s.name }
 func (s *producerSink) IsAvailable(_ context.Context) bool { return s.producer != nil }
 
 func (s *producerSink) Send(ctx context.Context, msg messaging.Message) error {
-	return s.producer.PublishBinary(ctx, s.topic, msg.Key, msg.Value)
+	if msg.Topic == "" {
+		msg.Topic = s.topic
+	}
+	return s.producer.Send(ctx, msg)
 }
 
 // --- EventProducerAsSink ---

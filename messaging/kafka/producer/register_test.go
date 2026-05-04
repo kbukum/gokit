@@ -15,15 +15,15 @@ func TestRegisterIsExplicitConfigFreeAndConstructs(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register kafka producer: %v", err)
 	}
-	if got := reg.ProducerBackends(); len(got) != 1 || got[0] != "kafka" {
-		t.Fatalf("producer backends = %v, want [kafka]", got)
+	if got := reg.ProducerAdapters(); len(got) != 1 || got[0] != "kafka" {
+		t.Fatalf("producer adapters = %v, want [kafka]", got)
 	}
-	if got := reg.ConsumerBackends(); len(got) != 0 {
-		t.Fatalf("consumer backends = %v, want []", got)
+	if got := reg.ConsumerAdapters(); len(got) != 0 {
+		t.Fatalf("consumer adapters = %v, want []", got)
 	}
 
 	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
-	producer, err := reg.NewProducer(context.Background(), messaging.Config{Backend: "kafka", Name: "events", RetryAttempts: 7}, cfg, nil)
+	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "kafka", Name: "events", RetryAttempts: 7}, cfg, nil)
 	if err != nil {
 		t.Fatalf("new kafka producer: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestFactoryRejectsWrongConfigType(t *testing.T) {
 	if err := Register(reg); err != nil {
 		t.Fatalf("register kafka producer: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Backend: "kafka"}, struct{}{}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "kafka"}, struct{}{}, nil)
 	if err == nil {
 		t.Fatal("expected config type error")
 	}

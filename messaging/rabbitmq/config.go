@@ -11,7 +11,7 @@ import (
 	"github.com/kbukum/gokit/security"
 )
 
-const backendName = "rabbitmq"
+const adapterName = "rabbitmq"
 
 const defaultURL = "amqps://localhost:5671/"
 

@@ -88,7 +88,7 @@ factories only through explicit config-free `Register(registry)` calls; runtime 
 passed when creating producer/consumer instances. They do not use `init` registration side effects.
 
 Core `messaging.Config` owns only broker-neutral policy: instance `Name`, `Enabled`,
-`Backend`, delivery guarantee, commit strategy, DLQ policy, max in-flight,
+`Adapter`, delivery guarantee, commit strategy, DLQ policy, max in-flight,
 consumer group, allowed topics/subscriptions, request timeout, and retry attempts/
 backoff. Adapter configs contain only provider-specific connection/protocol knobs:
 Kafka keeps brokers/resolve, TLS/SASL, compression, required acks, batch settings,
@@ -112,7 +112,7 @@ import (
 )
 
 common := messaging.Config{
-	Backend:        "kafka",
+	Adapter:        "kafka",
 	Name:           "my-service-producer",
 	Topics:         []string{"events"},
 	ConsumerGroup:  "my-service",
@@ -143,7 +143,7 @@ reg := messaging.NewRegistry()
 _ = natsadapter.Register(reg)
 producer, _ := reg.NewProducer(ctx,
 	messaging.Config{
-		Backend:           "nats",
+		Adapter:           "nats",
 		DeliveryGuarantee: messaging.DeliveryAtMostOnce,
 		CommitStrategy:    messaging.CommitAuto,
 		Topics:            []string{"events"},
@@ -168,7 +168,7 @@ import (
 reg := messaging.NewRegistry()
 _ = rabbitmqadapter.Register(reg)
 producer, _ := reg.NewProducer(ctx,
-	messaging.Config{Backend: "rabbitmq", Topics: []string{"events"}, RequestTimeout: "5s"},
+	messaging.Config{Adapter: "rabbitmq", Topics: []string{"events"}, RequestTimeout: "5s"},
 	&rabbitmqadapter.Config{
 		URL:      "amqps://rabbitmq.internal:5671/",
 		Username: os.Getenv("RABBITMQ_USERNAME"),

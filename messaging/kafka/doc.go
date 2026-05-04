@@ -20,7 +20,7 @@
 // registry/direct constructors.
 //
 //	messaging:
-//	  backend: kafka
+//	  adapter: kafka
 //	  consumer_group: "my-group"
 //	  topics: ["events"]
 //	kafka:

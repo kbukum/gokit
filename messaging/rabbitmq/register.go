@@ -14,8 +14,8 @@ func Register(registry *messaging.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("rabbitmq: messaging registry is nil")
 	}
-	if err := registry.RegisterProducer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger) (messaging.Producer, error) {
-		cfg, err := configFromProviderCfg(providerCfg)
+	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger) (messaging.Producer, error) {
+		cfg, err := configFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -31,8 +31,8 @@ func Register(registry *messaging.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterConsumer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
-		cfg, err := configFromProviderCfg(providerCfg)
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
+		cfg, err := configFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -44,8 +44,8 @@ func Register(registry *messaging.Registry) error {
 	})
 }
 
-func configFromProviderCfg(providerCfg any) (Config, error) {
-	if providerCfg == nil {
+func configFromProviderCfg(adapterCfg any) (Config, error) {
+	if adapterCfg == nil {
 		cfg := Config{}
 		cfg.ApplyDefaults()
 		if err := cfg.Validate(); err != nil {
@@ -53,9 +53,9 @@ func configFromProviderCfg(providerCfg any) (Config, error) {
 		}
 		return cfg, nil
 	}
-	cfg, ok := providerCfg.(*Config)
+	cfg, ok := adapterCfg.(*Config)
 	if !ok {
-		return Config{}, &messaging.ConfigTypeError{Backend: backendName, Expected: "*rabbitmq.Config", Actual: providerCfg}
+		return Config{}, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*rabbitmq.Config", Actual: adapterCfg}
 	}
 	out := *cfg
 	out.ApplyDefaults()

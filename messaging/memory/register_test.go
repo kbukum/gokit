@@ -8,7 +8,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-func TestRegisterMemoryBackendConstructsFactories(t *testing.T) {
+func TestRegisterMemoryAdapterConstructsFactories(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
@@ -17,13 +17,13 @@ func TestRegisterMemoryBackendConstructsFactories(t *testing.T) {
 		t.Fatalf("register memory: %v", err)
 	}
 
-	cfg := messaging.Config{Backend: "memory"}
-	providerCfg := &Config{Broker: broker}
-	producer, err := reg.NewProducer(context.Background(), cfg, providerCfg, nil)
+	cfg := messaging.Config{Adapter: "memory"}
+	adapterCfg := &Config{Broker: broker}
+	producer, err := reg.NewProducer(context.Background(), cfg, adapterCfg, nil)
 	if err != nil {
 		t.Fatalf("new producer: %v", err)
 	}
-	consumer, err := reg.NewConsumer(context.Background(), cfg, providerCfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), cfg, adapterCfg, nil, "events")
 	if err != nil {
 		t.Fatalf("new consumer: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRegisterRejectsAdapterManagedDLQ(t *testing.T) {
 		t.Fatalf("register memory: %v", err)
 	}
 	_, err := reg.NewProducer(context.Background(), messaging.Config{
-		Backend: "memory",
+		Adapter: "memory",
 		DLQ:     messaging.DLQPolicy{Enabled: true},
 	}, &Config{}, nil)
 	if err == nil {

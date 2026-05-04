@@ -28,16 +28,16 @@ func TestRegistryExplicitRegistration(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
-	if got := reg.ProducerBackends(); len(got) != 0 {
-		t.Fatalf("new registry has producer backends: %v", got)
+	if got := reg.ProducerAdapters(); len(got) != 0 {
+		t.Fatalf("new registry has producer adapters: %v", got)
 	}
-	if got := reg.ConsumerBackends(); len(got) != 0 {
-		t.Fatalf("new registry has consumer backends: %v", got)
+	if got := reg.ConsumerAdapters(); len(got) != 0 {
+		t.Fatalf("new registry has consumer adapters: %v", got)
 	}
 
-	_, err := reg.NewProducer(context.Background(), Config{Backend: "kafka"}, nil, logger.NewDefault("registry-test"))
+	_, err := reg.NewProducer(context.Background(), Config{Adapter: "kafka"}, nil, logger.NewDefault("registry-test"))
 	if err == nil {
-		t.Fatal("expected unregistered producer backend error")
+		t.Fatal("expected unregistered producer adapter error")
 	}
 }
 
@@ -47,12 +47,12 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 	reg := NewRegistry()
 	producerCfg := struct{ Name string }{Name: "producer-a"}
 	consumerCfg := struct{ Name string }{Name: "consumer-a"}
-	if err := reg.RegisterProducer("custom", func(_ context.Context, cfg Config, providerCfg any, log *logger.Logger) (Producer, error) {
-		if cfg.Backend != "custom" {
-			t.Fatalf("cfg.Backend = %q, want custom", cfg.Backend)
+	if err := reg.RegisterProducer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logger.Logger) (Producer, error) {
+		if cfg.Adapter != "custom" {
+			t.Fatalf("cfg.Adapter = %q, want custom", cfg.Adapter)
 		}
-		if providerCfg != &producerCfg {
-			t.Fatalf("providerCfg = %p, want %p", providerCfg, &producerCfg)
+		if adapterCfg != &producerCfg {
+			t.Fatalf("adapterCfg = %p, want %p", adapterCfg, &producerCfg)
 		}
 		if log == nil {
 			t.Fatal("log is nil")
@@ -61,12 +61,12 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("register producer: %v", err)
 	}
-	if err := reg.RegisterConsumer("custom", func(_ context.Context, cfg Config, providerCfg any, log *logger.Logger, topic string) (Consumer, error) {
-		if cfg.Backend != "custom" {
-			t.Fatalf("cfg.Backend = %q, want custom", cfg.Backend)
+	if err := reg.RegisterConsumer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logger.Logger, topic string) (Consumer, error) {
+		if cfg.Adapter != "custom" {
+			t.Fatalf("cfg.Adapter = %q, want custom", cfg.Adapter)
 		}
-		if providerCfg != &consumerCfg {
-			t.Fatalf("providerCfg = %p, want %p", providerCfg, &consumerCfg)
+		if adapterCfg != &consumerCfg {
+			t.Fatalf("adapterCfg = %p, want %p", adapterCfg, &consumerCfg)
 		}
 		if log == nil {
 			t.Fatal("log is nil")
@@ -76,10 +76,10 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 		t.Fatalf("register consumer: %v", err)
 	}
 
-	if _, err := reg.NewProducer(context.Background(), Config{Backend: "custom"}, &producerCfg, nil); err != nil {
+	if _, err := reg.NewProducer(context.Background(), Config{Adapter: "custom"}, &producerCfg, nil); err != nil {
 		t.Fatalf("new producer: %v", err)
 	}
-	consumer, err := reg.NewConsumer(context.Background(), Config{Backend: "custom"}, &consumerCfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), Config{Adapter: "custom"}, &consumerCfg, nil, "events")
 	if err != nil {
 		t.Fatalf("new consumer: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 	}
 }
 
-func TestRegistryRejectsDuplicateBackends(t *testing.T) {
+func TestRegistryRejectsDuplicateAdapters(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
@@ -112,7 +112,7 @@ func TestRegistryHonorsConfiguredProducerTopics(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("register producer: %v", err)
 	}
-	producer, err := reg.NewProducer(context.Background(), Config{Backend: "custom", Topics: []string{"events"}}, nil, nil)
+	producer, err := reg.NewProducer(context.Background(), Config{Adapter: "custom", Topics: []string{"events"}}, nil, nil)
 	if err != nil {
 		t.Fatalf("new producer: %v", err)
 	}
@@ -133,10 +133,10 @@ func TestRegistryHonorsConfiguredConsumerSubscriptions(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("register consumer: %v", err)
 	}
-	if _, err := reg.NewConsumer(context.Background(), Config{Backend: "custom", Subscriptions: []string{"events"}}, nil, nil, "events"); err != nil {
+	if _, err := reg.NewConsumer(context.Background(), Config{Adapter: "custom", Subscriptions: []string{"events"}}, nil, nil, "events"); err != nil {
 		t.Fatalf("configured subscription rejected: %v", err)
 	}
-	if _, err := reg.NewConsumer(context.Background(), Config{Backend: "custom", Subscriptions: []string{"events"}}, nil, nil, "other"); err == nil {
+	if _, err := reg.NewConsumer(context.Background(), Config{Adapter: "custom", Subscriptions: []string{"events"}}, nil, nil, "other"); err == nil {
 		t.Fatal("expected unconfigured subscription error")
 	}
 }

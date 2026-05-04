@@ -76,7 +76,7 @@ func TestConfigDoesNotExposeCorePolicyFields(t *testing.T) {
 func TestValidateCommonRejectsAdapterManagedDLQ(t *testing.T) {
 	t.Parallel()
 
-	cfg := messaging.Config{Backend: "kafka", DLQ: messaging.DLQPolicy{Enabled: true}}
+	cfg := messaging.Config{Adapter: "kafka", DLQ: messaging.DLQPolicy{Enabled: true}}
 	cfg.ApplyDefaults()
 	if err := ValidateCommonProducer(cfg); err == nil {
 		t.Fatal("expected producer DLQ validation error")

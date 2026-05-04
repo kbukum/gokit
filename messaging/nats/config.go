@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	backendName = "nats"
+	adapterName = "nats"
 	defaultURL  = "tls://localhost:4222"
 )
 
