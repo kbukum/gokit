@@ -26,7 +26,7 @@ func TestDetect_GIF(t *testing.T) {
 	assertInfo(t, info, Image, "gif", "image/gif")
 }
 
-func TestDetect_GIFRejectsTruncatedHeaders(t *testing.T) {
+func TestDetect_GIFRejectsTruncatedOrInvalidHeaders(t *testing.T) {
 	for _, data := range [][]byte{
 		[]byte("GIF"),
 		[]byte("GIF8"),
@@ -243,12 +243,22 @@ func TestDetect_ShortData(t *testing.T) {
 
 	// 4 bytes exercise the shortest guarded image/video signatures without
 	// allowing longer detectors to read past the slice.
-	for _, data := range [][]byte{
-		{0xFF, 0xD8, 0xFF, 0x00},
-		{'F', 'L', 'V', 0x00},
-		{0x1A, 0x45, 0xDF, 0xA3},
+	for _, tc := range []struct {
+		name   string
+		data   []byte
+		typ    Type
+		format string
+	}{
+		{name: "jpeg", data: []byte{0xFF, 0xD8, 0xFF, 0x00}, typ: Image, format: "jpeg"},
+		{name: "flv", data: []byte{'F', 'L', 'V', 0x00}, typ: Video, format: "flv"},
+		{name: "ebml", data: []byte{0x1A, 0x45, 0xDF, 0xA3}, typ: Video, format: "mkv"},
 	} {
-		_ = Detect(data)
+		t.Run(tc.name, func(t *testing.T) {
+			info := Detect(tc.data)
+			if info.Type != tc.typ || info.Format != tc.format {
+				t.Fatalf("expected %s/%s, got %#v", tc.typ, tc.format, info)
+			}
+		})
 	}
 }
 
