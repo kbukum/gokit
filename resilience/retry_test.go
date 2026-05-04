@@ -236,3 +236,16 @@ func TestCalculateBackoff(t *testing.T) {
 		}
 	}
 }
+
+func TestBackoffDelay(t *testing.T) {
+	cfg := RetryConfig{
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     250 * time.Millisecond,
+		BackoffFactor:  2.0,
+		Jitter:         0,
+	}
+
+	if got := BackoffDelay(3, cfg); got != 250*time.Millisecond {
+		t.Fatalf("BackoffDelay() = %v, want 250ms", got)
+	}
+}

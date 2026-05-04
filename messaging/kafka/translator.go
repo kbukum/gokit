@@ -7,7 +7,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-// KafkaErrorTranslator implements messaging.ErrorTranslator for Kafka errors.
+// KafkaErrorTranslator adapts Kafka errors to the broker-neutral messaging.ErrorTranslator contract.
 type KafkaErrorTranslator struct{}
 
 var _ messaging.ErrorTranslator = KafkaErrorTranslator{}
@@ -17,7 +17,7 @@ func (KafkaErrorTranslator) Translate(err error, topic string) *apperrors.AppErr
 }
 
 // FromKafka converts a Kafka error to an AppError.
-// It translates Kafka-specific errors to user-friendly messages.
+// It keeps Kafka-specific classification in the adapter while returning core error shapes.
 func FromKafka(err error, topic string) *apperrors.AppError {
 	if err == nil {
 		return nil

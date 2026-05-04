@@ -3,9 +3,15 @@ package middleware
 import (
 	"context"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/messaging"
+)
+
+const (
+	redactedValue      = "<redacted>"
+	maxDLQPayloadBytes = 4096
 )
 
 // DeadLetterEnvelope is the JSON payload written to the DLQ topic.
@@ -15,7 +21,7 @@ type DeadLetterEnvelope struct {
 	RetryCount    int               `json:"retry_count"`
 	Timestamp     time.Time         `json:"timestamp"`
 	Headers       map[string]string `json:"headers,omitempty"`
-	Payload       []byte            `json:"payload"`
+	Payload       string            `json:"payload"`
 }
 
 // DLQOption configures a DeadLetterProducer.
@@ -48,8 +54,8 @@ func NewDeadLetterProducer(publisher messaging.Producer, opts ...DLQOption) *Dea
 }
 
 // Send publishes a DeadLetterEnvelope to the DLQ topic for the given message.
-// The envelope includes the original payload, headers, error description,
-// retry count (read from the "x-retry-count" header), and a UTC timestamp.
+// The envelope includes a redacted payload summary, redacted headers, sanitized
+// error summary, retry count (read from the "x-retry-count" header), and a UTC timestamp.
 func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, originalErr error) error {
 	retryCount := 0
 	if rc, ok := msg.Headers["x-retry-count"]; ok {
@@ -58,11 +64,11 @@ func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, or
 
 	envelope := DeadLetterEnvelope{
 		OriginalTopic: msg.Topic,
-		Error:         originalErr.Error(),
+		Error:         sanitizeSummary(originalErr.Error()),
 		RetryCount:    retryCount,
 		Timestamp:     time.Now().UTC(),
-		Headers:       msg.Headers,
-		Payload:       msg.Value,
+		Headers:       redactHeaders(msg.Headers),
+		Payload:       payloadSummary(msg.Value),
 	}
 
 	dlqTopic := msg.Topic + d.suffix
@@ -72,4 +78,56 @@ func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, or
 	}
 
 	return d.publisher.PublishJSON(ctx, dlqTopic, key, envelope)
+}
+
+func redactHeaders(headers map[string]string) map[string]string {
+	if len(headers) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if isSensitiveKey(key) || containsSensitiveMarker(value) {
+			out[key] = redactedValue
+			continue
+		}
+		out[key] = value
+	}
+	return out
+}
+
+func sanitizeSummary(value string) string {
+	if containsSensitiveMarker(value) {
+		return redactedValue
+	}
+	return truncate(value)
+}
+
+func payloadSummary(payload []byte) string {
+	value := string(payload)
+	if containsSensitiveMarker(value) {
+		return redactedValue
+	}
+	return truncate(value)
+}
+
+func truncate(value string) string {
+	runes := []rune(value)
+	if len(runes) <= maxDLQPayloadBytes {
+		return value
+	}
+	return string(runes[:maxDLQPayloadBytes]) + "…"
+}
+
+func isSensitiveKey(key string) bool {
+	return containsSensitiveMarker(key)
+}
+
+func containsSensitiveMarker(value string) bool {
+	lower := strings.ToLower(value)
+	for _, part := range []string{"authorization", "cookie", "token", "secret", "password", "credential", "api-key", "apikey"} {
+		if strings.Contains(lower, part) {
+			return true
+		}
+	}
+	return false
 }

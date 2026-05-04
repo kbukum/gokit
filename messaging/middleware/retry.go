@@ -15,7 +15,7 @@ type RetryMiddlewareConfig struct {
 
 	// OnExhausted is called after all retries fail. Use this to route
 	// the message to a dead-letter queue. May be nil.
-	OnExhausted func(ctx context.Context, msg messaging.Message, err error)
+	OnExhausted func(ctx context.Context, msg messaging.Message, err error) error
 }
 
 // RetryHandler wraps a MessageHandler with retry logic powered by
@@ -40,9 +40,12 @@ func RetryHandler(handler messaging.MessageHandler, cfg RetryMiddlewareConfig) m
 			return handler(ctx, msg)
 		})
 
-		if err != nil && cfg.OnExhausted != nil {
-			cfg.OnExhausted(ctx, msg, err)
+		if err == nil {
+			return nil
 		}
-		return err
+		if cfg.OnExhausted == nil {
+			return err
+		}
+		return cfg.OnExhausted(ctx, msg, err)
 	}
 }

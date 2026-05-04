@@ -23,7 +23,7 @@ func (p *adapterProducer) Publish(_ context.Context, _ string, _ Event, _ ...str
 	return nil
 }
 
-func (p *adapterProducer) PublishJSON(_ context.Context, _, _ string, _ interface{}) error {
+func (p *adapterProducer) PublishJSON(_ context.Context, _, _ string, _ any) error {
 	return nil
 }
 
@@ -32,6 +32,18 @@ func (p *adapterProducer) PublishBinary(_ context.Context, topic, key string, da
 	return p.publishBinaryErr
 }
 
+func (p *adapterProducer) Send(ctx context.Context, msg Message) error {
+	return p.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
+}
+func (p *adapterProducer) SendBatch(ctx context.Context, messages []Message) error {
+	for _, msg := range messages {
+		if err := p.Send(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (p *adapterProducer) Flush(context.Context) error { return nil }
 func (p *adapterProducer) Close() error {
 	p.closeCalled = true
 	return nil

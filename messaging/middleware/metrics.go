@@ -10,22 +10,22 @@ import (
 
 // InstrumentHandler wraps a MessageHandler with OpenTelemetry metrics:
 //
-//   - kafka_consumer_messages_total      (counter)   — total messages processed
-//   - kafka_consumer_errors_total        (counter)   — total processing errors
-//   - kafka_consumer_processing_duration_seconds (histogram) — processing latency
+//   - messaging_consumer_messages_total      (counter)   — total messages processed
+//   - messaging_consumer_errors_total        (counter)   — total processing errors
+//   - messaging_consumer_processing_duration_seconds (histogram) — processing latency
 //
 // All instruments are labeled with "topic" and "group".
 func InstrumentHandler(topic, group string, handler messaging.MessageHandler) messaging.MessageHandler {
-	messagesTotal, _ := observability.NewInt64Counter("kafka.consumer", "kafka_consumer_messages_total",
-		observability.WithInstrumentDescription("Total number of consumed Kafka messages"),
+	messagesTotal, _ := observability.NewInt64Counter("messaging.consumer", "messaging_consumer_messages_total",
+		observability.WithInstrumentDescription("Total number of consumed messages"),
 	)
-	errorsTotal, _ := observability.NewInt64Counter("kafka.consumer", "kafka_consumer_errors_total",
-		observability.WithInstrumentDescription("Total number of Kafka consumer errors"),
+	errorsTotal, _ := observability.NewInt64Counter("messaging.consumer", "messaging_consumer_errors_total",
+		observability.WithInstrumentDescription("Total number of messaging consumer errors"),
 	)
 	processingDuration, _ := observability.NewFloat64Histogram(
-		"kafka.consumer",
-		"kafka_consumer_processing_duration_seconds",
-		observability.WithInstrumentDescription("Duration of Kafka message processing in seconds"),
+		"messaging.consumer",
+		"messaging_consumer_processing_duration_seconds",
+		observability.WithInstrumentDescription("Duration of message processing in seconds"),
 		observability.WithInstrumentUnit("s"),
 	)
 

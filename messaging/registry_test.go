@@ -1,0 +1,140 @@
+package messaging
+
+import (
+	"context"
+	"testing"
+
+	"github.com/kbukum/gokit/logger"
+)
+
+type registryProducer struct{}
+
+func (registryProducer) Publish(context.Context, string, Event, ...string) error     { return nil }
+func (registryProducer) PublishJSON(context.Context, string, string, any) error      { return nil }
+func (registryProducer) PublishBinary(context.Context, string, string, []byte) error { return nil }
+func (registryProducer) Close() error                                                { return nil }
+
+func (registryProducer) Send(context.Context, Message) error        { return nil }
+func (registryProducer) SendBatch(context.Context, []Message) error { return nil }
+func (registryProducer) Flush(context.Context) error                { return nil }
+
+type registryConsumer struct{ topic string }
+
+func (c registryConsumer) Consume(context.Context, MessageHandler) error { return nil }
+func (c registryConsumer) Topic() string                                 { return c.topic }
+func (c registryConsumer) Close() error                                  { return nil }
+
+func TestRegistryExplicitRegistration(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry()
+	if got := reg.ProducerBackends(); len(got) != 0 {
+		t.Fatalf("new registry has producer backends: %v", got)
+	}
+	if got := reg.ConsumerBackends(); len(got) != 0 {
+		t.Fatalf("new registry has consumer backends: %v", got)
+	}
+
+	_, err := reg.NewProducer(context.Background(), Config{Backend: "kafka"}, nil, logger.NewDefault("registry-test"))
+	if err == nil {
+		t.Fatal("expected unregistered producer backend error")
+	}
+}
+
+func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry()
+	producerCfg := struct{ Name string }{Name: "producer-a"}
+	consumerCfg := struct{ Name string }{Name: "consumer-a"}
+	if err := reg.RegisterProducer("custom", func(_ context.Context, cfg Config, providerCfg any, log *logger.Logger) (Producer, error) {
+		if cfg.Backend != "custom" {
+			t.Fatalf("cfg.Backend = %q, want custom", cfg.Backend)
+		}
+		if providerCfg != &producerCfg {
+			t.Fatalf("providerCfg = %p, want %p", providerCfg, &producerCfg)
+		}
+		if log == nil {
+			t.Fatal("log is nil")
+		}
+		return registryProducer{}, nil
+	}); err != nil {
+		t.Fatalf("register producer: %v", err)
+	}
+	if err := reg.RegisterConsumer("custom", func(_ context.Context, cfg Config, providerCfg any, log *logger.Logger, topic string) (Consumer, error) {
+		if cfg.Backend != "custom" {
+			t.Fatalf("cfg.Backend = %q, want custom", cfg.Backend)
+		}
+		if providerCfg != &consumerCfg {
+			t.Fatalf("providerCfg = %p, want %p", providerCfg, &consumerCfg)
+		}
+		if log == nil {
+			t.Fatal("log is nil")
+		}
+		return registryConsumer{topic: topic}, nil
+	}); err != nil {
+		t.Fatalf("register consumer: %v", err)
+	}
+
+	if _, err := reg.NewProducer(context.Background(), Config{Backend: "custom"}, &producerCfg, nil); err != nil {
+		t.Fatalf("new producer: %v", err)
+	}
+	consumer, err := reg.NewConsumer(context.Background(), Config{Backend: "custom"}, &consumerCfg, nil, "events")
+	if err != nil {
+		t.Fatalf("new consumer: %v", err)
+	}
+	if consumer.Topic() != "events" {
+		t.Fatalf("consumer topic = %q, want events", consumer.Topic())
+	}
+}
+
+func TestRegistryRejectsDuplicateBackends(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry()
+	factory := func(context.Context, Config, any, *logger.Logger) (Producer, error) { return nil, nil }
+	if err := reg.RegisterProducer("memory", factory); err != nil {
+		t.Fatalf("register producer: %v", err)
+	}
+	if err := reg.RegisterProducer("memory", factory); err == nil {
+		t.Fatal("expected duplicate producer registration error")
+	}
+}
+
+func TestRegistryHonorsConfiguredProducerTopics(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry()
+	if err := reg.RegisterProducer("custom", func(context.Context, Config, any, *logger.Logger) (Producer, error) {
+		return registryProducer{}, nil
+	}); err != nil {
+		t.Fatalf("register producer: %v", err)
+	}
+	producer, err := reg.NewProducer(context.Background(), Config{Backend: "custom", Topics: []string{"events"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("new producer: %v", err)
+	}
+	if err := producer.PublishBinary(context.Background(), "events", "", nil); err != nil {
+		t.Fatalf("configured topic rejected: %v", err)
+	}
+	if err := producer.PublishBinary(context.Background(), "other", "", nil); err == nil {
+		t.Fatal("expected unconfigured topic error")
+	}
+}
+
+func TestRegistryHonorsConfiguredConsumerSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	reg := NewRegistry()
+	if err := reg.RegisterConsumer("custom", func(_ context.Context, _ Config, _ any, _ *logger.Logger, topic string) (Consumer, error) {
+		return registryConsumer{topic: topic}, nil
+	}); err != nil {
+		t.Fatalf("register consumer: %v", err)
+	}
+	if _, err := reg.NewConsumer(context.Background(), Config{Backend: "custom", Subscriptions: []string{"events"}}, nil, nil, "events"); err != nil {
+		t.Fatalf("configured subscription rejected: %v", err)
+	}
+	if _, err := reg.NewConsumer(context.Background(), Config{Backend: "custom", Subscriptions: []string{"events"}}, nil, nil, "other"); err == nil {
+		t.Fatal("expected unconfigured subscription error")
+	}
+}

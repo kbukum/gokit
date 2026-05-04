@@ -165,3 +165,30 @@ func TestMessage_Timestamp(t *testing.T) {
 		t.Errorf("Timestamp mismatch")
 	}
 }
+
+func TestNewMessage(t *testing.T) {
+	t.Parallel()
+
+	msg := NewMessage("topic", "key", []byte("val"), nil)
+	if msg.Topic != "topic" {
+		t.Errorf("Topic = %q", msg.Topic)
+	}
+	if msg.Key != "key" {
+		t.Errorf("Key = %q", msg.Key)
+	}
+	if string(msg.Value) != "val" {
+		t.Errorf("Value = %q", string(msg.Value))
+	}
+	if msg.Headers == nil {
+		t.Error("expected non-nil Headers")
+	}
+}
+
+func TestNewMessagePreservesHeaders(t *testing.T) {
+	t.Parallel()
+
+	msg := NewMessage("topic", "key", []byte("val"), map[string]string{"h": "v"})
+	if msg.Headers["h"] != "v" {
+		t.Errorf("Headers[h] = %q, want v", msg.Headers["h"])
+	}
+}

@@ -123,6 +123,12 @@ func RetryFunc(ctx context.Context, cfg RetryConfig, fn func() error) error {
 	return err
 }
 
+// BackoffDelay returns the normalized retry delay for a failed attempt.
+// attempt is one-based and matches the attempt value passed to RetryConfig.OnRetry.
+func BackoffDelay(attempt int, cfg RetryConfig) time.Duration {
+	return calculateBackoff(attempt, cfg)
+}
+
 func normalizeRetryConfig(cfg RetryConfig) RetryConfig {
 	if cfg.MaxAttempts <= 0 {
 		cfg.MaxAttempts = 3

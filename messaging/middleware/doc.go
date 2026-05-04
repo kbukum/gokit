@@ -11,8 +11,8 @@
 //
 //	wrapped := middleware.RetryHandler(handler, middleware.RetryMiddlewareConfig{
 //	    RetryConfig: resilience.DefaultRetryConfig(),
-//	    OnExhausted: func(ctx context.Context, msg messaging.Message, err error) {
-//	        dlq.Send(ctx, msg, err)
+//	    OnExhausted: func(ctx context.Context, msg messaging.Message, err error) error {
+//	        return dlq.Send(ctx, msg, err)
 //	    },
 //	})
 //

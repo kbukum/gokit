@@ -1,10 +1,14 @@
 package kafka
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	kafkago "github.com/segmentio/kafka-go"
+
+	"github.com/kbukum/gokit/messaging"
 )
 
 func TestFromKafkaMessage(t *testing.T) {
@@ -45,7 +49,7 @@ func TestFromKafkaMessage(t *testing.T) {
 }
 
 func TestToKafkaMessage(t *testing.T) {
-	msg := NewMessage("t1", "k1", []byte("v1"), map[string]string{"h1": "val1"})
+	msg := messaging.NewMessage("t1", "k1", []byte("v1"), map[string]string{"h1": "val1"})
 	msg.Partition = 1
 	msg.Offset = 10
 	km := ToKafkaMessage(msg)
@@ -71,15 +75,17 @@ func TestFromKafkaMessage_NoHeaders(t *testing.T) {
 	}
 }
 
-func TestNewMessage(t *testing.T) {
-	msg := NewMessage("topic", "key", []byte("val"), nil)
-	if msg.Topic != "topic" {
-		t.Errorf("Topic = %q", msg.Topic)
-	}
-	if msg.Key != "key" {
-		t.Errorf("Key = %q", msg.Key)
-	}
-	if msg.Headers == nil {
-		t.Error("expected non-nil Headers")
+func TestKafkaPackageDoesNotDefineGenericMessageConstructor(t *testing.T) {
+	t.Parallel()
+
+	files := []string{"translator.go", "helpers.go"}
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		if strings.Contains(string(data), "func NewMessage(") {
+			t.Fatalf("%s defines generic NewMessage; use messaging.NewMessage in core", file)
+		}
 	}
 }

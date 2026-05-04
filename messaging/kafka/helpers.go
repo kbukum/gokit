@@ -39,16 +39,3 @@ func ToKafkaMessage(m messaging.Message) kafkago.Message {
 		Headers:   headers,
 	}
 }
-
-// NewMessage creates a basic domain Message with key, value, topic, and headers.
-func NewMessage(topic, key string, value []byte, headers map[string]string) messaging.Message {
-	if headers == nil {
-		headers = make(map[string]string)
-	}
-	return messaging.Message{
-		Key:     key,
-		Value:   value,
-		Topic:   topic,
-		Headers: headers,
-	}
-}

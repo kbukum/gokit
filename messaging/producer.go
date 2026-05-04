@@ -9,9 +9,12 @@ import "context"
 //   - PublishJSON:   arbitrary data as JSON (direct marshal, no envelope)
 //   - PublishBinary: raw bytes (protobuf, avro, etc. — zero encoding overhead)
 type Producer interface {
+	Send(ctx context.Context, msg Message) error
+	SendBatch(ctx context.Context, messages []Message) error
 	Publish(ctx context.Context, topic string, event Event, key ...string) error
-	PublishJSON(ctx context.Context, topic, key string, value interface{}) error
+	PublishJSON(ctx context.Context, topic, key string, value any) error
 	PublishBinary(ctx context.Context, topic, key string, data []byte) error
+	Flush(ctx context.Context) error
 	Close() error
 }
 

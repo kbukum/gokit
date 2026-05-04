@@ -14,7 +14,7 @@ var _ provider.Sink[messaging.Message] = (*Producer)(nil)
 
 // Name returns the producer name (implements provider.Provider).
 func (p *Producer) Name() string {
-	return p.cfg.Name
+	return p.name
 }
 
 // IsAvailable checks if the producer is ready (implements provider.Provider).

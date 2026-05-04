@@ -11,28 +11,39 @@ import (
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // Consumer wraps a kafka-go Reader with TLS/SASL, backoff, and gokit logging.
 type Consumer struct {
-	reader   *kafkago.Reader
-	topic    string
-	groupID  string
-	log      *logger.Logger
-	failures int
-	errCount *atomic.Int64 // tracks kafka-go internal error count for rate-limiting
+	reader         *kafkago.Reader
+	topic          string
+	groupID        string
+	log            *logger.Logger
+	failures       int
+	errCount       *atomic.Int64 // tracks kafka-go internal error count for rate-limiting
+	commitStrategy messaging.CommitStrategy
 }
 
 // NewConsumer creates a new Kafka consumer for a single topic.
-func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer, error) {
+func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *logger.Logger) (*Consumer, error) {
+	common.ApplyDefaults()
+	if err := common.Validate(); err != nil {
+		return nil, fmt.Errorf("kafka consumer common config: %w", err)
+	}
+	if !common.IsEnabled() {
+		return nil, fmt.Errorf("kafka consumer: messaging is disabled")
+	}
+	if err := kafka.ValidateCommonConsumer(common); err != nil {
+		return nil, err
+	}
 	cfg.ApplyDefaults()
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kafka consumer config: %w", err)
 	}
-
-	if !cfg.Enabled {
-		return nil, fmt.Errorf("kafka is disabled")
+	if err := messaging.ValidateTopic(topic); err != nil {
+		return nil, err
 	}
 
 	dialer, err := kafka.CreateDialer(&cfg)
@@ -40,6 +51,9 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 		return nil, fmt.Errorf("kafka consumer dialer: %w", err)
 	}
 
+	if log == nil {
+		log = logger.NewDefault("messaging")
+	}
 	clog := log.WithComponent("kafka.consumer")
 
 	// Rate-limited error logger: log first error, suppress subsequent until recovery.
@@ -49,7 +63,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 		if n == 1 {
 			clog.Warn("Kafka connection issue (retrying automatically)", map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
 				"topic":   topic,
-				"groupID": cfg.GroupID,
+				"groupID": common.ConsumerGroup,
 			})
 		}
 	})
@@ -57,7 +71,7 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 	reader := kafkago.NewReader(kafkago.ReaderConfig{
 		Brokers:           cfg.Brokers,
 		Topic:             topic,
-		GroupID:           cfg.GroupID,
+		GroupID:           common.ConsumerGroup,
 		Dialer:            dialer,
 		StartOffset:       kafkago.FirstOffset,
 		MinBytes:          1,
@@ -70,16 +84,17 @@ func NewConsumer(cfg kafka.Config, topic string, log *logger.Logger) (*Consumer,
 
 	clog.Debug("Kafka consumer initialized", map[string]interface{}{
 		"topic":   topic,
-		"groupID": cfg.GroupID,
+		"groupID": common.ConsumerGroup,
 		"brokers": cfg.Brokers,
 	})
 
 	return &Consumer{
-		reader:   reader,
-		topic:    topic,
-		groupID:  cfg.GroupID,
-		log:      clog,
-		errCount: &errCount,
+		reader:         reader,
+		topic:          topic,
+		groupID:        common.ConsumerGroup,
+		log:            clog,
+		errCount:       &errCount,
+		commitStrategy: common.CommitStrategy,
 	}, nil
 }
 
@@ -96,37 +111,50 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			msg, err := c.reader.ReadMessage(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				if retryErr := c.handleFailure(ctx, err); retryErr != nil {
-					return retryErr
-				}
-				continue
+		}
+
+		msg, err := c.read(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-
-			c.failures = 0
-			if c.errCount.Load() > 0 {
-				c.log.InfoCtx(ctx, "Kafka connection recovered", map[string]interface{}{
-					"topic":   c.topic,
-					"groupID": c.groupID,
-				})
-				c.errCount.Store(0)
+			if retryErr := c.handleFailure(ctx, err); retryErr != nil {
+				return retryErr
 			}
+			continue
+		}
 
-			domainMsg := kafka.FromKafkaMessage(msg)
+		c.failures = 0
+		if c.errCount.Load() > 0 {
+			c.log.InfoCtx(ctx, "Kafka connection recovered", map[string]interface{}{
+				"topic":   c.topic,
+				"groupID": c.groupID,
+			})
+			c.errCount.Store(0)
+		}
 
-			if err := handler(ctx, domainMsg); err != nil {
-				c.log.ErrorCtx(ctx, "Message processing failed", map[string]interface{}{
-					"error":  err.Error(),
-					"topic":  domainMsg.Topic,
-					"offset": domainMsg.Offset,
-				})
+		domainMsg := kafka.FromKafkaMessage(msg)
+		if err := handler(ctx, domainMsg); err != nil {
+			c.log.ErrorCtx(ctx, "Message processing failed", map[string]interface{}{
+				"error":  err.Error(),
+				"topic":  domainMsg.Topic,
+				"offset": domainMsg.Offset,
+			})
+			return err
+		}
+		if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
+			if err := c.reader.CommitMessages(ctx, msg); err != nil {
+				return fmt.Errorf("kafka commit message: %w", err)
 			}
 		}
 	}
+}
+
+func (c *Consumer) read(ctx context.Context) (kafkago.Message, error) {
+	if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
+		return c.reader.FetchMessage(ctx)
+	}
+	return c.reader.ReadMessage(ctx)
 }
 
 func (c *Consumer) handleFailure(ctx context.Context, err error) error {
@@ -140,10 +168,12 @@ func (c *Consumer) handleFailure(ctx context.Context, err error) error {
 		})
 	}
 
-	backoff := time.Duration(c.failures) * time.Second
-	if backoff > 30*time.Second {
-		backoff = 30 * time.Second
-	}
+	backoff := resilience.BackoffDelay(c.failures, resilience.RetryConfig{
+		InitialBackoff: time.Second,
+		MaxBackoff:     30 * time.Second,
+		Strategy:       resilience.LinearBackoff,
+		Jitter:         0,
+	})
 
 	select {
 	case <-ctx.Done():

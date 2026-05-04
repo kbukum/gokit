@@ -4,8 +4,8 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 )
 
-// WriterMetrics contains structured publisher metrics.
-type WriterMetrics struct {
+// KafkaWriterMetrics contains Kafka writer metrics extracted from kafka-go stats.
+type KafkaWriterMetrics struct {
 	Writes       int64   `json:"writes"`
 	Messages     int64   `json:"messages"`
 	Bytes        int64   `json:"bytes"`
@@ -16,8 +16,8 @@ type WriterMetrics struct {
 	Topic        string  `json:"topic,omitempty"`
 }
 
-// ReaderMetrics contains structured consumer metrics.
-type ReaderMetrics struct {
+// KafkaReaderMetrics contains Kafka reader metrics extracted from kafka-go stats.
+type KafkaReaderMetrics struct {
 	Dials      int64  `json:"dials"`
 	Fetches    int64  `json:"fetches"`
 	Messages   int64  `json:"messages"`
@@ -31,8 +31,8 @@ type ReaderMetrics struct {
 }
 
 // CollectWriterMetrics extracts structured metrics from kafka.WriterStats.
-func CollectWriterMetrics(stats kafkago.WriterStats) WriterMetrics {
-	return WriterMetrics{
+func CollectWriterMetrics(stats kafkago.WriterStats) KafkaWriterMetrics {
+	return KafkaWriterMetrics{
 		Writes:       stats.Writes,
 		Messages:     stats.Messages,
 		Bytes:        stats.Bytes,
@@ -45,8 +45,8 @@ func CollectWriterMetrics(stats kafkago.WriterStats) WriterMetrics {
 }
 
 // CollectReaderMetrics extracts structured metrics from kafka.ReaderStats.
-func CollectReaderMetrics(stats kafkago.ReaderStats) ReaderMetrics {
-	return ReaderMetrics{
+func CollectReaderMetrics(stats kafkago.ReaderStats) KafkaReaderMetrics {
+	return KafkaReaderMetrics{
 		Dials:      stats.Dials,
 		Fetches:    stats.Fetches,
 		Messages:   stats.Messages,

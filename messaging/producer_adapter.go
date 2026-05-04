@@ -35,7 +35,7 @@ func (a *ProducerProviderAdapter) IsAvailable(_ context.Context) bool {
 
 // Send writes a domain Message to the underlying producer.
 func (a *ProducerProviderAdapter) Send(ctx context.Context, msg Message) error {
-	return a.producer.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
+	return a.producer.Send(ctx, msg)
 }
 
 // Producer returns the underlying Producer for direct access.

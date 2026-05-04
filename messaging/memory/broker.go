@@ -173,6 +173,20 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 	return nil
 }
 
+func (b *InMemoryBroker) requeue(topic string, msg messaging.Message) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed {
+		return
+	}
+	for _, ch := range b.topics[topic] {
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+}
+
 // Producer creates a new in-memory producer backed by this broker.
 func (b *InMemoryBroker) Producer() *InMemoryProducer {
 	return &InMemoryProducer{broker: b}
@@ -180,8 +194,12 @@ func (b *InMemoryBroker) Producer() *InMemoryProducer {
 
 // Consumer creates a new in-memory consumer for the given topic.
 func (b *InMemoryBroker) Consumer(topic string) *InMemoryConsumer {
+	return b.consumer(topic, messaging.CommitAuto)
+}
+
+func (b *InMemoryBroker) consumer(topic string, commit messaging.CommitStrategy) *InMemoryConsumer {
 	ch := b.subscribe(topic)
-	return &InMemoryConsumer{topic: topic, ch: ch}
+	return &InMemoryConsumer{broker: b, topic: topic, ch: ch, commitStrategy: commit}
 }
 
 // Close marks the broker as closed.
@@ -205,6 +223,30 @@ type InMemoryProducer struct {
 }
 
 var _ messaging.Producer = (*InMemoryProducer)(nil)
+
+// Send writes a pre-built transport-agnostic message to the broker.
+func (p *InMemoryProducer) Send(_ context.Context, msg messaging.Message) error {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return fmt.Errorf("producer is closed")
+	}
+	p.mu.Unlock()
+	return p.broker.publish(msg.Topic, msg)
+}
+
+// SendBatch writes pre-built messages to the broker in order.
+func (p *InMemoryProducer) SendBatch(ctx context.Context, messages []messaging.Message) error {
+	for _, msg := range messages {
+		if err := p.Send(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Flush is a no-op for the in-memory broker because delivery is synchronous.
+func (p *InMemoryProducer) Flush(_ context.Context) error { return nil }
 
 // Publish sends a structured event to the broker.
 func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messaging.Event, key ...string) error {
@@ -242,7 +284,7 @@ func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messag
 }
 
 // PublishJSON marshals value as JSON and sends it to the broker.
-func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
+func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, value any) error {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
@@ -293,8 +335,10 @@ func (p *InMemoryProducer) Close() error {
 
 // InMemoryConsumer implements messaging.Consumer using an InMemoryBroker.
 type InMemoryConsumer struct {
-	topic string
-	ch    chan messaging.Message
+	broker         *InMemoryBroker
+	topic          string
+	ch             chan messaging.Message
+	commitStrategy messaging.CommitStrategy
 }
 
 var _ messaging.Consumer = (*InMemoryConsumer)(nil)
@@ -310,6 +354,9 @@ func (c *InMemoryConsumer) Consume(ctx context.Context, handler messaging.Messag
 				return nil
 			}
 			if err := handler(ctx, msg); err != nil {
+				if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
+					c.broker.requeue(c.topic, msg)
+				}
 				return err
 			}
 		}

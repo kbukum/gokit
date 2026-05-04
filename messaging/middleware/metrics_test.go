@@ -58,9 +58,9 @@ func TestInstrumentHandler_Success(t *testing.T) {
 	metrics := collectMetrics(t, reader)
 
 	// messages_total should be 1
-	mt, ok := metrics["kafka_consumer_messages_total"]
+	mt, ok := metrics["messaging_consumer_messages_total"]
 	if !ok {
-		t.Fatal("kafka_consumer_messages_total not found")
+		t.Fatal("messaging_consumer_messages_total not found")
 	}
 	sumData, ok := mt.Data.(metricdata.Sum[int64])
 	if !ok {
@@ -71,7 +71,7 @@ func TestInstrumentHandler_Success(t *testing.T) {
 	}
 
 	// errors_total should be absent or 0
-	if et, etOk := metrics["kafka_consumer_errors_total"]; etOk {
+	if et, etOk := metrics["messaging_consumer_errors_total"]; etOk {
 		if sumData, sumOk := et.Data.(metricdata.Sum[int64]); sumOk {
 			for _, dp := range sumData.DataPoints {
 				if dp.Value != 0 {
@@ -82,9 +82,9 @@ func TestInstrumentHandler_Success(t *testing.T) {
 	}
 
 	// duration should have been recorded
-	dur, ok := metrics["kafka_consumer_processing_duration_seconds"]
+	dur, ok := metrics["messaging_consumer_processing_duration_seconds"]
 	if !ok {
-		t.Fatal("kafka_consumer_processing_duration_seconds not found")
+		t.Fatal("messaging_consumer_processing_duration_seconds not found")
 	}
 	histData, ok := dur.Data.(metricdata.Histogram[float64])
 	if !ok {
@@ -113,9 +113,9 @@ func TestInstrumentHandler_Error(t *testing.T) {
 	metrics := collectMetrics(t, reader)
 
 	// errors_total should be 1
-	et, ok := metrics["kafka_consumer_errors_total"]
+	et, ok := metrics["messaging_consumer_errors_total"]
 	if !ok {
-		t.Fatal("kafka_consumer_errors_total not found")
+		t.Fatal("messaging_consumer_errors_total not found")
 	}
 	sumData, ok := et.Data.(metricdata.Sum[int64])
 	if !ok {
@@ -126,9 +126,9 @@ func TestInstrumentHandler_Error(t *testing.T) {
 	}
 
 	// messages_total should also be 1
-	mt, ok := metrics["kafka_consumer_messages_total"]
+	mt, ok := metrics["messaging_consumer_messages_total"]
 	if !ok {
-		t.Fatal("kafka_consumer_messages_total not found")
+		t.Fatal("messaging_consumer_messages_total not found")
 	}
 	sumData2, ok := mt.Data.(metricdata.Sum[int64])
 	if !ok {

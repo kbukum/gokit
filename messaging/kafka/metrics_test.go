@@ -101,3 +101,13 @@ func TestCollectWriterMetrics_Zero(t *testing.T) {
 		t.Errorf("expected zero metrics, got %+v", m)
 	}
 }
+
+func TestMetricSnapshotTypesAreKafkaNamed(t *testing.T) {
+	t.Parallel()
+
+	var writer KafkaWriterMetrics = CollectWriterMetrics(kafkago.WriterStats{})
+	var reader KafkaReaderMetrics = CollectReaderMetrics(kafkago.ReaderStats{})
+	if writer.Topic != "" || reader.Topic != "" {
+		t.Fatalf("zero metric snapshots should have empty topics: %+v %+v", writer, reader)
+	}
+}

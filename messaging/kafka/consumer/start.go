@@ -26,8 +26,8 @@ func StartConsumer(
 	handler func(ctx context.Context, data []byte) error,
 	log *logger.Logger,
 ) (*ManagedConsumer, error) {
-	cfg.GroupID = groupID
 	mc, err := NewManagedConsumer(ManagedConsumerConfig{ //nolint:contextcheck // kafka-go connection error logger callback fires without a request context
+		Common: messaging.Config{Backend: "kafka", ConsumerGroup: groupID},
 		Config: cfg,
 		Topic:  topic,
 		Handler: func(ctx context.Context, msg messaging.Message) error {

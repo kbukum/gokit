@@ -32,9 +32,12 @@ func (m *mockProducer) Publish(_ context.Context, topic string, event messaging.
 	return nil
 }
 
-func (m *mockProducer) PublishJSON(context.Context, string, string, interface{}) error { return nil }
-func (m *mockProducer) PublishBinary(context.Context, string, string, []byte) error    { return nil }
-func (m *mockProducer) Close() error                                                   { return nil }
+func (m *mockProducer) PublishJSON(context.Context, string, string, any) error      { return nil }
+func (m *mockProducer) PublishBinary(context.Context, string, string, []byte) error { return nil }
+func (m *mockProducer) Send(context.Context, messaging.Message) error               { return nil }
+func (m *mockProducer) SendBatch(context.Context, []messaging.Message) error        { return nil }
+func (m *mockProducer) Flush(context.Context) error                                 { return nil }
+func (m *mockProducer) Close() error                                                { return nil }
 
 func TestPublishCreatesEnvelope(t *testing.T) {
 	mock := &mockProducer{}
