@@ -35,7 +35,8 @@ type InMemoryBroker struct {
 
 	// msgCh is signaled (non-blocking) after every publish so that
 	// WaitForMessage can wake up without polling.
-	msgCh chan struct{}
+	msgCh   chan struct{}
+	closeCh chan struct{}
 }
 
 // NewBroker creates a new in-memory broker with the default buffer size.
@@ -45,6 +46,7 @@ func NewBroker() *InMemoryBroker {
 		history: make(map[string][]messaging.Message),
 		bufSize: defaultBufferSize,
 		msgCh:   make(chan struct{}, 1),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -55,6 +57,7 @@ func NewBrokerWithBuffer(size int) *InMemoryBroker {
 		history: make(map[string][]messaging.Message),
 		bufSize: size,
 		msgCh:   make(chan struct{}, 1),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -176,15 +179,21 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 
 func (b *InMemoryBroker) requeue(ctx context.Context, topic string, msg messaging.Message) error {
 	b.mu.RLock()
-	defer b.mu.RUnlock()
 	if b.closed {
+		b.mu.RUnlock()
 		return fmt.Errorf("broker: %w", messaging.ErrClosed)
 	}
-	for _, ch := range b.topics[topic] {
+	subs := append([]chan messaging.Message(nil), b.topics[topic]...)
+	closeCh := b.closeCh
+	b.mu.RUnlock()
+
+	for _, ch := range subs {
 		select {
 		case ch <- msg:
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-closeCh:
+			return fmt.Errorf("broker: %w", messaging.ErrClosed)
 		}
 	}
 	return nil
@@ -209,7 +218,11 @@ func (b *InMemoryBroker) consumer(topic string, commit messaging.CommitStrategy)
 func (b *InMemoryBroker) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.closed {
+		return
+	}
 	b.closed = true
+	close(b.closeCh)
 	for _, subs := range b.topics {
 		for _, ch := range subs {
 			close(ch)

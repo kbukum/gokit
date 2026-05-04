@@ -34,8 +34,8 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if natsProducer.cfg.PublishTimeout != messaging.DefaultRequestTimeout {
 		t.Fatalf("publish timeout = %q, want common request_timeout", natsProducer.cfg.PublishTimeout)
 	}
-	if err := producer.(interface{ Close() error }).Close(); err != nil {
-		t.Fatalf("close nats producer: %v", err)
+	if closeErr := producer.(interface{ Close() error }).Close(); closeErr != nil {
+		t.Fatalf("close nats producer: %v", closeErr)
 	}
 	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto, ConsumerGroup: "workers"}, cfg, nil, "events")
 	if err != nil {
@@ -63,8 +63,8 @@ func TestProducerReturnsClosedErrorAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new nats producer: %v", err)
 	}
-	if err := producer.Close(); err != nil {
-		t.Fatalf("close nats producer: %v", err)
+	if closeErr := producer.Close(); closeErr != nil {
+		t.Fatalf("close nats producer: %v", closeErr)
 	}
 
 	err = producer.PublishBinary(context.Background(), "events", "", []byte("payload"))
@@ -93,8 +93,8 @@ func TestConsumerReturnsClosedErrorAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new nats consumer: %v", err)
 	}
-	if err := consumer.Close(); err != nil {
-		t.Fatalf("close nats consumer: %v", err)
+	if closeErr := consumer.Close(); closeErr != nil {
+		t.Fatalf("close nats consumer: %v", closeErr)
 	}
 
 	err = consumer.Consume(context.Background(), func(context.Context, messaging.Message) error {

@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
+
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/resilience"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // Producer publishes messages through RabbitMQ.
@@ -21,6 +22,7 @@ type Producer struct {
 	retryBackoff  time.Duration
 	mu            sync.Mutex
 	closed        bool
+	declared      map[string]struct{}
 }
 
 var _ messaging.Producer = (*Producer)(nil)
@@ -38,7 +40,7 @@ func newProducer(cfg Config, retryAttempts int, retryBackoff time.Duration) (*Pr
 	if retryAttempts <= 0 {
 		retryAttempts = 1
 	}
-	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff}, nil
+	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff, declared: make(map[string]struct{})}, nil
 }
 
 func (p *Producer) ensureChannelLocked() (*amqp.Channel, error) {
@@ -54,12 +56,12 @@ func (p *Producer) ensureChannelLocked() (*amqp.Channel, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, redactError("rabbitmq producer channel", err)
 	}
 	if err := declareExchange(ch, p.cfg); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	p.conn = conn
@@ -69,7 +71,7 @@ func (p *Producer) ensureChannelLocked() (*amqp.Channel, error) {
 
 // Send writes a pre-built transport-agnostic message.
 func (p *Producer) Send(ctx context.Context, msg messaging.Message) error {
-	return p.publish(ctx, msg.Topic, msg.Value, msg.Headers)
+	return p.publish(ctx, msg.Topic, msg.Value, headersWithMessageKey(msg.Headers, msg.Key))
 }
 
 // SendBatch writes pre-built messages in order.
@@ -143,11 +145,14 @@ func (p *Producer) publish(ctx context.Context, topic string, data []byte, heade
 		table[key] = value
 	}
 	queue := queueName(p.cfg, topic)
-	if _, err := ch.QueueDeclare(queue, p.cfg.QueueDurable, false, false, false, nil); err != nil {
-		return fmt.Errorf("rabbitmq declare queue: %w", err)
-	}
-	if err := bindQueue(ch, p.cfg, queue, routingKey(p.cfg, topic)); err != nil {
-		return err
+	if _, ok := p.declared[queue]; !ok {
+		if _, err := ch.QueueDeclare(queue, p.cfg.QueueDurable, false, false, false, nil); err != nil {
+			return fmt.Errorf("rabbitmq declare queue: %w", err)
+		}
+		if err := bindQueue(ch, p.cfg, queue, routingKey(p.cfg, topic)); err != nil {
+			return err
+		}
+		p.declared[queue] = struct{}{}
 	}
 	publishing := amqp.Publishing{
 		ContentType: contentType,
@@ -218,4 +223,18 @@ func (p *Producer) Close() error {
 		return chErr
 	}
 	return connErr
+}
+
+func headersWithMessageKey(headers map[string]string, key string) map[string]string {
+	if key == "" {
+		return headers
+	}
+	out := make(map[string]string, len(headers)+1)
+	for header, value := range headers {
+		out[header] = value
+	}
+	if _, ok := out["message-key"]; !ok {
+		out["message-key"] = key
+	}
+	return out
 }

@@ -34,8 +34,8 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if rabbitProducer.cfg.PublishTimeout != messaging.DefaultRequestTimeout {
 		t.Fatalf("publish timeout = %q, want common request_timeout", rabbitProducer.cfg.PublishTimeout)
 	}
-	if err := producer.(interface{ Close() error }).Close(); err != nil {
-		t.Fatalf("close rabbitmq producer: %v", err)
+	if closeErr := producer.(interface{ Close() error }).Close(); closeErr != nil {
+		t.Fatalf("close rabbitmq producer: %v", closeErr)
 	}
 	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Backend: "rabbitmq", ConsumerGroup: "workers"}, cfg, nil, "events")
 	if err != nil {
@@ -63,8 +63,8 @@ func TestProducerReturnsClosedErrorAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new rabbitmq producer: %v", err)
 	}
-	if err := producer.Close(); err != nil {
-		t.Fatalf("close rabbitmq producer: %v", err)
+	if closeErr := producer.Close(); closeErr != nil {
+		t.Fatalf("close rabbitmq producer: %v", closeErr)
 	}
 
 	err = producer.PublishBinary(context.Background(), "events", "", []byte("payload"))
@@ -93,8 +93,8 @@ func TestConsumerReturnsClosedErrorAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new rabbitmq consumer: %v", err)
 	}
-	if err := consumer.Close(); err != nil {
-		t.Fatalf("close rabbitmq consumer: %v", err)
+	if closeErr := consumer.Close(); closeErr != nil {
+		t.Fatalf("close rabbitmq consumer: %v", closeErr)
 	}
 
 	err = consumer.Consume(context.Background(), func(context.Context, messaging.Message) error {

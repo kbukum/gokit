@@ -134,6 +134,7 @@ func (c Config) connectionURL() (*url.URL, error) {
 	}
 	return parsed, nil
 }
+
 func parsePositiveDuration(prefix, name, value string) (time.Duration, error) {
 	d, err := time.ParseDuration(value)
 	if err != nil {

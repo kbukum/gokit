@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kbukum/gokit/messaging"
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/kbukum/gokit/messaging"
 )
 
 // Consumer consumes messages from RabbitMQ.
@@ -49,22 +50,22 @@ func (c *Consumer) ensureChannel() (*amqp.Channel, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, redactError("rabbitmq consumer channel", err)
 	}
 	if err := declareExchange(ch, c.cfg); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	if _, err := ch.QueueDeclare(c.queue, c.cfg.QueueDurable, false, false, false, nil); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("rabbitmq declare queue: %w", err)
 	}
 	if err := bindQueue(ch, c.cfg, c.queue, routingKey(c.cfg, c.topic)); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 	c.conn = conn
@@ -79,8 +80,8 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 		return err
 	}
 	if c.cfg.PrefetchCount > 0 {
-		if err := ch.Qos(c.cfg.PrefetchCount, 0, false); err != nil {
-			return fmt.Errorf("rabbitmq qos: %w", err)
+		if qosErr := ch.Qos(c.cfg.PrefetchCount, 0, false); qosErr != nil {
+			return fmt.Errorf("rabbitmq qos: %w", qosErr)
 		}
 	}
 	deliveries, err := ch.ConsumeWithContext(ctx, c.queue, "", c.cfg.AutoAck, false, false, false, nil)

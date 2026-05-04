@@ -6,13 +6,16 @@ import (
 	"strings"
 	"time"
 
+	natsgo "github.com/nats-io/nats.go"
+
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/security"
-	natsgo "github.com/nats-io/nats.go"
 )
 
-const backendName = "nats"
-const defaultURL = "tls://localhost:4222"
+const (
+	backendName = "nats"
+	defaultURL  = "tls://localhost:4222"
+)
 
 // Config contains NATS-specific adapter settings.
 type Config struct {
@@ -121,6 +124,7 @@ func (c Config) RedactedURL() string {
 	}
 	return strings.Join(parts, ",")
 }
+
 func (c Config) connectOptions() ([]natsgo.Option, error) {
 	opts := []natsgo.Option{
 		natsgo.Timeout(mustDuration(c.ConnectTimeout)),
@@ -159,6 +163,7 @@ func mustDuration(value string) time.Duration {
 	d, _ := time.ParseDuration(value)
 	return d
 }
+
 func subject(cfg Config, topic string) string {
 	prefix := strings.Trim(cfg.SubjectPrefix, ".")
 	if prefix == "" {

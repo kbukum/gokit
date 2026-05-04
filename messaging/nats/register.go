@@ -19,8 +19,8 @@ func Register(registry *messaging.Registry) error {
 		if err != nil {
 			return nil, err
 		}
-		if err := validateCommon(common); err != nil {
-			return nil, err
+		if commonErr := validateCommon(common); commonErr != nil {
+			return nil, commonErr
 		}
 		cfg.PublishTimeout = common.RequestTimeout
 		retryBackoff, err := time.ParseDuration(common.RetryBackoff)
@@ -36,8 +36,8 @@ func Register(registry *messaging.Registry) error {
 		if err != nil {
 			return nil, err
 		}
-		if err := validateCommon(common); err != nil {
-			return nil, err
+		if commonErr := validateCommon(common); commonErr != nil {
+			return nil, commonErr
 		}
 		if common.ConsumerGroup != "" {
 			if cfg.QueueGroup != "" && cfg.QueueGroup != common.ConsumerGroup {
@@ -84,18 +84,4 @@ func validateCommon(cfg messaging.Config) error {
 		return fmt.Errorf("nats: adapter-managed DLQ is not supported; use messaging middleware")
 	}
 	return nil
-}
-
-func waitBackoff(ctx context.Context, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }

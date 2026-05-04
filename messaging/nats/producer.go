@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	natsgo "github.com/nats-io/nats.go"
+
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/resilience"
-	natsgo "github.com/nats-io/nats.go"
 )
 
 // Producer publishes messages to NATS subjects.
@@ -61,7 +62,7 @@ func (p *Producer) ensureConnLocked() (*natsgo.Conn, error) {
 
 // Send writes a pre-built transport-agnostic message.
 func (p *Producer) Send(ctx context.Context, msg messaging.Message) error {
-	return p.publish(ctx, msg.Topic, msg.Value, msg.Headers)
+	return p.publish(ctx, msg.Topic, msg.Value, headersWithMessageKey(msg.Headers, msg.Key))
 }
 
 // SendBatch writes pre-built messages in order.
@@ -202,8 +203,24 @@ func (p *Producer) Close() error {
 	if p.conn == nil {
 		return nil
 	}
-	p.conn.Drain()
+	if err := p.conn.Drain(); err != nil {
+		return fmt.Errorf("nats drain: %w", err)
+	}
 	p.conn.Close()
 	p.conn = nil
 	return nil
+}
+
+func headersWithMessageKey(headers map[string]string, key string) map[string]string {
+	if key == "" {
+		return headers
+	}
+	out := make(map[string]string, len(headers)+1)
+	for header, value := range headers {
+		out[header] = value
+	}
+	if _, ok := out["message-key"]; !ok {
+		out["message-key"] = key
+	}
+	return out
 }

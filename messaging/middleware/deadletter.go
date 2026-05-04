@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/kbukum/gokit/messaging"
 )
@@ -99,7 +100,7 @@ func sanitizeSummary(value string) string {
 	if containsSensitiveMarker(value) {
 		return redactedValue
 	}
-	return truncateRunes(value)
+	return truncateStringBytes(value)
 }
 
 func summarizePayloadBytes(payload []byte) string {
@@ -112,12 +113,18 @@ func summarizePayloadBytes(payload []byte) string {
 	return string(payload[:maxDLQPayloadBytes]) + "…"
 }
 
-func truncateRunes(value string) string {
-	runes := []rune(value)
-	if len(runes) <= maxDLQPayloadBytes {
+func truncateStringBytes(value string) string {
+	if len(value) <= maxDLQPayloadBytes {
 		return value
 	}
-	return string(runes[:maxDLQPayloadBytes]) + "…"
+	limit := maxDLQPayloadBytes
+	for limit > 0 && !utf8.RuneStart(value[limit]) {
+		limit--
+	}
+	if limit == 0 {
+		return "…"
+	}
+	return value[:limit] + "…"
 }
 
 func isSensitiveKey(key string) bool {

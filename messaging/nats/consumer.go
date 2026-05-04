@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/messaging"
 	natsgo "github.com/nats-io/nats.go"
+
+	"github.com/kbukum/gokit/messaging"
 )
 
 // Consumer consumes messages from a NATS subject.
