@@ -127,6 +127,28 @@ func TestProducer_WriteMessages_Closed(t *testing.T) {
 	}
 }
 
+func TestProducer_FlushNoOpRespectsContextAndClosedState(t *testing.T) {
+	p := &Producer{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := p.Flush(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Flush(canceled) error = %v, want context.Canceled", err)
+	}
+
+	if err := p.Flush(context.Background()); err != nil {
+		t.Fatalf("Flush() on open producer: %v", err)
+	}
+	if p.writer != nil {
+		t.Fatal("Flush() should not initialize kafka writer")
+	}
+
+	p.closed = true
+	if err := p.Flush(context.Background()); !errors.Is(err, messaging.ErrClosed) {
+		t.Fatalf("Flush(closed) error = %v, want ErrClosed", err)
+	}
+}
+
 func TestWriteMessagesRejectsInvalidTopicBeforeInit(t *testing.T) {
 	p, err := NewLazyProducer(messaging.Config{}, kafka.Config{AllowInsecureDev: true}, nil)
 	if err != nil {

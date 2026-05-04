@@ -13,8 +13,9 @@ import (
 type RetryMiddlewareConfig struct {
 	resilience.RetryConfig
 
-	// OnExhausted is called after all retries fail. Use this to route
-	// the message to a dead-letter queue. May be nil.
+	// OnExhausted is called after all retries fail. When nil, the final
+	// handler error is returned. When non-nil, its return value is returned,
+	// allowing successful DLQ routing to acknowledge the failed message.
 	OnExhausted func(ctx context.Context, msg messaging.Message, err error) error
 }
 

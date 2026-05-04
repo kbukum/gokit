@@ -12,6 +12,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -149,7 +150,7 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return fmt.Errorf("broker is closed")
+		return fmt.Errorf("broker: %w", messaging.ErrClosed)
 	}
 	msg.Topic = topic
 
@@ -173,18 +174,20 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 	return nil
 }
 
-func (b *InMemoryBroker) requeue(topic string, msg messaging.Message) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *InMemoryBroker) requeue(ctx context.Context, topic string, msg messaging.Message) error {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	if b.closed {
-		return
+		return fmt.Errorf("broker: %w", messaging.ErrClosed)
 	}
 	for _, ch := range b.topics[topic] {
 		select {
 		case ch <- msg:
-		default:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
+	return nil
 }
 
 // Producer creates a new in-memory producer backed by this broker.
@@ -229,7 +232,7 @@ func (p *InMemoryProducer) Send(_ context.Context, msg messaging.Message) error 
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 	return p.broker.publish(msg.Topic, msg)
@@ -253,7 +256,7 @@ func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messag
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -288,7 +291,7 @@ func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, val
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -311,7 +314,7 @@ func (p *InMemoryProducer) PublishBinary(_ context.Context, topic, key string, d
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -355,7 +358,9 @@ func (c *InMemoryConsumer) Consume(ctx context.Context, handler messaging.Messag
 			}
 			if err := handler(ctx, msg); err != nil {
 				if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
-					c.broker.requeue(c.topic, msg)
+					if requeueErr := c.broker.requeue(ctx, c.topic, msg); requeueErr != nil {
+						return errors.Join(err, fmt.Errorf("requeue message: %w", requeueErr))
+					}
 				}
 				return err
 			}

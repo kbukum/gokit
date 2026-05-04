@@ -98,7 +98,8 @@ func (r *Registry) NewProducer(ctx context.Context, cfg Config, providerCfg any,
 	if !ok {
 		return nil, fmt.Errorf("messaging: producer backend %q is not registered", cfg.Backend)
 	}
-	producer, err := factory(ctx, cfg, providerCfg, messagingLogger(log))
+	msgLog := messagingLogger(log) //nolint:contextcheck // logger fallback construction has no request-scoped operation; ctx is passed to backend factory
+	producer, err := factory(ctx, cfg, providerCfg, msgLog)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,8 @@ func (r *Registry) NewConsumer(ctx context.Context, cfg Config, providerCfg any,
 	if !ok {
 		return nil, fmt.Errorf("messaging: consumer backend %q is not registered", cfg.Backend)
 	}
-	return factory(ctx, cfg, providerCfg, messagingLogger(log), topic)
+	msgLog := messagingLogger(log) //nolint:contextcheck // logger fallback construction has no request-scoped operation; ctx is passed to backend factory
+	return factory(ctx, cfg, providerCfg, msgLog, topic)
 }
 
 // ProducerBackends returns registered producer backend names.
@@ -151,7 +153,7 @@ func (r *Registry) ConsumerBackends() []string {
 
 func messagingLogger(log *logger.Logger) *logger.Logger {
 	if log == nil {
-		log = logger.NewDefault("messaging")
+		log = logger.NewDefault("messaging") //nolint:contextcheck // default logger construction has no request-scoped operation; ctx is passed to backend factories separately
 	}
 	return log.WithComponent("messaging")
 }

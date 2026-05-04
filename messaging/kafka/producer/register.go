@@ -21,6 +21,6 @@ func Register(registry *messaging.Registry) error {
 		if !ok {
 			return nil, &messaging.ConfigTypeError{Backend: backendName, Expected: "*kafka.Config", Actual: providerCfg}
 		}
-		return NewLazyProducer(common, *cfg, log)
+		return NewLazyProducer(common, *cfg, log) //nolint:contextcheck // lazy producer construction does not perform request-scoped I/O
 	})
 }

@@ -35,6 +35,7 @@ func (p *adapterProducer) PublishBinary(_ context.Context, topic, key string, da
 func (p *adapterProducer) Send(ctx context.Context, msg Message) error {
 	return p.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
 }
+
 func (p *adapterProducer) SendBatch(ctx context.Context, messages []Message) error {
 	for _, msg := range messages {
 		if err := p.Send(ctx, msg); err != nil {

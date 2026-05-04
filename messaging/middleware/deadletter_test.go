@@ -32,9 +32,11 @@ func (m *mockPublisher) PublishJSON(_ context.Context, topic, key string, value 
 func (m *mockPublisher) PublishBinary(_ context.Context, _, _ string, _ []byte) error {
 	return m.err
 }
+
 func (m *mockPublisher) Send(ctx context.Context, msg messaging.Message) error {
 	return m.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
 }
+
 func (m *mockPublisher) SendBatch(ctx context.Context, messages []messaging.Message) error {
 	for _, msg := range messages {
 		if err := m.Send(ctx, msg); err != nil {
@@ -190,7 +192,7 @@ func TestDeadLetterProducer_Send_RedactsSensitiveFields(t *testing.T) {
 	}
 
 	data, _ := json.Marshal(pub.lastValue)
-	if string(data) == "" || errors.New(string(data)).Error() == "" {
+	if len(data) == 0 || errors.New(string(data)).Error() == "" {
 		t.Fatal("expected marshaled DLQ envelope")
 	}
 	var env DeadLetterEnvelope
@@ -227,7 +229,29 @@ func TestDeadLetterProducer_Send_TruncatesPayload(t *testing.T) {
 	if err := json.Unmarshal(data, &env); err != nil {
 		t.Fatalf("unmarshal envelope: %v", err)
 	}
-	if len([]rune(env.Payload)) != maxDLQPayloadBytes+1 || !strings.HasSuffix(env.Payload, "…") {
-		t.Fatalf("payload was not truncated correctly: len=%d suffix=%q", len([]rune(env.Payload)), env.Payload[len(env.Payload)-3:])
+	payload, ok := strings.CutSuffix(env.Payload, "…")
+	if !ok {
+		t.Fatalf("payload was not truncated correctly: missing ellipsis")
+	}
+	if len([]byte(payload)) != maxDLQPayloadBytes {
+		t.Fatalf("payload summary bytes = %d, want %d", len([]byte(payload)), maxDLQPayloadBytes)
+	}
+}
+
+func TestDeadLetterProducer_Send_RedactsSensitiveLargePayloadBeyondTruncationLimit(t *testing.T) {
+	pub := &mockPublisher{}
+	d := NewDeadLetterProducer(pub)
+
+	msg := messaging.Message{Topic: "events", Value: []byte(strings.Repeat("x", maxDLQPayloadBytes+10) + "token")}
+	if err := d.Send(context.Background(), msg, errors.New("err")); err != nil {
+		t.Fatalf("Send() error: %v", err)
+	}
+	data, _ := json.Marshal(pub.lastValue)
+	var env DeadLetterEnvelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		t.Fatalf("unmarshal envelope: %v", err)
+	}
+	if env.Payload != redactedValue {
+		t.Fatalf("payload = %q, want redacted", env.Payload)
 	}
 }

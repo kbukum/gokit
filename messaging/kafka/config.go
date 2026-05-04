@@ -18,7 +18,8 @@ type Config struct {
 	// Empty = use static Brokers. Set = resolve from discovery provider.
 	Resolve string `yaml:"resolve" mapstructure:"resolve"`
 
-	// TLS configures TLS settings. Defaults to a TLS 1.2 floor.
+	// TLS configures TLS settings. Defaults to a TLS 1.2 floor unless
+	// AllowInsecureDev is explicitly enabled.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 
 	// AllowInsecureDev permits plaintext connections for local development only.
@@ -52,7 +53,7 @@ func (c *Config) ApplyDefaults() {
 	if len(c.Brokers) == 0 {
 		c.Brokers = []string{"localhost:9092"}
 	}
-	if c.TLS == nil {
+	if c.TLS == nil && !c.AllowInsecureDev {
 		c.TLS = &security.TLSConfig{MinVersion: tls.VersionTLS12}
 	}
 	if c.Compression == "" {
@@ -150,9 +151,6 @@ func ValidateCommonProducer(cfg messaging.Config) error {
 
 // ValidateCommonConsumer checks Kafka support for core consumer semantics.
 func ValidateCommonConsumer(cfg messaging.Config) error {
-	if cfg.DeliveryGuarantee == messaging.DeliveryExactlyOnce {
-		return fmt.Errorf("kafka consumer: exactly-once delivery requires transactions and is not supported")
-	}
 	if cfg.DLQ.Enabled {
 		return fmt.Errorf("kafka consumer: adapter-managed DLQ is not supported; use messaging middleware")
 	}
@@ -168,6 +166,8 @@ func ValidateCommonConsumer(cfg messaging.Config) error {
 		if cfg.CommitStrategy != messaging.CommitAuto {
 			return fmt.Errorf("kafka consumer: at-most-once delivery requires %s commits", messaging.CommitAuto)
 		}
+	case messaging.DeliveryExactlyOnce:
+		return fmt.Errorf("kafka consumer: exactly-once delivery requires transactions and is not supported")
 	}
 	return nil
 }

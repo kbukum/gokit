@@ -37,7 +37,7 @@ func Register(registry *messaging.Registry) error {
 		return fmt.Errorf("memory: messaging registry is nil")
 	}
 	if err := registry.RegisterProducer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger) (messaging.Producer, error) {
-		broker, err := brokerFromProviderCfg(common, providerCfg)
+		broker, err := brokerFromProviderCfg(providerCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -52,7 +52,7 @@ func Register(registry *messaging.Registry) error {
 		return err
 	}
 	return registry.RegisterConsumer(backendName, func(_ context.Context, common messaging.Config, providerCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
-		broker, err := brokerFromProviderCfg(common, providerCfg)
+		broker, err := brokerFromProviderCfg(providerCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +63,7 @@ func Register(registry *messaging.Registry) error {
 	})
 }
 
-func brokerFromProviderCfg(common messaging.Config, providerCfg any) (*InMemoryBroker, error) {
+func brokerFromProviderCfg(providerCfg any) (*InMemoryBroker, error) {
 	if providerCfg == nil {
 		return NewBroker(), nil
 	}

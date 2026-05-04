@@ -147,8 +147,8 @@ func (p *Producer) ensureWriter() error {
 
 // WriteMessages sends one or more messages to Kafka with retry logic.
 func (p *Producer) WriteMessages(ctx context.Context, msgs ...kafkago.Message) error {
-	for _, msg := range msgs {
-		if err := messaging.ValidateTopic(msg.Topic); err != nil {
+	for i := range msgs {
+		if err := messaging.ValidateTopic(msgs[i].Topic); err != nil {
 			return err
 		}
 	}
@@ -211,10 +211,17 @@ func (p *Producer) Stats() kafkago.WriterStats {
 	return kafkago.WriterStats{}
 }
 
-// Close shuts down the producer.
+// Flush is a no-op because kafka-go Writer writes synchronously when BatchSize
+// and BatchTimeout are used without Async. It still reports cancellation and
+// closed-producer state so callers can rely on the Producer contract.
 func (p *Producer) Flush(ctx context.Context) error {
-	if err := p.ensureWriter(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.closed {
+		return messaging.ErrClosed
 	}
 	return nil
 }

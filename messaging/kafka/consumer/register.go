@@ -21,6 +21,6 @@ func Register(registry *messaging.Registry) error {
 		if !ok {
 			return nil, &messaging.ConfigTypeError{Backend: backendName, Expected: "*kafka.Config", Actual: providerCfg}
 		}
-		return NewConsumer(common, *cfg, topic, log)
+		return NewConsumer(common, *cfg, topic, log) //nolint:contextcheck // factory construction is synchronous; request ctx is owned by Consume
 	})
 }

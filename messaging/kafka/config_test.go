@@ -52,6 +52,18 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	}
 }
 
+func TestConfig_ApplyDefaults_AllowsExplicitInsecureDevPlaintext(t *testing.T) {
+	cfg := Config{AllowInsecureDev: true}
+	cfg.ApplyDefaults()
+
+	if cfg.TLS != nil {
+		t.Fatalf("TLS = %#v, want nil when allow_insecure_dev is explicit", cfg.TLS)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with allow_insecure_dev: %v", err)
+	}
+}
+
 func TestConfigDoesNotExposeCorePolicyFields(t *testing.T) {
 	typ := reflect.TypeOf(Config{})
 	for _, name := range []string{"Name", "Enabled", "Retries", "RetryAttempts", "WriteTimeout", "ReadTimeout", "GroupID", "Topics", "DLQ", "MaxInFlight", "CommitStrategy", "DeliveryGuarantee"} {

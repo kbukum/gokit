@@ -68,7 +68,7 @@ func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, or
 		RetryCount:    retryCount,
 		Timestamp:     time.Now().UTC(),
 		Headers:       redactHeaders(msg.Headers),
-		Payload:       payloadSummary(msg.Value),
+		Payload:       summarizePayloadBytes(msg.Value),
 	}
 
 	dlqTopic := msg.Topic + d.suffix
@@ -99,18 +99,20 @@ func sanitizeSummary(value string) string {
 	if containsSensitiveMarker(value) {
 		return redactedValue
 	}
-	return truncate(value)
+	return truncateRunes(value)
 }
 
-func payloadSummary(payload []byte) string {
-	value := string(payload)
-	if containsSensitiveMarker(value) {
+func summarizePayloadBytes(payload []byte) string {
+	if containsSensitiveMarkerBytes(payload) {
 		return redactedValue
 	}
-	return truncate(value)
+	if len(payload) <= maxDLQPayloadBytes {
+		return string(payload)
+	}
+	return string(payload[:maxDLQPayloadBytes]) + "…"
 }
 
-func truncate(value string) string {
+func truncateRunes(value string) string {
 	runes := []rune(value)
 	if len(runes) <= maxDLQPayloadBytes {
 		return value
@@ -130,4 +132,52 @@ func containsSensitiveMarker(value string) bool {
 		}
 	}
 	return false
+}
+
+func containsSensitiveMarkerBytes(value []byte) bool {
+	for _, marker := range sensitiveMarkers() {
+		if containsASCIIFold(value, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func containsASCIIFold(value []byte, marker string) bool {
+	if marker == "" {
+		return true
+	}
+	if len(value) < len(marker) {
+		return false
+	}
+	first := marker[0]
+	for offset := 0; offset <= len(value)-len(marker); offset++ {
+		if lowerASCII(value[offset]) != first {
+			continue
+		}
+		if hasASCIIFoldPrefix(value[offset:], marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasASCIIFoldPrefix(value []byte, marker string) bool {
+	for i := range marker {
+		if lowerASCII(value[i]) != marker[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerASCII(value byte) byte {
+	if value >= 'A' && value <= 'Z' {
+		return value + ('a' - 'A')
+	}
+	return value
+}
+
+func sensitiveMarkers() []string {
+	return []string{"authorization", "cookie", "token", "secret", "password", "credential", "api-key", "apikey"}
 }

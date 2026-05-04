@@ -92,7 +92,9 @@ func TestRegistryRejectsDuplicateBackends(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
-	factory := func(context.Context, Config, any, *logger.Logger) (Producer, error) { return nil, nil }
+	factory := func(context.Context, Config, any, *logger.Logger) (Producer, error) {
+		return registryProducer{}, nil
+	}
 	if err := reg.RegisterProducer("memory", factory); err != nil {
 		t.Fatalf("register producer: %v", err)
 	}

@@ -39,7 +39,6 @@ func TestConfigValidateRejectsInvalidValues(t *testing.T) {
 		"dlq":            {Backend: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: "bad suffix"}},
 	}
 	for name, cfg := range cases {
-		cfg := cfg
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			if err := cfg.Validate(); err == nil {
