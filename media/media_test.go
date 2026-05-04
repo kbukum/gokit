@@ -26,6 +26,21 @@ func TestDetect_GIF(t *testing.T) {
 	assertInfo(t, info, Image, "gif", "image/gif")
 }
 
+func TestDetect_GIFRejectsTruncatedOrInvalidHeaders(t *testing.T) {
+	for _, data := range [][]byte{
+		[]byte("GIF"),
+		[]byte("GIF8"),
+		[]byte("GIF89"),
+		[]byte("GIF87"),
+		[]byte("GIF00a"),
+	} {
+		info := Detect(data)
+		if info.Type == Image || info.Format == "gif" {
+			t.Fatalf("expected non-GIF for %q, got %#v", data, info)
+		}
+	}
+}
+
 func TestDetect_WebP(t *testing.T) {
 	data := make([]byte, 12)
 	copy(data[0:4], "RIFF")
@@ -224,6 +239,26 @@ func TestDetect_ShortData(t *testing.T) {
 	info = Detect([]byte{0x00, 0x01, 0x02})
 	if info.Type != Unknown {
 		t.Errorf("expected Unknown for 3-byte input, got %v", info.Type)
+	}
+
+	// 4 bytes exercise the shortest guarded image/video signatures without
+	// allowing longer detectors to read past the slice.
+	for _, tc := range []struct {
+		name   string
+		data   []byte
+		typ    Type
+		format string
+	}{
+		{name: "jpeg", data: []byte{0xFF, 0xD8, 0xFF, 0x00}, typ: Image, format: "jpeg"},
+		{name: "flv", data: []byte{'F', 'L', 'V', 0x00}, typ: Video, format: "flv"},
+		{name: "ebml", data: []byte{0x1A, 0x45, 0xDF, 0xA3}, typ: Video, format: "mkv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			info := Detect(tc.data)
+			if info.Type != tc.typ || info.Format != tc.format {
+				t.Fatalf("expected %s/%s, got %#v", tc.typ, tc.format, info)
+			}
+		})
 	}
 }
 
