@@ -15,7 +15,7 @@ func dial(cfg Config) (*amqp.Connection, error) {
 	}
 	connectionURL, err := cfg.connectionURL()
 	if err != nil {
-		return nil, fmt.Errorf("rabbitmq: invalid url")
+		return nil, fmt.Errorf("rabbitmq: invalid url: %w", err)
 	}
 	dialer := net.Dialer{Timeout: mustDuration(cfg.ConnectionTimeout)}
 	return amqp.DialConfig(connectionURL.String(), amqp.Config{

@@ -223,11 +223,9 @@ func (b *InMemoryBroker) Close() {
 	}
 	b.closed = true
 	close(b.closeCh)
-	for _, subs := range b.topics {
-		for _, ch := range subs {
-			close(ch)
-		}
-	}
+	// Don't close individual subscriber channels; closeCh signals no more messages will come.
+	// Subscribers detect closure via closeCh select case. This avoids a race where requeue
+	// might be sending on a channel as Close closes it.
 	b.topics = make(map[string][]chan messaging.Message)
 }
 

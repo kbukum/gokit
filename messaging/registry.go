@@ -121,10 +121,13 @@ func (r *Registry) NewConsumer(ctx context.Context, cfg Config, providerCfg any,
 	if err := ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	if err := validateConfiguredTopic("subscription", topic, cfg.Subscriptions); err != nil {
-		return nil, err
+	// Use Subscriptions if configured, fall back to Topics for backward compatibility.
+	// This allows distinct producer topics vs consumer subscriptions.
+	allowedTopics := cfg.Subscriptions
+	if len(allowedTopics) == 0 {
+		allowedTopics = cfg.Topics
 	}
-	if err := validateConfiguredTopic("topic", topic, cfg.Topics); err != nil {
+	if err := validateConfiguredTopic("topic", topic, allowedTopics); err != nil {
 		return nil, err
 	}
 	r.mu.RLock()
