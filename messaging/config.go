@@ -33,9 +33,6 @@ type Config struct {
 	RetryBackoff      string            `yaml:"retry_backoff" mapstructure:"retry_backoff"`
 }
 
-// BackendConfig is kept as a source-compatible alias during the config rename.
-type BackendConfig = Config
-
 // ApplyDefaults fills zero-valued config fields with deterministic safe defaults.
 func (c *Config) ApplyDefaults() {
 	if c.Backend == "" {
