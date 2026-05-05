@@ -20,6 +20,19 @@ type Message struct {
 	Headers   map[string]string `json:"headers,omitempty"`
 }
 
+// NewMessage creates a broker-neutral Message with topic, key, value, and headers.
+func NewMessage(topic, key string, value []byte, headers map[string]string) Message {
+	if headers == nil {
+		headers = make(map[string]string)
+	}
+	return Message{
+		Key:     key,
+		Value:   value,
+		Topic:   topic,
+		Headers: headers,
+	}
+}
+
 // Event represents a structured event for domain messaging.
 // Data is json.RawMessage so events can be forwarded without re-marshaling.
 type Event struct {
@@ -91,9 +104,20 @@ func (m Message) IsJSON() bool {
 }
 
 // UnmarshalValueJSON unmarshals the message value as JSON into v.
-func (m Message) UnmarshalValueJSON(v interface{}) error {
+// v is intentionally opaque because encoding/json requires a caller-owned destination.
+func (m Message) UnmarshalValueJSON(v any) error {
 	return json.Unmarshal(m.Value, v)
 }
+
+// UnmarshalMessageJSON unmarshals the message value into a typed value.
+func UnmarshalMessageJSON[T any](m Message) (T, error) {
+	var out T
+	err := json.Unmarshal(m.Value, &out)
+	return out, err
+}
+
+// RoutingKey returns the broker-neutral partition/routing key for the message.
+func (m Message) RoutingKey() string { return m.Key }
 
 // ToEvent converts the message to an Event (assumes JSON content).
 func (m Message) ToEvent() (Event, error) {

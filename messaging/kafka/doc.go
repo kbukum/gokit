@@ -13,11 +13,17 @@
 //
 // # Configuration
 //
-// All settings are provided via Config with ApplyDefaults()/Validate():
+// Kafka-specific connection/protocol settings are provided via Config with
+// ApplyDefaults()/Validate(). Broker-neutral policy (name, enabled, retries,
+// request timeout, consumer group, topics, delivery guarantee, commit strategy,
+// DLQ, and max in-flight) belongs in messaging.Config and is mapped by the
+// registry/direct constructors.
 //
+//	messaging:
+//	  adapter: kafka
+//	  consumer_group: "my-group"
+//	  topics: ["events"]
 //	kafka:
 //	  brokers: ["localhost:9092"]
-//	  consumer:
-//	    group_id: "my-group"
-//	    topics: ["events"]
+//	  compression: snappy
 package kafka

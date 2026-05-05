@@ -3,6 +3,7 @@ package producer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -12,30 +13,30 @@ import (
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
+	"github.com/kbukum/gokit/resilience"
 )
 
-// Producer wraps a kafka-go Writer with TLS/SASL, retries, and gokit logging.
+const defaultProviderName = "kafka.producer"
+
+// Producer wraps a kafka-go Writer with TLS/SASL and gokit logging.
 type Producer struct {
-	writer *kafkago.Writer
-	cfg    kafka.Config
-	log    *logger.Logger
-	mu     sync.RWMutex
-	closed bool
+	writer         *kafkago.Writer
+	cfg            kafka.Config
+	name           string
+	retryAttempts  int
+	retryBackoff   time.Duration
+	requestTimeout time.Duration
+	log            *logger.Logger
+	mu             sync.RWMutex
+	closed         bool
 }
 
 // NewProducer creates a new Kafka producer with eager initialization.
-func NewProducer(cfg kafka.Config, log *logger.Logger) (*Producer, error) {
-	cfg.ApplyDefaults()
-
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("kafka producer config: %w", err)
+func NewProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+	p, err := newProducer(common, cfg, log)
+	if err != nil {
+		return nil, err
 	}
-
-	if !cfg.Enabled {
-		return nil, fmt.Errorf("kafka is disabled")
-	}
-
-	p := &Producer{cfg: cfg, log: log.WithComponent("kafka.producer")}
 	if err := p.initWriter(); err != nil {
 		return nil, err
 	}
@@ -44,18 +45,49 @@ func NewProducer(cfg kafka.Config, log *logger.Logger) (*Producer, error) {
 
 // NewLazyProducer creates a Producer that initializes the underlying writer
 // on first use (thread-safe). Useful when Kafka may not be available at startup.
-func NewLazyProducer(cfg kafka.Config, log *logger.Logger) (*Producer, error) {
-	cfg.ApplyDefaults()
+func NewLazyProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+	return newProducer(common, cfg, log)
+}
 
+func newProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+	common.ApplyDefaults()
+	if err := common.Validate(); err != nil {
+		return nil, fmt.Errorf("kafka producer common config: %w", err)
+	}
+	if !common.IsEnabled() {
+		return nil, fmt.Errorf("kafka producer: messaging is disabled")
+	}
+	if err := kafka.ValidateCommonProducer(common); err != nil {
+		return nil, err
+	}
+	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("kafka producer config: %w", err)
 	}
 
-	if !cfg.Enabled {
-		return nil, fmt.Errorf("kafka is disabled")
+	requestTimeout, err := time.ParseDuration(common.RequestTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("kafka producer request_timeout: %w", err)
 	}
-
-	return &Producer{cfg: cfg, log: log.WithComponent("kafka.producer")}, nil
+	retryBackoff, err := time.ParseDuration(common.RetryBackoff)
+	if err != nil {
+		return nil, fmt.Errorf("kafka producer retry_backoff: %w", err)
+	}
+	name := common.Name
+	if name == "" {
+		name = defaultProviderName
+	}
+	if log == nil {
+		log = logger.NewDefault("messaging")
+	}
+	return &Producer{
+		cfg:            cfg,
+		name:           name,
+		retryAttempts:  common.RetryAttempts,
+		retryBackoff:   retryBackoff,
+		requestTimeout: requestTimeout,
+		log:            log.WithComponent("kafka.producer"),
+	}, nil
 }
 
 // initWriter creates the underlying kafka.Writer (idempotent, thread-safe).
@@ -65,6 +97,9 @@ func (p *Producer) initWriter() error {
 
 	if p.writer != nil {
 		return nil
+	}
+	if p.closed {
+		return messaging.ErrClosed
 	}
 
 	transport, err := kafka.CreateTransport(&p.cfg)
@@ -80,7 +115,7 @@ func (p *Producer) initWriter() error {
 		BatchTimeout: kafka.ParseDuration(p.cfg.BatchTimeout),
 		RequiredAcks: kafkago.RequiredAcks(p.cfg.RequiredAcks),
 		Compression:  kafka.ResolveCompression(p.cfg.Compression),
-		WriteTimeout: kafka.ParseDuration(p.cfg.WriteTimeout),
+		WriteTimeout: p.requestTimeout,
 		ErrorLogger: kafkago.LoggerFunc(func(msg string, args ...interface{}) {
 			p.log.Error("writer: "+msg, map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
 				"args": fmt.Sprintf("%v", args),
@@ -89,9 +124,11 @@ func (p *Producer) initWriter() error {
 	}
 
 	p.log.Debug("Kafka producer initialized", map[string]interface{}{
-		"brokers":     p.cfg.Brokers,
-		"compression": p.cfg.Compression,
-		"batch_size":  p.cfg.BatchSize,
+		"brokers":         p.cfg.Brokers,
+		"compression":     p.cfg.Compression,
+		"batch_size":      p.cfg.BatchSize,
+		"request_timeout": p.requestTimeout.String(),
+		"retry_attempts":  p.retryAttempts,
 	})
 
 	return nil
@@ -110,6 +147,11 @@ func (p *Producer) ensureWriter() error {
 
 // WriteMessages sends one or more messages to Kafka with retry logic.
 func (p *Producer) WriteMessages(ctx context.Context, msgs ...kafkago.Message) error {
+	for i := range msgs {
+		if err := messaging.ValidateTopic(msgs[i].Topic); err != nil {
+			return err
+		}
+	}
 	if err := p.ensureWriter(); err != nil { //nolint:contextcheck // lazy writer init has no request context; underlying error logger annotated separately
 		return err
 	}
@@ -117,26 +159,46 @@ func (p *Producer) WriteMessages(ctx context.Context, msgs ...kafkago.Message) e
 	p.mu.RLock()
 	if p.closed {
 		p.mu.RUnlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
+	writer := p.writer
 	p.mu.RUnlock()
 
-	var lastErr error
-	for attempt := 1; attempt <= p.cfg.Retries; attempt++ {
-		if err := p.writer.WriteMessages(ctx, msgs...); err == nil {
-			return nil
-		} else {
-			lastErr = err
-			if attempt < p.cfg.Retries {
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-time.After(time.Duration(attempt) * 100 * time.Millisecond):
-				}
-			}
-		}
+	attempts := p.retryAttempts
+	if attempts <= 0 {
+		attempts = 1
 	}
-	return fmt.Errorf("write after %d retries: %w", p.cfg.Retries, lastErr)
+	retryCfg := resilience.RetryConfig{
+		MaxAttempts:    attempts,
+		InitialBackoff: p.retryBackoff,
+		MaxBackoff:     time.Duration(attempts) * p.retryBackoff,
+		Strategy:       resilience.LinearBackoff,
+		Jitter:         0,
+		RetryIf: func(err error) bool {
+			return !errors.Is(err, context.Canceled) &&
+				!errors.Is(err, context.DeadlineExceeded) &&
+				ctx.Err() == nil
+		},
+	}
+	if retryCfg.InitialBackoff <= 0 {
+		retryCfg.InitialBackoff = time.Second
+		retryCfg.MaxBackoff = time.Duration(attempts) * time.Second
+	}
+
+	err := resilience.RetryFunc(ctx, retryCfg, func() error {
+		writeCtx := ctx
+		cancel := func() {}
+		if _, ok := ctx.Deadline(); !ok && p.requestTimeout > 0 {
+			writeCtx, cancel = context.WithTimeout(ctx, p.requestTimeout)
+		}
+		err := writer.WriteMessages(writeCtx, msgs...)
+		cancel()
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("write after %d attempts: %w", attempts, err)
+	}
+	return nil
 }
 
 // Stats returns writer statistics.
@@ -147,6 +209,21 @@ func (p *Producer) Stats() kafkago.WriterStats {
 		return p.writer.Stats()
 	}
 	return kafkago.WriterStats{}
+}
+
+// Flush is a no-op because kafka-go Writer writes synchronously when BatchSize
+// and BatchTimeout are used without Async. It still reports cancellation and
+// closed-producer state so callers can rely on the Producer contract.
+func (p *Producer) Flush(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.closed {
+		return messaging.ErrClosed
+	}
+	return nil
 }
 
 // Close shuts down the producer.
@@ -165,8 +242,17 @@ func (p *Producer) Close() error {
 	return nil
 }
 
+// SendBatch writes pre-built transport-agnostic messages to Kafka in order.
+func (p *Producer) SendBatch(ctx context.Context, messages []messaging.Message) error {
+	msgs := make([]kafkago.Message, 0, len(messages))
+	for _, msg := range messages {
+		msgs = append(msgs, kafka.ToKafkaMessage(msg))
+	}
+	return p.WriteMessages(ctx, msgs...)
+}
+
 // PublishJSON marshals value as JSON and publishes it to the given topic.
-func (p *Producer) PublishJSON(ctx context.Context, topic, key string, value interface{}) error {
+func (p *Producer) PublishJSON(ctx context.Context, topic, key string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return fmt.Errorf("marshal JSON: %w", err)

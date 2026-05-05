@@ -16,6 +16,7 @@ type ManagedConsumer struct {
 
 // ManagedConsumerConfig holds configuration for a ManagedConsumer.
 type ManagedConsumerConfig struct {
+	Common  messaging.Config
 	Config  kafka.Config
 	Topic   string
 	Handler messaging.MessageHandler
@@ -24,7 +25,7 @@ type ManagedConsumerConfig struct {
 
 // NewManagedConsumer creates a managed consumer with lifecycle support.
 func NewManagedConsumer(cfg ManagedConsumerConfig) (*ManagedConsumer, error) {
-	consumer, err := NewConsumer(cfg.Config, cfg.Topic, cfg.Log)
+	consumer, err := NewConsumer(cfg.Common, cfg.Config, cfg.Topic, cfg.Log)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,7 @@ func NewManagedConsumer(cfg ManagedConsumerConfig) (*ManagedConsumer, error) {
 
 	return &ManagedConsumer{
 		ManagedConsumer: mc,
-		groupID:         cfg.Config.GroupID,
+		groupID:         cfg.Common.ConsumerGroup,
 	}, nil
 }
 

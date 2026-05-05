@@ -20,7 +20,7 @@ func (p *stubProducer) Publish(_ context.Context, _ string, _ Event, _ ...string
 	return p.err
 }
 
-func (p *stubProducer) PublishJSON(_ context.Context, _, _ string, _ interface{}) error {
+func (p *stubProducer) PublishJSON(_ context.Context, _, _ string, _ any) error {
 	return p.err
 }
 
@@ -33,7 +33,21 @@ func (p *stubProducer) PublishBinary(_ context.Context, topic, key string, data 
 	p.messages = append(p.messages, Message{Topic: topic, Key: key, Value: data})
 	return nil
 }
-func (p *stubProducer) Close() error { return nil }
+
+func (p *stubProducer) Send(ctx context.Context, msg Message) error {
+	return p.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
+}
+
+func (p *stubProducer) SendBatch(ctx context.Context, messages []Message) error {
+	for _, msg := range messages {
+		if err := p.Send(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (p *stubProducer) Flush(context.Context) error { return nil }
+func (p *stubProducer) Close() error                { return nil }
 func (p *stubProducer) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()

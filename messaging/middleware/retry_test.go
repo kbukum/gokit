@@ -121,9 +121,10 @@ func TestRetryHandler_OnExhaustedCalled(t *testing.T) {
 			InitialBackoff: time.Millisecond,
 			BackoffFactor:  2.0,
 		},
-		OnExhausted: func(_ context.Context, msg messaging.Message, err error) {
+		OnExhausted: func(_ context.Context, msg messaging.Message, err error) error {
 			exhaustedMsg = msg
 			exhaustedErr = err
+			return nil
 		},
 	}
 
@@ -145,8 +146,9 @@ func TestRetryHandler_OnExhaustedNotCalledOnSuccess(t *testing.T) {
 	called := false
 	cfg := RetryMiddlewareConfig{
 		RetryConfig: resilience.DefaultRetryConfig(),
-		OnExhausted: func(_ context.Context, _ messaging.Message, _ error) {
+		OnExhausted: func(_ context.Context, _ messaging.Message, _ error) error {
 			called = true
+			return nil
 		},
 	}
 
@@ -205,5 +207,31 @@ func TestRetryHandler_DoesNotMutateOriginalHeaders(t *testing.T) {
 
 	if _, ok := original["x-retry-count"]; ok {
 		t.Error("original headers map was mutated by retry middleware")
+	}
+}
+
+func TestRetryHandler_OnExhaustedSuccessSwallowsTerminalError(t *testing.T) {
+	handler := func(_ context.Context, _ messaging.Message) error { return errors.New("poison") }
+	cfg := RetryMiddlewareConfig{
+		RetryConfig: resilience.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Millisecond},
+		OnExhausted: func(context.Context, messaging.Message, error) error { return nil },
+	}
+
+	if err := RetryHandler(handler, cfg)(context.Background(), messaging.Message{Headers: map[string]string{}}); err != nil {
+		t.Fatalf("expected exhausted handler success to swallow terminal error, got %v", err)
+	}
+}
+
+func TestRetryHandler_OnExhaustedFailurePropagates(t *testing.T) {
+	dlqErr := errors.New("dlq publish failed")
+	handler := func(_ context.Context, _ messaging.Message) error { return errors.New("poison") }
+	cfg := RetryMiddlewareConfig{
+		RetryConfig: resilience.RetryConfig{MaxAttempts: 1, InitialBackoff: time.Millisecond},
+		OnExhausted: func(context.Context, messaging.Message, error) error { return dlqErr },
+	}
+
+	err := RetryHandler(handler, cfg)(context.Background(), messaging.Message{Headers: map[string]string{}})
+	if !errors.Is(err, dlqErr) {
+		t.Fatalf("expected DLQ error propagation, got %v", err)
 	}
 }

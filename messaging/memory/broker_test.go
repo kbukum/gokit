@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -162,6 +163,9 @@ func TestBroker_ClosedProducer(t *testing.T) {
 
 	if err := producer.PublishBinary(context.Background(), "t", "k", []byte("data")); err == nil {
 		t.Error("expected error publishing to closed producer")
+	}
+	if err := producer.Send(context.Background(), messaging.Message{Topic: "t"}); !errors.Is(err, messaging.ErrClosed) {
+		t.Fatalf("Send() error = %v, want ErrClosed", err)
 	}
 }
 
@@ -379,5 +383,69 @@ func TestBrokerWithBuffer(t *testing.T) {
 	// Second publish should fail (buffer full)
 	if err := producer.PublishBinary(context.Background(), "t", "k", []byte("2")); err == nil {
 		t.Error("expected error for full buffer")
+	}
+}
+
+func TestConsumerRequeueBlocksUntilBufferHasCapacity(t *testing.T) {
+	broker := NewBrokerWithBuffer(1)
+	defer broker.Close()
+	producer := broker.Producer()
+	consumer := broker.consumer("t", messaging.CommitAfterHandlerSuccess)
+
+	if err := producer.Send(context.Background(), messaging.Message{Topic: "t", Key: "first"}); err != nil {
+		t.Fatalf("send first: %v", err)
+	}
+
+	handlerStarted := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	handlerErr := errors.New("handler failed")
+	consumeDone := make(chan error, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	go func() {
+		consumeDone <- consumer.Consume(ctx, func(context.Context, messaging.Message) error {
+			close(handlerStarted)
+			<-releaseHandler
+			return handlerErr
+		})
+	}()
+
+	select {
+	case <-handlerStarted:
+	case <-ctx.Done():
+		t.Fatal("handler was not called")
+	}
+
+	if err := producer.Send(context.Background(), messaging.Message{Topic: "t", Key: "second"}); err != nil {
+		t.Fatalf("send second: %v", err)
+	}
+	close(releaseHandler)
+
+	select {
+	case msg := <-consumer.ch:
+		if msg.Key != "second" {
+			t.Fatalf("first queued message = %q, want second", msg.Key)
+		}
+	case <-ctx.Done():
+		t.Fatal("requeue did not wait with the original buffered message preserved")
+	}
+
+	select {
+	case err := <-consumeDone:
+		if !errors.Is(err, handlerErr) {
+			t.Fatalf("Consume() error = %v, want handler error", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("Consume() did not return after requeue capacity became available")
+	}
+
+	select {
+	case msg := <-consumer.ch:
+		if msg.Key != "first" {
+			t.Fatalf("requeued message = %q, want first", msg.Key)
+		}
+	default:
+		t.Fatal("expected failed message to be requeued")
 	}
 }

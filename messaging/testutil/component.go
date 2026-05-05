@@ -77,7 +77,7 @@ func (p *MockProducer) Publish(_ context.Context, topic string, event messaging.
 }
 
 // PublishJSON marshals value as JSON and records it.
-func (p *MockProducer) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
+func (p *MockProducer) PublishJSON(_ context.Context, topic, key string, value any) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -136,6 +136,19 @@ func (p *MockProducer) Send(_ context.Context, msg messaging.Message) error {
 	})
 	return nil
 }
+
+// SendBatch records pre-built messages in order.
+func (p *MockProducer) SendBatch(ctx context.Context, messages []messaging.Message) error {
+	for _, msg := range messages {
+		if err := p.Send(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Flush is a no-op for MockProducer.
+func (p *MockProducer) Flush(_ context.Context) error { return nil }
 
 // Messages returns all recorded messages.
 func (p *MockProducer) Messages() []Message {

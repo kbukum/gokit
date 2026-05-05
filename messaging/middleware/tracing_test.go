@@ -113,11 +113,40 @@ func TestTracingHandler_CreatesSpan(t *testing.T) {
 	for _, a := range s.Attributes() {
 		attrMap[string(a.Key)] = a.Value.Emit()
 	}
-	if attrMap["messaging.system"] != "kafka" {
+	if attrMap["messaging.system"] != "messaging" {
 		t.Errorf("messaging.system = %q", attrMap["messaging.system"])
 	}
 	if attrMap["messaging.destination"] != "orders" {
 		t.Errorf("messaging.destination = %q", attrMap["messaging.destination"])
+	}
+}
+
+func TestTracingHandler_KafkaAttributes(t *testing.T) {
+	sr := setupTestTracer(t)
+
+	handler := func(_ context.Context, _ messaging.Message) error { return nil }
+	wrapped := TracingHandler(handler, WithMessagingSystem("kafka"), WithTracerName("kafka.consumer"))
+
+	msg := messaging.Message{
+		Topic:     "orders",
+		Partition: 1,
+		Key:       "order-42",
+		Headers:   map[string]string{},
+	}
+	if err := wrapped(context.Background(), msg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	spans := sr.Ended()
+	if len(spans) != 1 {
+		t.Fatalf("expected 1 span, got %d", len(spans))
+	}
+	attrMap := make(map[string]string)
+	for _, a := range spans[0].Attributes() {
+		attrMap[string(a.Key)] = a.Value.Emit()
+	}
+	if attrMap["messaging.system"] != "kafka" {
+		t.Errorf("messaging.system = %q", attrMap["messaging.system"])
 	}
 	if attrMap["messaging.kafka.message.key"] != "order-42" {
 		t.Errorf("messaging.kafka.message.key = %q", attrMap["messaging.kafka.message.key"])

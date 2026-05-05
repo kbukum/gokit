@@ -40,6 +40,8 @@ type TracingOption func(*tracingConfig)
 
 type tracingConfig struct {
 	spanNameFunc func(messaging.Message) string
+	tracerName   string
+	system       string
 }
 
 func defaultTracingConfig() tracingConfig {
@@ -47,6 +49,8 @@ func defaultTracingConfig() tracingConfig {
 		spanNameFunc: func(msg messaging.Message) string {
 			return fmt.Sprintf("%s consume", msg.Topic)
 		},
+		tracerName: "messaging.consumer",
+		system:     "messaging",
 	}
 }
 
@@ -54,6 +58,24 @@ func defaultTracingConfig() tracingConfig {
 func WithSpanNameFunc(fn func(messaging.Message) string) TracingOption {
 	return func(c *tracingConfig) {
 		c.spanNameFunc = fn
+	}
+}
+
+// WithTracerName overrides the tracer name used for consumer spans.
+func WithTracerName(name string) TracingOption {
+	return func(c *tracingConfig) {
+		if name != "" {
+			c.tracerName = name
+		}
+	}
+}
+
+// WithMessagingSystem sets the messaging.system span attribute.
+func WithMessagingSystem(system string) TracingOption {
+	return func(c *tracingConfig) {
+		if system != "" {
+			c.system = system
+		}
 	}
 }
 
@@ -70,14 +92,20 @@ func TracingHandler(handler messaging.MessageHandler, opts ...TracingOption) mes
 		ctx = ExtractTraceContext(ctx, msg.Headers)
 
 		spanName := cfg.spanNameFunc(msg)
-		ctx, span := observability.StartNamedSpan(ctx, "kafka.consumer", spanName,
-			observability.WithSpanKind(observability.SpanKindConsumer),
-			observability.WithSpanAttributes(
-				observability.StringAttribute("messaging.system", "kafka"),
-				observability.StringAttribute("messaging.destination", msg.Topic),
+		attrs := []observability.SpanAttribute{
+			observability.StringAttribute("messaging.system", cfg.system),
+			observability.StringAttribute("messaging.destination", msg.Topic),
+		}
+		if cfg.system == "kafka" {
+			attrs = append(attrs,
 				observability.IntAttribute("messaging.kafka.partition", msg.Partition),
 				observability.StringAttribute("messaging.kafka.message.key", msg.Key),
-			),
+			)
+		}
+
+		ctx, span := observability.StartNamedSpan(ctx, cfg.tracerName, spanName,
+			observability.WithSpanKind(observability.SpanKindConsumer),
+			observability.WithSpanAttributes(attrs...),
 		)
 		defer span.End()
 

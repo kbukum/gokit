@@ -44,7 +44,7 @@ Every package has its own `README.md` with API examples — start there for deta
 | `database` | `gokit/database` | Explicit-driver database component — pooling, migrations, health |
 | `cache` | `gokit/cache` | Cache abstraction with memory default and opt-in Redis adapter |
 | `httpclient` | `gokit/httpclient` | HTTP client with resilience patterns |
-| `messaging` | `gokit/messaging` | Producer/consumer with Kafka + in-memory broker |
+| `messaging` | `gokit/messaging` | Transport-agnostic producer/consumer registry with memory default and opt-in Kafka/NATS/RabbitMQ adapters |
 | `storage` | `gokit/storage` | Object storage — local + S3-compatible |
 | `server` | `gokit/server` | HTTP server (Gin, HTTP/2, middleware stack) |
 | `grpc` | `gokit/grpc` | gRPC client config — TLS, keepalive, pooling |

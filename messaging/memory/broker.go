@@ -12,6 +12,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -34,7 +35,8 @@ type InMemoryBroker struct {
 
 	// msgCh is signaled (non-blocking) after every publish so that
 	// WaitForMessage can wake up without polling.
-	msgCh chan struct{}
+	msgCh   chan struct{}
+	closeCh chan struct{}
 }
 
 // NewBroker creates a new in-memory broker with the default buffer size.
@@ -44,6 +46,7 @@ func NewBroker() *InMemoryBroker {
 		history: make(map[string][]messaging.Message),
 		bufSize: defaultBufferSize,
 		msgCh:   make(chan struct{}, 1),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -54,6 +57,7 @@ func NewBrokerWithBuffer(size int) *InMemoryBroker {
 		history: make(map[string][]messaging.Message),
 		bufSize: size,
 		msgCh:   make(chan struct{}, 1),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -149,7 +153,7 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
-		return fmt.Errorf("broker is closed")
+		return fmt.Errorf("broker: %w", messaging.ErrClosed)
 	}
 	msg.Topic = topic
 
@@ -173,6 +177,28 @@ func (b *InMemoryBroker) publish(topic string, msg messaging.Message) error {
 	return nil
 }
 
+func (b *InMemoryBroker) requeue(ctx context.Context, topic string, msg messaging.Message) error {
+	b.mu.RLock()
+	if b.closed {
+		b.mu.RUnlock()
+		return fmt.Errorf("broker: %w", messaging.ErrClosed)
+	}
+	subs := append([]chan messaging.Message(nil), b.topics[topic]...)
+	closeCh := b.closeCh
+	b.mu.RUnlock()
+
+	for _, ch := range subs {
+		select {
+		case ch <- msg:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-closeCh:
+			return fmt.Errorf("broker: %w", messaging.ErrClosed)
+		}
+	}
+	return nil
+}
+
 // Producer creates a new in-memory producer backed by this broker.
 func (b *InMemoryBroker) Producer() *InMemoryProducer {
 	return &InMemoryProducer{broker: b}
@@ -180,20 +206,26 @@ func (b *InMemoryBroker) Producer() *InMemoryProducer {
 
 // Consumer creates a new in-memory consumer for the given topic.
 func (b *InMemoryBroker) Consumer(topic string) *InMemoryConsumer {
+	return b.consumer(topic, messaging.CommitAuto)
+}
+
+func (b *InMemoryBroker) consumer(topic string, commit messaging.CommitStrategy) *InMemoryConsumer {
 	ch := b.subscribe(topic)
-	return &InMemoryConsumer{topic: topic, ch: ch}
+	return &InMemoryConsumer{broker: b, topic: topic, ch: ch, commitStrategy: commit}
 }
 
 // Close marks the broker as closed.
 func (b *InMemoryBroker) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.closed = true
-	for _, subs := range b.topics {
-		for _, ch := range subs {
-			close(ch)
-		}
+	if b.closed {
+		return
 	}
+	b.closed = true
+	close(b.closeCh)
+	// Don't close individual subscriber channels; closeCh signals no more messages will come.
+	// Subscribers detect closure via closeCh select case. This avoids a race where requeue
+	// might be sending on a channel as Close closes it.
 	b.topics = make(map[string][]chan messaging.Message)
 }
 
@@ -206,12 +238,36 @@ type InMemoryProducer struct {
 
 var _ messaging.Producer = (*InMemoryProducer)(nil)
 
+// Send writes a pre-built transport-agnostic message to the broker.
+func (p *InMemoryProducer) Send(_ context.Context, msg messaging.Message) error {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return messaging.ErrClosed
+	}
+	p.mu.Unlock()
+	return p.broker.publish(msg.Topic, msg)
+}
+
+// SendBatch writes pre-built messages to the broker in order.
+func (p *InMemoryProducer) SendBatch(ctx context.Context, messages []messaging.Message) error {
+	for _, msg := range messages {
+		if err := p.Send(ctx, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Flush is a no-op for the in-memory broker because delivery is synchronous.
+func (p *InMemoryProducer) Flush(_ context.Context) error { return nil }
+
 // Publish sends a structured event to the broker.
 func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messaging.Event, key ...string) error {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -242,11 +298,11 @@ func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messag
 }
 
 // PublishJSON marshals value as JSON and sends it to the broker.
-func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, value interface{}) error {
+func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, value any) error {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -269,7 +325,7 @@ func (p *InMemoryProducer) PublishBinary(_ context.Context, topic, key string, d
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		return fmt.Errorf("producer is closed")
+		return messaging.ErrClosed
 	}
 	p.mu.Unlock()
 
@@ -293,8 +349,10 @@ func (p *InMemoryProducer) Close() error {
 
 // InMemoryConsumer implements messaging.Consumer using an InMemoryBroker.
 type InMemoryConsumer struct {
-	topic string
-	ch    chan messaging.Message
+	broker         *InMemoryBroker
+	topic          string
+	ch             chan messaging.Message
+	commitStrategy messaging.CommitStrategy
 }
 
 var _ messaging.Consumer = (*InMemoryConsumer)(nil)
@@ -310,6 +368,11 @@ func (c *InMemoryConsumer) Consume(ctx context.Context, handler messaging.Messag
 				return nil
 			}
 			if err := handler(ctx, msg); err != nil {
+				if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
+					if requeueErr := c.broker.requeue(ctx, c.topic, msg); requeueErr != nil {
+						return errors.Join(err, fmt.Errorf("requeue message: %w", requeueErr))
+					}
+				}
 				return err
 			}
 		}

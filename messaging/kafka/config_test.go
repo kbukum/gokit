@@ -1,12 +1,17 @@
 package kafka
 
 import (
+	"crypto/tls"
+	"reflect"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/messaging"
+	"github.com/kbukum/gokit/security"
 )
 
 func TestConfig_ApplyDefaults(t *testing.T) {
-	cfg := Config{Enabled: true}
+	cfg := Config{}
 	cfg.ApplyDefaults()
 
 	if len(cfg.Brokers) != 1 || cfg.Brokers[0] != "localhost:9092" {
@@ -15,20 +20,11 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	if cfg.Compression != "snappy" {
 		t.Errorf("Compression = %q, want snappy", cfg.Compression)
 	}
-	if cfg.Retries != 3 {
-		t.Errorf("Retries = %d, want 3", cfg.Retries)
-	}
 	if cfg.BatchSize != 100 {
 		t.Errorf("BatchSize = %d, want 100", cfg.BatchSize)
 	}
 	if cfg.BatchTimeout != "1s" {
 		t.Errorf("BatchTimeout = %q, want 1s", cfg.BatchTimeout)
-	}
-	if cfg.WriteTimeout != "10s" {
-		t.Errorf("WriteTimeout = %q, want 10s", cfg.WriteTimeout)
-	}
-	if cfg.ReadTimeout != "10s" {
-		t.Errorf("ReadTimeout = %q, want 10s", cfg.ReadTimeout)
 	}
 	if cfg.RequiredAcks != -1 {
 		t.Errorf("RequiredAcks = %d, want -1", cfg.RequiredAcks)
@@ -51,13 +47,50 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	if cfg.MetadataTTL != "6s" {
 		t.Errorf("MetadataTTL = %q, want 6s", cfg.MetadataTTL)
 	}
+	if cfg.TLS == nil || cfg.TLS.MinVersion != tls.VersionTLS12 {
+		t.Fatalf("TLS default = %#v, want TLS 1.2 floor", cfg.TLS)
+	}
+}
+
+func TestConfig_ApplyDefaults_AllowsExplicitInsecureDevPlaintext(t *testing.T) {
+	cfg := Config{AllowInsecureDev: true}
+	cfg.ApplyDefaults()
+
+	if cfg.TLS != nil {
+		t.Fatalf("TLS = %#v, want nil when allow_insecure_dev is explicit", cfg.TLS)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() with allow_insecure_dev: %v", err)
+	}
+}
+
+func TestConfigDoesNotExposeCorePolicyFields(t *testing.T) {
+	typ := reflect.TypeOf(Config{})
+	for _, name := range []string{"Name", "Enabled", "Retries", "RetryAttempts", "WriteTimeout", "ReadTimeout", "GroupID", "Topics", "DLQ", "MaxInFlight", "CommitStrategy", "DeliveryGuarantee"} {
+		if _, ok := typ.FieldByName(name); ok {
+			t.Fatalf("kafka.Config exposes core field %s", name)
+		}
+	}
+}
+
+func TestValidateCommonRejectsAdapterManagedDLQ(t *testing.T) {
+	t.Parallel()
+
+	cfg := messaging.Config{Adapter: "kafka", DLQ: messaging.DLQPolicy{Enabled: true}}
+	cfg.ApplyDefaults()
+	if err := ValidateCommonProducer(cfg); err == nil {
+		t.Fatal("expected producer DLQ validation error")
+	}
+	if err := ValidateCommonConsumer(cfg); err == nil {
+		t.Fatal("expected consumer DLQ validation error")
+	}
 }
 
 func TestConfig_ApplyDefaults_NoOverwrite(t *testing.T) {
 	cfg := Config{
 		Brokers:     []string{"broker1:9092", "broker2:9092"},
+		TLS:         &security.TLSConfig{ServerName: "kafka.test"},
 		Compression: "gzip",
-		Retries:     5,
 		BatchSize:   200,
 	}
 	cfg.ApplyDefaults()
@@ -67,9 +100,6 @@ func TestConfig_ApplyDefaults_NoOverwrite(t *testing.T) {
 	}
 	if cfg.Compression != "gzip" {
 		t.Errorf("Compression should not be overwritten, got %q", cfg.Compression)
-	}
-	if cfg.Retries != 5 {
-		t.Errorf("Retries should not be overwritten, got %d", cfg.Retries)
 	}
 	if cfg.BatchSize != 200 {
 		t.Errorf("BatchSize should not be overwritten, got %d", cfg.BatchSize)
@@ -84,17 +114,10 @@ func TestConfig_ApplyDefaults_SASLDefaultMechanism(t *testing.T) {
 	}
 }
 
-func TestConfig_Validate_Disabled(t *testing.T) {
-	cfg := Config{Enabled: false}
-	if err := cfg.Validate(); err != nil {
-		t.Errorf("Validate() should pass for disabled config: %v", err)
-	}
-}
-
 func TestConfig_Validate_NoBrokers(t *testing.T) {
-	cfg := Config{Enabled: true, Brokers: []string{}}
+	cfg := Config{}
 	cfg.ApplyDefaults()
-	cfg.Brokers = []string{} // clear after defaults
+	cfg.Brokers = []string{}
 	if err := cfg.Validate(); err == nil {
 		t.Error("Validate() should fail with no brokers")
 	}
@@ -102,8 +125,8 @@ func TestConfig_Validate_NoBrokers(t *testing.T) {
 
 func TestConfig_Validate_InvalidDuration(t *testing.T) {
 	cfg := Config{
-		Enabled:      true,
 		Brokers:      []string{"localhost:9092"},
+		TLS:          &security.TLSConfig{ServerName: "kafka.test"},
 		BatchTimeout: "not-a-duration",
 	}
 	cfg.ApplyDefaults()
@@ -114,7 +137,7 @@ func TestConfig_Validate_InvalidDuration(t *testing.T) {
 }
 
 func TestConfig_Validate_UnsupportedSASL(t *testing.T) {
-	cfg := Config{Enabled: true, EnableSASL: true, SASLMechanism: "GSSAPI", Username: "u"}
+	cfg := Config{EnableSASL: true, SASLMechanism: "GSSAPI", Username: "u"}
 	cfg.ApplyDefaults()
 	cfg.SASLMechanism = "GSSAPI"
 	if err := cfg.Validate(); err == nil {
@@ -123,24 +146,15 @@ func TestConfig_Validate_UnsupportedSASL(t *testing.T) {
 }
 
 func TestConfig_Validate_SASLNoUsername(t *testing.T) {
-	cfg := Config{Enabled: true, EnableSASL: true, SASLMechanism: "PLAIN"}
+	cfg := Config{EnableSASL: true, SASLMechanism: "PLAIN"}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err == nil {
 		t.Error("Validate() should fail with no SASL username")
 	}
 }
 
-func TestConfig_Validate_InvalidRetries(t *testing.T) {
-	cfg := Config{Enabled: true}
-	cfg.ApplyDefaults()
-	cfg.Retries = 0
-	if err := cfg.Validate(); err == nil {
-		t.Error("Validate() should fail with retries=0")
-	}
-}
-
 func TestConfig_Validate_InvalidBatchSize(t *testing.T) {
-	cfg := Config{Enabled: true}
+	cfg := Config{}
 	cfg.ApplyDefaults()
 	cfg.BatchSize = 0
 	if err := cfg.Validate(); err == nil {
@@ -149,10 +163,7 @@ func TestConfig_Validate_InvalidBatchSize(t *testing.T) {
 }
 
 func TestConfig_Validate_Valid(t *testing.T) {
-	cfg := Config{
-		Enabled: true,
-		Brokers: []string{"localhost:9092"},
-	}
+	cfg := Config{Brokers: []string{"localhost:9092"}, TLS: &security.TLSConfig{ServerName: "kafka.test"}}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("Validate() should pass: %v", err)
@@ -163,11 +174,11 @@ func TestConfig_Validate_ValidSASL(t *testing.T) {
 	for _, mech := range []string{"PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"} {
 		t.Run(mech, func(t *testing.T) {
 			cfg := Config{
-				Enabled:       true,
 				EnableSASL:    true,
 				SASLMechanism: mech,
 				Username:      "user",
 				Password:      "pass",
+				TLS:           &security.TLSConfig{ServerName: "kafka.test"},
 			}
 			cfg.ApplyDefaults()
 			cfg.SASLMechanism = mech
@@ -175,6 +186,19 @@ func TestConfig_Validate_ValidSASL(t *testing.T) {
 				t.Errorf("Validate() should pass for %s: %v", mech, err)
 			}
 		})
+	}
+}
+
+func TestConfigValidateRejectsPlaintextWithoutDevOptIn(t *testing.T) {
+	cfg := Config{TLS: nil, AllowInsecureDev: false}
+	cfg.ApplyDefaults()
+	cfg.TLS = nil
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected plaintext validation error")
+	}
+	cfg.AllowInsecureDev = true
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("allow_insecure_dev should permit plaintext: %v", err)
 	}
 }
 

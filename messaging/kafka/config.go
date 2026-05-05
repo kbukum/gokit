@@ -1,20 +1,16 @@
 package kafka
 
 import (
+	"crypto/tls"
 	"fmt"
 	"time"
 
+	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/security"
 )
 
-// Config holds Kafka connection and behavior configuration.
+// Config holds Kafka-specific connection, protocol, and batching settings.
 type Config struct {
-	// Name identifies this adapter instance (used by provider.Provider interface).
-	Name string `yaml:"name" mapstructure:"name"`
-
-	// Enabled controls whether the Kafka component is active.
-	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
-
 	// Brokers is the list of Kafka broker addresses.
 	Brokers []string `yaml:"brokers" mapstructure:"brokers"`
 
@@ -22,14 +18,12 @@ type Config struct {
 	// Empty = use static Brokers. Set = resolve from discovery provider.
 	Resolve string `yaml:"resolve" mapstructure:"resolve"`
 
-	// GroupID is the consumer group identifier.
-	GroupID string `yaml:"group_id" mapstructure:"group_id"`
-
-	// Topics is the list of topics to consume from.
-	Topics []string `yaml:"topics" mapstructure:"topics"`
-
-	// TLS configures TLS settings. Nil disables TLS.
+	// TLS configures TLS settings. Defaults to a TLS 1.2 floor unless
+	// AllowInsecureDev is explicitly enabled.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
+
+	// AllowInsecureDev permits plaintext connections for local development only.
+	AllowInsecureDev bool `yaml:"allow_insecure_dev" mapstructure:"allow_insecure_dev"`
 
 	// SASL
 	EnableSASL    bool   `yaml:"enable_sasl" mapstructure:"enable_sasl"`
@@ -39,19 +33,16 @@ type Config struct {
 
 	// Producer settings
 	Compression  string `yaml:"compression" mapstructure:"compression"` // none, gzip, snappy, lz4, zstd
-	Retries      int    `yaml:"retries" mapstructure:"retries"`
 	BatchSize    int    `yaml:"batch_size" mapstructure:"batch_size"`
 	BatchTimeout string `yaml:"batch_timeout" mapstructure:"batch_timeout"`
-	WriteTimeout string `yaml:"write_timeout" mapstructure:"write_timeout"`
-	ReadTimeout  string `yaml:"read_timeout" mapstructure:"read_timeout"`
 	RequiredAcks int    `yaml:"required_acks" mapstructure:"required_acks"`
 
-	// Consumer settings
+	// Consumer protocol settings
 	SessionTimeout    string `yaml:"session_timeout" mapstructure:"session_timeout"`
 	HeartbeatInterval string `yaml:"heartbeat_interval" mapstructure:"heartbeat_interval"`
 	RebalanceTimeout  string `yaml:"rebalance_timeout" mapstructure:"rebalance_timeout"`
 
-	// Connection settings
+	// Connection protocol settings
 	DialTimeout string `yaml:"dial_timeout" mapstructure:"dial_timeout"`
 	IdleTimeout string `yaml:"idle_timeout" mapstructure:"idle_timeout"`
 	MetadataTTL string `yaml:"metadata_ttl" mapstructure:"metadata_ttl"`
@@ -62,23 +53,17 @@ func (c *Config) ApplyDefaults() {
 	if len(c.Brokers) == 0 {
 		c.Brokers = []string{"localhost:9092"}
 	}
+	if c.TLS == nil && !c.AllowInsecureDev {
+		c.TLS = &security.TLSConfig{MinVersion: tls.VersionTLS12}
+	}
 	if c.Compression == "" {
 		c.Compression = "snappy"
-	}
-	if c.Retries <= 0 {
-		c.Retries = 3
 	}
 	if c.BatchSize <= 0 {
 		c.BatchSize = 100
 	}
 	if c.BatchTimeout == "" {
 		c.BatchTimeout = "1s"
-	}
-	if c.WriteTimeout == "" {
-		c.WriteTimeout = "10s"
-	}
-	if c.ReadTimeout == "" {
-		c.ReadTimeout = "10s"
 	}
 	if c.RequiredAcks <= 0 {
 		c.RequiredAcks = -1 // all replicas
@@ -106,20 +91,26 @@ func (c *Config) ApplyDefaults() {
 	}
 }
 
-// Validate checks that required fields are present and parseable.
-func (c *Config) Validate() error {
-	if !c.Enabled {
-		return nil
-	}
+// Validate checks that Kafka-specific fields are present and parseable.
+func (c Config) Validate() error {
 	if len(c.Brokers) == 0 {
 		return fmt.Errorf("kafka brokers are required")
+	}
+	for _, broker := range c.Brokers {
+		if broker == "" {
+			return fmt.Errorf("kafka broker address is required")
+		}
+	}
+	if err := c.TLS.Validate(); err != nil {
+		return fmt.Errorf("kafka tls: %w", err)
+	}
+	if !c.AllowInsecureDev && !c.TLS.IsEnabled() {
+		return fmt.Errorf("kafka: TLS is required unless allow_insecure_dev is true")
 	}
 	for _, d := range []struct {
 		name, val string
 	}{
 		{"batch_timeout", c.BatchTimeout},
-		{"write_timeout", c.WriteTimeout},
-		{"read_timeout", c.ReadTimeout},
 		{"session_timeout", c.SessionTimeout},
 		{"heartbeat_interval", c.HeartbeatInterval},
 		{"rebalance_timeout", c.RebalanceTimeout},
@@ -127,8 +118,8 @@ func (c *Config) Validate() error {
 		{"idle_timeout", c.IdleTimeout},
 		{"metadata_ttl", c.MetadataTTL},
 	} {
-		if _, err := time.ParseDuration(d.val); err != nil {
-			return fmt.Errorf("invalid %s %q: %w", d.name, d.val, err)
+		if _, err := parsePositiveDuration(d.name, d.val); err != nil {
+			return err
 		}
 	}
 	if c.EnableSASL {
@@ -141,11 +132,42 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("SASL username is required")
 		}
 	}
-	if c.Retries <= 0 {
-		return fmt.Errorf("retries must be > 0")
-	}
 	if c.BatchSize <= 0 {
 		return fmt.Errorf("batch_size must be > 0")
+	}
+	return nil
+}
+
+// ValidateCommonProducer checks Kafka support for core producer semantics.
+func ValidateCommonProducer(cfg messaging.Config) error {
+	if cfg.DeliveryGuarantee == messaging.DeliveryExactlyOnce {
+		return fmt.Errorf("kafka producer: exactly-once delivery requires transactions and is not supported")
+	}
+	if cfg.DLQ.Enabled {
+		return fmt.Errorf("kafka producer: adapter-managed DLQ is not supported; use messaging middleware")
+	}
+	return nil
+}
+
+// ValidateCommonConsumer checks Kafka support for core consumer semantics.
+func ValidateCommonConsumer(cfg messaging.Config) error {
+	if cfg.DLQ.Enabled {
+		return fmt.Errorf("kafka consumer: adapter-managed DLQ is not supported; use messaging middleware")
+	}
+	if cfg.MaxInFlight != 1 {
+		return fmt.Errorf("kafka consumer: max_in_flight > 1 is not supported by the serial consumer")
+	}
+	switch cfg.DeliveryGuarantee {
+	case messaging.DeliveryAtLeastOnce:
+		if cfg.CommitStrategy != messaging.CommitAfterHandlerSuccess {
+			return fmt.Errorf("kafka consumer: at-least-once delivery requires %s commits", messaging.CommitAfterHandlerSuccess)
+		}
+	case messaging.DeliveryAtMostOnce:
+		if cfg.CommitStrategy != messaging.CommitAuto {
+			return fmt.Errorf("kafka consumer: at-most-once delivery requires %s commits", messaging.CommitAuto)
+		}
+	case messaging.DeliveryExactlyOnce:
+		return fmt.Errorf("kafka consumer: exactly-once delivery requires transactions and is not supported")
 	}
 	return nil
 }
@@ -154,4 +176,15 @@ func (c *Config) Validate() error {
 func ParseDuration(s string) time.Duration {
 	d, _ := time.ParseDuration(s)
 	return d
+}
+
+func parsePositiveDuration(name, value string) (time.Duration, error) {
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", name, value, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("%s must be > 0", name)
+	}
+	return d, nil
 }

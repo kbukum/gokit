@@ -27,6 +27,9 @@ use (
 	./llm/providers
 	./mcp
 	./messaging
+	./messaging/kafka
+	./messaging/nats
+	./messaging/rabbitmq
 	./schema
 	./server
 	./server/testutil
