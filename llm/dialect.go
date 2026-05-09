@@ -19,6 +19,18 @@ const (
 	StreamSSE
 )
 
+// String returns the human-readable name of the stream format.
+func (f StreamFormat) String() string {
+	switch f {
+	case StreamNDJSON:
+		return "NDJSON"
+	case StreamSSE:
+		return "SSE"
+	default:
+		return fmt.Sprintf("StreamFormat(%d)", int(f))
+	}
+}
+
 // Dialect maps universal LLM types to/from a specific provider's HTTP format.
 //
 // Each LLM provider (Ollama, OpenAI, Anthropic, etc.) has its own Dialect
