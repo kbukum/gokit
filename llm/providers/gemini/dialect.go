@@ -3,9 +3,13 @@ package gemini
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
-	"github.com/kbukum/gokit/tool"
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
 
 // Register installs the Gemini dialect in the supplied registry.
@@ -44,10 +48,10 @@ func (d *Dialect) ChatPath() string {
 // Gemini API format:
 //
 //	{
-//	  "contents": [{"role": "user", "parts": [{"text": "..."}]}],
-//	  "systemInstruction": {"parts": [{"text": "..."}]},
-//	  "tools": [{"functionDeclarations": [...]}],
-//	  "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
+//	 "contents": [{"role": "user", "parts": [{"text": "..."}]}],
+//	 "systemInstruction": {"parts": [{"text": "..."}]},
+//	 "tools": [{"functionDeclarations": [...]}],
+//	 "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
 //	}
 func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	contents := make([]map[string]any, 0, len(req.Messages))
@@ -114,8 +118,8 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 // Gemini response format:
 //
 //	{
-//	  "candidates": [{"content": {"parts": [{"text": "..."}], "role": "model"}, "finishReason": "STOP"}],
-//	  "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}
+//	 "candidates": [{"content": {"parts": [{"text": "..."}], "role": "model"}, "finishReason": "STOP"}],
+//	 "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5, "totalTokenCount": 15}
 //	}
 func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	var raw struct {
@@ -141,29 +145,32 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}
 
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("gemini: parse response: %w", err)
+		return nil, errors.New(errors.ErrCodeInvalidFormat, "gemini: parse response", http.StatusBadGateway).WithCause(err)
 	}
 
 	if len(raw.Candidates) == 0 {
-		return nil, fmt.Errorf("gemini: response has no candidates")
+		return nil, errors.New(errors.ErrCodeInvalidFormat, "gemini: response has no candidates", http.StatusBadGateway)
 	}
 
 	candidate := raw.Candidates[0]
-	msg := llm.AssistantMessage{}
+	msg := chat.AssistantMessage{}
 
 	for i, part := range candidate.Content.Parts {
 		if part.Text != "" {
-			msg.Content = llm.TextContent(part.Text)
+			msg.Content = ai.TextContent(part.Text)
 		}
 		if part.FunctionCall != nil {
-			args := string(part.FunctionCall.Args)
-			msg.ToolCalls = append(msg.ToolCalls, llm.ToolCall{
-				ID:   fmt.Sprintf("call_%d", i),
-				Type: "function",
-				Function: llm.FunctionCall{
-					Name:      part.FunctionCall.Name,
-					Arguments: args,
-				},
+			var input map[string]any
+			if len(part.FunctionCall.Args) > 0 {
+				_ = json.Unmarshal(part.FunctionCall.Args, &input)
+			}
+			if input == nil {
+				input = map[string]any{}
+			}
+			msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
+				ID:    fmt.Sprintf("call_%d", i),
+				Name:  part.FunctionCall.Name,
+				Input: input,
 			})
 		}
 	}
@@ -177,9 +184,8 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Message: msg,
 		Model:   model,
 		Usage: llm.Usage{
-			PromptTokens:     raw.UsageMetadata.PromptTokenCount,
-			CompletionTokens: raw.UsageMetadata.CandidatesTokenCount,
-			TotalTokens:      raw.UsageMetadata.TotalTokenCount,
+			InputTokens:  raw.UsageMetadata.PromptTokenCount,
+			OutputTokens: raw.UsageMetadata.CandidatesTokenCount,
 		},
 		StopReason: mapFinishReason(candidate.FinishReason),
 	}, nil
@@ -189,7 +195,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 //
 // Gemini streaming returns the same structure as non-streaming but incrementally.
 // Each chunk is a full candidates array with partial content.
-func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
+func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var chunk struct {
 		Candidates []struct {
 			Content struct {
@@ -206,32 +212,31 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return llm.StreamChunk{}, fmt.Errorf("gemini: parse stream chunk: %w", err)
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeInvalidFormat, "gemini: parse stream chunk", http.StatusBadGateway).WithCause(err)
 	}
 
 	if len(chunk.Candidates) == 0 {
-		return llm.StreamChunk{}, nil
+		return streamwire.Chunk{}, nil
 	}
 
 	candidate := chunk.Candidates[0]
 	var text string
-	var toolCalls []llm.ToolCall
-	for _, part := range candidate.Content.Parts {
+	var toolCalls []streamwire.ToolCall
+	for i, part := range candidate.Content.Parts {
 		text += part.Text
 		if part.FunctionCall != nil {
-			args, _ := json.Marshal(part.FunctionCall.Args)
-			toolCalls = append(toolCalls, llm.ToolCall{
-				Type: "function",
-				Function: llm.FunctionCall{
-					Name:      part.FunctionCall.Name,
-					Arguments: string(args),
-				},
+			argsJSON, _ := json.Marshal(part.FunctionCall.Args)
+			toolCalls = append(toolCalls, streamwire.ToolCall{
+				Index:      i,
+				ID:         fmt.Sprintf("call_%d", i),
+				Name:       part.FunctionCall.Name,
+				InputDelta: string(argsJSON),
 			})
 		}
 	}
 
 	done := candidate.FinishReason != "" && candidate.FinishReason != "NONE"
-	return llm.StreamChunk{
+	return streamwire.Chunk{
 		Content:   text,
 		ToolCalls: toolCalls,
 		Done:      done,
@@ -240,30 +245,26 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 
 // --- internal helpers ---
 
-func encodeMessage(m llm.Message) (map[string]any, error) {
+func encodeMessage(m chat.Message) (map[string]any, error) {
 	switch msg := m.(type) {
-	case llm.UserMessage:
+	case chat.UserMessage:
 		return map[string]any{
 			"role": "user",
 			"parts": []map[string]any{
-				{"text": llm.TextOf(msg.Content)},
+				{"text": ai.TextOf(msg.Content)},
 			},
 		}, nil
-	case llm.AssistantMessage:
+	case chat.AssistantMessage:
 		parts := make([]map[string]any, 0)
-		text := llm.TextOf(msg.Content)
+		text := ai.TextOf(msg.Content)
 		if text != "" {
 			parts = append(parts, map[string]any{"text": text})
 		}
-		for _, tc := range msg.ToolCalls {
-			var args any
-			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
-				args = map[string]any{}
-			}
+		for _, tb := range msg.ToolCalls {
 			parts = append(parts, map[string]any{
 				"functionCall": map[string]any{
-					"name": tc.Function.Name,
-					"args": args,
+					"name": tb.Name,
+					"args": tb.Input,
 				},
 			})
 		}
@@ -274,10 +275,9 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 			"role":  "model",
 			"parts": parts,
 		}, nil
-	case llm.SystemMessage:
-		// System messages are handled via systemInstruction, skip in contents
+	case chat.SystemMessage:
 		return nil, nil //nolint:nilnil // signals "no contents entry to emit"
-	case llm.ToolResultMessage:
+	case chat.ToolResultMessage:
 		return map[string]any{
 			"role": "user",
 			"parts": []map[string]any{
@@ -292,11 +292,11 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 			},
 		}, nil
 	default:
-		return nil, fmt.Errorf("gemini: unknown message type %T", m)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("gemini: unknown message type %T", m), http.StatusBadRequest)
 	}
 }
 
-func encodeTools(defs []tool.Definition) []map[string]any {
+func encodeTools(defs []ai.ToolSpec) []map[string]any {
 	tools := make([]map[string]any, 0, len(defs))
 	for _, d := range defs {
 		t := map[string]any{
@@ -311,19 +311,19 @@ func encodeTools(defs []tool.Definition) []map[string]any {
 	return tools
 }
 
-func mapFinishReason(reason string) llm.StopReason {
+func mapFinishReason(reason string) chat.FinishReason {
 	switch reason {
 	case "STOP":
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	case "MAX_TOKENS":
-		return llm.StopMaxTokens
+		return chat.FinishReasonLength
 	case "SAFETY":
-		return llm.StopContentFilter
+		return chat.FinishReasonContentFilter
 	case "RECITATION":
-		return llm.StopContentFilter
+		return chat.FinishReasonContentFilter
 	case "TOOL_USE":
-		return llm.StopToolUse
+		return chat.FinishReasonToolUse
 	default:
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	}
 }

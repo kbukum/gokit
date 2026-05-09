@@ -218,7 +218,7 @@ func TestTLS_DefaultMinVersion_Is12(t *testing.T) {
 	}
 }
 
-func TestTLS_RejectsLegacyVersions(t *testing.T) {
+func TestTLS_RejectsObsoleteVersions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

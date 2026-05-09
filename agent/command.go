@@ -7,7 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kbukum/gokit/llm"
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
 )
 
 // CommandHandler executes a slash command. Returns a result string shown to the user.
@@ -161,7 +162,7 @@ func builtinModel(ctx context.Context, args string, a *Agent) (string, error) {
 	}
 	prev := a.GetModel()
 	a.SetModel(args)
-	a.emitHook(ctx, ModelSwitched{
+	_ = a.emitHook(ctx, ModelSwitched{
 		PreviousModel: prev,
 		NewModel:      args,
 		Reason:        "command",
@@ -170,7 +171,7 @@ func builtinModel(ctx context.Context, args string, a *Agent) (string, error) {
 }
 
 func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
-	if a.config.ContextStrategy == nil {
+	if a.config.MemoryPolicy == nil {
 		return "No context strategy configured.", nil
 	}
 	if a.config.Memory == nil || a.config.SessionID == "" {
@@ -185,9 +186,9 @@ func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
 	}
 	maxTokens := 0
 	if a.config.Provider != nil {
-		maxTokens = a.config.Provider.Capabilities().MaxContextTokens
+		maxTokens = a.config.Provider.Capabilities().MaxInputTokens
 	}
-	compacted, err := a.config.ContextStrategy.Compact(msgs, maxTokens)
+	compacted, err := a.config.MemoryPolicy.Compact(ctx, msgs, maxTokens)
 	if err != nil {
 		return "", fmt.Errorf("compact: %w", err)
 	}
@@ -214,16 +215,16 @@ func (a *Agent) ClearMemory(ctx context.Context) error {
 }
 
 // extractUserText returns the text content of the last user message.
-func extractUserText(msgs []llm.Message) (string, bool) {
+func extractUserText(msgs []chat.Message) (string, bool) {
 	if len(msgs) == 0 {
 		return "", false
 	}
-	um, ok := msgs[len(msgs)-1].(llm.UserMessage)
+	um, ok := msgs[len(msgs)-1].(chat.UserMessage)
 	if !ok {
 		return "", false
 	}
 	for _, block := range um.Content {
-		if tb, ok := block.(llm.TextBlock); ok {
+		if tb, ok := block.(ai.Text); ok {
 			return tb.Text, true
 		}
 	}
@@ -232,7 +233,7 @@ func extractUserText(msgs []llm.Message) (string, bool) {
 
 // handleCommand checks if the last message is a slash command and executes it.
 // Returns the result and true if a command was handled.
-func (a *Agent) handleCommand(ctx context.Context, msgs []llm.Message) (*Result, bool) {
+func (a *Agent) handleCommand(ctx context.Context, msgs []chat.Message) (*Result, bool) {
 	if a.config.Commands == nil {
 		return nil, false
 	}
@@ -252,7 +253,7 @@ func (a *Agent) handleCommand(ctx context.Context, msgs []llm.Message) (*Result,
 	if err != nil {
 		output = fmt.Sprintf("Error: %v", err)
 	}
-	finalMsg := llm.Assistant(output)
+	finalMsg := chat.Assistant(output)
 	return &Result{
 		Messages:     append(msgs, finalMsg),
 		FinalMessage: finalMsg,

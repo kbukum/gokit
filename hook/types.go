@@ -1,10 +1,19 @@
 package hook
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrFatalHook marks a hook error as fatal to the caller's flow.
+var ErrFatalHook = errors.New("hook: fatal")
 
 // EventType identifies the kind of hook event.
 // Applications define their own EventType constants.
 type EventType string
+
+// EventOnError is emitted when a non-fatal hook handler returns an error.
+const EventOnError EventType = "on_error"
 
 // Event is the interface for all hook events.
 // Applications define concrete event types that implement this interface.
@@ -13,57 +22,15 @@ type Event interface {
 	Type() EventType
 }
 
-// --- Hook Result ---
-
-// Action determines how the caller proceeds after a hook.
-type Action int
-
-const (
-	// ActionContinue lets execution proceed normally.
-	ActionContinue Action = iota
-	// ActionAbort stops execution with an optional reason.
-	ActionAbort
-	// ActionModify lets the handler modify data before proceeding.
-	ActionModify
-)
-
-// Result is returned by hook handlers to control execution flow.
-type Result struct {
-	// Action determines whether to continue, abort, or modify.
-	Action Action
-	// ModifiedData carries replacement data when Action is Modify.
-	ModifiedData any
-	// Reason explains why execution was aborted (Action == Abort).
-	Reason string
-	// Err reports an error from the handler without aborting dispatch.
-	Err error
+// ErrorEvent reports a non-fatal hook handler error.
+type ErrorEvent struct {
+	Err    error     `json:"-"`
+	Source EventType `json:"source"`
 }
 
-// Continue returns a Result that lets execution proceed.
-func Continue() Result {
-	return Result{Action: ActionContinue}
-}
+// Type returns the canonical hook error event type.
+func (ErrorEvent) Type() EventType { return EventOnError }
 
-// ContinueWithError returns a Result that lets execution proceed but records an error.
-func ContinueWithError(err error) Result {
-	return Result{Action: ActionContinue, Err: err}
-}
-
-// Abort returns a Result that stops execution.
-func Abort(reason string) Result {
-	return Result{Action: ActionAbort, Reason: reason}
-}
-
-// AbortWithError returns a Result that stops execution with an error.
-func AbortWithError(reason string, err error) Result {
-	return Result{Action: ActionAbort, Reason: reason, Err: err}
-}
-
-// Modify returns a Result that replaces event data.
-func Modify(data any) Result {
-	return Result{Action: ActionModify, ModifiedData: data}
-}
-
-// Handler processes a hook event and returns a result.
-// The context carries deadlines, cancellation, and request-scoped values.
-type Handler func(ctx context.Context, event Event) Result
+// Handler observes a hook event.
+// Returning a non-nil error records the failure; only errors wrapping ErrFatalHook abort dispatch.
+type Handler func(ctx context.Context, event Event) error

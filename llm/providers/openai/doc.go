@@ -1,6 +1,8 @@
 // Package openai provides an OpenAI-compatible LLM dialect and embedding
-// provider for gokit. Import this package to register the "openai" dialect
-// automatically, or use [NewAdapter] / [NewEmbeddingProvider] directly.
+// provider for gokit. Use [Register] to install the "openai" dialect into
+// a [llm.DialectRegistry] explicitly, or use [NewAdapter] /
+// [NewEmbeddingProvider] directly. There are no init() side effects;
+// registration is always explicit (D-cross-cutting #1).
 //
 // Works with OpenAI, Azure OpenAI, Ollama, vLLM, llama.cpp, LM Studio,
 // Together, Groq, and any server that exposes the /v1/chat/completions
@@ -8,7 +10,8 @@
 //
 // Quick start:
 //
-//	import _ "github.com/kbukum/gokit/llm/providers/openai" // registers "openai" dialect
+//	registry := llm.NewDialectRegistry()
+//	if err := openai.Register(registry); err != nil { /* handle */ }
 //
 //	adapter, err := openai.NewAdapter(openai.Config{
 //	    APIKey: "sk-...",

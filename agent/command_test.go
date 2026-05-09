@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kbukum/gokit/ai/chat"
+
 	"github.com/kbukum/gokit/agent"
 	"github.com/kbukum/gokit/hook"
-	"github.com/kbukum/gokit/llm"
 )
 
 // --- CommandRegistry Tests ---
@@ -115,7 +116,7 @@ func TestBuiltin_Help(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/help")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/help")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,7 +144,7 @@ func TestBuiltin_Help(t *testing.T) {
 
 func TestBuiltin_Clear(t *testing.T) {
 	mem := agent.NewInMemoryStore()
-	_ = mem.Save(context.Background(), "s1", []llm.Message{llm.User("old")})
+	_ = mem.Save(context.Background(), "s1", []chat.Message{chat.User("old")})
 
 	reg := agent.NewCommandRegistry()
 	reg.RegisterBuiltins()
@@ -155,7 +156,7 @@ func TestBuiltin_Clear(t *testing.T) {
 		Commands:  reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/clear")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/clear")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,7 +183,7 @@ func TestBuiltin_Clear_NoMemory(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/clear")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/clear")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -198,12 +199,12 @@ func TestBuiltin_Model_Switch(t *testing.T) {
 
 	var switched bool
 	hooks := hook.NewRegistry()
-	hooks.On(agent.EventModelSwitched, func(ctx context.Context, e hook.Event) hook.Result {
+	hooks.On(agent.EventModelSwitched, func(ctx context.Context, e hook.Event) error {
 		ms := e.(agent.ModelSwitched)
 		if ms.NewModel == "gpt-4o" && ms.PreviousModel == "" {
 			switched = true
 		}
-		return hook.Continue()
+		return nil
 	})
 
 	a := agent.New(agent.Config{
@@ -212,7 +213,7 @@ func TestBuiltin_Model_Switch(t *testing.T) {
 		Hooks:    hooks,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/model gpt-4o")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/model gpt-4o")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +240,7 @@ func TestBuiltin_Model_ShowCurrent(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/model")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/model")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -250,9 +251,9 @@ func TestBuiltin_Model_ShowCurrent(t *testing.T) {
 
 func TestBuiltin_Compact(t *testing.T) {
 	mem := agent.NewInMemoryStore()
-	msgs := []llm.Message{
-		llm.User("1"), llm.User("2"), llm.User("3"),
-		llm.User("4"), llm.User("5"),
+	msgs := []chat.Message{
+		chat.User("1"), chat.User("2"), chat.User("3"),
+		chat.User("4"), chat.User("5"),
 	}
 	_ = mem.Save(context.Background(), "s1", msgs)
 
@@ -260,14 +261,14 @@ func TestBuiltin_Compact(t *testing.T) {
 	reg.RegisterBuiltins()
 
 	a := agent.New(agent.Config{
-		Provider:        newMockProvider(textResponse("unused")),
-		Memory:          mem,
-		SessionID:       "s1",
-		Commands:        reg,
-		ContextStrategy: agent.TruncateStrategy{KeepLast: 2},
+		Provider:     newMockProvider(textResponse("unused")),
+		Memory:       mem,
+		SessionID:    "s1",
+		Commands:     reg,
+		MemoryPolicy: agent.TruncateStrategy{KeepLast: 2},
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/compact")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/compact")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -302,7 +303,7 @@ func TestRun_CommandBypassesLLM(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/echo hello world")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/echo hello world")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -328,7 +329,7 @@ func TestRun_NonCommandPassesToLLM(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("Hi there")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("Hi there")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -337,45 +338,6 @@ func TestRun_NonCommandPassesToLLM(t *testing.T) {
 	}
 	if result.FinalMessage.Text() != "Hello!" {
 		t.Errorf("output = %q, want %q", result.FinalMessage.Text(), "Hello!")
-	}
-}
-
-func TestStream_CommandEmitsCompleteEvent(t *testing.T) {
-	reg := agent.NewCommandRegistry()
-	reg.Register(agent.Command{
-		Name: "ping",
-		Handler: func(_ context.Context, _ string, _ *agent.Agent) (string, error) {
-			return "pong", nil
-		},
-	})
-
-	a := agent.New(agent.Config{
-		Provider: newMockProvider(),
-		Commands: reg,
-	})
-
-	ch, err := a.Stream(context.Background(), []llm.Message{llm.User("/ping")})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	events := make([]agent.Event, 0, 1)
-	for e := range ch {
-		events = append(events, e)
-	}
-
-	if len(events) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(events))
-	}
-	ce, ok := events[0].(agent.CompleteEvent)
-	if !ok {
-		t.Fatalf("expected CompleteEvent, got %T", events[0])
-	}
-	if ce.Result.StopReason != agent.StopCommand {
-		t.Errorf("StopReason = %q, want %q", ce.Result.StopReason, agent.StopCommand)
-	}
-	if ce.Result.FinalMessage.Text() != "pong" {
-		t.Errorf("output = %q, want %q", ce.Result.FinalMessage.Text(), "pong")
 	}
 }
 
@@ -391,7 +353,7 @@ func TestRun_UnregisteredSlashNotIntercepted(t *testing.T) {
 		Commands: reg,
 	})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("/foo")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("/foo")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

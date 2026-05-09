@@ -2,16 +2,15 @@ package hook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 )
 
 // Registry manages hook handlers and dispatches events.
-// Handlers are executed sequentially in registration order.
-// An Abort result short-circuits remaining handlers.
-// Modify results chain — each handler sees the previous modification.
-// Panicking handlers are recovered and converted to errors without
-// disrupting dispatch to subsequent handlers.
+// Handlers are executed sequentially in registration order. Non-fatal errors are
+// aggregated and emitted as EventOnError observations. Fatal errors short-circuit
+// dispatch when they wrap ErrFatalHook.
 type Registry struct {
 	mu       sync.RWMutex
 	handlers map[EventType][]entry
@@ -54,47 +53,69 @@ func (r *Registry) On(eventType EventType, h Handler) func() {
 }
 
 // Emit dispatches an event to all registered handlers for its type.
-// Handlers run sequentially. First Abort short-circuits.
-// Returns the merged result (last non-Continue result wins).
-// Panicking handlers are recovered: the panic is converted to an error
-// on the Result and dispatch continues to the next handler.
-func (r *Registry) Emit(ctx context.Context, event Event) Result {
-	r.mu.RLock()
-	entries := make([]entry, len(r.handlers[event.Type()]))
-	copy(entries, r.handlers[event.Type()])
-	r.mu.RUnlock()
-
-	merged := Continue()
+// Panicking handlers are recovered and converted to non-fatal errors. Non-fatal
+// errors do not stop dispatch; each is observed through EventOnError and the
+// aggregate is returned. Fatal errors wrapping ErrFatalHook return immediately.
+func (r *Registry) Emit(ctx context.Context, event Event) error {
+	entries := r.entries(event.Type())
+	var joined error
 
 	for _, e := range entries {
 		if err := ctx.Err(); err != nil {
-			return Result{Action: ActionAbort, Reason: "context canceled", Err: err}
+			return fmt.Errorf("%w: context canceled: %w", ErrFatalHook, err)
 		}
 
-		result := r.safeCall(ctx, e.handler, event)
-		switch result.Action {
-		case ActionAbort:
-			return result
-		case ActionModify:
-			merged = result
-		case ActionContinue:
-			if result.Err != nil {
-				merged.Err = result.Err
+		err := r.safeCall(ctx, e.handler, event)
+		if err == nil {
+			continue
+		}
+		if errors.Is(err, ErrFatalHook) {
+			return err
+		}
+		joined = errors.Join(joined, err)
+		if event.Type() != EventOnError {
+			emitErr := r.emitError(ctx, event.Type(), err)
+			if errors.Is(emitErr, ErrFatalHook) {
+				return errors.Join(joined, emitErr)
 			}
+			joined = errors.Join(joined, emitErr)
 		}
 	}
 
-	return merged
+	return joined
+}
+
+func (r *Registry) entries(eventType EventType) []entry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entries := make([]entry, len(r.handlers[eventType]))
+	copy(entries, r.handlers[eventType])
+	return entries
+}
+
+func (r *Registry) emitError(ctx context.Context, source EventType, err error) error {
+	var joined error
+	for _, e := range r.entries(EventOnError) {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("%w: context canceled: %w", ErrFatalHook, ctxErr)
+		}
+		handlerErr := r.safeCall(ctx, e.handler, ErrorEvent{Err: err, Source: source})
+		if handlerErr == nil {
+			continue
+		}
+		if errors.Is(handlerErr, ErrFatalHook) {
+			return handlerErr
+		}
+		joined = errors.Join(joined, handlerErr)
+	}
+	return joined
 }
 
 // safeCall invokes a handler with panic recovery.
-func (r *Registry) safeCall(ctx context.Context, h Handler, event Event) (result Result) {
+func (r *Registry) safeCall(ctx context.Context, h Handler, event Event) (err error) {
 	defer func() {
 		if rv := recover(); rv != nil {
-			result = Result{
-				Action: ActionContinue,
-				Err:    fmt.Errorf("hook handler panicked: %v", rv),
-			}
+			err = fmt.Errorf("hook handler panicked: %v", rv)
 		}
 	}()
 	return h(ctx, event)

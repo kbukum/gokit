@@ -24,23 +24,28 @@ func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
 		t.OutputSchema = def.OutputSchema
 	}
 
-	// Convert annotations
-	if def.Annotations != nil {
-		t.Title = def.Annotations.Title
-		t.Annotations = &sdkmcp.ToolAnnotations{
-			Title:          def.Annotations.Title,
-			ReadOnlyHint:   def.ReadOnly,
-			OpenWorldHint:  def.Annotations.OpenWorldHint,
-			IdempotentHint: def.Annotations.IdempotentHint != nil && *def.Annotations.IdempotentHint,
-		}
-		if def.Annotations.DestructiveHint != nil {
-			t.Annotations.DestructiveHint = def.Annotations.DestructiveHint
-		}
-	} else if def.ReadOnly {
-		t.Annotations = &sdkmcp.ToolAnnotations{ReadOnlyHint: true}
-	}
+	t.Title = def.Annotations.Title
+	annotations := toMCPAnnotations(def)
+	t.Annotations = &annotations
 
 	return t
+}
+
+// toMCPAnnotations builds MCP wire-format annotations from Definition + Envelope.
+// Read-only / destructive / open-world hints are derived from Envelope.
+func toMCPAnnotations(def tool.Definition) sdkmcp.ToolAnnotations {
+	readOnly := def.Envelope.Safety == tool.SafetyReadOnly
+	destructive := def.Envelope.Safety == tool.SafetyDestructive
+	openWorld := (def.Envelope.Network != nil && len(def.Envelope.Network.AllowList) > 0) ||
+		len(def.Envelope.Filesystem) > 0 ||
+		len(def.Envelope.Subprocess) > 0
+	return sdkmcp.ToolAnnotations{
+		Title:           def.Annotations.Title,
+		ReadOnlyHint:    readOnly,
+		DestructiveHint: &destructive,
+		IdempotentHint:  def.Annotations.IdempotentHint != nil && *def.Annotations.IdempotentHint,
+		OpenWorldHint:   &openWorld,
+	}
 }
 
 // mcpToolToDefinition converts an MCP Tool to a kit tool.Definition.
@@ -62,14 +67,18 @@ func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
 		}
 	}
 
-	// Convert annotations
+	// Convert annotations. MCP safety/open-world hints are executable wire metadata,
+	// so they populate Envelope rather than internal Annotations.
 	if t.Annotations != nil {
-		def.ReadOnly = t.Annotations.ReadOnlyHint
-		def.Annotations = &tool.Annotations{
-			Title:           t.Annotations.Title,
-			OpenWorldHint:   t.Annotations.OpenWorldHint,
-			DestructiveHint: t.Annotations.DestructiveHint,
+		switch {
+		case t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint:
+			def.Envelope.Safety = tool.SafetyDestructive
+		case t.Annotations.ReadOnlyHint:
+			def.Envelope.Safety = tool.SafetyReadOnly
+		default:
+			def.Envelope.Safety = tool.SafetyMutating
 		}
+		def.Annotations = tool.Annotations{Title: t.Annotations.Title}
 		if t.Annotations.IdempotentHint {
 			def.Annotations.IdempotentHint = boolPtr(true)
 		}

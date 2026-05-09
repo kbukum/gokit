@@ -6,7 +6,7 @@
 // # Architecture
 //
 // The llm package provides:
-//   - Universal types: [CompletionRequest], [CompletionResponse], [StreamChunk], [Message], [Usage]
+//   - Universal types: [CompletionRequest], [CompletionResponse], [StreamEvent], [chat.Message], [Usage]
 //   - [Dialect] interface: maps universal types to/from provider-specific HTTP format
 //   - [Adapter]: composes gokit's REST client + a Dialect to create a complete LLM client
 //   - [DialectRegistry]: explicit, isolated, thread-safe registry of dialect drivers

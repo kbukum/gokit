@@ -133,17 +133,17 @@ func TestTLSConfig_IsEnabled(t *testing.T) {
 	}
 }
 
-func TestTLSConfig_Validate_RejectsLegacyMinVersion(t *testing.T) {
+func TestTLSConfig_Validate_RejectsObsoleteMinVersion(t *testing.T) {
 	cfg := &TLSConfig{MinVersion: tls.VersionTLS11}
 	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected error for legacy TLS min version")
+		t.Fatal("expected error for obsolete TLS min version")
 	}
 }
 
-func TestTLSConfig_Build_RejectsLegacyMinVersion(t *testing.T) {
+func TestTLSConfig_Build_RejectsObsoleteMinVersion(t *testing.T) {
 	cfg := &TLSConfig{MinVersion: tls.VersionTLS11}
 	if _, err := cfg.Build(); err == nil {
-		t.Fatal("expected build error for legacy TLS min version")
+		t.Fatal("expected build error for obsolete TLS min version")
 	}
 }
 

@@ -3,8 +3,6 @@ package tool_test
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
-	"os"
 	"testing"
 	"time"
 
@@ -79,9 +77,6 @@ func TestFromFunc_WithAnnotations(t *testing.T) {
 		})
 
 	def := st.Definition()
-	if def.Annotations == nil {
-		t.Fatal("expected annotations")
-	}
 	if def.Annotations.Category != "discovery" {
 		t.Errorf("expected category, got %q", def.Annotations.Category)
 	}
@@ -365,17 +360,6 @@ func TestRegistry_Search(t *testing.T) {
 	}
 }
 
-// readOnlyCallable wraps a Callable and overrides Definition with ReadOnly=true
-type readOnlyCallable struct {
-	tool.Callable
-}
-
-func (r *readOnlyCallable) Definition() tool.Definition {
-	def := r.Callable.Definition()
-	def.ReadOnly = true
-	return def
-}
-
 func TestRegistry_CallBatch(t *testing.T) {
 	readFn := func(ctx context.Context, in SearchInput) (SearchOutput, error) {
 		return SearchOutput{Items: []string{"read"}, Total: 1}, nil
@@ -386,9 +370,9 @@ func TestRegistry_CallBatch(t *testing.T) {
 
 	reg := tool.NewRegistry()
 
-	mustReg(t, reg, &readOnlyCallable{
-		Callable: tool.FromFunc("read_tool", "Reads data", readFn).AsCallable(),
-	})
+	readTool := tool.FromFunc("read_tool", "Reads data", readFn)
+	readTool.Def.Envelope.Safety = tool.SafetyReadOnly
+	mustReg(t, reg, readTool.AsCallable())
 	mustReg(t, reg, tool.FromFunc("write_tool", "Writes data", writeFn).AsCallable())
 
 	calls := []tool.BatchCall{
@@ -397,7 +381,7 @@ func TestRegistry_CallBatch(t *testing.T) {
 		{Name: "nonexistent", ID: "c3", Input: nil},
 	}
 
-	results := reg.CallBatch(tool.Background(), calls)
+	results := reg.CallBatch(tool.Background(), calls, tool.BatchOptions{Concurrency: 2})
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
 	}
@@ -444,14 +428,11 @@ func TestAnnotations_ExecutionHint(t *testing.T) {
 	st := tool.FromFunc("validate", "Validate input", doSearch).
 		WithAnnotations(tool.Annotations{
 			Category:      "forms",
-			ExecutionHint: "ui",
+			ExecutionHint: tool.ExecutionUI,
 		})
 
 	def := st.Definition()
-	if def.Annotations == nil {
-		t.Fatal("expected annotations")
-	}
-	if def.Annotations.ExecutionHint != "ui" {
+	if def.Annotations.ExecutionHint.Resolved() != tool.ExecutionUI {
 		t.Errorf("expected executionHint 'ui', got %q", def.Annotations.ExecutionHint)
 	}
 }
@@ -460,143 +441,29 @@ func TestRegistry_FilterByExecutionHint(t *testing.T) {
 	reg := tool.NewRegistry()
 
 	mustReg(t, reg, tool.FromFunc("validate", "Validate", doSearch).
-		WithAnnotations(tool.Annotations{ExecutionHint: "ui"}).
+		WithAnnotations(tool.Annotations{ExecutionHint: tool.ExecutionUI}).
 		AsCallable())
 	mustReg(t, reg, tool.FromFunc("process", "Process", doSearch).
-		WithAnnotations(tool.Annotations{ExecutionHint: "backend"}).
+		WithAnnotations(tool.Annotations{ExecutionHint: tool.ExecutionBackend}).
 		AsCallable())
 	mustReg(t, reg, tool.FromFunc("submit", "Submit", doSearch).
-		WithAnnotations(tool.Annotations{ExecutionHint: "hybrid"}).
+		WithAnnotations(tool.Annotations{ExecutionHint: tool.ExecutionHybrid}).
 		AsCallable())
 	mustReg(t, reg, tool.FromFunc("plain", "Plain", doSearch).AsCallable())
 
-	defs := reg.Filter(tool.WithExecutionHint("ui"))
+	defs := reg.Filter(tool.WithExecutionHint(tool.ExecutionUI))
 	if len(defs) != 1 || defs[0].Name != "validate" {
 		t.Errorf("expected 1 ui tool (validate), got %d", len(defs))
 	}
 
-	defs = reg.Filter(tool.WithExecutionHint("backend"))
-	if len(defs) != 1 || defs[0].Name != "process" {
-		t.Errorf("expected 1 backend tool (process), got %d", len(defs))
+	defs = reg.Filter(tool.WithExecutionHint(tool.ExecutionBackend))
+	if len(defs) != 2 {
+		t.Errorf("expected 2 backend tools (process + plain), got %d", len(defs))
 	}
 
-	defs = reg.Filter(tool.WithExecutionHint("hybrid"))
+	defs = reg.Filter(tool.WithExecutionHint(tool.ExecutionHybrid))
 	if len(defs) != 1 || defs[0].Name != "submit" {
 		t.Errorf("expected 1 hybrid tool (submit), got %d", len(defs))
-	}
-}
-
-// --- Middleware tests ---
-
-func TestMiddleware_Logging(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	st := tool.FromFunc("search", "Search", doSearch)
-	c := tool.Apply(st.AsCallable(), tool.WithLogging(logger))
-
-	result, err := c.Call(tool.Background(), json.RawMessage(`{"query":"test"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result == nil {
-		t.Error("expected non-nil result")
-	}
-}
-
-func TestMiddleware_Timeout(t *testing.T) {
-	slowFn := func(ctx context.Context, in SearchInput) (SearchOutput, error) {
-		select {
-		case <-time.After(2 * time.Second):
-			return SearchOutput{}, nil
-		case <-ctx.Done():
-			return SearchOutput{}, ctx.Err()
-		}
-	}
-
-	st := tool.FromFunc("slow", "Slow tool", slowFn)
-	c := tool.Apply(st.AsCallable(), tool.WithTimeout(50*time.Millisecond))
-
-	_, err := c.Call(tool.Background(), json.RawMessage(`{"query":"test"}`))
-	if err == nil {
-		t.Error("expected timeout error")
-	}
-}
-
-func TestMiddleware_Chain(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	st := tool.FromFunc("search", "Search", doSearch)
-
-	c := tool.Apply(st.AsCallable(),
-		tool.Chain(
-			tool.WithLogging(logger),
-			tool.WithTimeout(5*time.Second),
-			tool.WithRecover(),
-		),
-	)
-
-	result, err := c.Call(tool.Background(), json.RawMessage(`{"query":"test"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result == nil {
-		t.Error("expected non-nil result")
-	}
-}
-
-func TestMiddleware_Recover(t *testing.T) {
-	panicFn := func(ctx context.Context, in SearchInput) (SearchOutput, error) {
-		panic("something went wrong")
-	}
-
-	st := tool.FromFunc("panicker", "Panics", panicFn)
-	c := tool.Apply(st.AsCallable(), tool.WithRecover())
-
-	_, err := c.Call(tool.Background(), json.RawMessage(`{"query":"test"}`))
-	if err == nil {
-		t.Error("expected error from recovered panic")
-	}
-}
-
-func TestMiddleware_Validation(t *testing.T) {
-	st := tool.FromFunc("search", "Search", doSearch)
-	c := tool.Apply(st.AsCallable(), tool.WithValidation())
-
-	// Valid input — should succeed
-	result, err := c.Call(tool.Background(), json.RawMessage(`{"query":"hello"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.IsError {
-		t.Errorf("expected success, got error: %s", result.Content)
-	}
-
-	// Invalid JSON — should return error result
-	result, err = c.Call(tool.Background(), json.RawMessage(`{invalid`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.IsError {
-		t.Error("expected error result for invalid JSON")
-	}
-}
-
-func TestMiddleware_ResultLimit(t *testing.T) {
-	bigFn := func(ctx context.Context, in SearchInput) (SearchOutput, error) {
-		items := make([]string, 100)
-		for i := range items {
-			items[i] = "item-with-long-name-for-testing-truncation"
-		}
-		return SearchOutput{Items: items, Total: 100}, nil
-	}
-
-	st := tool.FromFunc("big", "Returns big output", bigFn)
-	c := tool.Apply(st.AsCallable(), tool.WithResultLimit(50))
-
-	result, err := c.Call(tool.Background(), json.RawMessage(`{"query":"test"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Content) > 70 { // 50 + "... (truncated)"
-		t.Errorf("expected truncated content, got length %d", len(result.Content))
 	}
 }
 

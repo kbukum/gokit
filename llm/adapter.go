@@ -28,7 +28,7 @@ var (
 //
 // Adapter implements:
 //   - provider.RequestResponse[CompletionRequest, CompletionResponse]
-//   - provider.Streamable[CompletionRequest, CompletionResponse, StreamChunk]
+//   - provider.Streamable[CompletionRequest, CompletionResponse, StreamEvent]
 //   - provider.Closeable
 type Adapter struct {
 	rest      *rest.Client
@@ -140,15 +140,23 @@ func (a *Adapter) Execute(ctx context.Context, req CompletionRequest) (Completio
 
 // --- provider.Streamable streaming ---
 
-// Stream sends a completion request and returns a channel of streamed chunks.
+// Stream sends a completion request and returns canonical stream events.
 // The channel is closed when the stream ends or an error occurs.
-func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamChunk, error) {
+func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamEvent, error) {
+	chunkCh, model, err := a.streamChunks(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return streamEventsFromChunks(chunkCh, model), nil
+}
+
+func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, err error) {
 	a.applyDefaults(&req)
 	req.Stream = true
 
 	body, err := a.dialect.BuildRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("llm: build stream request: %w", err)
+		return nil, "", fmt.Errorf("llm: build stream request: %w", err)
 	}
 
 	streamResp, err := a.rest.HTTP().DoStream(ctx, httpclient.Request{
@@ -157,12 +165,12 @@ func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan Str
 		Body:   body,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("llm: stream: %w", err)
+		return nil, "", fmt.Errorf("llm: stream: %w", err)
 	}
 
-	ch := make(chan StreamChunk, 1)
+	ch := make(chan streamChunk, 1)
 	go a.readStream(ctx, streamResp, ch)
-	return ch, nil
+	return ch, req.Model, nil
 }
 
 // --- Accessors ---

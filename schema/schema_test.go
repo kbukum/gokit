@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -316,5 +317,30 @@ func TestValidate_NestedObject(t *testing.T) {
 	})
 	if !vr.Valid {
 		t.Errorf("expected valid nested object, got errors: %v", vr.Errors)
+	}
+}
+
+func TestAdditionalSchemaOptionsAndValidationErrors(t *testing.T) {
+	type Sample struct {
+		Name string `json:"name" jsonschema:"required"`
+	}
+	s := schema.Generate[Sample](schema.WithDefinitions(), schema.WithAdditionalProperties())
+	if s["$ref"] == "" {
+		t.Fatalf("expected $ref schema: %#v", s)
+	}
+	vr := schema.Validate(s, json.RawMessage(`{bad`))
+	if vr.Valid || len(vr.Errors) == 0 {
+		t.Fatal("expected invalid json")
+	}
+	if vr.Errors[0].Error() == "" {
+		t.Fatal("expected error text")
+	}
+	vr = schema.Validate(s, nil)
+	if vr.Valid {
+		t.Fatal("nil should fail")
+	}
+	vr = schema.Validate(schema.JSON{"type": "array", "minItems": float64(2), "maxItems": float64(2)}, []byte(`[1]`))
+	if vr.Valid {
+		t.Fatal("minItems should fail")
 	}
 }

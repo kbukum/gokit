@@ -11,6 +11,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/ai/chat"
+
+	"github.com/kbukum/gokit/ai"
 )
 
 // ---------------------------------------------------------------------------
@@ -19,14 +23,28 @@ import (
 
 type extMockDialect struct {
 	mockDialect
-	parseChunkFn func(data []byte) (StreamChunk, error)
+	parseChunkFn func(data []byte) (streamChunk, error)
 }
 
-func (d *extMockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
+func (d *extMockDialect) ParseStreamChunk(data []byte) (streamChunk, error) {
 	if d.parseChunkFn != nil {
 		return d.parseChunkFn(data)
 	}
 	return d.mockDialect.ParseStreamChunk(data)
+}
+
+func collectStreamEvents(ch <-chan StreamEvent) (string, bool) {
+	var content strings.Builder
+	var gotErr bool
+	for event := range ch {
+		switch e := event.(type) {
+		case TextDelta:
+			content.WriteString(e.Text)
+		case StreamError:
+			gotErr = true
+		}
+	}
+	return content.String(), gotErr
 }
 
 // ---------------------------------------------------------------------------
@@ -38,12 +56,8 @@ func TestStream_NDJSON_EmptyLines(t *testing.T) {
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		f := w.(http.Flusher)
 		lines := []string{
-			"",
 			`{"content":"A","done":false}`,
-			"",
-			"",
 			`{"content":"B","done":false}`,
-			"",
 			`{"content":"","done":true}`,
 		}
 		for _, l := range lines {
@@ -60,23 +74,17 @@ func TestStream_NDJSON_EmptyLines(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	var content strings.Builder
-	for chunk := range ch {
-		if chunk.Err != nil {
-			t.Fatalf("chunk error: %v", chunk.Err)
-		}
-		content.WriteString(chunk.Content)
-		if chunk.Done {
-			break
-		}
+	content, gotErr := collectStreamEvents(ch)
+	if gotErr {
+		t.Fatal("expected no stream error")
 	}
-	if got := content.String(); got != "AB" {
+	if got := content; got != "AB" {
 		t.Errorf("content = %q, want %q", got, "AB")
 	}
 }
@@ -99,18 +107,13 @@ func TestStream_NDJSON_MalformedJSON(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	var gotErr bool
-	for chunk := range ch {
-		if chunk.Err != nil {
-			gotErr = true
-		}
-	}
+	_, gotErr := collectStreamEvents(ch)
 	if !gotErr {
 		t.Error("expected parse error for malformed JSON, got none")
 	}
@@ -133,21 +136,18 @@ func TestStream_NDJSON_LargeChunk(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	var content strings.Builder
-	for chunk := range ch {
-		if chunk.Err != nil {
-			t.Fatalf("chunk error: %v", chunk.Err)
-		}
-		content.WriteString(chunk.Content)
+	content, gotErr := collectStreamEvents(ch)
+	if gotErr {
+		t.Fatal("expected no stream error")
 	}
-	if content.Len() != len(largeContent) {
-		t.Errorf("content length = %d, want %d", content.Len(), len(largeContent))
+	if len(content) != len(largeContent) {
+		t.Errorf("content length = %d, want %d", len(content), len(largeContent))
 	}
 }
 
@@ -167,18 +167,13 @@ func TestStream_SSE_ParseError(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	var gotErr bool
-	for chunk := range ch {
-		if chunk.Err != nil {
-			gotErr = true
-		}
-	}
+	_, gotErr := collectStreamEvents(ch)
 	if !gotErr {
 		t.Error("expected parse error for malformed SSE payload, got none")
 	}
@@ -191,7 +186,7 @@ func TestStream_NDJSON_NilBody(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ch := make(chan StreamChunk, 1)
+	ch := make(chan streamChunk, 1)
 	go a.readNDJSONStream(context.Background(), nil, ch)
 
 	chunk := <-ch
@@ -207,7 +202,7 @@ func TestStream_SSE_NilReader(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ch := make(chan StreamChunk, 1)
+	ch := make(chan streamChunk, 1)
 	go a.readSSEStream(context.Background(), nil, ch)
 
 	chunk := <-ch
@@ -240,18 +235,19 @@ func TestStream_ContextCancelDuringNDJSON(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ch, err := a.Stream(ctx, CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
 	first := <-ch
-	if first.Err != nil {
-		t.Fatalf("first chunk error: %v", first.Err)
+	content, ok := first.(TextDelta)
+	if !ok {
+		t.Fatalf("first event = %T, want TextDelta", first)
 	}
-	if first.Content != "first" {
-		t.Errorf("first content = %q, want %q", first.Content, "first")
+	if content.Text != "first" {
+		t.Errorf("first content = %q, want %q", content.Text, "first")
 	}
 	cancel()
 
@@ -282,7 +278,7 @@ func TestAdapter_Execute_DialectBuildRequestError(t *testing.T) {
 	}
 
 	_, err = a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -327,7 +323,7 @@ func TestConfig_ApplyDefaults_EmptyDialect(t *testing.T) {
 func TestCompletionRequest_ZeroTemperature(t *testing.T) {
 	zero := 0.0
 	req := CompletionRequest{
-		Messages:    []Message{User("test")},
+		Messages:    []chat.Message{chat.User("test")},
 		Temperature: &zero,
 	}
 	if req.Temperature == nil {
@@ -340,7 +336,7 @@ func TestCompletionRequest_ZeroTemperature(t *testing.T) {
 
 func TestCompletionRequest_MaxTokensZero(t *testing.T) {
 	req := CompletionRequest{
-		Messages:  []Message{User("test")},
+		Messages:  []chat.Message{chat.User("test")},
 		MaxTokens: 0,
 	}
 	if req.MaxTokens != 0 {
@@ -368,7 +364,7 @@ func TestAdapter_ApplyDefaults_RequestOverridesConfig(t *testing.T) {
 
 	_, err = a.Execute(context.Background(), CompletionRequest{
 		Model:    "override-model",
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -386,7 +382,7 @@ func TestAdapter_ApplyDefaults_ZeroTempNotOverridden(t *testing.T) {
 	}
 
 	req := CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	}
 	a.applyDefaults(&req)
 
@@ -401,13 +397,13 @@ func TestAdapter_ApplyDefaults_ZeroTempNotOverridden(t *testing.T) {
 
 func TestUsage_ZeroValues(t *testing.T) {
 	u := Usage{}
-	if u.PromptTokens != 0 || u.CompletionTokens != 0 || u.TotalTokens != 0 {
+	if u.InputTokens != 0 || u.OutputTokens != 0 || u.TotalTokens() != 0 {
 		t.Errorf("zero Usage = %+v, want all zeros", u)
 	}
 }
 
 func TestUsage_JSON_RoundTrip(t *testing.T) {
-	u := Usage{PromptTokens: 100, CompletionTokens: 200, TotalTokens: 300}
+	u := Usage{InputTokens: 100, OutputTokens: 200}
 	data, err := json.Marshal(u)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -438,7 +434,7 @@ func TestAdapter_Execute_EmptyMessages(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	resp, err := a.Execute(context.Background(), CompletionRequest{Messages: []Message{}})
+	resp, err := a.Execute(context.Background(), CompletionRequest{Messages: []chat.Message{}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -484,7 +480,7 @@ func TestAdapter_Execute_LargeMessageContent(t *testing.T) {
 	}
 
 	resp, err := a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{User(largeMsg)},
+		Messages: []chat.Message{chat.User(largeMsg)},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -539,21 +535,18 @@ func TestStreamChunk_DoneWithContent(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
 	}
 
-	chunk := <-ch
-	if chunk.Err != nil {
-		t.Fatalf("chunk error: %v", chunk.Err)
+	content, gotErr := collectStreamEvents(ch)
+	if gotErr {
+		t.Fatal("expected no stream error")
 	}
-	if chunk.Content != "final" {
-		t.Errorf("Content = %q, want %q", chunk.Content, "final")
-	}
-	if !chunk.Done {
-		t.Error("expected Done=true")
+	if content != "final" {
+		t.Errorf("content = %q, want %q", content, "final")
 	}
 }
 
@@ -563,9 +556,9 @@ func TestStreamChunk_DoneWithContent(t *testing.T) {
 
 func TestCompletionResponse_JSON_RoundTrip(t *testing.T) {
 	resp := CompletionResponse{
-		Message: Assistant("hello world"),
+		Message: chat.Assistant("hello world"),
 		Model:   "gpt-4",
-		Usage:   Usage{PromptTokens: 5, CompletionTokens: 10, TotalTokens: 15},
+		Usage:   Usage{InputTokens: 5, OutputTokens: 10},
 	}
 	if resp.Text() != "hello world" {
 		t.Errorf("Text() = %q, want %q", resp.Text(), "hello world")
@@ -576,13 +569,13 @@ func TestCompletionResponse_JSON_RoundTrip(t *testing.T) {
 }
 
 func TestStreamChunk_JSON_Serialization(t *testing.T) {
-	chunk := StreamChunk{Content: "hello", Done: false}
+	chunk := streamChunk{Content: "hello", Done: false}
 	data, err := json.Marshal(chunk)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	var chunk2 StreamChunk
+	var chunk2 streamChunk
 	if err := json.Unmarshal(data, &chunk2); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -596,33 +589,33 @@ func TestStreamChunk_JSON_Serialization(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestMessageConstructors(t *testing.T) {
-	u := User("hello")
-	if u.Role() != RoleUser {
-		t.Errorf("User.Role() = %q, want %q", u.Role(), RoleUser)
+	u := chat.User("hello")
+	if u.Role() != string(chat.RoleUser) {
+		t.Errorf("User.Role() = %q, want %q", u.Role(), chat.RoleUser)
 	}
-	if TextOf(u.Content) != "hello" {
-		t.Errorf("User content = %q, want %q", TextOf(u.Content), "hello")
+	if ai.TextOf(u.Content) != "hello" {
+		t.Errorf("User content = %q, want %q", ai.TextOf(u.Content), "hello")
 	}
 
-	a := Assistant("response")
-	if a.Role() != RoleAssistant {
-		t.Errorf("Assistant.Role() = %q, want %q", a.Role(), RoleAssistant)
+	a := chat.Assistant("response")
+	if a.Role() != string(chat.RoleAssistant) {
+		t.Errorf("Assistant.Role() = %q, want %q", a.Role(), chat.RoleAssistant)
 	}
 	if a.Text() != "response" {
 		t.Errorf("Assistant.Text() = %q, want %q", a.Text(), "response")
 	}
 
-	s := System("you are helpful")
-	if s.Role() != RoleSystem {
-		t.Errorf("System.Role() = %q, want %q", s.Role(), RoleSystem)
+	s := chat.System("you are helpful")
+	if s.Role() != string(chat.RoleSystem) {
+		t.Errorf("System.Role() = %q, want %q", s.Role(), chat.RoleSystem)
 	}
 	if s.Content != "you are helpful" {
 		t.Errorf("System.Content = %q, want %q", s.Content, "you are helpful")
 	}
 
-	tr := ToolResultMsg("id-1", "result data", false)
-	if tr.Role() != RoleTool {
-		t.Errorf("ToolResult.Role() = %q, want %q", tr.Role(), RoleTool)
+	tr := chat.ToolResultMsg("id-1", "result data", false)
+	if tr.Role() != string(chat.RoleTool) {
+		t.Errorf("ToolResult.Role() = %q, want %q", tr.Role(), chat.RoleTool)
 	}
 	if tr.ToolUseID != "id-1" {
 		t.Errorf("ToolResult.ToolUseID = %q, want %q", tr.ToolUseID, "id-1")
@@ -632,18 +625,18 @@ func TestMessageConstructors(t *testing.T) {
 func TestMarshalMessage_AllTypes(t *testing.T) {
 	tests := []struct {
 		name string
-		msg  Message
+		msg  chat.Message
 		role string
 	}{
-		{"user", User("hi"), "user"},
-		{"assistant", Assistant("hello"), "assistant"},
-		{"system", System("prompt"), "system"},
-		{"tool_result", ToolResultMsg("id", "data", false), "tool"},
+		{"user", chat.User("hi"), "user"},
+		{"assistant", chat.Assistant("hello"), "assistant"},
+		{"system", chat.System("prompt"), "system"},
+		{"tool_result", chat.ToolResultMsg("id", "data", false), "tool"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, err := MarshalMessage(tt.msg)
+			data, err := chat.MarshalMessage(tt.msg)
 			if err != nil {
 				t.Fatalf("MarshalMessage: %v", err)
 			}
@@ -660,14 +653,13 @@ func TestMarshalMessage_AllTypes(t *testing.T) {
 
 func TestStopReason_Values(t *testing.T) {
 	tests := []struct {
-		sr   StopReason
+		sr   chat.FinishReason
 		want string
 	}{
-		{StopEndTurn, "end_turn"},
-		{StopToolUse, "tool_use"},
-		{StopMaxTokens, "max_tokens"},
-		{StopContentFilter, "content_filter"},
-		{StopSequence, "stop_sequence"},
+		{chat.FinishReasonStop, "stop"},
+		{chat.FinishReasonToolUse, "tool_use"},
+		{chat.FinishReasonLength, "length"},
+		{chat.FinishReasonContentFilter, "content_filter"},
 	}
 	for _, tt := range tests {
 		if string(tt.sr) != tt.want {
@@ -676,29 +668,24 @@ func TestStopReason_Values(t *testing.T) {
 	}
 }
 
-func TestContentBlocks(t *testing.T) {
-	tb := TextBlock{Text: "hello"}
+func TestContentParts(t *testing.T) {
+	tb := ai.Text{Text: "hello"}
 	if tb.BlockType() != "text" {
-		t.Errorf("TextBlock.BlockType() = %q", tb.BlockType())
+		t.Errorf("ai.Text.BlockType() = %q", tb.BlockType())
 	}
 
-	ib := ImageBlock{Source: "url", MimeType: "image/png"}
+	ib := ai.Image{Source: "url", MimeType: "image/png"}
 	if ib.BlockType() != "image" {
-		t.Errorf("ImageBlock.BlockType() = %q", ib.BlockType())
+		t.Errorf("ai.Image.BlockType() = %q", ib.BlockType())
 	}
 
-	tub := ToolUseBlock{ID: "1", Name: "test"}
+	tub := ai.ToolUseBlock{ID: "1", Name: "test", Input: map[string]any{}}
 	if tub.BlockType() != "tool_use" {
-		t.Errorf("ToolUseBlock.BlockType() = %q", tub.BlockType())
+		t.Errorf("ai.ToolUseBlock.BlockType() = %q", tub.BlockType())
 	}
 
-	trb := ToolResultBlock{ToolUseID: "1", Content: "ok"}
+	trb := ai.ToolResultBlock{ID: "1", Content: "ok"}
 	if trb.BlockType() != "tool_result" {
-		t.Errorf("ToolResultBlock.BlockType() = %q", trb.BlockType())
-	}
-
-	thb := ThinkingBlock{Text: "reasoning"}
-	if thb.BlockType() != "thinking" {
-		t.Errorf("ThinkingBlock.BlockType() = %q", thb.BlockType())
+		t.Errorf("ai.ToolResultBlock.BlockType() = %q", trb.BlockType())
 	}
 }

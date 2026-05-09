@@ -3,6 +3,7 @@ package llm
 import (
 	"fmt"
 
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
@@ -47,10 +48,9 @@ type Dialect interface {
 	StreamFormat() StreamFormat
 
 	// ParseStreamChunk extracts content (text and/or tool calls) from a single
-	// stream data chunk. The returned StreamChunk carries Content, ToolCalls,
-	// and Done fields. Err on the StreamChunk is unused; return errors via the
-	// error return value.
-	ParseStreamChunk(data []byte) (StreamChunk, error)
+	// stream data chunk. The returned chunk is llm-internal; callers consume the
+	// assembled public StreamEvent values produced by Adapter.Stream/Provider.Stream.
+	ParseStreamChunk(data []byte) (streamwire.Chunk, error)
 }
 
 // DialectRegistry stores LLM dialects by name.

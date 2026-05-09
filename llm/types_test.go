@@ -1,10 +1,14 @@
 package llm
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/kbukum/gokit/ai/chat"
+)
 
 func TestCompletionRequest_Defaults(t *testing.T) {
 	req := CompletionRequest{
-		Messages: []Message{User("Hello")},
+		Messages: []chat.Message{chat.User("Hello")},
 	}
 
 	if req.Model != "" {
@@ -39,7 +43,7 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	}
 }
 
-func TestConfig_ApplyDefaults_PreservesExisting(t *testing.T) {
+func TestConfig_ApplyDefaults_DoesNotOverrideExplicitValues(t *testing.T) {
 	cfg := Config{
 		Name:    "custom",
 		Dialect: "test",
@@ -48,27 +52,26 @@ func TestConfig_ApplyDefaults_PreservesExisting(t *testing.T) {
 	cfg.applyDefaults()
 
 	if cfg.Name != "custom" {
-		t.Errorf("Name = %q, want %q (should be preserved)", cfg.Name, "custom")
+		t.Errorf("Name = %q, want %q", cfg.Name, "custom")
 	}
 	if cfg.Timeout != 60e9 {
-		t.Errorf("Timeout = %v, want 60s (should be preserved)", cfg.Timeout)
+		t.Errorf("Timeout = %v, want 60s", cfg.Timeout)
 	}
 }
 
 func TestUsage_Fields(t *testing.T) {
 	u := Usage{
-		PromptTokens:     10,
-		CompletionTokens: 20,
-		TotalTokens:      30,
+		InputTokens:  10,
+		OutputTokens: 20,
 	}
-	if u.PromptTokens+u.CompletionTokens != u.TotalTokens {
-		t.Errorf("token math: %d + %d != %d", u.PromptTokens, u.CompletionTokens, u.TotalTokens)
+	if u.InputTokens+u.OutputTokens != u.TotalTokens() {
+		t.Errorf("token math: %d + %d != %d", u.InputTokens, u.OutputTokens, u.TotalTokens())
 	}
 }
 
 func TestExtra_Field(t *testing.T) {
 	req := CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 		Extra:    map[string]any{"think": false, "format": "json"},
 	}
 

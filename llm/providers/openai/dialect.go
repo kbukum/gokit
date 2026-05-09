@@ -3,9 +3,13 @@ package openai
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
-	"github.com/kbukum/gokit/tool"
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
 
 // Register installs the OpenAI dialect in the supplied registry.
@@ -84,39 +88,43 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Usage struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
+			PromptTokenCount     int `json:"prompt_tokens"`
+			CompletionTokenCount int `json:"completion_tokens"`
+			TotalTokens          int `json:"total_tokens"`
 		} `json:"usage"`
 	}
 
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("openai: parse response: %w", err)
+		return nil, errors.New(errors.ErrCodeInvalidFormat, "openai: parse response", http.StatusBadGateway).WithCause(err)
 	}
 
 	if len(raw.Choices) == 0 {
-		return nil, fmt.Errorf("openai: response has no choices")
+		return nil, errors.New(errors.ErrCodeInvalidFormat, "openai: response has no choices", http.StatusBadGateway)
 	}
 
 	choice := raw.Choices[0]
-	msg := llm.AssistantMessage{}
+	msg := chat.AssistantMessage{}
 
 	if choice.Message.Content != nil && *choice.Message.Content != "" {
-		msg.Content = llm.TextContent(*choice.Message.Content)
+		msg.Content = ai.TextContent(*choice.Message.Content)
 	} else if choice.Message.ReasoningContent != nil && *choice.Message.ReasoningContent != "" {
 		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1)
 		// emit text under reasoning_content when content is empty.
-		msg.Content = llm.TextContent(*choice.Message.ReasoningContent)
+		msg.Content = ai.TextContent(*choice.Message.ReasoningContent)
 	}
 
 	for _, tc := range choice.Message.ToolCalls {
-		msg.ToolCalls = append(msg.ToolCalls, llm.ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: llm.FunctionCall{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
+		var input map[string]any
+		if tc.Function.Arguments != "" {
+			_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
+		}
+		if input == nil {
+			input = map[string]any{}
+		}
+		msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
+			ID:    tc.ID,
+			Name:  tc.Function.Name,
+			Input: input,
 		})
 	}
 
@@ -124,19 +132,18 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Message: msg,
 		Model:   raw.Model,
 		Usage: llm.Usage{
-			PromptTokens:     raw.Usage.PromptTokens,
-			CompletionTokens: raw.Usage.CompletionTokens,
-			TotalTokens:      raw.Usage.TotalTokens,
+			InputTokens:  raw.Usage.PromptTokenCount,
+			OutputTokens: raw.Usage.CompletionTokenCount,
 		},
 		StopReason: mapFinishReason(choice.FinishReason),
 	}, nil
 }
 
 // ParseStreamChunk extracts content and tool calls from an SSE data payload.
-func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
+func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	s := string(data)
 	if s == "[DONE]" {
-		return llm.StreamChunk{Done: true}, nil
+		return streamwire.Chunk{Done: true}, nil
 	}
 
 	var chunk struct {
@@ -151,25 +158,23 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return llm.StreamChunk{}, fmt.Errorf("openai: parse stream chunk: %w", err)
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeInvalidFormat, "openai: parse stream chunk", http.StatusBadGateway).WithCause(err)
 	}
 
 	if len(chunk.Choices) == 0 {
-		return llm.StreamChunk{}, nil
+		return streamwire.Chunk{}, nil
 	}
 
 	c := chunk.Choices[0]
 	done := c.FinishReason != nil && *c.FinishReason != ""
 
-	var toolCalls []llm.ToolCall
+	var toolCalls []streamwire.ToolCall
 	for _, tc := range c.Delta.ToolCalls {
-		toolCalls = append(toolCalls, llm.ToolCall{
-			ID:   tc.ID,
-			Type: tc.Type,
-			Function: llm.FunctionCall{
-				Name:      tc.Function.Name,
-				Arguments: tc.Function.Arguments,
-			},
+		toolCalls = append(toolCalls, streamwire.ToolCall{
+			Index:      tc.Index,
+			ID:         tc.ID,
+			Name:       tc.Function.Name,
+			InputDelta: tc.Function.Arguments,
 		})
 	}
 
@@ -178,7 +183,7 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 		content = c.Delta.ReasoningContent
 	}
 
-	return llm.StreamChunk{
+	return streamwire.Chunk{
 		Content:   content,
 		ToolCalls: toolCalls,
 		Done:      done,
@@ -207,50 +212,51 @@ type rawToolCall struct {
 	} `json:"function"`
 }
 
-func encodeMessage(m llm.Message) (map[string]any, error) {
+func encodeMessage(m chat.Message) (map[string]any, error) {
 	switch msg := m.(type) {
-	case llm.UserMessage:
+	case chat.UserMessage:
 		return map[string]any{
 			"role":    "user",
-			"content": llm.TextOf(msg.Content),
+			"content": ai.TextOf(msg.Content),
 		}, nil
-	case llm.AssistantMessage:
+	case chat.AssistantMessage:
 		result := map[string]any{
 			"role":    "assistant",
-			"content": llm.TextOf(msg.Content),
+			"content": ai.TextOf(msg.Content),
 		}
 		if len(msg.ToolCalls) > 0 {
 			var tcs []map[string]any
-			for _, tc := range msg.ToolCalls {
+			for _, tb := range msg.ToolCalls {
+				argsJSON, _ := json.Marshal(tb.Input)
 				tcs = append(tcs, map[string]any{
-					"id":   tc.ID,
-					"type": tc.Type,
+					"id":   tb.ID,
+					"type": "function",
 					"function": map[string]any{
-						"name":      tc.Function.Name,
-						"arguments": tc.Function.Arguments,
+						"name":      tb.Name,
+						"arguments": string(argsJSON),
 					},
 				})
 			}
 			result["tool_calls"] = tcs
 		}
 		return result, nil
-	case llm.SystemMessage:
+	case chat.SystemMessage:
 		return map[string]any{
 			"role":    "system",
 			"content": msg.Content,
 		}, nil
-	case llm.ToolResultMessage:
+	case chat.ToolResultMessage:
 		return map[string]any{
 			"role":         "tool",
 			"content":      msg.Content,
 			"tool_call_id": msg.ToolUseID,
 		}, nil
 	default:
-		return nil, fmt.Errorf("openai: unknown message type %T", m)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("openai: unknown message type %T", m), http.StatusBadRequest)
 	}
 }
 
-func encodeTools(defs []tool.Definition) []map[string]any {
+func encodeTools(defs []ai.ToolSpec) []map[string]any {
 	tools := make([]map[string]any, 0, len(defs))
 	for _, d := range defs {
 		tools = append(tools, map[string]any{
@@ -283,17 +289,17 @@ func encodeToolChoice(tc *llm.ToolChoice) any {
 	}
 }
 
-func mapFinishReason(reason string) llm.StopReason {
+func mapFinishReason(reason string) chat.FinishReason {
 	switch reason {
 	case "stop":
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	case "tool_calls":
-		return llm.StopToolUse
+		return chat.FinishReasonToolUse
 	case "length":
-		return llm.StopMaxTokens
+		return chat.FinishReasonLength
 	case "content_filter":
-		return llm.StopContentFilter
+		return chat.FinishReasonContentFilter
 	default:
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	}
 }

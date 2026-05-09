@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
+
 	"github.com/kbukum/gokit/llm"
 )
 
@@ -32,7 +35,7 @@ func TestDialect_BuildRequest_Basic(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:        "claude-sonnet-4-20250514",
-		Messages:     []llm.Message{llm.User("hello")},
+		Messages:     []chat.Message{chat.User("hello")},
 		SystemPrompt: "You are helpful.",
 	}
 
@@ -60,7 +63,7 @@ func TestDialect_BuildRequest_WithMaxTokens(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:     "claude-sonnet-4-20250514",
-		Messages:  []llm.Message{llm.User("test")},
+		Messages:  []chat.Message{chat.User("test")},
 		MaxTokens: 1000,
 	}
 
@@ -82,7 +85,7 @@ func TestDialect_BuildRequest_WithToolChoice(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:      "claude-sonnet-4-20250514",
-		Messages:   []llm.Message{llm.User("test")},
+		Messages:   []chat.Message{chat.User("test")},
 		ToolChoice: llm.ToolChoiceRequired,
 	}
 
@@ -126,11 +129,11 @@ func TestDialect_ParseResponse_Text(t *testing.T) {
 	if resp.Text() != "Hello!" {
 		t.Errorf("expected text 'Hello!', got %q", resp.Text())
 	}
-	if resp.StopReason != llm.StopEndTurn {
+	if resp.StopReason != chat.FinishReasonStop {
 		t.Errorf("expected StopEndTurn, got %v", resp.StopReason)
 	}
-	if resp.Usage.TotalTokens != 15 {
-		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens)
+	if resp.Usage.TotalTokens() != 15 {
+		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens())
 	}
 }
 
@@ -156,11 +159,52 @@ func TestDialect_ParseResponse_ToolUse(t *testing.T) {
 	if !resp.HasToolCalls() {
 		t.Fatal("expected tool calls")
 	}
-	if resp.Message.ToolCalls[0].Function.Name != "get_weather" {
-		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Function.Name)
+	if resp.Message.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Name)
 	}
-	if resp.StopReason != llm.StopToolUse {
+	if resp.StopReason != chat.FinishReasonToolUse {
 		t.Errorf("expected StopToolUse, got %v", resp.StopReason)
+	}
+}
+
+func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
+	d := &Dialect{}
+	tests := []struct {
+		name string
+		raw  string
+		want []ai.ToolUseBlock
+	}{
+		{
+			name: "single tool call",
+			raw:  `{"id":"msg-1","model":"claude-sonnet-4-20250514","content":[{"type":"tool_use","id":"toolu_1","name":"get_weather","input":{"city":"NYC"}}],"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}`,
+			want: []ai.ToolUseBlock{{ID: "toolu_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+		},
+		{
+			name: "empty args",
+			raw:  `{"id":"msg-2","model":"claude-sonnet-4-20250514","content":[{"type":"tool_use","id":"toolu_2","name":"ping","input":{}}],"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}`,
+			want: []ai.ToolUseBlock{{ID: "toolu_2", Name: "ping", Input: map[string]any{}}},
+		},
+		{
+			name: "multi tool",
+			raw:  `{"id":"msg-3","model":"claude-sonnet-4-20250514","content":[{"type":"tool_use","id":"toolu_3","name":"search","input":{"q":"x"}},{"type":"tool_use","id":"toolu_4","name":"lookup","input":{"id":7}}],"stop_reason":"tool_use","usage":{"input_tokens":1,"output_tokens":1}}`,
+			want: []ai.ToolUseBlock{{ID: "toolu_3", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "toolu_4", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := d.ParseResponse([]byte(tt.raw))
+			if err != nil {
+				t.Fatalf("ParseResponse: %v", err)
+			}
+			if len(resp.Message.ToolCalls) != len(tt.want) {
+				t.Fatalf("tool calls=%d want=%d", len(resp.Message.ToolCalls), len(tt.want))
+			}
+			for i := range tt.want {
+				if resp.Message.ToolCalls[i].ID != tt.want[i].ID || resp.Message.ToolCalls[i].Name != tt.want[i].Name {
+					t.Fatalf("tool[%d]=%+v want %+v", i, resp.Message.ToolCalls[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
 
@@ -224,8 +268,8 @@ func TestDialect_ParseStreamChunk_ToolUse(t *testing.T) {
 	if chunk.ToolCalls[0].ID != "toolu_123" {
 		t.Errorf("tool ID = %q, want %q", chunk.ToolCalls[0].ID, "toolu_123")
 	}
-	if chunk.ToolCalls[0].Function.Name != "search" {
-		t.Errorf("tool name = %q, want %q", chunk.ToolCalls[0].Function.Name, "search")
+	if chunk.ToolCalls[0].Name != "search" {
+		t.Errorf("tool name = %q, want %q", chunk.ToolCalls[0].Name, "search")
 	}
 
 	// input_json_delta
@@ -237,8 +281,8 @@ func TestDialect_ParseStreamChunk_ToolUse(t *testing.T) {
 	if len(chunk2.ToolCalls) != 1 {
 		t.Fatalf("expected 1 tool call delta, got %d", len(chunk2.ToolCalls))
 	}
-	if chunk2.ToolCalls[0].Function.Arguments != `{"q":"test"}` {
-		t.Errorf("tool args = %q, want %q", chunk2.ToolCalls[0].Function.Arguments, `{"q":"test"}`)
+	if chunk2.ToolCalls[0].InputDelta != `{"q":"test"}` {
+		t.Errorf("tool args = %q, want %q", chunk2.ToolCalls[0].InputDelta, `{"q":"test"}`)
 	}
 }
 
@@ -260,9 +304,9 @@ func TestDialect_ToolResultEncoding(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model: "claude-sonnet-4-20250514",
-		Messages: []llm.Message{
-			llm.User("what's the weather?"),
-			llm.ToolResultMsg("toolu_abc", "72°F and sunny", false),
+		Messages: []chat.Message{
+			chat.User("what's the weather?"),
+			chat.ToolResultMsg("toolu_abc", "72°F and sunny", false),
 		},
 	}
 

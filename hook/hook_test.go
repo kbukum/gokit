@@ -9,23 +9,17 @@ import (
 	"github.com/kbukum/gokit/hook"
 )
 
-// --- Test event types (domain-agnostic) ---
-
 const (
 	eventAlpha hook.EventType = "alpha"
 	eventBeta  hook.EventType = "beta"
 	eventGamma hook.EventType = "gamma"
 )
 
-type alphaEvent struct {
-	Value string
-}
+type alphaEvent struct{ Value string }
 
 func (alphaEvent) Type() hook.EventType { return eventAlpha }
 
-type betaEvent struct {
-	Count int
-}
+type betaEvent struct{ Count int }
 
 func (betaEvent) Type() hook.EventType { return eventBeta }
 
@@ -35,8 +29,6 @@ type gammaEvent struct {
 }
 
 func (gammaEvent) Type() hook.EventType { return eventGamma }
-
-// --- Event interface ---
 
 func TestEventInterface(t *testing.T) {
 	events := []struct {
@@ -57,68 +49,17 @@ func TestEventInterface(t *testing.T) {
 	}
 }
 
-// --- Result constructors ---
-
-func TestContinue(t *testing.T) {
-	r := hook.Continue()
-	if r.Action != hook.ActionContinue {
-		t.Errorf("Action = %v, want Continue", r.Action)
+func TestErrFatalHookSentinel(t *testing.T) {
+	err := errors.Join(errors.New("boom"), hook.ErrFatalHook)
+	if !errors.Is(err, hook.ErrFatalHook) {
+		t.Fatalf("expected fatal sentinel match")
 	}
 }
-
-func TestContinueWithError(t *testing.T) {
-	err := errors.New("something went wrong")
-	r := hook.ContinueWithError(err)
-	if r.Action != hook.ActionContinue {
-		t.Errorf("Action = %v, want Continue", r.Action)
-	}
-	if !errors.Is(r.Err, err) {
-		t.Errorf("Err = %v, want %v", r.Err, err)
-	}
-}
-
-func TestAbort(t *testing.T) {
-	r := hook.Abort("rate limited")
-	if r.Action != hook.ActionAbort {
-		t.Errorf("Action = %v, want Abort", r.Action)
-	}
-	if r.Reason != "rate limited" {
-		t.Errorf("Reason = %q, want %q", r.Reason, "rate limited")
-	}
-}
-
-func TestAbortWithError(t *testing.T) {
-	err := errors.New("forbidden")
-	r := hook.AbortWithError("rate limited", err)
-	if r.Action != hook.ActionAbort {
-		t.Errorf("Action = %v, want Abort", r.Action)
-	}
-	if r.Reason != "rate limited" {
-		t.Errorf("Reason = %q, want %q", r.Reason, "rate limited")
-	}
-	if !errors.Is(r.Err, err) {
-		t.Errorf("Err = %v, want %v", r.Err, err)
-	}
-}
-
-func TestModify(t *testing.T) {
-	data := map[string]string{"model": "gpt-3.5"}
-	r := hook.Modify(data)
-	if r.Action != hook.ActionModify {
-		t.Errorf("Action = %v, want Modify", r.Action)
-	}
-	if r.ModifiedData == nil {
-		t.Error("ModifiedData should not be nil")
-	}
-}
-
-// --- Registry tests ---
 
 func TestRegistry_EmitWithNoHandlers(t *testing.T) {
 	reg := hook.NewRegistry()
-	result := reg.Emit(context.Background(), alphaEvent{Value: "test"})
-	if result.Action != hook.ActionContinue {
-		t.Errorf("expected Continue with no handlers, got %v", result.Action)
+	if err := reg.Emit(context.Background(), alphaEvent{Value: "test"}); err != nil {
+		t.Fatalf("Emit error = %v", err)
 	}
 }
 
@@ -126,13 +67,14 @@ func TestRegistry_SingleHandler(t *testing.T) {
 	reg := hook.NewRegistry()
 	var received hook.EventType
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(_ context.Context, e hook.Event) error {
 		received = e.Type()
-		return hook.Continue()
+		return nil
 	})
 
-	reg.Emit(context.Background(), alphaEvent{Value: "hello"})
-
+	if err := reg.Emit(context.Background(), alphaEvent{Value: "hello"}); err != nil {
+		t.Fatalf("Emit error = %v", err)
+	}
 	if received != eventAlpha {
 		t.Errorf("handler received %q, want %q", received, eventAlpha)
 	}
@@ -142,14 +84,15 @@ func TestRegistry_TypeAssertionInHandler(t *testing.T) {
 	reg := hook.NewRegistry()
 	var capturedValue string
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(_ context.Context, e hook.Event) error {
 		a := e.(alphaEvent)
 		capturedValue = a.Value
-		return hook.Continue()
+		return nil
 	})
 
-	reg.Emit(context.Background(), alphaEvent{Value: "captured!"})
-
+	if err := reg.Emit(context.Background(), alphaEvent{Value: "captured!"}); err != nil {
+		t.Fatalf("Emit error = %v", err)
+	}
 	if capturedValue != "captured!" {
 		t.Errorf("capturedValue = %q, want %q", capturedValue, "captured!")
 	}
@@ -159,69 +102,135 @@ func TestRegistry_MultipleHandlers_ExecutionOrder(t *testing.T) {
 	reg := hook.NewRegistry()
 	var order []int
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		order = append(order, 1)
-		return hook.Continue()
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		order = append(order, 2)
-		return hook.Continue()
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		order = append(order, 3)
-		return hook.Continue()
-	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { order = append(order, 1); return nil })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { order = append(order, 2); return nil })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { order = append(order, 3); return nil })
 
-	reg.Emit(context.Background(), alphaEvent{Value: "test"})
-
+	if err := reg.Emit(context.Background(), alphaEvent{Value: "test"}); err != nil {
+		t.Fatalf("Emit error = %v", err)
+	}
 	if len(order) != 3 || order[0] != 1 || order[1] != 2 || order[2] != 3 {
 		t.Errorf("expected order [1,2,3], got %v", order)
 	}
 }
 
-func TestRegistry_AbortShortCircuits(t *testing.T) {
+func TestRegistry_NonFatalErrorDoesNotShortCircuit(t *testing.T) {
 	reg := hook.NewRegistry()
 	handlersCalled := 0
+	expectedErr := errors.New("observe failed")
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
 		handlersCalled++
-		return hook.Abort("blocked")
+		return expectedErr
 	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
 		handlersCalled++
-		return hook.Continue()
+		return nil
 	})
 
-	result := reg.Emit(context.Background(), alphaEvent{Value: "dangerous"})
-
-	if result.Action != hook.ActionAbort {
-		t.Errorf("expected Abort, got %v", result.Action)
+	err := reg.Emit(context.Background(), alphaEvent{Value: "observed"})
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected error %v, got %v", expectedErr, err)
 	}
-	if result.Reason != "blocked" {
-		t.Errorf("Reason = %q, want %q", result.Reason, "blocked")
-	}
-	if handlersCalled != 1 {
-		t.Errorf("expected 1 handler called (short-circuit), got %d", handlersCalled)
+	if handlersCalled != 2 {
+		t.Errorf("expected 2 handlers called, got %d", handlersCalled)
 	}
 }
 
-func TestRegistry_ModifyChains(t *testing.T) {
+func TestRegistry_FatalErrorShortCircuits(t *testing.T) {
 	reg := hook.NewRegistry()
+	handlersCalled := 0
+	errFatal := errors.Join(errors.New("stop"), hook.ErrFatalHook)
 
-	reg.On(eventBeta, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.Modify("step1")
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
+		handlersCalled++
+		return errFatal
 	})
-	reg.On(eventBeta, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.Modify("step2")
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
+		handlersCalled++
+		return nil
 	})
 
-	result := reg.Emit(context.Background(), betaEvent{Count: 1})
-
-	if result.Action != hook.ActionModify {
-		t.Errorf("expected Modify, got %v", result.Action)
+	err := reg.Emit(context.Background(), alphaEvent{Value: "dangerous"})
+	if !errors.Is(err, hook.ErrFatalHook) {
+		t.Fatalf("expected fatal error, got %v", err)
 	}
-	if result.ModifiedData != "step2" {
-		t.Errorf("ModifiedData = %v, want step2", result.ModifiedData)
+	if handlersCalled != 1 {
+		t.Errorf("expected 1 handler called, got %d", handlersCalled)
+	}
+}
+
+func TestRegistry_EmitsOnErrorForEachNonFatalError(t *testing.T) {
+	reg := hook.NewRegistry()
+	err1 := errors.New("first")
+	err2 := errors.New("second")
+	var observed []hook.ErrorEvent
+
+	reg.On(hook.EventOnError, func(_ context.Context, e hook.Event) error {
+		observed = append(observed, e.(hook.ErrorEvent))
+		return nil
+	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { return err1 })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { return err2 })
+
+	err := reg.Emit(context.Background(), alphaEvent{Value: "test"})
+	if !errors.Is(err, err1) || !errors.Is(err, err2) {
+		t.Fatalf("expected joined errors, got %v", err)
+	}
+	if len(observed) != 2 {
+		t.Fatalf("observed %d errors, want 2", len(observed))
+	}
+	if observed[0].Source != eventAlpha || !errors.Is(observed[0].Err, err1) {
+		t.Fatalf("first observed = %+v", observed[0])
+	}
+	if observed[1].Source != eventAlpha || !errors.Is(observed[1].Err, err2) {
+		t.Fatalf("second observed = %+v", observed[1])
+	}
+}
+
+func TestRegistry_ErrorEventHandlerErrorAggregatesWithoutRecursion(t *testing.T) {
+	reg := hook.NewRegistry()
+	primary := errors.New("primary")
+	errorHandlerErr := errors.New("error handler")
+	calls := 0
+
+	reg.On(hook.EventOnError, func(context.Context, hook.Event) error {
+		calls++
+		return errorHandlerErr
+	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { return primary })
+
+	err := reg.Emit(context.Background(), alphaEvent{Value: "test"})
+	if !errors.Is(err, primary) || !errors.Is(err, errorHandlerErr) {
+		t.Fatalf("expected both errors, got %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("on_error calls = %d, want 1", calls)
+	}
+}
+
+func TestRegistry_FatalOnErrorShortCircuitsDispatch(t *testing.T) {
+	reg := hook.NewRegistry()
+	primary := errors.New("primary")
+	fatal := errors.Join(errors.New("fatal on_error"), hook.ErrFatalHook)
+	handlersCalled := 0
+
+	reg.On(hook.EventOnError, func(context.Context, hook.Event) error { return fatal })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
+		handlersCalled++
+		return primary
+	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
+		handlersCalled++
+		return nil
+	})
+
+	err := reg.Emit(context.Background(), alphaEvent{Value: "test"})
+	if !errors.Is(err, primary) || !errors.Is(err, hook.ErrFatalHook) {
+		t.Fatalf("expected primary + fatal errors, got %v", err)
+	}
+	if handlersCalled != 1 {
+		t.Fatalf("handlersCalled = %d, want 1", handlersCalled)
 	}
 }
 
@@ -229,19 +238,18 @@ func TestRegistry_Unsubscribe(t *testing.T) {
 	reg := hook.NewRegistry()
 	calls := 0
 
-	unsub := reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	unsub := reg.On(eventAlpha, func(context.Context, hook.Event) error {
 		calls++
-		return hook.Continue()
+		return nil
 	})
 
-	reg.Emit(context.Background(), alphaEvent{Value: "1"})
+	_ = reg.Emit(context.Background(), alphaEvent{Value: "1"})
 	if calls != 1 {
 		t.Fatalf("expected 1 call before unsub, got %d", calls)
 	}
 
 	unsub()
-
-	reg.Emit(context.Background(), alphaEvent{Value: "2"})
+	_ = reg.Emit(context.Background(), alphaEvent{Value: "2"})
 	if calls != 1 {
 		t.Errorf("expected 1 call after unsub, got %d", calls)
 	}
@@ -251,19 +259,13 @@ func TestRegistry_DifferentEventTypes(t *testing.T) {
 	reg := hook.NewRegistry()
 	var alphaCalls, betaCalls int
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		alphaCalls++
-		return hook.Continue()
-	})
-	reg.On(eventBeta, func(ctx context.Context, e hook.Event) hook.Result {
-		betaCalls++
-		return hook.Continue()
-	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { alphaCalls++; return nil })
+	reg.On(eventBeta, func(context.Context, hook.Event) error { betaCalls++; return nil })
 
 	ctx := context.Background()
-	reg.Emit(ctx, alphaEvent{Value: "a"})
-	reg.Emit(ctx, alphaEvent{Value: "b"})
-	reg.Emit(ctx, betaEvent{Count: 1})
+	_ = reg.Emit(ctx, alphaEvent{Value: "a"})
+	_ = reg.Emit(ctx, alphaEvent{Value: "b"})
+	_ = reg.Emit(ctx, betaEvent{Count: 1})
 
 	if alphaCalls != 2 {
 		t.Errorf("alphaCalls = %d, want 2", alphaCalls)
@@ -275,21 +277,14 @@ func TestRegistry_DifferentEventTypes(t *testing.T) {
 
 func TestRegistry_HasHandlers(t *testing.T) {
 	reg := hook.NewRegistry()
-
 	if reg.HasHandlers(eventAlpha) {
 		t.Error("should have no handlers initially")
 	}
-
-	unsub := reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.Continue()
-	})
-
+	unsub := reg.On(eventAlpha, func(context.Context, hook.Event) error { return nil })
 	if !reg.HasHandlers(eventAlpha) {
 		t.Error("should have handlers after On")
 	}
-
 	unsub()
-
 	if reg.HasHandlers(eventAlpha) {
 		t.Error("should have no handlers after unsub")
 	}
@@ -297,9 +292,8 @@ func TestRegistry_HasHandlers(t *testing.T) {
 
 func TestRegistry_Clear(t *testing.T) {
 	reg := hook.NewRegistry()
-
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result { return hook.Continue() })
-	reg.On(eventBeta, func(ctx context.Context, e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { return nil })
+	reg.On(eventBeta, func(context.Context, hook.Event) error { return nil })
 
 	reg.Clear(eventAlpha)
 	if reg.HasHandlers(eventAlpha) {
@@ -312,9 +306,8 @@ func TestRegistry_Clear(t *testing.T) {
 
 func TestRegistry_ClearAll(t *testing.T) {
 	reg := hook.NewRegistry()
-
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result { return hook.Continue() })
-	reg.On(eventBeta, func(ctx context.Context, e hook.Event) hook.Result { return hook.Continue() })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { return nil })
+	reg.On(eventBeta, func(context.Context, hook.Event) error { return nil })
 
 	reg.Clear()
 	if reg.HasHandlers(eventAlpha) || reg.HasHandlers(eventBeta) {
@@ -326,48 +319,37 @@ func TestRegistry_ConcurrentSafety(t *testing.T) {
 	reg := hook.NewRegistry()
 	done := make(chan struct{})
 
-	for i := range 10 {
-		go func(n int) {
-			reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-				return hook.Continue()
-			})
-			done <- struct{}{}
-		}(i)
-	}
-
 	for range 10 {
 		go func() {
-			reg.Emit(context.Background(), alphaEvent{Value: "concurrent"})
+			reg.On(eventAlpha, func(context.Context, hook.Event) error { return nil })
 			done <- struct{}{}
 		}()
 	}
-
+	for range 10 {
+		go func() {
+			_ = reg.Emit(context.Background(), alphaEvent{Value: "concurrent"})
+			done <- struct{}{}
+		}()
+	}
 	for range 20 {
 		<-done
 	}
 }
 
-// --- Context support tests ---
-
 func TestRegistry_ContextCancellation(t *testing.T) {
 	reg := hook.NewRegistry()
 	handlersCalled := 0
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(context.Context, hook.Event) error {
 		handlersCalled++
-		return hook.Continue()
+		return nil
 	})
 
-	result := reg.Emit(ctx, alphaEvent{Value: "test"})
-
-	if result.Action != hook.ActionAbort {
-		t.Errorf("expected Abort on canceled context, got %v", result.Action)
-	}
-	if result.Err == nil {
-		t.Error("expected error on canceled context")
+	err := reg.Emit(ctx, alphaEvent{Value: "test"})
+	if !errors.Is(err, hook.ErrFatalHook) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected fatal context error, got %v", err)
 	}
 	if handlersCalled != 0 {
 		t.Errorf("expected 0 handlers called on canceled context, got %d", handlersCalled)
@@ -377,105 +359,35 @@ func TestRegistry_ContextCancellation(t *testing.T) {
 func TestRegistry_ContextPassedToHandler(t *testing.T) {
 	reg := hook.NewRegistry()
 	type ctxKey struct{}
-
 	ctx := context.WithValue(context.Background(), ctxKey{}, "injected")
 
 	var received string
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
+	reg.On(eventAlpha, func(ctx context.Context, _ hook.Event) error {
 		received = ctx.Value(ctxKey{}).(string)
-		return hook.Continue()
+		return nil
 	})
 
-	reg.Emit(ctx, alphaEvent{Value: "test"})
-
+	if err := reg.Emit(ctx, alphaEvent{Value: "test"}); err != nil {
+		t.Fatalf("Emit error = %v", err)
+	}
 	if received != "injected" {
 		t.Errorf("handler received ctx value %q, want %q", received, "injected")
 	}
 }
 
-// --- Panic recovery tests ---
-
 func TestRegistry_PanicRecovery(t *testing.T) {
 	reg := hook.NewRegistry()
 	var order []int
 
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		order = append(order, 1)
-		return hook.Continue()
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		panic("handler exploded")
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		order = append(order, 3)
-		return hook.Continue()
-	})
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { order = append(order, 1); return nil })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { panic("handler exploded") })
+	reg.On(eventAlpha, func(context.Context, hook.Event) error { order = append(order, 3); return nil })
 
-	result := reg.Emit(context.Background(), alphaEvent{Value: "test"})
-
+	err := reg.Emit(context.Background(), alphaEvent{Value: "test"})
 	if len(order) != 2 || order[0] != 1 || order[1] != 3 {
-		t.Errorf("expected order [1,3] (skipping panicked handler), got %v", order)
+		t.Errorf("expected order [1,3], got %v", order)
 	}
-	if result.Err == nil {
-		t.Error("expected error from panicked handler")
-	}
-	if !strings.Contains(result.Err.Error(), "panicked") {
-		t.Errorf("error should mention panic, got: %v", result.Err)
-	}
-}
-
-func TestRegistry_PanicDoesNotPreventAbort(t *testing.T) {
-	reg := hook.NewRegistry()
-
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		panic("boom")
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.Abort("stop")
-	})
-
-	result := reg.Emit(context.Background(), alphaEvent{Value: "test"})
-
-	if result.Action != hook.ActionAbort {
-		t.Errorf("expected Abort after panic recovery, got %v", result.Action)
-	}
-}
-
-// --- Error propagation tests ---
-
-func TestRegistry_ContinueWithErrorPropagates(t *testing.T) {
-	reg := hook.NewRegistry()
-	expectedErr := errors.New("non-fatal issue")
-
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.ContinueWithError(expectedErr)
-	})
-
-	result := reg.Emit(context.Background(), alphaEvent{Value: "test"})
-
-	if result.Action != hook.ActionContinue {
-		t.Errorf("expected Continue, got %v", result.Action)
-	}
-	if !errors.Is(result.Err, expectedErr) {
-		t.Errorf("expected error %v, got %v", expectedErr, result.Err)
-	}
-}
-
-func TestRegistry_LastContinueErrorWins(t *testing.T) {
-	reg := hook.NewRegistry()
-	err1 := errors.New("first")
-	err2 := errors.New("second")
-
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.ContinueWithError(err1)
-	})
-	reg.On(eventAlpha, func(ctx context.Context, e hook.Event) hook.Result {
-		return hook.ContinueWithError(err2)
-	})
-
-	result := reg.Emit(context.Background(), alphaEvent{Value: "test"})
-
-	if !errors.Is(result.Err, err2) {
-		t.Errorf("expected last error %v, got %v", err2, result.Err)
+	if err == nil || !strings.Contains(err.Error(), "panicked") {
+		t.Errorf("error should mention panic, got: %v", err)
 	}
 }

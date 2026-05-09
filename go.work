@@ -20,9 +20,13 @@ use (
 	./discovery
 	./discovery/testutil
 	./embedding
-	./explain
+	./ai
 	./grpc
 	./httpclient
+	./inference
+	./inference/tgi
+	./inference/triton
+	./inference/vllm
 	./llm
 	./llm/providers
 	./mcp
@@ -30,9 +34,11 @@ use (
 	./messaging/kafka
 	./messaging/nats
 	./messaging/rabbitmq
+	
 	./schema
 	./server
 	./server/testutil
+	./skill
 	./stateful
 	./storage
 	./storage/s3

@@ -8,6 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kbukum/gokit/ai/chat"
+
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/embedding"
 	"github.com/kbukum/gokit/llm"
 )
 
@@ -40,7 +44,7 @@ func TestDialect_BuildRequest_Basic(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:        "gpt-4o",
-		Messages:     []llm.Message{llm.User("hello")},
+		Messages:     []chat.Message{chat.User("hello")},
 		SystemPrompt: "You are helpful.",
 		Stream:       false,
 	}
@@ -73,7 +77,7 @@ func TestDialect_BuildRequest_WithToolChoice(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:      "gpt-4o",
-		Messages:   []llm.Message{llm.User("test")},
+		Messages:   []chat.Message{chat.User("test")},
 		ToolChoice: llm.ToolChoiceRequired,
 	}
 
@@ -119,11 +123,11 @@ func TestDialect_ParseResponse(t *testing.T) {
 	if resp.Text() != "Hello!" {
 		t.Errorf("expected text 'Hello!', got %q", resp.Text())
 	}
-	if resp.StopReason != llm.StopEndTurn {
+	if resp.StopReason != chat.FinishReasonStop {
 		t.Errorf("expected StopEndTurn, got %v", resp.StopReason)
 	}
-	if resp.Usage.TotalTokens != 15 {
-		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens)
+	if resp.Usage.TotalTokens() != 15 {
+		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens())
 	}
 }
 
@@ -155,11 +159,55 @@ func TestDialect_ParseResponse_ToolCalls(t *testing.T) {
 	if !resp.HasToolCalls() {
 		t.Fatal("expected tool calls")
 	}
-	if resp.Message.ToolCalls[0].Function.Name != "get_weather" {
-		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Function.Name)
+	if resp.Message.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Name)
 	}
-	if resp.StopReason != llm.StopToolUse {
+	if resp.StopReason != chat.FinishReasonToolUse {
 		t.Errorf("expected StopToolUse, got %v", resp.StopReason)
+	}
+}
+
+func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
+	d := &Dialect{}
+	tests := []struct {
+		name string
+		raw  string
+		want []ai.ToolUseBlock
+	}{
+		{
+			name: "single tool call",
+			raw:  `{"id":"chatcmpl-1","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"NYC\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+		},
+		{
+			name: "empty args",
+			raw:  `{"id":"chatcmpl-2","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"ping","arguments":""}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_2", Name: "ping", Input: map[string]any{}}},
+		},
+		{
+			name: "multi tool",
+			raw:  `{"id":"chatcmpl-3","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_3","type":"function","function":{"name":"search","arguments":"{\"q\":\"x\"}"}},{"id":"call_4","type":"function","function":{"name":"lookup","arguments":"{\"id\":7}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_3", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_4", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := d.ParseResponse([]byte(tt.raw))
+			if err != nil {
+				t.Fatalf("ParseResponse: %v", err)
+			}
+			if len(resp.Message.ToolCalls) != len(tt.want) {
+				t.Fatalf("tool calls=%d want=%d", len(resp.Message.ToolCalls), len(tt.want))
+			}
+			for i := range tt.want {
+				if resp.Message.ToolCalls[i].ID != tt.want[i].ID || resp.Message.ToolCalls[i].Name != tt.want[i].Name {
+					t.Fatalf("tool[%d]=%+v want %+v", i, resp.Message.ToolCalls[i], tt.want[i])
+				}
+				if got, _ := json.Marshal(resp.Message.ToolCalls[i].Input); string(got) == "null" {
+					t.Fatalf("tool[%d] input nil", i)
+				}
+			}
+		})
 	}
 }
 
@@ -222,11 +270,11 @@ func TestDialect_ParseStreamChunk_ToolCalls(t *testing.T) {
 	if tc.ID != "call_123" {
 		t.Errorf("tool call ID = %q, want %q", tc.ID, "call_123")
 	}
-	if tc.Function.Name != "search" {
-		t.Errorf("tool call name = %q, want %q", tc.Function.Name, "search")
+	if tc.Name != "search" {
+		t.Errorf("tool call name = %q, want %q", tc.Name, "search")
 	}
-	if tc.Function.Arguments != `{"q":` {
-		t.Errorf("tool call args = %q, want %q", tc.Function.Arguments, `{"q":`)
+	if tc.InputDelta != `{"q":` {
+		t.Errorf("tool call args = %q, want %q", tc.InputDelta, `{"q":`)
 	}
 }
 
@@ -259,47 +307,38 @@ func TestEmbeddingProvider_EmptyBatch(t *testing.T) {
 	}
 }
 
-func TestEmbeddingProvider_Dimensions(t *testing.T) {
-	p := NewEmbeddingProvider(Config{EmbeddingDimensions: 768})
-	if p.Dimensions() != 768 {
-		t.Errorf("expected 768, got %d", p.Dimensions())
-	}
-}
-
 func TestEmbeddingProvider_Embed(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/embeddings" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-
 		body, _ := io.ReadAll(r.Body)
 		var req map[string]any
 		_ = json.Unmarshal(body, &req)
-
 		if req["model"] != "text-embedding-3-small" {
 			t.Errorf("unexpected model: %v", req["model"])
 		}
-
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": []map[string]any{
-				{"embedding": []float32{0.1, 0.2, 0.3}, "index": 0},
-			},
+			"data":  []map[string]any{{"embedding": []float32{0.1, 0.2, 0.3}, "index": 0}},
+			"usage": map[string]any{"prompt_tokens": 2, "total_tokens": 2},
 		})
 	}))
 	defer srv.Close()
 
 	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
-
-	vec, err := p.Embed(context.Background(), "hello")
+	resp, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "hello"}}})
 	if err != nil {
 		t.Fatalf("Embed: %v", err)
 	}
-	if len(vec) != 3 {
-		t.Fatalf("expected 3 dimensions, got %d", len(vec))
+	if resp.Model.Provider != ai.ProviderOpenAI || resp.Model.Name != "text-embedding-3-small" {
+		t.Fatalf("model=%+v", resp.Model)
 	}
-	if vec[0] < 0.09 || vec[0] > 0.11 {
-		t.Errorf("expected ~0.1, got %f", vec[0])
+	if resp.Embedding.Dimensions != 3 || resp.Embedding.Vector[0] < 0.09 || resp.Embedding.Vector[0] > 0.11 {
+		t.Fatalf("embedding=%+v", resp.Embedding)
+	}
+	if resp.Usage.InputTokens != 2 {
+		t.Fatalf("usage=%+v", resp.Usage)
 	}
 }
 
@@ -316,16 +355,15 @@ func TestEmbeddingProvider_EmbedBatch_Order(t *testing.T) {
 	defer srv.Close()
 
 	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
-
-	results, err := p.EmbedBatch(context.Background(), []string{"a", "b"})
+	results, err := p.EmbedBatch(context.Background(), []embedding.EmbedRequest{{Inputs: []embedding.EmbedInput{embedding.Text{Text: "a"}, embedding.Text{Text: "b"}}}})
 	if err != nil {
 		t.Fatalf("EmbedBatch: %v", err)
 	}
-	if len(results) != 2 {
-		t.Fatalf("expected 2 results, got %d", len(results))
+	if len(results) != 1 || len(results[0].Embeddings) != 2 {
+		t.Fatalf("results=%+v", results)
 	}
-	if results[0][0] > 0.15 {
-		t.Errorf("expected first result ~0.1, got %f", results[0][0])
+	if results[0].Embeddings[0].Vector[0] > 0.15 {
+		t.Errorf("expected first result ~0.1, got %f", results[0].Embeddings[0].Vector[0])
 	}
 }
 
@@ -334,17 +372,12 @@ func TestEmbeddingProvider_AuthHeader(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": []map[string]any{
-				{"embedding": []float32{0.1}, "index": 0},
-			},
-		})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"embedding": []float32{0.1}, "index": 0}}})
 	}))
 	defer srv.Close()
 
 	p := NewEmbeddingProvider(Config{BaseURL: srv.URL, APIKey: "sk-test"})
-	_, _ = p.Embed(context.Background(), "test")
-
+	_, _ = p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
 	if gotAuth != "Bearer sk-test" {
 		t.Errorf("expected 'Bearer sk-test', got %q", gotAuth)
 	}
@@ -358,9 +391,17 @@ func TestEmbeddingProvider_ServerError(t *testing.T) {
 	defer srv.Close()
 
 	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
-	_, err := p.Embed(context.Background(), "test")
+	_, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
 	if err == nil {
 		t.Fatal("expected error for 500 response")
+	}
+}
+
+func TestEmbeddingProviderRejectsMultimodalForOpenAITextEndpoint(t *testing.T) {
+	p := NewEmbeddingProvider(DefaultConfig())
+	_, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Image{URL: "https://example.com/cat.png"}}})
+	if err == nil {
+		t.Fatal("expected unsupported input error")
 	}
 }
 
