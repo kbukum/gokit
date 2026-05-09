@@ -3,6 +3,8 @@ package tool
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/kbukum/gokit/ai"
 )
 
 // Result is the structured output of a tool execution.
@@ -29,6 +31,24 @@ func (r *Result) Text() string {
 		return string(r.Output)
 	}
 	return ""
+}
+
+// ToolResultBlock returns the shared GenAI tool-result content block for this result.
+func (r *Result) ToolResultBlock(id string) ai.ToolResultBlock {
+	if r == nil {
+		return ai.ToolResultBlock{ID: id}
+	}
+	return ai.ToolResultBlock{ID: id, Content: r.Text(), IsError: r.IsError}
+}
+
+// ResultBlock builds a GenAI tool-result block from an optional result and error.
+// If err is non-nil it takes priority and produces an error block.
+// If r is nil and err is nil, an empty success block is returned.
+func ResultBlock(id string, r *Result, err error) ai.ToolResultBlock {
+	if err != nil {
+		return ai.ToolResultBlock{ID: id, Content: err.Error(), IsError: true}
+	}
+	return r.ToolResultBlock(id) // nil-safe
 }
 
 // SetMeta sets a metadata key-value pair.

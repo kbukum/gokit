@@ -6,6 +6,6 @@
 //   - ABAC policies refine access using subject, resource, and request context
 //   - deny policies override role grants
 //
-// The legacy Checker and MapChecker helpers remain available for lightweight
-// wildcard-based permission checks, but Engine is the preferred Group 05 shape.
+// Checker and MapChecker provide lightweight wildcard permission checks;
+// Engine provides full Group 05 RBAC + ABAC evaluation.
 package authz

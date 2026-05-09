@@ -131,9 +131,19 @@ linters:
             - "$gokit/version/**/*.go"
             - "$gokit/encryption/**/*.go"
             - "$gokit/schema/**/*.go"
+            - "$gokit/ai/**/*.go"
             - "$gokit/resilience/**/*.go"
             - "$gokit/httpclient/**/*.go"
+            - "$gokit/observability/**/*.go"
           deny:
+            - pkg: github.com/kbukum/gokit/llm
+              desc: "foundation packages must not import L7 AI modules for shared vocabulary; consume ai instead."
+            - pkg: github.com/kbukum/gokit/tool
+              desc: "foundation packages must not import L7 AI modules for shared vocabulary; consume ai instead."
+            - pkg: github.com/kbukum/gokit/agent
+              desc: "foundation packages must not import L7 AI modules for shared vocabulary; consume ai instead."
+            - pkg: github.com/kbukum/gokit/inference
+              desc: "foundation packages must not import L7 AI modules for shared vocabulary; consume ai instead."
             - pkg: github.com/kbukum/gokit/sse
               desc: "foundation packages must not import transport (sse). Define a local interface and accept any concrete that satisfies it. See F-012."
             - pkg: github.com/kbukum/gokit/server
@@ -144,6 +154,21 @@ linters:
               desc: "foundation packages must not import transport (connect)."
             - pkg: github.com/kbukum/gokit/bootstrap
               desc: "foundation packages must not import integration (bootstrap)."
+        observability-no-ai:
+          list-mode: lax
+          files:
+            - "$gokit/observability/**/*.go"
+          deny:
+            - pkg: github.com/kbukum/gokit/ai
+              desc: "observability must have zero AI/ML knowledge; ai/semconv owns GenAI semantic conventions."
+            - pkg: github.com/kbukum/gokit/llm
+              desc: "observability must not import L7 AI modules."
+            - pkg: github.com/kbukum/gokit/tool
+              desc: "observability must not import L7 AI modules."
+            - pkg: github.com/kbukum/gokit/agent
+              desc: "observability must not import L7 AI modules."
+            - pkg: github.com/kbukum/gokit/inference
+              desc: "observability must not import L7 AI modules."
 
 issues:
   max-issues-per-linter: 0

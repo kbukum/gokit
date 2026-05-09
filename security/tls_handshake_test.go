@@ -45,7 +45,7 @@ func TestTLSConfig_Handshake_PrefersModernTLS(t *testing.T) {
 	}
 }
 
-func TestTLSConfig_Handshake_RejectsLegacyTLS(t *testing.T) {
+func TestTLSConfig_Handshake_RejectsObsoleteTLS(t *testing.T) {
 	certs := tlstest.GenerateTLSCerts(t)
 
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

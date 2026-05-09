@@ -3,6 +3,7 @@ package llm
 import (
 	"fmt"
 
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
@@ -17,6 +18,18 @@ const (
 	// Used by: OpenAI, Anthropic, Azure OpenAI, most cloud providers.
 	StreamSSE
 )
+
+// String returns the human-readable name of the stream format.
+func (f StreamFormat) String() string {
+	switch f {
+	case StreamNDJSON:
+		return "NDJSON"
+	case StreamSSE:
+		return "SSE"
+	default:
+		return fmt.Sprintf("StreamFormat(%d)", int(f))
+	}
+}
 
 // Dialect maps universal LLM types to/from a specific provider's HTTP format.
 //
@@ -47,10 +60,9 @@ type Dialect interface {
 	StreamFormat() StreamFormat
 
 	// ParseStreamChunk extracts content (text and/or tool calls) from a single
-	// stream data chunk. The returned StreamChunk carries Content, ToolCalls,
-	// and Done fields. Err on the StreamChunk is unused; return errors via the
-	// error return value.
-	ParseStreamChunk(data []byte) (StreamChunk, error)
+	// stream data chunk. The returned chunk is llm-internal; callers consume the
+	// assembled public StreamEvent values produced by Adapter.Stream/Provider.Stream.
+	ParseStreamChunk(data []byte) (streamwire.Chunk, error)
 }
 
 // DialectRegistry stores LLM dialects by name.

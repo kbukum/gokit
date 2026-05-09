@@ -35,9 +35,9 @@ func (t *Tool[I, O]) Execute(ctx context.Context, input I) (O, error) {
 	return t.handler.Execute(ctx, input)
 }
 
-// WithAnnotations returns a copy of the tool with the given annotations.
+// WithAnnotations sets annotations on the receiver and returns it for chaining.
 func (t *Tool[I, O]) WithAnnotations(a Annotations) *Tool[I, O] {
-	t.Def.Annotations = &a
+	t.Def.Annotations = a
 	return t
 }
 

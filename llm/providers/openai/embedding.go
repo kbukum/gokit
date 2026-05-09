@@ -5,89 +5,175 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/embedding"
 	"github.com/kbukum/gokit/httpclient"
+	"github.com/kbukum/gokit/observability"
 )
 
 // EmbeddingProvider implements embedding.Provider for OpenAI-compatible APIs.
-// Works with OpenAI, Azure OpenAI, vLLM, llama.cpp, or any server that
-// exposes the /v1/embeddings endpoint.
 //
-// Uses gokit's httpclient for proper auth, TLS, timeouts, and resilience.
+// Per locked decision D12 (NATIVE COMPONENT), EmbeddingProvider implements
+// component.Component so bootstrap auto-wires it as infrastructure.
 type EmbeddingProvider struct {
-	client *httpclient.Adapter
-	config Config
+	client    *httpclient.Adapter
+	config    Config
+	lifecycle ai.Lifecycle
 }
 
 // NewEmbeddingProvider creates an OpenAI embedding provider.
 func NewEmbeddingProvider(config Config) *EmbeddingProvider {
 	config.applyDefaults()
 
-	httpCfg := httpclient.Config{
-		Name:    "openai-embedding",
-		BaseURL: config.BaseURL,
-	}
+	httpCfg := httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL}
 	if config.APIKey != "" {
 		httpCfg.Auth = httpclient.BearerAuth(config.APIKey)
 	}
-
 	client, err := httpclient.New(httpCfg)
 	if err != nil {
 		client, _ = httpclient.New(httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL})
 	}
-
 	return &EmbeddingProvider{client: client, config: config}
 }
 
-// Embed generates an embedding for a single text input.
-func (p *EmbeddingProvider) Embed(ctx context.Context, text string) ([]float32, error) {
-	results, err := p.EmbedBatch(ctx, []string{text})
+// Name returns the provider name.
+func (p *EmbeddingProvider) Name() string { return p.client.Name() }
+
+// IsAvailable delegates to the underlying HTTP client.
+func (p *EmbeddingProvider) IsAvailable(ctx context.Context) bool { return p.client.IsAvailable(ctx) }
+
+// Execute generates embeddings for one canonical request (provider.RequestResponse method).
+func (p *EmbeddingProvider) Execute(ctx context.Context, req embedding.EmbedRequest) (embedding.EmbedResponse, error) {
+	ctx, span := observability.StartNamedSpan(ctx, "github.com/kbukum/gokit/llm/providers/openai", "embedding.embed",
+		observability.WithSpanKind(observability.SpanKindClient),
+		observability.WithSpanAttributes(
+			observability.StringAttribute(semconv.GenAISystem, "openai"),
+			observability.StringAttribute(semconv.GenAIRequestModel, p.modelName(req.Model)),
+			observability.IntAttribute("embedding.input_count", len(req.Inputs)),
+		),
+	)
+	defer span.End()
+	responses, err := p.EmbedBatch(ctx, []embedding.EmbedRequest{req})
 	if err != nil {
-		return nil, err
+		span.RecordError(err)
+		return embedding.EmbedResponse{}, err
 	}
-	if len(results) == 0 {
-		return nil, fmt.Errorf("openai: empty embedding response")
+	if len(responses) == 0 {
+		err := fmt.Errorf("openai: empty embedding response")
+		span.RecordError(err)
+		return embedding.EmbedResponse{}, err
 	}
-	return results[0], nil
+	span.SetAttributes(
+		observability.IntAttribute(semconv.GenAIUsageInputTokens, responses[0].Usage.InputTokens),
+		observability.IntAttribute(semconv.GenAIUsageOutputTokens, responses[0].Usage.OutputTokens),
+	)
+	p.lifecycle.Touch()
+	return responses[0], nil
 }
 
-// EmbedBatch generates embeddings for a batch of texts.
-func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
-	if len(texts) == 0 {
-		return [][]float32{}, nil
-	}
+// --- component.Component (D12) ---
 
-	reqBody := map[string]any{
-		"model": p.config.EmbeddingModel,
-		"input": texts,
+// Start marks the provider as ready.
+func (p *EmbeddingProvider) Start(_ context.Context) error { p.lifecycle.MarkReady(); return nil }
+
+// Stop closes the underlying httpclient.
+func (p *EmbeddingProvider) Stop(ctx context.Context) error {
+	p.lifecycle.MarkStopped()
+	return p.client.Close(ctx)
+}
+
+// Health reports component health based on upstream availability.
+func (p *EmbeddingProvider) Health(ctx context.Context) component.Health {
+	if !p.lifecycle.Ready() {
+		return component.Health{Name: p.Name(), Status: component.StatusDegraded, Message: "not started"}
+	}
+	if !p.client.IsAvailable(ctx) {
+		return component.Health{Name: p.Name(), Status: component.StatusUnhealthy, Message: "upstream unreachable"}
+	}
+	msg := "ready"
+	if last := p.lifecycle.LastCall(); !last.IsZero() {
+		msg = "last_call=" + last.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return component.Health{Name: p.Name(), Status: component.StatusHealthy, Message: msg}
+}
+
+// EmbedBatch generates embeddings for a batch of canonical requests.
+func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, reqs []embedding.EmbedRequest) ([]embedding.EmbedResponse, error) {
+	responses := make([]embedding.EmbedResponse, len(reqs))
+	for i, req := range reqs {
+		resp, err := p.embedOne(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		responses[i] = resp
+	}
+	return responses, nil
+}
+
+func (p *EmbeddingProvider) embedOne(ctx context.Context, req embedding.EmbedRequest) (embedding.EmbedResponse, error) {
+	if len(req.Inputs) == 0 {
+		return embedding.EmbedResponse{Model: p.responseModel(req.Model), Usage: ai.Usage{}}, nil
+	}
+	texts := make([]string, len(req.Inputs))
+	for i, input := range req.Inputs {
+		text, ok := input.(embedding.Text)
+		if !ok {
+			return embedding.EmbedResponse{}, fmt.Errorf("openai: input %d has unsupported type %T", i, input)
+		}
+		texts[i] = text.Text
+	}
+	reqBody := map[string]any{"model": p.modelName(req.Model), "input": texts}
+	for key, value := range req.Options {
+		reqBody[key] = value
 	}
 
 	resp, err := httpclient.Post[json.RawMessage](p.client, ctx, "/embeddings", reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("openai: embedding request failed: %w", err)
+		return embedding.EmbedResponse{}, fmt.Errorf("openai: embedding request failed: %w", err)
 	}
-
 	var result struct {
 		Data []struct {
 			Embedding []float32 `json:"embedding"`
 			Index     int       `json:"index"`
 		} `json:"data"`
+		Usage struct {
+			PromptTokens int `json:"prompt_tokens"`
+			TotalTokens  int `json:"total_tokens"`
+		} `json:"usage"`
 	}
-
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("openai: parse embedding response: %w", err)
+		return embedding.EmbedResponse{}, fmt.Errorf("openai: parse embedding response: %w", err)
 	}
-
-	embeddings := make([][]float32, len(texts))
+	embeddings := make([]embedding.Embedding, len(texts))
 	for _, item := range result.Data {
-		if item.Index < len(embeddings) {
-			embeddings[item.Index] = item.Embedding
+		if item.Index >= 0 && item.Index < len(embeddings) {
+			embeddings[item.Index] = embedding.Embedding{Vector: item.Embedding, Dimensions: len(item.Embedding), Index: item.Index}
 		}
 	}
-
-	return embeddings, nil
+	usage := ai.Usage{InputTokens: result.Usage.PromptTokens}
+	if result.Usage.TotalTokens > result.Usage.PromptTokens {
+		usage.OutputTokens = result.Usage.TotalTokens - result.Usage.PromptTokens
+	}
+	return embedding.EmbedResponse{Embedding: embeddings[0], Embeddings: embeddings, Model: p.responseModel(req.Model), Usage: usage}, nil
 }
 
-// Dimensions returns the configured embedding dimensions.
-func (p *EmbeddingProvider) Dimensions() int {
-	return p.config.EmbeddingDimensions
+func (p *EmbeddingProvider) modelName(model ai.Model) string {
+	if model.Name != "" {
+		return model.Name
+	}
+	return p.config.EmbeddingModel
 }
+
+func (p *EmbeddingProvider) responseModel(model ai.Model) ai.Model {
+	if model.Name == "" {
+		model.Name = p.config.EmbeddingModel
+	}
+	if model.Provider == "" {
+		model.Provider = ai.ProviderOpenAI
+	}
+	return model
+}
+
+var _ embedding.Provider = (*EmbeddingProvider)(nil)

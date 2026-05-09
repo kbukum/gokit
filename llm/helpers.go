@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/provider"
 )
 
@@ -13,7 +14,7 @@ import (
 func Complete(ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string) (string, error) {
 	resp, err := p.Execute(ctx, CompletionRequest{
 		SystemPrompt: system,
-		Messages:     []Message{User(user)},
+		Messages:     []chat.Message{chat.User(user)},
 	})
 	if err != nil {
 		return "", err
@@ -29,7 +30,7 @@ func CompleteStructured(ctx context.Context, p provider.RequestResponse[Completi
 
 	resp, err := p.Execute(ctx, CompletionRequest{
 		SystemPrompt: system,
-		Messages:     []Message{User(user)},
+		Messages:     []chat.Message{chat.User(user)},
 	})
 	if err != nil {
 		return err

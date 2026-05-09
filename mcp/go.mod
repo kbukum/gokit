@@ -5,8 +5,12 @@ go 1.26.0
 toolchain go1.26.2
 
 require (
-	github.com/kbukum/gokit/schema v0.1.0
-	github.com/kbukum/gokit/tool v0.1.0
+	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit/ai v0.2.0
+	github.com/kbukum/gokit/authz v0.2.0
+	github.com/kbukum/gokit/schema v0.2.0
+	github.com/kbukum/gokit/skill v0.2.0
+	github.com/kbukum/gokit/tool v0.2.0
 	github.com/modelcontextprotocol/go-sdk v1.5.0
 )
 
@@ -22,7 +26,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/kbukum/gokit v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -52,7 +55,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
@@ -63,6 +66,9 @@ require (
 
 replace (
 	github.com/kbukum/gokit => ../
+	github.com/kbukum/gokit/ai => ../ai
+	github.com/kbukum/gokit/authz => ../authz
 	github.com/kbukum/gokit/schema => ../schema
+	github.com/kbukum/gokit/skill => ../skill
 	github.com/kbukum/gokit/tool => ../tool
 )

@@ -6,6 +6,7 @@ toolchain go1.26.2
 
 require (
 	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit/ai v0.2.0
 	github.com/kbukum/gokit/llm v0.2.0
 	github.com/kbukum/gokit/tool v0.2.0
 )
@@ -22,7 +23,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/kbukum/gokit/httpclient v0.2.0 // indirect
-	github.com/kbukum/gokit/schema v0.1.0 // indirect
+	github.com/kbukum/gokit/schema v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -59,6 +60,7 @@ require (
 
 replace (
 	github.com/kbukum/gokit => ../
+	github.com/kbukum/gokit/ai => ../ai
 	github.com/kbukum/gokit/httpclient => ../httpclient
 	github.com/kbukum/gokit/llm => ../llm
 	github.com/kbukum/gokit/schema => ../schema

@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/llm"
-	"github.com/kbukum/gokit/tool"
 )
 
 // ---------------------------------------------------------------------------
@@ -37,7 +38,7 @@ func TestDialect_BuildRequest_Basic(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:        "gemini-2.0-flash",
-		Messages:     []llm.Message{llm.User("hello")},
+		Messages:     []chat.Message{chat.User("hello")},
 		SystemPrompt: "You are helpful.",
 	}
 
@@ -78,7 +79,7 @@ func TestDialect_BuildRequest_WithGenerationConfig(t *testing.T) {
 	topP := 0.9
 	req := llm.CompletionRequest{
 		Model:       "gemini-2.0-flash",
-		Messages:    []llm.Message{llm.User("test")},
+		Messages:    []chat.Message{chat.User("test")},
 		Temperature: &temp,
 		TopP:        &topP,
 		MaxTokens:   1000,
@@ -112,8 +113,8 @@ func TestDialect_BuildRequest_WithTools(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model:    "gemini-2.0-flash",
-		Messages: []llm.Message{llm.User("What's the weather?")},
-		Tools: []tool.Definition{
+		Messages: []chat.Message{chat.User("What's the weather?")},
+		Tools: []ai.ToolSpec{
 			{
 				Name:        "get_weather",
 				Description: "Get weather for a city",
@@ -155,9 +156,9 @@ func TestDialect_BuildRequest_SystemMessageSkipped(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model: "gemini-2.0-flash",
-		Messages: []llm.Message{
-			llm.System("system msg"),
-			llm.User("hello"),
+		Messages: []chat.Message{
+			chat.System("system msg"),
+			chat.User("hello"),
 		},
 	}
 
@@ -207,11 +208,11 @@ func TestDialect_ParseResponse_Text(t *testing.T) {
 	if resp.Text() != "Hello!" {
 		t.Errorf("expected text 'Hello!', got %q", resp.Text())
 	}
-	if resp.StopReason != llm.StopEndTurn {
+	if resp.StopReason != chat.FinishReasonStop {
 		t.Errorf("expected StopEndTurn, got %v", resp.StopReason)
 	}
-	if resp.Usage.TotalTokens != 15 {
-		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens)
+	if resp.Usage.TotalTokens() != 15 {
+		t.Errorf("expected 15 total tokens, got %d", resp.Usage.TotalTokens())
 	}
 }
 
@@ -240,11 +241,52 @@ func TestDialect_ParseResponse_FunctionCall(t *testing.T) {
 	if !resp.HasToolCalls() {
 		t.Fatal("expected tool calls")
 	}
-	if resp.Message.ToolCalls[0].Function.Name != "get_weather" {
-		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Function.Name)
+	if resp.Message.ToolCalls[0].Name != "get_weather" {
+		t.Errorf("expected tool name 'get_weather', got %q", resp.Message.ToolCalls[0].Name)
 	}
-	if resp.StopReason != llm.StopToolUse {
+	if resp.StopReason != chat.FinishReasonToolUse {
 		t.Errorf("expected StopToolUse, got %v", resp.StopReason)
+	}
+}
+
+func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
+	d := &Dialect{}
+	tests := []struct {
+		name string
+		raw  string
+		want []ai.ToolUseBlock
+	}{
+		{
+			name: "single tool call",
+			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"NYC"}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_0", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+		},
+		{
+			name: "empty args",
+			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"ping","args":{}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_0", Name: "ping", Input: map[string]any{}}},
+		},
+		{
+			name: "multi tool",
+			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"search","args":{"q":"x"}}},{"functionCall":{"name":"lookup","args":{"id":7}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
+			want: []ai.ToolUseBlock{{ID: "call_0", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_1", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := d.ParseResponse([]byte(tt.raw))
+			if err != nil {
+				t.Fatalf("ParseResponse: %v", err)
+			}
+			if len(resp.Message.ToolCalls) != len(tt.want) {
+				t.Fatalf("tool calls=%d want=%d", len(resp.Message.ToolCalls), len(tt.want))
+			}
+			for i := range tt.want {
+				if resp.Message.ToolCalls[i].ID != tt.want[i].ID || resp.Message.ToolCalls[i].Name != tt.want[i].Name {
+					t.Fatalf("tool[%d]=%+v want %+v", i, resp.Message.ToolCalls[i], tt.want[i])
+				}
+			}
+		})
 	}
 }
 
@@ -271,7 +313,7 @@ func TestDialect_ParseResponse_SafetyFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseResponse: %v", err)
 	}
-	if resp.StopReason != llm.StopContentFilter {
+	if resp.StopReason != chat.FinishReasonContentFilter {
 		t.Errorf("expected StopContentFilter for SAFETY, got %v", resp.StopReason)
 	}
 }
@@ -332,8 +374,8 @@ func TestDialect_ParseStreamChunk_FunctionCall(t *testing.T) {
 	if len(chunk.ToolCalls) != 1 {
 		t.Fatalf("expected 1 tool call, got %d", len(chunk.ToolCalls))
 	}
-	if chunk.ToolCalls[0].Function.Name != "search" {
-		t.Errorf("tool name = %q, want %q", chunk.ToolCalls[0].Function.Name, "search")
+	if chunk.ToolCalls[0].Name != "search" {
+		t.Errorf("tool name = %q, want %q", chunk.ToolCalls[0].Name, "search")
 	}
 }
 
@@ -355,9 +397,9 @@ func TestDialect_ToolResultEncoding(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model: "gemini-2.0-flash",
-		Messages: []llm.Message{
-			llm.User("what's the weather?"),
-			llm.ToolResultMsg("get_weather", "72°F and sunny", false),
+		Messages: []chat.Message{
+			chat.User("what's the weather?"),
+			chat.ToolResultMsg("get_weather", "72°F and sunny", false),
 		},
 	}
 
@@ -395,9 +437,9 @@ func TestDialect_AssistantMessageEncoding(t *testing.T) {
 	d := &Dialect{}
 	req := llm.CompletionRequest{
 		Model: "gemini-2.0-flash",
-		Messages: []llm.Message{
-			llm.User("hello"),
-			llm.Assistant("Hi there!"),
+		Messages: []chat.Message{
+			chat.User("hello"),
+			chat.Assistant("Hi there!"),
 		},
 	}
 

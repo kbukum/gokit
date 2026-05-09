@@ -6,7 +6,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kbukum/gokit/ai/chat"
+
 	"github.com/kbukum/gokit/agent"
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/llm"
 )
 
@@ -27,9 +30,9 @@ func TestInMemoryStore_SaveAndLoad(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	original := []llm.Message{
-		llm.User("hello"),
-		llm.Assistant("hi there"),
+	original := []chat.Message{
+		chat.User("hello"),
+		chat.Assistant("hi there"),
 	}
 
 	if err := store.Save(ctx, "s1", original); err != nil {
@@ -45,13 +48,13 @@ func TestInMemoryStore_SaveAndLoad(t *testing.T) {
 	}
 
 	// Verify content
-	if u, ok := loaded[0].(llm.UserMessage); !ok {
+	if u, ok := loaded[0].(chat.UserMessage); !ok {
 		t.Errorf("msg[0] type = %T, want UserMessage", loaded[0])
-	} else if llm.TextOf(u.Content) != "hello" {
-		t.Errorf("msg[0] text = %q, want %q", llm.TextOf(u.Content), "hello")
+	} else if ai.TextOf(u.Content) != "hello" {
+		t.Errorf("msg[0] text = %q, want %q", ai.TextOf(u.Content), "hello")
 	}
 
-	if a, ok := loaded[1].(llm.AssistantMessage); !ok {
+	if a, ok := loaded[1].(chat.AssistantMessage); !ok {
 		t.Errorf("msg[1] type = %T, want AssistantMessage", loaded[1])
 	} else if a.Text() != "hi there" {
 		t.Errorf("msg[1] text = %q, want %q", a.Text(), "hi there")
@@ -62,24 +65,24 @@ func TestInMemoryStore_DeepCopy(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	original := []llm.Message{llm.User("original")}
+	original := []chat.Message{chat.User("original")}
 	if err := store.Save(ctx, "s1", original); err != nil {
 		t.Fatal(err)
 	}
 
 	// Mutate the original slice after save
-	original[0] = llm.User("mutated")
+	original[0] = chat.User("mutated")
 
 	loaded, _ := store.Load(ctx, "s1")
-	if u, ok := loaded[0].(llm.UserMessage); !ok || llm.TextOf(u.Content) != "original" {
+	if u, ok := loaded[0].(chat.UserMessage); !ok || ai.TextOf(u.Content) != "original" {
 		t.Error("stored message was aliased with original")
 	}
 
 	// Mutate loaded slice
-	loaded[0] = llm.User("also mutated")
+	loaded[0] = chat.User("also mutated")
 
 	loaded2, _ := store.Load(ctx, "s1")
-	if u, ok := loaded2[0].(llm.UserMessage); !ok || llm.TextOf(u.Content) != "original" {
+	if u, ok := loaded2[0].(chat.UserMessage); !ok || ai.TextOf(u.Content) != "original" {
 		t.Error("stored message was aliased with loaded result")
 	}
 }
@@ -88,10 +91,10 @@ func TestInMemoryStore_Append(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	if err := store.Save(ctx, "s1", []llm.Message{llm.User("one")}); err != nil {
+	if err := store.Save(ctx, "s1", []chat.Message{chat.User("one")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Append(ctx, "s1", llm.Assistant("two"), llm.User("three")); err != nil {
+	if err := store.Append(ctx, "s1", chat.Assistant("two"), chat.User("three")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,7 +108,7 @@ func TestInMemoryStore_Clear(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	_ = store.Save(ctx, "s1", []llm.Message{llm.User("data")})
+	_ = store.Save(ctx, "s1", []chat.Message{chat.User("data")})
 	if err := store.Clear(ctx, "s1"); err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +131,7 @@ func TestInMemoryStore_ConcurrentAccess(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			sid := fmt.Sprintf("session-%d", id%5)
-			msg := llm.User(fmt.Sprintf("msg-%d", id))
+			msg := chat.User(fmt.Sprintf("msg-%d", id))
 			_ = store.Append(ctx, sid, msg)
 			_, _ = store.Load(ctx, sid)
 		}(i)
@@ -154,12 +157,12 @@ func TestSlidingWindowMemory_WindowEnforcement(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	msgs := []llm.Message{
-		llm.User("1"),
-		llm.Assistant("2"),
-		llm.User("3"),
-		llm.Assistant("4"),
-		llm.User("5"),
+	msgs := []chat.Message{
+		chat.User("1"),
+		chat.Assistant("2"),
+		chat.User("3"),
+		chat.Assistant("4"),
+		chat.User("5"),
 	}
 	_ = store.Save(ctx, "s1", msgs)
 
@@ -174,7 +177,7 @@ func TestSlidingWindowMemory_WindowEnforcement(t *testing.T) {
 	}
 
 	// Should be the last 3: Assistant("2") is index 1, but last 3 are index 2,3,4
-	if u, ok := loaded[0].(llm.UserMessage); !ok || llm.TextOf(u.Content) != "3" {
+	if u, ok := loaded[0].(chat.UserMessage); !ok || ai.TextOf(u.Content) != "3" {
 		t.Errorf("msg[0] = %T/%q, want UserMessage '3'", loaded[0], loaded[0])
 	}
 }
@@ -183,13 +186,13 @@ func TestSlidingWindowMemory_SystemMessagePreserved(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	msgs := []llm.Message{
-		llm.System("system prompt"),
-		llm.User("1"),
-		llm.Assistant("2"),
-		llm.User("3"),
-		llm.Assistant("4"),
-		llm.User("5"),
+	msgs := []chat.Message{
+		chat.System("system prompt"),
+		chat.User("1"),
+		chat.Assistant("2"),
+		chat.User("3"),
+		chat.Assistant("4"),
+		chat.User("5"),
 	}
 	_ = store.Save(ctx, "s1", msgs)
 
@@ -205,11 +208,11 @@ func TestSlidingWindowMemory_SystemMessagePreserved(t *testing.T) {
 	}
 
 	// First must be the system message
-	if _, ok := loaded[0].(llm.SystemMessage); !ok {
+	if _, ok := loaded[0].(chat.SystemMessage); !ok {
 		t.Errorf("first message should be SystemMessage, got %T", loaded[0])
 	}
 	// Last should be the 5th non-system message
-	if u, ok := loaded[2].(llm.UserMessage); !ok || llm.TextOf(u.Content) != "5" {
+	if u, ok := loaded[2].(chat.UserMessage); !ok || ai.TextOf(u.Content) != "5" {
 		t.Errorf("last message should be User '5', got %T", loaded[2])
 	}
 }
@@ -220,11 +223,11 @@ func TestSlidingWindowMemory_SaveTrims(t *testing.T) {
 
 	sw := agent.NewSlidingWindowMemory(store, 2)
 
-	msgs := []llm.Message{
-		llm.User("1"),
-		llm.Assistant("2"),
-		llm.User("3"),
-		llm.Assistant("4"),
+	msgs := []chat.Message{
+		chat.User("1"),
+		chat.Assistant("2"),
+		chat.User("3"),
+		chat.Assistant("4"),
 	}
 	_ = sw.Save(ctx, "s1", msgs)
 
@@ -239,7 +242,7 @@ func TestSlidingWindowMemory_SmallHistory(t *testing.T) {
 	store := agent.NewInMemoryStore()
 	ctx := context.Background()
 
-	_ = store.Save(ctx, "s1", []llm.Message{llm.User("only one")})
+	_ = store.Save(ctx, "s1", []chat.Message{chat.User("only one")})
 
 	sw := agent.NewSlidingWindowMemory(store, 10)
 	loaded, _ := sw.Load(ctx, "s1")
@@ -253,7 +256,7 @@ func TestSlidingWindowMemory_Append(t *testing.T) {
 	ctx := context.Background()
 
 	sw := agent.NewSlidingWindowMemory(store, 2)
-	_ = sw.Append(ctx, "s1", llm.User("a"), llm.Assistant("b"), llm.User("c"))
+	_ = sw.Append(ctx, "s1", chat.User("a"), chat.Assistant("b"), chat.User("c"))
 
 	// Append delegates to underlying store, so all 3 are stored
 	raw, _ := store.Load(ctx, "s1")
@@ -273,7 +276,7 @@ func TestSlidingWindowMemory_Clear(t *testing.T) {
 	ctx := context.Background()
 
 	sw := agent.NewSlidingWindowMemory(store, 5)
-	_ = sw.Save(ctx, "s1", []llm.Message{llm.User("data")})
+	_ = sw.Save(ctx, "s1", []chat.Message{chat.User("data")})
 	_ = sw.Clear(ctx, "s1")
 
 	loaded, _ := sw.Load(ctx, "s1")
@@ -298,7 +301,7 @@ func TestAgent_RunWithMemory(t *testing.T) {
 	ctx := context.Background()
 
 	// First run: single user message
-	result1, err := a.Run(ctx, []llm.Message{llm.User("hello")})
+	result1, err := a.Run(ctx, []chat.Message{chat.User("hello")})
 	if err != nil {
 		t.Fatalf("run 1: %v", err)
 	}
@@ -307,7 +310,7 @@ func TestAgent_RunWithMemory(t *testing.T) {
 	}
 
 	// Second run: history (user+assistant) should be loaded, plus new user msg = 3
-	result2, err := a.Run(ctx, []llm.Message{llm.User("world")})
+	result2, err := a.Run(ctx, []chat.Message{chat.User("world")})
 	if err != nil {
 		t.Fatalf("run 2: %v", err)
 	}
@@ -337,7 +340,7 @@ func TestAgent_RunWithSlidingWindowMemory(t *testing.T) {
 
 	// Run three conversations to accumulate history
 	for i := 0; i < 5; i++ {
-		_, err := a.Run(ctx, []llm.Message{llm.User(fmt.Sprintf("msg-%d", i))})
+		_, err := a.Run(ctx, []chat.Message{chat.User(fmt.Sprintf("msg-%d", i))})
 		if err != nil {
 			t.Fatalf("run %d: %v", i, err)
 		}
@@ -355,7 +358,7 @@ func TestAgent_RunWithoutMemory(t *testing.T) {
 	provider := newMockProvider(textResponse("ok"))
 	a := agent.New(agent.Config{Provider: provider})
 
-	result, err := a.Run(context.Background(), []llm.Message{llm.User("test")})
+	result, err := a.Run(context.Background(), []chat.Message{chat.User("test")})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -368,36 +371,37 @@ func TestAgent_RunWithoutMemory(t *testing.T) {
 
 type echoCountProvider struct{}
 
-func (p *echoCountProvider) Complete(_ context.Context, req llm.CompletionRequest) (*llm.CompletionResponse, error) {
+func (p *echoCountProvider) Name() string                       { return "echo-count" }
+func (p *echoCountProvider) IsAvailable(_ context.Context) bool { return true }
+func (p *echoCountProvider) Execute(_ context.Context, req llm.CompletionRequest) (llm.CompletionResponse, error) {
 	text := fmt.Sprintf("seen %d messages", len(req.Messages))
-	return &llm.CompletionResponse{
-		Message:    llm.Assistant(text),
-		StopReason: llm.StopEndTurn,
-		Usage:      llm.Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
+	return llm.CompletionResponse{
+		Message:    chat.Assistant(text),
+		StopReason: chat.FinishReasonStop,
+		Usage:      llm.Usage{InputTokens: 10, OutputTokens: 5},
 	}, nil
 }
 
 func (p *echoCountProvider) Stream(_ context.Context, req llm.CompletionRequest) (<-chan llm.StreamEvent, error) {
-	resp, err := p.Complete(context.Background(), req)
+	resp, err := p.Execute(context.Background(), req)
 	if err != nil {
 		return nil, err
 	}
 	ch := make(chan llm.StreamEvent, 1)
 	go func() {
 		defer close(ch)
-		ch <- llm.MessageComplete{Response: *resp}
+		ch <- llm.MessageComplete{Response: resp}
 	}()
 	return ch, nil
 }
 
 func (p *echoCountProvider) Capabilities() llm.Capabilities {
 	return llm.Capabilities{
-		SupportsStreaming: true,
-		MaxContextTokens:  100000,
-		ModelID:           "echo-count",
+		Streaming:      true,
+		MaxInputTokens: 100000,
 	}
 }
 
-func (p *echoCountProvider) CountTokens(msgs []llm.Message) int {
-	return llm.CountTokensApprox(msgs)
+func (p *echoCountProvider) CountTokens(msgs []chat.Message) int {
+	return chat.CountTokensApprox(msgs)
 }

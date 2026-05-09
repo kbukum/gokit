@@ -1,8 +1,6 @@
 package tool
 
 import (
-	"time"
-
 	"github.com/kbukum/gokit/schema"
 )
 
@@ -17,41 +15,48 @@ type Definition struct {
 	InputSchema schema.JSON `json:"inputSchema"`
 	// OutputSchema is a standard JSON Schema describing the output (optional).
 	OutputSchema schema.JSON `json:"outputSchema,omitempty"`
-	// Annotations holds MCP-aligned metadata hints.
-	Annotations *Annotations `json:"annotations,omitempty"`
-	// ReadOnly indicates the tool does not modify external state.
-	// Read-only tools can be executed concurrently in batch operations.
-	ReadOnly bool `json:"readOnly,omitempty"`
-	// Destructive indicates the tool may perform irreversible operations.
-	Destructive bool `json:"destructive,omitempty"`
-	// Timeout is the default timeout for this tool. Zero means no default.
-	Timeout time.Duration `json:"-"`
-	// MaxResultSize limits result content size in bytes. Zero means unlimited.
-	MaxResultSize int `json:"maxResultSize,omitempty"`
+	// Annotations holds non-executable metadata hints.
+	Annotations Annotations `json:"annotations,omitzero"`
+	// Envelope is the executable permission envelope for this tool. It
+	// is the single source of truth for what the tool may do at runtime.
+	// The zero value adds no extra capabilities and follows Envelope's
+	// field-level defaults (for example, nil network/filesystem/subprocess
+	// policies deny those capabilities, while empty scopes require none).
+	// Safety, timeout, and result-size policy live here — not as separate
+	// Definition fields.
+	Envelope Envelope `json:"envelope,omitempty"`
 }
 
-// Annotations provides metadata hints about a tool's behavior.
-// Field names align with the MCP tool specification (2025-11-25).
+// Annotations provides non-executable metadata about a tool.
 type Annotations struct {
 	// Title is a human-readable display name.
 	Title string `json:"title,omitempty"`
-	// ReadOnlyHint indicates the tool does not modify external state.
-	ReadOnlyHint *bool `json:"readOnlyHint,omitempty"`
-	// DestructiveHint indicates the tool may perform destructive operations.
-	DestructiveHint *bool `json:"destructiveHint,omitempty"`
-	// IdempotentHint indicates the tool can be called repeatedly with the same result.
-	IdempotentHint *bool `json:"idempotentHint,omitempty"`
-	// OpenWorldHint indicates the tool interacts with external entities.
-	OpenWorldHint *bool `json:"openWorldHint,omitempty"`
 	// Category groups tools for filtering.
 	Category string `json:"category,omitempty"`
 	// Tags are searchable labels.
 	Tags []string `json:"tags,omitempty"`
+	// IdempotentHint indicates the tool can be called repeatedly with the same result.
+	IdempotentHint *bool `json:"idempotentHint,omitempty"`
 	// ExecutionHint tells the frontend how to handle the tool result.
-	// "ui"      — tool only validates/extracts params; frontend drives the action.
-	// "backend" — tool executes a real operation; result is authoritative (default).
-	// "hybrid"  — tool executes backend AND frontend should refresh/navigate.
-	// An empty string is treated as "backend" — the most common case for
-	// server-resident tools — so producers don't have to set it explicitly.
-	ExecutionHint string `json:"executionHint,omitempty"`
+	ExecutionHint ExecutionHint `json:"executionHint,omitzero"`
+}
+
+// ExecutionHint tells the frontend how to handle the tool result.
+type ExecutionHint string
+
+const (
+	// ExecutionBackend means the tool executes a real operation.
+	ExecutionBackend ExecutionHint = "backend"
+	// ExecutionUI means the tool only validates/extracts params; frontend drives the action.
+	ExecutionUI ExecutionHint = "ui"
+	// ExecutionHybrid means the tool executes backend and frontend should refresh/navigate.
+	ExecutionHybrid ExecutionHint = "hybrid"
+)
+
+// Resolved returns the effective hint, defaulting to Backend when zero.
+func (h ExecutionHint) Resolved() ExecutionHint {
+	if h == "" {
+		return ExecutionBackend
+	}
+	return h
 }

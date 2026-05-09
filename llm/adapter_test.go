@@ -10,6 +10,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
 
 // --- mock dialect for testing ---
@@ -46,7 +49,7 @@ func (d *mockDialect) BuildRequest(req CompletionRequest) (any, error) {
 	// Serialize messages using MarshalMessage for proper role-tagged format
 	msgs := make([]json.RawMessage, len(req.Messages))
 	for i, m := range req.Messages {
-		data, err := MarshalMessage(m)
+		data, err := chat.MarshalMessage(m)
 		if err != nil {
 			return nil, err
 		}
@@ -70,23 +73,23 @@ func (d *mockDialect) ParseResponse(body []byte) (*CompletionResponse, error) {
 	content, _ := raw["content"].(string)
 	model, _ := raw["model"].(string)
 	return &CompletionResponse{
-		Message: Assistant(content),
+		Message: chat.Assistant(content),
 		Model:   model,
-		Usage:   Usage{TotalTokens: 10},
+		Usage:   Usage{InputTokens: 10},
 	}, nil
 }
 
 func (d *mockDialect) StreamFormat() StreamFormat { return d.streamFormat }
 
-func (d *mockDialect) ParseStreamChunk(data []byte) (StreamChunk, error) {
+func (d *mockDialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var chunk struct {
 		Content string `json:"content"`
 		Done    bool   `json:"done"`
 	}
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return StreamChunk{}, err
+		return streamwire.Chunk{}, err
 	}
-	return StreamChunk{Content: chunk.Content, Done: chunk.Done}, nil
+	return streamwire.Chunk{Content: chunk.Content, Done: chunk.Done}, nil
 }
 
 // --- tests ---
@@ -172,7 +175,7 @@ func TestAdapter_Execute(t *testing.T) {
 	}
 
 	resp, err := a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{User("Hi")},
+		Messages: []chat.Message{chat.User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error: %v", err)
@@ -211,7 +214,7 @@ func TestAdapter_Execute_AppliesDefaults(t *testing.T) {
 	}
 
 	_, err = a.Execute(context.Background(), CompletionRequest{
-		Messages: []Message{User("test")},
+		Messages: []chat.Message{chat.User("test")},
 	})
 	if err != nil {
 		t.Fatalf("Execute() error: %v", err)
@@ -304,20 +307,23 @@ func TestAdapter_Stream_NDJSON(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("Hi")},
+		Messages: []chat.Message{chat.User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Stream() error: %v", err)
 	}
 
 	var content strings.Builder
-	for chunk := range ch {
-		if chunk.Err != nil {
-			t.Fatalf("stream error: %v", chunk.Err)
-		}
-		content.WriteString(chunk.Content)
-		if chunk.Done {
-			break
+	for event := range ch {
+		switch e := event.(type) {
+		case TextDelta:
+			content.WriteString(e.Text)
+		case MessageComplete:
+			if e.Response.Text() == "" {
+				t.Fatal("expected final message")
+			}
+		case StreamError:
+			t.Fatalf("stream error: %v", e.Err)
 		}
 	}
 
@@ -353,20 +359,23 @@ func TestAdapter_Stream_SSE(t *testing.T) {
 	}
 
 	ch, err := a.Stream(context.Background(), CompletionRequest{
-		Messages: []Message{User("Hi")},
+		Messages: []chat.Message{chat.User("Hi")},
 	})
 	if err != nil {
 		t.Fatalf("Stream() error: %v", err)
 	}
 
 	var content strings.Builder
-	for chunk := range ch {
-		if chunk.Err != nil {
-			t.Fatalf("stream error: %v", chunk.Err)
-		}
-		content.WriteString(chunk.Content)
-		if chunk.Done {
-			break
+	for event := range ch {
+		switch e := event.(type) {
+		case TextDelta:
+			content.WriteString(e.Text)
+		case MessageComplete:
+			if e.Response.Text() == "" {
+				t.Fatal("expected final message")
+			}
+		case StreamError:
+			t.Fatalf("stream error: %v", e.Err)
 		}
 	}
 

@@ -3,9 +3,13 @@ package anthropic
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
-	"github.com/kbukum/gokit/tool"
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
 
 // Register installs the Anthropic dialect in the supplied registry.
@@ -93,24 +97,27 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}
 
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("anthropic: parse response: %w", err)
+		return nil, errors.New(errors.ErrCodeInvalidFormat, "anthropic: parse response", http.StatusBadGateway).WithCause(err)
 	}
 
-	msg := llm.AssistantMessage{}
+	msg := chat.AssistantMessage{}
 
 	for _, block := range raw.Content {
 		switch block.Type {
 		case "text":
-			msg.Content = llm.TextContent(block.Text)
+			msg.Content = ai.TextContent(block.Text)
 		case "tool_use":
-			args := string(block.Input)
-			msg.ToolCalls = append(msg.ToolCalls, llm.ToolCall{
-				ID:   block.ID,
-				Type: "function",
-				Function: llm.FunctionCall{
-					Name:      block.Name,
-					Arguments: args,
-				},
+			var input map[string]any
+			if len(block.Input) > 0 {
+				_ = json.Unmarshal(block.Input, &input)
+			}
+			if input == nil {
+				input = map[string]any{}
+			}
+			msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
+				ID:    block.ID,
+				Name:  block.Name,
+				Input: input,
 			})
 		}
 	}
@@ -119,16 +126,15 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		Message: msg,
 		Model:   raw.Model,
 		Usage: llm.Usage{
-			PromptTokens:     raw.Usage.InputTokens,
-			CompletionTokens: raw.Usage.OutputTokens,
-			TotalTokens:      raw.Usage.InputTokens + raw.Usage.OutputTokens,
+			InputTokens:  raw.Usage.InputTokens,
+			OutputTokens: raw.Usage.OutputTokens,
 		},
 		StopReason: mapStopReason(raw.StopReason),
 	}, nil
 }
 
 // ParseStreamChunk extracts content from an Anthropic SSE data payload.
-func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
+func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var event struct {
 		Type  string `json:"type"`
 		Index int    `json:"index,omitempty"`
@@ -146,73 +152,66 @@ func (d *Dialect) ParseStreamChunk(data []byte) (llm.StreamChunk, error) {
 	}
 
 	if err := json.Unmarshal(data, &event); err != nil {
-		return llm.StreamChunk{}, fmt.Errorf("anthropic: parse stream chunk: %w", err)
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeInvalidFormat, "anthropic: parse stream chunk", http.StatusBadGateway).WithCause(err)
 	}
 
 	switch event.Type {
 	case "content_block_start":
 		if event.ContentBlock.Type == "tool_use" {
-			return llm.StreamChunk{
-				ToolCalls: []llm.ToolCall{{
-					ID:   event.ContentBlock.ID,
-					Type: "function",
-					Function: llm.FunctionCall{
-						Name: event.ContentBlock.Name,
-					},
+			return streamwire.Chunk{
+				ToolCalls: []streamwire.ToolCall{{
+					Index: event.Index,
+					ID:    event.ContentBlock.ID,
+					Name:  event.ContentBlock.Name,
 				}},
 			}, nil
 		}
-		return llm.StreamChunk{}, nil
+		return streamwire.Chunk{}, nil
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" {
-			return llm.StreamChunk{Content: event.Delta.Text}, nil
+			return streamwire.Chunk{Content: event.Delta.Text}, nil
 		}
 		if event.Delta.Type == "input_json_delta" {
-			return llm.StreamChunk{
-				ToolCalls: []llm.ToolCall{{
-					Function: llm.FunctionCall{
-						Arguments: event.Delta.PartialJSON,
-					},
+			return streamwire.Chunk{
+				ToolCalls: []streamwire.ToolCall{{
+					Index:      event.Index,
+					InputDelta: event.Delta.PartialJSON,
 				}},
 			}, nil
 		}
-		return llm.StreamChunk{}, nil
+		return streamwire.Chunk{}, nil
 	case "message_stop":
-		return llm.StreamChunk{Done: true}, nil
+		return streamwire.Chunk{Done: true}, nil
 	default:
-		return llm.StreamChunk{}, nil
+		return streamwire.Chunk{}, nil
 	}
 }
 
 // --- internal helpers ---
 
-func encodeMessage(m llm.Message) (map[string]any, error) {
+func encodeMessage(m chat.Message) (map[string]any, error) {
 	switch msg := m.(type) {
-	case llm.UserMessage:
+	case chat.UserMessage:
 		return map[string]any{
 			"role":    "user",
-			"content": llm.TextOf(msg.Content),
+			"content": ai.TextOf(msg.Content),
 		}, nil
-	case llm.AssistantMessage:
+	case chat.AssistantMessage:
 		if len(msg.ToolCalls) > 0 {
 			blocks := make([]map[string]any, 0)
-			text := llm.TextOf(msg.Content)
+			text := ai.TextOf(msg.Content)
 			if text != "" {
 				blocks = append(blocks, map[string]any{
 					"type": "text",
 					"text": text,
 				})
 			}
-			for _, tc := range msg.ToolCalls {
-				var input any
-				if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
-					input = map[string]any{}
-				}
+			for _, tb := range msg.ToolCalls {
 				blocks = append(blocks, map[string]any{
 					"type":  "tool_use",
-					"id":    tc.ID,
-					"name":  tc.Function.Name,
-					"input": input,
+					"id":    tb.ID,
+					"name":  tb.Name,
+					"input": tb.Input,
 				})
 			}
 			return map[string]any{
@@ -222,14 +221,14 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 		}
 		return map[string]any{
 			"role":    "assistant",
-			"content": llm.TextOf(msg.Content),
+			"content": ai.TextOf(msg.Content),
 		}, nil
-	case llm.SystemMessage:
+	case chat.SystemMessage:
 		return map[string]any{
 			"role":    "user",
 			"content": msg.Content,
 		}, nil
-	case llm.ToolResultMessage:
+	case chat.ToolResultMessage:
 		return map[string]any{
 			"role": "user",
 			"content": []map[string]any{
@@ -241,11 +240,11 @@ func encodeMessage(m llm.Message) (map[string]any, error) {
 			},
 		}, nil
 	default:
-		return nil, fmt.Errorf("anthropic: unknown message type %T", m)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("anthropic: unknown message type %T", m), http.StatusBadRequest)
 	}
 }
 
-func encodeTools(defs []tool.Definition) []map[string]any {
+func encodeTools(defs []ai.ToolSpec) []map[string]any {
 	tools := make([]map[string]any, 0, len(defs))
 	for _, d := range defs {
 		tools = append(tools, map[string]any{
@@ -275,17 +274,17 @@ func encodeToolChoice(tc *llm.ToolChoice) any {
 	}
 }
 
-func mapStopReason(reason string) llm.StopReason {
+func mapStopReason(reason string) chat.FinishReason {
 	switch reason {
 	case "end_turn":
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	case "tool_use":
-		return llm.StopToolUse
+		return chat.FinishReasonToolUse
 	case "max_tokens":
-		return llm.StopMaxTokens
+		return chat.FinishReasonLength
 	case "stop_sequence":
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	default:
-		return llm.StopEndTurn
+		return chat.FinishReasonStop
 	}
 }

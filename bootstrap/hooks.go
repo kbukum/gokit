@@ -2,7 +2,7 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/kbukum/gokit/hook"
 )
@@ -31,11 +31,11 @@ func (e lifecycleEvent) Type() hook.EventType { return e.eventType }
 func (a *App[C]) OnStart(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h
-		a.hooks.On(EventStart, func(ctx context.Context, _ hook.Event) hook.Result {
+		a.hooks.On(EventStart, func(ctx context.Context, _ hook.Event) error {
 			if err := fn(ctx); err != nil {
-				return hook.AbortWithError("onStart hook failed", err)
+				return fmt.Errorf("%w: onStart hook failed: %w", hook.ErrFatalHook, err)
 			}
-			return hook.Continue()
+			return nil
 		})
 	}
 }
@@ -45,11 +45,11 @@ func (a *App[C]) OnStart(hooks ...Hook) {
 func (a *App[C]) OnReady(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h
-		a.hooks.On(EventReady, func(ctx context.Context, _ hook.Event) hook.Result {
+		a.hooks.On(EventReady, func(ctx context.Context, _ hook.Event) error {
 			if err := fn(ctx); err != nil {
-				return hook.AbortWithError("onReady hook failed", err)
+				return fmt.Errorf("%w: onReady hook failed: %w", hook.ErrFatalHook, err)
 			}
-			return hook.Continue()
+			return nil
 		})
 	}
 }
@@ -60,24 +60,13 @@ func (a *App[C]) OnReady(hooks ...Hook) {
 func (a *App[C]) OnStop(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h
-		a.hooks.On(EventStop, func(ctx context.Context, _ hook.Event) hook.Result {
-			if err := fn(ctx); err != nil {
-				return hook.ContinueWithError(err)
-			}
-			return hook.Continue()
+		a.hooks.On(EventStop, func(ctx context.Context, _ hook.Event) error {
+			return fn(ctx)
 		})
 	}
 }
 
 // emitLifecycleHooks dispatches a lifecycle event and returns any error.
 func (a *App[C]) emitLifecycleHooks(ctx context.Context, eventType hook.EventType) error {
-	result := a.hooks.Emit(ctx, lifecycleEvent{eventType: eventType})
-	var errs []error
-	if result.Err != nil {
-		errs = append(errs, result.Err)
-	}
-	if result.Action == hook.ActionAbort && result.Reason != "" && result.Err == nil {
-		errs = append(errs, errors.New(result.Reason))
-	}
-	return errors.Join(errs...)
+	return a.hooks.Emit(ctx, lifecycleEvent{eventType: eventType})
 }

@@ -1,142 +1,76 @@
 package llm
 
-import "github.com/kbukum/gokit/tool"
-
-// Standard message role constants.
-const (
-	RoleSystem    = "system"
-	RoleUser      = "user"
-	RoleAssistant = "assistant"
-	RoleTool      = "tool"
+import (
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
 
-// CompletionRequest is the universal input for all LLM providers.
+type (
+	Model        = ai.Model
+	ProviderName = ai.Provider
+	Usage        = ai.Usage
+)
+
+// FinishReason aliases chat.FinishReason within the llm package.
+type FinishReason = chat.FinishReason
+
 type CompletionRequest struct {
-	// Model overrides the adapter's default model.
-	Model string `json:"model,omitempty" yaml:"model"`
-	// Messages is the conversation history.
-	// Serialization is handled by the Dialect, not json.Marshal.
-	Messages []Message `json:"-"`
-	// SystemPrompt is prepended as a system message.
-	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt"`
-	// Temperature controls randomness (0.0 = deterministic, 1.0 = creative).
-	Temperature *float64 `json:"temperature,omitempty" yaml:"temperature"`
-	// TopP controls nucleus sampling. 0 means provider default.
-	TopP *float64 `json:"top_p,omitempty" yaml:"top_p"`
-	// MaxTokens limits the response length. 0 means provider default.
-	MaxTokens int `json:"max_tokens,omitempty" yaml:"max_tokens"`
-	// StopSequences causes the model to stop when any sequence is encountered.
-	StopSequences []string `json:"stop_sequences,omitempty" yaml:"stop_sequences,omitempty"`
-	// Stream requests streaming mode. Set automatically by Adapter.Stream().
-	Stream bool `json:"stream,omitempty" yaml:"stream"`
-	// Tools is the list of tools available to the model.
-	Tools []tool.Definition `json:"tools,omitempty" yaml:"tools,omitempty"`
-	// ToolChoice controls how the model selects tools.
-	ToolChoice *ToolChoice `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
-	// Metadata holds arbitrary key-value data passed through to the provider.
-	Metadata map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	// Extra holds provider-specific fields that don't fit the universal schema.
-	Extra map[string]any `json:"extra,omitempty" yaml:"extra"`
+	Model         string            `json:"model,omitempty" yaml:"model"`
+	Messages      []chat.Message    `json:"-"`
+	SystemPrompt  string            `json:"system_prompt,omitempty" yaml:"system_prompt"`
+	Temperature   *float64          `json:"temperature,omitempty" yaml:"temperature"`
+	TopP          *float64          `json:"top_p,omitempty" yaml:"top_p"`
+	MaxTokens     int               `json:"max_tokens,omitempty" yaml:"max_tokens"`
+	StopSequences []string          `json:"stop_sequences,omitempty" yaml:"stop_sequences,omitempty"`
+	Stream        bool              `json:"stream,omitempty" yaml:"stream"`
+	Tools         []ai.ToolSpec     `json:"tools,omitempty" yaml:"tools,omitempty"`
+	ToolChoice    *ToolChoice       `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Extra         map[string]any    `json:"extra,omitempty" yaml:"extra"`
 }
 
-// CompletionResponse is the universal output from all LLM providers.
 type CompletionResponse struct {
-	// Message is the assistant's response.
-	Message AssistantMessage `json:"message"`
-	// Model is the model that produced the response.
-	Model string `json:"model"`
-	// Usage reports token consumption.
-	Usage Usage `json:"usage"`
-	// StopReason indicates why the model stopped generating.
-	StopReason StopReason `json:"stop_reason,omitempty"`
+	Message    chat.AssistantMessage `json:"message"`
+	Model      string                `json:"model"`
+	Usage      Usage                 `json:"usage"`
+	StopReason chat.FinishReason     `json:"stop_reason,omitempty"`
 }
 
-// Text extracts the text content from the response message.
-func (r *CompletionResponse) Text() string {
-	return r.Message.Text()
-}
+func (r *CompletionResponse) Text() string { return r.Message.Text() }
 
-// HasToolCalls returns true if the response contains tool call requests.
-func (r *CompletionResponse) HasToolCalls() bool {
-	return r.Message.HasToolCalls()
-}
+func (r *CompletionResponse) HasToolCalls() bool { return r.Message.HasToolCalls() }
 
-// StreamChunk is a single piece of a streamed response.
-type StreamChunk struct {
-	// Content is the text fragment.
-	Content string `json:"content"`
-	// Done indicates this is the final chunk.
-	Done bool `json:"done"`
-	// Err is set when a streaming error occurs.
-	Err error `json:"-"`
-	// ToolCalls contains incremental tool call data during streaming.
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
-}
+// streamChunk is an llm-internal streaming accumulation type.
+// Provider dialects emit these chunks; the public streaming API exposes
+// StreamEvent values assembled from them.
+type streamChunk = streamwire.Chunk
 
-// Usage reports token consumption.
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-	// CacheReadTokens reports tokens read from provider cache (if supported).
-	CacheReadTokens int `json:"cache_read_tokens,omitempty"`
-	// CacheWriteTokens reports tokens written to provider cache (if supported).
-	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
-	// ThinkingTokens reports tokens used for extended thinking (if supported).
-	ThinkingTokens int `json:"thinking_tokens,omitempty"`
-}
+// streamToolCall carries tool call deltas during streaming; the final
+// canonical ai.ToolUseBlock is built after all deltas arrive.
+type streamToolCall = streamwire.ToolCall
 
-// --- Tool calling types ---
-
-// ToolCall represents an LLM's request to invoke a tool.
-type ToolCall struct {
-	// ID uniquely identifies this tool call within the response.
-	ID string `json:"id"`
-	// Type is the call type (always "function" for now).
-	Type string `json:"type"`
-	// Function contains the function name and arguments.
-	Function FunctionCall `json:"function"`
-}
-
-// FunctionCall contains the function invocation details.
-type FunctionCall struct {
-	// Name is the tool function name.
-	Name string `json:"name"`
-	// Arguments is a JSON string containing the function arguments.
-	Arguments string `json:"arguments"`
-}
-
-// ToolResult feeds tool execution output back to the LLM as a message.
 type ToolResult struct {
-	// ToolCallID links back to the ToolCall.ID this result responds to.
 	ToolCallID string `json:"tool_call_id"`
-	// Content is the tool's output as a string.
-	Content string `json:"content"`
-	// IsError indicates the tool encountered an error.
-	IsError bool `json:"is_error,omitempty"`
+	Content    string `json:"content"`
+	IsError    bool   `json:"is_error,omitempty"`
 }
 
-// ToMessage converts a ToolResult into a ToolResultMessage.
-func (r ToolResult) ToMessage() ToolResultMessage {
-	return ToolResultMsg(r.ToolCallID, r.Content, r.IsError)
+func (r ToolResult) ToMessage() chat.ToolResultMessage {
+	return chat.ToolResultMsg(r.ToolCallID, r.Content, r.IsError)
 }
 
-// ToolChoice controls how the model selects tools.
 type ToolChoice struct {
-	// Mode controls tool selection: "auto", "none", "required", or "specific".
-	Mode string `json:"mode"`
-	// Function specifies which tool to call when Mode is "specific".
+	Mode     string `json:"mode"`
 	Function string `json:"function,omitempty"`
 }
 
-// Predefined tool choice modes.
 var (
 	ToolChoiceAuto     = &ToolChoice{Mode: "auto"}
 	ToolChoiceNone     = &ToolChoice{Mode: "none"}
 	ToolChoiceRequired = &ToolChoice{Mode: "required"}
 )
 
-// ToolChoiceFunc creates a ToolChoice that forces a specific tool.
 func ToolChoiceFunc(name string) *ToolChoice {
 	return &ToolChoice{Mode: "specific", Function: name}
 }

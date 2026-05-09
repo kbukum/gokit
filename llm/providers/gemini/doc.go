@@ -1,10 +1,12 @@
-// Package gemini provides a Google Gemini LLM dialect for gokit.
-// Import this package to register the "gemini" dialect automatically,
-// or use [NewAdapter] directly.
+// Package gemini provides a Google Gemini LLM dialect for gokit. Use
+// [Register] to install the "gemini" dialect into a [llm.DialectRegistry]
+// explicitly, or use [NewAdapter] directly. There are no init() side
+// effects; registration is always explicit (D-cross-cutting #1).
 //
 // Quick start:
 //
-//	import _ "github.com/kbukum/gokit/llm/providers/gemini" // registers "gemini" dialect
+//	registry := llm.NewDialectRegistry()
+//	if err := gemini.Register(registry); err != nil { /* handle */ }
 //
 //	adapter, err := gemini.NewAdapter(gemini.Config{
 //	    APIKey: "AIza...",
