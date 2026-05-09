@@ -48,15 +48,16 @@ type StreamableHTTPConfig struct {
 }
 
 // NewStreamableHTTPOptions builds Streamable HTTP options with loopback protection enabled by default.
-func NewStreamableHTTPOptions(cfg StreamableHTTPConfig) (*sdkmcp.StreamableHTTPOptions, error) {
-	crossOriginProtection := &http.CrossOriginProtection{}
+// The returned CrossOriginProtection should be applied as middleware via protection.Handler(h).
+func NewStreamableHTTPOptions(cfg StreamableHTTPConfig) (*sdkmcp.StreamableHTTPOptions, *http.CrossOriginProtection, error) {
+	crossOriginProtection := http.NewCrossOriginProtection()
 	for _, origin := range cfg.AllowedOrigins {
 		normalizedOrigin, err := validateAllowedOrigin(origin)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if err := crossOriginProtection.AddTrustedOrigin(normalizedOrigin); err != nil {
-			return nil, fmt.Errorf("invalid allowed origin %q: %w", origin, err)
+			return nil, nil, fmt.Errorf("invalid allowed origin %q: %w", origin, err)
 		}
 	}
 	return &sdkmcp.StreamableHTTPOptions{
@@ -66,8 +67,7 @@ func NewStreamableHTTPOptions(cfg StreamableHTTPConfig) (*sdkmcp.StreamableHTTPO
 		EventStore:                 cfg.EventStore,
 		SessionTimeout:             cfg.SessionTimeout,
 		DisableLocalhostProtection: cfg.DisableLocalhostProtection,
-		CrossOriginProtection:      crossOriginProtection,
-	}, nil
+	}, crossOriginProtection, nil
 }
 
 func validateAllowedOrigin(origin string) (string, error) {

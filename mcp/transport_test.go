@@ -23,7 +23,7 @@ func TestParseTransport(t *testing.T) {
 func TestNewStreamableHTTPOptions(t *testing.T) {
 	t.Parallel()
 
-	opts, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
+	opts, protection, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
 		AllowedOrigins: []string{"HTTPS://APP.EXAMPLE.COM"},
 	})
 	if err != nil {
@@ -36,14 +36,14 @@ func TestNewStreamableHTTPOptions(t *testing.T) {
 	trusted := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", http.NoBody)
 	trusted.Host = "127.0.0.1"
 	trusted.Header.Set("Origin", "https://app.example.com")
-	if err := opts.CrossOriginProtection.Check(trusted); err != nil {
+	if err := protection.Check(trusted); err != nil {
 		t.Fatalf("trusted origin rejected: %v", err)
 	}
 
 	untrusted := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", http.NoBody)
 	untrusted.Host = "127.0.0.1"
 	untrusted.Header.Set("Origin", "https://evil.example.com")
-	if err := opts.CrossOriginProtection.Check(untrusted); err == nil {
+	if err := protection.Check(untrusted); err == nil {
 		t.Fatal("untrusted origin should be rejected")
 	}
 }
@@ -64,7 +64,7 @@ func TestNewStreamableHTTPOptionsInvalidOrigin(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
+			if _, _, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
 				AllowedOrigins: []string{tc.origin},
 			}); err == nil {
 				t.Fatalf("NewStreamableHTTPOptions() should reject %s origin %q", tc.name, tc.origin)
