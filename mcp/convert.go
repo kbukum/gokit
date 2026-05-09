@@ -25,7 +25,14 @@ func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
 	}
 
 	t.Title = def.Annotations.Title
-	if def.Annotations.Title != "" || def.Envelope.Safety != "" {
+	// Only attach annotations when there are actual non-title hints to convey,
+	// so a round-trip doesn't mutate unset Safety into SafetyMutating.
+	hasSafetyHint := def.Envelope.Safety != ""
+	hasIdempotentHint := def.Annotations.IdempotentHint != nil
+	hasOpenWorldHint := (def.Envelope.Network != nil && len(def.Envelope.Network.AllowList) > 0) ||
+		len(def.Envelope.Filesystem) > 0 ||
+		len(def.Envelope.Subprocess) > 0
+	if hasSafetyHint || hasIdempotentHint || hasOpenWorldHint {
 		annotations := toMCPAnnotations(def)
 		t.Annotations = &annotations
 	}
@@ -71,20 +78,24 @@ func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
 
 	// Convert annotations. MCP safety/open-world hints are executable wire metadata,
 	// so they populate Envelope rather than internal Annotations.
+	// Only set Safety when hints are explicitly present; otherwise preserve "unknown".
+	title := t.Title
 	if t.Annotations != nil {
-		switch {
-		case t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint:
-			def.Envelope.Safety = tool.SafetyDestructive
-		case t.Annotations.ReadOnlyHint:
-			def.Envelope.Safety = tool.SafetyReadOnly
-		default:
-			def.Envelope.Safety = tool.SafetyMutating
+		if t.Annotations.Title != "" {
+			title = t.Annotations.Title
 		}
-		def.Annotations = tool.Annotations{Title: t.Annotations.Title}
+		if t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint {
+			def.Envelope.Safety = tool.SafetyDestructive
+		} else if t.Annotations.ReadOnlyHint {
+			def.Envelope.Safety = tool.SafetyReadOnly
+		}
+		// Only set Mutating if we have explicit non-zero annotations indicating
+		// the tool is neither read-only nor destructive.
 		if t.Annotations.IdempotentHint {
 			def.Annotations.IdempotentHint = boolPtr(true)
 		}
 	}
+	def.Annotations.Title = title
 
 	return def
 }

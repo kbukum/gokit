@@ -172,7 +172,7 @@ func builtinModel(ctx context.Context, args string, a *Agent) (string, error) {
 
 func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
 	if a.config.MemoryPolicy == nil {
-		return "No context strategy configured.", nil
+		return "No memory policy configured.", nil
 	}
 	if a.config.Memory == nil || a.config.SessionID == "" {
 		return "No memory configured for compaction.", nil
