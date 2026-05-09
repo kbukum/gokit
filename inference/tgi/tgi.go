@@ -9,11 +9,9 @@ package tgi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
-	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/inference"
 )
@@ -71,11 +69,6 @@ func (p *Provider) Predict(ctx context.Context, req inference.PredictRequest) (i
 	return inference.OAICompatPredict(ctx, Kind, p.exec, req)
 }
 
-// PredictStream is not yet implemented for TGI (deferred to a follow-up).
-func (p *Provider) PredictStream(context.Context, inference.PredictRequest) (<-chan ai.StreamEvent, error) {
-	return nil, errors.New("tgi: PredictStream not implemented")
-}
-
 // Descriptor advertises the live TGI adapter.
 func (p *Provider) Descriptor() inference.Descriptor {
 	return inference.Descriptor{
@@ -98,4 +91,4 @@ func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]b
 	return resp.Data, nil
 }
 
-var _ inference.StreamingInference = (*Provider)(nil)
+var _ inference.Inference = (*Provider)(nil)
