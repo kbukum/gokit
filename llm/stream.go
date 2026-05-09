@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/kbukum/gokit/httpclient"
@@ -19,6 +20,8 @@ func (a *Adapter) readStream(ctx context.Context, resp *httpclient.StreamRespons
 		a.readSSEStream(ctx, resp.SSE, ch)
 	case StreamNDJSON:
 		a.readNDJSONStream(ctx, resp.Body, ch)
+	default:
+		ch <- streamChunk{Err: fmt.Errorf("unsupported stream format: %s", a.dialect.StreamFormat())}
 	}
 }
 

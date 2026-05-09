@@ -93,11 +93,12 @@ func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
 		if t.Annotations.Title != "" {
 			title = t.Annotations.Title
 		}
-		if t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint {
+		switch {
+		case t.Annotations.DestructiveHint != nil && *t.Annotations.DestructiveHint:
 			def.Envelope.Safety = tool.SafetyDestructive
-		} else if t.Annotations.ReadOnlyHint {
+		case t.Annotations.ReadOnlyHint:
 			def.Envelope.Safety = tool.SafetyReadOnly
-		} else if t.Annotations.DestructiveHint != nil {
+		case t.Annotations.DestructiveHint != nil:
 			// Explicitly not destructive + not read-only → mutating.
 			def.Envelope.Safety = tool.SafetyMutating
 		}
