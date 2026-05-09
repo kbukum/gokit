@@ -45,6 +45,17 @@ func cloneValue(value inference.Value) inference.Value {
 		return inference.BytesValue(value.Bytes)
 	case inference.KindJSON:
 		return inference.JSONValue(value.JSON)
+	case inference.KindTensor:
+		if value.Tensor != nil {
+			shape := make([]int64, len(value.Tensor.Shape))
+			copy(shape, value.Tensor.Shape)
+			return inference.TensorValue(inference.Tensor{
+				DType: value.Tensor.DType,
+				Shape: shape,
+				Data:  value.Tensor.Data,
+			})
+		}
+		return value
 	default:
 		return value
 	}

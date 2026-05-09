@@ -42,19 +42,28 @@ func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
 
 // toMCPAnnotations builds MCP wire-format annotations from Definition + Envelope.
 // Read-only / destructive / open-world hints are derived from Envelope.
+// Pointers are only set when the hint is explicitly intended to avoid round-trip mutation.
 func toMCPAnnotations(def tool.Definition) sdkmcp.ToolAnnotations {
-	readOnly := def.Envelope.Safety == tool.SafetyReadOnly
-	destructive := def.Envelope.Safety == tool.SafetyDestructive
+	ann := sdkmcp.ToolAnnotations{
+		Title:          def.Annotations.Title,
+		IdempotentHint: def.Annotations.IdempotentHint != nil && *def.Annotations.IdempotentHint,
+	}
+	switch def.Envelope.Safety {
+	case tool.SafetyReadOnly:
+		ann.ReadOnlyHint = true
+	case tool.SafetyDestructive:
+		ann.DestructiveHint = boolPtr(true)
+	case tool.SafetyMutating:
+		// Explicitly mutating: not read-only, not destructive.
+		ann.DestructiveHint = boolPtr(false)
+	}
 	openWorld := (def.Envelope.Network != nil && len(def.Envelope.Network.AllowList) > 0) ||
 		len(def.Envelope.Filesystem) > 0 ||
 		len(def.Envelope.Subprocess) > 0
-	return sdkmcp.ToolAnnotations{
-		Title:           def.Annotations.Title,
-		ReadOnlyHint:    readOnly,
-		DestructiveHint: &destructive,
-		IdempotentHint:  def.Annotations.IdempotentHint != nil && *def.Annotations.IdempotentHint,
-		OpenWorldHint:   &openWorld,
+	if openWorld {
+		ann.OpenWorldHint = boolPtr(true)
 	}
+	return ann
 }
 
 // mcpToolToDefinition converts an MCP Tool to a kit tool.Definition.
@@ -88,6 +97,9 @@ func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
 			def.Envelope.Safety = tool.SafetyDestructive
 		} else if t.Annotations.ReadOnlyHint {
 			def.Envelope.Safety = tool.SafetyReadOnly
+		} else if t.Annotations.DestructiveHint != nil {
+			// Explicitly not destructive + not read-only → mutating.
+			def.Envelope.Safety = tool.SafetyMutating
 		}
 		// Only set Mutating if we have explicit non-zero annotations indicating
 		// the tool is neither read-only nor destructive.

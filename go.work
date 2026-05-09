@@ -34,7 +34,7 @@ use (
 	./messaging/kafka
 	./messaging/nats
 	./messaging/rabbitmq
-	
+
 	./schema
 	./server
 	./server/testutil
