@@ -27,7 +27,7 @@ type (
 )
 
 // MessageComplete is the llm-layer terminal event carrying the assembled
-// CompletionResponse alongside the canonical chat.MessageStop signal.
+// CompletionResponse. Consumers should treat this as the final stream event.
 type MessageComplete struct {
 	Response CompletionResponse `json:"response"`
 }

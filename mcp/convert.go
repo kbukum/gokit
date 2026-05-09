@@ -25,8 +25,10 @@ func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
 	}
 
 	t.Title = def.Annotations.Title
-	annotations := toMCPAnnotations(def)
-	t.Annotations = &annotations
+	if def.Annotations.Title != "" || def.Envelope.Safety != "" {
+		annotations := toMCPAnnotations(def)
+		t.Annotations = &annotations
+	}
 
 	return t
 }

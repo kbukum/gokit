@@ -6,7 +6,7 @@ toolchain go1.26.2
 
 require (
 	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/schema v0.1.0
+	github.com/kbukum/gokit/schema v0.2.0
 )
 
 require (
