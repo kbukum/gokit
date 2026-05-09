@@ -7,7 +7,7 @@ toolchain go1.26.2
 require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/messaging v0.2.0
-	github.com/nats-io/nats.go v1.47.0
+	github.com/nats-io/nats.go v1.51.0
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/nats-io/nkeys v0.4.11 // indirect
+	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
