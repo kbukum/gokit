@@ -42,11 +42,12 @@
 //
 // # Streamable HTTP Example
 //
-//	opts, err := mcpkit.NewStreamableHTTPOptions(mcpkit.StreamableHTTPConfig{
+//	opts, protection, err := mcpkit.NewStreamableHTTPOptions(mcpkit.StreamableHTTPConfig{
 //	    AllowedOrigins: []string{"https://app.example.com"},
 //	})
 //	if err != nil { return err }
 //	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, opts)
+//	protectedHandler := protection.Handler(handler)
 //
 // # Client Example
 //
