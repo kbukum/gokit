@@ -21,7 +21,7 @@ func (a *Adapter) readStream(ctx context.Context, resp *httpclient.StreamRespons
 	case StreamNDJSON:
 		a.readNDJSONStream(ctx, resp.Body, ch)
 	default:
-		ch <- streamChunk{Err: fmt.Errorf("unsupported stream format: %s", a.dialect.StreamFormat())}
+		ch <- streamChunk{Err: fmt.Errorf("unsupported stream format: %v", a.dialect.StreamFormat())}
 	}
 }
 
