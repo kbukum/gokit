@@ -113,6 +113,7 @@ func (b *Backend) FileAt(revision, path string) ([]byte, error) {
 		return nil, err
 	}
 
+	path = strings.ReplaceAll(path, "\\", "/")
 	file, err := commit.File(path)
 	if err != nil {
 		return nil, giterr.RefNotFound(fmt.Sprintf("%s:%s", revision, path))

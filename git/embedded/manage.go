@@ -68,7 +68,7 @@ func (b *Backend) ListTags() ([]model.Tag, error) {
 			tag.Message = obj.Message
 		case errors.Is(err, plumbing.ErrObjectNotFound):
 		default:
-			return err
+			return giterr.Internal(err)
 		}
 		tags = append(tags, tag)
 		return nil
