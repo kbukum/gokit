@@ -35,7 +35,7 @@ func WithPolicy(policy *resilience.Policy) EmbeddingProviderOption {
 }
 
 // NewEmbeddingProvider creates an OpenAI embedding provider.
-func NewEmbeddingProvider(config Config, opts ...EmbeddingProviderOption) *EmbeddingProvider {
+func NewEmbeddingProvider(config Config, opts ...EmbeddingProviderOption) (*EmbeddingProvider, error) {
 	config.applyDefaults()
 
 	httpCfg := httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL}
@@ -44,7 +44,7 @@ func NewEmbeddingProvider(config Config, opts ...EmbeddingProviderOption) *Embed
 	}
 	client, err := httpclient.New(httpCfg)
 	if err != nil {
-		client, _ = httpclient.New(httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL})
+		return nil, fmt.Errorf("openai: create embedding http client: %w", err)
 	}
 	provider := &EmbeddingProvider{client: client, config: config}
 	for _, opt := range opts {
@@ -52,7 +52,7 @@ func NewEmbeddingProvider(config Config, opts ...EmbeddingProviderOption) *Embed
 			opt(provider)
 		}
 	}
-	return provider
+	return provider, nil
 }
 
 // Name returns the provider name.

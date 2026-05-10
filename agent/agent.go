@@ -357,11 +357,8 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 
 func (a *Agent) toolPolicy(name string) *resilience.Policy {
 	if a.config.Tools != nil {
-		switch policy := a.config.Tools.PolicyFor(name).(type) {
-		case *resilience.Policy:
-			return policy
-		case resilience.Policy:
-			return &policy
+		if p, ok := a.config.Tools.PolicyFor(name).(*resilience.Policy); ok {
+			return p
 		}
 	}
 	return a.config.Policy

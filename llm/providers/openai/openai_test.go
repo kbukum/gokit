@@ -300,7 +300,10 @@ func TestDialect_RegisterAddsToRegistry(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestEmbeddingProvider_EmptyBatch(t *testing.T) {
-	p := NewEmbeddingProvider(DefaultConfig())
+	p, err := NewEmbeddingProvider(DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
 	result, err := p.EmbedBatch(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("EmbedBatch: %v", err)
@@ -329,7 +332,10 @@ func TestEmbeddingProvider_Embed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
+	p, err := NewEmbeddingProvider(Config{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
 	resp, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "hello"}}})
 	if err != nil {
 		t.Fatalf("Embed: %v", err)
@@ -357,7 +363,10 @@ func TestEmbeddingProvider_EmbedBatch_Order(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
+	p, err := NewEmbeddingProvider(Config{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
 	results, err := p.EmbedBatch(context.Background(), []embedding.EmbedRequest{{Inputs: []embedding.EmbedInput{embedding.Text{Text: "a"}, embedding.Text{Text: "b"}}}})
 	if err != nil {
 		t.Fatalf("EmbedBatch: %v", err)
@@ -379,7 +388,10 @@ func TestEmbeddingProvider_AuthHeader(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewEmbeddingProvider(Config{BaseURL: srv.URL, APIKey: "sk-test"})
+	p, err := NewEmbeddingProvider(Config{BaseURL: srv.URL, APIKey: "sk-test"})
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
 	_, _ = p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
 	if gotAuth != "Bearer sk-test" {
 		t.Errorf("expected 'Bearer sk-test', got %q", gotAuth)
@@ -393,8 +405,11 @@ func TestEmbeddingProvider_ServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewEmbeddingProvider(Config{BaseURL: srv.URL})
-	_, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
+	p, err := NewEmbeddingProvider(Config{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
+	_, err = p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
@@ -423,7 +438,10 @@ func TestEmbeddingProvider_UsesResiliencePolicy(t *testing.T) {
 		Strategy:       resilience.ConstantBackoff,
 		Jitter:         0,
 	})
-	p := NewEmbeddingProvider(Config{BaseURL: srv.URL}, WithPolicy(policy))
+	p, err := NewEmbeddingProvider(Config{BaseURL: srv.URL}, WithPolicy(policy))
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
 	resp, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "retry"}}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -437,8 +455,11 @@ func TestEmbeddingProvider_UsesResiliencePolicy(t *testing.T) {
 }
 
 func TestEmbeddingProviderRejectsMultimodalForOpenAITextEndpoint(t *testing.T) {
-	p := NewEmbeddingProvider(DefaultConfig())
-	_, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Image{URL: "https://example.com/cat.png"}}})
+	p, err := NewEmbeddingProvider(DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewEmbeddingProvider: %v", err)
+	}
+	_, err = p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Image{URL: "https://example.com/cat.png"}}})
 	if err == nil {
 		t.Fatal("expected unsupported input error")
 	}
