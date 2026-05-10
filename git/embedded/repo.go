@@ -20,7 +20,7 @@ type Backend struct {
 }
 
 // Init creates a new git repository at the given path.
-func Init(path string) (*Backend, error) {
+func Init(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, giterr.Internal(err)
@@ -29,11 +29,11 @@ func Init(path string) (*Backend, error) {
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
-	return &Backend{repo: repo, root: absPath}, nil
+	return &Backend{repo: repo, root: absPath, transport: transportFrom(cfg)}, nil
 }
 
 // InitBare creates a new bare git repository at the given path.
-func InitBare(path string) (*Backend, error) {
+func InitBare(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, giterr.Internal(err)
@@ -42,7 +42,7 @@ func InitBare(path string) (*Backend, error) {
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
-	return &Backend{repo: repo, root: absPath}, nil
+	return &Backend{repo: repo, root: absPath, transport: transportFrom(cfg)}, nil
 }
 
 // Open opens a git repository at the given path.

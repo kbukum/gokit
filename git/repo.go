@@ -94,7 +94,7 @@ func Clone(url, path string, opts ...Option) (*Repo, error) {
 // Init creates a new git repository at the given path.
 func Init(path string, opts ...Option) (*Repo, error) {
 	cfg := model.ApplyOptions(opts...)
-	backend, err := embedded.Init(path)
+	backend, err := embedded.Init(path, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func Init(path string, opts ...Option) (*Repo, error) {
 // InitBare creates a new bare git repository at the given path.
 func InitBare(path string, opts ...Option) (*Repo, error) {
 	cfg := model.ApplyOptions(opts...)
-	backend, err := embedded.InitBare(path)
+	backend, err := embedded.InitBare(path, cfg)
 	if err != nil {
 		return nil, err
 	}

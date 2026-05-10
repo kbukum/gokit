@@ -38,7 +38,7 @@ func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Resul
 }
 
 func commandError(args []string, result *process.Result) error {
-	msg := strings.TrimSpace(string(result.Stderr))
+	msg := redactCredentials(strings.TrimSpace(string(result.Stderr)))
 	if msg == "" {
 		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
 	}

@@ -235,6 +235,7 @@ func (b *Backend) Blame(revision, path string, opts ...model.BlameOption) ([]mod
 	if err != nil {
 		return nil, err
 	}
+	path = strings.ReplaceAll(path, "\\", "/")
 	if _, fileErr := commit.File(path); fileErr != nil {
 		return nil, giterr.RefNotFound(fmt.Sprintf("%s:%s", revision, path))
 	}
