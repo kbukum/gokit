@@ -3,9 +3,10 @@ package bench
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func setupTestDataset(t *testing.T) *DatasetLoader[string] {
@@ -25,11 +26,11 @@ func setupTestDataset(t *testing.T) *DatasetLoader[string] {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), data); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"s1.txt", "s2.txt", "s3.txt", "s4.txt"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("content-"+name), 0o644); err != nil {
+		if err := util.WriteFile(filepath.Join(dir, name), []byte("content-"+name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -204,7 +205,9 @@ func TestBenchRunnerEmptyDataset(t *testing.T) {
 		Samples: []ManifestSample{},
 	}
 	data, _ := json.Marshal(manifest)
-	os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644)
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), data); err != nil {
+		t.Fatal(err)
+	}
 
 	loader := NewDatasetLoader(dir, func(s string) (string, error) { return s, nil })
 	runner := NewBenchRunner[string]()

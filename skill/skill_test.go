@@ -8,14 +8,12 @@ import (
 
 	"github.com/kbukum/gokit/skill"
 	"github.com/kbukum/gokit/tool"
+	"github.com/kbukum/gokit/util"
 )
 
 func writeFile(t *testing.T, path, body string) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+	if err := util.WriteFile(path, []byte(body)); err != nil {
 		t.Fatal(err)
 	}
 }

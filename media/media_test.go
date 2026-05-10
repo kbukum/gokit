@@ -3,9 +3,10 @@ package media
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func TestDetect_JPEG(t *testing.T) {
@@ -377,7 +378,7 @@ func TestDetectFile(t *testing.T) {
 
 	// Write PNG header.
 	pngHeader := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}
-	if err := os.WriteFile(path, pngHeader, 0o644); err != nil {
+	if err := util.WriteFile(path, pngHeader); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 
@@ -526,7 +527,7 @@ func TestDetect_GIF87a(t *testing.T) {
 func TestDetect_DetectFileEmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "empty.bin")
-	if err := os.WriteFile(path, []byte{}, 0o644); err != nil {
+	if err := util.WriteFile(path, []byte{}); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	_, err := DetectFile(path)

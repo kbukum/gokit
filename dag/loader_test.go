@@ -3,9 +3,10 @@ package dag
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func TestLoadPipeline_FromFile(t *testing.T) {
@@ -21,7 +22,7 @@ nodes:
     depends_on: [transform]
 `
 	path := filepath.Join(dir, "test-pipeline.yaml")
-	if err := os.WriteFile(path, []byte(yamlContent), 0o644); err != nil {
+	if err := util.WriteFile(path, []byte(yamlContent)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -45,7 +46,7 @@ mode: batch
 nodes:
   - component: step1
 `
-	if err := os.WriteFile(filepath.Join(dir, "my-pipe.yaml"), []byte(yamlContent), 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, "my-pipe.yaml"), []byte(yamlContent)); err != nil {
 		t.Fatal(err)
 	}
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/util"
 )
 
 func TestServiceConfigApplyDefaults(t *testing.T) {
@@ -79,7 +80,7 @@ base:
   environment: staging
   version: "1.0.0"
 `
-	if err := os.WriteFile(configPath, []byte(yamlContent), 0o644); err != nil {
+	if err := util.WriteFile(configPath, []byte(yamlContent)); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
@@ -394,7 +395,7 @@ logging:
   level: warn
   format: json
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -430,7 +431,7 @@ func TestLoadConfigEnvVarOverridesYAML(t *testing.T) {
 environment: staging
 version: "1.0.0"
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -452,7 +453,7 @@ func TestLoadConfigEnvFileLoaded(t *testing.T) {
 	envPath := filepath.Join(dir, ".env")
 
 	envContent := "VERSION=3.0.0-env\n"
-	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
+	if err := util.WriteFile(envPath, []byte(envContent)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -489,7 +490,7 @@ func TestLoadConfigInvalidYAML(t *testing.T) {
 environment: [this is : broken yaml
   not valid at all: {{{
 `
-	if err := os.WriteFile(cfgPath, []byte(invalidYAML), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(invalidYAML)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -509,7 +510,7 @@ func TestLoadConfigTypeDurationCoercion(t *testing.T) {
 	yaml := `timeout: 5s
 retry_interval: 100ms
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -535,7 +536,7 @@ func TestLoadConfigSliceCoercion(t *testing.T) {
   - beta
   - gamma
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -558,7 +559,7 @@ func TestLoadConfigIntCoercion(t *testing.T) {
 	yaml := `port: 8080
 max_connections: 100
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -587,7 +588,7 @@ func TestLoadConfigNestedStruct(t *testing.T) {
   port: 5432
   name: testdb
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -623,7 +624,7 @@ environment: development
 unknown_field: should-be-ignored
 another_extra: 42
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -645,7 +646,7 @@ func TestLoadConfigSpecialCharacters(t *testing.T) {
 version: "1.0.0-beta+build.123"
 environment: development
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -667,7 +668,7 @@ func TestLoadConfigVeryLongValues(t *testing.T) {
 
 	longVal := strings.Repeat("a", 10000)
 	yaml := "name: " + longVal + "\nenvironment: development\n"
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -883,14 +884,14 @@ func TestMultiSourcePrecedence(t *testing.T) {
 environment: staging
 version: "1.0.0"
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
 	// .env overrides version
 	envPath := filepath.Join(dir, ".env")
 	envContent := "VERSION=2.0.0-from-env\n"
-	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
+	if err := util.WriteFile(envPath, []byte(envContent)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -923,7 +924,7 @@ func TestYAMLOverridesDefaults(t *testing.T) {
 environment: production
 debug: true
 `
-	if err := os.WriteFile(cfgPath, []byte(yaml), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte(yaml)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -951,7 +952,7 @@ func TestLoadConfigEmptyYAML(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
 
-	if err := os.WriteFile(cfgPath, []byte(""), 0o644); err != nil {
+	if err := util.WriteFile(cfgPath, []byte("")); err != nil {
 		t.Fatal(err)
 	}
 

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/kbukum/gokit/util"
 )
 
 // RunStorage persists benchmark results.
@@ -83,7 +85,7 @@ func (fs *FileStorage) Save(_ context.Context, result *RunResult) (string, error
 		return "", fmt.Errorf("bench: marshal result: %w", err)
 	}
 	path := filepath.Join(fs.dir, result.ID+".json")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := util.WriteFile(path, data); err != nil {
 		return "", fmt.Errorf("bench: write result file: %w", err)
 	}
 	return result.ID, nil

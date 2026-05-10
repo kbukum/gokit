@@ -20,6 +20,11 @@ description = "Bootstrap, pipeline, DAG, chain, worker, process, stateful"
 modules = ["bootstrap", "pipeline", "dag", "dag/testutil", "chain", "worker", "process", "stateful"]
 depends_on = ["core", "patterns", "crosscutting"]
 
+[domains.devtools]
+description = "Developer tooling: git"
+modules = ["git", "git/testutil"]
+depends_on = ["core"]
+
 [domains.transport]
 description = "Server, HTTP client, gRPC, SSE, connect, discovery"
 modules = ["server", "server/testutil", "httpclient", "grpc", "sse", "connect", "connect/testutil", "discovery", "discovery/testutil"]
