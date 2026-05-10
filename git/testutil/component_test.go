@@ -101,6 +101,32 @@ func TestComponent_ResetSnapshotRestore(t *testing.T) {
 	}
 }
 
+func TestComponent_StopRemovesSnapshots(t *testing.T) {
+	ctx := context.Background()
+	comp := NewComponent()
+	gotestutil.T(t).Setup(comp)
+
+	snapshot, err := comp.Snapshot(ctx)
+	if err != nil {
+		t.Fatalf("Snapshot() failed: %v", err)
+	}
+
+	snapshotRoot, ok := snapshot.(string)
+	if !ok {
+		t.Fatalf("snapshot type = %T, want string", snapshot)
+	}
+	if _, err := os.Stat(snapshotRoot); err != nil {
+		t.Fatalf("snapshot stat failed: %v", err)
+	}
+
+	if err := comp.Stop(ctx); err != nil {
+		t.Fatalf("Stop() failed: %v", err)
+	}
+	if _, err := os.Stat(snapshotRoot); !os.IsNotExist(err) {
+		t.Fatalf("snapshot stat after Stop = %v, want not exist", err)
+	}
+}
+
 func TestBuilder(t *testing.T) {
 	remoteRoot := filepath.Join(t.TempDir(), "remote.git")
 	if _, err := git.InitBare(remoteRoot); err != nil {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -66,11 +67,11 @@ func CopyDir(src, dst string) error {
 		return fmt.Errorf("source is not a directory: %s", src)
 	}
 
-	absSrc, err := filepath.Abs(src)
+	absSrc, err := canonicalizeCopyPath(src)
 	if err != nil {
 		return err
 	}
-	absDst, err := filepath.Abs(dst)
+	absDst, err := canonicalizeCopyPath(dst)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func CopyDir(src, dst string) error {
 
 		switch mode := entry.Mode(); {
 		case entry.IsDir():
-			if err := os.MkdirAll(target, mode.Perm()); err != nil {
+			if err := os.MkdirAll(target, writableDirPerm(mode.Perm())); err != nil {
 				return err
 			}
 			dirs = append(dirs, copiedDir{path: target, info: entry})
@@ -132,6 +133,60 @@ func CopyDir(src, dst string) error {
 	}
 
 	return nil
+}
+
+func canonicalizeCopyPath(path string) (string, error) {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	resolvedPath, err := resolveExistingSymlinks(absPath)
+	if err != nil {
+		return "", err
+	}
+
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		resolvedPath = strings.ToLower(resolvedPath)
+	}
+
+	return filepath.Clean(resolvedPath), nil
+}
+
+func resolveExistingSymlinks(path string) (string, error) {
+	if resolvedPath, err := filepath.EvalSymlinks(path); err == nil {
+		return resolvedPath, nil
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	parent := path
+	var suffix []string
+	for {
+		dir := filepath.Dir(parent)
+		if dir == parent {
+			break
+		}
+		suffix = append([]string{filepath.Base(parent)}, suffix...)
+		parent = dir
+
+		if _, err := os.Lstat(parent); err == nil {
+			resolvedParent, err := filepath.EvalSymlinks(parent)
+			if err != nil {
+				return "", err
+			}
+			parts := append([]string{resolvedParent}, suffix...)
+			return filepath.Join(parts...), nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+	}
+
+	return path, nil
+}
+
+func writableDirPerm(perm os.FileMode) os.FileMode {
+	return perm | 0o700
 }
 
 // EnsureDir creates a directory and all parents if they don't exist.

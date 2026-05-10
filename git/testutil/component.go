@@ -20,10 +20,11 @@ const (
 // Component is a test git component backed by a temporary repository.
 // It implements both component.Component and testutil.TestComponent interfaces.
 type Component struct {
-	root    string
-	repo    *git.Repo
-	started bool
-	mu      sync.RWMutex
+	root      string
+	repo      *git.Repo
+	started   bool
+	snapshots map[string]struct{}
+	mu        sync.RWMutex
 }
 
 var (
@@ -70,6 +71,7 @@ func (c *Component) Start(_ context.Context) error {
 	c.root = root
 	c.repo = repo
 	c.started = true
+	c.snapshots = make(map[string]struct{})
 	return nil
 }
 
@@ -83,14 +85,23 @@ func (c *Component) Stop(_ context.Context) error {
 	}
 
 	root := c.root
+	snapshots := c.snapshotRoots()
 	c.root = ""
 	c.repo = nil
 	c.started = false
+	c.snapshots = nil
 
-	if root == "" {
-		return nil
+	if root != "" {
+		if err := util.RemoveAll(root); err != nil {
+			return err
+		}
 	}
-	return util.RemoveAll(root)
+	for _, snapshot := range snapshots {
+		if err := util.RemoveAll(snapshot); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Health reports whether the test repository is available.
@@ -122,8 +133,8 @@ func (c *Component) Reset(_ context.Context) error {
 
 // Snapshot copies the repository to a separate snapshot directory.
 func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	if !c.started || c.root == "" {
 		return nil, fmt.Errorf("component not started")
@@ -137,6 +148,10 @@ func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
 		_ = util.RemoveAll(snapshotRoot)
 		return nil, fmt.Errorf("copy snapshot: %w", err)
 	}
+	if c.snapshots == nil {
+		c.snapshots = make(map[string]struct{})
+	}
+	c.snapshots[snapshotRoot] = struct{}{}
 	return snapshotRoot, nil
 }
 
@@ -153,14 +168,17 @@ func (c *Component) Restore(_ context.Context, snapshot interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid snapshot type: expected string, got %T", snapshot)
 	}
+	defer func() {
+		_ = util.RemoveAll(snapshotRoot)
+		delete(c.snapshots, snapshotRoot)
+	}()
+
 	if err := util.RemoveAll(c.root); err != nil {
 		return fmt.Errorf("remove repository root: %w", err)
 	}
 	if err := util.CopyDir(snapshotRoot, c.root); err != nil {
 		return fmt.Errorf("restore snapshot: %w", err)
 	}
-	// Clean up the snapshot directory now that the restore succeeded.
-	_ = util.RemoveAll(snapshotRoot)
 
 	repo, err := git.Open(c.root)
 	if err != nil {
@@ -190,7 +208,7 @@ func recreateRepo(root string) (*git.Repo, error) {
 	if err := util.RemoveAll(root); err != nil {
 		return nil, fmt.Errorf("remove repository root: %w", err)
 	}
-	if err := util.EnsureDir(root); err != nil {
+	if err := os.Mkdir(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create repository root: %w", err)
 	}
 
@@ -212,4 +230,12 @@ func configureRepo(repo *git.Repo) error {
 		return fmt.Errorf("set user.email: %w", err)
 	}
 	return nil
+}
+
+func (c *Component) snapshotRoots() []string {
+	snapshots := make([]string, 0, len(c.snapshots))
+	for snapshot := range c.snapshots {
+		snapshots = append(snapshots, snapshot)
+	}
+	return snapshots
 }

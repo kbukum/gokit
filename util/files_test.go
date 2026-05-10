@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -233,5 +235,100 @@ func TestCopyDir(t *testing.T) {
 	}
 	if target != filepath.Join("nested", "file.txt") {
 		t.Fatalf("symlink target = %q, want %q", target, filepath.Join("nested", "file.txt"))
+	}
+}
+
+func TestCopyDirRejectsDestinationInsideSourceViaSymlink(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	if err := EnsureDir(filepath.Join(src, "nested")); err != nil {
+		t.Fatalf("EnsureDir() failed: %v", err)
+	}
+
+	linkRoot := filepath.Join(root, "link")
+	if err := os.Symlink(src, linkRoot); err != nil {
+		t.Fatalf("Symlink() failed: %v", err)
+	}
+
+	dst := filepath.Join(linkRoot, "nested", "copy")
+	err := CopyDir(src, dst)
+	if err == nil {
+		t.Fatal("CopyDir() succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "inside source") {
+		t.Fatalf("CopyDir() error = %v, want destination-inside-source error", err)
+	}
+}
+
+func TestCopyDirPreservesReadOnlyDirectoryPermissions(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	dst := filepath.Join(root, "dst")
+	lockedDir := filepath.Join(src, "locked")
+	filePath := filepath.Join(lockedDir, "file.txt")
+
+	if err := EnsureDir(lockedDir); err != nil {
+		t.Fatalf("EnsureDir() failed: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile() failed: %v", err)
+	}
+	if err := os.Chmod(lockedDir, 0o555); err != nil {
+		t.Fatalf("Chmod() failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(lockedDir, 0o755)
+	})
+
+	if err := CopyDir(src, dst); err != nil {
+		t.Fatalf("CopyDir() failed: %v", err)
+	}
+
+	copiedDir := filepath.Join(dst, "locked")
+	t.Cleanup(func() {
+		_ = os.Chmod(copiedDir, 0o755)
+	})
+	if _, err := os.Stat(filepath.Join(copiedDir, "file.txt")); err != nil {
+		t.Fatalf("copied file stat failed: %v", err)
+	}
+
+	info, err := os.Stat(copiedDir)
+	if err != nil {
+		t.Fatalf("Stat() failed: %v", err)
+	}
+	if info.Mode().Perm() != 0o555 {
+		t.Fatalf("permissions = %o, want %o", info.Mode().Perm(), 0o555)
+	}
+}
+
+func TestCopyDirRejectsCaseInsensitiveDestinationInsideSource(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		t.Skip("case-insensitive destination guard is platform-specific")
+	}
+
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	if err := EnsureDir(filepath.Join(src, "nested")); err != nil {
+		t.Fatalf("EnsureDir() failed: %v", err)
+	}
+
+	upperSrc := strings.ToUpper(src)
+	if _, err := os.Stat(upperSrc); err != nil {
+		t.Skipf("filesystem is case-sensitive for temp dir paths: %v", err)
+	}
+
+	dst := filepath.Join(upperSrc, "nested", "copy")
+	err := CopyDir(src, dst)
+	if err == nil {
+		t.Fatal("CopyDir() succeeded, want error")
+	}
+	if !strings.Contains(err.Error(), "inside source") {
+		t.Fatalf("CopyDir() error = %v, want destination-inside-source error", err)
 	}
 }
