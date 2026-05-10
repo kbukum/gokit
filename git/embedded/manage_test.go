@@ -25,8 +25,8 @@ func TestListBranches(t *testing.T) {
 		wantNames []string
 	}{
 		{name: "local branches", filter: git.LocalBranches, wantNames: []string{"feature", mainBranch}},
-		{name: "remote branches", filter: git.RemoteBranches, wantNames: []string{"origin/main"}},
-		{name: "all branches", filter: git.AllBranches, wantNames: []string{"feature", mainBranch, "origin/main"}},
+		{name: "remote branches", filter: git.RemoteBranches, wantNames: []string{"origin/" + mainBranch}},
+		{name: "all branches", filter: git.AllBranches, wantNames: []string{"feature", mainBranch, "origin/" + mainBranch}},
 	}
 
 	for _, tc := range cases {
@@ -46,8 +46,8 @@ func TestListBranches(t *testing.T) {
 				}
 			}
 			if tc.filter == git.LocalBranches {
-				if branch := names[mainBranch]; branch.Upstream != "origin/main" {
-					t.Errorf("upstream = %q, want origin/main", branch.Upstream)
+				if branch := names[mainBranch]; branch.Upstream != "origin/"+mainBranch {
+					t.Errorf("upstream = %q, want origin/%s", branch.Upstream, mainBranch)
 				}
 			}
 		})
@@ -182,8 +182,8 @@ func TestTrackingBranch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("TrackingBranch() error: %v", err)
 	}
-	if got != "origin/main" {
-		t.Fatalf("TrackingBranch() = %q, want origin/main", got)
+	if got != "origin/"+branch {
+		t.Fatalf("TrackingBranch() = %q, want origin/%s", got, branch)
 	}
 }
 
