@@ -5,6 +5,7 @@ go 1.26.0
 toolchain go1.26.3
 
 require (
+	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/ai v0.2.0
 	github.com/kbukum/gokit/tool v0.2.0
 	go.yaml.in/yaml/v4 v4.0.0-rc.2
@@ -21,7 +22,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/kbukum/gokit v0.2.0 // indirect
 	github.com/kbukum/gokit/schema v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
