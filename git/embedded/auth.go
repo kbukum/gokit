@@ -61,7 +61,7 @@ func tokenAuth(cfg auth.Token) (gittransport.AuthMethod, error) {
 
 func sshAuth(cfg auth.SSHKey) (gittransport.AuthMethod, error) {
 	if cfg.PrivateKeyPath == "" {
-		return nil, giterr.InvalidPath(cfg.PrivateKeyPath)
+		return nil, giterr.InvalidArg("PrivateKeyPath", "SSH key path must not be empty")
 	}
 	user := cfg.User
 	if user == "" {
@@ -70,6 +70,13 @@ func sshAuth(cfg auth.SSHKey) (gittransport.AuthMethod, error) {
 	authMethod, err := sshauth.NewPublicKeysFromFile(user, cfg.PrivateKeyPath, cfg.Passphrase)
 	if err != nil {
 		return nil, giterr.Internal(err)
+	}
+	if cfg.KnownHostsFile != "" {
+		cb, cbErr := sshauth.NewKnownHostsCallback(cfg.KnownHostsFile)
+		if cbErr != nil {
+			return nil, giterr.Internal(cbErr)
+		}
+		authMethod.HostKeyCallbackHelper = sshauth.HostKeyCallbackHelper{HostKeyCallback: cb}
 	}
 	return authMethod, nil
 }

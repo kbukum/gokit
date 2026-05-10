@@ -7,14 +7,16 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 
+	"github.com/kbukum/gokit/git/auth"
 	giterr "github.com/kbukum/gokit/git/internal/giterr"
 	"github.com/kbukum/gokit/git/internal/model"
 )
 
 // Backend implements the git interfaces using go-git.
 type Backend struct {
-	repo *gogit.Repository
-	root string
+	repo      *gogit.Repository
+	root      string
+	transport auth.Transport
 }
 
 // Init creates a new git repository at the given path.
@@ -44,7 +46,7 @@ func InitBare(path string) (*Backend, error) {
 }
 
 // Open opens a git repository at the given path.
-func Open(path string, _ *model.OpenOptions) (*Backend, error) {
+func Open(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, giterr.RepoNotFound(path)
@@ -60,11 +62,11 @@ func Open(path string, _ *model.OpenOptions) (*Backend, error) {
 		return nil, giterr.RepoNotFound(absPath)
 	}
 
-	return &Backend{repo: repo, root: root}, nil
+	return &Backend{repo: repo, root: root, transport: transportFrom(cfg)}, nil
 }
 
 // Discover finds a git repository by walking up from the given path.
-func Discover(path string, _ *model.OpenOptions) (*Backend, error) {
+func Discover(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, giterr.RepoNotFound(path)
@@ -80,7 +82,7 @@ func Discover(path string, _ *model.OpenOptions) (*Backend, error) {
 		return nil, giterr.RepoNotFound(absPath)
 	}
 
-	return &Backend{repo: repo, root: root}, nil
+	return &Backend{repo: repo, root: root, transport: transportFrom(cfg)}, nil
 }
 
 // Clone clones a repository into path.
@@ -90,10 +92,8 @@ func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
 		return nil, giterr.RepoNotFound(path)
 	}
 
-	authMethod, err := transportAuthMethod(nil)
-	if cfg != nil {
-		authMethod, err = transportAuthMethod(cfg.Transport)
-	}
+	transport := transportFrom(cfg)
+	authMethod, err := transportAuthMethod(transport)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
 		return nil, giterr.Network(err)
 	}
 
-	return &Backend{repo: repo, root: absPath}, nil
+	return &Backend{repo: repo, root: absPath, transport: transport}, nil
 }
 
 // Root returns the absolute path to the repository root.
@@ -194,4 +194,11 @@ func referenceFromPlumbing(ref *plumbing.Reference) model.Reference {
 		IsBranch: name.IsBranch(),
 		IsTag:    name.IsTag(),
 	}
+}
+
+func transportFrom(cfg *model.OpenOptions) auth.Transport {
+	if cfg == nil {
+		return nil
+	}
+	return cfg.Transport
 }

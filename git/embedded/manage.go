@@ -203,6 +203,11 @@ func (b *Backend) Fetch(remote string, opts ...model.FetchOption) error {
 			fetchOpts.RefSpecs = append(fetchOpts.RefSpecs, ggconfig.RefSpec(refspec))
 		}
 	}
+	authMethod, err := transportAuthMethod(b.transport)
+	if err != nil {
+		return err
+	}
+	fetchOpts.Auth = authMethod
 	if err := b.repo.Fetch(fetchOpts); err != nil {
 		switch {
 		case errors.Is(err, gogit.NoErrAlreadyUpToDate):
@@ -231,6 +236,11 @@ func (b *Backend) Push(remote string, opts ...model.PushOption) error {
 			pushOpts.RefSpecs = append(pushOpts.RefSpecs, ggconfig.RefSpec(refspec))
 		}
 	}
+	pushAuth, err := transportAuthMethod(b.transport)
+	if err != nil {
+		return err
+	}
+	pushOpts.Auth = pushAuth
 	if err := b.repo.Push(pushOpts); err != nil {
 		switch {
 		case errors.Is(err, gogit.NoErrAlreadyUpToDate):
