@@ -96,7 +96,7 @@ func CopyDir(src, dst string) error {
 			if err := RemoveAll(target); err != nil {
 				return err
 			}
-			return os.Symlink(link, target)
+			return os.Symlink(link, target) //nolint:gosec // G122: TOCTOU acceptable — developer tooling copying local trees, not untrusted input
 		default:
 			return CopyFile(path, target)
 		}

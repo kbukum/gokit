@@ -104,7 +104,6 @@ linters:
         - G404  # math/rand acceptable for non-security paths (jitter, IDs).
         - G306  # File permissions — flagged at specific call sites where 0644 is intentional.
         - G304  # File paths from variables — required for storage abstraction.
-        - G122  # TOCTOU in WalkDir — acceptable for developer tooling; not processing untrusted input.
         # G402 (TLS InsecureSkipVerify) is intentionally NOT excluded.
         # Per-site //nolint:gosec comments document the opt-in semantics at
         # security/tls.go and discovery/consul/consul.go.
