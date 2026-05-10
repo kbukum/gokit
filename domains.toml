@@ -22,7 +22,7 @@ depends_on = ["core", "patterns", "crosscutting"]
 
 [domains.devtools]
 description = "Developer tooling: git, process"
-modules = ["git"]
+modules = ["git", "git/testutil"]
 depends_on = ["core"]
 
 [domains.transport]

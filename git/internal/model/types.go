@@ -290,7 +290,7 @@ func WithSigning(signing gitauth.Signing) Option {
 
 // WithExtraArgs appends raw CLI args for backends that support them.
 func WithExtraArgs(args ...string) Option {
-	return func(opts *OpenOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *OpenOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // ApplyOptions materializes constructor options.

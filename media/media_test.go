@@ -3,9 +3,10 @@ package media
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/kbukum/gokit/util"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func TestDetect_JPEG(t *testing.T) {

@@ -15,20 +15,32 @@ func (b *Backend) Exec(args ...string) ([]byte, error) {
 }
 
 func (b *Backend) run(ctx context.Context, args ...string) ([]byte, error) {
+	result, err := b.runResult(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	if result.ExitCode != 0 {
+		return result.Stdout, giterr.Internal(commandError(args, result))
+	}
+	return result.Stdout, nil
+}
+
+func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Result, error) {
 	result, err := process.Run(ctx, process.Command{
 		Binary: b.executable,
 		Args:   append(append([]string(nil), b.extraArgs...), args...),
 		Dir:    b.root,
 	})
-	if err != nil {
+	if err != nil && (result == nil || result.ExitCode < 0) {
 		return nil, giterr.Internal(err)
 	}
-	if result.ExitCode != 0 {
-		msg := strings.TrimSpace(string(result.Stderr))
-		if msg == "" {
-			msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
-		}
-		return result.Stdout, giterr.Internal(fmt.Errorf("git %v: %s", args, msg))
+	return result, nil
+}
+
+func commandError(args []string, result *process.Result) error {
+	msg := strings.TrimSpace(string(result.Stderr))
+	if msg == "" {
+		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
 	}
-	return result.Stdout, nil
+	return fmt.Errorf("git %v: %s", args, msg)
 }

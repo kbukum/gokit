@@ -37,10 +37,17 @@ func (b *Backend) Grep(pattern string, paths ...string) ([]model.GrepMatch, erro
 		args = append(args, "--")
 		args = append(args, paths...)
 	}
-	out, err := b.run(context.Background(), args...)
+	result, err := b.runResult(context.Background(), args...)
 	if err != nil {
 		return nil, err
 	}
+	if result.ExitCode == 1 {
+		return nil, nil
+	}
+	if result.ExitCode != 0 {
+		return nil, giterr.Internal(commandError(args, result))
+	}
+	out := result.Stdout
 	text := strings.TrimSpace(string(out))
 	if text == "" {
 		return nil, nil

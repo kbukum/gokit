@@ -28,6 +28,19 @@ func TestExec(t *testing.T) {
 	}
 }
 
+func TestExecReportsGitFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	backend := New(dir, nil)
+
+	if _, err := backend.Exec("show", "does-not-exist"); err == nil {
+		t.Fatal("Exec() expected error")
+	} else if !strings.Contains(err.Error(), "unknown revision or path not in the working tree") {
+		t.Fatalf("Exec() error = %v, want stderr from git", err)
+	}
+}
+
 func TestInspectorOperations(t *testing.T) {
 	t.Parallel()
 
@@ -72,6 +85,18 @@ func TestInspectorOperations(t *testing.T) {
 		}
 		if matches[0].Path != "README.md" || matches[0].Line != 1 || matches[0].Content != "# test repo" {
 			t.Fatalf("Grep() match = %+v", matches[0])
+		}
+	})
+
+	t.Run("GrepNoMatches", func(t *testing.T) {
+		t.Parallel()
+
+		matches, err := backend.Grep("missing-pattern", "README.md")
+		if err != nil {
+			t.Fatalf("Grep() error: %v", err)
+		}
+		if len(matches) != 0 {
+			t.Fatalf("Grep() len = %d, want 0", len(matches))
 		}
 	})
 
