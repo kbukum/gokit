@@ -50,22 +50,27 @@ func commandError(args []string, result *process.Result) error {
 }
 
 // redactCredentials masks credentials in URLs to prevent leakage in
-// error messages and logs.
+// error messages and logs. Handles all http(s)://user:pass@host occurrences.
 func redactCredentials(s string) string {
+	result := s
 	for _, scheme := range []string{"https://", "http://"} {
-		idx := strings.Index(s, scheme)
-		if idx < 0 {
-			continue
-		}
-		rest := s[idx+len(scheme):]
-		atIdx := strings.Index(rest, "@")
-		if atIdx < 0 {
-			continue
-		}
-		userinfo := rest[:atIdx]
-		if user, _, ok := strings.Cut(userinfo, ":"); ok {
-			return s[:idx] + scheme + user + ":***@" + rest[atIdx+1:]
+		for {
+			idx := strings.Index(result, scheme)
+			if idx < 0 {
+				break
+			}
+			rest := result[idx+len(scheme):]
+			atIdx := strings.Index(rest, "@")
+			if atIdx < 0 {
+				break
+			}
+			userinfo := rest[:atIdx]
+			if user, _, ok := strings.Cut(userinfo, ":"); ok {
+				result = result[:idx] + scheme + user + ":***@" + rest[atIdx+1:]
+			} else {
+				break
+			}
 		}
 	}
-	return s
+	return result
 }
