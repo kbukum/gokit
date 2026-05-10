@@ -5,6 +5,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "ci"
     labels:
@@ -26,6 +29,9 @@ updates:
       - "/*/*"        # 2-level sub-modules (bench/storage, llm/providers, */testutil, …)
     schedule:
       interval: "weekly"
+      day: "friday"
+      time: "09:00"
+      timezone: "Etc/UTC"
     commit-message:
       prefix: "deps"
       include: "scope"

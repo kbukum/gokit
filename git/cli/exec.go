@@ -54,11 +54,13 @@ func commandError(args []string, result *process.Result) error {
 func redactCredentials(s string) string {
 	result := s
 	for _, scheme := range []string{"https://", "http://"} {
+		var offset int
 		for {
-			idx := strings.Index(result, scheme)
+			idx := strings.Index(result[offset:], scheme)
 			if idx < 0 {
 				break
 			}
+			idx += offset
 			rest := result[idx+len(scheme):]
 			atIdx := strings.Index(rest, "@")
 			if atIdx < 0 {
@@ -66,9 +68,11 @@ func redactCredentials(s string) string {
 			}
 			userinfo := rest[:atIdx]
 			if user, _, ok := strings.Cut(userinfo, ":"); ok {
-				result = result[:idx] + scheme + user + ":***@" + rest[atIdx+1:]
+				redacted := scheme + user + ":***@"
+				result = result[:idx] + redacted + rest[atIdx+1:]
+				offset = idx + len(redacted)
 			} else {
-				break
+				offset = idx + len(scheme)
 			}
 		}
 	}
