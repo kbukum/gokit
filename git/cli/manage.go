@@ -61,8 +61,8 @@ func (b *Backend) Clean(opts ...model.CleanOption) ([]string, error) {
 			cleaned = append(cleaned, strings.TrimPrefix(line, "Removing "))
 		case strings.HasPrefix(line, "Would remove "):
 			cleaned = append(cleaned, strings.TrimPrefix(line, "Would remove "))
-		case line != "":
-			cleaned = append(cleaned, line)
+		default:
+			continue
 		}
 	}
 	return cleaned, nil

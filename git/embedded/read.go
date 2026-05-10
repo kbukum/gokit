@@ -345,6 +345,7 @@ func (b *Backend) resolveTree(revision, path string) (*object.Tree, error) {
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
+	path = strings.ReplaceAll(path, "\\", "/")
 	if path == "" || path == "." || path == "/" {
 		return tree, nil
 	}

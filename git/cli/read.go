@@ -32,7 +32,7 @@ func (b *Backend) RevParse(spec string) (model.Oid, error) {
 }
 
 func (b *Backend) Grep(pattern string, paths ...string) ([]model.GrepMatch, error) {
-	args := []string{"grep", "-n", pattern}
+	args := []string{"grep", "-n", "--", pattern}
 	if len(paths) > 0 {
 		args = append(args, "--")
 		args = append(args, paths...)
