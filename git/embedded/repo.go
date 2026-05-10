@@ -54,7 +54,10 @@ func Open(path string, cfg *model.OpenOptions) (*Backend, error) {
 
 	repo, err := gogit.PlainOpen(absPath)
 	if err != nil {
-		return nil, giterr.RepoNotFound(absPath)
+		if os.IsNotExist(err) || err == gogit.ErrRepositoryNotExists {
+			return nil, giterr.RepoNotFound(absPath)
+		}
+		return nil, giterr.Internal(err)
 	}
 
 	root, err := findRepoRoot(absPath)

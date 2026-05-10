@@ -182,6 +182,9 @@ func TestCopyDir(t *testing.T) {
 		t.Fatalf("Chtimes(nestedDir) failed: %v", err)
 	}
 	if err := os.Symlink(filepath.Join("nested", "file.txt"), linkPath); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Symlink requires elevated privileges on Windows: %v", err)
+		}
 		t.Fatalf("Symlink() failed: %v", err)
 	}
 

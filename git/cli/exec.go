@@ -63,8 +63,7 @@ func redactCredentials(s string) string {
 			continue
 		}
 		userinfo := rest[:atIdx]
-		if strings.Contains(userinfo, ":") {
-			user := userinfo[:strings.Index(userinfo, ":")]
+		if user, _, ok := strings.Cut(userinfo, ":"); ok {
 			return s[:idx] + scheme + user + ":***@" + rest[atIdx+1:]
 		}
 	}
