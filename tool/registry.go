@@ -250,6 +250,8 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 	res, err := t.Call(ctx, input)
 	if err != nil {
 		span.RecordError(err)
+	} else {
+		r.lifecycle.Touch()
 	}
 	return res, err
 }
