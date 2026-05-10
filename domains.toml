@@ -21,7 +21,7 @@ modules = ["bootstrap", "pipeline", "dag", "dag/testutil", "chain", "worker", "p
 depends_on = ["core", "patterns", "crosscutting"]
 
 [domains.devtools]
-description = "Developer tooling: git, process"
+description = "Developer tooling: git"
 modules = ["git", "git/testutil"]
 depends_on = ["core"]
 

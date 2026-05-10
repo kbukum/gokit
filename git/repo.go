@@ -7,9 +7,15 @@ import (
 )
 
 // Repo orchestrates git operations across the available backends.
+// Operations are routed to whichever backend implements them:
+// - embedded (go-git): Repository, Diff, TreeRead, Log, Blame, Index, Commit, Ref, Remote, Config
+// - cli (git binary): Exec, Inspect, Merge, Rebase, CherryPick, Reset, Stash, Maintain
+// When preferCLI is true and a future CLI implementation covers an embedded operation,
+// the CLI backend will be preferred for that operation.
 type Repo struct {
-	embedded *embedded.Backend
-	cli      *cliimpl.Backend
+	embedded  *embedded.Backend
+	cli       *cliimpl.Backend
+	preferCLI bool
 }
 
 var (
@@ -106,9 +112,11 @@ func InitBare(path string, opts ...Option) (*Repo, error) {
 }
 
 func newRepo(backend *embedded.Backend, cfg *model.OpenOptions) *Repo {
+	preferCLI := cfg != nil && cfg.PreferCLI
 	return &Repo{
-		embedded: backend,
-		cli:      cliimpl.New(backend.Root(), cfg),
+		embedded:  backend,
+		cli:       cliimpl.New(backend.Root(), cfg),
+		preferCLI: preferCLI,
 	}
 }
 

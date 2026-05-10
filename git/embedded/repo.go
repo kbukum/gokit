@@ -174,10 +174,17 @@ func findRepoRoot(path string) (string, error) {
 }
 
 func isGitDir(path string) bool {
-	// A repository root may contain either a .git directory or a .git file
-	// (for example, in linked worktrees or submodules). Existence is enough.
-	_, err := os.Stat(filepath.Join(path, ".git"))
-	return err == nil
+	// A non-bare repository root contains a .git directory or file.
+	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
+		return true
+	}
+	// A bare repository has HEAD, objects, and refs directly at the root.
+	for _, entry := range []string{"HEAD", "objects", "refs"} {
+		if _, err := os.Stat(filepath.Join(path, entry)); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 func oidFromHash(h plumbing.Hash) model.Oid {

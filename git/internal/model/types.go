@@ -326,7 +326,7 @@ func WithDiffNameOnly(nameOnly bool) DiffOption {
 
 // WithDiffExtraArgs appends backend-specific raw diff args.
 func WithDiffExtraArgs(args ...string) DiffOption {
-	return func(opts *DiffOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *DiffOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // LogOptions controls log traversal.
@@ -341,7 +341,7 @@ type LogOptions struct {
 
 // WithLogExtraArgs appends backend-specific raw log args.
 func WithLogExtraArgs(args ...string) func(*LogOptions) {
-	return func(opts *LogOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *LogOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // BlameOptions controls blame output.
@@ -370,7 +370,7 @@ func WithIgnoreWhitespace(ignore bool) BlameOption {
 
 // WithBlameExtraArgs appends backend-specific raw blame args.
 func WithBlameExtraArgs(args ...string) BlameOption {
-	return func(opts *BlameOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *BlameOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // CommitOptions controls commit creation.
@@ -411,7 +411,7 @@ func WithCommitAmend(amend bool) CommitOption {
 
 // WithCommitExtraArgs appends backend-specific raw commit args.
 func WithCommitExtraArgs(args ...string) CommitOption {
-	return func(opts *CommitOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *CommitOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // FetchOptions controls fetch behavior.
@@ -433,12 +433,12 @@ func WithFetchDepth(depth int) FetchOption { return func(opts *FetchOptions) { o
 
 // WithFetchRefspecs sets fetch refspecs.
 func WithFetchRefspecs(refspecs ...string) FetchOption {
-	return func(opts *FetchOptions) { opts.Refspecs = append([]string(nil), refspecs...) }
+	return func(opts *FetchOptions) { opts.Refspecs = append(opts.Refspecs, refspecs...) }
 }
 
 // WithFetchExtraArgs appends backend-specific raw fetch args.
 func WithFetchExtraArgs(args ...string) FetchOption {
-	return func(opts *FetchOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *FetchOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // PushOptions controls push behavior.
@@ -456,12 +456,12 @@ func WithPushForce(force bool) PushOption { return func(opts *PushOptions) { opt
 
 // WithPushRefspecs sets push refspecs.
 func WithPushRefspecs(refspecs ...string) PushOption {
-	return func(opts *PushOptions) { opts.Refspecs = append([]string(nil), refspecs...) }
+	return func(opts *PushOptions) { opts.Refspecs = append(opts.Refspecs, refspecs...) }
 }
 
 // WithPushExtraArgs appends backend-specific raw push args.
 func WithPushExtraArgs(args ...string) PushOption {
-	return func(opts *PushOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *PushOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // DescribeOptions controls git describe output.
@@ -504,7 +504,7 @@ func WithDescribeAlways(always bool) DescribeOption {
 
 // WithDescribeExtraArgs appends backend-specific raw describe args.
 func WithDescribeExtraArgs(args ...string) DescribeOption {
-	return func(opts *DescribeOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *DescribeOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // GrepOptions controls git grep behavior.
@@ -520,7 +520,7 @@ type GrepOption func(*GrepOptions)
 
 // WithGrepPathspecs restricts grep to the provided paths.
 func WithGrepPathspecs(pathspecs ...string) GrepOption {
-	return func(opts *GrepOptions) { opts.Pathspecs = append([]string(nil), pathspecs...) }
+	return func(opts *GrepOptions) { opts.Pathspecs = append(opts.Pathspecs, pathspecs...) }
 }
 
 // WithGrepIgnoreCase toggles case-insensitive matching.
@@ -535,7 +535,7 @@ func WithGrepLineNumbers(enabled bool) GrepOption {
 
 // WithGrepExtraArgs appends backend-specific raw grep args.
 func WithGrepExtraArgs(args ...string) GrepOption {
-	return func(opts *GrepOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *GrepOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // MergeOptions controls merge behavior.
@@ -578,7 +578,7 @@ func WithMergeMessage(message string) MergeOption {
 
 // WithMergeExtraArgs appends backend-specific raw merge args.
 func WithMergeExtraArgs(args ...string) MergeOption {
-	return func(opts *MergeOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *MergeOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // RebaseOptions controls rebase behavior.
@@ -603,7 +603,7 @@ func WithRebaseAutosquash(autosquash bool) RebaseOption {
 
 // WithRebaseExtraArgs appends backend-specific raw rebase args.
 func WithRebaseExtraArgs(args ...string) RebaseOption {
-	return func(opts *RebaseOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *RebaseOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // CherryPickOptions controls cherry-pick behavior.
@@ -628,7 +628,7 @@ func WithCherryPickNoCommit(noCommit bool) CherryPickOption {
 
 // WithCherryPickExtraArgs appends backend-specific raw cherry-pick args.
 func WithCherryPickExtraArgs(args ...string) CherryPickOption {
-	return func(opts *CherryPickOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *CherryPickOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // CheckoutOptions controls checkout behavior.
@@ -659,7 +659,7 @@ func WithCheckoutDetach(detach bool) CheckoutOption {
 
 // WithCheckoutExtraArgs appends backend-specific raw checkout args.
 func WithCheckoutExtraArgs(args ...string) CheckoutOption {
-	return func(opts *CheckoutOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *CheckoutOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
 
 // CleanOptions controls git clean behavior.
@@ -688,5 +688,5 @@ func WithCleanForce(force bool) CleanOption { return func(opts *CleanOptions) { 
 
 // WithCleanExtraArgs appends backend-specific raw clean args.
 func WithCleanExtraArgs(args ...string) CleanOption {
-	return func(opts *CleanOptions) { opts.ExtraArgs = append([]string(nil), args...) }
+	return func(opts *CleanOptions) { opts.ExtraArgs = append(opts.ExtraArgs, args...) }
 }
