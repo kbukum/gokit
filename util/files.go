@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // CopyFile copies a single file from src to dst, preserving permissions and modification times.
@@ -52,6 +53,7 @@ type copiedDir struct {
 
 // CopyDir recursively copies a directory tree from src to dst.
 // It preserves file permissions, modification times, and symlinks.
+// dst must not be inside src; passing an overlapping dst returns an error.
 func CopyDir(src, dst string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
@@ -59,6 +61,18 @@ func CopyDir(src, dst string) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("source is not a directory: %s", src)
+	}
+
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return err
+	}
+	absDst, err := filepath.Abs(dst)
+	if err != nil {
+		return err
+	}
+	if absDst == absSrc || strings.HasPrefix(absDst+string(filepath.Separator), absSrc+string(filepath.Separator)) {
+		return fmt.Errorf("destination %s is inside source %s", dst, src)
 	}
 
 	var dirs []copiedDir

@@ -112,7 +112,7 @@ func (b *Backend) StashList() ([]model.StashEntry, error) {
 			return nil, giterr.Internal(fmt.Errorf("invalid stash index %q: %w", indexText, convErr))
 		}
 
-		commit, revErr := b.RevParse(name + "^1")
+		commit, revErr := b.RevParse(name)
 		if revErr != nil {
 			return nil, revErr
 		}

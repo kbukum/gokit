@@ -37,7 +37,7 @@ func transportAuthMethod(cfg auth.Transport) (gittransport.AuthMethod, error) {
 		}
 		return sshAuth(*v)
 	case auth.CredentialHelper, *auth.CredentialHelper:
-		return nil, giterr.CLINotImplemented()
+		return nil, giterr.EmbeddedUnsupported("CredentialHelper transport")
 	default:
 		return nil, giterr.InvalidTransport(fmt.Sprintf("%T", cfg))
 	}

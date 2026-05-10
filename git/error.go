@@ -20,5 +20,7 @@ func ErrInvalidConfigKey(key string) *errors.AppError     { return giterr.Invali
 func ErrSigningNotSupported() *errors.AppError            { return giterr.SigningNotSupported() }
 func ErrNetwork(cause error) *errors.AppError             { return giterr.Network(cause) }
 func ErrInternal(cause error) *errors.AppError            { return giterr.Internal(cause) }
-func ErrCLINotImplemented() *errors.AppError              { return giterr.CLINotImplemented() }
-func ErrInvalidTransport(kind string) *errors.AppError    { return giterr.InvalidTransport(kind) }
+func ErrEmbeddedUnsupported(operation string) *errors.AppError {
+	return giterr.EmbeddedUnsupported(operation)
+}
+func ErrInvalidTransport(kind string) *errors.AppError { return giterr.InvalidTransport(kind) }

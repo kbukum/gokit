@@ -43,8 +43,11 @@ func SigningNotSupported() *errors.AppError {
 }
 func Network(cause error) *errors.AppError  { return errors.ExternalServiceError("git", cause) }
 func Internal(cause error) *errors.AppError { return errors.Internal(cause) }
-func CLINotImplemented() *errors.AppError {
-	return errors.InvalidInput("backend", "operation not supported by the embedded backend; use CLI backend instead")
+
+// EmbeddedUnsupported returns an error indicating the embedded (go-git) backend
+// does not support this operation or transport type.
+func EmbeddedUnsupported(operation string) *errors.AppError {
+	return errors.InvalidInput("backend", "operation not supported by the embedded backend: "+operation)
 }
 
 func InvalidTransport(kind string) *errors.AppError {
