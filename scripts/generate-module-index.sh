@@ -5,12 +5,35 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 export ROOT_DIR
 
-python3 <<'PY'
+if [[ -n "${PYTHON:-}" ]]; then
+  PYTHON_BIN="$PYTHON"
+elif command -v python3.14 >/dev/null 2>&1; then
+  PYTHON_BIN="python3.14"
+elif command -v python3.13 >/dev/null 2>&1; then
+  PYTHON_BIN="python3.13"
+elif command -v python3.12 >/dev/null 2>&1; then
+  PYTHON_BIN="python3.12"
+elif command -v python3.11 >/dev/null 2>&1; then
+  PYTHON_BIN="python3.11"
+else
+  PYTHON_BIN="python3"
+fi
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python 3.11+ is required" >&2
+  exit 1
+fi
+
+"$PYTHON_BIN" <<'PY'
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from pathlib import Path
+
+if sys.version_info < (3, 11):
+    raise SystemExit("Python 3.11+ is required")
 
 DOMAIN_EMOJI = {
     "core": "🧱",

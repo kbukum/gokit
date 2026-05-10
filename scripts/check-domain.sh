@@ -74,6 +74,8 @@ resolve_module_path() {
 run_module_checks() {
   local module="$1"
   local module_path
+  local mod_file
+  local -a nested_mod_files=()
   module_path="$(resolve_module_path "$module")"
 
   echo "==> Checking $module ($module_path)"
@@ -84,12 +86,54 @@ run_module_checks() {
       go vet ./...
       go test -race -count=1 -shuffle=on ./...
     )
-    return
+    while IFS= read -r mod_file; do
+      [[ -n "$mod_file" ]] || continue
+      [[ "$mod_file" == "$module_path/go.mod" ]] && continue
+      nested_mod_files+=("$mod_file")
+    done < <(find "$module_path" -mindepth 2 -name go.mod -type f | sort)
+  else
+    go build "./$module_path/..."
+    go vet "./$module_path/..."
+    go test -race -count=1 -shuffle=on "./$module_path/..."
+
+    while IFS= read -r mod_file; do
+      [[ -n "$mod_file" ]] || continue
+      nested_mod_files+=("$mod_file")
+    done < <(find "$module_path" -mindepth 2 -name go.mod -type f | sort)
   fi
 
-  go build "./$module_path/..."
-  go vet "./$module_path/..."
-  go test -race -count=1 -shuffle=on "./$module_path/..."
+  if ((${#nested_mod_files[@]} > 0)); then
+    for mod_file in "${nested_mod_files[@]}"; do
+      echo "==> Checking nested module ${mod_file%/go.mod}"
+      (
+        cd "${mod_file%/go.mod}"
+        go build ./...
+        go vet ./...
+        go test -race -count=1 -shuffle=on ./...
+      )
+    done
+  fi
+}
+
+module_has_listed_ancestor() {
+  local module="$1"
+  shift
+  local parent="${module%/*}"
+  local candidate
+
+  while [[ "$parent" != "$module" && -n "$parent" ]]; do
+    for candidate in "$@"; do
+      if [[ "$candidate" == "$parent" ]]; then
+        return 0
+      fi
+    done
+    if [[ "$parent" != */* ]]; then
+      break
+    fi
+    parent="${parent%/*}"
+  done
+
+  return 1
 }
 
 run_domain() {
@@ -108,6 +152,9 @@ run_domain() {
 
   echo "==> Domain: $domain"
   for module in "${modules[@]}"; do
+    if module_has_listed_ancestor "$module" "${modules[@]}"; then
+      continue
+    fi
     run_module_checks "$module"
   done
 }

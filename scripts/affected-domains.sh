@@ -47,6 +47,9 @@ for name, domain in domains.items():
     for module in domain.get("modules", []):
         module_to_domains.setdefault(module, set()).add(name)
 
+global_prefixes = {".github", "docs", "scripts"}
+global_files = {"Makefile", "README.md", "domains.toml", "go.work", "go.work.sum"}
+
 
 def domains_for_file(path_str: str) -> set[str]:
     path_str = path_str.strip()
@@ -57,8 +60,11 @@ def domains_for_file(path_str: str) -> set[str]:
     if not parts:
         return set()
 
-    if len(parts) == 1:
+    if parts[0] in global_prefixes or path_str in global_files:
         return set(all_domains)
+
+    if len(parts) == 1:
+        return set(all_domains if parts[0] not in module_to_domains else module_to_domains[parts[0]])
 
     return set(module_to_domains.get(parts[0], set()))
 

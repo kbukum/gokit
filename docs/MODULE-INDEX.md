@@ -12,22 +12,22 @@ component · hook · provider · di
 observability · resilience · security
 
 ## 🏗️ Composition  (`make check-composition`)
-bootstrap · pipeline · dag · chain · worker · process · stateful
+bootstrap · pipeline · dag · dag/testutil · chain · worker · process · stateful
 
 ## 🌐 Transport  (`make check-transport`)
-server · httpclient · grpc · sse · connect · discovery
+server · server/testutil · httpclient · grpc · sse · connect · connect/testutil · discovery · discovery/testutil
 
 ## 🔑 Auth  (`make check-auth`)
 auth · authz
 
 ## 💾 Data  (`make check-data`)
-database · cache · storage · vectorstore · messaging
+database · database/sqlite · database/testutil · cache · cache/redis · storage · storage/s3 · storage/testutil · vectorstore · messaging · messaging/kafka · messaging/nats · messaging/rabbitmq
 
 ## 🧠 AI  (`make check-ai`)
-ai · llm · embedding · inference · agent · tool · mcp · skill
+ai · llm · llm/providers · embedding · inference · inference/tgi · inference/triton · inference/vllm · agent · tool · mcp · skill
 
 ## 🎬 Media  (`make check-media`)
 media
 
 ## ⚙️ Infra  (`make check-infra`)
-workload · bench · testutil
+workload · workload/testutil · bench · bench/storage · testutil
