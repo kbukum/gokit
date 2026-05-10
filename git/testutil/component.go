@@ -159,6 +159,8 @@ func (c *Component) Restore(_ context.Context, snapshot interface{}) error {
 	if err := util.CopyDir(snapshotRoot, c.root); err != nil {
 		return fmt.Errorf("restore snapshot: %w", err)
 	}
+	// Clean up the snapshot directory now that the restore succeeded.
+	_ = util.RemoveAll(snapshotRoot)
 
 	repo, err := git.Open(c.root)
 	if err != nil {
