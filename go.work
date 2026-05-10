@@ -21,6 +21,8 @@ use (
 	./discovery/testutil
 	./embedding
 	./ai
+	./git
+	./git/testutil
 	./grpc
 	./httpclient
 	./inference

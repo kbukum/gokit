@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"github.com/kbukum/gokit/bench/metric"
 	"github.com/kbukum/gokit/bench/report"
 	"github.com/kbukum/gokit/bench/viz"
+	"github.com/kbukum/gokit/util"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -44,7 +44,7 @@ func createDataset(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), data); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,13 +66,13 @@ func createDataset(t *testing.T, dir string) {
 
 	for i, txt := range aiTexts {
 		name := samples[i].File
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(txt), 0o644); err != nil {
+		if err := util.WriteFile(filepath.Join(dir, name), []byte(txt)); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for i, txt := range humanTexts {
 		name := samples[5+i].File
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(txt), 0o644); err != nil {
+		if err := util.WriteFile(filepath.Join(dir, name), []byte(txt)); err != nil {
 			t.Fatal(err)
 		}
 	}

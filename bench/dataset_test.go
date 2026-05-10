@@ -3,7 +3,7 @@ package bench
 import (
 	"context"
 	"encoding/json"
-	"os"
+	"github.com/kbukum/gokit/util"
 	"path/filepath"
 	"testing"
 )
@@ -14,14 +14,14 @@ func writeManifest(t *testing.T, dir string, m DatasetManifest) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), data, 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), data); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func writeSampleFile(t *testing.T, dir, name, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, name), []byte(content)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -179,7 +179,7 @@ func TestDatasetLoaderCustomManifestFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wErr := os.WriteFile(filepath.Join(dir, "custom.json"), data, 0o644); wErr != nil {
+	if wErr := util.WriteFile(filepath.Join(dir, "custom.json"), data); wErr != nil {
 		t.Fatal(wErr)
 	}
 
@@ -210,7 +210,7 @@ func TestDatasetLoaderBadJSON(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte("not json"), 0o644); err != nil {
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), []byte("not json")); err != nil {
 		t.Fatal(err)
 	}
 
