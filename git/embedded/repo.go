@@ -23,7 +23,7 @@ type Backend struct {
 func Init(path string) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, giterr.RepoNotFound(path)
+		return nil, giterr.Internal(err)
 	}
 	repo, err := gogit.PlainInit(absPath, false)
 	if err != nil {
@@ -36,7 +36,7 @@ func Init(path string) (*Backend, error) {
 func InitBare(path string) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, giterr.RepoNotFound(path)
+		return nil, giterr.Internal(err)
 	}
 	repo, err := gogit.PlainInit(absPath, true)
 	if err != nil {
@@ -49,7 +49,7 @@ func InitBare(path string) (*Backend, error) {
 func Open(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, giterr.RepoNotFound(path)
+		return nil, giterr.Internal(err)
 	}
 
 	repo, err := gogit.PlainOpen(absPath)
@@ -69,7 +69,7 @@ func Open(path string, cfg *model.OpenOptions) (*Backend, error) {
 func Discover(path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, giterr.RepoNotFound(path)
+		return nil, giterr.Internal(err)
 	}
 
 	repo, err := gogit.PlainOpenWithOptions(absPath, &gogit.PlainOpenOptions{DetectDotGit: true})
@@ -89,7 +89,7 @@ func Discover(path string, cfg *model.OpenOptions) (*Backend, error) {
 func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, giterr.RepoNotFound(path)
+		return nil, giterr.Internal(err)
 	}
 
 	transport := transportFrom(cfg)

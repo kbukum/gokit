@@ -3,6 +3,7 @@ package embedded
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -83,7 +84,7 @@ func (b *Backend) ListTags() ([]model.Tag, error) {
 func (b *Backend) CreateBranch(name, target string) error {
 	refName := plumbing.NewBranchReferenceName(name)
 	if err := refName.Validate(); err != nil {
-		return giterr.Internal(err)
+		return giterr.InvalidArg("name", fmt.Sprintf("%s: %s", name, err.Error()))
 	}
 	if _, err := b.repo.Reference(refName, false); err == nil {
 		return giterr.AlreadyExists("branch", name)

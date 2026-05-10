@@ -9,7 +9,10 @@ import (
 )
 
 // CopyFile copies a single file from src to dst, preserving permissions and modification times.
-// Parent directories of dst are created as needed.
+// Both src and dst are resolved through symlinks (os.Stat / os.Open follow symlinks), so if
+// src is a symlink its target's content is copied; if dst is an existing symlink the link
+// target is overwritten. Use CopyDir to copy directory trees (symlinks inside are recreated
+// as symlinks, not followed). Parent directories of dst are created as needed.
 func CopyFile(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
