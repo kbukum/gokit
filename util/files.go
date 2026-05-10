@@ -171,9 +171,9 @@ func resolveExistingSymlinks(path string) (string, error) {
 		parent = dir
 
 		if _, err := os.Lstat(parent); err == nil {
-			resolvedParent, err := filepath.EvalSymlinks(parent)
-			if err != nil {
-				return "", err
+			resolvedParent, evalErr := filepath.EvalSymlinks(parent)
+			if evalErr != nil {
+				return "", evalErr
 			}
 			parts := append([]string{resolvedParent}, suffix...)
 			return filepath.Join(parts...), nil
