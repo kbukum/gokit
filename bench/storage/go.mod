@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/bench/storage
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/kbukum/gokit/bench v0.0.0

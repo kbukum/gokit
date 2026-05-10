@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+if [[ -n "${PYTHON:-}" ]]; then
+  python_bin="$PYTHON"
+elif command -v python3.13 >/dev/null 2>&1; then
+  python_bin="python3.13"
+else
+  python_bin="python3"
+fi
+
+require_python() {
+  "$python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 13) else "Python 3.13+ is required")'
+}
+
+list_domains() {
+  "$python_bin" -c 'import tomllib
+with open("domains.toml", "rb") as f:
+    data = tomllib.load(f)
+for name in sorted(data.get("domains", {})):
+    print(name)'
+}
+
+read_modules() {
+  local domain="$1"
+  "$python_bin" -c 'import sys, tomllib
+with open("domains.toml", "rb") as f:
+    data = tomllib.load(f)
+domains = data.get("domains", {})
+name = sys.argv[1]
+entry = domains.get(name)
+if entry is None:
+    print(f"Unknown domain: {name}", file=sys.stderr)
+    print("Available domains:", file=sys.stderr)
+    for item in sorted(domains):
+        print(f"  {item}", file=sys.stderr)
+    raise SystemExit(1)
+for module in entry["modules"]:
+    print(module)' "$domain"
+}
+
+resolve_module_path() {
+  local module="$1"
+  local candidate
+  for candidate in "$module" "${module//-//}"; do
+    if [[ -d "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  case "$module" in
+    logging)
+      if [[ -d logger ]]; then
+        printf '%s\n' "logger"
+        return 0
+      fi
+      ;;
+  esac
+
+  echo "Unable to resolve module path for '$module'" >&2
+  return 1
+}
+
+run_module_checks() {
+  local module="$1"
+  local module_path
+  module_path="$(resolve_module_path "$module")"
+
+  echo "==> Checking $module ($module_path)"
+  if [[ -f "$module_path/go.mod" ]]; then
+    (
+      cd "$module_path"
+      go build ./...
+      go vet ./...
+      go test -race -count=1 -shuffle=on ./...
+    )
+    return
+  fi
+
+  go build "./$module_path/..."
+  go vet "./$module_path/..."
+  go test -race -count=1 -shuffle=on "./$module_path/..."
+}
+
+run_domain() {
+  local domain="$1"
+  local modules_output
+  local -a modules=()
+  local module
+
+  modules_output="$(read_modules "$domain")"
+  if [[ -n "$modules_output" ]]; then
+    while IFS= read -r module; do
+      [[ -n "$module" ]] || continue
+      modules+=("$module")
+    done <<< "$modules_output"
+  fi
+
+  echo "==> Domain: $domain"
+  for module in "${modules[@]}"; do
+    run_module_checks "$module"
+  done
+}
+
+main() {
+  require_python
+
+  if [[ $# -ne 1 ]]; then
+    echo "Usage: $0 <domain|--list|--all>" >&2
+    exit 1
+  fi
+
+  case "$1" in
+    --list)
+      list_domains
+      ;;
+    --all)
+      local domains_output
+      local -a domains=()
+      local domain
+      domains_output="$(list_domains)"
+      if [[ -n "$domains_output" ]]; then
+        while IFS= read -r domain; do
+          [[ -n "$domain" ]] || continue
+          domains+=("$domain")
+        done <<< "$domains_output"
+      fi
+      for domain in "${domains[@]}"; do
+        run_domain "$domain"
+      done
+      ;;
+    *)
+      run_domain "$1"
+      ;;
+  esac
+}
+
+main "$@"

@@ -44,9 +44,8 @@ func (p *AdapterProvider) WithDefaults(fn func(req *CompletionRequest)) *Adapter
 }
 
 // Execute is the canonical RequestResponse method. Per D7 NATIVE EMBED,
-// llm.Provider embeds provider.Streamable[CompletionRequest, CompletionResponse, StreamEvent]
-// so the single-response method on the LLM provider IS Execute (the streaming
-// counterpart is Stream).
+// llm.Provider embeds provider.RequestResponse[CompletionRequest,
+// CompletionResponse], while streaming remains the named Stream extension.
 func (p *AdapterProvider) Execute(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	p.applyDefaults(&req)
 	ctx, span := observability.StartNamedSpan(ctx, tracerName, "llm.complete",

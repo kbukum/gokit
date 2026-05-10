@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/inference"
 )
@@ -29,8 +31,9 @@ type Config struct {
 
 // Provider is the live vLLM adapter wrapping vLLM's /v1/completions.
 type Provider struct {
-	cfg    Config
-	client *httpclient.Adapter
+	cfg       Config
+	client    *httpclient.Adapter
+	lifecycle ai.Lifecycle
 }
 
 // New constructs a Provider from cfg.
@@ -65,7 +68,16 @@ func Register(reg *inference.Registry) error { return reg.Register(Kind, Factory
 
 // Predict calls /v1/completions via the shared OAI-compat helper.
 func (p *Provider) Predict(ctx context.Context, req inference.PredictRequest) (inference.PredictResponse, error) {
-	return inference.OAICompatPredict(ctx, Kind, p.exec, req)
+	resp, err := inference.OAICompatPredict(ctx, Kind, p.exec, req)
+	if err == nil {
+		p.lifecycle.Touch()
+	}
+	return resp, err
+}
+
+// Execute satisfies provider.RequestResponse by forwarding to Predict.
+func (p *Provider) Execute(ctx context.Context, req inference.PredictRequest) (inference.PredictResponse, error) {
+	return p.Predict(ctx, req)
 }
 
 // Descriptor advertises the live vLLM adapter.
@@ -79,6 +91,39 @@ func (p *Provider) Descriptor() inference.Descriptor {
 	}
 }
 
+// Name returns the adapter name.
+func (p *Provider) Name() string { return Kind }
+
+// IsAvailable reports whether the underlying HTTP client is reachable.
+func (p *Provider) IsAvailable(ctx context.Context) bool { return p.client.IsAvailable(ctx) }
+
+// Start marks the adapter ready after constructor validation.
+func (p *Provider) Start(_ context.Context) error {
+	p.lifecycle.MarkReady()
+	return nil
+}
+
+// Stop closes idle HTTP connections.
+func (p *Provider) Stop(ctx context.Context) error {
+	p.lifecycle.MarkStopped()
+	return p.client.Close(ctx)
+}
+
+// Health reports whether the adapter is ready to serve requests.
+func (p *Provider) Health(ctx context.Context) component.Health {
+	if !p.lifecycle.Ready() {
+		return component.Health{Name: p.Name(), Status: component.StatusDegraded, Message: "not started"}
+	}
+	if !p.client.IsAvailable(ctx) {
+		return component.Health{Name: p.Name(), Status: component.StatusUnhealthy, Message: "client unavailable"}
+	}
+	msg := "ready"
+	if last := p.lifecycle.LastCall(); !last.IsZero() {
+		msg = "last_call=" + last.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return component.Health{Name: p.Name(), Status: component.StatusHealthy, Message: msg}
+}
+
 func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]byte, error) {
 	if method != http.MethodPost {
 		return nil, fmt.Errorf("vllm: unsupported method %s", method)
@@ -90,4 +135,7 @@ func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]b
 	return resp.Data, nil
 }
 
-var _ inference.Inference = (*Provider)(nil)
+var (
+	_ inference.Inference = (*Provider)(nil)
+	_ component.Component = (*Provider)(nil)
+)

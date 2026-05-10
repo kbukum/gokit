@@ -11,6 +11,7 @@ import (
 
 	"github.com/kbukum/gokit/ai/semconv"
 	"github.com/kbukum/gokit/authz"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/inference"
 	"github.com/kbukum/gokit/resilience"
@@ -185,7 +186,11 @@ func TestPredictValidationAndHealthError(t *testing.T) {
 	if _, err := provider.Predict(context.Background(), inference.PredictRequest{}); err == nil {
 		t.Fatal("expected missing model error")
 	}
-	if err := provider.Health(context.Background()); err == nil || !strings.Contains(err.Error(), "not ready") {
-		t.Fatalf("Health err = %v", err)
+	if err := provider.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	health := provider.Health(context.Background())
+	if health.Status != component.StatusUnhealthy || !strings.Contains(health.Message, "not ready") {
+		t.Fatalf("Health = %+v", health)
 	}
 }

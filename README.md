@@ -11,6 +11,25 @@
 
 > **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python). Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are evaluated for parity across all three.
 
+## Browse by Domain
+
+Modules are organized into domains for scoped development. See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
+
+| Domain | Focus | Quick check |
+|--------|-------|-------------|
+| core | Foundation types, config, logging | `make check-core` |
+| patterns | Component, provider, DI, hooks | `make check-patterns` |
+| crosscutting | Observability, resilience, security | `make check-crosscutting` |
+| composition | Bootstrap, pipeline, DAG, workers | `make check-composition` |
+| transport | Server, HTTP, gRPC, SSE | `make check-transport` |
+| auth | Authentication, authorization | `make check-auth` |
+| data | Database, cache, storage, messaging | `make check-data` |
+| ai | LLM, inference, agents, tools | `make check-ai` |
+| media | Media processing, transcription | `make check-media` |
+| infra | Workload, CLI, benchmarks, testing | `make check-infra` |
+
+CI still runs full-workspace validation; on pull requests the `changes` job also publishes an `affected` domain list from `./scripts/affected-domains.sh` so later workflow steps can consume the same domain mapping developers use locally with `make check-<domain>`.
+
 ## Highlights
 
 - **Multi-module layout** — light core (`github.com/kbukum/gokit`) + sub-modules (`gokit/server`, `gokit/database`, …) you opt into individually. No transitive heavy deps unless you ask.

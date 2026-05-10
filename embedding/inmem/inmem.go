@@ -46,6 +46,7 @@ func (p *Provider) Execute(ctx context.Context, req embedding.EmbedRequest) (emb
 		observability.WithSpanKind(observability.SpanKindInternal),
 		observability.WithSpanAttributes(
 			observability.StringAttribute(semconv.GenAISystem, "inmem"),
+			observability.StringAttribute(semconv.GenAIOperationName, semconv.OpEmbedding),
 			observability.StringAttribute(semconv.GenAIRequestModel, req.Model.Name),
 			observability.IntAttribute("embedding.input_count", len(req.Inputs)),
 		),

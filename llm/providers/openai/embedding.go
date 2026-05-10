@@ -11,6 +11,7 @@ import (
 	"github.com/kbukum/gokit/embedding"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/observability"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // EmbeddingProvider implements embedding.Provider for OpenAI-compatible APIs.
@@ -21,10 +22,20 @@ type EmbeddingProvider struct {
 	client    *httpclient.Adapter
 	config    Config
 	lifecycle ai.Lifecycle
+	policy    *resilience.Policy
+}
+
+type EmbeddingProviderOption func(*EmbeddingProvider)
+
+// WithPolicy wraps outbound embedding calls with an optional resilience policy.
+func WithPolicy(policy *resilience.Policy) EmbeddingProviderOption {
+	return func(p *EmbeddingProvider) {
+		p.policy = policy
+	}
 }
 
 // NewEmbeddingProvider creates an OpenAI embedding provider.
-func NewEmbeddingProvider(config Config) *EmbeddingProvider {
+func NewEmbeddingProvider(config Config, opts ...EmbeddingProviderOption) *EmbeddingProvider {
 	config.applyDefaults()
 
 	httpCfg := httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL}
@@ -35,7 +46,13 @@ func NewEmbeddingProvider(config Config) *EmbeddingProvider {
 	if err != nil {
 		client, _ = httpclient.New(httpclient.Config{Name: "openai-embedding", BaseURL: config.BaseURL})
 	}
-	return &EmbeddingProvider{client: client, config: config}
+	provider := &EmbeddingProvider{client: client, config: config}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(provider)
+		}
+	}
+	return provider
 }
 
 // Name returns the provider name.
@@ -50,6 +67,7 @@ func (p *EmbeddingProvider) Execute(ctx context.Context, req embedding.EmbedRequ
 		observability.WithSpanKind(observability.SpanKindClient),
 		observability.WithSpanAttributes(
 			observability.StringAttribute(semconv.GenAISystem, "openai"),
+			observability.StringAttribute(semconv.GenAIOperationName, semconv.OpEmbedding),
 			observability.StringAttribute(semconv.GenAIRequestModel, p.modelName(req.Model)),
 			observability.IntAttribute("embedding.input_count", len(req.Inputs)),
 		),
@@ -129,7 +147,9 @@ func (p *EmbeddingProvider) embedOne(ctx context.Context, req embedding.EmbedReq
 		reqBody[key] = value
 	}
 
-	resp, err := httpclient.Post[json.RawMessage](p.client, ctx, "/embeddings", reqBody)
+	resp, err := resilience.Execute(ctx, p.policy, func(callCtx context.Context) (*httpclient.TypedResponse[json.RawMessage], error) {
+		return httpclient.Post[json.RawMessage](p.client, callCtx, "/embeddings", reqBody)
+	})
 	if err != nil {
 		return embedding.EmbedResponse{}, fmt.Errorf("openai: embedding request failed: %w", err)
 	}

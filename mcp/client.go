@@ -7,6 +7,8 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/schema"
 	"github.com/kbukum/gokit/tool"
 )
@@ -101,10 +103,25 @@ func (r *remoteCallable) Validate(input json.RawMessage) schema.ValidationResult
 }
 
 func (r *remoteCallable) Call(ctx *tool.Context, input json.RawMessage) (*tool.Result, error) {
+	spanCtx, span := observability.StartNamedSpan(ctx.Context, "github.com/kbukum/gokit/mcp", "mcp.request",
+		observability.WithSpanKind(observability.SpanKindClient),
+		observability.WithSpanAttributes(
+			observability.StringAttribute(semconv.GenAIOperationName, semconv.OpMCPRequest),
+			observability.StringAttribute(semconv.GenAIToolName, r.name),
+			observability.StringAttribute("mcp.method", "tools/call"),
+			observability.StringAttribute("mcp.tool_name", r.mcpName),
+		),
+	)
+	defer span.End()
+	innerCtx := *ctx
+	innerCtx.Context = spanCtx
+	ctx = &innerCtx
+
 	// Build arguments from raw JSON
 	var args map[string]any
 	if len(input) > 0 {
 		if err := json.Unmarshal(input, &args); err != nil {
+			span.RecordError(err)
 			return nil, fmt.Errorf("mcp call %q: unmarshal args: %w", r.name, err)
 		}
 	}
@@ -116,6 +133,7 @@ func (r *remoteCallable) Call(ctx *tool.Context, input json.RawMessage) (*tool.R
 
 	mcpResult, err := r.session.CallTool(ctx, params)
 	if err != nil {
+		span.RecordError(err)
 		return nil, fmt.Errorf("mcp call %q: %w", r.name, err)
 	}
 

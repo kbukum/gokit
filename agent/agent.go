@@ -16,6 +16,7 @@ import (
 	"github.com/kbukum/gokit/hook"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/observability"
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/tool"
 )
 
@@ -47,6 +48,7 @@ type Config struct {
 	MaxToolCalls         int
 	ToolConcurrency      int
 	ToolTimeout          time.Duration
+	Policy               *resilience.Policy
 	MemoryPolicy         MemoryPolicy
 	Commands             *CommandRegistry
 	Memory               Memory
@@ -147,6 +149,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 		observability.WithSpanKind(observability.SpanKindInternal),
 		observability.WithSpanAttributes(
 			observability.StringAttribute(semconv.GenAISystem, "agent"),
+			observability.StringAttribute(semconv.GenAIOperationName, semconv.OpAgentRun),
 			observability.StringAttribute(semconv.GenAIRequestModel, a.config.Model),
 		),
 	)
@@ -173,6 +176,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 		turnCtx, turnSpan := observability.StartNamedSpan(ctx, tracerName, "agent.turn",
 			observability.WithSpanKind(observability.SpanKindInternal),
 			observability.WithSpanAttributes(
+				observability.StringAttribute(semconv.GenAIOperationName, semconv.OpAgentTurn),
 				observability.IntAttribute("agent.turn", turn),
 			),
 		)
@@ -332,14 +336,16 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 	if !ok {
 		return nil, fmt.Errorf("tool %q not found", tc.Name)
 	}
-	toolCtx := tool.NewContext(ctx)
-	toolCtx.ToolUseID = tc.ID
-	if a.config.ToolTimeout > 0 {
-		var cancel context.CancelFunc
-		toolCtx, cancel = toolCtx.WithTimeout(a.config.ToolTimeout)
-		defer cancel()
-	}
-	result, err := callable.Call(toolCtx, input)
+	result, err := resilience.Execute(ctx, a.toolPolicy(tc.Name), func(callCtx context.Context) (*tool.Result, error) {
+		toolCtx := tool.NewContext(callCtx)
+		toolCtx.ToolUseID = tc.ID
+		if a.config.ToolTimeout > 0 {
+			var cancel context.CancelFunc
+			toolCtx, cancel = toolCtx.WithTimeout(a.config.ToolTimeout)
+			defer cancel()
+		}
+		return callable.Call(toolCtx, input)
+	})
 	if err == nil && result != nil && a.config.ToolFormatter != nil {
 		if formatted, fmtErr := a.config.ToolFormatter.Format(tc.Name, result); fmtErr == nil {
 			result.Content = formatted
@@ -347,6 +353,18 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 	}
 	_ = a.emitHookErr(ctx, ToolResultEvent{ToolUseID: tc.ID, Name: tc.Name, Input: input, Result: result, Err: err})
 	return result, err
+}
+
+func (a *Agent) toolPolicy(name string) *resilience.Policy {
+	if a.config.Tools != nil {
+		switch policy := a.config.Tools.PolicyFor(name).(type) {
+		case *resilience.Policy:
+			return policy
+		case resilience.Policy:
+			return &policy
+		}
+	}
+	return a.config.Policy
 }
 
 func (a *Agent) executeTools(ctx context.Context, calls []ai.ToolUseBlock) []chat.ToolResultMessage {

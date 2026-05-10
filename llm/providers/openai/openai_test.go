@@ -6,13 +6,16 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/ai/chat"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/embedding"
 	"github.com/kbukum/gokit/llm"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // ---------------------------------------------------------------------------
@@ -394,6 +397,42 @@ func TestEmbeddingProvider_ServerError(t *testing.T) {
 	_, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "test"}}})
 	if err == nil {
 		t.Fatal("expected error for 500 response")
+	}
+}
+
+func TestEmbeddingProvider_UsesResiliencePolicy(t *testing.T) {
+	var attempts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"retry me"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data":  []map[string]any{{"embedding": []float32{0.1, 0.2, 0.3}, "index": 0}},
+			"usage": map[string]any{"prompt_tokens": 2, "total_tokens": 2},
+		})
+	}))
+	defer srv.Close()
+
+	policy := resilience.NewPolicy().WithRetry(resilience.RetryConfig{
+		MaxAttempts:    2,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		Strategy:       resilience.ConstantBackoff,
+		Jitter:         0,
+	})
+	p := NewEmbeddingProvider(Config{BaseURL: srv.URL}, WithPolicy(policy))
+	resp, err := p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Text{Text: "retry"}}})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("attempts=%d, want 2", attempts.Load())
+	}
+	if len(resp.Embeddings) != 1 {
+		t.Fatalf("embeddings=%+v", resp.Embeddings)
 	}
 }
 

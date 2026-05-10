@@ -11,6 +11,14 @@ import (
 
 type fakeRuntime struct{}
 
+func (fakeRuntime) Name() string { return "fake" }
+
+func (fakeRuntime) IsAvailable(context.Context) bool { return true }
+
+func (fakeRuntime) Execute(context.Context, inference.PredictRequest) (inference.PredictResponse, error) {
+	return inference.PredictResponse{}, nil
+}
+
 func (fakeRuntime) Predict(context.Context, inference.PredictRequest) (inference.PredictResponse, error) {
 	return inference.PredictResponse{}, nil
 }

@@ -21,6 +21,7 @@ const (
 	OpChat             = "chat"
 	OpTextCompletion   = "text_completion"
 	OpEmbedding        = "embedding"
+	OpAgentRun         = "agent.run"
 	OpAgentTurn        = "agent.turn"
 	OpLLMCall          = "llm.call"
 	OpToolCall         = "tool.call"

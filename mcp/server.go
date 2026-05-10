@@ -84,6 +84,7 @@ func makeToolHandler(toolName, mcpName string, registry *tool.Registry, cfg *ser
 		ctx, span := observability.StartNamedSpan(ctx, "github.com/kbukum/gokit/mcp", "mcp.request",
 			observability.WithSpanKind(observability.SpanKindServer),
 			observability.WithSpanAttributes(
+				observability.StringAttribute(semconv.GenAIOperationName, semconv.OpMCPRequest),
 				observability.StringAttribute("mcp.method", "tools/call"),
 				observability.StringAttribute(semconv.GenAIToolName, toolName),
 				observability.StringAttribute("mcp.tool_name", mcpName),

@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/database
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
