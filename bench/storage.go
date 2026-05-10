@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/kbukum/gokit/util"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/kbukum/gokit/util"
 )
 
 // RunStorage persists benchmark results.
