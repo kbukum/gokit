@@ -3,9 +3,10 @@ package bench
 import (
 	"context"
 	"encoding/json"
-	"github.com/kbukum/gokit/util"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func setupTestDataset(t *testing.T) *DatasetLoader[string] {
