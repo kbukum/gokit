@@ -10,9 +10,8 @@ import (
 
 // Provider is the canonical LLM-provider contract.
 //
-// Per locked decision D7 (NATIVE EMBED), Provider natively embeds
-// [provider.RequestResponse] so any Provider drops into dag / pipeline / chain /
-// worker consumers without a bridge.
+// Provider natively embeds [provider.RequestResponse] so any Provider drops
+// into dag / pipeline / chain / worker consumers without a bridge.
 //
 // Streaming remains a first-class extension via the named Stream method. We do
 // not embed [provider.Stream] because its Execute method conflicts with

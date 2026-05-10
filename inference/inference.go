@@ -16,9 +16,8 @@ import (
 // Inference is NOT chat completion. Conversational LLM surface lives in
 // the llm module; inference sits one layer below as the serving runtime.
 //
-// Per locked decision D7 (NATIVE EMBED), Inference natively embeds
-// [provider.RequestResponse] so serving adapters plug into canonical provider
-// consumers without a shim.
+// Inference natively embeds [provider.RequestResponse] so serving adapters
+// plug into canonical provider consumers (pipeline, dag, chain) without a shim.
 type Inference interface {
 	provider.RequestResponse[PredictRequest, PredictResponse]
 	Predict(ctx context.Context, req PredictRequest) (PredictResponse, error)
