@@ -3,9 +3,10 @@ package dag
 import (
 	"context"
 	"fmt"
-	"github.com/kbukum/gokit/util"
 	"path/filepath"
 	"testing"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func TestLoadPipeline_FromFile(t *testing.T) {
