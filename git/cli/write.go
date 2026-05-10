@@ -51,7 +51,11 @@ func (b *Backend) CherryPickAbort() error {
 }
 
 func (b *Backend) Reset(target string, mode model.ResetMode, paths ...string) error {
-	args := []string{"reset", "--" + mode.String(), target}
+	modeStr := mode.String()
+	if modeStr == "unknown" {
+		return giterr.InvalidArg("mode", fmt.Sprintf("invalid reset mode: %v", mode))
+	}
+	args := []string{"reset", "--" + modeStr, target}
 	if len(paths) > 0 {
 		args = append(args, "--")
 		args = append(args, paths...)

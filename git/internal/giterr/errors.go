@@ -21,23 +21,32 @@ func DetachedHead() *errors.AppError { return errors.InvalidInput("HEAD", "detac
 func AlreadyExists(kind, name string) *errors.AppError {
 	return errors.Conflict(fmt.Sprintf("%s already exists: %s", kind, name))
 }
+
 func InvalidLineRange(start, end int) *errors.AppError {
 	return errors.InvalidInput("lineRange", fmt.Sprintf("invalid line range: start=%d end=%d", start, end))
 }
+
 func InvalidPath(path string) *errors.AppError {
 	return errors.InvalidInput("path", "invalid path: "+path)
 }
+
 func InvalidConfigKey(key string) *errors.AppError {
 	return errors.InvalidInput("key", "invalid config key: "+key)
 }
+
+func InvalidArg(field, detail string) *errors.AppError {
+	return errors.InvalidInput(field, detail)
+}
+
 func SigningNotSupported() *errors.AppError {
 	return errors.InvalidInput("sign", "commit signing is not supported by the go-git backend")
 }
 func Network(cause error) *errors.AppError  { return errors.ExternalServiceError("git", cause) }
 func Internal(cause error) *errors.AppError { return errors.Internal(cause) }
 func CLINotImplemented() *errors.AppError {
-	return errors.InvalidInput("backend", "git CLI backend is not implemented")
+	return errors.InvalidInput("backend", "operation not supported by the embedded backend; use CLI backend instead")
 }
+
 func InvalidTransport(kind string) *errors.AppError {
 	return errors.InvalidInput("transport", "unsupported transport auth: "+kind)
 }

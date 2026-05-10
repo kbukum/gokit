@@ -20,7 +20,6 @@ func TestStage(t *testing.T) {
 		{name: "multiple files", setup: func(t *testing.T, dir string) { makeDirty(t, dir, "README.md"); makeUntracked(t, dir, "notes.txt") }, paths: []string{"README.md", "notes.txt"}, wantPaths: []string{"README.md", "notes.txt"}},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := initTestRepo(t)
@@ -53,7 +52,6 @@ func TestUnstage(t *testing.T) {
 		{name: "new file", setup: func(t *testing.T, dir string) { makeUntracked(t, dir, "notes.txt") }, path: "notes.txt", wantState: git.Untracked},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := initTestRepo(t)
@@ -100,7 +98,6 @@ func TestStagedEntries(t *testing.T) {
 		}, stage: []string{"z-last.txt", "a-first.txt"}, wantPaths: []string{"a-first.txt", "z-last.txt"}},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := initTestRepo(t)
@@ -135,7 +132,6 @@ func TestCommit(t *testing.T) {
 		{name: "with author option", message: "authored commit", setup: func(t *testing.T, dir string) { makeUntracked(t, dir, "author.txt") }, opts: []git.CommitOption{git.WithCommitAuthor(git.Signature{Name: "Custom Author", Email: "author@example.com", When: time.Date(2024, time.January, 2, 3, 4, 5, 0, time.FixedZone("+0200", 2*60*60))})}, wantAuthor: "Custom Author <author@example.com>", wantAuthorTS: "2024-01-02T03:04:05+02:00"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dir := initTestRepo(t)

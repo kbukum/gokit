@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	rawconfig "github.com/go-git/go-git/v5/plumbing/format/config"
 	"github.com/go-git/go-git/v5/plumbing/storer"
+
 	giterr "github.com/kbukum/gokit/git/internal/giterr"
 	"github.com/kbukum/gokit/git/internal/model"
 )
@@ -39,7 +40,7 @@ func (b *Backend) ListBranches(filter model.BranchFilter) ([]model.Branch, error
 		branches = append(branches, branch)
 		return nil
 	})
-	if err != nil && err != storer.ErrStop {
+	if err != nil && !errors.Is(err, storer.ErrStop) {
 		return nil, giterr.Internal(err)
 	}
 	sort.Slice(branches, func(i, j int) bool { return branches[i].Name < branches[j].Name })
@@ -57,7 +58,7 @@ func (b *Backend) ListTags() ([]model.Tag, error) {
 	tags := make([]model.Tag, 0)
 	err = iter.ForEach(func(ref *plumbing.Reference) error {
 		tag := model.Tag{Name: ref.Name().Short(), Target: oidFromHash(ref.Hash())}
-		obj, err := b.repo.TagObject(ref.Hash())
+		obj, err := b.repo.TagObject(ref.Hash()) //nolint:govet // inner err shadows outer intentionally
 		switch {
 		case err == nil:
 			tagger := signatureFromObject(obj.Tagger)
@@ -71,7 +72,7 @@ func (b *Backend) ListTags() ([]model.Tag, error) {
 		tags = append(tags, tag)
 		return nil
 	})
-	if err != nil && err != storer.ErrStop {
+	if err != nil && !errors.Is(err, storer.ErrStop) {
 		return nil, giterr.Internal(err)
 	}
 	sort.Slice(tags, func(i, j int) bool { return tags[i].Name < tags[j].Name })

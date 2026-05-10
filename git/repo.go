@@ -123,9 +123,11 @@ func (r *Repo) Status() ([]StatusEntry, error)               { return r.embedded
 func (r *Repo) TreeHash(revision, path string) (TreeHash, error) {
 	return r.embedded.TreeHash(revision, path)
 }
+
 func (r *Repo) FileAt(revision, path string) ([]byte, error) {
 	return r.embedded.FileAt(revision, path)
 }
+
 func (r *Repo) ListEntries(revision, path string) ([]TreeEntry, error) {
 	return r.embedded.ListEntries(revision, path)
 }
@@ -141,6 +143,7 @@ func (r *Repo) StagedEntries() ([]StatusEntry, error) { return r.embedded.Staged
 func (r *Repo) Commit(message string, opts ...CommitOption) (Oid, error) {
 	return r.embedded.Commit(message, opts...)
 }
+
 func (r *Repo) ListBranches(filter BranchFilter) ([]Branch, error) {
 	return r.embedded.ListBranches(filter)
 }
@@ -179,6 +182,7 @@ func (r *Repo) CherryPickAbort() error           { return r.cli.CherryPickAbort(
 func (r *Repo) Reset(target string, mode ResetMode, paths ...string) error {
 	return r.cli.Reset(target, mode, paths...)
 }
+
 func (r *Repo) Checkout(target string, paths ...string) error {
 	return r.cli.Checkout(target, paths...)
 }

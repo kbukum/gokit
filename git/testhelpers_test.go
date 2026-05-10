@@ -50,6 +50,7 @@ func checkoutBranch(t *testing.T, repoDir, name string) {
 	t.Helper()
 	runGit(t, repoDir, "checkout", name)
 }
+
 func checkoutNewBranch(t *testing.T, repoDir, name string) {
 	t.Helper()
 	runGit(t, repoDir, "checkout", "-b", name)
@@ -60,8 +61,12 @@ func createRemote(t *testing.T, repoDir string) string {
 	t.Helper()
 	remoteDir := t.TempDir()
 	runGit(t, remoteDir, "init", "--bare")
+	// Align remote HEAD with the source branch so go-git can resolve it during Clone.
+	// Use --git-dir from the source repo dir to avoid safe.bareRepository restrictions.
+	branch := stringTrimSpace(runGit(t, repoDir, "rev-parse", "--abbrev-ref", "HEAD"))
+	runGit(t, repoDir, "--git-dir="+remoteDir, "symbolic-ref", "HEAD", "refs/heads/"+branch)
 	runGit(t, repoDir, "remote", "add", "origin", remoteDir)
-	runGit(t, repoDir, "push", "-u", "origin", "HEAD:refs/heads/main")
+	runGit(t, repoDir, "push", "-u", "origin", "HEAD:refs/heads/"+branch)
 	runGit(t, repoDir, "fetch", "origin")
 	return remoteDir
 }
@@ -70,6 +75,7 @@ func makeDirty(t *testing.T, repoDir, path string) {
 	t.Helper()
 	writeFile(t, repoDir, path, "dirty content\n")
 }
+
 func makeUntracked(t *testing.T, repoDir, path string) {
 	t.Helper()
 	writeFile(t, repoDir, path, "untracked\n")
@@ -105,16 +111,17 @@ func revParse(t *testing.T, dir, rev string) string {
 	t.Helper()
 	return stringTrimSpace(runGit(t, dir, "rev-parse", rev))
 }
+
 func currentBranch(t *testing.T, dir string) string {
 	t.Helper()
 	return stringTrimSpace(runGit(t, dir, "branch", "--show-current"))
 }
 
 func stringTrimSpace(s string) string {
-	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
+	for s != "" && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
 		s = s[:len(s)-1]
 	}
-	for len(s) > 0 && (s[0] == '\n' || s[0] == '\r' || s[0] == ' ' || s[0] == '\t') {
+	for s != "" && (s[0] == '\n' || s[0] == '\r' || s[0] == ' ' || s[0] == '\t') {
 		s = s[1:]
 	}
 	return s

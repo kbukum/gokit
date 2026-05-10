@@ -2,28 +2,30 @@ package git
 
 import "github.com/kbukum/gokit/git/internal/model"
 
-type Oid = model.Oid
-type TreeHash = model.TreeHash
-type Reference = model.Reference
-type Signature = model.Signature
-type Commit = model.Commit
-type FileStatus = model.FileStatus
-type DiffEntry = model.DiffEntry
-type DiffStats = model.DiffStats
-type EntryState = model.EntryState
-type StatusEntry = model.StatusEntry
-type EntryKind = model.EntryKind
-type TreeEntry = model.TreeEntry
-type Branch = model.Branch
-type Tag = model.Tag
-type Remote = model.Remote
-type BlameLine = model.BlameLine
-type BranchFilter = model.BranchFilter
-type GrepMatch = model.GrepMatch
-type ResetMode = model.ResetMode
-type StashEntry = model.StashEntry
-type MergeResult = model.MergeResult
-type RebaseResult = model.RebaseResult
+type (
+	Oid          = model.Oid
+	TreeHash     = model.TreeHash
+	Reference    = model.Reference
+	Signature    = model.Signature
+	Commit       = model.Commit
+	FileStatus   = model.FileStatus
+	DiffEntry    = model.DiffEntry
+	DiffStats    = model.DiffStats
+	EntryState   = model.EntryState
+	StatusEntry  = model.StatusEntry
+	EntryKind    = model.EntryKind
+	TreeEntry    = model.TreeEntry
+	Branch       = model.Branch
+	Tag          = model.Tag
+	Remote       = model.Remote
+	BlameLine    = model.BlameLine
+	BranchFilter = model.BranchFilter
+	GrepMatch    = model.GrepMatch
+	ResetMode    = model.ResetMode
+	StashEntry   = model.StashEntry
+	MergeResult  = model.MergeResult
+	RebaseResult = model.RebaseResult
+)
 
 const (
 	FileAdded       = model.FileAdded

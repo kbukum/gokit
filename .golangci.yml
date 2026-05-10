@@ -57,6 +57,11 @@ linters:
           - unparam
           - unused
           - contextcheck
+      # govet/shadow in test files: the `if err := ...; err != nil` pattern
+      # is idiomatic Go in table-driven tests and does not risk real bugs.
+      - path: "_test\\.go"
+        linters: [govet]
+        text: "shadow"
       # bootstrap/summary.go intentionally calls fmt.Fprintf on a configurable
       # writer; errors are surfaced through the writer's contract, not
       # propagated. Was: whole-file errcheck exclusion (F-079 #81); now
@@ -99,6 +104,7 @@ linters:
         - G404  # math/rand acceptable for non-security paths (jitter, IDs).
         - G306  # File permissions — flagged at specific call sites where 0644 is intentional.
         - G304  # File paths from variables — required for storage abstraction.
+        - G122  # TOCTOU in WalkDir — acceptable for developer tooling; not processing untrusted input.
         # G402 (TLS InsecureSkipVerify) is intentionally NOT excluded.
         # Per-site //nolint:gosec comments document the opt-in semantics at
         # security/tls.go and discovery/consul/consul.go.

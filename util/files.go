@@ -17,15 +17,15 @@ func CopyFile(src, dst string) error {
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("source is not a regular file: %s", src)
 	}
-	if err := EnsureDir(filepath.Dir(dst)); err != nil {
-		return err
+	if ensureErr := EnsureDir(filepath.Dir(dst)); ensureErr != nil {
+		return ensureErr
 	}
 
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 
 	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
 	if err != nil {
@@ -119,7 +119,7 @@ func CopyDir(src, dst string) error {
 
 // EnsureDir creates a directory and all parents if they don't exist.
 func EnsureDir(path string) error {
-	return os.MkdirAll(path, 0o755)
+	return os.MkdirAll(path, 0o750)
 }
 
 // FileExists reports whether path exists and is a regular file.

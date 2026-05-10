@@ -209,7 +209,6 @@ func TestResetModes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -378,7 +377,8 @@ func currentBranch(t *testing.T, repoDir string) string {
 func statusShort(t *testing.T, repoDir string, paths ...string) string {
 	t.Helper()
 
-	args := []string{"status", "--short"}
+	args := make([]string, 0, 2+len(paths))
+	args = append(args, "status", "--short")
 	args = append(args, paths...)
 	return strings.TrimRight(runGit(t, repoDir, args...), "\r\n")
 }

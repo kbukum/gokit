@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -135,7 +136,7 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile(dst) failed: %v", err)
 	}
-	if string(data) != string(content) {
+	if !bytes.Equal(data, content) {
 		t.Fatalf("copied content = %q, want %q", string(data), string(content))
 	}
 

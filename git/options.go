@@ -2,33 +2,35 @@ package git
 
 import "github.com/kbukum/gokit/git/internal/model"
 
-type OpenOptions = model.OpenOptions
-type Option = model.Option
-type DiffOptions = model.DiffOptions
-type DiffOption = model.DiffOption
-type LogOptions = model.LogOptions
-type BlameOptions = model.BlameOptions
-type BlameOption = model.BlameOption
-type CommitOptions = model.CommitOptions
-type CommitOption = model.CommitOption
-type FetchOptions = model.FetchOptions
-type FetchOption = model.FetchOption
-type PushOptions = model.PushOptions
-type PushOption = model.PushOption
-type DescribeOptions = model.DescribeOptions
-type DescribeOption = model.DescribeOption
-type GrepOptions = model.GrepOptions
-type GrepOption = model.GrepOption
-type MergeOptions = model.MergeOptions
-type MergeOption = model.MergeOption
-type RebaseOptions = model.RebaseOptions
-type RebaseOption = model.RebaseOption
-type CherryPickOptions = model.CherryPickOptions
-type CherryPickOption = model.CherryPickOption
-type CheckoutOptions = model.CheckoutOptions
-type CheckoutOption = model.CheckoutOption
-type CleanOptions = model.CleanOptions
-type CleanOption = model.CleanOption
+type (
+	OpenOptions       = model.OpenOptions
+	Option            = model.Option
+	DiffOptions       = model.DiffOptions
+	DiffOption        = model.DiffOption
+	LogOptions        = model.LogOptions
+	BlameOptions      = model.BlameOptions
+	BlameOption       = model.BlameOption
+	CommitOptions     = model.CommitOptions
+	CommitOption      = model.CommitOption
+	FetchOptions      = model.FetchOptions
+	FetchOption       = model.FetchOption
+	PushOptions       = model.PushOptions
+	PushOption        = model.PushOption
+	DescribeOptions   = model.DescribeOptions
+	DescribeOption    = model.DescribeOption
+	GrepOptions       = model.GrepOptions
+	GrepOption        = model.GrepOption
+	MergeOptions      = model.MergeOptions
+	MergeOption       = model.MergeOption
+	RebaseOptions     = model.RebaseOptions
+	RebaseOption      = model.RebaseOption
+	CherryPickOptions = model.CherryPickOptions
+	CherryPickOption  = model.CherryPickOption
+	CheckoutOptions   = model.CheckoutOptions
+	CheckoutOption    = model.CheckoutOption
+	CleanOptions      = model.CleanOptions
+	CleanOption       = model.CleanOption
+)
 
 var (
 	WithPreferCLI                 = model.WithPreferCLI

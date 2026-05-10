@@ -388,16 +388,16 @@ type CommitOption func(*CommitOptions)
 // WithCommitAuthor sets the author signature for a commit.
 func WithCommitAuthor(sig Signature) CommitOption {
 	return func(opts *CommitOptions) {
-		copy := sig
-		opts.Author = &copy
+		copySig := sig
+		opts.Author = &copySig
 	}
 }
 
 // WithCommitCommitter sets the committer signature for a commit.
 func WithCommitCommitter(sig Signature) CommitOption {
 	return func(opts *CommitOptions) {
-		copy := sig
-		opts.Committer = &copy
+		copySig := sig
+		opts.Committer = &copySig
 	}
 }
 

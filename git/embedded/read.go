@@ -1,8 +1,9 @@
 package embedded
 
 import (
+	"errors"
 	"fmt"
-	"path"
+	stdpath "path"
 	"sort"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
+
 	giterr "github.com/kbukum/gokit/git/internal/giterr"
 	"github.com/kbukum/gokit/git/internal/model"
 )
@@ -169,7 +171,7 @@ func (b *Backend) Log(opts model.LogOptions) ([]model.Commit, error) {
 		}
 		return nil
 	})
-	if err != nil && err != storer.ErrStop {
+	if err != nil && !errors.Is(err, storer.ErrStop) {
 		return nil, giterr.Internal(err)
 	}
 	return commits, nil
@@ -232,7 +234,7 @@ func (b *Backend) Blame(revision, path string, opts ...model.BlameOption) ([]mod
 	if err != nil {
 		return nil, err
 	}
-	if _, err := commit.File(path); err != nil {
+	if _, fileErr := commit.File(path); fileErr != nil {
 		return nil, giterr.RefNotFound(fmt.Sprintf("%s:%s", revision, path))
 	}
 
@@ -383,7 +385,7 @@ func signatureFromObject(sig object.Signature) model.Signature {
 }
 
 func normalizeGitPath(name string) string {
-	clean := path.Clean(strings.TrimSpace(name))
+	clean := stdpath.Clean(strings.TrimSpace(name))
 	switch clean {
 	case "", ".", "/":
 		return ""
@@ -404,12 +406,12 @@ func matchesAuthorFilter(commit *object.Commit, filter string) bool {
 		strings.Contains(strings.ToLower(commit.Committer.Email), filter)
 }
 
-func blameRange(total int, opts model.BlameOptions) (int, int, error) {
-	start := 1
+func blameRange(total int, opts model.BlameOptions) (start, end int, err error) {
+	start = 1
 	if opts.StartLine > 0 {
 		start = opts.StartLine
 	}
-	end := total
+	end = total
 	if opts.EndLine > 0 {
 		end = opts.EndLine
 	}

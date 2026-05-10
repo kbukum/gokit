@@ -23,7 +23,7 @@ func (b *Backend) Fsck() error {
 }
 
 func (b *Backend) Clean(opts ...model.CleanOption) ([]string, error) {
-	cfg := &model.CleanOptions{Force: true}
+	cfg := &model.CleanOptions{Force: false}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(cfg)
