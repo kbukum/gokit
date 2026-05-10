@@ -252,6 +252,9 @@ func TestCopyDirRejectsDestinationInsideSourceViaSymlink(t *testing.T) {
 
 	linkRoot := filepath.Join(root, "link")
 	if err := os.Symlink(src, linkRoot); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("Symlink requires elevated privileges on Windows: %v", err)
+		}
 		t.Fatalf("Symlink() failed: %v", err)
 	}
 
