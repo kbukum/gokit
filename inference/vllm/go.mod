@@ -2,9 +2,11 @@ module github.com/kbukum/gokit/inference/vllm
 
 go 1.26.0
 
-toolchain go1.26.2
+toolchain go1.26.3
 
 require (
+	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit/ai v0.2.0
 	github.com/kbukum/gokit/httpclient v0.2.0
 	github.com/kbukum/gokit/inference v0.2.0
 )
@@ -17,8 +19,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
-	github.com/kbukum/gokit v0.2.0 // indirect
-	github.com/kbukum/gokit/ai v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

@@ -9,6 +9,7 @@ import (
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
@@ -22,6 +23,7 @@ type Registry struct {
 	evaluator  SensitivityEvaluator
 	approval   HumanApproval
 	toolPolicy map[string]any
+	lifecycle  ai.Lifecycle
 }
 
 // Authorizer optionally gates tool calls before sensitivity evaluation. It is
@@ -95,6 +97,32 @@ func (r *Registry) PolicyFor(name string) any {
 	return r.toolPolicy[name]
 }
 
+// Name returns the registry component name.
+func (r *Registry) Name() string { return "tool-registry" }
+
+// Start marks the registry ready for tool lookup and invocation.
+func (r *Registry) Start(_ context.Context) error {
+	r.lifecycle.MarkReady()
+	return nil
+}
+
+// Stop marks the registry stopped. Registered tools are caller-owned.
+func (r *Registry) Stop(_ context.Context) error {
+	r.lifecycle.MarkStopped()
+	return nil
+}
+
+// Health reports whether the registry is ready to serve tool calls.
+func (r *Registry) Health(_ context.Context) component.Health {
+	if !r.lifecycle.Ready() {
+		return component.Health{Name: r.Name(), Status: component.StatusDegraded, Message: "not started"}
+	}
+	r.mu.RLock()
+	count := r.inner.Len()
+	r.mu.RUnlock()
+	return component.Health{Name: r.Name(), Status: component.StatusHealthy, Message: fmt.Sprintf("tools=%d", count)}
+}
+
 // Register adds a tool to the registry.
 // Returns an error if a tool with the same name already exists.
 func (r *Registry) Register(t Callable) error {
@@ -142,6 +170,7 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 	spanCtx, span := observability.StartNamedSpan(ctx.Context, "github.com/kbukum/gokit/tool", "tool.call",
 		observability.WithSpanKind(observability.SpanKindInternal),
 		observability.WithSpanAttributes(
+			observability.StringAttribute(semconv.GenAIOperationName, semconv.OpToolCall),
 			observability.StringAttribute(semconv.GenAIToolName, name),
 			observability.StringAttribute("tool.use_id", ctx.ToolUseID),
 		),
@@ -221,6 +250,8 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 	res, err := t.Call(ctx, input)
 	if err != nil {
 		span.RecordError(err)
+	} else {
+		r.lifecycle.Touch()
 	}
 	return res, err
 }

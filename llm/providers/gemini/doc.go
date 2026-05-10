@@ -13,6 +13,6 @@
 //	    Model:  "gemini-2.0-flash",
 //	})
 //
-// The Gemini API uses API key authentication via query parameter (?key=API_KEY),
+// The Gemini API uses API key authentication via the x-goog-api-key header,
 // which is handled automatically by [NewAdapter].
 package gemini

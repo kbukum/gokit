@@ -1,5 +1,6 @@
-.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected clean help \
-       tag tag-push tag-force list-tags ci ci-test ci-lint ensure-act
+.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected \
+       check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
+       check-media check-infra clean help tag tag-push tag-force list-tags ci ci-test ci-lint ensure-act
 
 GOMOD := ./gomod.sh
 
@@ -126,6 +127,46 @@ test-affected:
 ## Run all checks (build + vet + test) — supports M=<module>
 check: build vet test
 
+## Check only core domain modules
+check-core:
+	@./scripts/check-domain.sh core
+
+## Check only patterns domain modules
+check-patterns:
+	@./scripts/check-domain.sh patterns
+
+## Check only crosscutting domain modules
+check-crosscutting:
+	@./scripts/check-domain.sh crosscutting
+
+## Check only composition domain modules
+check-composition:
+	@./scripts/check-domain.sh composition
+
+## Check only transport domain modules
+check-transport:
+	@./scripts/check-domain.sh transport
+
+## Check only auth domain modules
+check-auth:
+	@./scripts/check-domain.sh auth
+
+## Check only data domain modules
+check-data:
+	@./scripts/check-domain.sh data
+
+## Check only ai domain modules
+check-ai:
+	@./scripts/check-domain.sh ai
+
+## Check only media domain modules
+check-media:
+	@./scripts/check-domain.sh media
+
+## Check only infra domain modules
+check-infra:
+	@./scripts/check-domain.sh infra
+
 ## Clean build artifacts
 clean:
 	@find . -name "coverage.out" -o -name "coverage.html" | xargs rm -f
@@ -170,6 +211,16 @@ help:
 	@echo "  make update   [M=]            Update dependencies"
 	@echo "  make check-fast [M=]          Build + vet + lint"
 	@echo "  make check    [M=]            Build + vet + test"
+	@echo "  make check-core               Check only core domain modules"
+	@echo "  make check-patterns           Check only patterns domain modules"
+	@echo "  make check-crosscutting       Check only crosscutting domain modules"
+	@echo "  make check-composition        Check only composition domain modules"
+	@echo "  make check-transport          Check only transport domain modules"
+	@echo "  make check-auth               Check only auth domain modules"
+	@echo "  make check-data               Check only data domain modules"
+	@echo "  make check-ai                 Check only ai domain modules"
+	@echo "  make check-media              Check only media domain modules"
+	@echo "  make check-infra              Check only infra domain modules"
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
 	@echo "Go version:"

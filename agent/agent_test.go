@@ -15,6 +15,7 @@ import (
 	"github.com/kbukum/gokit/ai/prompt"
 	"github.com/kbukum/gokit/hook"
 	"github.com/kbukum/gokit/llm"
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/tool"
 )
 
@@ -97,6 +98,40 @@ func TestAgentToolCallThenResponse(t *testing.T) {
 	r, err := a.Run(context.Background(), []chat.Message{chat.User("calc")})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if r.StopReason != agent.StopEndTurn || r.TurnCount != 2 {
+		t.Fatalf("unexpected result: %#v", r)
+	}
+}
+
+func TestAgentToolCallUsesResiliencePolicy(t *testing.T) {
+	p := newMockProvider(toolCallResponse("calculator", "{}"), textResponse("42"))
+	reg := tool.NewRegistry()
+	attempts := 0
+	tl := tool.FromFunc("calculator", "retrying calculator", func(ctx context.Context, in struct{}) (string, error) {
+		attempts++
+		if attempts == 1 {
+			return "", fmt.Errorf("temporary failure")
+		}
+		return "42", nil
+	})
+	if err := reg.Register(tl.AsCallable()); err != nil {
+		t.Fatal(err)
+	}
+	policy := resilience.NewPolicy().WithRetry(resilience.RetryConfig{
+		MaxAttempts:    2,
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Millisecond,
+		Strategy:       resilience.ConstantBackoff,
+		Jitter:         0,
+	})
+	a := agent.New(agent.Config{Provider: p, Tools: reg, Policy: policy})
+	r, err := a.Run(context.Background(), []chat.Message{chat.User("calc")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts=%d, want 2", attempts)
 	}
 	if r.StopReason != agent.StopEndTurn || r.TurnCount != 2 {
 		t.Fatalf("unexpected result: %#v", r)

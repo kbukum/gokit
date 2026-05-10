@@ -16,6 +16,7 @@ import (
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/semconv"
 	"github.com/kbukum/gokit/authz"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/inference"
 	"github.com/kbukum/gokit/observability"
@@ -69,6 +70,7 @@ type Provider struct {
 	descriptor inference.Descriptor
 	decider    authz.Decider
 	subject    authz.Subject
+	lifecycle  ai.Lifecycle
 }
 
 // NewProvider creates a Triton KServe v2 HTTP provider.
@@ -125,8 +127,41 @@ func NewProvider(cfg Config, options ...Option) (*Provider, error) {
 // Descriptor documents the adapter and its network egress envelope.
 func (p *Provider) Descriptor() inference.Descriptor { return p.descriptor }
 
-// Health probes /v2/health/ready.
-func (p *Provider) Health(ctx context.Context) error {
+// Name returns the configured component name.
+func (p *Provider) Name() string { return p.cfg.Name }
+
+// IsAvailable reports whether the underlying HTTP client is reachable.
+func (p *Provider) IsAvailable(ctx context.Context) bool { return p.client.IsAvailable(ctx) }
+
+// Start marks the adapter ready.
+func (p *Provider) Start(_ context.Context) error {
+	p.lifecycle.MarkReady()
+	return nil
+}
+
+// Stop closes idle HTTP connections.
+func (p *Provider) Stop(ctx context.Context) error {
+	p.lifecycle.MarkStopped()
+	return p.client.Close(ctx)
+}
+
+// Health reports component health using Triton's readiness probe.
+func (p *Provider) Health(ctx context.Context) component.Health {
+	if !p.lifecycle.Ready() {
+		return component.Health{Name: p.Name(), Status: component.StatusDegraded, Message: "not started"}
+	}
+	if err := p.healthCheck(ctx); err != nil {
+		return component.Health{Name: p.Name(), Status: component.StatusUnhealthy, Message: err.Error()}
+	}
+	msg := "ready"
+	if last := p.lifecycle.LastCall(); !last.IsZero() {
+		msg = "last_call=" + last.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return component.Health{Name: p.Name(), Status: component.StatusHealthy, Message: msg}
+}
+
+// healthCheck probes /v2/health/ready.
+func (p *Provider) healthCheck(ctx context.Context) error {
 	ctx, span := startSpan(ctx, "health")
 	defer span.End()
 
@@ -192,6 +227,7 @@ func (p *Provider) Predict(ctx context.Context, req inference.PredictRequest) (i
 	if finishReason := decoded.Metadata["finish_reason"]; finishReason != "" {
 		span.SetAttributes(observability.StringAttribute(semconv.GenAIResponseFinishReason, finishReason))
 	}
+	p.lifecycle.Touch()
 	return decoded, nil
 }
 
@@ -397,6 +433,11 @@ func decodeResponse(resp *httpclient.Response) (inference.PredictResponse, error
 		Status:   inference.StatusSuccess,
 		Metadata: metadata,
 	}, nil
+}
+
+// Execute satisfies provider.RequestResponse by forwarding to Predict.
+func (p *Provider) Execute(ctx context.Context, req inference.PredictRequest) (inference.PredictResponse, error) {
+	return p.Predict(ctx, req)
 }
 
 func firstNonEmpty(values ...string) string {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/provider"
 )
 
 // Inference is the model-serving runtime interface. It is intentionally
@@ -14,7 +15,11 @@ import (
 //
 // Inference is NOT chat completion. Conversational LLM surface lives in
 // the llm module; inference sits one layer below as the serving runtime.
+//
+// Inference natively embeds [provider.RequestResponse] so serving adapters
+// plug into canonical provider consumers (pipeline, dag, chain) without a shim.
 type Inference interface {
+	provider.RequestResponse[PredictRequest, PredictResponse]
 	Predict(ctx context.Context, req PredictRequest) (PredictResponse, error)
 	Descriptor() Descriptor
 }

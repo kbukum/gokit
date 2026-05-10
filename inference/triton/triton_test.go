@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/inference"
 	"github.com/kbukum/gokit/inference/triton"
 )
@@ -115,8 +116,12 @@ func TestProviderHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewProvider: %v", err)
 	}
-	if err := provider.Health(context.Background()); err != nil {
-		t.Fatalf("Health: %v", err)
+	if err := provider.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	health := provider.Health(context.Background())
+	if health.Status != component.StatusHealthy {
+		t.Fatalf("Health = %+v", health)
 	}
 	desc := provider.Descriptor()
 	if desc.ServingProtocol != "kserve-v2-http" || !desc.Available {

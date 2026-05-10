@@ -6,13 +6,44 @@ import (
 	"encoding/json"
 
 	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/inference"
 )
 
 const Kind = "echo"
 
 // Echo returns inputs unchanged as outputs.
-type Echo struct{}
+type Echo struct{ lifecycle ai.Lifecycle }
+
+// Name returns the adapter name.
+func (e *Echo) Name() string { return Kind }
+
+// IsAvailable always reports true for the in-memory echo adapter.
+func (e *Echo) IsAvailable(_ context.Context) bool { return true }
+
+// Start marks the echo adapter ready.
+func (e *Echo) Start(_ context.Context) error {
+	e.lifecycle.MarkReady()
+	return nil
+}
+
+// Stop marks the echo adapter stopped.
+func (e *Echo) Stop(_ context.Context) error {
+	e.lifecycle.MarkStopped()
+	return nil
+}
+
+// Health reports the echo adapter state.
+func (e *Echo) Health(_ context.Context) component.Health {
+	if !e.lifecycle.Ready() {
+		return component.Health{Name: e.Name(), Status: component.StatusDegraded, Message: "not started"}
+	}
+	msg := "ready"
+	if last := e.lifecycle.LastCall(); !last.IsZero() {
+		msg = "last_call=" + last.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return component.Health{Name: e.Name(), Status: component.StatusHealthy, Message: msg}
+}
 
 // Factory builds an Echo adapter.
 func Factory(json.RawMessage) (inference.Inference, error) { return &Echo{}, nil }
@@ -26,7 +57,13 @@ func (e *Echo) Predict(_ context.Context, req inference.PredictRequest) (inferen
 	for name, value := range req.Inputs {
 		outputs[name] = cloneValue(value)
 	}
+	e.lifecycle.Touch()
 	return inference.PredictResponse{Outputs: outputs, Model: model(req), Status: inference.StatusSuccess, Usage: ai.Usage{}}, nil
+}
+
+// Execute satisfies provider.RequestResponse by forwarding to Predict.
+func (e *Echo) Execute(ctx context.Context, req inference.PredictRequest) (inference.PredictResponse, error) {
+	return e.Predict(ctx, req)
 }
 
 // Descriptor documents the in-memory echo adapter.
@@ -69,4 +106,7 @@ func model(req inference.PredictRequest) ai.Model {
 	return m
 }
 
-var _ inference.Inference = (*Echo)(nil)
+var (
+	_ inference.Inference = (*Echo)(nil)
+	_ component.Component = (*Echo)(nil)
+)
