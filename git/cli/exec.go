@@ -42,5 +42,31 @@ func commandError(args []string, result *process.Result) error {
 	if msg == "" {
 		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
 	}
-	return fmt.Errorf("git %v: %s", args, msg)
+	sanitized := make([]string, len(args))
+	for i, arg := range args {
+		sanitized[i] = redactCredentials(arg)
+	}
+	return fmt.Errorf("git %v: %s", sanitized, msg)
+}
+
+// redactCredentials masks credentials in URLs to prevent leakage in
+// error messages and logs.
+func redactCredentials(s string) string {
+	for _, scheme := range []string{"https://", "http://"} {
+		idx := strings.Index(s, scheme)
+		if idx < 0 {
+			continue
+		}
+		rest := s[idx+len(scheme):]
+		atIdx := strings.Index(rest, "@")
+		if atIdx < 0 {
+			continue
+		}
+		userinfo := rest[:atIdx]
+		if strings.Contains(userinfo, ":") {
+			user := userinfo[:strings.Index(userinfo, ":")]
+			return s[:idx] + scheme + user + ":***@" + rest[atIdx+1:]
+		}
+	}
+	return s
 }

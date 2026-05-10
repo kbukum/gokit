@@ -147,6 +147,9 @@ func canonicalizeCopyPath(path string) (string, error) {
 	}
 
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		// Case-fold for the overlap check only. macOS HFS+/APFS is
+		// typically case-insensitive; Windows NTFS always is.
+		// Case-sensitive macOS volumes are rare; this is best-effort.
 		resolvedPath = strings.ToLower(resolvedPath)
 	}
 

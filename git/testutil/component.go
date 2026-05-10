@@ -168,6 +168,9 @@ func (c *Component) Restore(_ context.Context, snapshot interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid snapshot type: expected string, got %T", snapshot)
 	}
+	if _, tracked := c.snapshots[snapshotRoot]; !tracked {
+		return fmt.Errorf("unknown snapshot: %s", snapshotRoot)
+	}
 	defer func() {
 		_ = util.RemoveAll(snapshotRoot)
 		delete(c.snapshots, snapshotRoot)
