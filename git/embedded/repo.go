@@ -1,6 +1,7 @@
 package embedded
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -54,7 +55,7 @@ func Open(path string, cfg *model.OpenOptions) (*Backend, error) {
 
 	repo, err := gogit.PlainOpen(absPath)
 	if err != nil {
-		if os.IsNotExist(err) || err == gogit.ErrRepositoryNotExists {
+		if os.IsNotExist(err) || errors.Is(err, gogit.ErrRepositoryNotExists) {
 			return nil, giterr.RepoNotFound(absPath)
 		}
 		return nil, giterr.Internal(err)
