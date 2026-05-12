@@ -144,7 +144,7 @@ cmd_tidy() {
     echo "Running: go mod tidy in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go mod tidy"
   else
-    echo "Running: go mod tidy across all modules..."
+    echo "Running: go mod tidy across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go mod tidy"
     done < <(find_modules)
@@ -158,7 +158,7 @@ cmd_update() {
     echo "Running: go get -u in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go get -u ./... && go mod tidy"
   else
-    echo "Running: go get -u ./... across all modules..."
+    echo "Running: go get -u ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go get -u ./... && go mod tidy"
     done < <(find_modules)
@@ -172,7 +172,7 @@ cmd_update_go() {
     exit 1
   fi
 
-  echo "Updating go version to $version across all modules..."
+  echo "Updating go version to $version across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
   while IFS= read -r modfile; do
     run_in_module "$modfile" "go mod edit -go=$version && go mod tidy"
   done < <(find_modules)
