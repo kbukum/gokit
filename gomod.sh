@@ -41,6 +41,11 @@ validate_workspace_membership() {
   local mod_dir="$1"
   [[ -z "$WORKSPACE_FILE" ]] && return 0
 
+  # Normalize: strip leading ./, trailing /, map empty to .
+  mod_dir="${mod_dir#./}"
+  mod_dir="${mod_dir%/}"
+  [[ -z "$mod_dir" ]] && mod_dir="."
+
   local in_ws=false
   while IFS= read -r modfile; do
     local ws_dir
@@ -169,7 +174,7 @@ cmd_tidy() {
     echo "Running: go mod tidy in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go mod tidy"
   else
-    echo "Running: go mod tidy across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
+    echo "Running: go mod tidy across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go mod tidy"
     done < <(find_modules)
@@ -184,7 +189,7 @@ cmd_update() {
     echo "Running: go get -u in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go get -u ./... && go mod tidy"
   else
-    echo "Running: go get -u ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
+    echo "Running: go get -u ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go get -u ./... && go mod tidy"
     done < <(find_modules)
@@ -198,7 +203,7 @@ cmd_update_go() {
     exit 1
   fi
 
-  echo "Updating go version to $version across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET }modules..."
+  echo "Updating go version to $version across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
   while IFS= read -r modfile; do
     run_in_module "$modfile" "go mod edit -go=$version && go mod tidy"
   done < <(find_modules)
@@ -217,7 +222,11 @@ cmd_custom() {
     echo "Running: '$command' in $target${WORKSPACE_TARGET:+ (workspace: $WORKSPACE_TARGET)}..."
     run_in_target "$target" "$command"
   else
-    echo "Running: '$command' across all modules${WORKSPACE_TARGET:+ (workspace: $WORKSPACE_TARGET)}..."
+    if [[ -n "$WORKSPACE_TARGET" ]]; then
+      echo "Running: '$command' across $WORKSPACE_TARGET workspace modules..."
+    else
+      echo "Running: '$command' across all modules..."
+    fi
     while IFS= read -r modfile; do
       run_in_module "$modfile" "$command ./..."
     done < <(find_modules)

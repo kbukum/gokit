@@ -113,7 +113,11 @@ test-affected:
 			echo "No Go module changes detected"; \
 		else \
 			if [ -n "$(W)" ]; then \
-				WS_MODS=$$(awk '/^use[[:space:]]*\(/{u=1;next} u&&/\)/{u=0;next} u{gsub(/^[[:space:]]+|[[:space:]]+$$/,"");if($$0!="")print}' $(W).go.work); \
+				if [ ! -f "$(W).go.work" ]; then \
+					echo "Error: workspace file not found: $(W).go.work"; \
+					exit 1; \
+				fi; \
+				WS_MODS=$$(awk '/^use[[:space:]]*\(/{u=1;next} u&&/\)/{u=0;next} u{gsub(/^[[:space:]]+|[[:space:]]+$$/,"");if($$0!="")print} /^use[[:space:]]+[^(]/{sub(/^use[[:space:]]+/,"");gsub(/^[[:space:]]+|[[:space:]]+$$/,"");print}' $(W).go.work); \
 				FILTERED=""; \
 				for mod in $$MODULES; do \
 					for wmod in $$WS_MODS; do \
