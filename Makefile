@@ -60,7 +60,7 @@ update:
 ## Update Go version across all modules (usage: make update-go VERSION=1.26.0)
 update-go:
 	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.26.0" && exit 1)
-	@$(GOMOD) update-go $(VERSION)
+	@$(GOMOD) update-go $(VERSION) $(_W)
 
 ## Tag all modules with a version (usage: make tag VERSION=v0.1.0)
 tag:
@@ -93,7 +93,7 @@ test-affected:
 		echo "No changes detected, running all tests"; \
 		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
 	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum|.*\.go\.work)$$'; then \
-		echo "Root go.mod/go.sum/go.work changed, running all tests"; \
+		echo "go.mod/go.sum or .go.work file changed, running all tests"; \
 		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
 	else \
 		CHANGED=$$(printf '%s\n' "$$CHANGED" | grep -E '\.go$$|(^|/)(go\.mod|go\.sum)$$' || true); \

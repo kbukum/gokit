@@ -16,6 +16,7 @@ coverage.xml
 
 # Go workspace (go.work is committed; lock is generated)
 go.work.sum
+*.go.work.sum
 
 # Profiling
 *.prof
