@@ -212,7 +212,7 @@ print_summary() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Argument parsing: extract -m <module> and -w <workspace> from any position
+# Argument parsing: extract -m <module> and -w <workspace> flags (after action)
 # ─────────────────────────────────────────────────────────────────────────────
 parse_module_flag() {
   MODULE_TARGET=""

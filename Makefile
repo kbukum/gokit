@@ -57,7 +57,7 @@ tidy:
 update:
 	@$(GOMOD) update $(_M) $(_W)
 
-## Update Go version across all modules (usage: make update-go VERSION=1.26.0)
+## Update Go version across modules (usage: make update-go VERSION=1.26.0 [W=core|contrib])
 update-go:
 	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.26.0" && exit 1)
 	@$(GOMOD) update-go $(VERSION) $(_W)
@@ -92,7 +92,7 @@ test-affected:
 	if [ -z "$$CHANGED" ]; then \
 		echo "No changes detected, running all tests"; \
 		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
-	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum|.*\.go\.work)$$'; then \
+	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum|go\.work|.*\.go\.work)$$'; then \
 		echo "go.mod/go.sum or .go.work file changed, running all tests"; \
 		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
 	else \
@@ -204,7 +204,7 @@ help:
 	@echo "  make help                     Show this help"
 	@echo "  make build    [M=] [W=]       Build packages"
 	@echo "  make test     [M=] [T=] [W=]  Run tests"
-	@echo "  make test-affected            Run tests for changed modules vs main"
+	@echo "  make test-affected [W=]       Run tests for changed modules vs main"
 	@echo "  make test-integration [M=] [W=] Run integration suite (//go:build integration)"
 	@echo "  make test-coverage [M=] [T=] [W=] Run tests with coverage"
 	@echo "  make lint     [M=] [W=]       Run golangci-lint"
@@ -212,8 +212,8 @@ help:
 	@echo "  make fmt      [M=]            Format code"
 	@echo "  make tidy     [M=] [W=]       Run go mod tidy"
 	@echo "  make update   [M=] [W=]       Update dependencies"
-	@echo "  make check-fast [M=]          Build + vet + lint"
-	@echo "  make check    [M=]            Build + vet + test"
+	@echo "  make check-fast [M=] [W=]     Build + vet + lint"
+	@echo "  make check    [M=] [W=]       Build + vet + test"
 	@echo "  make check-core               Check only core domain modules"
 	@echo "  make check-patterns           Check only patterns domain modules"
 	@echo "  make check-crosscutting       Check only crosscutting domain modules"
