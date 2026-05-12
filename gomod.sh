@@ -36,6 +36,29 @@ WORKSPACE_FILE=""
 #   grpc/client     → mod_dir=grpc,            pkg=./client/...    (subpackage)
 #   security        → mod_dir=.,               pkg=./security/...  (core subpackage)
 # ─────────────────────────────────────────────────────────────────────────────
+# Validate that a resolved module is part of the selected workspace.
+validate_workspace_membership() {
+  local mod_dir="$1"
+  [[ -z "$WORKSPACE_FILE" ]] && return 0
+
+  local in_ws=false
+  while IFS= read -r modfile; do
+    local ws_dir
+    ws_dir=$(dirname "$modfile")
+    ws_dir="${ws_dir#$ROOT_DIR/}"
+    [[ "$ws_dir" == "$ROOT_DIR" ]] && ws_dir="."
+    if [[ "$mod_dir" == "$ws_dir" ]]; then
+      in_ws=true
+      break
+    fi
+  done < <(find_modules)
+
+  if [[ "$in_ws" != true ]]; then
+    echo -e "${RED}Error: module '$mod_dir' is not part of workspace '$WORKSPACE_TARGET'${NC}"
+    exit 1
+  fi
+}
+
 resolve_module() {
   local target="$1"
   MOD_DIR="$target"
@@ -118,6 +141,7 @@ run_in_target() {
   local command="$2"
 
   resolve_module "$target"
+  validate_workspace_membership "$MOD_DIR"
 
   local label="$MOD_DIR"
   if [ "$PKG" != "./..." ]; then
@@ -141,6 +165,7 @@ cmd_tidy() {
   local target="$1"
   if [ -n "$target" ]; then
     resolve_module "$target"
+    validate_workspace_membership "$MOD_DIR"
     echo "Running: go mod tidy in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go mod tidy"
   else
@@ -155,6 +180,7 @@ cmd_update() {
   local target="$1"
   if [ -n "$target" ]; then
     resolve_module "$target"
+    validate_workspace_membership "$MOD_DIR"
     echo "Running: go get -u in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go get -u ./... && go mod tidy"
   else

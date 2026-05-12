@@ -112,6 +112,24 @@ test-affected:
 		if [ -z "$$MODULES" ]; then \
 			echo "No Go module changes detected"; \
 		else \
+			if [ -n "$(W)" ]; then \
+				WS_MODS=$$(awk '/^use[[:space:]]*\(/{u=1;next} u&&/\)/{u=0;next} u{gsub(/^[[:space:]]+|[[:space:]]+$$/,"");if($$0!="")print}' $(W).go.work); \
+				FILTERED=""; \
+				for mod in $$MODULES; do \
+					for wmod in $$WS_MODS; do \
+						wmod=$${wmod#./}; wmod=$${wmod%/}; \
+						if [ "$$mod" = "$$wmod" ] || [ "$$mod" = "." -a "$$wmod" = "" ]; then \
+							FILTERED="$$FILTERED $$mod"; \
+							break; \
+						fi; \
+					done; \
+				done; \
+				MODULES=$$FILTERED; \
+				if [ -z "$$MODULES" ]; then \
+					echo "No affected modules in workspace $(W)"; \
+					exit 0; \
+				fi; \
+			fi; \
 			echo "Affected modules: $$MODULES"; \
 			failed=0; \
 			for mod in $$MODULES; do \
