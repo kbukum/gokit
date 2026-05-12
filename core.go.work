@@ -1,0 +1,41 @@
+go 1.26.0
+
+toolchain go1.26.2
+
+use (
+	.
+	./agent
+	./ai
+	./auth
+	./authz
+	./bench
+	./cache
+	./connect
+	./connect/testutil
+	./dag/testutil
+	./database
+	./database/testutil
+	./discovery
+	./discovery/testutil
+	./embedding
+	./git
+	./git/testutil
+	./grpc
+	./httpclient
+	./inference
+	./llm
+	./mcp
+	./messaging
+	./schema
+	./server
+	./server/testutil
+	./skill
+	./stateful
+	./storage
+	./storage/testutil
+	./testutil
+	./tool
+	./vectorstore
+	./workload
+	./workload/testutil
+)

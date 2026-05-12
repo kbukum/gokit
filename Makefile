@@ -7,33 +7,36 @@ GOMOD := ./gomod.sh
 # Module flag: pass -m $(M) to gomod.sh when M is set
 _M = $(if $(M),-m $(M))
 
+# Workspace flag: pass -w $(W) to gomod.sh when W is set
+_W = $(if $(W),-w $(W))
+
 ## Default target
 all: check
 
-## Build packages (M=<module> for specific)
+## Build packages (M=<module> for specific, W=core|contrib for filtered workspace)
 build:
-	@$(GOMOD) cmd "go build" $(_M)
+	@$(GOMOD) cmd "go build" $(_M) $(_W)
 
-## Run tests (M=<module>, T=<test pattern>)
+## Run tests (M=<module>, T=<test pattern>, W=core|contrib)
 test:
-	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M)
+	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M) $(_W)
 
 ## Run integration suite (gated by `//go:build integration`).
 ## Slow / dependency-heavy; not part of `make test` or default CI `check`.
 test-integration:
-	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M)
+	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M) $(_W)
 
-## Run tests with coverage (M=<module>, T=<test pattern>)
+## Run tests with coverage (M=<module>, T=<test pattern>, W=core|contrib)
 test-coverage:
-	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M)
+	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M) $(_W)
 
-## Run linter (M=<module>)
+## Run linter (M=<module>, W=core|contrib)
 lint:
-	@$(GOMOD) cmd "golangci-lint run" $(_M)
+	@$(GOMOD) cmd "golangci-lint run" $(_M) $(_W)
 
-## Run go vet (M=<module>)
+## Run go vet (M=<module>, W=core|contrib)
 vet:
-	@$(GOMOD) cmd "go vet" $(_M)
+	@$(GOMOD) cmd "go vet" $(_M) $(_W)
 
 ## Format code (M=<module>)
 fmt:
@@ -46,18 +49,18 @@ else
 endif
 	@echo "✓ Formatted"
 
-## Tidy modules (M=<module>)
+## Tidy modules (M=<module>, W=core|contrib)
 tidy:
-	@$(GOMOD) tidy $(_M)
+	@$(GOMOD) tidy $(_M) $(_W)
 
-## Update dependencies (M=<module>)
+## Update dependencies (M=<module>, W=core|contrib)
 update:
-	@$(GOMOD) update $(_M)
+	@$(GOMOD) update $(_M) $(_W)
 
-## Update Go version across all modules (usage: make update-go VERSION=1.26.0)
+## Update Go version across modules (usage: make update-go VERSION=1.26.0 [W=core|contrib])
 update-go:
 	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.26.0" && exit 1)
-	@$(GOMOD) update-go $(VERSION)
+	@$(GOMOD) update-go $(VERSION) $(_W)
 
 ## Tag all modules with a version (usage: make tag VERSION=v0.1.0)
 tag:
@@ -88,10 +91,10 @@ test-affected:
 	@CHANGED=$$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD~1); \
 	if [ -z "$$CHANGED" ]; then \
 		echo "No changes detected, running all tests"; \
-		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M); \
-	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum)$$'; then \
-		echo "Root go.mod/go.sum changed, running all tests"; \
-		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M); \
+		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
+	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum|go\.work|.*\.go\.work)$$'; then \
+		echo "go.mod/go.sum or .go.work file changed, running all tests"; \
+		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
 	else \
 		CHANGED=$$(printf '%s\n' "$$CHANGED" | grep -E '\.go$$|(^|/)(go\.mod|go\.sum)$$' || true); \
 		if [ -z "$$CHANGED" ]; then \
@@ -109,11 +112,33 @@ test-affected:
 		if [ -z "$$MODULES" ]; then \
 			echo "No Go module changes detected"; \
 		else \
+			if [ -n "$(W)" ]; then \
+				if [ ! -f "$(W).go.work" ]; then \
+					echo "Error: workspace file not found: $(W).go.work"; \
+					exit 1; \
+				fi; \
+				WS_MODS=$$(awk '/^use[[:space:]]*\(/{u=1;next} u&&/\)/{u=0;next} u{gsub(/^[[:space:]]+|[[:space:]]+$$/,"");if($$0!="")print} /^use[[:space:]]+[^(]/{sub(/^use[[:space:]]+/,"");gsub(/^[[:space:]]+|[[:space:]]+$$/,"");print}' $(W).go.work); \
+				FILTERED=""; \
+				for mod in $$MODULES; do \
+					for wmod in $$WS_MODS; do \
+						wmod=$${wmod#./}; wmod=$${wmod%/}; \
+						if [ "$$mod" = "$$wmod" ] || [ "$$mod" = "." -a "$$wmod" = "" ]; then \
+							FILTERED="$$FILTERED $$mod"; \
+							break; \
+						fi; \
+					done; \
+				done; \
+				MODULES=$$FILTERED; \
+				if [ -z "$$MODULES" ]; then \
+					echo "No affected modules in workspace $(W)"; \
+					exit 0; \
+				fi; \
+			fi; \
 			echo "Affected modules: $$MODULES"; \
 			failed=0; \
 			for mod in $$MODULES; do \
 				echo "==> Testing $$mod..."; \
-				if ! (cd "$$mod" && go test -race -shuffle=on -count=1 ./...); then \
+				if ! $(GOMOD) cmd "go test -race -shuffle=on -count=1" -m "$$mod" $(_W); then \
 					echo "✗ Tests failed in $$mod"; \
 					failed=1; \
 				fi; \
@@ -195,22 +220,22 @@ ci-lint: ensure-act
 
 ## Show help
 help:
-	@echo "Usage: make <target> [M=<module>] [T=<test>]"
+	@echo "Usage: make <target> [M=<module>] [T=<test>] [W=core|contrib]"
 	@echo ""
 	@echo "Development:"
 	@echo "  make help                     Show this help"
-	@echo "  make build    [M=]            Build packages"
-	@echo "  make test     [M=] [T=]       Run tests"
-	@echo "  make test-affected            Run tests for changed modules vs main"
-	@echo "  make test-integration [M=]    Run integration suite (//go:build integration)"
-	@echo "  make test-coverage [M=] [T=]  Run tests with coverage"
-	@echo "  make lint     [M=]            Run golangci-lint"
-	@echo "  make vet      [M=]            Run go vet"
+	@echo "  make build    [M=] [W=]       Build packages"
+	@echo "  make test     [M=] [T=] [W=]  Run tests"
+	@echo "  make test-affected [M=] [W=]  Run tests for changed modules vs main"
+	@echo "  make test-integration [M=] [W=] Run integration suite (//go:build integration)"
+	@echo "  make test-coverage [M=] [T=] [W=] Run tests with coverage"
+	@echo "  make lint     [M=] [W=]       Run golangci-lint"
+	@echo "  make vet      [M=] [W=]       Run go vet"
 	@echo "  make fmt      [M=]            Format code"
-	@echo "  make tidy     [M=]            Run go mod tidy"
-	@echo "  make update   [M=]            Update dependencies"
-	@echo "  make check-fast [M=]          Build + vet + lint"
-	@echo "  make check    [M=]            Build + vet + test"
+	@echo "  make tidy     [M=] [W=]       Run go mod tidy"
+	@echo "  make update   [M=] [W=]       Update dependencies"
+	@echo "  make check-fast [M=] [W=]     Build + vet + lint"
+	@echo "  make check    [M=] [W=]       Build + vet + test"
 	@echo "  make check-core               Check only core domain modules"
 	@echo "  make check-patterns           Check only patterns domain modules"
 	@echo "  make check-crosscutting       Check only crosscutting domain modules"
@@ -224,7 +249,7 @@ help:
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
 	@echo "Go version:"
-	@echo "  make update-go VERSION=1.26.0  Update Go version in all go.mod"
+	@echo "  make update-go VERSION=1.26.0 [W=]  Update Go version in go.mod files"
 	@echo ""
 	@echo "Versioning & Release:"
 	@echo "  make tag VERSION=v0.1.0        Tag all modules"
@@ -243,10 +268,16 @@ help:
 	@echo "  M=grpc/client       Target grpc module, client package"
 	@echo "  M=security          Target root module, security package"
 	@echo ""
+	@echo "Workspace targeting (W=):"
+	@echo "  W=core              Only core modules"
+	@echo "  W=contrib           Only contrib/adapter modules"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make test                            Test everything"
 	@echo "  make test M=messaging                Test messaging module"
 	@echo "  make test M=httpclient/rest          Test rest subpackage"
 	@echo "  make test M=httpclient T=TestClient  Test matching tests in httpclient"
+	@echo "  make test W=core                     Test only core modules"
+	@echo "  make build W=contrib                 Build only contrib modules"
 	@echo "  make lint M=grpc                     Lint grpc module"
 	@echo "  make check M=httpclient              Build+vet+test httpclient"

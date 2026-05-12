@@ -20,6 +20,8 @@ NC='\033[0m' # No Color
 
 ROOT_DIR=$(pwd)
 FAILED_MODULES=()
+WORKSPACE_TARGET=""
+WORKSPACE_FILE=""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module resolution
@@ -34,6 +36,34 @@ FAILED_MODULES=()
 #   grpc/client     → mod_dir=grpc,            pkg=./client/...    (subpackage)
 #   security        → mod_dir=.,               pkg=./security/...  (core subpackage)
 # ─────────────────────────────────────────────────────────────────────────────
+# Validate that a resolved module is part of the selected workspace.
+validate_workspace_membership() {
+  local mod_dir="$1"
+  [[ -z "$WORKSPACE_FILE" ]] && return 0
+
+  # Normalize: strip leading ./, trailing /, map empty to .
+  mod_dir="${mod_dir#./}"
+  mod_dir="${mod_dir%/}"
+  [[ -z "$mod_dir" ]] && mod_dir="."
+
+  local in_ws=false
+  while IFS= read -r modfile; do
+    local ws_dir
+    ws_dir=$(dirname "$modfile")
+    ws_dir="${ws_dir#$ROOT_DIR/}"
+    [[ "$ws_dir" == "$ROOT_DIR" ]] && ws_dir="."
+    if [[ "$mod_dir" == "$ws_dir" ]]; then
+      in_ws=true
+      break
+    fi
+  done < <(find_modules)
+
+  if [[ "$in_ws" != true ]]; then
+    echo -e "${RED}Error: module '$mod_dir' is not part of workspace '$WORKSPACE_TARGET'${NC}"
+    exit 1
+  fi
+}
+
 resolve_module() {
   local target="$1"
   MOD_DIR="$target"
@@ -57,8 +87,38 @@ resolve_module() {
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Find all modules, excluding vendor directories
+# Find all modules, excluding vendor directories. When -w is set, limit to modules
+# listed in the selected workspace file.
 find_modules() {
+  if [[ -n "$WORKSPACE_FILE" ]]; then
+    awk '
+      /^use[[:space:]]*\(/ { in_use = 1; next }
+      in_use && /^[[:space:]]*\)/ { in_use = 0; next }
+      in_use {
+        line = $0
+        sub(/^[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        if (line != "") print line
+        next
+      }
+      /^use[[:space:]]+\./ {
+        line = $0
+        sub(/^use[[:space:]]+/, "", line)
+        sub(/[[:space:]]+$/, "", line)
+        print line
+      }
+    ' "$WORKSPACE_FILE" | while IFS= read -r modpath; do
+      modpath="${modpath#./}"
+      modpath="${modpath%/}"
+      if [[ "$modpath" == "." || -z "$modpath" ]]; then
+        echo "$ROOT_DIR/go.mod"
+      elif [[ -f "$ROOT_DIR/$modpath/go.mod" ]]; then
+        echo "$ROOT_DIR/$modpath/go.mod"
+      fi
+    done | sort -u
+    return
+  fi
+
   find "$ROOT_DIR" -name "go.mod" \
     -not -path "*/vendor/*" \
     -not -path "*/.git/*" \
@@ -86,6 +146,7 @@ run_in_target() {
   local command="$2"
 
   resolve_module "$target"
+  validate_workspace_membership "$MOD_DIR"
 
   local label="$MOD_DIR"
   if [ "$PKG" != "./..." ]; then
@@ -109,10 +170,11 @@ cmd_tidy() {
   local target="$1"
   if [ -n "$target" ]; then
     resolve_module "$target"
+    validate_workspace_membership "$MOD_DIR"
     echo "Running: go mod tidy in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go mod tidy"
   else
-    echo "Running: go mod tidy across all modules..."
+    echo "Running: go mod tidy across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go mod tidy"
     done < <(find_modules)
@@ -123,10 +185,11 @@ cmd_update() {
   local target="$1"
   if [ -n "$target" ]; then
     resolve_module "$target"
+    validate_workspace_membership "$MOD_DIR"
     echo "Running: go get -u in $MOD_DIR..."
     run_in_module "$MOD_DIR/go.mod" "go get -u ./... && go mod tidy"
   else
-    echo "Running: go get -u ./... across all modules..."
+    echo "Running: go get -u ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
     while IFS= read -r modfile; do
       run_in_module "$modfile" "go get -u ./... && go mod tidy"
     done < <(find_modules)
@@ -140,7 +203,7 @@ cmd_update_go() {
     exit 1
   fi
 
-  echo "Updating go version to $version across all modules..."
+  echo "Updating go version to $version across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
   while IFS= read -r modfile; do
     run_in_module "$modfile" "go mod edit -go=$version && go mod tidy"
   done < <(find_modules)
@@ -156,10 +219,14 @@ cmd_custom() {
   fi
 
   if [ -n "$target" ]; then
-    echo "Running: '$command' in $target..."
+    echo "Running: '$command' in $target${WORKSPACE_TARGET:+ (workspace: $WORKSPACE_TARGET)}..."
     run_in_target "$target" "$command"
   else
-    echo "Running: '$command' across all modules..."
+    if [[ -n "$WORKSPACE_TARGET" ]]; then
+      echo "Running: '$command' across $WORKSPACE_TARGET workspace modules..."
+    else
+      echo "Running: '$command' across all modules..."
+    fi
     while IFS= read -r modfile; do
       run_in_module "$modfile" "$command ./..."
     done < <(find_modules)
@@ -180,7 +247,7 @@ print_summary() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Argument parsing: extract -m <module> from any position
+# Argument parsing: extract -m <module> and -w <workspace> flags (after action)
 # ─────────────────────────────────────────────────────────────────────────────
 parse_module_flag() {
   MODULE_TARGET=""
@@ -189,6 +256,16 @@ parse_module_flag() {
     case "$1" in
       -m)
         MODULE_TARGET="$2"
+        shift 2
+        ;;
+      -w)
+        WORKSPACE_TARGET="$2"
+        WORKSPACE_FILE="$ROOT_DIR/$2.go.work"
+        if [[ ! -f "$WORKSPACE_FILE" ]]; then
+          echo -e "${RED}Error: workspace file not found: $WORKSPACE_FILE${NC}"
+          exit 1
+        fi
+        export GOWORK="$WORKSPACE_FILE"
         shift 2
         ;;
       *)
@@ -211,16 +288,20 @@ case "$ACTION" in
   cmd)         cmd_custom "${REMAINING_ARGS[0]}" "$MODULE_TARGET" ;;
   *)
     echo "Usage:"
-    echo "  ./gomod.sh tidy [-m module]          # go mod tidy"
-    echo "  ./gomod.sh update [-m module]        # go get -u ./..."
-    echo "  ./gomod.sh update-go <version>       # update go version in all go.mod"
-    echo "  ./gomod.sh cmd \"<command>\" [-m mod]   # run command in module(s)"
+    echo "  ./gomod.sh tidy [-m module] [-w workspace]          # go mod tidy"
+    echo "  ./gomod.sh update [-m module] [-w workspace]        # go get -u ./..."
+    echo "  ./gomod.sh update-go <version> [-w workspace]       # update go version in all go.mod"
+    echo "  ./gomod.sh cmd \"<command>\" [-m mod] [-w workspace] # run command in module(s)"
     echo ""
     echo "Module targeting (-m):"
     echo "  -m messaging         Target messaging module"
     echo "  -m httpclient/rest   Target httpclient module, rest package"
     echo "  -m grpc/client       Target grpc module, client package"
     echo "  -m security          Target root module, security package"
+    echo ""
+    echo "Workspace targeting (-w):"
+    echo "  -w core              Use core.go.work modules only"
+    echo "  -w contrib           Use contrib.go.work modules only"
     exit 1
     ;;
 esac
