@@ -8,7 +8,7 @@ require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/discovery v0.2.0
 	github.com/stretchr/testify v1.11.1
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.81.1
 )
 
 require (
