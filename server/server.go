@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,8 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/h2c"
 
 	"github.com/kbukum/gokit/logger"
 	"github.com/kbukum/gokit/server/endpoint"
@@ -53,18 +52,34 @@ func New(cfg *Config, log *logger.Logger) *Server {
 	// Mount Gin as the fallback handler on the root mux.
 	mux.Handle("/", engine)
 
-	// Wrap with h2c for HTTP/2 cleartext (required for gRPC without TLS).
-	h2s := &http2.Server{
-		MaxConcurrentStreams: 250,
-		IdleTimeout:          120 * time.Second,
-	}
-	handler := h2c.NewHandler(mux, h2s)
-
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+
+	// Configure HTTP/2 protocol support based on TLS setting.
+	var protocols http.Protocols
+	protocols.SetHTTP1(true)
+
+	var tlsConfig *tls.Config
+	if cfg.TLS != nil && cfg.TLS.IsEnabled() {
+		// TLS enabled: use encrypted HTTP/2.
+		protocols.SetHTTP2(true)
+		var err error
+		tlsConfig, err = cfg.TLS.Build()
+		if err != nil {
+			// Return a server with nil TLS — Start will fail with a clear error.
+			// We don't panic in constructors.
+			tlsConfig = nil
+		}
+	} else {
+		// No TLS: enable unencrypted HTTP/2 (h2c) for gRPC without TLS.
+		protocols.SetUnencryptedHTTP2(true)
+	}
 
 	httpServer := &http.Server{
 		Addr:         addr,
-		Handler:      handler,
+		Handler:      mux,
+		Protocols:    &protocols,
+		HTTP2:        &http.HTTP2Config{MaxConcurrentStreams: 250},
+		TLSConfig:    tlsConfig,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
@@ -122,9 +137,15 @@ func (s *Server) Start(ctx context.Context) error {
 	s.listener = listener
 
 	go func() { //nolint:contextcheck // serve goroutine outlives the Start ctx
-		if err := s.httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
+		var serveErr error
+		if s.httpServer.TLSConfig != nil {
+			serveErr = s.httpServer.ServeTLS(listener, "", "")
+		} else {
+			serveErr = s.httpServer.Serve(listener)
+		}
+		if serveErr != nil && serveErr != http.ErrServerClosed {
 			s.log.Error("Server error", map[string]interface{}{
-				"error": err.Error(),
+				"error": serveErr.Error(),
 			})
 		}
 	}()
@@ -192,11 +213,7 @@ func (s *Server) ApplyMiddleware() {
 		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodySize))
 	}
 
-	h2s := &http2.Server{
-		MaxConcurrentStreams: 250,
-		IdleTimeout:          120 * time.Second,
-	}
-	s.httpServer.Handler = h2c.NewHandler(middleware.Chain(stack...)(s.mux), h2s)
+	s.httpServer.Handler = middleware.Chain(stack...)(s.mux)
 }
 
 // RegisterDefaultEndpoints registers the standard observability endpoints:

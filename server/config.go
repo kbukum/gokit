@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"github.com/kbukum/gokit/security"
 	"github.com/kbukum/gokit/server/middleware"
 )
 
@@ -14,6 +15,7 @@ type Config struct {
 	WriteTimeout int                   `yaml:"write_timeout" mapstructure:"write_timeout"` // seconds
 	IdleTimeout  int                   `yaml:"idle_timeout" mapstructure:"idle_timeout"`   // seconds
 	MaxBodySize  string                `yaml:"max_body_size" mapstructure:"max_body_size"` // e.g. "10MB"
+	TLS          *security.TLSConfig   `yaml:"tls" mapstructure:"tls"`
 	CORS         middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
 	Docs         DocsConfig            `yaml:"docs" mapstructure:"docs"`
 	Enabled      bool                  `yaml:"enabled" mapstructure:"enabled"`
