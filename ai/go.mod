@@ -15,7 +15,7 @@ require (
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
-	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	google.golang.org/grpc v1.81.1 // indirect
 )
 
