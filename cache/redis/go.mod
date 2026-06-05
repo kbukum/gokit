@@ -8,7 +8,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/cache v0.2.0
-	github.com/redis/go-redis/v9 v9.19.0
+	github.com/redis/go-redis/v9 v9.20.0
 )
 
 require (
