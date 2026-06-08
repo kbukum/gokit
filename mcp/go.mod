@@ -11,7 +11,7 @@ require (
 	github.com/kbukum/gokit/schema v0.2.0
 	github.com/kbukum/gokit/skill v0.2.0
 	github.com/kbukum/gokit/tool v0.2.0
-	github.com/modelcontextprotocol/go-sdk v1.6.0
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 )
 
 require (
