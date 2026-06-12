@@ -8,7 +8,7 @@ require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/ai v0.2.0
 	github.com/kbukum/gokit/tool v0.2.0
-	go.yaml.in/yaml/v4 v4.0.0-rc.4
+	go.yaml.in/yaml/v4 v4.0.0-rc.5
 )
 
 require (
