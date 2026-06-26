@@ -7,8 +7,8 @@ toolchain go1.26.3
 require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/kbukum/gokit v0.2.0
-	github.com/moby/moby/api v1.54.2
-	github.com/moby/moby/client v0.4.1
+	github.com/moby/moby/api v1.55.0
+	github.com/moby/moby/client v0.5.0
 	github.com/opencontainers/image-spec v1.1.1
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
