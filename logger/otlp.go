@@ -9,7 +9,7 @@ import (
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -168,7 +168,7 @@ func newLogResource(serviceName, environment, version string) (*resource.Resourc
 			semconv.SchemaURL,
 			semconv.ServiceName(serviceName),
 			semconv.ServiceVersion(version),
-			semconv.DeploymentEnvironmentName(environment),
+			semconv.DeploymentEnvironmentNameKey.String(environment),
 		),
 	)
 }

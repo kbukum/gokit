@@ -111,7 +111,7 @@ func TestTracingHandler_CreatesSpan(t *testing.T) {
 
 	attrMap := make(map[string]string)
 	for _, a := range s.Attributes() {
-		attrMap[string(a.Key)] = a.Value.Emit()
+		attrMap[string(a.Key)] = a.Value.String()
 	}
 	if attrMap["messaging.system"] != "messaging" {
 		t.Errorf("messaging.system = %q", attrMap["messaging.system"])
@@ -143,7 +143,7 @@ func TestTracingHandler_KafkaAttributes(t *testing.T) {
 	}
 	attrMap := make(map[string]string)
 	for _, a := range spans[0].Attributes() {
-		attrMap[string(a.Key)] = a.Value.Emit()
+		attrMap[string(a.Key)] = a.Value.String()
 	}
 	if attrMap["messaging.system"] != "kafka" {
 		t.Errorf("messaging.system = %q", attrMap["messaging.system"])
