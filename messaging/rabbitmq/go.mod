@@ -7,7 +7,7 @@ toolchain go1.26.3
 require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/messaging v0.2.0
-	github.com/rabbitmq/amqp091-go v1.11.0
+	github.com/rabbitmq/amqp091-go v1.12.0
 )
 
 require (
