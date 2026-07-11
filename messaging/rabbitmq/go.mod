@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/messaging/rabbitmq
 
 go 1.26.0
 
-toolchain go1.26.3
+toolchain go1.26.5
 
 require (
 	github.com/kbukum/gokit v0.2.0

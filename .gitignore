@@ -50,4 +50,4 @@ docs/testutil*.md
 .env
 
 # Temporary / planning files
-.tmp/
+tmp/
