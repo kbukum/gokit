@@ -33,7 +33,7 @@ wiring for the invariants below.
   pass `01`), maintained (recent releases), license-compatible, and free of known advisories.
   An unjustified or unmaintained dependency is a should-fix; one with an open CVE is a blocker.
 - **Vulnerability + license clean.** `govulncheck` passes; new findings are triaged in
-  `govulncheck-suppressions.json` with a rationale, not silently ignored. `gosec` (config in
+  `.github/govulncheck-suppressions.json` with a rationale, not silently ignored. `gosec` (config in
   `gosec.toml`) passes.
 - **Tidy modules.** `go.mod`/`go.sum` reflect exactly what is used (`go mod tidy` run per
   affected module); no leftover or phantom requires; `go.work` / `core.go.work` /

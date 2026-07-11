@@ -142,8 +142,9 @@ Check: behavioral code in scope has tests covering it (changes mode: in the same
 mode: anywhere in the tree); bug fixes have a regression test that fails without the fix; failure
 paths asserted, not just happy paths; tests **green under `-race -shuffle=on`** and depend on no
 wall clock, network, or working directory unless intentional (time uses an **injected clock**;
-env-var tests use `t.Setenv`; filesystem tests use `t.TempDir`); coverage meets the gates (≥80%
-per package, ≥85% overall, ≥85% for `errors`/`auth`/`authz`/`security`/`resilience`/`encryption`);
+env-var tests use `t.Setenv`; filesystem tests use `t.TempDir`); coverage meets the per-package
+floors (≥80% per package, ≥85% overall, ≥85% for `errors`/`auth`/`authz`/`security`/`resilience`/`encryption`,
+checked via `make test-coverage`; CI codecov enforces project 80% / patch 85%);
 parsers/validators/auth/codecs/schema carry `Fuzz` targets; fixtures over large inline config; an
 operation does what its name implies; every exported identifier has godoc that **matches
 implemented behavior**, each package has a `doc.go`, examples compile; comments describe the code

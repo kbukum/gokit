@@ -28,7 +28,8 @@ and hunt for flaky/implementation-coupled tests across the suite.
   correctly (trivially safe on 1.22+, but still check shared mutable state).
 - **Coverage gates.** ≥80% per package, ≥85% overall; ≥85% for the security-load-bearing
   packages (`errors`, `auth`, `authz`, `security`, `resilience`, `encryption`). A change that
-  drops a gated package below its floor is a blocker.
+  drops a gated package below its floor is a blocker. (CI enforces project 80% / patch 85% via
+  `codecov.yml`; the per-package floors are checked each step via `make test-coverage`.)
 - **Fuzz where it matters.** Parsers, validators, auth/JWT, codecs, and schema have `Fuzz`
   targets. A new parser/validator with no fuzz target is a should-fix.
 - **Environment-independent.** Tests use `t.Setenv` (auto-restored) rather than mutating global

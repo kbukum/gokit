@@ -21,7 +21,7 @@
 
 ## Module(s) Affected
 
-<!-- List the modules this PR changes (e.g., server, database, logging) -->
+<!-- List the modules this PR changes (e.g., server, database, cache) -->
 
 -
 
@@ -74,7 +74,7 @@ https://github.com/kbukum/rskit/issues/123 -->
 - [ ] Code follows the [coding standards](../CONTRIBUTING.md#coding-standards) in CONTRIBUTING.md
 - [ ] Behavior was developed test-first; new/changed behavior has tests (failure paths included)
 - [ ] Bug fixes include a regression test that fails without the fix
-- [ ] Suite is green under `-race -shuffle=on`; coverage gates met (≥80% pkg, ≥85% overall/security)
+- [ ] Suite is green under `-race -shuffle=on`; coverage meets the per-package floors (≥80% pkg, ≥85% security-load-bearing) and the CI codecov gate (project 80% / patch 85%)
 - [ ] No public `interface{}`/`any` (generics/typed); documented exceptions only
 - [ ] No `panic`/`log.Fatal`/ignored errors/unchecked type assertions on runtime paths
 - [ ] Dependencies (logger/tracer/policies/registries) injected — no globals or `init()` side effects
