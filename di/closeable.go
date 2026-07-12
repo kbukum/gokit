@@ -20,11 +20,11 @@ func RegisterCloseable[T any](c *Container, value T, dispose Disposer[T], opts .
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
 	}
-	if dispose == nil {
-		return fmt.Errorf("di: disposer for %s must not be nil", typeName[T]())
-	}
 	o := buildOptions(opts)
 	k := keyFor[T](o.name)
+	if dispose == nil {
+		return fmt.Errorf("di: disposer for %s must not be nil", k)
+	}
 	c.put(k, &entry{
 		mode:        modeEager,
 		typeName:    typeName[T](),
@@ -45,14 +45,15 @@ func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) 
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
 	}
+	o := buildOptions(opts)
+	k := keyFor[T](o.name)
 	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", typeName[T]())
+		return fmt.Errorf("di: constructor for %s must not be nil", k)
 	}
 	if dispose == nil {
-		return fmt.Errorf("di: disposer for %s must not be nil", typeName[T]())
+		return fmt.Errorf("di: disposer for %s must not be nil", k)
 	}
-	o := buildOptions(opts)
-	c.put(keyFor[T](o.name), &entry{
+	c.put(k, &entry{
 		mode:     modeSingleton,
 		typeName: typeName[T](),
 		name:     o.name,
@@ -60,7 +61,7 @@ func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) 
 		disposer: func(ctx context.Context, v any) error {
 			value, ok := v.(T)
 			if !ok {
-				return fmt.Errorf("di: disposer for %s got %T", typeName[T](), v)
+				return fmt.Errorf("di: disposer for %s got %T", k, v)
 			}
 			return dispose(ctx, value)
 		},

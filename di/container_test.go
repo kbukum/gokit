@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -191,6 +192,18 @@ func TestRegister_NilConstructor_Errors(t *testing.T) {
 	}
 	if err := di.RegisterTransient[int](c, nil); err == nil {
 		t.Error("nil transient constructor should error")
+	}
+}
+
+func TestRegister_NilConstructor_ErrorIncludesName(t *testing.T) {
+	t.Parallel()
+	c := di.NewContainer()
+	err := di.RegisterSingleton[int](c, nil, di.WithName("primary"))
+	if err == nil {
+		t.Fatal("nil singleton constructor should error")
+	}
+	if !strings.Contains(err.Error(), "primary") {
+		t.Errorf("error should name the WithName qualifier, got %q", err.Error())
 	}
 }
 

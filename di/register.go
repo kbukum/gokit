@@ -56,10 +56,10 @@ func RegisterSingleton[T any](c *Container, ctor func(context.Context) (T, error
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
 	}
-	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", typeName[T]())
-	}
 	o := buildOptions(opts)
+	if ctor == nil {
+		return fmt.Errorf("di: constructor for %s must not be nil", keyFor[T](o.name))
+	}
 	c.put(keyFor[T](o.name), &entry{
 		mode:     modeSingleton,
 		typeName: typeName[T](),
@@ -76,10 +76,10 @@ func RegisterTransient[T any](c *Container, ctor func(context.Context) (T, error
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
 	}
-	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", typeName[T]())
-	}
 	o := buildOptions(opts)
+	if ctor == nil {
+		return fmt.Errorf("di: constructor for %s must not be nil", keyFor[T](o.name))
+	}
 	c.put(keyFor[T](o.name), &entry{
 		mode:     modeTransient,
 		typeName: typeName[T](),

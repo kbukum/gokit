@@ -187,12 +187,12 @@ func TestInitTracer(t *testing.T) {
 
 	tp, err := InitTracer(context.Background(), cfg)
 	if err != nil {
-		// Known schema URL version mismatch; the important thing is the code path ran
-		t.Skipf("InitTracer failed (known schema conflict): %v", err)
+		t.Fatalf("InitTracer: %v", err)
 	}
-	if tp != nil {
-		defer tp.Shutdown(context.Background())
+	if tp == nil {
+		t.Fatal("InitTracer returned nil provider")
 	}
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 }
 
 func TestInitTracerSamplingRates(t *testing.T) {
@@ -217,11 +217,12 @@ func TestInitTracerSamplingRates(t *testing.T) {
 			}
 			tp, err := InitTracer(context.Background(), cfg)
 			if err != nil {
-				t.Skipf("InitTracer failed (known schema conflict): %v", err)
+				t.Fatalf("InitTracer: %v", err)
 			}
-			if tp != nil {
-				defer tp.Shutdown(context.Background())
+			if tp == nil {
+				t.Fatal("InitTracer returned nil provider")
 			}
+			t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 		})
 	}
 }
@@ -238,11 +239,12 @@ func TestInitTracerSecure(t *testing.T) {
 
 	tp, err := InitTracer(context.Background(), cfg)
 	if err != nil {
-		t.Skipf("InitTracer failed (known schema conflict): %v", err)
+		t.Fatalf("InitTracer: %v", err)
 	}
-	if tp != nil {
-		defer tp.Shutdown(context.Background())
+	if tp == nil {
+		t.Fatal("InitTracer returned nil provider")
 	}
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
 }
 
 func TestSpanNestingParentChild(t *testing.T) {
