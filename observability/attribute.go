@@ -39,7 +39,7 @@ func stringSliceValue(v []string) attrValue {
 func (v attrValue) keyValue(key string) attribute.KeyValue {
 	switch v.kind {
 	case kindInt:
-		return attribute.Int64(key, v.i64)
+		return attribute.Int(key, int(v.i64))
 	case kindInt64:
 		return attribute.Int64(key, v.i64)
 	case kindFloat64:
