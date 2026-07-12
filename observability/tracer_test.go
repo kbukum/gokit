@@ -108,7 +108,7 @@ func TestSpanFromContext(t *testing.T) {
 	}
 }
 
-func TestSetSpanAttribute(t *testing.T) {
+func TestSetSpanAttributes(t *testing.T) {
 	// Use SDK tracer so span.IsRecording() returns true
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
@@ -129,7 +129,7 @@ func TestSetSpanAttribute(t *testing.T) {
 	)
 }
 
-func TestSetSpanAttributeNoSpan(t *testing.T) {
+func TestSetSpanAttributesNoSpan(t *testing.T) {
 	// With background context (no recording span), should not panic
 	ctx := context.Background()
 	SetSpanAttributes(ctx, StringAttribute("key", "value"))

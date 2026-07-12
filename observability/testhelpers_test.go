@@ -9,9 +9,8 @@ import (
 )
 
 // setTracerProvider installs tp as the global tracer provider for the duration
-// of the test and restores the previous provider on cleanup. Because `go test`
-// runs packages in parallel, leaving global OTel state mutated can make other
-// packages' tests flaky.
+// of the test and restores the previous provider on cleanup, so parallel tests
+// within this package don't observe each other's global OTel state.
 func setTracerProvider(t *testing.T, tp oteltrace.TracerProvider) {
 	t.Helper()
 	prev := otel.GetTracerProvider()
