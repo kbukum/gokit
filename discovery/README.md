@@ -13,12 +13,19 @@ go get github.com/kbukum/gokit/discovery@latest
 ```go
 import (
     "github.com/kbukum/gokit/discovery"
-    _ "github.com/kbukum/gokit/discovery/consul"  // register consul provider
+    "github.com/kbukum/gokit/discovery/consul"  // consul provider
     "github.com/kbukum/gokit/logging"
 )
 
-log := logging.New()
-comp := discovery.NewComponent(discovery.Config{
+log := logging.NewDefault("my-service")
+
+// Providers are registered explicitly into an injected registry.
+reg := discovery.NewProviderRegistry()
+if err := consul.Register(reg); err != nil {
+    panic(err)
+}
+
+comp, err := discovery.NewComponent(reg, discovery.Config{
     Enabled:  true,
     Provider: "consul",
     Consul:   map[string]any{"addr": "localhost:8500"},
@@ -27,6 +34,9 @@ comp := discovery.NewComponent(discovery.Config{
         ServicePort: 8080,
     },
 }, log)
+if err != nil {
+    panic(err)
+}
 
 comp.Start(ctx)
 defer comp.Stop(ctx)

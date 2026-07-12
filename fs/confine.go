@@ -116,11 +116,7 @@ func canonicalizeDirectoryRoot(root string) (string, error) {
 func canonicalizeConfinedInput(path, label string) (string, error) {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		code := apperrors.ErrCodeInternal
-		status := http.StatusInternalServerError
-		if errors.Is(err, os.ErrNotExist) {
-			code, status = apperrors.ErrCodeNotFound, http.StatusNotFound
-		}
+		code, status := osErrorCode(err)
 		return "", apperrors.New(code,
 			fmt.Sprintf("failed to canonicalize %s '%s': %v", label, path, err), status).WithCause(err)
 	}

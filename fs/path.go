@@ -132,12 +132,7 @@ func splitSegments(path string) []string {
 }
 
 func canonicalizeError(path string, err error) error {
-	code := apperrors.ErrCodeInternal
-	status := 500
-	if errors.Is(err, os.ErrNotExist) {
-		code = apperrors.ErrCodeNotFound
-		status = 404
-	}
+	code, status := osErrorCode(err)
 	return apperrors.New(code,
 		fmt.Sprintf("failed to canonicalize '%s': %v", path, err), status).WithCause(err)
 }

@@ -78,14 +78,21 @@ func TestFromKafkaMessage_NoHeaders(t *testing.T) {
 func TestKafkaPackageDoesNotDefineGenericMessageConstructor(t *testing.T) {
 	t.Parallel()
 
-	files := []string{"translator.go", "helpers.go"}
-	for _, file := range files {
-		data, err := os.ReadFile(file)
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read package dir: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(name)
 		if err != nil {
-			t.Fatalf("read %s: %v", file, err)
+			t.Fatalf("read %s: %v", name, err)
 		}
 		if strings.Contains(string(data), "func NewMessage(") {
-			t.Fatalf("%s defines generic NewMessage; use messaging.NewMessage in core", file)
+			t.Fatalf("%s defines generic NewMessage; use messaging.NewMessage in core", name)
 		}
 	}
 }

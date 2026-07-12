@@ -26,11 +26,10 @@ func main() {
 
     // Component-scoped logger
     dbLog := log.WithComponent("database")
-    dbLog.Debug("query executed", logger.DurationFields("select", elapsed))
+    dbLog.Debug("query executed", logging.DurationFields("select", elapsed))
 
-    // Global logger (set once, use anywhere)
-    logger.SetGlobalLogger(log)
-    logging.Info("using global logger")
+    // Package-level functions use the immutable process default (logging.Default())
+    logging.Info("using package-level default logger")
 
     // Sensitive data is automatically redacted
     log.Info("user login", logging.Fields("password", "hunter2"))
@@ -227,7 +226,7 @@ cfg := &logging.Config{
     Level:       "info",
     Format:      "json",
     ServiceName: "my-service",
-    OTLP: logger.OTLPConfig{
+    OTLP: logging.OTLPConfig{
         Enabled:  true,
         Endpoint: "localhost:4317",
         Protocol: "grpc",
@@ -278,7 +277,7 @@ All three kits (gokit, pykit, rskit) share the same structured field names:
 Attach standard service identification to any log entry:
 
 ```go
-svcFields := logger.ServiceFields("order-svc", "production", "1.2.3")
+svcFields := logging.ServiceFields("order-svc", "production", "1.2.3")
 log.Info("service started", svcFields)
 // → {"service":"order-svc","environment":"production","version":"1.2.3",...}
 ```
@@ -293,12 +292,12 @@ logging.Fields("op", "save", "id", 42)
 logging.ErrorFields("db.connect", err)
 
 // Duration fields
-logger.DurationFields("query", 150*time.Millisecond)
+logging.DurationFields("query", 150*time.Millisecond)
 
 // Merge helpers
 fields := logging.Fields("op", "save")
-logger.MergeWithError(fields, err)
-logger.MergeWithDuration(fields, elapsed)
+logging.MergeWithError(fields, err)
+logging.MergeWithDuration(fields, elapsed)
 ```
 
 ## Custom Masker

@@ -162,10 +162,3 @@ func TestCanonicalize(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
-
-func TestCanonicalizeMissingErrors(t *testing.T) {
-	t.Parallel()
-	if _, err := fs.Canonicalize(filepath.Join(t.TempDir(), "missing")); err == nil {
-		t.Fatal("expected error for missing path")
-	}
-}

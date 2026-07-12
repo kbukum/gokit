@@ -5,7 +5,7 @@
 // composable evaluation workflow:
 //
 //   - Evaluator = provider.RequestResponse[[]byte, Prediction[L]]
-//   - Dataset   = pipeline.Iterator[Sample[L]], loaded from manifest files
+//   - Dataset   = stream.Iterator[Sample[L]], loaded from manifest files
 //   - Metrics   = pluggable scorers that consume (ground-truth, prediction) pairs
 //
 // # Architecture
@@ -14,7 +14,7 @@
 //
 //	Dataset → Evaluator → ScoredSample → Metrics → Results
 //
-// Datasets are loaded lazily through pipeline.Iterator, so arbitrarily large
+// Datasets are loaded lazily through stream.Iterator, so arbitrarily large
 // datasets stream through memory without loading everything at once.
 // Evaluators wrap any provider.RequestResponse via the FromProvider adapter,
 // or use EvaluatorFunc for quick inline definitions.

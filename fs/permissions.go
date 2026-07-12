@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -67,7 +66,7 @@ func IsReadonly(path string) (bool, error) {
 }
 
 func accessError(context, path string, err error) error {
-	return apperrors.New(apperrors.ErrCodeInternal,
-		fmt.Sprintf("failed to %s for '%s': %v", context, path, err),
-		http.StatusInternalServerError).WithCause(err)
+	code, status := osErrorCode(err)
+	return apperrors.New(code,
+		fmt.Sprintf("failed to %s for '%s': %v", context, path, err), status).WithCause(err)
 }

@@ -18,7 +18,7 @@ import (
     "github.com/kbukum/gokit/logging"
 )
 
-log := logging.New()
+log := logging.NewDefault("my-service")
 cfg := grpccfg.Config{Host: "localhost", Port: 50051, Enabled: true}
 
 // Direct connection

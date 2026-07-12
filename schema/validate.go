@@ -49,7 +49,7 @@ func Compile(s JSON) (*CompiledSchema, error) {
 // limits to the schema document.
 func CompileWithLimits(s JSON, limits ValidationLimits) (*CompiledSchema, error) {
 	if s != nil {
-		if err := limits.check("schema", map[string]any(s)); err != nil {
+		if err := limits.check("schema", s); err != nil {
 			return nil, err
 		}
 	}

@@ -52,6 +52,13 @@ func TestModeAndExecutable(t *testing.T) {
 	}
 }
 
+func TestModeMissingPathIsNotFound(t *testing.T) {
+	t.Parallel()
+	_, modeErr := fs.Mode(filepath.Join(t.TempDir(), "missing"))
+	requireNotFound(t, modeErr)
+	requireNotFound(t, fs.SetMode(filepath.Join(t.TempDir(), "missing"), 0o644))
+}
+
 func TestIsReadonly(t *testing.T) {
 	t.Parallel()
 	file := filepath.Join(t.TempDir(), "f.txt")

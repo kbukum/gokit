@@ -14,7 +14,7 @@ flow through **pipelines**, and metrics are fully pluggable.
 
 - **Generics-first** — `Sample[L]`, `Prediction[L]`, `Evaluator[L]` are parameterised on the label type
 - **Provider integration** — any `provider.RequestResponse` becomes an evaluator with one adapter call
-- **Pipeline integration** — datasets expose a `pipeline.Pipeline` / `pipeline.Iterator` for lazy, backpressure-aware loading
+- **Pipeline integration** — datasets expose a `stream.Pipeline` / `stream.Iterator` for lazy, backpressure-aware loading
 - **Pluggable metrics** — classification, probability, ranking, regression, matching — or bring your own
 - **Multiple output formats** — JSON, Markdown, CSV, HTML, JUnit XML, Vega-Lite, SVG visualisations
 - **Comparison & regression detection** — diff two runs, surface fixed/regressed samples, gate CI on thresholds
@@ -101,7 +101,7 @@ func main() {
 | `Evaluator[L]` | interface | `provider.RequestResponse[[]byte, Prediction[L]]` |
 | `EvaluatorFunc[L]` | func | Wraps a plain `func(ctx, []byte) (Prediction[L], error)` as an `Evaluator` |
 | `FromProvider[I,O,L]` | func | Adapts any `provider.RequestResponse[I,O]` into an `Evaluator[L]` |
-| `DatasetLoader[L]` | struct | Reads a manifest directory into `[]Sample[L]` or a `pipeline.Pipeline` |
+| `DatasetLoader[L]` | struct | Reads a manifest directory into `[]Sample[L]` or a `stream.Pipeline` |
 | `LabelMapper[L]` | func | `func(string) (L, error)` — converts manifest string labels to typed `L` |
 | `BenchRunner[L]` | struct | Orchestrates evaluation: load → evaluate → compute metrics → store |
 | `RunResult` | struct | Full benchmark output — metrics, branch results, per-sample details, curves |
@@ -280,7 +280,7 @@ _ = cli.ShowRun(ctx, "run-abc123")         // show a specific run
 ## Related Packages
 
 - [**provider**](../provider/) — `Evaluator` is a `provider.RequestResponse` under the hood
-- [**pipeline**](../pipeline/) — `DatasetLoader.Pipeline()` returns a lazy `pipeline.Pipeline`
+- [**stream**](../stream/) — `DatasetLoader.Pipeline()` returns a lazy `stream.Pipeline`
 - [**process**](../process/) — wrap a subprocess as a provider, then adapt to an evaluator
 - [**storage**](../storage/) — `bench/storage` adapts `gokit/storage` for cloud result persistence
 

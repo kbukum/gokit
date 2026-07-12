@@ -16,8 +16,8 @@ import (
     "github.com/kbukum/gokit/logging"
 )
 
-log := logging.New()
-srv := server.New(server.Config{Host: "0.0.0.0", Port: 8080}, log)
+log := logging.NewDefault("my-service")
+srv := server.New(&server.Config{Host: "0.0.0.0", Port: 8080}, log)
 srv.ApplyDefaults("my-service", healthChecker)
 
 srv.GinEngine().GET("/hello", func(c *gin.Context) {

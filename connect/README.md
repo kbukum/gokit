@@ -252,7 +252,7 @@ func (s *UserService) GetProfile(
 }
 
 func main() {
-    log := logging.New()
+    log := logging.NewDefault("my-service")
 
     // Setup JWT service
     jwtCfg := &jwt.Config{

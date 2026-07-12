@@ -12,6 +12,10 @@
 //
 // # Usage
 //
-//	log := logging.Get("my-component")
-//	log.Info().Str("key", "value").Msg("operation completed")
+//	log := logging.NewDefault("my-service")
+//	log.Info("operation completed", logging.Fields("key", "value"))
+//
+//	// Component-scoped logger derived from a base logger.
+//	dbLog := log.WithComponent("database")
+//	dbLog.Debug("query executed")
 package logging

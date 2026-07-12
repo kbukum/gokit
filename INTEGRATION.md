@@ -193,7 +193,7 @@ func setupAnalysisClient(
 
 func main() {
 	discoveryClient := discovery.NewConsulClient(/* ... */)
-	log := logging.New()
+	log := logging.NewDefault("my-service")
 	
 	// Setup lazy gRPC client
 	analysisClient := setupAnalysisClient(discoveryClient, log)
@@ -399,7 +399,7 @@ All five patterns work together in a complete microservice:
 // main.go — complete microservice wiring
 func main() {
 	ctx := context.Background()
-	log := logging.New()
+	log := logging.NewDefault("my-service")
 	
 	// Setup discovery
 	discoveryRegistry := discovery.NewConsulRegistry(/* ... */)

@@ -122,19 +122,19 @@ acc := stateful.NewAccumulator(&PostgresStore[Event]{db: myDB}, config)
 
 ## Composing with Pipeline
 
-`stateful` and `pipeline` are complementary patterns:
+`stateful` and `stream` are complementary patterns:
 
 ```go
-// Pipeline feeds Accumulator
-pipeline.FromSlice(events).
+// Stream feeds Accumulator
+stream.FromSlice(events).
     Map(transform).
     ForEach(func(ctx context.Context, e Event) error {
         return accumulator.Append(ctx, e)
     })
 
-// Accumulator flushes to Pipeline
+// Accumulator flushes to Stream
 acc.OnFlush = func(ctx context.Context, events []Event) error {
-    return pipeline.FromSlice(events).
+    return stream.FromSlice(events).
         Filter(validate).
         Sink(kafkaPublish)
 }
