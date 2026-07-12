@@ -40,7 +40,14 @@ reg.SetDefault("jwt")
 
 // In middleware setup
 validator, _ := reg.Default()
-router.Use(middleware.Auth(validator))
+// Auth injects validated claims via a ClaimsSetter (authctx.Set) so the
+// transport layer stays decoupled from this module, and returns an error for
+// invalid configuration.
+authMW, err := middleware.Auth(validator, authctx.Set)
+if err != nil {
+    log.Fatal(err)
+}
+router.Use(authMW)
 ```
 
 ### JWT Token Service

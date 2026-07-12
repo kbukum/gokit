@@ -3,7 +3,7 @@ package chain
 import "context"
 
 // StepContext is the per-step execution context. It carries cancellation
-// (through the underlying context.Context) and a channel for reporting
+// (through the underlying context.Context) and a callback for reporting
 // step-local progress. It is passed by value; the zero value is not useful —
 // obtain one from the executor.
 type StepContext struct {

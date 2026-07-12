@@ -42,7 +42,8 @@ func runCleanups(ctx context.Context, cleanups []cleanupAction) error {
 }
 
 // Chain executes a typed sequence of steps, short-circuiting on the first
-// failure and returning that step's output type.
+// failure. On success it returns the chain's final output type O; on failure it
+// returns an error together with the zero value of O.
 type Chain[I, O any] struct {
 	stepCount int
 	runner    runner[I, O]
