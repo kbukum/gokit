@@ -88,8 +88,12 @@ func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 // Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
 //
 // setClaims is the injected sink for validated claims (typically auth/authctx.Set),
-// keeping the transport layer decoupled from the auth module. It must be non-nil.
+// keeping the transport layer decoupled from the auth module. Both validator and
+// setClaims must be non-nil.
 func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	if validator == nil {
+		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil TokenValidator")
+	}
 	if setClaims == nil {
 		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil ClaimsSetter")
 	}
@@ -130,8 +134,12 @@ func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) 
 // is always rejected with 401 — this is a deliberate secure-by-default contract:
 // callers that want pass-through-on-failure should use no auth middleware at all.
 //
-// setClaims is the injected sink for validated claims and must be non-nil.
+// setClaims is the injected sink for validated claims. Both validator and
+// setClaims must be non-nil.
 func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	if validator == nil {
+		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil TokenValidator")
+	}
 	if setClaims == nil {
 		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil ClaimsSetter")
 	}

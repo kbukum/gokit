@@ -46,6 +46,20 @@ func TestAuth_QueryTokenConfigError(t *testing.T) {
 	}
 }
 
+func TestAuth_NilValidator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	if _, err := Auth(nil, storeClaims); err == nil || !strings.Contains(err.Error(), "TokenValidator") {
+		t.Errorf("got %v want non-nil TokenValidator error", err)
+	}
+}
+
+func TestOptionalAuth_NilValidator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	if _, err := OptionalAuth(nil, storeClaims); err == nil || !strings.Contains(err.Error(), "TokenValidator") {
+		t.Errorf("got %v want non-nil TokenValidator error", err)
+	}
+}
+
 func TestAuth_SkipPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

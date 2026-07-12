@@ -124,7 +124,7 @@ func (s *partitionState[T]) start(createCtx, firstNextCtx context.Context, p *Pi
 func (s *partitionState[T]) consume(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.finish(result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
+			s.finish(result[T]{err: fmt.Errorf("stream: partition predicate panic: %v", r)})
 		} else {
 			s.finish(result[T]{})
 		}
