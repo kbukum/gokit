@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`. Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
+- **security**: documented, time-boxed govulncheck suppression for `GO-2026-5932` (deprecated, unfixable `golang.org/x/crypto/openpgp`; not imported or reachable in any module). Removed the two stale `moby/moby` suppressions now that `workload` links `moby/moby/client`.
 
 ## [0.2.0] - 2026-04-25
 
