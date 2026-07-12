@@ -71,10 +71,16 @@ func (b *Broadcaster[T]) SubscriberCount() int {
 
 // Subscribe registers a new subscriber and returns its receive-only event
 // channel. The channel is closed — terminating any range over it — when ctx is
-// canceled or the Broadcaster is closed. Subscribing to a closed Broadcaster
-// returns an already-closed channel.
+// canceled or the Broadcaster is closed. Subscribing with an already-canceled
+// context, or to a closed Broadcaster, returns an already-closed channel
+// without registering a subscriber or spawning a watcher goroutine.
 func (b *Broadcaster[T]) Subscribe(ctx context.Context) <-chan T {
 	ch := make(chan T, b.buffer)
+
+	if ctx.Err() != nil {
+		close(ch)
+		return ch
+	}
 
 	b.mu.Lock()
 	if b.closed {

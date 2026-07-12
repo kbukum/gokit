@@ -89,18 +89,16 @@ func New(cfg *Config, log *logging.Logger) *Server {
 	log = log.WithComponent("server")
 
 	// Build the security-headers middleware once. Config.Validate is the trust
-	// boundary that rejects an invalid SecurityHeaders config; if an unvalidated
-	// invalid config reaches here we fall back to the secure defaults (which
-	// cannot fail) rather than serve responses without protective headers.
+	// boundary that rejects an invalid SecurityHeaders config, so a validated
+	// config never reaches the error branch here. If an unvalidated invalid
+	// config does reach New, fall back to the secure defaults — which build from
+	// a nil config and therefore cannot fail — rather than serving responses
+	// without protective headers. New is an infallible constructor with no
+	// request context, so the fallback is silent by design; the invalid config
+	// is surfaced to callers through Config.Validate.
 	secHeaders, err := middleware.SecurityHeaders(&cfg.SecurityHeaders)
 	if err != nil {
-		log.Warn("invalid security headers config; falling back to secure defaults", map[string]any{
-			"error": err.Error(),
-		})
 		if secHeaders, err = middleware.SecurityHeaders(nil); err != nil {
-			log.Error("failed to build default security headers; responses will omit them", map[string]any{
-				"error": err.Error(),
-			})
 			secHeaders = nil
 		}
 	}

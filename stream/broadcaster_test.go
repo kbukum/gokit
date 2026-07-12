@@ -102,6 +102,23 @@ func TestBroadcasterDropsOverflowWithoutBlocking(t *testing.T) {
 	}
 }
 
+func TestBroadcasterSubscribeCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	b := stream.NewBroadcaster[int]()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	sub := b.Subscribe(ctx)
+	// A subscription made with an already-canceled context must not be
+	// registered and must yield an already-closed channel.
+	if n := b.SubscriberCount(); n != 0 {
+		t.Fatalf("subscriber count = %d, want 0 for canceled-context subscribe", n)
+	}
+	b.Broadcast(1)
+	expectClosed(t, sub, "canceled-context subscription")
+}
+
 func TestBroadcasterChannelClosesOnCancel(t *testing.T) {
 	t.Parallel()
 
