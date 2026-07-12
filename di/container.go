@@ -191,16 +191,17 @@ func (c *Container) Close(ctx context.Context) error {
 	c.closers = nil
 	c.closersMu.Unlock()
 
-	c.mu.Lock()
-	c.entries = make(map[typeKey]*entry)
-	c.mu.Unlock()
-
 	var errs []error
 	for i := len(closers) - 1; i >= 0; i-- {
 		if err := closers[i].fn(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("di: close %s: %w", closers[i].key, err))
 		}
 	}
+
+	c.mu.Lock()
+	c.entries = make(map[typeKey]*entry)
+	c.mu.Unlock()
+
 	return errors.Join(errs...)
 }
 
