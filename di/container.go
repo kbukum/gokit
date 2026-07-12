@@ -157,7 +157,8 @@ func (e *entry) resolve(ctx context.Context) (any, error) {
 
 // Close calls Close on every resolved value that implements
 // interface{ Close() error }, once, and clears the container so a second call
-// is a no-op. Errors are joined.
+// is a no-op. Errors are joined. Only currently-registered values are closed;
+// a value dropped by re-registering its key is the caller's to close.
 func (c *Container) Close() error {
 	c.mu.Lock()
 	entries := c.entries

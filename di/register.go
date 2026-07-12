@@ -28,7 +28,8 @@ func buildOptions(opts []Option) options {
 }
 
 // Register registers a pre-built value for type T. The value is returned as-is
-// on every [Resolve]. Re-registering the same key replaces the prior entry.
+// on every [Resolve]. Re-registering the same key replaces the prior entry; the
+// replaced value is not closed, so close any resource you replace.
 func Register[T any](c *Container, value T, opts ...Option) error {
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
