@@ -72,17 +72,17 @@
 // stateful and stream are complementary patterns that compose naturally:
 //
 //	// Stream feeds Accumulator
-//	stream.FromSlice(events).
-//	    Map(transform).
-//	    ForEach(func(ctx context.Context, e Event) error {
-//	        return accumulator.Append(ctx, e)
-//	    })
+//	transformed := stream.Map(stream.FromSlice(events), transform)
+//	_ = stream.ForEach(ctx, transformed, func(ctx context.Context, e Event) error {
+//	    return acc.Append(ctx, e)
+//	})
 //
-//	// Accumulator flushes to Stream
-//	acc.OnFlush = func(ctx context.Context, events []Event) error {
-//	    return stream.FromSlice(events).
-//	        Filter(validate).
-//	        Sink(kafkaPublish)
+//	// Accumulator flushes to Stream (OnFlush configured on Config)
+//	cfg := stateful.Config[Event]{
+//	    OnFlush: func(ctx context.Context, events []Event) error {
+//	        valid := stream.Filter(stream.FromSlice(events), validate)
+//	        return stream.Drain(valid, kafkaPublish).Run(ctx)
+//	    },
 //	}
 //
 // # When to Use

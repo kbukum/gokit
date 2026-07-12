@@ -333,8 +333,7 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 | `New(cfg, name)` | Create logger from config |
 | `NewDefault(name)` | Create logger with defaults |
 | `NewFromEnv(name)` | Create logger from `LOG_LEVEL`, `LOG_FORMAT` env vars |
-| `Init(cfg)` | Initialize global logger |
-| `SetGlobalLogger(l)` / `GetGlobalLogger()` | Global logger management |
+| `Default()` | Access the process-wide default logger (immutable) |
 | `WithContext(ctx)` | Enrich with trace/span/request IDs from context |
 | `WithComponent(name)` | Tag with component + apply module level |
 | `WithFields(map)` | Add structured fields |

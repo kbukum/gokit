@@ -32,7 +32,7 @@ func setupDiscoveryServer(
 		discoveryRegistry,
 		"payment-svc-1",      // unique service instance ID
 		"payment-service",    // logical service name
-		"",                   // auto-detect local IP
+		"127.0.0.1",          // advertised address
 		8080,                 // port to register
 		[]string{"v1", "prod"}, // optional tags
 		map[string]string{"region": "us-west"},
@@ -46,18 +46,22 @@ func setupDiscoveryServer(
 
 func main() {
 	ctx := context.Background()
-	
-	// Create HTTP server
-	httpServer := server.NewServer(ctx, server.Config{
+	log := logging.NewDefault("payment-service")
+
+	// Create HTTP server component
+	httpServer := server.NewComponent(server.New(&server.Config{
 		Port:    8080,
 		Network: "tcp",
-	})
-	
-	// Setup discovery registry (e.g., Consul)
-	discoveryRegistry := discovery.NewConsulRegistry(/* ... */)
-	
+	}, log))
+
+	// Setup discovery provider (e.g., Consul) — implements discovery.Registry
+	consulProvider, err := consul.NewProvider(discovery.Config{}, nil, log)
+	if err != nil {
+		panic(err)
+	}
+
 	// Wrap with discovery
-	discServer, err := setupDiscoveryServer(httpServer, discoveryRegistry, log)
+	discServer, err := setupDiscoveryServer(httpServer, consulProvider, log)
 	if err != nil {
 		panic(err)
 	}
@@ -192,9 +196,10 @@ func setupAnalysisClient(
 }
 
 func main() {
-	discoveryClient := discovery.NewConsulClient(/* ... */)
 	log := logging.NewDefault("my-service")
-	
+	consulProvider, _ := consul.NewProvider(discovery.Config{}, nil, log)
+	discoveryClient := discovery.NewClient(consulProvider, discovery.ClientConfig{}, log)
+
 	// Setup lazy gRPC client
 	analysisClient := setupAnalysisClient(discoveryClient, log)
 	
@@ -401,14 +406,14 @@ func main() {
 	ctx := context.Background()
 	log := logging.NewDefault("my-service")
 	
-	// Setup discovery
-	discoveryRegistry := discovery.NewConsulRegistry(/* ... */)
-	discoveryClient := discovery.NewConsulClient(/* ... */)
+	// Setup discovery provider (Consul) — serves as both Registry and Discovery
+	consulProvider, _ := consul.NewProvider(discovery.Config{}, nil, log)
+	discoveryClient := discovery.NewClient(consulProvider, discovery.ClientConfig{}, log)
 	
 	// 1. HTTP server with discovery
-	httpServer := server.NewServer(ctx, server.Config{Port: 8080})
+	httpServer := server.NewComponent(server.New(&server.Config{Port: 8080}, log))
 	discServer, _ := server.NewDiscoveryServerComponent(
-		httpServer, discoveryRegistry, "svc-1", "my-service", "", 8080, nil, nil, log)
+		httpServer, consulProvider, "svc-1", "my-service", "127.0.0.1", 8080, nil, nil, log)
 	component.Register(discServer)
 	
 	// 2. Kafka message handler with middleware stack
