@@ -481,17 +481,21 @@ func TestIntegration_DI_Component_RegistrationModes(t *testing.T) {
 		callCount++
 		return &trackingComponent{name: "eager"}
 	}()
-	_ = di.Register(container, eager, di.WithName("eager-svc"))
+	if err := di.Register(container, eager, di.WithName("eager-svc")); err != nil {
+		t.Fatalf("register eager-svc: %v", err)
+	}
 	if callCount != 1 {
 		t.Errorf("eager should build the value immediately, callCount=%d", callCount)
 	}
 
 	// Lazy (singleton) registration
 	lazyCount := 0
-	_ = di.RegisterSingleton(container, func(context.Context) (*trackingComponent, error) {
+	if err := di.RegisterSingleton(container, func(context.Context) (*trackingComponent, error) {
 		lazyCount++
 		return &trackingComponent{name: "lazy"}, nil
-	}, di.WithName("lazy-svc"))
+	}, di.WithName("lazy-svc")); err != nil {
+		t.Fatalf("register lazy-svc: %v", err)
+	}
 	if lazyCount != 0 {
 		t.Error("lazy should not call factory until resolve")
 	}
@@ -725,7 +729,9 @@ func TestIntegration_DI_Resilience_CircuitBreakerInContainer(t *testing.T) {
 		Timeout:     100 * time.Millisecond,
 	})
 
-	_ = di.Register(container, cb, di.WithName("circuit-breaker"))
+	if err := di.Register(container, cb, di.WithName("circuit-breaker")); err != nil {
+		t.Fatalf("register circuit-breaker: %v", err)
+	}
 
 	resolvedCB, err := di.Resolve[*resilience.CircuitBreaker](context.Background(), container, di.WithName("circuit-breaker"))
 	if err != nil {
@@ -831,7 +837,9 @@ func TestIntegration_FullStack_ConfigDIComponentPipeline(t *testing.T) {
 
 	// 2. DI container
 	container := di.NewContainer()
-	_ = di.Register(container, cfg, di.WithName("config"))
+	if err := di.Register(container, cfg, di.WithName("config")); err != nil {
+		t.Fatalf("register config: %v", err)
+	}
 
 	// 3. Components
 	db := &trackingComponent{name: cfg.Name + "-db"}

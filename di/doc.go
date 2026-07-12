@@ -29,6 +29,8 @@
 // resolution [context.Context] and calls [Resolve] with it for each dependency
 // it needs. The active resolution chain travels in that context, so circular
 // dependencies are detected and reported as an error, and a canceled context
-// aborts resolution. Values that implement interface{ Close() error } are
-// closed by [Container.Close].
+// aborts resolution. Eager registrations and resolved singletons whose value
+// implements interface{ Close() error } are closed by [Container.Close];
+// transients and unresolved singletons are never stored, so nothing is closed
+// for them.
 package di
