@@ -79,6 +79,7 @@ func TestConfineExistingPathMissingErrors(t *testing.T) {
 		t.Fatal("expected error for missing confined path")
 	}
 }
+
 func TestConfineRootMustBeDirectory(t *testing.T) {
 	t.Parallel()
 	file := filepath.Join(t.TempDir(), "not-a-dir")

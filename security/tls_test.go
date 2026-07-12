@@ -240,6 +240,7 @@ func TestTLSConfig_Build_DefaultMinVersionIsTLS12(t *testing.T) {
 		t.Errorf("default MinVersion = %#x, want %#x (TLS 1.2)", result.MinVersion, tls.VersionTLS12)
 	}
 }
+
 func TestTLSConfig_Build_MinVersionTLS13Accepted(t *testing.T) {
 	cfg := &TLSConfig{SkipVerify: true, MinVersion: tls.VersionTLS13}
 	result, err := cfg.Build()
@@ -250,6 +251,7 @@ func TestTLSConfig_Build_MinVersionTLS13Accepted(t *testing.T) {
 		t.Errorf("MinVersion = %#x, want %#x (TLS 1.3)", result.MinVersion, tls.VersionTLS13)
 	}
 }
+
 func TestTLSConfig_Build_MinVersionTLS12Accepted(t *testing.T) {
 	cfg := &TLSConfig{SkipVerify: true, MinVersion: tls.VersionTLS12}
 	result, err := cfg.Build()
@@ -260,6 +262,7 @@ func TestTLSConfig_Build_MinVersionTLS12Accepted(t *testing.T) {
 		t.Errorf("MinVersion = %#x, want %#x (TLS 1.2)", result.MinVersion, tls.VersionTLS12)
 	}
 }
+
 func TestTLSConfig_Build_ZeroMinVersionDefaultsToTLS12(t *testing.T) {
 	cfg := &TLSConfig{SkipVerify: true, MinVersion: 0}
 	result, err := cfg.Build()
@@ -270,6 +273,7 @@ func TestTLSConfig_Build_ZeroMinVersionDefaultsToTLS12(t *testing.T) {
 		t.Errorf("MinVersion 0 should default to TLS 1.2 (%#x), got %#x", tls.VersionTLS12, result.MinVersion)
 	}
 }
+
 func TestTLSConfig_Build_CertificateChainWithIntermediateCA(t *testing.T) {
 	dir := t.TempDir()
 
@@ -341,6 +345,7 @@ func TestTLSConfig_Build_CertificateChainWithIntermediateCA(t *testing.T) {
 		t.Errorf("intermediate cert should be verifiable against root: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_ExpiredCertificateLoadsButExpired(t *testing.T) {
 	dir := t.TempDir()
 
@@ -380,6 +385,7 @@ func TestTLSConfig_Build_ExpiredCertificateLoadsButExpired(t *testing.T) {
 		t.Errorf("expected 1 certificate loaded, got %d", len(result.Certificates))
 	}
 }
+
 func TestTLSConfig_Build_SelfSignedCertAsCA(t *testing.T) {
 	dir := t.TempDir()
 
@@ -414,6 +420,7 @@ func TestTLSConfig_Build_SelfSignedCertAsCA(t *testing.T) {
 		t.Error("expected RootCAs to be set for self-signed CA")
 	}
 }
+
 func TestTLSConfig_Build_mTLSFullConfiguration(t *testing.T) {
 	certs := tlstest.GenerateTLSCerts(t)
 	cfg := &TLSConfig{
@@ -442,6 +449,7 @@ func TestTLSConfig_Build_mTLSFullConfiguration(t *testing.T) {
 		t.Errorf("mTLS: MinVersion = %#x, want TLS 1.2", result.MinVersion)
 	}
 }
+
 func TestTLSConfig_Validate_mTLSMissingKeyFile(t *testing.T) {
 	certs := tlstest.GenerateTLSCerts(t)
 	cfg := &TLSConfig{
@@ -457,6 +465,7 @@ func TestTLSConfig_Validate_mTLSMissingKeyFile(t *testing.T) {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
 func TestTLSConfig_Validate_mTLSMissingCertFile(t *testing.T) {
 	certs := tlstest.GenerateTLSCerts(t)
 	cfg := &TLSConfig{
@@ -469,6 +478,7 @@ func TestTLSConfig_Validate_mTLSMissingCertFile(t *testing.T) {
 		t.Fatal("expected validation error when KeyFile set without CertFile")
 	}
 }
+
 func TestTLSConfig_Build_NonexistentCertFileClearError(t *testing.T) {
 	cfg := &TLSConfig{
 		CertFile: "/nonexistent/path/cert.pem",
@@ -485,6 +495,7 @@ func TestTLSConfig_Build_NonexistentCertFileClearError(t *testing.T) {
 		t.Errorf("error should mention client certificate loading: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_NonexistentCAFileClearError(t *testing.T) {
 	cfg := &TLSConfig{CAFile: "/nonexistent/path/ca.pem"}
 	_, err := cfg.Build()
@@ -498,6 +509,7 @@ func TestTLSConfig_Build_NonexistentCAFileClearError(t *testing.T) {
 		t.Errorf("error should mention CA file reading: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_EmptyStringPathsProduceNilConfig(t *testing.T) {
 	cfg := &TLSConfig{
 		CAFile:   "",
@@ -512,6 +524,7 @@ func TestTLSConfig_Build_EmptyStringPathsProduceNilConfig(t *testing.T) {
 		t.Fatal("empty string paths (no settings) should produce nil config")
 	}
 }
+
 func TestTLSConfig_Build_EmptyPathsWithSkipVerify(t *testing.T) {
 	cfg := &TLSConfig{
 		SkipVerify: true,
@@ -533,6 +546,7 @@ func TestTLSConfig_Build_EmptyPathsWithSkipVerify(t *testing.T) {
 		t.Errorf("expected no client certs, got %d", len(result.Certificates))
 	}
 }
+
 func TestTLSConfig_Build_CertKeyMismatchError(t *testing.T) {
 	dir := t.TempDir()
 
@@ -566,6 +580,7 @@ func TestTLSConfig_Build_CertKeyMismatchError(t *testing.T) {
 		t.Errorf("error should have security/tls prefix: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_PermissionDeniedCAFile(t *testing.T) {
 	dir := t.TempDir()
 	caFile := filepath.Join(dir, "no-read-ca.pem")
@@ -583,6 +598,7 @@ func TestTLSConfig_Build_PermissionDeniedCAFile(t *testing.T) {
 		t.Errorf("error should mention CA file read or parse failure: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_ProducesValidConfig(t *testing.T) {
 	certs := tlstest.GenerateTLSCerts(t)
 	cfg := &TLSConfig{
@@ -614,18 +630,21 @@ func TestTLSConfig_Build_ProducesValidConfig(t *testing.T) {
 		t.Errorf("Certificates length = %d, want 1", len(result.Certificates))
 	}
 }
+
 func TestTLSConfig_IsEnabled_KeyFileOnlyNotEnabled(t *testing.T) {
 	cfg := &TLSConfig{KeyFile: "key.pem"}
 	if cfg.IsEnabled() {
 		t.Error("KeyFile alone should not enable TLS (CertFile is the trigger)")
 	}
 }
+
 func TestTLSConfig_IsEnabled_MinVersionOnlyEnabled(t *testing.T) {
 	cfg := &TLSConfig{MinVersion: tls.VersionTLS13}
 	if !cfg.IsEnabled() {
 		t.Error("MinVersion alone should enable TLS")
 	}
 }
+
 func TestTLSConfig_IsEnabled_MultipleFieldsCombined(t *testing.T) {
 	cfg := &TLSConfig{
 		SkipVerify: true,
@@ -637,12 +656,14 @@ func TestTLSConfig_IsEnabled_MultipleFieldsCombined(t *testing.T) {
 		t.Error("multiple fields set should be enabled")
 	}
 }
+
 func TestTLSConfig_Validate_ZeroValueValid(t *testing.T) {
 	cfg := &TLSConfig{}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("zero-value config should be valid: %v", err)
 	}
 }
+
 func TestTLSConfig_Validate_AllFieldsSetValid(t *testing.T) {
 	cfg := &TLSConfig{
 		SkipVerify: true,
@@ -656,6 +677,7 @@ func TestTLSConfig_Validate_AllFieldsSetValid(t *testing.T) {
 		t.Fatalf("all fields set with both cert+key should be valid: %v", err)
 	}
 }
+
 func TestTLSConfig_Validate_ErrorMessageDoesNotLeakPaths(t *testing.T) {
 	cfg := &TLSConfig{CertFile: "/secret/path/cert.pem"}
 	err := cfg.Validate()
@@ -667,6 +689,7 @@ func TestTLSConfig_Validate_ErrorMessageDoesNotLeakPaths(t *testing.T) {
 		t.Error("validation error should not contain file paths")
 	}
 }
+
 func TestTLSConfig_Build_InvalidPEMCertFile(t *testing.T) {
 	dir := t.TempDir()
 	certFile := filepath.Join(dir, "bad-cert.pem")
@@ -683,6 +706,7 @@ func TestTLSConfig_Build_InvalidPEMCertFile(t *testing.T) {
 		t.Errorf("error should have security/tls prefix: %v", err)
 	}
 }
+
 func TestTLSConfig_Build_LargeCAFile(t *testing.T) {
 	dir := t.TempDir()
 	caFile := filepath.Join(dir, "large-ca.pem")
@@ -703,6 +727,7 @@ func TestTLSConfig_Build_LargeCAFile(t *testing.T) {
 		t.Fatal("expected error for large invalid CA file")
 	}
 }
+
 func writePEMFile(t *testing.T, path, blockType string, data []byte) {
 	t.Helper()
 	f, err := os.Create(path)

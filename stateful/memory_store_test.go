@@ -134,6 +134,7 @@ func TestMemoryStore_Operations(t *testing.T) {
 		t.Errorf("close failed: %v", err)
 	}
 }
+
 func TestMemoryStore_Touch_LastActivity(t *testing.T) {
 	store := NewMemoryStore[int]()
 	ctx := context.Background()
@@ -161,6 +162,7 @@ func TestMemoryStore_Touch_LastActivity(t *testing.T) {
 		t.Error("expected activity to be updated after touch")
 	}
 }
+
 func TestMemoryStore_AppendFIFO_NoLimit(t *testing.T) {
 	store := NewMemoryStore[int]()
 	ctx := context.Background()

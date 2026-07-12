@@ -364,6 +364,7 @@ func TestRunWithResilience_RetryTransientFailure(t *testing.T) {
 		t.Fatalf("expected 'retry ok', got %q", string(result.Stdout))
 	}
 }
+
 func TestRunWithResilience_CircuitBreakerAfterNFailures(t *testing.T) {
 	runner := process.NewRunner(provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{

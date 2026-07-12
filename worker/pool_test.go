@@ -569,6 +569,7 @@ func TestSharedQueueUsesAvailableWorkers(t *testing.T) {
 		}
 	}
 }
+
 func TestPoolZeroSizeDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -600,6 +601,7 @@ func TestPoolZeroSizeDefaults(t *testing.T) {
 		t.Fatalf("result failed: %v", err)
 	}
 }
+
 func TestPoolNegativeSizeDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -620,6 +622,7 @@ func TestPoolNegativeSizeDefaults(t *testing.T) {
 		t.Fatalf("expected positive idle workers after negative config, got %d", stats.Idle)
 	}
 }
+
 func TestSubmitBatchEmpty(t *testing.T) {
 	t.Parallel()
 
@@ -640,6 +643,7 @@ func TestSubmitBatchEmpty(t *testing.T) {
 		t.Fatalf("expected 0 handles, got %d", len(handles))
 	}
 }
+
 func TestStatsDuringConcurrency(t *testing.T) {
 	t.Parallel()
 
@@ -695,6 +699,7 @@ func TestStatsDuringConcurrency(t *testing.T) {
 		t.Errorf("expected 0 failures, got %d", finalStats.Failed)
 	}
 }
+
 func TestPoolEventsAggregation(t *testing.T) {
 	t.Parallel()
 
@@ -753,6 +758,7 @@ func TestPoolEventsAggregation(t *testing.T) {
 	}
 	mu.Unlock()
 }
+
 func TestSubmitBatchAfterStop(t *testing.T) {
 	t.Parallel()
 

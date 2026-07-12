@@ -322,6 +322,7 @@ func TestSupervisorMaxRestartsWithFastBackoff(t *testing.T) {
 		t.Fatal("expected error after max restarts exceeded")
 	}
 }
+
 func TestSupervisorRestartAlways(t *testing.T) {
 	t.Parallel()
 

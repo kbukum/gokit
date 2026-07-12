@@ -32,7 +32,7 @@ type VersionInfo struct {
 
 // source is the raw, injectable input from which a VersionInfo is computed.
 // It isolates the pure derivation logic from process-global build state so the
-// behaviour can be tested deterministically.
+// behavior can be tested deterministically.
 type source struct {
 	version   string
 	gitCommit string

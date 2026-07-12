@@ -85,7 +85,6 @@ func TestIsReleaseTable(t *testing.T) {
 		{"", true},                   // empty is not "dev" and has no "dirty"
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.version, func(t *testing.T) {
 			t.Parallel()
 			info := compute(src(tc.version, "", "", "", ""))

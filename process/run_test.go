@@ -173,6 +173,7 @@ func TestRunNonexistentWorkingDir(t *testing.T) {
 		t.Fatal("expected error for non-existent working directory")
 	}
 }
+
 func TestRunVeryLongArgs(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// Windows command-line is capped at ~32 KiB; this test exercises a
@@ -192,6 +193,7 @@ func TestRunVeryLongArgs(t *testing.T) {
 		t.Fatalf("expected 100000 chars, got %d", len(out))
 	}
 }
+
 func TestRunNonexistentBinary(t *testing.T) {
 	_, err := process.Run(context.Background(), process.Command{
 		Binary: "nonexistent_binary_xyz_99999",
@@ -204,6 +206,7 @@ func TestRunNonexistentBinary(t *testing.T) {
 		t.Fatalf("expected 'not found' style error, got: %v", err)
 	}
 }
+
 func TestRunEmptyArgs(t *testing.T) {
 	result, err := process.Run(context.Background(), process.Command{
 		Binary: "echo",
@@ -216,6 +219,7 @@ func TestRunEmptyArgs(t *testing.T) {
 		t.Fatalf("expected exit 0, got %d", result.ExitCode)
 	}
 }
+
 func TestRunAlreadyCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
@@ -229,6 +233,7 @@ func TestRunAlreadyCancelledContext(t *testing.T) {
 		t.Fatal("expected error from already-canceled context")
 	}
 }
+
 func TestRunSigtermSigkillEscalation(t *testing.T) {
 	// Process that traps SIGTERM and ignores it — must be SIGKILLed
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -253,6 +258,7 @@ func TestRunSigtermSigkillEscalation(t *testing.T) {
 		t.Fatalf("process took too long to kill (SIGKILL escalation failed): %v", elapsed)
 	}
 }
+
 func TestRunLargeStdout(t *testing.T) {
 	// Generate ~1MB of output
 	result, err := process.Run(context.Background(), process.Command{
@@ -266,6 +272,7 @@ func TestRunLargeStdout(t *testing.T) {
 		t.Fatalf("expected >= 1MB stdout, got %d bytes", len(result.Stdout))
 	}
 }
+
 func TestRunLargeStderr(t *testing.T) {
 	result, err := process.Run(context.Background(), process.Command{
 		Binary: "sh",
@@ -278,6 +285,7 @@ func TestRunLargeStderr(t *testing.T) {
 		t.Fatalf("expected >= 512KB stderr, got %d bytes", len(result.Stderr))
 	}
 }
+
 func TestRunConcurrent(t *testing.T) {
 	const n = 10
 	var wg sync.WaitGroup
@@ -309,6 +317,7 @@ func TestRunConcurrent(t *testing.T) {
 		}
 	}
 }
+
 func TestRunDurationAccuracy(t *testing.T) {
 	result, err := process.Run(context.Background(), process.Command{
 		Binary: "sleep",
@@ -324,6 +333,7 @@ func TestRunDurationAccuracy(t *testing.T) {
 		t.Fatalf("duration too long: %v (expected ~200ms)", result.Duration)
 	}
 }
+
 func TestRunNoShellInjection(t *testing.T) {
 	t.Parallel()
 

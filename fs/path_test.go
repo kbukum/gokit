@@ -141,6 +141,7 @@ func TestAbsolute(t *testing.T) {
 		t.Fatalf("absolute passthrough: %q %v", got, err)
 	}
 }
+
 func TestCanonicalize(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -161,6 +162,7 @@ func TestCanonicalize(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
+
 func TestCanonicalizeMissingErrors(t *testing.T) {
 	t.Parallel()
 	if _, err := fs.Canonicalize(filepath.Join(t.TempDir(), "missing")); err == nil {
