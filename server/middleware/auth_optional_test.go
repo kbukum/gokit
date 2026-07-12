@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -21,11 +22,19 @@ func (f fakeTokenValidator) ValidateToken(string) (any, error) {
 	return f.claims, nil
 }
 
+type ctxClaimsKey struct{}
+
+// storeClaims is a test ClaimsSetter that records claims under a local key so
+// tests can inject a setter without importing the auth module.
+func storeClaims(ctx context.Context, claims any) context.Context {
+	return context.WithValue(ctx, ctxClaimsKey{}, claims)
+}
+
 func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	// OptionalAuth always rejects a present-but-invalid token (secure-by-default).
-	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")})
+	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")}, storeClaims)
 	if err != nil {
 		t.Fatalf("OptionalAuth() error: %v", err)
 	}
@@ -45,7 +54,7 @@ func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
 func TestOptionalAuth_NoTokenPasses(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")})
+	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")}, storeClaims)
 	if err != nil {
 		t.Fatalf("OptionalAuth() error: %v", err)
 	}
@@ -67,7 +76,7 @@ func BenchmarkMiddlewareStackExecution(b *testing.B) {
 	r := gin.New()
 	warn := func(_ *gin.Context, _ string) {}
 	h, err := Auth(
-		fakeTokenValidator{claims: map[string]string{"sub": "user"}},
+		fakeTokenValidator{claims: map[string]string{"sub": "user"}}, storeClaims,
 		WithQueryTokenParam("token"),
 		WithQueryTokenAllowedPaths("/bench"),
 		WithQueryTokenWarningLogger(warn),

@@ -1,8 +1,10 @@
-# pipeline
+# stream
 
-**Pull-based data pipeline with composable operators**
+**Pull-based data pipeline with composable operators, plus a bounded push fan-out source**
 
-`pipeline` provides lazy, backpressure-aware data processing for Go. Pipelines pull values on demand — no work happens until you call `Collect`, `Drain`, or `ForEach`. This design naturally handles flow control without buffering or blocking.
+`stream` provides lazy, backpressure-aware data processing for Go. Pipelines pull values on demand — no work happens until you call `Collect`, `Drain`, or `ForEach`. This design naturally handles flow control without buffering or blocking. For the genuinely push-shaped "one source, many observers" case, `Broadcaster` fans events out to independent subscribers with bounded, drop-on-overflow buffers.
+
+gokit converges on the [`rskit-stream`](https://github.com/kbukum/rskit/tree/main/core/rskit-stream) operator vocabulary (`map`/`filter`/`fan_out`/`window`/`batch`/`parallel`/`merge`/`partition`/…) and its `Broadcaster`, expressed idiomatically in Go: a pull iterator for transformation pipelines and a bounded channel bus for fan-out. No operator buffers without bound.
 
 ## Features
 
@@ -79,6 +81,7 @@ func main() {
 | `take` | `stream.Take` | Emits at most the first `n` values. |
 | `skip` | `stream.Skip` | Ignores the first `n` values. |
 | `buffer` | `stream.Buffer` | Bounded channel between stages; size <= 0 becomes 1. |
+| `broadcaster` | `stream.Broadcaster` | Bounded push fan-out to many subscribers; drops overflow per subscriber. |
 
 ### Synchronous Operators
 
@@ -101,6 +104,38 @@ func main() {
 | `Parallel[I, O](p *Pipeline[I], n int, fn func(context.Context, I) (O, error)) *Pipeline[O]` | Concurrent Map with worker pool (order NOT preserved) |
 | `Merge[T](pipelines ...*Pipeline[T]) *Pipeline[T]` | Combine pipelines concurrently (order NOT preserved) |
 
+### Push Fan-Out (Broadcaster)
+
+For the "watch one source → fan a typed change stream out to many independent observers" shape
+(config reloads, service discovery, cache invalidation, secret rotation), use `Broadcaster[T]`.
+Each subscriber owns a private bounded channel: a subscriber lagging beyond its buffer drops the
+overflow (backpressure by drop) but never blocks the broadcaster or its peers.
+
+| Operator | Description |
+|----------|-------------|
+| `NewBroadcaster[T](opts ...BroadcasterOption) *Broadcaster[T]` | Create a fan-out bus (default buffer `DefaultBroadcastBuffer` = 64) |
+| `WithBroadcastBuffer(size int) BroadcasterOption` | Set per-subscriber buffer (clamped to >= 1) |
+| `(*Broadcaster[T]).Subscribe(ctx) <-chan T` | Register a subscriber; channel closes on ctx cancel or `Close` |
+| `(*Broadcaster[T]).Broadcast(item T)` | Deliver to all live subscribers; full subscribers drop the event |
+| `(*Broadcaster[T]).Close()` | Terminate all subscribers and release their goroutines (idempotent) |
+| `(*Broadcaster[T]).SubscriberCount() int` / `Buffer() int` | Live subscriber count / per-subscriber buffer |
+
+```go
+b := stream.NewBroadcaster[Config](stream.WithBroadcastBuffer(16))
+defer b.Close()
+
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+updates := b.Subscribe(ctx)
+go func() {
+    for cfg := range updates { // ends when ctx is canceled or b.Close() is called
+        reload(cfg)
+    }
+}()
+
+b.Broadcast(newConfig) // reaches every live subscriber; slow ones drop overflow
+```
+
 ### Stream/Time-Aware Operators
 
 | Operator | Description |
@@ -112,7 +147,6 @@ func main() {
 | `SlidingWindow[T](p *Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) *Pipeline[[]T]` | Overlapping event-time windows with configurable slide |
 
 ### Terminal Operators
-
 | Operator | Description |
 |----------|-------------|
 | `Collect[T](ctx context.Context, p *Pipeline[T]) ([]T, error)` | Pull all values into a slice |

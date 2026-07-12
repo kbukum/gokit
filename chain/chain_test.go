@@ -2,292 +2,254 @@ package chain_test
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
+	"strconv"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/kbukum/gokit/chain"
+	"github.com/kbukum/gokit/errors"
 )
 
-// ── Mock operations ──────────────────────────────────────────────────────
+func TestExecuteTransformsTypedOutput(t *testing.T) {
+	t.Parallel()
 
-type incrementOp struct {
-	chain.BaseOperation
-	id string
-}
+	parse := chain.StepFunc("parse", func(_ chain.StepContext, in string) (int, error) {
+		return strconv.Atoi(in)
+	})
+	double := chain.StepFunc("double", func(_ chain.StepContext, n int) (int, error) {
+		return n * 2, nil
+	})
+	format := chain.StepFunc("format", func(_ chain.StepContext, n int) (string, error) {
+		return fmt.Sprintf("value=%d", n), nil
+	})
 
-func (o *incrementOp) ID() string   { return o.id }
-func (o *incrementOp) Name() string { return o.id }
-func (o *incrementOp) Execute(_ context.Context, input any, progress chain.ProgressFn) (any, error) {
-	n, _ := input.(int)
-	progress(50, "halfway")
-	progress(100, "")
-	return n + 1, nil
-}
+	c := chain.Then(chain.Then(chain.Then(chain.New[string](), parse), double), format).Build()
 
-type failOp struct {
-	chain.BaseOperation
-	id string
-}
-
-func (o *failOp) ID() string   { return o.id }
-func (o *failOp) Name() string { return o.id }
-func (o *failOp) Execute(_ context.Context, _ any, _ chain.ProgressFn) (any, error) {
-	return nil, fmt.Errorf("intentional failure")
-}
-
-type cleanupTracker struct {
-	chain.BaseOperation
-	id      string
-	cleaned *atomic.Bool
-}
-
-func (o *cleanupTracker) ID() string   { return o.id }
-func (o *cleanupTracker) Name() string { return o.id }
-func (o *cleanupTracker) Execute(_ context.Context, input any, _ chain.ProgressFn) (any, error) {
-	return input, nil
-}
-
-func (o *cleanupTracker) Cleanup(_ context.Context, _ any) error {
-	o.cleaned.Store(true)
-	return nil
-}
-
-// ── Tests ────────────────────────────────────────────────────────────────
-
-func TestSimpleChainIncrements(t *testing.T) {
-	c := chain.NewBuilder().
-		Step(&incrementOp{id: "step-1"}).
-		Step(&incrementOp{id: "step-2"}).
-		Step(&incrementOp{id: "step-3"}).
-		Build()
-
-	result, err := c.Execute(context.Background(), 0, nil)
+	out, err := c.Execute(context.Background(), "21", nil)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("execute: %v", err)
 	}
-
-	if !result.Success {
-		t.Fatal("expected success")
+	if out != "value=42" {
+		t.Fatalf("got %q, want %q", out, "value=42")
 	}
-	if result.CompletedSteps() != 3 {
-		t.Errorf("expected 3 completed steps, got %d", result.CompletedSteps())
+	if c.Len() != 3 {
+		t.Fatalf("len = %d, want 3", c.Len())
 	}
-	if result.FinalOutput != 3 {
-		t.Errorf("expected final output 3, got %v", result.FinalOutput)
-	}
-	if result.FailedStep() != nil {
-		t.Error("expected no failed step")
-	}
-
-	for i, step := range result.Steps {
-		if step.Status != chain.StatusCompleted {
-			t.Errorf("step %d: expected completed, got %s", i, step.Status)
-		}
-		if step.Output != i+1 {
-			t.Errorf("step %d: expected output %d, got %v", i, i+1, step.Output)
-		}
+	if c.IsEmpty() {
+		t.Fatal("chain should not be empty")
 	}
 }
 
-func TestFailureTriggersCleanup(t *testing.T) {
-	cleaned1 := &atomic.Bool{}
-	cleaned2 := &atomic.Bool{}
+func TestEmptyChainReturnsInput(t *testing.T) {
+	t.Parallel()
 
-	c := chain.NewBuilder().
-		Step(&cleanupTracker{id: "tracker-1", cleaned: cleaned1}).
-		Step(&failOp{id: "fail-op"}).
-		Step(&cleanupTracker{id: "tracker-2", cleaned: cleaned2}).
-		CleanupOnFailure(true).
-		StopOnFailure(true).
-		Build()
-
-	result, err := c.Execute(context.Background(), nil, nil)
+	c := chain.New[int]().Build()
+	if !c.IsEmpty() {
+		t.Fatal("empty chain should report IsEmpty")
+	}
+	out, err := c.Execute(context.Background(), 7, nil)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("execute: %v", err)
 	}
-
-	if result.Success {
-		t.Fatal("expected failure")
-	}
-	if result.CompletedSteps() != 1 {
-		t.Errorf("expected 1 completed step, got %d", result.CompletedSteps())
-	}
-	if result.FinalOutput != nil {
-		t.Errorf("expected nil final output, got %v", result.FinalOutput)
-	}
-
-	// Step 0 completed, step 1 failed, step 2 skipped
-	if result.Steps[0].Status != chain.StatusCompleted {
-		t.Errorf("step 0: expected completed, got %s", result.Steps[0].Status)
-	}
-	if result.Steps[1].Status != chain.StatusFailed {
-		t.Errorf("step 1: expected failed, got %s", result.Steps[1].Status)
-	}
-	if result.Steps[2].Status != chain.StatusSkipped {
-		t.Errorf("step 2: expected skipped, got %s", result.Steps[2].Status)
-	}
-
-	// Cleanup should have run on the completed tracker-1
-	if !cleaned1.Load() {
-		t.Error("expected tracker-1 to be cleaned up")
-	}
-	// tracker-2 was skipped, so no cleanup
-	if cleaned2.Load() {
-		t.Error("expected tracker-2 NOT to be cleaned up")
+	if out != 7 {
+		t.Fatalf("got %d, want 7", out)
 	}
 }
 
-func TestCancellationMarksRemainingCanceled(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel before the chain runs
+func TestStepFailureShortCircuitsAndPreservesCode(t *testing.T) {
+	t.Parallel()
 
-	c := chain.NewBuilder().
-		Step(&incrementOp{id: "step-1"}).
-		Step(&incrementOp{id: "step-2"}).
-		Step(&incrementOp{id: "step-3"}).
-		Build()
+	sentinel := errors.NotFound("widget", "42")
+	var secondRan bool
 
-	result, err := c.Execute(ctx, 0, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	first := chain.StepFunc("first", func(_ chain.StepContext, in int) (int, error) {
+		return in, sentinel
+	})
+	second := chain.StepFunc("second", func(_ chain.StepContext, in int) (int, error) {
+		secondRan = true
+		return in, nil
+	})
+
+	c := chain.Then(chain.Then(chain.New[int](), first), second).Build()
+	_, err := c.Execute(context.Background(), 1, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if secondRan {
+		t.Fatal("second step must not run after first fails")
 	}
 
-	if result.Success {
-		t.Fatal("expected failure due to cancellation")
+	var appErr *errors.AppError
+	if !stderrors.As(err, &appErr) {
+		t.Fatalf("error is not AppError: %v", err)
 	}
-	if result.CompletedSteps() != 0 {
-		t.Errorf("expected 0 completed steps, got %d", result.CompletedSteps())
+	if appErr.Code != errors.ErrCodeNotFound {
+		t.Fatalf("code = %s, want %s", appErr.Code, errors.ErrCodeNotFound)
 	}
-
-	for _, step := range result.Steps {
-		if step.Status != chain.StatusCanceled {
-			t.Errorf("step %s: expected canceled, got %s", step.StepID, step.Status)
-		}
-		if step.Error != "chain canceled" {
-			t.Errorf("step %s: expected error 'chain canceled', got %q", step.StepID, step.Error)
-		}
+	if got := appErr.Details["step"]; got != "first" {
+		t.Fatalf("step detail = %v, want first", got)
+	}
+	// The original sentinel must remain unmutated.
+	if _, ok := sentinel.Details["step"]; ok {
+		t.Fatal("wrapping mutated the caller's error")
 	}
 }
 
-func TestContinueAfterFailure(t *testing.T) {
-	c := chain.NewBuilder().
-		Step(&incrementOp{id: "step-1"}).
-		Step(&failOp{id: "fail-op"}).
-		Step(&incrementOp{id: "step-3"}).
-		StopOnFailure(false).
-		CleanupOnFailure(false).
-		Build()
+func TestCleanupRunsOnFailureInReverseOrder(t *testing.T) {
+	t.Parallel()
 
-	result, err := c.Execute(context.Background(), 0, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if result.Success {
-		t.Fatal("expected failure")
-	}
-
-	// step-1 completed, fail-op failed, step-3 still ran
-	if result.Steps[0].Status != chain.StatusCompleted {
-		t.Errorf("step 0: expected completed, got %s", result.Steps[0].Status)
-	}
-	if result.Steps[1].Status != chain.StatusFailed {
-		t.Errorf("step 1: expected failed, got %s", result.Steps[1].Status)
-	}
-	if result.Steps[2].Status != chain.StatusCompleted {
-		t.Errorf("step 2: expected completed, got %s", result.Steps[2].Status)
-	}
-	if result.CompletedSteps() != 2 {
-		t.Errorf("expected 2 completed steps, got %d", result.CompletedSteps())
-	}
-}
-
-func TestProgressCallbackEvents(t *testing.T) {
+	var order []string
 	var mu sync.Mutex
-	var events []chain.StepProgress
-
-	c := chain.NewBuilder().
-		Step(&incrementOp{id: "step-1"}).
-		Step(&incrementOp{id: "step-2"}).
-		Build()
-
-	progress := func(p chain.StepProgress) {
-		mu.Lock()
-		events = append(events, p)
-		mu.Unlock()
+	record := func(id string) chain.CleanupFn {
+		return func(_ context.Context) error {
+			mu.Lock()
+			defer mu.Unlock()
+			order = append(order, id)
+			return nil
+		}
 	}
 
-	result, err := c.Execute(context.Background(), 0, progress)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Fatal("expected success")
-	}
+	a := chain.StepFunc("a", func(_ chain.StepContext, n int) (int, error) { return n, nil }).
+		WithCleanup(record("a"))
+	b := chain.StepFunc("b", func(_ chain.StepContext, n int) (int, error) { return n, nil }).
+		WithCleanup(record("b"))
+	fail := chain.StepFunc("fail", func(_ chain.StepContext, n int) (int, error) {
+		return 0, errors.Internal(stderrors.New("boom"))
+	})
 
-	mu.Lock()
-	captured := make([]chain.StepProgress, len(events))
-	copy(captured, events)
-	mu.Unlock()
-
-	// For each step: Running(0%), Running(50%), Running(100%), Completed(100%)
-	// = 4 events per step × 2 steps = 8 total
-	if len(captured) != 8 {
-		t.Fatalf("expected 8 progress events, got %d", len(captured))
+	c := chain.Then(chain.Then(chain.Then(chain.New[int](), a), b), fail).Build()
+	if _, err := c.Execute(context.Background(), 1, nil); err == nil {
+		t.Fatal("expected failure")
 	}
 
-	// First step events
-	assertProgress(t, captured[0], "step-1", chain.StatusRunning, 0)
-	assertProgress(t, captured[1], "step-1", chain.StatusRunning, 50)
-	assertProgress(t, captured[2], "step-1", chain.StatusRunning, 100)
-	assertProgress(t, captured[3], "step-1", chain.StatusCompleted, 100)
-
-	// Second step events
-	assertProgress(t, captured[4], "step-2", chain.StatusRunning, 0)
-	assertProgress(t, captured[7], "step-2", chain.StatusCompleted, 100)
-}
-
-func TestEmptyChain(t *testing.T) {
-	c := chain.NewBuilder().Build()
-
-	result, err := c.Execute(context.Background(), "input", nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !result.Success {
-		t.Fatal("expected success for empty chain")
-	}
-	if len(result.Steps) != 0 {
-		t.Errorf("expected 0 steps, got %d", len(result.Steps))
+	if len(order) != 2 || order[0] != "b" || order[1] != "a" {
+		t.Fatalf("cleanup order = %v, want [b a]", order)
 	}
 }
 
-func TestExecutorString(t *testing.T) {
-	c := chain.NewBuilder().
-		Step(&incrementOp{id: "a"}).
-		Step(&incrementOp{id: "b"}).
-		Build()
+func TestCleanupErrorsJoinedOntoFailure(t *testing.T) {
+	t.Parallel()
 
-	s := c.String()
-	if s == "" {
-		t.Error("expected non-empty string representation")
+	cleanupErr := stderrors.New("cleanup failed")
+	a := chain.StepFunc("a", func(_ chain.StepContext, n int) (int, error) { return n, nil }).
+		WithCleanup(func(_ context.Context) error { return cleanupErr })
+	fail := chain.StepFunc("fail", func(_ chain.StepContext, n int) (int, error) {
+		return 0, errors.Internal(stderrors.New("boom"))
+	})
+
+	c := chain.Then(chain.Then(chain.New[int](), a), fail).Build()
+	_, err := c.Execute(context.Background(), 1, nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !stderrors.Is(err, cleanupErr) {
+		t.Fatalf("cleanup error not joined: %v", err)
 	}
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────
+func TestCancellationBeforeStepRunsCleanups(t *testing.T) {
+	t.Parallel()
 
-func assertProgress(t *testing.T, p chain.StepProgress, stepID string, status chain.StepStatus, pct uint8) {
-	t.Helper()
-	if p.StepID != stepID {
-		t.Errorf("expected step_id %q, got %q", stepID, p.StepID)
+	var cleaned bool
+	a := chain.StepFunc("a", func(_ chain.StepContext, n int) (int, error) { return n, nil }).
+		WithCleanup(func(_ context.Context) error { cleaned = true; return nil })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var secondRan bool
+	b := chain.StepFunc("b", func(_ chain.StepContext, n int) (int, error) {
+		secondRan = true
+		return n, nil
+	})
+
+	// Cancel after the first step completes but before the second runs.
+	trigger := chain.StepFunc("trigger", func(_ chain.StepContext, n int) (int, error) {
+		cancel()
+		return n, nil
+	})
+
+	c := chain.Then(chain.Then(chain.Then(chain.New[int](), a), trigger), b).Build()
+	_, err := c.Execute(ctx, 1, nil)
+	if err == nil {
+		t.Fatal("expected cancellation error")
 	}
-	if p.Status != status {
-		t.Errorf("step %q: expected status %s, got %s", stepID, status, p.Status)
+	if secondRan {
+		t.Fatal("step after cancellation must not run")
 	}
-	if p.ProgressPercent != pct {
-		t.Errorf("step %q: expected progress %d%%, got %d%%", stepID, pct, p.ProgressPercent)
+	if !cleaned {
+		t.Fatal("cleanup should run on cancellation")
+	}
+
+	var appErr *errors.AppError
+	if !stderrors.As(err, &appErr) || appErr.Code != errors.ErrCodeCanceled {
+		t.Fatalf("expected canceled error, got %v", err)
+	}
+}
+
+func TestProgressCallbackEmitsRunningThenCompleted(t *testing.T) {
+	t.Parallel()
+
+	step := chain.StepFunc("work", func(sctx chain.StepContext, n int) (int, error) {
+		sctx.Progress(200, "clamped") // over 100 must clamp
+		return n, nil
+	})
+
+	var updates []chain.StepProgress
+	c := chain.Then(chain.New[int](), step).Build()
+	if _, err := c.Execute(context.Background(), 1, func(p chain.StepProgress) {
+		updates = append(updates, p)
+	}); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	if len(updates) != 3 {
+		t.Fatalf("got %d updates, want 3: %+v", len(updates), updates)
+	}
+	if updates[0].Status != chain.StatusRunning || updates[0].ProgressPercent != 0 {
+		t.Fatalf("first update = %+v", updates[0])
+	}
+	if updates[1].Status != chain.StatusRunning || updates[1].ProgressPercent != 100 || updates[1].Message != "clamped" {
+		t.Fatalf("step-local update = %+v", updates[1])
+	}
+	if updates[2].Status != chain.StatusCompleted || updates[2].ProgressPercent != 100 {
+		t.Fatalf("final update = %+v", updates[2])
+	}
+	if updates[2].StepID != "work" || updates[2].StepIndex != 0 {
+		t.Fatalf("final update metadata = %+v", updates[2])
+	}
+}
+
+func TestStepAccessors(t *testing.T) {
+	t.Parallel()
+
+	s := chain.NewStep("id", "display", func(_ chain.StepContext, n int) (int, error) { return n, nil })
+	if s.ID() != "id" || s.Name() != "display" {
+		t.Fatalf("accessors = %q/%q", s.ID(), s.Name())
+	}
+	f := chain.StepFunc("only", func(_ chain.StepContext, n int) (int, error) { return n, nil })
+	if f.ID() != "only" || f.Name() != "only" {
+		t.Fatalf("StepFunc accessors = %q/%q", f.ID(), f.Name())
+	}
+}
+
+func TestStepContextErrReflectsCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	step := chain.StepFunc("check", func(sctx chain.StepContext, n int) (int, error) {
+		if sctx.Err() != nil {
+			t.Error("context should be live inside step")
+		}
+		if sctx.Context() == nil {
+			t.Error("Context() must not be nil")
+		}
+		return n, nil
+	})
+	defer cancel()
+
+	c := chain.Then(chain.New[int](), step).Build()
+	if _, err := c.Execute(ctx, 1, nil); err != nil {
+		t.Fatalf("execute: %v", err)
 	}
 }

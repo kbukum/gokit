@@ -124,9 +124,9 @@ func (s *partitionState[T]) start(createCtx, firstNextCtx context.Context, p *Pi
 func (s *partitionState[T]) consume(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.finish(ctx, result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
+			s.finish(result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
 		} else {
-			s.finish(ctx, result[T]{})
+			s.finish(result[T]{})
 		}
 	}()
 	defer func() { _ = s.closeSource() }()
@@ -134,7 +134,7 @@ func (s *partitionState[T]) consume(ctx context.Context) {
 	for {
 		val, ok, err := s.source.Next(ctx)
 		if err != nil {
-			s.finish(ctx, result[T]{err: err})
+			s.finish(result[T]{err: err})
 			return
 		}
 		if !ok {
@@ -172,11 +172,17 @@ func (s *partitionState[T]) send(ctx context.Context, branch partitionBranch, r 
 	}
 }
 
-func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
+// finish delivers the terminal result to both branches exactly once and closes
+// them. The terminal error is delivered with sendTerminal, which never selects
+// on the tee context — that context is already canceled at termination, so
+// selecting on it would race the delivery and drop the terminal error — yet
+// still cannot block: it drops a buffered value to make room when a branch was
+// abandoned without being closed.
+func (s *partitionState[T]) finish(terminal result[T]) {
 	s.finishOnce.Do(func() {
 		if terminal.err != nil {
-			_ = s.send(ctx, partitionMatch, terminal)
-			_ = s.send(ctx, partitionReject, terminal)
+			s.sendTerminal(partitionMatch, terminal)
+			s.sendTerminal(partitionReject, terminal)
 		}
 		s.mu.Lock()
 		cancel := s.cancel
@@ -187,6 +193,43 @@ func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
 		close(s.out[partitionMatch])
 		close(s.out[partitionReject])
 	})
+}
+
+// sendTerminal delivers the terminal result to a branch, prioritizing it over
+// any buffered value. It never selects on the (already-canceled) tee context,
+// and it never blocks indefinitely: if the 1-slot buffer is full because the
+// consumer abandoned the branch without closing it, the buffered value is
+// dropped so the terminal error takes its place. The tee goroutine is the only
+// sender, so once a slot is freed the send always makes progress.
+func (s *partitionState[T]) sendTerminal(branch partitionBranch, r result[T]) {
+	idx := int(branch)
+	s.mu.Lock()
+	closed := s.closed[idx]
+	closeCh := s.closeCh[idx]
+	out := s.out[idx]
+	s.mu.Unlock()
+	if closed {
+		return
+	}
+	select {
+	case out <- r:
+		return
+	case <-closeCh:
+		return
+	default:
+	}
+	// Buffer full and branch not closed: drop the buffered value to free the
+	// slot, then deliver the terminal error into it.
+	select {
+	case <-out:
+	case <-closeCh:
+		return
+	default:
+	}
+	select {
+	case out <- r:
+	case <-closeCh:
+	}
 }
 
 func (s *partitionState[T]) closeBranch(branch partitionBranch) error {

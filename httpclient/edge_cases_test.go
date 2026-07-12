@@ -609,9 +609,12 @@ func TestAuth_EmptyBearerToken(t *testing.T) {
 	}
 }
 
-func TestAuth_APIKeyQuery_SpecialChars(t *testing.T) {
+func TestAuth_APIKeyHeader_SpecialChars(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Key", r.URL.Query().Get("api_key"))
+		w.Header().Set("X-Key", r.Header.Get("X-API-Key"))
+		if r.URL.RawQuery != "" {
+			t.Errorf("credentials leaked into query string: %q", r.URL.RawQuery)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
@@ -619,7 +622,7 @@ func TestAuth_APIKeyQuery_SpecialChars(t *testing.T) {
 	a, err := New(Config{
 		BaseURL: ts.URL,
 		Timeout: 5 * time.Second,
-		Auth:    APIKeyAuthQuery("k3y+val/ue=", "api_key"),
+		Auth:    APIKeyAuth("k3y+val/ue="),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -638,7 +641,7 @@ func TestAuth_NilApply(t *testing.T) {
 }
 
 func TestAuth_APIKey_EmptyName_FallsBackToDefault(t *testing.T) {
-	cfg := &AuthConfig{Type: AuthAPIKey, Key: "secret", In: "header", Name: ""}
+	cfg := &AuthConfig{Type: AuthAPIKey, Key: "secret", Name: ""}
 	req, _ := http.NewRequest("GET", "http://example.com", http.NoBody)
 	cfg.apply(req)
 	if req.Header.Get("X-API-Key") != "secret" {

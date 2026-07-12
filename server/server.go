@@ -26,8 +26,9 @@ type Server struct {
 	mux        *http.ServeMux
 	config     Config
 	log        *logging.Logger
-	mounts     []MountedHandler // tracked for summary display
-	listener   net.Listener     // set by Start(); used by ListenAddr()
+	mounts     []MountedHandler      // tracked for summary display
+	listener   net.Listener          // set by Start(); used by ListenAddr()
+	secHeaders middleware.Middleware // built once from config; no-op when disabled
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -85,12 +86,32 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
+	log = log.WithComponent("server")
+
+	// Build the security-headers middleware once. Config.Validate is the trust
+	// boundary that rejects an invalid SecurityHeaders config; if an unvalidated
+	// invalid config reaches here we fall back to the secure defaults (which
+	// cannot fail) rather than serve responses without protective headers.
+	secHeaders, err := middleware.SecurityHeaders(&cfg.SecurityHeaders)
+	if err != nil {
+		log.Warn("invalid security headers config; falling back to secure defaults", map[string]any{
+			"error": err.Error(),
+		})
+		if secHeaders, err = middleware.SecurityHeaders(nil); err != nil {
+			log.Error("failed to build default security headers; responses will omit them", map[string]any{
+				"error": err.Error(),
+			})
+			secHeaders = nil
+		}
+	}
+
 	return &Server{
 		httpServer: httpServer,
 		engine:     engine,
 		mux:        mux,
 		config:     *cfg,
-		log:        log.WithComponent("server"),
+		log:        log,
+		secHeaders: secHeaders,
 	}
 }
 
@@ -206,9 +227,14 @@ func (s *Server) ApplyMiddleware() {
 	stack := []middleware.Middleware{
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
+	}
+	if s.secHeaders != nil {
+		stack = append(stack, s.secHeaders)
+	}
+	stack = append(stack,
 		middleware.CORS(&s.config.CORS),
 		middleware.RequestLogger(s.log),
-	}
+	)
 	if s.config.MaxBodySize != "" {
 		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodySize))
 	}

@@ -1,10 +1,12 @@
 # chain
 
-Sequential chain execution: run a series of operations where each step receives the output
-of the previous one, with per-step progress reporting, cancellation at step boundaries, and
-automatic cleanup of completed steps when a later step fails.
+Typed, sequential chain execution: a statically typed sequence of steps where each step
+consumes the previous step's output and produces the next step's input type. Supports per-step
+progress reporting, cancellation at step boundaries, and automatic reverse-order cleanup of
+completed steps when a later step fails or the chain is canceled.
 
-Mirrors `rskit-chain` (Rust) and `pykit-chain` (Python).
+Mirrors `rskit-chain` (Rust) and `pykit-chain` (Python) — the same typed `Step` / builder /
+cleanup-on-failure semantics, expressed idiomatically in Go.
 
 ## Install
 
@@ -20,50 +22,47 @@ package main
 import (
     "context"
     "fmt"
+    "strconv"
 
     "github.com/kbukum/gokit/chain"
 )
 
-type doubleOp struct{ chain.BaseOperation }
-
-func (doubleOp) ID() string   { return "double" }
-func (doubleOp) Name() string { return "double" }
-func (doubleOp) Execute(ctx context.Context, input any, progress chain.ProgressFn) (any, error) {
-    n, ok := input.(int)
-    if !ok {
-        return nil, fmt.Errorf("double: expected int input, got %T", input)
-    }
-    progress(100, "doubled")
-    return n * 2, nil
-}
-
 func main() {
-    exec := chain.NewBuilder().
-        Step(doubleOp{}).
-        Step(doubleOp{}).
-        Build()
+    parse := chain.StepFunc("parse", func(_ chain.StepContext, in string) (int, error) {
+        return strconv.Atoi(in)
+    })
+    double := chain.StepFunc("double", func(sctx chain.StepContext, n int) (int, error) {
+        sctx.Progress(100, "doubled")
+        return n * 2, nil
+    })
 
-    result, err := exec.Execute(context.Background(), 3, nil)
+    c := chain.Then(chain.Then(chain.New[string](), parse), double).Build()
+
+    out, err := c.Execute(context.Background(), "21", nil)
     if err != nil {
         panic(err)
     }
-    fmt.Println(result.FinalOutput) // 12
+    fmt.Println(out) // 42
 }
 ```
+
+Because Go methods cannot introduce new type parameters, steps are appended with the
+package-level `Then` function rather than a fluent method, so each `Then` can transform the
+output type.
 
 ## Key Types & Functions
 
 | Name | Description |
 |------|-------------|
-| `NewBuilder()` | Start assembling a chain |
-| `Builder.Step(op)` | Append an `Operation` to the chain |
-| `Builder.WithConfig()` / `CleanupOnFailure()` / `StopOnFailure()` | Configure execution behavior |
-| `Builder.Build()` | Produce an `*Executor` |
-| `Executor.Execute(ctx, input, progress)` | Run the chain, returning a `*ChainResult` |
-| `Operation` | Interface: `ID()`, `Name()`, `Execute()`, `Cleanup()` |
-| `BaseOperation` | Embeddable no-op defaults for optional `Operation` methods |
-| `ChainProgressFn` / `ProgressFn` | Per-chain and per-step progress callbacks |
-| `StepResult` / `ChainResult` / `StepStatus` | Per-step and overall execution results |
+| `New[T]()` | Start a builder whose input and current output types are both `T` |
+| `Then(b, step)` | Append a `Step[M, N]`, transforming the output type from `M` to `N` |
+| `Builder.Build()` | Produce a `*Chain[I, O]` |
+| `Chain.Execute(ctx, input, progress)` | Run the chain, returning the final typed output |
+| `Chain.Len()` / `Chain.IsEmpty()` | Number of steps / emptiness |
+| `NewStep(id, name, fn)` / `StepFunc(id, fn)` | Construct a typed `Step[I, O]` |
+| `Step.WithCleanup(fn)` | Register reverse-order cleanup run on later failure/cancellation |
+| `StepContext` | Per-step context: `Context()`, `Err()`, `Progress(percent, message)` |
+| `ChainProgressFn` / `StepProgress` / `StepStatus` | Chain-level progress callback and payload |
 
 ---
 

@@ -2,208 +2,111 @@ package chain
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
-	"time"
+	stderrors "errors"
+
+	"github.com/kbukum/gokit/errors"
 )
 
-// Config controls chain execution behavior.
-type Config struct {
-	// CleanupOnFailure runs Cleanup on completed steps in reverse order when
-	// a later step fails. Default: true.
-	CleanupOnFailure bool
-	// StopOnFailure skips remaining steps after the first failure.
-	// Default: true.
-	StopOnFailure bool
+// cleanupAction is a deferred cleanup captured for a completed step.
+type cleanupAction func(ctx context.Context) error
+
+// chainState threads the current typed output and the cleanups accumulated by
+// completed steps through the runner composition.
+type chainState[O any] struct {
+	output   O
+	cleanups []cleanupAction
 }
 
-// DefaultConfig returns the default chain configuration.
-func DefaultConfig() Config {
-	return Config{
-		CleanupOnFailure: true,
-		StopOnFailure:    true,
+// chainContext carries execution-wide concerns shared by every step.
+type chainContext struct {
+	progress ChainProgressFn
+}
+
+// runner is the composed execution function built by the builder. Each Then
+// call wraps the previous runner, transforming the output type.
+type runner[I, O any] func(ctx context.Context, input I, cctx chainContext) (chainState[O], error)
+
+// runCleanups executes cleanups in reverse (LIFO) order, aggregating every
+// failure so no cleanup is skipped because an earlier one errored.
+func runCleanups(ctx context.Context, cleanups []cleanupAction) error {
+	var errs []error
+	for i := len(cleanups) - 1; i >= 0; i-- {
+		if err := cleanups[i](ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
-}
-
-// Executor runs a sequence of operations, feeding each output as input to
-// the next step.
-type Executor struct {
-	operations []Operation
-	config     Config
-}
-
-// NewExecutor creates an executor from the given operations.
-func NewExecutor(ops []Operation) *Executor {
-	return &Executor{
-		operations: ops,
-		config:     DefaultConfig(),
+	if len(errs) == 0 {
+		return nil
 	}
+	return stderrors.Join(errs...)
 }
 
-// WithConfig overrides the default configuration.
-func (e *Executor) WithConfig(cfg Config) *Executor {
-	e.config = cfg
-	return e
+// Chain executes a typed sequence of steps, short-circuiting on the first
+// failure and returning that step's output type.
+type Chain[I, O any] struct {
+	stepCount int
+	runner    runner[I, O]
 }
 
-// Execute runs all operations sequentially.
+// Execute runs the chain against input, returning the final typed output.
 //
-// The progress callback (if non-nil) receives per-step progress updates.
-// Cancellation is checked at step boundaries via ctx.
-func (e *Executor) Execute(ctx context.Context, input any, progress ChainProgressFn) (*ChainResult, error) {
-	chainStart := time.Now()
-	totalSteps := len(e.operations)
-	results := make([]StepResult, 0, totalSteps)
-	currentInput := input
-	failed := false
-
-	for i, op := range e.operations {
-		// Check cancellation before starting each step
-		if err := ctx.Err(); err != nil {
-			for _, remaining := range e.operations[i:] {
-				results = append(results, StepResult{
-					StepID: remaining.ID(),
-					Status: StatusCanceled,
-					Error:  "chain canceled",
-				})
-			}
-			break
-		}
-
-		// Skip remaining if a previous step failed and StopOnFailure is true
-		if failed && e.config.StopOnFailure {
-			results = append(results, StepResult{
-				StepID: op.ID(),
-				Status: StatusSkipped,
-			})
-			continue
-		}
-
-		stepID := op.ID()
-		stepStart := time.Now()
-
-		// Emit "running" progress
-		if progress != nil {
-			progress(StepProgress{
-				StepIndex:       i,
-				StepID:          stepID,
-				Status:          StatusRunning,
-				ProgressPercent: 0,
-			})
-		}
-
-		// Create per-step progress callback that wraps chain-level callback
-		var stepProgress ProgressFn
-		if progress != nil {
-			stepProgress = func(pct uint8, msg string) {
-				progress(StepProgress{
-					StepIndex:       i,
-					StepID:          stepID,
-					Status:          StatusRunning,
-					ProgressPercent: pct,
-					Message:         msg,
-				})
-			}
-		} else {
-			stepProgress = func(_ uint8, _ string) {}
-		}
-
-		slog.Debug("executing chain step",
-			"step", stepID,
-			"index", i,
-			"total_steps", totalSteps,
-		)
-
-		output, err := op.Execute(ctx, currentInput, stepProgress)
-		duration := time.Since(stepStart)
-
-		if err != nil {
-			slog.Error("chain step failed",
-				"step", stepID,
-				"error", err,
-			)
-
-			if progress != nil {
-				progress(StepProgress{
-					StepIndex:       i,
-					StepID:          stepID,
-					Status:          StatusFailed,
-					ProgressPercent: 0,
-					Message:         err.Error(),
-				})
-			}
-
-			results = append(results, StepResult{
-				StepID:   stepID,
-				Status:   StatusFailed,
-				Duration: duration,
-				Error:    err.Error(),
-			})
-			failed = true
-		} else {
-			if progress != nil {
-				progress(StepProgress{
-					StepIndex:       i,
-					StepID:          stepID,
-					Status:          StatusCompleted,
-					ProgressPercent: 100,
-				})
-			}
-
-			currentInput = output
-			results = append(results, StepResult{
-				StepID:   stepID,
-				Status:   StatusCompleted,
-				Duration: duration,
-				Output:   output,
-			})
-		}
+// Execution short-circuits on the first failed step and returns its error.
+// Cancellation is checked before each step via ctx. When a step fails or the
+// chain is canceled, the cleanups registered by already-completed steps run in
+// reverse order; any cleanup error is joined onto the returned error. The
+// progress callback, when non-nil, receives Running/Completed updates per step.
+func (c *Chain[I, O]) Execute(ctx context.Context, input I, progress ChainProgressFn) (O, error) {
+	state, err := c.runner(ctx, input, chainContext{progress: progress})
+	if err != nil {
+		var zero O
+		return zero, err
 	}
-
-	// Cleanup on failure: call Cleanup on completed steps in reverse order
-	allCompleted := !failed && len(results) == totalSteps
-	for _, r := range results {
-		if r.Status != StatusCompleted {
-			allCompleted = false
-			break
-		}
-	}
-
-	if !allCompleted && e.config.CleanupOnFailure {
-		slog.Warn("chain failed, cleaning up completed steps")
-		for j := len(results) - 1; j >= 0; j-- {
-			if results[j].Status != StatusCompleted {
-				continue
-			}
-			for _, op := range e.operations {
-				if op.ID() == results[j].StepID {
-					if err := op.Cleanup(ctx, results[j].Output); err != nil {
-						slog.Error("cleanup failed",
-							"step", results[j].StepID,
-							"error", err,
-						)
-					}
-					break
-				}
-			}
-		}
-	}
-
-	var finalOutput any
-	if allCompleted && len(results) > 0 {
-		finalOutput = results[len(results)-1].Output
-	}
-
-	return &ChainResult{
-		Steps:         results,
-		TotalDuration: time.Since(chainStart),
-		FinalOutput:   finalOutput,
-		Success:       allCompleted,
-	}, nil
+	return state.output, nil
 }
 
-// String returns a summary of the executor configuration.
-func (e *Executor) String() string {
-	return fmt.Sprintf("ChainExecutor(%d steps, stop_on_failure=%v, cleanup=%v)",
-		len(e.operations), e.config.StopOnFailure, e.config.CleanupOnFailure)
+// Len returns the number of steps in the chain.
+func (c *Chain[I, O]) Len() int { return c.stepCount }
+
+// IsEmpty reports whether the chain has no steps.
+func (c *Chain[I, O]) IsEmpty() bool { return c.stepCount == 0 }
+
+// cancelError builds the error returned when the chain is canceled before a
+// step runs, joining any cleanup failure that occurred while unwinding.
+func cancelError(ctx context.Context, stepID string, cleanupErr error) error {
+	err := errors.Canceled("chain").WithCause(ctx.Err()).WithDetail("step", stepID)
+	if cleanupErr != nil {
+		return stderrors.Join(err, cleanupErr)
+	}
+	return err
+}
+
+// stepError wraps a step failure, preserving the underlying AppError code while
+// attaching the failing step id, and joins any cleanup failure. stepErr is
+// always non-nil here (callers invoke it only on a failed step), but guard the
+// invariant explicitly so a future caller can never trigger a nil dereference.
+func stepError(stepID string, stepErr, cleanupErr error) error {
+	wrapped := errors.Wrap(stepErr)
+	if wrapped == nil {
+		if cleanupErr != nil {
+			return cleanupErr
+		}
+		return nil
+	}
+	out := *wrapped
+	out.Details = cloneDetails(wrapped.Details)
+	err := out.WithDetail("step", stepID)
+	if cleanupErr != nil {
+		return stderrors.Join(err, cleanupErr)
+	}
+	return err
+}
+
+// cloneDetails copies a details map so attaching step metadata never mutates a
+// shared AppError instance owned by the caller.
+func cloneDetails(src map[string]any) map[string]any {
+	dst := make(map[string]any, len(src)+1)
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

@@ -17,8 +17,11 @@ type Config struct {
 	MaxBodySize  string                `yaml:"max_body_size" mapstructure:"max_body_size"` // e.g. "10MB"
 	TLS          *security.TLSConfig   `yaml:"tls" mapstructure:"tls"`
 	CORS         middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
-	Docs         DocsConfig            `yaml:"docs" mapstructure:"docs"`
-	Enabled      bool                  `yaml:"enabled" mapstructure:"enabled"`
+	// SecurityHeaders configures the secure-by-default response headers applied
+	// to every route. Zero value yields secure defaults; set Disabled to opt out.
+	SecurityHeaders security.HeadersConfig `yaml:"security_headers" mapstructure:"security_headers"`
+	Docs            DocsConfig             `yaml:"docs" mapstructure:"docs"`
+	Enabled         bool                   `yaml:"enabled" mapstructure:"enabled"`
 }
 
 // DocsConfig controls API documentation serving.
@@ -77,6 +80,9 @@ func (c *Config) Validate() error {
 	}
 	if c.IdleTimeout < 0 {
 		return fmt.Errorf("server.idle_timeout must be non-negative (got: %d)", c.IdleTimeout)
+	}
+	if _, err := c.SecurityHeaders.HeaderMap(); err != nil {
+		return err
 	}
 	return nil
 }
