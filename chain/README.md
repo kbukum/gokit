@@ -29,7 +29,10 @@ type doubleOp struct{ chain.BaseOperation }
 func (doubleOp) ID() string   { return "double" }
 func (doubleOp) Name() string { return "double" }
 func (doubleOp) Execute(ctx context.Context, input any, progress chain.ProgressFn) (any, error) {
-    n := input.(int)
+    n, ok := input.(int)
+    if !ok {
+        return nil, fmt.Errorf("double: expected int input, got %T", input)
+    }
     progress(100, "doubled")
     return n * 2, nil
 }
