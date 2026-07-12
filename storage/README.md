@@ -28,7 +28,10 @@ The S3 adapter is a nested Go module, so AWS SDK dependencies do not enter core.
 Importing it has no side effects; register explicitly:
 
 ```go
-import storages3 "github.com/kbukum/gokit/storage/s3"
+import (
+    "github.com/kbukum/gokit/storage"
+    storages3 "github.com/kbukum/gokit/storage/s3"
+)
 
 reg := storage.NewFactoryRegistry()
 if err := storages3.Register(reg); err != nil {
@@ -43,7 +46,10 @@ within the storage module (no separate `go.mod`), but it is still opt-in with no
 side effects — register it explicitly:
 
 ```go
-import "github.com/kbukum/gokit/storage/supabase"
+import (
+    "github.com/kbukum/gokit/storage"
+    "github.com/kbukum/gokit/storage/supabase"
+)
 
 reg := storage.NewFactoryRegistry()
 if err := supabase.Register(reg); err != nil {
