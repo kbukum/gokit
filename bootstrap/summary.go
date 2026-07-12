@@ -201,7 +201,7 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 // It auto-collects infrastructure, routes, and health from the component
 // registry and DI registrations from the container. Manual Track* calls
 // are only needed for non-component items (e.g., auth config).
-func (s *Summary) DisplaySummary(registry *component.Registry, container di.Container, log *logging.Logger) {
+func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Container, log *logging.Logger) {
 	ctx := context.Background()
 
 	// --- Auto-collect from registry ---
@@ -381,7 +381,7 @@ func (s *Summary) collectFromRegistry(ctx context.Context, registry *component.R
 }
 
 // displayDIRegistrations shows DI container registrations grouped by type.
-func (s *Summary) displayDIRegistrations(container di.Container) {
+func (s *Summary) displayDIRegistrations(container *di.Container) {
 	if container == nil {
 		return
 	}
@@ -472,7 +472,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 		for j, item := range g.items {
 			name := strings.TrimPrefix(item.Key, g.label+".")
 			status := "✅"
-			if item.Mode == di.Lazy && !item.Initialized {
+			if !item.Initialized {
 				status = "💤"
 			}
 			itemPrefix := treePrefix(j, len(g.items))
@@ -486,7 +486,7 @@ func (s *Summary) displayDIRegistrations(container di.Container) {
 		fmt.Fprintf(s.writer, "   %s 🔧 infrastructure (%d)\n", groupPrefix, len(infra))
 		for j, item := range infra {
 			status := "✅"
-			if item.Mode == di.Lazy && !item.Initialized {
+			if !item.Initialized {
 				status = "💤"
 			}
 			itemPrefix := treePrefix(j, len(infra))

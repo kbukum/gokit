@@ -26,7 +26,7 @@ func (n *tracingNode) Run(ctx context.Context, state *State) (any, error) {
 	ctx, span := observability.StartSpan(ctx, spanName)
 	defer span.End()
 
-	observability.SetSpanAttribute(ctx, "dag.node", n.inner.Name())
+	observability.SetSpanAttributes(ctx, observability.StringAttribute("dag.node", n.inner.Name()))
 
 	result, err := n.inner.Run(ctx, state)
 	if err != nil {

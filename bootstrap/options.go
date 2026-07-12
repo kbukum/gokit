@@ -14,7 +14,7 @@ type Option func(*appOptions)
 // appOptions collects all option values before applying to App.
 type appOptions struct {
 	logger          *logging.Logger
-	container       di.Container
+	container       *di.Container
 	gracefulTimeout *time.Duration
 }
 
@@ -43,7 +43,7 @@ func WithGracefulTimeout(d time.Duration) Option {
 }
 
 // WithContainer sets a custom DI container for the application.
-func WithContainer(c di.Container) Option {
+func WithContainer(c *di.Container) Option {
 	return func(o *appOptions) {
 		o.container = c
 	}

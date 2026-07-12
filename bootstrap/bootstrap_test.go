@@ -705,10 +705,10 @@ func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
 
 	registry := component.NewRegistry()
 	container := di.NewContainer()
-	container.RegisterSingleton("service.user", "user-svc")
-	container.RegisterSingleton("repository.user", "user-repo")
-	container.RegisterSingleton("handler.users", "users-handler")
-	container.RegisterSingleton("config", "cfg")
+	_ = di.Register(container, "user-svc", di.WithName("service.user"))
+	_ = di.Register(container, "user-repo", di.WithName("repository.user"))
+	_ = di.Register(container, "users-handler", di.WithName("handler.users"))
+	_ = di.Register(container, "cfg", di.WithName("config"))
 
 	// Should not panic
 	s.DisplaySummary(registry, container, nil)

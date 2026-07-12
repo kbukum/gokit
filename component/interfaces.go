@@ -111,6 +111,11 @@ type Description struct {
 // When a component implements this interface, the bootstrap system
 // automatically includes it in the infrastructure section of the
 // startup summary — no manual TrackInfrastructure calls needed.
+//
+// IMPROVE-RSKIT: rskit's component trait is lifecycle-only; these optional
+// self-description capabilities (Describable/RouteProvider) are a gokit
+// enhancement. Consider adding equivalent optional metadata traits to
+// rskit-component so the two kits report startup summaries at parity.
 type Describable interface {
 	Describe() Description
 }

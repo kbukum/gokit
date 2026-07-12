@@ -31,7 +31,7 @@ type App[C Config] struct {
 	Name       string
 	Version    string
 	Cfg        C
-	Container  di.Container
+	Container  *di.Container
 	Components *component.Registry
 	Logger     *logging.Logger
 	Summary    *Summary

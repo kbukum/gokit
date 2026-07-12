@@ -282,3 +282,10 @@ func TestExecuteWithResult(t *testing.T) {
 		t.Errorf("expected 42, got %d", result)
 	}
 }
+
+func TestNewBulkhead_DefaultsMaxConcurrent(t *testing.T) {
+	b := NewBulkhead(BulkheadConfig{Name: "t"})
+	if b.Available() != 10 {
+		t.Fatalf("expected default MaxConcurrent 10, got %d", b.Available())
+	}
+}

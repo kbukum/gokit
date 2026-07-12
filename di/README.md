@@ -1,6 +1,9 @@
 # di
 
-Dependency injection container with eager/lazy registration, singletons, circuit breakers, and generics.
+Small, type-keyed dependency injection container with eager / singleton /
+transient registration modes, closeable lifecycle, and context-based cycle
+detection. The public API is generic and typed end-to-end — there is no untyped
+registration or lookup.
 
 ## Install
 
@@ -14,47 +17,59 @@ go get github.com/kbukum/gokit
 package main
 
 import (
+    "context"
     "fmt"
+
     "github.com/kbukum/gokit/di"
 )
 
+type Store struct{ dsn string }
+
 func main() {
+    ctx := context.Background()
     c := di.NewContainer()
+    defer c.Close()
 
-    // Register a singleton
-    c.RegisterSingleton("greeting", "Hello, World!")
+    // Pre-built value (eager).
+    _ = di.Register(c, "Hello, World!", di.WithName("greeting"))
 
-    // Register a lazy constructor
-    c.RegisterLazy("service", func() (string, error) {
-        return "initialized on first resolve", nil
+    // Lazily constructed, cached (singleton).
+    _ = di.RegisterSingleton(c, func(ctx context.Context) (*Store, error) {
+        return &Store{dsn: "postgres://..."}, nil
     })
 
-    // Type-safe resolve
-    val, err := di.Resolve[string](c, "greeting")
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println(val) // "Hello, World!"
+    // Fresh instance per resolve (transient).
+    _ = di.RegisterTransient(c, func(ctx context.Context) (int, error) { return 7, nil })
 
-    // Must resolve (panics on error)
-    svc := di.MustResolve[string](c, "service")
-    fmt.Println(svc)
+    // Type-safe resolve (optionally by name).
+    greeting, _ := di.Resolve[string](ctx, c, di.WithName("greeting"))
+    fmt.Println(greeting) // "Hello, World!"
 
-    c.Close()
+    // Must resolve (panics on error; startup/tests only).
+    store := di.MustResolve[*Store](ctx, c)
+    fmt.Println(store.dsn)
 }
 ```
+
+Constructor injection is the only wiring pattern: a factory receives the
+resolution `context.Context` and calls `Resolve` with it for each dependency it
+needs. The active resolution chain travels in that context, so circular
+dependencies are detected and returned as an error, and a canceled context
+aborts resolution. Values that implement `interface{ Close() error }` are closed
+by `Container.Close`.
 
 ## Key Types & Functions
 
 | Name | Description |
 |------|-------------|
-| `Container` | DI container interface |
-| `NewContainer()` / `NewSimpleContainer()` | Container constructors |
-| `Register()` / `RegisterLazy()` / `RegisterEager()` | Registration modes |
-| `RegisterSingleton()` | Register a pre-built instance |
-| `Resolve[T]()` / `MustResolve[T]()` / `TryResolve[T]()` | Type-safe generic resolution |
-| `WithRetryPolicy()` / `WithCircuitBreaker()` | Lazy registration options |
-| `CircuitBreaker` / `CircuitBreakerConfig` | Built-in circuit breaker for lazy deps |
+| `Container` / `NewContainer()` | Type-keyed container |
+| `Register[T]()` | Register a pre-built value (eager) |
+| `RegisterSingleton[T]()` | Register a factory invoked once and cached |
+| `RegisterTransient[T]()` | Register a factory invoked on every resolve |
+| `Resolve[T]()` / `MustResolve[T]()` / `TryResolve[T]()` | Typed resolution (context-threaded) |
+| `WithName(string)` | Qualify a registration/lookup with a name |
+| `Registrations()` | Introspect registrations for diagnostics/summaries |
+| `Mode` / `RegistrationInfo` | Introspection types |
 
 ---
 

@@ -26,29 +26,38 @@ const (
 
 // SpanAttribute is a typed, transport-neutral span attribute.
 type SpanAttribute struct {
-	key   string
-	value any
+	key string
+	val attrValue
 }
 
 // StringAttribute creates a string span attribute.
-func StringAttribute(key, value string) SpanAttribute { return SpanAttribute{key: key, value: value} }
+func StringAttribute(key, value string) SpanAttribute {
+	return SpanAttribute{key: key, val: stringValue(value)}
+}
 
 // IntAttribute creates an int span attribute.
-func IntAttribute(key string, value int) SpanAttribute { return SpanAttribute{key: key, value: value} }
+func IntAttribute(key string, value int) SpanAttribute {
+	return SpanAttribute{key: key, val: intValue(value)}
+}
 
 // Int64Attribute creates an int64 span attribute.
 func Int64Attribute(key string, value int64) SpanAttribute {
-	return SpanAttribute{key: key, value: value}
+	return SpanAttribute{key: key, val: int64Value(value)}
 }
 
 // Float64Attribute creates a float64 span attribute.
 func Float64Attribute(key string, value float64) SpanAttribute {
-	return SpanAttribute{key: key, value: value}
+	return SpanAttribute{key: key, val: float64Value(value)}
 }
 
 // BoolAttribute creates a bool span attribute.
 func BoolAttribute(key string, value bool) SpanAttribute {
-	return SpanAttribute{key: key, value: value}
+	return SpanAttribute{key: key, val: boolValue(value)}
+}
+
+// StringSliceAttribute creates a string-slice span attribute.
+func StringSliceAttribute(key string, value []string) SpanAttribute {
+	return SpanAttribute{key: key, val: stringSliceValue(value)}
 }
 
 // SpanOption configures a span without exposing OpenTelemetry option types.
@@ -112,18 +121,7 @@ func toOTelSpanKind(kind SpanKind) trace.SpanKind {
 func toOTelSpanAttributes(attrs []SpanAttribute) []attribute.KeyValue {
 	out := make([]attribute.KeyValue, 0, len(attrs))
 	for _, attr := range attrs {
-		switch value := attr.value.(type) {
-		case string:
-			out = append(out, attribute.String(attr.key, value))
-		case int:
-			out = append(out, attribute.Int(attr.key, value))
-		case int64:
-			out = append(out, attribute.Int64(attr.key, value))
-		case float64:
-			out = append(out, attribute.Float64(attr.key, value))
-		case bool:
-			out = append(out, attribute.Bool(attr.key, value))
-		}
+		out = append(out, attr.val.keyValue(attr.key))
 	}
 	return out
 }

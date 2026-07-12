@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"time"
 )
 
@@ -39,6 +39,11 @@ type RetryConfig struct {
 	BackoffFactor float64
 	// Jitter adds randomness to backoff (0.0 to 1.0).
 	Jitter float64
+	// Rand supplies a uniform random float64 in [0.0, 1.0) used to compute
+	// jitter. Leave nil for the concurrency-safe, auto-seeded default; inject a
+	// seeded source (e.g. rand.New(rand.NewPCG(seed1, seed2)).Float64) to make
+	// backoff deterministic under test.
+	Rand func() float64
 	// RetryIf determines if an error should be retried.
 	RetryIf func(error) bool
 	// OnRetry is called before each retry.
@@ -149,6 +154,9 @@ func normalizeRetryConfig(cfg RetryConfig) RetryConfig {
 	if cfg.RetryIf == nil {
 		cfg.RetryIf = DefaultRetryIf
 	}
+	if cfg.Rand == nil {
+		cfg.Rand = rand.Float64
+	}
 	return cfg
 }
 
@@ -168,7 +176,7 @@ func calculateBackoff(attempt int, cfg RetryConfig) time.Duration {
 
 	if cfg.Jitter > 0 {
 		jitterRange := backoffFloat * cfg.Jitter
-		jitter := (rand.Float64()*2 - 1) * jitterRange
+		jitter := (cfg.Rand()*2 - 1) * jitterRange
 		backoffFloat += jitter
 	}
 
