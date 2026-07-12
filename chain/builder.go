@@ -38,6 +38,10 @@ func Then[I, M, N any](b *Builder[I, M], step Step[M, N]) *Builder[I, N] {
 		emitProgress(cctx, stepIndex, step.id, StatusRunning, 0, "")
 		sctx := newStepContext(ctx, stepProgressReporter(cctx, stepIndex, step.id))
 
+		if step.execute == nil {
+			return chainState[N]{}, stepError(step.id, errNilStepExecute, runCleanups(ctx, state.cleanups))
+		}
+
 		output, err := step.execute(sctx, state.output)
 		if err != nil {
 			return chainState[N]{}, stepError(step.id, err, runCleanups(ctx, state.cleanups))

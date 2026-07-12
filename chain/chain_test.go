@@ -149,6 +149,26 @@ func TestCleanupErrorsJoinedOntoFailure(t *testing.T) {
 	}
 }
 
+func TestNilStepExecuteReturnsErrorAndRunsCleanups(t *testing.T) {
+	t.Parallel()
+
+	cleaned := false
+	a := chain.StepFunc("a", func(_ chain.StepContext, n int) (int, error) { return n, nil }).
+		WithCleanup(func(_ context.Context) error { cleaned = true; return nil })
+	// A zero-value Step has a nil execute function; the runner must surface a
+	// normal error instead of panicking.
+	var broken chain.Step[int, int]
+
+	c := chain.Then(chain.Then(chain.New[int](), a), broken).Build()
+	_, err := c.Execute(context.Background(), 1, nil)
+	if err == nil {
+		t.Fatal("expected error for nil step execute")
+	}
+	if !cleaned {
+		t.Fatal("expected prior step cleanup to run on nil-execute failure")
+	}
+}
+
 func TestCancellationBeforeStepRunsCleanups(t *testing.T) {
 	t.Parallel()
 

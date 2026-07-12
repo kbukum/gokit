@@ -10,6 +10,12 @@ import (
 // cleanupAction is a deferred cleanup captured for a completed step.
 type cleanupAction func(ctx context.Context) error
 
+// errNilStepExecute reports a step constructed without an execute function
+// (for example, a zero-value Step). The runner surfaces it as a normal chain
+// error — after running accumulated cleanups — rather than panicking on the
+// execution path.
+var errNilStepExecute = stderrors.New("chain: step has no execute function")
+
 // chainState threads the current typed output and the cleanups accumulated by
 // completed steps through the runner composition.
 type chainState[O any] struct {
