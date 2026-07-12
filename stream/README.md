@@ -109,7 +109,7 @@ func main() {
 | `Batch[T](p Pipeline[T], size int, timeout time.Duration) Pipeline[[]T]` | Collect N items or wait timeout, emit as slice |
 | `Debounce[T](p Pipeline[T], quiet time.Duration) Pipeline[T]` | Wait for silence before emitting latest value |
 | `TumblingWindow[T](p Pipeline[T], duration time.Duration) Pipeline[[]T]` | Non-overlapping fixed-duration windows |
-| `SlidingWindow[T](p Pipeline[T], duration, slide time.Duration) Pipeline[[]T]` | Overlapping windows with configurable slide |
+| `SlidingWindow[T](p Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) Pipeline[[]T]` | Overlapping event-time windows with configurable slide |
 
 ### Terminal Operators
 
@@ -125,7 +125,7 @@ func main() {
 |-------------|-------------|
 | `FromSlice[T](items []T) Pipeline[T]` | Create pipeline from slice |
 | `From[T](it Iterator[T]) Pipeline[T]` | Create pipeline from any iterator (including `provider.Iterator[T]`) |
-| `FromFunc[T](fn func(context.Context) (T, bool, error)) Pipeline[T]` | Create pipeline from generator function |
+| `FromFunc[T](fn func(context.Context) Iterator[T]) Pipeline[T]` | Create pipeline from an iterator-producing function |
 
 ## Usage Examples
 
@@ -155,7 +155,7 @@ activeUsers, err := stream.Collect(ctx, active)
 
 ```go
 // Stream of events
-events := stream.FromFunc(eventSource.Next)
+events := stream.From(eventSource) // eventSource implements Iterator[Event]
 
 // Rate-limit to 10 events/sec
 throttled := stream.Throttle(events, 100*time.Millisecond)
@@ -203,7 +203,7 @@ stream.Drain(identified, finalSink.Send).Run(ctx)
 
 ```go
 // Stream of metrics
-metrics := stream.FromFunc(metricSource.Next)
+metrics := stream.From(metricSource) // metricSource implements Iterator[Metric]
 
 // Create 1-minute tumbling windows
 windows := stream.TumblingWindow(metrics, 1*time.Minute)

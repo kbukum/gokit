@@ -68,7 +68,7 @@ When adding a new module:
 - Package names: lowercase, single-word, no plurals.
 - Every package has a `doc.go`.
 - Exported interfaces + factory functions; concrete implementations unexported.
-- Errors: RFC 7807 `AppError` with typed error codes.
+- Errors: RFC 9457 `AppError` with typed error codes.
 - Tests: parallel, table-driven, use `testutil` helpers; deterministic under `-race -shuffle`.
 - **Readability & structure (load-bearing, not cosmetic):** organize by focused, well-named
   files within a package — never pile unrelated logic into one large file. Split by concern

@@ -57,7 +57,7 @@
 //	mgr := stateful.NewManager(
 //	    func(userID string) *stateful.Accumulator[LogEntry] {
 //	        return stateful.NewAccumulator(
-//	            stateful.NewRedisStore[LogEntry](redis, "logs:"+userID),
+//	            stateful.NewMemoryStore[LogEntry](),
 //	            config,
 //	        )
 //	    },

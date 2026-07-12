@@ -196,12 +196,11 @@ log := logging.New(cfg, "my-service")
 // WithComponent applies the module-level override automatically
 dbLog := log.WithComponent("database")   // → debug level
 kafkaLog := log.WithComponent("kafka")   // → warn level
-
-// Dynamic update at runtime
-log.moduleLevels.SetLevel("cache", "debug")
 ```
 
-The `ModuleLevelManager` is thread-safe and supports runtime level changes via `SetLevel()`.
+Module levels are configured via the `module_levels` map (config or `logging.Config`) and
+applied automatically by `WithComponent`. The underlying `ModuleLevelManager` is thread-safe;
+its `SetLevel()` is used internally when levels are established from configuration.
 
 ## OTLP Export
 

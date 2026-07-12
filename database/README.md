@@ -26,7 +26,7 @@ comp := database.NewComponent(cfg, log).
 
 ```go
 drivers := database.NewDriverRegistry()
-if err := postgresadapter.Register(drivers); err != nil {
+if err := drivers.Register("postgres", postgres.Open); err != nil {
     return err
 }
 
