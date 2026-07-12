@@ -156,7 +156,7 @@ func (l *Logger) WithComponent(name string) *Logger {
 }
 
 // WithFields returns a logger with additional fields.
-func (l *Logger) WithFields(fields map[string]interface{}) *Logger {
+func (l *Logger) WithFields(fields map[string]any) *Logger {
 	zc := l.logger.With()
 	for k, v := range fields {
 		zc = zc.Interface(k, v)
@@ -214,12 +214,12 @@ func (l *Logger) GetLogger() zerolog.Logger {
 //
 // For request- or operation-scoped logging that should propagate cancellation
 // and trace correlation to OTLP, prefer DebugCtx.
-func (l *Logger) Debug(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Debug(msg string, fields ...map[string]any) {
 	l.DebugCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API; callers with a ctx in scope should use DebugCtx
 }
 
 // DebugCtx logs a debug message and propagates ctx to the OTLP exporter.
-func (l *Logger) DebugCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func (l *Logger) DebugCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	event := l.logger.Debug()
 	l.addFields(event, fields...)
 	event.Msg(msg)
@@ -227,12 +227,12 @@ func (l *Logger) DebugCtx(ctx context.Context, msg string, fields ...map[string]
 }
 
 // Info logs an info message. Prefer InfoCtx when a context is in scope.
-func (l *Logger) Info(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Info(msg string, fields ...map[string]any) {
 	l.InfoCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
 }
 
 // InfoCtx logs an info message and propagates ctx to the OTLP exporter.
-func (l *Logger) InfoCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func (l *Logger) InfoCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	event := l.logger.Info()
 	l.addFields(event, fields...)
 	event.Msg(msg)
@@ -240,12 +240,12 @@ func (l *Logger) InfoCtx(ctx context.Context, msg string, fields ...map[string]i
 }
 
 // Warn logs a warning message. Prefer WarnCtx when a context is in scope.
-func (l *Logger) Warn(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Warn(msg string, fields ...map[string]any) {
 	l.WarnCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
 }
 
 // WarnCtx logs a warning message and propagates ctx to the OTLP exporter.
-func (l *Logger) WarnCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func (l *Logger) WarnCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	event := l.logger.Warn()
 	l.addFields(event, fields...)
 	event.Msg(msg)
@@ -253,12 +253,12 @@ func (l *Logger) WarnCtx(ctx context.Context, msg string, fields ...map[string]i
 }
 
 // Error logs an error message. Prefer ErrorCtx when a context is in scope.
-func (l *Logger) Error(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Error(msg string, fields ...map[string]any) {
 	l.ErrorCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
 }
 
 // ErrorCtx logs an error message and propagates ctx to the OTLP exporter.
-func (l *Logger) ErrorCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func (l *Logger) ErrorCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	event := l.logger.Error()
 	l.addFields(event, fields...)
 	event.Msg(msg)
@@ -266,12 +266,12 @@ func (l *Logger) ErrorCtx(ctx context.Context, msg string, fields ...map[string]
 }
 
 // Fatal logs a fatal message and exits. Prefer FatalCtx when a context is in scope.
-func (l *Logger) Fatal(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Fatal(msg string, fields ...map[string]any) {
 	l.FatalCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
 }
 
 // FatalCtx logs a fatal message and exits, propagating ctx to the OTLP exporter.
-func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	l.emitOTLP(ctx, "fatal", msg, fields...)
 	event := l.logger.Fatal()
 	l.addFields(event, fields...)
@@ -302,43 +302,43 @@ func GetLoggerZ() zerolog.Logger {
 
 // Package-level convenience functions delegate to the default logger.
 
-func Debug(msg string, fields ...map[string]interface{}) {
+func Debug(msg string, fields ...map[string]any) {
 	Default().Debug(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
 }
 
-func DebugCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func DebugCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	Default().DebugCtx(ctx, msg, fields...)
 }
 
-func Info(msg string, fields ...map[string]interface{}) {
+func Info(msg string, fields ...map[string]any) {
 	Default().Info(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
 }
 
-func InfoCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func InfoCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	Default().InfoCtx(ctx, msg, fields...)
 }
 
-func Warn(msg string, fields ...map[string]interface{}) {
+func Warn(msg string, fields ...map[string]any) {
 	Default().Warn(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
 }
 
-func WarnCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func WarnCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	Default().WarnCtx(ctx, msg, fields...)
 }
 
-func Error(msg string, fields ...map[string]interface{}) {
+func Error(msg string, fields ...map[string]any) {
 	Default().Error(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
 }
 
-func ErrorCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func ErrorCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	Default().ErrorCtx(ctx, msg, fields...)
 }
 
-func Fatal(msg string, fields ...map[string]interface{}) {
+func Fatal(msg string, fields ...map[string]any) {
 	Default().Fatal(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
 }
 
-func FatalCtx(ctx context.Context, msg string, fields ...map[string]interface{}) {
+func FatalCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	Default().FatalCtx(ctx, msg, fields...)
 }
 
@@ -354,11 +354,11 @@ func WithComponent(name string) *Logger {
 
 // --- internal helpers ---
 
-func (l *Logger) emitOTLP(ctx context.Context, level, msg string, fields ...map[string]interface{}) {
+func (l *Logger) emitOTLP(ctx context.Context, level, msg string, fields ...map[string]any) {
 	if l.otlpProvider == nil {
 		return
 	}
-	merged := make(map[string]interface{})
+	merged := make(map[string]any)
 	for _, fm := range fields {
 		for k, v := range fm {
 			merged[k] = v
@@ -367,7 +367,7 @@ func (l *Logger) emitOTLP(ctx context.Context, level, msg string, fields ...map[
 	l.otlpProvider.EmitLog(ctx, level, msg, merged)
 }
 
-func (l *Logger) addFields(event *zerolog.Event, fields ...map[string]interface{}) {
+func (l *Logger) addFields(event *zerolog.Event, fields ...map[string]any) {
 	if l.masker != nil {
 		for _, fm := range fields {
 			for k, v := range fm {
@@ -414,7 +414,7 @@ func newConsoleLogger(cfg *Config, serviceName string) zerolog.Logger {
 		Out:        output,
 		TimeFormat: "15:04:05",
 		NoColor:    cfg.NoColor,
-		FormatLevel: func(i interface{}) string {
+		FormatLevel: func(i any) string {
 			lvl := strings.ToUpper(fmt.Sprintf("%s", i))
 			if !cfg.NoColor {
 				switch lvl {
@@ -456,16 +456,16 @@ func newConsoleLogger(cfg *Config, serviceName string) zerolog.Logger {
 			}
 			return lvl
 		},
-		FormatMessage: func(i interface{}) string {
+		FormatMessage: func(i any) string {
 			if i == nil {
 				return ""
 			}
 			return fmt.Sprintf("%s", i)
 		},
-		FormatFieldName: func(i interface{}) string {
+		FormatFieldName: func(i any) string {
 			return fmt.Sprintf("%s:", i)
 		},
-		FormatFieldValue: func(i interface{}) string {
+		FormatFieldValue: func(i any) string {
 			if i == nil {
 				return ""
 			}

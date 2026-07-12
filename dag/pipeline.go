@@ -102,8 +102,8 @@ func (s *ScheduleConfig) UnmarshalYAML(value *yaml.Node) error {
 }
 
 // MarshalYAML writes ScheduleConfig as YAML with integer seconds.
-func (s ScheduleConfig) MarshalYAML() (interface{}, error) {
-	out := make(map[string]interface{})
+func (s ScheduleConfig) MarshalYAML() (any, error) {
+	out := make(map[string]any)
 	if s.Interval > 0 {
 		out["interval_sec"] = s.Interval.Seconds()
 	}

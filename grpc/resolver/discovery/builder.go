@@ -49,7 +49,7 @@ func NewResolverBuilder(disc discovery.Discovery, log *logging.Logger, opts ...O
 func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	serviceName := target.Endpoint()
 
-	b.log.Debug("Building discovery resolver", map[string]interface{}{
+	b.log.Debug("Building discovery resolver", map[string]any{
 		"service": serviceName,
 		"scheme":  b.scheme,
 	})

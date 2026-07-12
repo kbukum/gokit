@@ -2,6 +2,7 @@ package fs_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -124,4 +125,45 @@ func FuzzValidateRelativePath(f *testing.F) {
 			t.Fatalf("validated path escapes root: %q -> %q", path, joined)
 		}
 	})
+}
+
+func TestAbsolute(t *testing.T) {
+	t.Parallel()
+	abs, err := fs.Absolute("relative/path")
+	if err != nil {
+		t.Fatalf("absolute: %v", err)
+	}
+	if !filepath.IsAbs(abs) {
+		t.Fatalf("expected absolute path, got %q", abs)
+	}
+	already := filepath.Join(string(filepath.Separator), "etc", "hosts")
+	if got, err := fs.Absolute(already); err != nil || got != already {
+		t.Fatalf("absolute passthrough: %q %v", got, err)
+	}
+}
+func TestCanonicalize(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real.txt")
+	if err := os.WriteFile(target, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	link := filepath.Join(dir, "link.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	got, err := fs.Canonicalize(link)
+	if err != nil {
+		t.Fatalf("canonicalize: %v", err)
+	}
+	want, _ := filepath.EvalSymlinks(target)
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+func TestCanonicalizeMissingErrors(t *testing.T) {
+	t.Parallel()
+	if _, err := fs.Canonicalize(filepath.Join(t.TempDir(), "missing")); err == nil {
+		t.Fatal("expected error for missing path")
+	}
 }

@@ -14,7 +14,7 @@ type Component struct {
 	db         *DB
 	cfg        Config
 	log        *logging.Logger
-	models     []interface{}
+	models     []any
 	driverFunc DriverFunc
 	driverName string
 }
@@ -60,7 +60,7 @@ func (c *Component) WithDriverFromRegistry(reg *DriverRegistry, name string) *Co
 
 // WithAutoMigrate registers models for auto-migration on Start.
 // Models are only migrated if Config.AutoMigrate is true and the component is enabled.
-func (c *Component) WithAutoMigrate(models ...interface{}) *Component {
+func (c *Component) WithAutoMigrate(models ...any) *Component {
 	c.models = append(c.models, models...)
 	return c
 }

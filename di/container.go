@@ -30,12 +30,12 @@ const (
 // callers are expected to use the generic helpers rather than the raw
 // untyped Resolve.
 type Container interface {
-	Register(key string, constructor interface{}) error
-	RegisterLazy(key string, constructor interface{}, options ...LazyOption) error
-	RegisterEager(key string, constructor interface{}) error
-	RegisterTransient(key string, constructor interface{}) error
-	Resolve(key string) (interface{}, error)
-	RegisterSingleton(key string, instance interface{}) error
+	Register(key string, constructor any) error
+	RegisterLazy(key string, constructor any, options ...LazyOption) error
+	RegisterEager(key string, constructor any) error
+	RegisterTransient(key string, constructor any) error
+	Resolve(key string) (any, error)
+	RegisterSingleton(key string, instance any) error
 	Close() error
 
 	// Introspection
@@ -48,8 +48,8 @@ type Container interface {
 	// resolution (where a generic helper is more ergonomic) is provided by the
 	// package-level [Resolve], [MustResolve], and [TryResolve] helpers.
 	InvalidateCache(name string) error
-	Refresh(name string) (interface{}, error)
-	GetResolver(name string) func() (interface{}, error)
+	Refresh(name string) (any, error)
+	GetResolver(name string) func() (any, error)
 }
 
 // RegistrationInfo describes a registered component for introspection.
@@ -62,7 +62,7 @@ type RegistrationInfo struct {
 // UnifiedContainer is our single, unified DI container
 type UnifiedContainer struct {
 	components map[string]*ComponentRegistration
-	singletons map[string]interface{}
+	singletons map[string]any
 	mutex      sync.RWMutex
 	// resolving tracks keys currently being resolved to detect circular dependencies.
 	// Each goroutine gets its own set via goroutine-local tracking.
@@ -72,9 +72,9 @@ type UnifiedContainer struct {
 
 type ComponentRegistration struct {
 	key            string
-	constructor    interface{}
+	constructor    any
 	mode           RegistrationMode
-	instance       interface{}
+	instance       any
 	mutex          sync.RWMutex
 	initialized    bool
 	lastError      error
@@ -117,18 +117,18 @@ type LazyOption func(*ComponentRegistration)
 func NewContainer() Container {
 	return &UnifiedContainer{
 		components: make(map[string]*ComponentRegistration),
-		singletons: make(map[string]interface{}),
+		singletons: make(map[string]any),
 		resolving:  make(map[uint64]map[string]bool),
 	}
 }
 
 // Register component with lazy loading by default (most common case)
-func (c *UnifiedContainer) Register(key string, constructor interface{}) error {
+func (c *UnifiedContainer) Register(key string, constructor any) error {
 	return c.RegisterLazy(key, constructor)
 }
 
 // RegisterLazy registers a component for lazy initialization
-func (c *UnifiedContainer) RegisterLazy(key string, constructor interface{}, options ...LazyOption) error {
+func (c *UnifiedContainer) RegisterLazy(key string, constructor any, options ...LazyOption) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -150,7 +150,7 @@ func (c *UnifiedContainer) RegisterLazy(key string, constructor interface{}, opt
 }
 
 // RegisterEager registers a component for immediate initialization
-func (c *UnifiedContainer) RegisterEager(key string, constructor interface{}) error {
+func (c *UnifiedContainer) RegisterEager(key string, constructor any) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -174,7 +174,7 @@ func (c *UnifiedContainer) RegisterEager(key string, constructor interface{}) er
 }
 
 // RegisterSingleton registers a pre-created instance
-func (c *UnifiedContainer) RegisterSingleton(key string, instance interface{}) error {
+func (c *UnifiedContainer) RegisterSingleton(key string, instance any) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -184,7 +184,7 @@ func (c *UnifiedContainer) RegisterSingleton(key string, instance interface{}) e
 
 // RegisterTransient registers a constructor that creates a new instance on every Resolve call.
 // The result is never cached.
-func (c *UnifiedContainer) RegisterTransient(key string, constructor interface{}) error {
+func (c *UnifiedContainer) RegisterTransient(key string, constructor any) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -199,7 +199,7 @@ func (c *UnifiedContainer) RegisterTransient(key string, constructor interface{}
 }
 
 // Resolve gets a component instance
-func (c *UnifiedContainer) Resolve(key string) (interface{}, error) {
+func (c *UnifiedContainer) Resolve(key string) (any, error) {
 	// Check singletons first
 	c.mutex.RLock()
 	if singleton, exists := c.singletons[key]; exists {
@@ -272,7 +272,7 @@ func (c *UnifiedContainer) popResolving(gid uint64, key string) {
 	}
 }
 
-func (c *UnifiedContainer) resolveComponent(registration *ComponentRegistration) (interface{}, error) {
+func (c *UnifiedContainer) resolveComponent(registration *ComponentRegistration) (any, error) {
 	switch registration.mode {
 	case Eager:
 		return c.resolveEager(registration)
@@ -285,7 +285,7 @@ func (c *UnifiedContainer) resolveComponent(registration *ComponentRegistration)
 	}
 }
 
-func (c *UnifiedContainer) resolveEager(registration *ComponentRegistration) (interface{}, error) {
+func (c *UnifiedContainer) resolveEager(registration *ComponentRegistration) (any, error) {
 	registration.mutex.RLock()
 	if registration.initialized && registration.instance != nil {
 		instance := registration.instance
@@ -297,7 +297,7 @@ func (c *UnifiedContainer) resolveEager(registration *ComponentRegistration) (in
 	return nil, fmt.Errorf("eager component not properly initialized: %s", registration.key)
 }
 
-func (c *UnifiedContainer) resolveLazy(registration *ComponentRegistration) (interface{}, error) {
+func (c *UnifiedContainer) resolveLazy(registration *ComponentRegistration) (any, error) {
 	// Circuit breaker check
 	if registration.circuitBreaker.IsOpen() {
 		return nil, fmt.Errorf("circuit breaker open for component: %s", registration.key)
@@ -317,11 +317,11 @@ func (c *UnifiedContainer) resolveLazy(registration *ComponentRegistration) (int
 }
 
 // resolveTransient creates a new instance every time. No caching.
-func (c *UnifiedContainer) resolveTransient(registration *ComponentRegistration) (interface{}, error) {
+func (c *UnifiedContainer) resolveTransient(registration *ComponentRegistration) (any, error) {
 	return c.callConstructor(registration.constructor)
 }
 
-func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistration) (interface{}, error) {
+func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistration) (any, error) {
 	var lastError error
 	backoffMs := registration.retryPolicy.InitialBackoffMs
 
@@ -355,7 +355,7 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 					registration.key, err)
 			}
 			registration.circuitBreaker.RecordFailure()
-			logging.Debug("Lazy component initialization failed", map[string]interface{}{
+			logging.Debug("Lazy component initialization failed", map[string]any{
 				"component": registration.key,
 				"attempt":   attempt + 1,
 				"error":     err.Error(),
@@ -377,7 +377,7 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 		registration.mutex.Unlock()
 		registration.circuitBreaker.RecordSuccess()
 
-		logging.Info("Lazy component initialized successfully", map[string]interface{}{
+		logging.Info("Lazy component initialized successfully", map[string]any{
 			"component": registration.key,
 			"attempts":  attempt + 1,
 		})
@@ -395,7 +395,7 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 		registration.key, registration.retryPolicy.MaxAttempts, lastError)
 }
 
-func (c *UnifiedContainer) callConstructor(constructor interface{}) (interface{}, error) {
+func (c *UnifiedContainer) callConstructor(constructor any) (any, error) {
 	fn := reflect.ValueOf(constructor)
 	if fn.Kind() != reflect.Func {
 		return nil, fmt.Errorf("constructor must be a function")
@@ -429,7 +429,7 @@ func (c *UnifiedContainer) callConstructor(constructor interface{}) (interface{}
 	}
 }
 
-func (c *UnifiedContainer) handleConstructorResults(results []reflect.Value) (interface{}, error) {
+func (c *UnifiedContainer) handleConstructorResults(results []reflect.Value) (any, error) {
 	switch len(results) {
 	case 1:
 		// Constructor returns just the instance
@@ -537,7 +537,7 @@ func (c *UnifiedContainer) InvalidateCache(name string) error {
 
 // Refresh invalidates the cached instance for name and resolves it again,
 // returning the freshly constructed value. Useful after configuration changes.
-func (c *UnifiedContainer) Refresh(name string) (interface{}, error) {
+func (c *UnifiedContainer) Refresh(name string) (any, error) {
 	if err := c.InvalidateCache(name); err != nil {
 		return nil, err
 	}
@@ -545,11 +545,11 @@ func (c *UnifiedContainer) Refresh(name string) (interface{}, error) {
 }
 
 // GetResolver returns a closure that resolves the named component lazily on
-// each call. Adapter code that must hand out a `func() (interface{}, error)`
+// each call. Adapter code that must hand out a `func() (any, error)`
 // (e.g., third-party plug-in loaders) uses this instead of capturing the
 // container directly.
-func (c *UnifiedContainer) GetResolver(name string) func() (interface{}, error) {
-	return func() (interface{}, error) {
+func (c *UnifiedContainer) GetResolver(name string) func() (any, error) {
+	return func() (any, error) {
 		return c.Resolve(name)
 	}
 }

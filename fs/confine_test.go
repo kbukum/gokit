@@ -71,3 +71,21 @@ func TestConfinePathRejectsAbsoluteEscape(t *testing.T) {
 		t.Fatal("expected escape to be rejected")
 	}
 }
+
+func TestConfineExistingPathMissingErrors(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if _, err := fs.ConfineExistingPath(root, "does/not/exist.txt"); err == nil {
+		t.Fatal("expected error for missing confined path")
+	}
+}
+func TestConfineRootMustBeDirectory(t *testing.T) {
+	t.Parallel()
+	file := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := fs.ConfinePath(file, "child.txt"); err == nil {
+		t.Fatal("expected error when root is not a directory")
+	}
+}

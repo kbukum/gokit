@@ -36,7 +36,7 @@ func testLogger() *logging.Logger {
 }
 
 func mockInvoker(retErr error) grpc.UnaryInvoker {
-	return func(ctx context.Context, method string, req, reply interface{},
+	return func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, opts ...grpc.CallOption,
 	) error {
 		return retErr
@@ -44,7 +44,7 @@ func mockInvoker(retErr error) grpc.UnaryInvoker {
 }
 
 func deadlineCapturingInvoker(captured *time.Time) grpc.UnaryInvoker {
-	return func(ctx context.Context, method string, req, reply interface{},
+	return func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, opts ...grpc.CallOption,
 	) error {
 		if dl, ok := ctx.Deadline(); ok {

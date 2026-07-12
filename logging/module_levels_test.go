@@ -159,7 +159,7 @@ func TestWithComponent_ModuleLevelOverride(t *testing.T) {
 		t.Error("expected debug message from database component to be logged")
 	}
 
-	var entry map[string]interface{}
+	var entry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("failed to parse log: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestWithComponent_ModuleLevelPropagation(t *testing.T) {
 	}
 
 	// WithFields should propagate moduleLevels
-	fl := l.WithFields(map[string]interface{}{"key": "val"})
+	fl := l.WithFields(map[string]any{"key": "val"})
 	if fl.moduleLevels == nil {
 		t.Error("expected moduleLevels to propagate through WithFields")
 	}

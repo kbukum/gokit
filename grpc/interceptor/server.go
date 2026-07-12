@@ -19,15 +19,15 @@ import (
 func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		start := time.Now()
 		svc := path.Dir(info.FullMethod)[1:]
 		method := path.Base(info.FullMethod)
 
-		log.DebugCtx(ctx, "gRPC request started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC request started", map[string]any{
 			"service": svc,
 			"method":  method,
 		})
@@ -35,7 +35,7 @@ func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerIntercep
 		resp, err := handler(ctx, req)
 		duration := time.Since(start)
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"service":     svc,
 			"method":      method,
 			"duration_ms": duration.Milliseconds(),
@@ -61,10 +61,10 @@ func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerIntercep
 func UnaryServerErrorInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
-		req interface{},
+		req any,
 		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
-	) (interface{}, error) {
+	) (any, error) {
 		resp, err := handler(ctx, req)
 		if err == nil {
 			return resp, nil

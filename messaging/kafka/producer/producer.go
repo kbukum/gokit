@@ -116,14 +116,14 @@ func (p *Producer) initWriter() error {
 		RequiredAcks: kafkago.RequiredAcks(p.cfg.RequiredAcks),
 		Compression:  kafka.ResolveCompression(p.cfg.Compression),
 		WriteTimeout: p.requestTimeout,
-		ErrorLogger: kafkago.LoggerFunc(func(msg string, args ...interface{}) {
-			p.log.Error("writer: "+msg, map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
+		ErrorLogger: kafkago.LoggerFunc(func(msg string, args ...any) {
+			p.log.Error("writer: "+msg, map[string]any{
 				"args": fmt.Sprintf("%v", args),
 			})
 		}),
 	}
 
-	p.log.Debug("Kafka producer initialized", map[string]interface{}{
+	p.log.Debug("Kafka producer initialized", map[string]any{
 		"brokers":         p.cfg.Brokers,
 		"compression":     p.cfg.Compression,
 		"batch_size":      p.cfg.BatchSize,

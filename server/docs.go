@@ -104,7 +104,7 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 
 		htmlContent, err := scalar.ApiReferenceHTML(opts)
 		if err != nil {
-			logging.Error("failed to render API docs", map[string]interface{}{
+			logging.Error("failed to render API docs", map[string]any{
 				"path":  d.UIPath,
 				"error": err.Error(),
 			})
@@ -116,7 +116,7 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", html)
 		})
 
-		logging.Debug("API docs mounted", map[string]interface{}{
+		logging.Debug("API docs mounted", map[string]any{
 			"ui": d.UIPath, "spec": d.SpecPath,
 		})
 	}
@@ -135,7 +135,7 @@ func patchSpec(spec []byte, host, basePath, contentType string) []byte {
 }
 
 func patchJSON(spec []byte, host, basePath string) []byte {
-	var doc map[string]interface{}
+	var doc map[string]any
 	if err := json.Unmarshal(spec, &doc); err != nil {
 		return spec
 	}

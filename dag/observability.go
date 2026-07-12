@@ -82,7 +82,7 @@ func (n *loggingNode) Run(ctx context.Context, state *State) (any, error) {
 	result, err := n.inner.Run(ctx, state)
 	duration := time.Since(start)
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"node":     n.inner.Name(),
 		"duration": duration.String(),
 	}

@@ -29,7 +29,7 @@ func NewDefaultConnectionFactory(cfg grpccfg.Config, log *logging.Logger) *Defau
 // NewConn creates a new gRPC client connection.
 // The serviceName is used for logging; the target address comes from the factory's Config.
 func (f *DefaultConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
-	f.log.Debug("Creating gRPC connection via factory", map[string]interface{}{
+	f.log.Debug("Creating gRPC connection via factory", map[string]any{
 		"service": serviceName,
 		"target":  f.cfg.Address(),
 	})

@@ -132,7 +132,7 @@ func (c *Component) Reset(_ context.Context) error {
 }
 
 // Snapshot copies the repository to a separate snapshot directory.
-func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
+func (c *Component) Snapshot(_ context.Context) (any, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -156,7 +156,7 @@ func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
 }
 
 // Restore restores the repository from a snapshot created by Snapshot.
-func (c *Component) Restore(_ context.Context, snapshot interface{}) error {
+func (c *Component) Restore(_ context.Context, snapshot any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

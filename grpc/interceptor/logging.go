@@ -17,7 +17,7 @@ func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientIntercep
 	return func(
 		ctx context.Context,
 		method string,
-		req, reply interface{},
+		req, reply any,
 		cc *grpc.ClientConn,
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
@@ -26,7 +26,7 @@ func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientIntercep
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.DebugCtx(ctx, "gRPC call started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC call started", map[string]any{
 			"service": service,
 			"method":  methodName,
 			"target":  cc.Target(),
@@ -35,7 +35,7 @@ func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientIntercep
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		duration := time.Since(start)
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"service":     service,
 			"method":      methodName,
 			"duration_ms": duration.Milliseconds(),
@@ -71,7 +71,7 @@ func StreamClientLoggingInterceptor(log *logging.Logger) grpc.StreamClientInterc
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.DebugCtx(ctx, "gRPC stream started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC stream started", map[string]any{
 			"service":        service,
 			"method":         methodName,
 			"target":         cc.Target(),
@@ -82,7 +82,7 @@ func StreamClientLoggingInterceptor(log *logging.Logger) grpc.StreamClientInterc
 		stream, err := streamer(ctx, desc, cc, method, opts...)
 		duration := time.Since(start)
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"service":     service,
 			"method":      methodName,
 			"duration_ms": duration.Milliseconds(),

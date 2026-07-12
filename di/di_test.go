@@ -539,7 +539,7 @@ func TestCloseWithLazyComponent(t *testing.T) {
 		return nil
 	}}
 
-	c.Register("lazy-closer", func() interface{} { return closeable })
+	c.Register("lazy-closer", func() any { return closeable })
 	c.Resolve("lazy-closer") // Initialize it
 
 	if err := c.Close(); err != nil {

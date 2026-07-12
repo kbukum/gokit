@@ -161,7 +161,7 @@ func (c *Component) Start(ctx context.Context) error {
 			if c.cfg.Registration.Required {
 				return fmt.Errorf("discovery: register self: %w", err)
 			}
-			c.log.WarnCtx(ctx, "failed to register with discovery — continuing in degraded mode", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to register with discovery — continuing in degraded mode", map[string]any{
 				"error":      err.Error(),
 				"service_id": svc.ID,
 			})
@@ -170,7 +170,7 @@ func (c *Component) Start(ctx context.Context) error {
 
 	c.client = c.buildClient()
 
-	c.log.DebugCtx(ctx, "discovery component started", map[string]interface{}{"provider": c.cfg.Provider})
+	c.log.DebugCtx(ctx, "discovery component started", map[string]any{"provider": c.cfg.Provider})
 	return nil
 }
 
@@ -180,7 +180,7 @@ func (c *Component) Stop(ctx context.Context) error {
 
 	if c.registry != nil && c.cfg.Enabled && c.cfg.Registration.ServiceID != "" {
 		if err := c.registry.Deregister(ctx, c.cfg.Registration.ServiceID); err != nil {
-			c.log.WarnCtx(ctx, "failed to deregister on stop", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to deregister on stop", map[string]any{
 				"error": err.Error(),
 			})
 		}
@@ -326,7 +326,7 @@ func (c *Component) registerWithRetry(ctx context.Context, svc *ServiceInfo) err
 		attempt++
 		err := c.registry.Register(ctx, svc)
 		if err != nil {
-			c.log.WarnCtx(ctx, "failed to register service", map[string]interface{}{
+			c.log.WarnCtx(ctx, "failed to register service", map[string]any{
 				"error":      err.Error(),
 				"service_id": svc.ID,
 				"attempt":    attempt,

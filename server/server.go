@@ -105,7 +105,7 @@ func (s *Server) GinEngine() *gin.Engine {
 func (s *Server) Handle(pattern string, handler http.Handler) {
 	s.mux.Handle(pattern, handler)
 	s.mounts = append(s.mounts, MountedHandler{Pattern: pattern})
-	s.log.Debug("Handler mounted", map[string]interface{}{
+	s.log.Debug("Handler mounted", map[string]any{
 		"pattern": pattern,
 	})
 }
@@ -125,7 +125,7 @@ func (s *Server) Handler() http.Handler {
 // Start binds the port and begins serving. It returns once the listener is
 // bound so the caller knows the port is ready; serving continues in a goroutine.
 func (s *Server) Start(ctx context.Context) error {
-	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]interface{}{
+	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]any{
 		"addr": s.httpServer.Addr,
 	})
 
@@ -144,13 +144,13 @@ func (s *Server) Start(ctx context.Context) error {
 			serveErr = s.httpServer.Serve(listener)
 		}
 		if serveErr != nil && serveErr != http.ErrServerClosed {
-			s.log.Error("Server error", map[string]interface{}{
+			s.log.Error("Server error", map[string]any{
 				"error": serveErr.Error(),
 			})
 		}
 	}()
 
-	s.log.InfoCtx(ctx, "HTTP server started", map[string]interface{}{
+	s.log.InfoCtx(ctx, "HTTP server started", map[string]any{
 		"addr": s.httpServer.Addr,
 	})
 	return nil
@@ -164,7 +164,7 @@ func (s *Server) Stop(ctx context.Context) error {
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.log.ErrorCtx(ctx, "Server shutdown error", map[string]interface{}{
+		s.log.ErrorCtx(ctx, "Server shutdown error", map[string]any{
 			"error": err.Error(),
 		})
 		return fmt.Errorf("server shutdown error: %w", err)
@@ -283,7 +283,7 @@ func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
 	case dc.SpecFile != "":
 		data, err := readSpecFile(dc.SpecFile)
 		if err != nil {
-			s.log.Error("Failed to load OpenAPI spec file", map[string]interface{}{
+			s.log.Error("Failed to load OpenAPI spec file", map[string]any{
 				"path":  dc.SpecFile,
 				"error": err.Error(),
 			})

@@ -157,11 +157,11 @@ func (m *DefaultMasker) MaskValue(key, value string) string {
 // String values are masked directly. Non-string values are converted to a
 // string representation, checked for sensitive patterns, and replaced with
 // the masked string if a pattern matches.
-func (m *DefaultMasker) MaskFields(fields map[string]interface{}) map[string]interface{} {
+func (m *DefaultMasker) MaskFields(fields map[string]any) map[string]any {
 	if fields == nil {
 		return nil
 	}
-	out := make(map[string]interface{}, len(fields))
+	out := make(map[string]any, len(fields))
 	for k, v := range fields {
 		str, isStr := v.(string)
 		if !isStr {

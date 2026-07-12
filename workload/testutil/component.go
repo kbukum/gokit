@@ -76,7 +76,7 @@ func (c *Component) Reset(_ context.Context) error {
 	return nil
 }
 
-func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
+func (c *Component) Snapshot(_ context.Context) (any, error) {
 	c.mgr.mu.RLock()
 	defer c.mgr.mu.RUnlock()
 	snap := make(map[string]*mockWorkload, len(c.mgr.workloads))
@@ -87,7 +87,7 @@ func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
 	return snap, nil
 }
 
-func (c *Component) Restore(_ context.Context, s interface{}) error {
+func (c *Component) Restore(_ context.Context, s any) error {
 	snap, ok := s.(map[string]*mockWorkload)
 	if !ok {
 		return fmt.Errorf("invalid snapshot type: expected map[string]*mockWorkload, got %T", s)

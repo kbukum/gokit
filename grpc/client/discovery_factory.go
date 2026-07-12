@@ -71,7 +71,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	}
 	instance, err := f.discoveryClient.DiscoverOne(ctx, query)
 	if err != nil {
-		f.logError("Failed to discover service", map[string]interface{}{
+		f.logError("Failed to discover service", map[string]any{
 			"service": serviceName,
 			"error":   err.Error(),
 		})
@@ -81,7 +81,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	// Build target address from the discovered instance
 	target := instance.Address + ":" + fmt.Sprint(instance.Port)
 
-	f.logDebug("Creating gRPC connection via discovery", map[string]interface{}{
+	f.logDebug("Creating gRPC connection via discovery", map[string]any{
 		"service":  serviceName,
 		"target":   target,
 		"instance": instance.ID,
@@ -100,7 +100,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	// Create the gRPC connection
 	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
-		f.logError("Failed to create gRPC connection", map[string]interface{}{
+		f.logError("Failed to create gRPC connection", map[string]any{
 			"service": serviceName,
 			"target":  target,
 			"error":   err.Error(),
@@ -108,7 +108,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 		return nil, fmt.Errorf("failed to connect to %s at %s: %w", serviceName, target, err)
 	}
 
-	f.logDebug("gRPC connection created via discovery", map[string]interface{}{
+	f.logDebug("gRPC connection created via discovery", map[string]any{
 		"service": serviceName,
 		"target":  target,
 	})
@@ -167,7 +167,7 @@ func (f *DiscoveryConnectionFactory) transportCredentials() (credentials.Transpo
 	return credentials.NewTLS(tlsCfg), nil
 }
 
-func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]interface{}) {
+func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]any) {
 	if f.log != nil {
 		f.log.Debug(msg, fields...)
 	} else {
@@ -175,7 +175,7 @@ func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]i
 	}
 }
 
-func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]interface{}) {
+func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]any) {
 	if f.log != nil {
 		f.log.Error(msg, fields...)
 	} else {

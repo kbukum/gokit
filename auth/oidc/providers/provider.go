@@ -140,7 +140,7 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 		reqURL = strings.ReplaceAll(reqURL, "{access_token}", url.QueryEscape(accessToken))
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := FetchJSON(ctx, p.cfg.HTTPClient, reqURL, accessToken, &raw); err != nil {
 		return nil, fmt.Errorf("%s userinfo: %w", p.cfg.ProviderName, err)
 	}
@@ -167,7 +167,7 @@ func (p *GenericProvider) ProviderType() string { return p.cfg.Type }
 // --- Internal helpers ---
 
 // mapUserInfo extracts standard fields from a raw JSON response using the configured mapping.
-func (p *GenericProvider) mapUserInfo(raw map[string]interface{}) *oidc.UserInfo {
+func (p *GenericProvider) mapUserInfo(raw map[string]any) *oidc.UserInfo {
 	m := p.cfg.UserInfo
 	data := raw
 

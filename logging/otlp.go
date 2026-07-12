@@ -63,7 +63,7 @@ func (p *OTLPProvider) Shutdown(ctx context.Context) error {
 // trace correlation flow through to telemetry. Pass context.Background() only
 // for emit sites where no request-scoped context is available (e.g. startup
 // banners, signal handlers).
-func (p *OTLPProvider) EmitLog(ctx context.Context, level, message string, fields map[string]interface{}) {
+func (p *OTLPProvider) EmitLog(ctx context.Context, level, message string, fields map[string]any) {
 	if p == nil || p.logger == nil {
 		return
 	}
@@ -106,7 +106,7 @@ func mapSeverity(level string) otellog.Severity {
 }
 
 // toOTLPKeyValue converts an arbitrary key-value pair to an OTel log KeyValue.
-func toOTLPKeyValue(key string, value interface{}) otellog.KeyValue {
+func toOTLPKeyValue(key string, value any) otellog.KeyValue {
 	switch v := value.(type) {
 	case string:
 		return otellog.String(key, v)

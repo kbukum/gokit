@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -515,5 +516,257 @@ func TestPoolNoHealthyWorkers(t *testing.T) {
 	_, err = pool.Submit(context.Background(), "should-fail")
 	if err == nil {
 		t.Fatal("expected error when no healthy workers available")
+	}
+}
+
+func TestSharedQueueUsesAvailableWorkers(t *testing.T) {
+	t.Parallel()
+
+	const poolSize = 4
+	var workerHits [poolSize]atomic.Int32
+	block := make(chan struct{})
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		emit(worker.LogEvent[int]("hit", nil))
+		<-block
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:      "shared-dist",
+		Size:      poolSize,
+		QueueSize: 0,
+		Dispatch:  worker.RoundRobin,
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handles := make([]*worker.TaskHandle[int], poolSize)
+	for i := range poolSize {
+		var err error
+		handles[i], err = pool.Submit(context.Background(), i)
+		if err != nil {
+			t.Fatalf("submit %d: %v", i, err)
+		}
+	}
+	close(block)
+
+	for _, h := range handles {
+		for e := range h.Events() {
+			if e.Type == worker.EventLog && e.WorkerID != "" {
+				var idx int
+				if _, err := fmt.Sscanf(e.WorkerID, "shared-dist-w%d", &idx); err == nil && idx < poolSize {
+					workerHits[idx].Add(1)
+				}
+			}
+		}
+	}
+
+	for i := range poolSize {
+		if workerHits[i].Load() == 0 {
+			t.Errorf("worker %d never received a task", i)
+		}
+	}
+}
+func TestPoolZeroSizeDefaults(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name: "zero-size",
+		Size: 0, // should default
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	stats := pool.Stats()
+	if stats.Idle <= 0 {
+		t.Fatalf("expected positive idle count from defaulted size, got %d", stats.Idle)
+	}
+
+	// Submit works
+	handle, err := pool.Submit(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("submit failed: %v", err)
+	}
+	for range handle.Events() {
+	}
+	if _, err := handle.Result(); err != nil {
+		t.Fatalf("result failed: %v", err)
+	}
+}
+func TestPoolNegativeSizeDefaults(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name: "neg-size",
+		Size: -5, // should default
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	stats := pool.Stats()
+	if stats.Idle <= 0 {
+		t.Fatalf("expected positive idle workers after negative config, got %d", stats.Idle)
+	}
+}
+func TestSubmitBatchEmpty(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "batch-empty", Size: 2})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handles, err := pool.SubmitBatch(context.Background(), []int{})
+	if err != nil {
+		t.Fatalf("empty batch should succeed: %v", err)
+	}
+	if len(handles) != 0 {
+		t.Fatalf("expected 0 handles, got %d", len(handles))
+	}
+}
+func TestStatsDuringConcurrency(t *testing.T) {
+	t.Parallel()
+
+	const total = 20
+	barrier := make(chan struct{})
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		<-barrier
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:      "stats-conc",
+		Size:      4,
+		QueueSize: total,
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handles := make([]*worker.TaskHandle[int], 0, total)
+	for i := range total {
+		h, err := pool.Submit(context.Background(), i)
+		if err != nil {
+			t.Fatalf("submit %d: %v", i, err)
+		}
+		handles = append(handles, h)
+	}
+
+	// Give workers time to pick up tasks
+	time.Sleep(50 * time.Millisecond)
+
+	stats := pool.Stats()
+	if stats.Total != total {
+		t.Errorf("expected Total=%d, got %d", total, stats.Total)
+	}
+	if stats.Active < 1 {
+		t.Error("expected at least 1 active worker")
+	}
+
+	close(barrier)
+
+	for _, h := range handles {
+		for range h.Events() {
+		}
+		if _, err := h.Result(); err != nil {
+			t.Errorf("task error: %v", err)
+		}
+	}
+
+	finalStats := pool.Stats()
+	if finalStats.Failed != 0 {
+		t.Errorf("expected 0 failures, got %d", finalStats.Failed)
+	}
+}
+func TestPoolEventsAggregation(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		emit(worker.LogEvent[int](fmt.Sprintf("task-%d", task), nil))
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name: "agg-events",
+		Size: 2,
+	})
+
+	// Drain pool events in background
+	var poolEvents []worker.Event[int]
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for e := range pool.Events() {
+			mu.Lock()
+			poolEvents = append(poolEvents, e)
+			mu.Unlock()
+		}
+	}()
+
+	const numTasks = 4
+	handles := make([]*worker.TaskHandle[int], numTasks)
+	for i := range numTasks {
+		var err error
+		handles[i], err = pool.Submit(context.Background(), i)
+		if err != nil {
+			t.Fatalf("submit %d: %v", i, err)
+		}
+	}
+
+	for _, h := range handles {
+		for range h.Events() {
+		}
+		h.Result() //nolint:errcheck // intentional in test cleanup
+	}
+
+	if err := pool.Stop(context.Background()); err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+
+	wg.Wait()
+
+	mu.Lock()
+	// Each task emits: log + result = 2 events → 4 tasks = at least 8
+	if len(poolEvents) < numTasks {
+		t.Errorf("expected at least %d pool-level events, got %d", numTasks, len(poolEvents))
+	}
+	mu.Unlock()
+}
+func TestSubmitBatchAfterStop(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "batch-after-stop", Size: 1})
+	_ = pool.Stop(context.Background())
+
+	_, err := pool.SubmitBatch(context.Background(), []int{1, 2, 3})
+	if err == nil {
+		t.Fatal("expected error from batch submit to stopped pool")
 	}
 }

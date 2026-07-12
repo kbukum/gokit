@@ -43,7 +43,7 @@
 //
 // Load test data easily:
 //
-//	MustLoadFixture(t, db.DB(), "users", []map[string]interface{}{
+//	MustLoadFixture(t, db.DB(), "users", []map[string]any{
 //	    {"name": "Alice", "email": "alice@example.com"},
 //	    {"name": "Bob", "email": "bob@example.com"},
 //	})

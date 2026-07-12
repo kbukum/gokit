@@ -145,11 +145,11 @@ func (c *Component) Reset(ctx context.Context) error {
 // Snapshot is a no-op for the server component (servers are stateless).
 //
 //nolint:nilnil // documented no-op contract: stateless component has no snapshot.
-func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
+func (c *Component) Snapshot(_ context.Context) (any, error) {
 	return nil, nil
 }
 
 // Restore is a no-op for the server component.
-func (c *Component) Restore(_ context.Context, _ interface{}) error {
+func (c *Component) Restore(_ context.Context, _ any) error {
 	return nil
 }

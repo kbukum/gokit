@@ -31,7 +31,7 @@ func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEve
 				if !ok {
 					return
 				}
-				m.log.ErrorCtx(ctx, "docker image event stream error", map[string]interface{}{"error": err.Error()})
+				m.log.ErrorCtx(ctx, "docker image event stream error", map[string]any{"error": err.Error()})
 				return
 			case evt, ok := <-eventsResult.Messages:
 				if !ok {

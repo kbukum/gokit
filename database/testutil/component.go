@@ -17,7 +17,7 @@ import (
 // It implements both component.Component and testutil.TestComponent interfaces.
 type Component struct {
 	db      *gorm.DB
-	models  []interface{}
+	models  []any
 	started bool
 	mu      sync.RWMutex
 }
@@ -37,7 +37,7 @@ func NewComponent() *Component {
 // WithModels registers models for auto-migration on Start.
 // This is useful when you want the component to automatically create
 // tables for your models during component startup.
-func (c *Component) WithModels(models ...interface{}) *Component {
+func (c *Component) WithModels(models ...any) *Component {
 	c.models = append(c.models, models...)
 	return c
 }
@@ -165,7 +165,7 @@ func (c *Component) Reset(ctx context.Context) error {
 
 // Snapshot captures the current state of the database.
 // Returns a snapshot that can be used with Restore to return to this state.
-func (c *Component) Snapshot(ctx context.Context) (interface{}, error) {
+func (c *Component) Snapshot(ctx context.Context) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -173,7 +173,7 @@ func (c *Component) Snapshot(ctx context.Context) (interface{}, error) {
 		return nil, fmt.Errorf("component not started")
 	}
 
-	snapshot := make(map[string][]map[string]interface{})
+	snapshot := make(map[string][]map[string]any)
 
 	// Get all table names
 	var tables []string
@@ -184,7 +184,7 @@ func (c *Component) Snapshot(ctx context.Context) (interface{}, error) {
 
 	// For each table, capture all rows
 	for _, table := range tables {
-		var rows []map[string]interface{}
+		var rows []map[string]any
 		if err := c.db.Raw(fmt.Sprintf("SELECT * FROM %s", table)).
 			Scan(&rows).Error; err != nil {
 			return nil, fmt.Errorf("failed to snapshot table %s: %w", table, err)
@@ -197,7 +197,7 @@ func (c *Component) Snapshot(ctx context.Context) (interface{}, error) {
 
 // Restore returns the database to a previously captured snapshot state.
 // The snapshot must have been created by the Snapshot method.
-func (c *Component) Restore(ctx context.Context, snap interface{}) error {
+func (c *Component) Restore(ctx context.Context, snap any) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -205,9 +205,9 @@ func (c *Component) Restore(ctx context.Context, snap interface{}) error {
 		return fmt.Errorf("component not started")
 	}
 
-	snapshot, ok := snap.(map[string][]map[string]interface{})
+	snapshot, ok := snap.(map[string][]map[string]any)
 	if !ok {
-		return fmt.Errorf("invalid snapshot type: expected map[string][]map[string]interface{}, got %T", snap)
+		return fmt.Errorf("invalid snapshot type: expected map[string][]map[string]any, got %T", snap)
 	}
 
 	// First, clear all tables

@@ -58,18 +58,18 @@ func (e *MetricError) Error() string {
 
 // PointPayload represents the metadata stored alongside each vector point.
 type PointPayload struct {
-	Fields map[string]interface{} `json:"fields"`
+	Fields map[string]any `json:"fields"`
 }
 
 // NewPointPayload creates a new empty PointPayload.
 func NewPointPayload() *PointPayload {
 	return &PointPayload{
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 }
 
 // WithField adds a field to the payload and returns the payload for chaining.
-func (p *PointPayload) WithField(key string, value interface{}) *PointPayload {
+func (p *PointPayload) WithField(key string, value any) *PointPayload {
 	p.Fields[key] = value
 	return p
 }
@@ -85,7 +85,7 @@ type SearchResult struct {
 type SearchFilter struct {
 	Must []struct {
 		Field string
-		Value interface{}
+		Value any
 	}
 }
 
@@ -94,16 +94,16 @@ func NewSearchFilter() *SearchFilter {
 	return &SearchFilter{
 		Must: []struct {
 			Field string
-			Value interface{}
+			Value any
 		}{},
 	}
 }
 
 // MustMatch adds a must-match condition to the filter.
-func (f *SearchFilter) MustMatch(field string, value interface{}) *SearchFilter {
+func (f *SearchFilter) MustMatch(field string, value any) *SearchFilter {
 	f.Must = append(f.Must, struct {
 		Field string
-		Value interface{}
+		Value any
 	}{Field: field, Value: value})
 	return f
 }

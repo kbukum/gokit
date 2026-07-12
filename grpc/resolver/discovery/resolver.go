@@ -54,7 +54,7 @@ func (r *discoveryResolver) start() {
 func (r *discoveryResolver) resolve() {
 	instances, err := r.discovery.Discover(r.ctx, r.serviceName)
 	if err != nil {
-		r.log.Warn("Discovery resolve failed", map[string]interface{}{
+		r.log.Warn("Discovery resolve failed", map[string]any{
 			"service": r.serviceName,
 			"error":   err.Error(),
 		})
@@ -71,7 +71,7 @@ func (r *discoveryResolver) watch() {
 
 	ch, err := r.discovery.Watch(r.ctx, r.serviceName)
 	if err != nil {
-		r.log.Warn("Discovery watch failed, falling back to one-shot resolve", map[string]interface{}{
+		r.log.Warn("Discovery watch failed, falling back to one-shot resolve", map[string]any{
 			"service": r.serviceName,
 			"error":   err.Error(),
 		})
@@ -94,7 +94,7 @@ func (r *discoveryResolver) watch() {
 // updateAddresses converts discovery instances to gRPC addresses and pushes to the ClientConn.
 func (r *discoveryResolver) updateAddresses(instances []disc.ServiceInstance) {
 	if len(instances) == 0 {
-		r.log.Warn("No healthy instances found", map[string]interface{}{
+		r.log.Warn("No healthy instances found", map[string]any{
 			"service": r.serviceName,
 		})
 		r.cc.ReportError(fmt.Errorf("%w: %s", disc.ErrNoHealthyEndpoints, r.serviceName))
@@ -110,13 +110,13 @@ func (r *discoveryResolver) updateAddresses(instances []disc.ServiceInstance) {
 		})
 	}
 
-	r.log.Debug("Updating gRPC addresses", map[string]interface{}{
+	r.log.Debug("Updating gRPC addresses", map[string]any{
 		"service": r.serviceName,
 		"count":   len(addrs),
 	})
 
 	if err := r.cc.UpdateState(resolver.State{Addresses: addrs}); err != nil {
-		r.log.Warn("Failed to update resolver state", map[string]interface{}{
+		r.log.Warn("Failed to update resolver state", map[string]any{
 			"service": r.serviceName,
 			"error":   err.Error(),
 		})

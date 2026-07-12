@@ -209,7 +209,7 @@ func WithWarningLogger(fn WarningFunc) LoaderOption {
 // LoadConfig loads configuration for a service into the provided cfg struct.
 // It searches for config.yml and .env files in standard locations, binds
 // environment variables, and unmarshals the result into cfg.
-func LoadConfig(serviceName string, cfg interface{}, opts ...LoaderOption) error {
+func LoadConfig(serviceName string, cfg any, opts ...LoaderOption) error {
 	var lc LoaderConfig
 	for _, opt := range opts {
 		opt(&lc)
@@ -235,7 +235,7 @@ type Validatable interface {
 }
 
 // loadFromResolvedFiles loads configuration from specific files.
-func loadFromResolvedFiles(serviceName string, cfg interface{}, files ResolvedFiles, fs FileSystem, warn WarningFunc) error {
+func loadFromResolvedFiles(serviceName string, cfg any, files ResolvedFiles, fs FileSystem, warn WarningFunc) error {
 	v := viper.New()
 
 	// 1. Load YAML config first (base configuration)

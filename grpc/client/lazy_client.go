@@ -93,7 +93,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	c.initialized = false
 	c.lastError = nil
 
-	c.logDebug("Initializing gRPC client", map[string]interface{}{
+	c.logDebug("Initializing gRPC client", map[string]any{
 		"service": c.serviceName,
 	})
 
@@ -101,7 +101,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	conn, err := c.factory.NewConn(c.serviceName)
 	if err != nil {
 		c.lastError = err
-		c.logError("Failed to create gRPC connection", map[string]interface{}{
+		c.logError("Failed to create gRPC connection", map[string]any{
 			"service": c.serviceName,
 			"error":   err.Error(),
 		})
@@ -117,7 +117,7 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	c.initialized = true
 	c.lastError = nil
 
-	c.logInfo("gRPC client initialized", map[string]interface{}{
+	c.logInfo("gRPC client initialized", map[string]any{
 		"service": c.serviceName,
 	})
 
@@ -134,7 +134,7 @@ func (c *LazyClient[T]) Close() error {
 		return nil
 	}
 
-	c.logDebug("Closing gRPC client", map[string]interface{}{
+	c.logDebug("Closing gRPC client", map[string]any{
 		"service": c.serviceName,
 	})
 
@@ -148,7 +148,7 @@ func (c *LazyClient[T]) Close() error {
 	c.lastError = nil
 
 	if err != nil {
-		c.logError("Error closing gRPC connection", map[string]interface{}{
+		c.logError("Error closing gRPC connection", map[string]any{
 			"service": c.serviceName,
 			"error":   err.Error(),
 		})
@@ -184,7 +184,7 @@ func (c *LazyClient[T]) GetConnection() *grpc.ClientConn {
 	return c.conn
 }
 
-func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]interface{}) {
+func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Debug(msg, fields...)
 	} else {
@@ -192,7 +192,7 @@ func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]interface{}) {
 	}
 }
 
-func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]interface{}) {
+func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Info(msg, fields...)
 	} else {
@@ -200,7 +200,7 @@ func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]interface{}) {
 	}
 }
 
-func (c *LazyClient[T]) logError(msg string, fields ...map[string]interface{}) {
+func (c *LazyClient[T]) logError(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Error(msg, fields...)
 	} else {

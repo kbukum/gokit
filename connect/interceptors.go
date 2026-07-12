@@ -24,14 +24,14 @@ func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 			start := time.Now()
 			procedure := req.Spec().Procedure
 
-			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]interface{}{
+			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]any{
 				"procedure": procedure,
 			})
 
 			resp, err := next(ctx, req)
 			duration := time.Since(start)
 
-			fields := map[string]interface{}{
+			fields := map[string]any{
 				"procedure":   procedure,
 				"duration_ms": duration.Milliseconds(),
 			}

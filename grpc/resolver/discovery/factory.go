@@ -44,7 +44,7 @@ func NewResolverConnectionFactory(
 func (f *ResolverConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	target := f.builder.Scheme() + ":///" + serviceName
 
-	f.log.Debug("Creating gRPC connection with discovery resolver", map[string]interface{}{
+	f.log.Debug("Creating gRPC connection with discovery resolver", map[string]any{
 		"service": serviceName,
 		"target":  target,
 	})

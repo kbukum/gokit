@@ -25,7 +25,7 @@ func RequestLogger(log *logging.Logger) Middleware {
 			next.ServeHTTP(sw, r)
 			duration := time.Since(start)
 
-			fields := map[string]interface{}{
+			fields := map[string]any{
 				"method":      r.Method,
 				"path":        r.URL.Path,
 				"status":      sw.status,
@@ -60,7 +60,7 @@ func GinRequestLogger() gin.HandlerFunc {
 			path = path + "?" + q
 		}
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"method":  c.Request.Method,
 			"path":    path,
 			"status":  status,
@@ -101,7 +101,7 @@ func isHealthEndpoint(path string) bool {
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
 // If log is nil, the global logger is used.
 // Shared by both Gin and net/http request logger middleware.
-func logByStatus(log *logging.Logger, fields map[string]interface{}, status int) {
+func logByStatus(log *logging.Logger, fields map[string]any, status int) {
 	logErr := logging.Error
 	logWarn := logging.Warn
 	logDebug := logging.Debug

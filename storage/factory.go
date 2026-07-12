@@ -56,6 +56,6 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger)
 		return nil, fmt.Errorf("storage: unsupported provider %q (not registered)", cfg.Provider)
 	}
 
-	l.Debug("initializing storage", map[string]interface{}{"provider": cfg.Provider})
+	l.Debug("initializing storage", map[string]any{"provider": cfg.Provider})
 	return f(cfg, providerCfg, l)
 }

@@ -134,7 +134,7 @@ func (m *Manager) ensureImage(ctx context.Context, imageName, platform string) e
 		return nil
 	}
 
-	m.log.InfoCtx(ctx, "pulling image", map[string]interface{}{"image": imageName})
+	m.log.InfoCtx(ctx, "pulling image", map[string]any{"image": imageName})
 
 	pullOpts := client.ImagePullOptions{}
 	plat := platform

@@ -335,12 +335,12 @@ func indexOf(s string, c byte, start int) int {
 }
 
 // decodeJWTSegment decodes a base64url-encoded JWT segment into a map.
-func decodeJWTSegment(seg string) (map[string]interface{}, error) {
+func decodeJWTSegment(seg string) (map[string]any, error) {
 	data, err := base64.RawURLEncoding.DecodeString(seg)
 	if err != nil {
 		return nil, err
 	}
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}

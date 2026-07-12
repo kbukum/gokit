@@ -64,6 +64,6 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger)
 		return nil, fmt.Errorf("workload: unsupported provider %q (not registered)", cfg.Provider)
 	}
 
-	l.Info("initializing workload manager", map[string]interface{}{"provider": cfg.Provider})
+	l.Info("initializing workload manager", map[string]any{"provider": cfg.Provider})
 	return f(cfg, providerCfg, l)
 }

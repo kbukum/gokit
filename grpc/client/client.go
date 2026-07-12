@@ -26,7 +26,7 @@ func NewClient(cfg grpccfg.Config, log *logging.Logger) (*grpc.ClientConn, error
 
 	target := cfg.Address()
 
-	log.Info("Connecting to gRPC server", map[string]interface{}{
+	log.Info("Connecting to gRPC server", map[string]any{
 		"target": target,
 		"tls":    cfg.TLS.IsEnabled(),
 	})
@@ -38,14 +38,14 @@ func NewClient(cfg grpccfg.Config, log *logging.Logger) (*grpc.ClientConn, error
 
 	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
-		log.Error("Failed to create gRPC client", map[string]interface{}{
+		log.Error("Failed to create gRPC client", map[string]any{
 			"target": target,
 			"error":  err.Error(),
 		})
 		return nil, fmt.Errorf("grpc: failed to create client for %s: %w", target, err)
 	}
 
-	log.Info("gRPC client created", map[string]interface{}{
+	log.Info("gRPC client created", map[string]any{
 		"target": target,
 	})
 

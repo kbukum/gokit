@@ -21,8 +21,8 @@ import (
 	appErrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
-	"github.com/kbukum/gokit/stream"
 	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/stream"
 	"github.com/kbukum/gokit/validation"
 )
 
@@ -481,7 +481,7 @@ func TestIntegration_DI_Component_RegistrationModes(t *testing.T) {
 
 	// Eager registration
 	callCount := 0
-	container.RegisterEager("eager-svc", func() (interface{}, error) {
+	container.RegisterEager("eager-svc", func() (any, error) {
 		callCount++
 		return &trackingComponent{name: "eager"}, nil
 	})
@@ -491,7 +491,7 @@ func TestIntegration_DI_Component_RegistrationModes(t *testing.T) {
 
 	// Lazy registration
 	lazyCount := 0
-	container.RegisterLazy("lazy-svc", func() (interface{}, error) {
+	container.RegisterLazy("lazy-svc", func() (any, error) {
 		lazyCount++
 		return &trackingComponent{name: "lazy"}, nil
 	})
@@ -674,7 +674,7 @@ func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
 	}
 
 	// Logger should work without panicking
-	log.Info("integration test message", map[string]interface{}{
+	log.Info("integration test message", map[string]any{
 		"test":  true,
 		"layer": "integration",
 	})
@@ -695,7 +695,7 @@ func TestIntegration_Logger_Config_LoggerWithContext(t *testing.T) {
 		ServiceName: "ctx-test",
 	}
 	log := logging.New(cfg, "ctx-test")
-	enriched := log.WithComponent("database").WithFields(map[string]interface{}{
+	enriched := log.WithComponent("database").WithFields(map[string]any{
 		"connection_pool": 10,
 	})
 	enriched.Info("component logger configured via config module")

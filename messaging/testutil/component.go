@@ -339,12 +339,12 @@ func (c *Component) Reset(_ context.Context) error {
 	return nil
 }
 
-func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
+func (c *Component) Snapshot(_ context.Context) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.producer.Messages(), nil
 }
 
-func (c *Component) Restore(_ context.Context, _ interface{}) error {
+func (c *Component) Restore(_ context.Context, _ any) error {
 	return nil
 }

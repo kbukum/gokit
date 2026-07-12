@@ -188,7 +188,7 @@ type IDToken struct {
 	Nonce string
 
 	// Claims holds all token claims for project-specific extraction.
-	Claims map[string]interface{}
+	Claims map[string]any
 }
 
 // VerifyExpectations captures caller-side replay-protection expectations.
@@ -319,26 +319,26 @@ func (v *Verifier) isAlgSupported(alg string) bool {
 
 // --- Helpers ---
 
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }
 
-func getBool(m map[string]interface{}, key string) bool {
+func getBool(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v
 }
 
-func getFloat64(m map[string]interface{}, key string) (float64, bool) {
+func getFloat64(m map[string]any, key string) (float64, bool) {
 	v, ok := m[key].(float64)
 	return v, ok
 }
 
-func getAudience(m map[string]interface{}) []string {
+func getAudience(m map[string]any) []string {
 	switch v := m["aud"].(type) {
 	case string:
 		return []string{v}
-	case []interface{}:
+	case []any:
 		out := make([]string, 0, len(v))
 		for _, a := range v {
 			if s, ok := a.(string); ok {

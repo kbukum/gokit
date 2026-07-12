@@ -86,7 +86,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 	tests := []struct {
 		name  string
 		key   string
-		value interface{}
+		value any
 		check func(t *testing.T, kv otellog.KeyValue)
 	}{
 		{
@@ -196,7 +196,7 @@ func TestEmitLogFieldConversion(t *testing.T) {
 	p := newTestOTLPProvider(exp)
 	defer p.Shutdown(context.Background())
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"user":  "bob",
 		"count": 5,
 	}
@@ -274,7 +274,7 @@ func TestLoggerWithOTLP(t *testing.T) {
 	l := NewDefault("test-svc").WithOTLP(provider)
 	defer l.Close()
 
-	l.Info("test message", map[string]interface{}{"key": "value"})
+	l.Info("test message", map[string]any{"key": "value"})
 
 	if len(exp.records) != 1 {
 		t.Fatalf("expected 1 OTLP record, got %d", len(exp.records))

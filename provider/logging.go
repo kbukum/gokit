@@ -28,7 +28,7 @@ func (l *loggingRR[I, O]) Execute(ctx context.Context, input I) (O, error) {
 	output, err := l.inner.Execute(ctx, input)
 	duration := time.Since(start)
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"provider": l.inner.Name(),
 		"duration": duration.String(),
 	}

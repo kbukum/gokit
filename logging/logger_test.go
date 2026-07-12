@@ -85,7 +85,7 @@ func TestWithContext(t *testing.T) {
 
 func TestWithFields(t *testing.T) {
 	l := NewDefault("test")
-	fl := l.WithFields(map[string]interface{}{"key": "value"})
+	fl := l.WithFields(map[string]any{"key": "value"})
 	if fl == nil {
 		t.Fatal("expected non-nil logger")
 	}
@@ -226,28 +226,28 @@ func TestRegistryNilBaseUsesDefault(t *testing.T) {
 func TestFields(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    []interface{}
-		expected map[string]interface{}
+		input    []any
+		expected map[string]any
 	}{
 		{
 			"key-value pairs",
-			[]interface{}{"op", "save", "id", 42},
-			map[string]interface{}{"op": "save", "id": 42},
+			[]any{"op", "save", "id", 42},
+			map[string]any{"op": "save", "id": 42},
 		},
 		{
 			"odd number of args",
-			[]interface{}{"op", "save", "trailing"},
-			map[string]interface{}{"op": "save"},
+			[]any{"op", "save", "trailing"},
+			map[string]any{"op": "save"},
 		},
 		{
 			"empty",
-			[]interface{}{},
-			map[string]interface{}{},
+			[]any{},
+			map[string]any{},
 		},
 		{
 			"non-string key skipped",
-			[]interface{}{123, "value", "key", "val"},
-			map[string]interface{}{"key": "val"},
+			[]any{123, "value", "key", "val"},
+			map[string]any{"key": "val"},
 		},
 	}
 
@@ -291,7 +291,7 @@ func TestMergeWithError(t *testing.T) {
 	err := fmt.Errorf("test error")
 
 	// Merge into existing map
-	fields := map[string]interface{}{"op": "save"}
+	fields := map[string]any{"op": "save"}
 	result := MergeWithError(fields, err)
 	if result[FieldError] != "test error" {
 		t.Errorf("expected error field, got %v", result[FieldError])
@@ -311,7 +311,7 @@ func TestMergeWithDuration(t *testing.T) {
 	d := 200 * time.Millisecond
 
 	// Merge into existing map
-	fields := map[string]interface{}{"op": "query"}
+	fields := map[string]any{"op": "query"}
 	result := MergeWithDuration(fields, d)
 	if result[FieldDuration] != int64(200) {
 		t.Errorf("expected duration 200, got %v", result[FieldDuration])
@@ -535,7 +535,7 @@ func TestLogLevels_AllLevelsProduceOutput(t *testing.T) {
 
 	levels := []struct {
 		name   string
-		logFn  func(*Logger, string, ...map[string]interface{})
+		logFn  func(*Logger, string, ...map[string]any)
 		zLevel string // minimum level to set so this level emits output
 	}{
 		{"trace", (*Logger).Trace, "trace"},
@@ -563,7 +563,7 @@ func TestLogLevels_Filtering(t *testing.T) {
 	tests := []struct {
 		name      string
 		cfgLevel  string
-		logFn     func(*Logger, string, ...map[string]interface{})
+		logFn     func(*Logger, string, ...map[string]any)
 		expectOut bool
 	}{
 		{"info filters debug", "info", (*Logger).Debug, false},
@@ -648,7 +648,7 @@ func TestJSONFormat_ValidJSON(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info("json test message")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("output is not valid JSON: %v\nraw: %s", err, buf.String())
 	}
@@ -663,7 +663,7 @@ func TestJSONFormat_ValidJSON(t *testing.T) {
 func TestJSONFormat_AllLevelsHaveCorrectLevelField(t *testing.T) {
 	levels := []struct {
 		name  string
-		logFn func(*Logger, string, ...map[string]interface{})
+		logFn func(*Logger, string, ...map[string]any)
 		want  string
 	}{
 		{"debug", (*Logger).Debug, "debug"},
@@ -678,7 +678,7 @@ func TestJSONFormat_AllLevelsHaveCorrectLevelField(t *testing.T) {
 			l := newBufferedLogger(&buf, "trace", "json")
 			tc.logFn(l, "level check")
 
-			var parsed map[string]interface{}
+			var parsed map[string]any
 			if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 				t.Fatalf("invalid JSON: %v", err)
 			}
@@ -695,7 +695,7 @@ func TestJSONFormat_TimestampPresent(t *testing.T) {
 	l := &Logger{logger: zl, service: "test"}
 	l.Info("with timestamp")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -713,7 +713,7 @@ func TestConsoleFormat_HumanReadable(t *testing.T) {
 		t.Errorf("console output should contain message, got: %s", output)
 	}
 	// Console output should NOT be valid JSON
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal([]byte(strings.TrimSpace(output)), &parsed); err == nil {
 		t.Error("console output should not be valid JSON")
 	}
@@ -726,10 +726,10 @@ func TestConsoleFormat_HumanReadable(t *testing.T) {
 func TestWithFields_AppearsInJSON(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	fl := l.WithFields(map[string]interface{}{"user": "alice", "count": 42})
+	fl := l.WithFields(map[string]any{"user": "alice", "count": 42})
 	fl.Info("with fields")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -745,9 +745,9 @@ func TestWithFields_AppearsInJSON(t *testing.T) {
 func TestInlineFields_AppearsInJSON(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	l.Info("inline", map[string]interface{}{"key": "value", "num": 7})
+	l.Info("inline", map[string]any{"key": "value", "num": 7})
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -763,11 +763,11 @@ func TestWithFields_MultipleFieldMaps(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info("multi",
-		map[string]interface{}{"a": 1},
-		map[string]interface{}{"b": 2},
+		map[string]any{"a": 1},
+		map[string]any{"b": 2},
 	)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -782,19 +782,19 @@ func TestWithFields_MultipleFieldMaps(t *testing.T) {
 func TestWithFields_NestedMap(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	nested := map[string]interface{}{
-		"outer": map[string]interface{}{
+	nested := map[string]any{
+		"outer": map[string]any{
 			"inner": "deep",
 		},
 	}
 	fl := l.WithFields(nested)
 	fl.Info("nested fields")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
-	outer, ok := parsed["outer"].(map[string]interface{})
+	outer, ok := parsed["outer"].(map[string]any)
 	if !ok {
 		t.Fatalf("expected nested object for 'outer', got %T", parsed["outer"])
 	}
@@ -809,7 +809,7 @@ func TestWithComponent_AppearsInJSON(t *testing.T) {
 	cl := l.WithComponent("auth-handler")
 	cl.Info("component test")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -824,7 +824,7 @@ func TestWithError_AppearsInJSON(t *testing.T) {
 	el := l.WithError(fmt.Errorf("something failed"))
 	el.Error("with error field")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -838,7 +838,7 @@ func TestFieldsHelper_InLogOutput(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info("fields helper", Fields("op", "create", "id", 99))
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -865,7 +865,7 @@ func TestWithContext_TraceAndSpanInJSON(t *testing.T) {
 	cl := l.WithContext(ctx)
 	cl.Info("context test")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -891,7 +891,7 @@ func TestWithContext_AllKeysInJSON(t *testing.T) {
 	cl := l.WithContext(ctx)
 	cl.Info("all keys")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -917,7 +917,7 @@ func TestWithContext_EmptyContext(t *testing.T) {
 	cl := l.WithContext(context.Background())
 	cl.Info("empty context")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -937,7 +937,7 @@ func TestWithContext_PartialContext(t *testing.T) {
 	cl := l.WithContext(ctx)
 	cl.Info("partial ctx")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1041,7 +1041,7 @@ func TestNew_WithTimestampAndCaller(t *testing.T) {
 	l.logger = l.logger.Output(&buf)
 	l.Info("caller check")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1117,7 +1117,7 @@ func TestConcurrent_LoggingSafety(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			l.Info(fmt.Sprintf("goroutine %d", n), map[string]interface{}{"n": n})
+			l.Info(fmt.Sprintf("goroutine %d", n), map[string]any{"n": n})
 			l.Debug(fmt.Sprintf("debug %d", n))
 			l.Warn(fmt.Sprintf("warn %d", n))
 			l.Error(fmt.Sprintf("error %d", n))
@@ -1139,7 +1139,7 @@ func TestConcurrent_WithFieldsSafety(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			fl := l.WithFields(map[string]interface{}{"goroutine": n})
+			fl := l.WithFields(map[string]any{"goroutine": n})
 			fl.Info("concurrent with fields")
 		}(i)
 	}
@@ -1203,7 +1203,7 @@ func TestEdge_EmptyMessage(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info("")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1216,7 +1216,7 @@ func TestEdge_VeryLongMessage(t *testing.T) {
 	longMsg := strings.Repeat("x", 10000)
 	l.Info(longMsg)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON with long message: %v", err)
 	}
@@ -1230,7 +1230,7 @@ func TestEdge_UnicodeMessage(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info("こんにちは世界 🌍 émojis ñ")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON with unicode message: %v", err)
 	}
@@ -1244,7 +1244,7 @@ func TestEdge_SpecialCharactersMessage(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 	l.Info(`special chars: "quotes" \backslash\ <html> & newline\n tab\t`)
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON with special chars: %v", err)
 	}
@@ -1263,9 +1263,9 @@ func TestEdge_NilFieldsMap(t *testing.T) {
 func TestEdge_EmptyFieldsMap(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	l.Info("empty fields", map[string]interface{}{})
+	l.Info("empty fields", map[string]any{})
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1274,7 +1274,7 @@ func TestEdge_EmptyFieldsMap(t *testing.T) {
 func TestEdge_WithFieldsEmptyMap(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	fl := l.WithFields(map[string]interface{}{})
+	fl := l.WithFields(map[string]any{})
 	fl.Info("empty withfields")
 	if buf.Len() == 0 {
 		t.Error("expected output with empty WithFields")
@@ -1284,10 +1284,10 @@ func TestEdge_WithFieldsEmptyMap(t *testing.T) {
 func TestEdge_WithFieldsNilValue(t *testing.T) {
 	var buf bytes.Buffer
 	l := newBufferedLogger(&buf, "debug", "json")
-	fl := l.WithFields(map[string]interface{}{"key": nil})
+	fl := l.WithFields(map[string]any{"key": nil})
 	fl.Info("nil value field")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1308,10 +1308,10 @@ func TestEdge_ChainedWithMethods(t *testing.T) {
 	l := newBufferedLogger(&buf, "debug", "json")
 
 	ctx := context.WithValue(context.Background(), contextKey("trace_id"), "chain-trace")
-	chained := l.WithContext(ctx).WithComponent("chained").WithFields(map[string]interface{}{"extra": "data"})
+	chained := l.WithContext(ctx).WithComponent("chained").WithFields(map[string]any{"extra": "data"})
 	chained.Info("chained call")
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("invalid JSON: %v", err)
 	}
@@ -1348,7 +1348,7 @@ func TestEdge_ErrorFieldsNilError(t *testing.T) {
 }
 
 func TestEdge_MergeWithErrorNilError(t *testing.T) {
-	fields := map[string]interface{}{"key": "val"}
+	fields := map[string]any{"key": "val"}
 	result := MergeWithError(fields, nil)
 	if _, ok := result[FieldError]; ok {
 		t.Error("expected no error field when error is nil")
@@ -1371,7 +1371,7 @@ func TestEdge_MergeWithDurationZero(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // Trace logs a trace-level message (mirrors the other level methods).
-func (l *Logger) Trace(msg string, fields ...map[string]interface{}) {
+func (l *Logger) Trace(msg string, fields ...map[string]any) {
 	event := l.logger.Trace()
 	l.addFields(event, fields...)
 	event.Msg(msg)

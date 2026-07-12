@@ -168,3 +168,25 @@ func resultEvent(data any) worker.Event[any] {
 		Data: data,
 	}
 }
+
+func TestFanOutEmptyHandlers(t *testing.T) {
+	t.Parallel()
+
+	fanout := worker.FanOut[string, string]("empty-fanout")
+
+	pool := worker.NewPool(fanout, worker.PoolConfig{Name: "fanout-empty", Size: 1})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handle, err := pool.Submit(context.Background(), "input")
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	for range handle.Events() {
+	}
+
+	_, herr := handle.Result()
+	if herr != nil {
+		t.Fatalf("empty fanout should succeed: %v", herr)
+	}
+}

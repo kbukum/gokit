@@ -43,8 +43,8 @@ func GinRecovery() gin.HandlerFunc {
 
 // logRecoveredPanic logs a recovered panic with stack trace.
 // If log is nil, the global logger is used.
-func logRecoveredPanic(ctx context.Context, log *logging.Logger, err interface{}, path, method, remoteAddr string) {
-	fields := map[string]interface{}{
+func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, path, method, remoteAddr string) {
+	fields := map[string]any{
 		"error":     fmt.Sprintf("%v", err),
 		"stack":     string(debug.Stack()),
 		"path":      path,

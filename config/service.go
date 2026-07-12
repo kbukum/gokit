@@ -44,12 +44,12 @@ func (e Environment) IsDevelopment() bool {
 //	    Database database.Config `yaml:"database" mapstructure:"database"`
 //	}
 type ServiceConfig struct {
-	Name        string        `yaml:"name" mapstructure:"name"`
-	Environment string        `yaml:"environment" mapstructure:"environment"`
-	Version     string        `yaml:"version" mapstructure:"version"`
-	Address     string        `yaml:"address" mapstructure:"address"`
-	Port        int           `yaml:"port" mapstructure:"port"`
-	Debug       bool          `yaml:"debug" mapstructure:"debug"`
+	Name        string         `yaml:"name" mapstructure:"name"`
+	Environment string         `yaml:"environment" mapstructure:"environment"`
+	Version     string         `yaml:"version" mapstructure:"version"`
+	Address     string         `yaml:"address" mapstructure:"address"`
+	Port        int            `yaml:"port" mapstructure:"port"`
+	Debug       bool           `yaml:"debug" mapstructure:"debug"`
 	Logging     logging.Config `yaml:"logging" mapstructure:"logging"`
 }
 

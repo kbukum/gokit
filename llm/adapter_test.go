@@ -395,3 +395,157 @@ func TestAdapter_REST_Returns_Client(t *testing.T) {
 		t.Error("REST() returned nil")
 	}
 }
+
+func TestAdapter_Execute_DialectBuildRequestError(t *testing.T) {
+	buildFail := errors.New("transient build failure")
+	d := &mockDialect{buildErr: buildFail}
+	a, err := NewWithDialect(d, Config{BaseURL: "http://localhost:1"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	_, err = a.Execute(context.Background(), CompletionRequest{
+		Messages: []chat.Message{chat.User("test")},
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "build request") {
+		t.Errorf("error = %q, want to contain 'build request'", err.Error())
+	}
+}
+
+func TestAdapter_Stream_DialectBuildRequestError(t *testing.T) {
+	d := &mockDialect{buildErr: errors.New("build fail")}
+	a, err := NewWithDialect(d, Config{BaseURL: "http://localhost:1"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	_, err = a.Stream(context.Background(), CompletionRequest{})
+	if err == nil {
+		t.Fatal("expected error from Stream when BuildRequest fails")
+	}
+	if !strings.Contains(err.Error(), "build stream request") {
+		t.Errorf("error = %q, want to contain 'build stream request'", err.Error())
+	}
+}
+
+func TestAdapter_ApplyDefaults_RequestOverridesConfig(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+
+		if body["model"] != "override-model" {
+			t.Errorf("model = %v, want override-model", body["model"])
+		}
+		json.NewEncoder(w).Encode(map[string]any{"content": "ok", "model": "override-model"})
+	}))
+	defer srv.Close()
+
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{BaseURL: srv.URL, Model: "default-model"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	_, err = a.Execute(context.Background(), CompletionRequest{
+		Model:    "override-model",
+		Messages: []chat.Message{chat.User("test")},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+}
+
+func TestAdapter_ApplyDefaults_ZeroTempNotOverridden(t *testing.T) {
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{
+		BaseURL:     "http://localhost:1",
+		Temperature: 0.0,
+	})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	req := CompletionRequest{
+		Messages: []chat.Message{chat.User("test")},
+	}
+	a.applyDefaults(&req)
+
+	if req.Temperature != nil {
+		t.Errorf("Temperature = %v, want nil (zero config temp should not be applied)", req.Temperature)
+	}
+}
+
+func TestAdapter_Execute_EmptyMessages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"content": "ok", "model": "m"})
+	}))
+	defer srv.Close()
+
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{BaseURL: srv.URL, Model: "m"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	resp, err := a.Execute(context.Background(), CompletionRequest{Messages: []chat.Message{}})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if resp.Text() != "ok" {
+		t.Errorf("Text() = %q, want %q", resp.Text(), "ok")
+	}
+}
+
+func TestAdapter_Close_Idempotent(t *testing.T) {
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{BaseURL: "http://localhost:1"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := a.Close(context.Background()); err != nil {
+			t.Errorf("Close() call %d: %v", i+1, err)
+		}
+	}
+}
+
+func TestAdapter_Execute_LargeMessageContent(t *testing.T) {
+	largeMsg := strings.Repeat("A", 128*1024) // 128 KB
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Just verify the request arrives and respond
+		json.NewEncoder(w).Encode(map[string]any{"content": "ok", "model": "m"})
+	}))
+	defer srv.Close()
+
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{BaseURL: srv.URL, Model: "m"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	resp, err := a.Execute(context.Background(), CompletionRequest{
+		Messages: []chat.Message{chat.User(largeMsg)},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if resp.Text() != "ok" {
+		t.Errorf("Text() = %q, want %q", resp.Text(), "ok")
+	}
+}
+
+func TestSentinelErrors(t *testing.T) {
+	if ErrNoDialect.Error() != "llm: dialect is required" {
+		t.Errorf("ErrNoDialect = %q", ErrNoDialect)
+	}
+	if ErrNoSSEReader.Error() != "llm: expected SSE stream but got no SSE reader" {
+		t.Errorf("ErrNoSSEReader = %q", ErrNoSSEReader)
+	}
+	if ErrNoStreamBody.Error() != "llm: expected stream body but got nil" {
+		t.Errorf("ErrNoStreamBody = %q", ErrNoStreamBody)
+	}
+}

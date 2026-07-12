@@ -68,7 +68,7 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logging.Logge
 
 // Deploy creates and starts a Kubernetes workload (Pod or Job).
 func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*workload.DeployResult, error) {
-	m.log.InfoCtx(ctx, "deploying workload", map[string]interface{}{
+	m.log.InfoCtx(ctx, "deploying workload", map[string]any{
 		"name":  req.Name,
 		"image": req.Image,
 		"type":  m.cfg.WorkloadType,

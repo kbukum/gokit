@@ -58,10 +58,10 @@ func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *l
 
 	// Rate-limited error logger: log first error, suppress subsequent until recovery.
 	var errCount atomic.Int64
-	rateLimitedErrLogger := kafkago.LoggerFunc(func(msg string, args ...interface{}) {
+	rateLimitedErrLogger := kafkago.LoggerFunc(func(msg string, args ...any) {
 		n := errCount.Add(1)
 		if n == 1 {
-			clog.Warn("Kafka connection issue (retrying automatically)", map[string]interface{}{ //nolint:contextcheck // kafka-go callback fires from internal goroutines without a request context
+			clog.Warn("Kafka connection issue (retrying automatically)", map[string]any{
 				"topic":   topic,
 				"groupID": common.ConsumerGroup,
 			})
@@ -82,7 +82,7 @@ func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *l
 		ErrorLogger:       rateLimitedErrLogger,
 	})
 
-	clog.Debug("Kafka consumer initialized", map[string]interface{}{
+	clog.Debug("Kafka consumer initialized", map[string]any{
 		"topic":   topic,
 		"groupID": common.ConsumerGroup,
 		"brokers": cfg.Brokers,
@@ -101,7 +101,7 @@ func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *l
 // Consume reads messages in a loop, calling handler for each one.
 // It blocks until ctx is canceled or an unrecoverable error occurs.
 func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
-	c.log.DebugCtx(ctx, "Starting consume loop", map[string]interface{}{
+	c.log.DebugCtx(ctx, "Starting consume loop", map[string]any{
 		"topic":   c.topic,
 		"groupID": c.groupID,
 	})
@@ -126,7 +126,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 
 		c.failures = 0
 		if c.errCount.Load() > 0 {
-			c.log.InfoCtx(ctx, "Kafka connection recovered", map[string]interface{}{
+			c.log.InfoCtx(ctx, "Kafka connection recovered", map[string]any{
 				"topic":   c.topic,
 				"groupID": c.groupID,
 			})
@@ -135,7 +135,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 
 		domainMsg := kafka.FromKafkaMessage(msg)
 		if err := handler(ctx, domainMsg); err != nil {
-			c.log.ErrorCtx(ctx, "Message processing failed", map[string]interface{}{
+			c.log.ErrorCtx(ctx, "Message processing failed", map[string]any{
 				"error":  err.Error(),
 				"topic":  domainMsg.Topic,
 				"offset": domainMsg.Offset,
@@ -160,7 +160,7 @@ func (c *Consumer) read(ctx context.Context) (kafkago.Message, error) {
 func (c *Consumer) handleFailure(ctx context.Context, err error) error {
 	c.failures++
 	if c.failures <= 3 {
-		c.log.ErrorCtx(ctx, "Kafka read error", map[string]interface{}{
+		c.log.ErrorCtx(ctx, "Kafka read error", map[string]any{
 			"error":    err.Error(),
 			"failures": c.failures,
 			"topic":    c.topic,
@@ -194,7 +194,7 @@ func (c *Consumer) Stats() kafkago.ReaderStats { return c.reader.Stats() }
 
 // Close shuts down the consumer.
 func (c *Consumer) Close() error {
-	c.log.Debug("Kafka consumer closing", map[string]interface{}{
+	c.log.Debug("Kafka consumer closing", map[string]any{
 		"topic":   c.topic,
 		"groupID": c.groupID,
 	})

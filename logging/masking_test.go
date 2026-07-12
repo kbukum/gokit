@@ -287,7 +287,7 @@ func TestMaskValue_PreserveLast(t *testing.T) {
 func TestMaskFields(t *testing.T) {
 	m := newTestMasker()
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"password": "secret123",
 		"username": "john",
 		"email":    "john@example.com",
@@ -352,13 +352,13 @@ func TestMaskingEnabled_Integration(t *testing.T) {
 		masker:  m,
 	}
 
-	l.Info("login attempt", map[string]interface{}{
+	l.Info("login attempt", map[string]any{
 		"username": "alice",
 		"password": "secret123",
 		"email":    "alice@example.com",
 	})
 
-	var entry map[string]interface{}
+	var entry map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("failed to parse log output: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestMaskerPropagation(t *testing.T) {
 	}
 
 	// WithFields should propagate masker
-	fl := l.WithFields(map[string]interface{}{"key": "val"})
+	fl := l.WithFields(map[string]any{"key": "val"})
 	if fl.masker == nil {
 		t.Error("expected masker to propagate through WithFields")
 	}
@@ -445,7 +445,7 @@ func TestMaskerConcurrentAccess(t *testing.T) {
 			_ = m.MaskValue("data", "user@example.com")
 			_ = m.MaskValue("info", "4111111111111111")
 			_ = m.MaskValue("msg", "hello world")
-			_ = m.MaskFields(map[string]interface{}{
+			_ = m.MaskFields(map[string]any{
 				"token": "abc",
 				"name":  "bob",
 			})

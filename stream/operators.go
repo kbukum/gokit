@@ -300,3 +300,90 @@ func (it *concatIter[T]) Close() error {
 	}
 	return firstErr
 }
+
+// Distinct removes duplicate comparable values while preserving first-seen order.
+func Distinct[T comparable](p *Pipeline[T]) *Pipeline[T] {
+	return &Pipeline[T]{
+		create: func(ctx context.Context) Iterator[T] {
+			return &distinctIter[T]{source: p.create(ctx), seen: make(map[T]struct{})}
+		},
+	}
+}
+
+// Take yields at most the first n values from the pipeline.
+func Take[T any](p *Pipeline[T], n int) *Pipeline[T] {
+	return &Pipeline[T]{
+		create: func(ctx context.Context) Iterator[T] {
+			return &takeIter[T]{source: p.create(ctx), remaining: n}
+		},
+	}
+}
+
+// Skip ignores the first n values from the pipeline.
+func Skip[T any](p *Pipeline[T], n int) *Pipeline[T] {
+	return &Pipeline[T]{
+		create: func(ctx context.Context) Iterator[T] {
+			return &skipIter[T]{source: p.create(ctx), remaining: n}
+		},
+	}
+}
+
+type distinctIter[T comparable] struct {
+	source Iterator[T]
+	seen   map[T]struct{}
+}
+
+func (it *distinctIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
+	for {
+		val, ok, err := it.source.Next(ctx)
+		if err != nil || !ok {
+			return val, ok, err
+		}
+		if _, exists := it.seen[val]; exists {
+			continue
+		}
+		it.seen[val] = struct{}{}
+		return val, true, nil
+	}
+}
+
+func (it *distinctIter[T]) Close() error { return it.source.Close() }
+
+type takeIter[T any] struct {
+	source    Iterator[T]
+	remaining int
+}
+
+func (it *takeIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
+	if it.remaining <= 0 {
+		var zero T
+		return zero, false, nil
+	}
+	val, ok, err := it.source.Next(ctx)
+	if err != nil || !ok {
+		return val, ok, err
+	}
+	it.remaining--
+	return val, true, nil
+}
+
+func (it *takeIter[T]) Close() error { return it.source.Close() }
+
+type skipIter[T any] struct {
+	source    Iterator[T]
+	remaining int
+}
+
+func (it *skipIter[T]) Next(ctx context.Context) (result T, ok bool, err error) {
+	for it.remaining > 0 {
+		_, ok, err := it.source.Next(ctx)
+		if err != nil || !ok {
+			var zero T
+			return zero, false, err
+		}
+		it.remaining--
+	}
+	return it.source.Next(ctx)
+}
+
+func (it *skipIter[T]) Close() error { return it.source.Close() }

@@ -79,7 +79,7 @@ func New(cfg Config, log *logging.Logger) (*Client, error) {
 
 	rdb := goredis.NewClient(opts)
 
-	log.Debug("Redis client created", map[string]interface{}{
+	log.Debug("Redis client created", map[string]any{
 		"addr":      cfg.Addr,
 		"db":        cfg.DB,
 		"pool_size": cfg.PoolSize,

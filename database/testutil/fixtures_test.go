@@ -16,7 +16,7 @@ func TestLoadFixture(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
 
 	// Load fixture data
-	err := LoadFixture(db, "users", []map[string]interface{}{
+	err := LoadFixture(db, "users", []map[string]any{
 		{"name": "Alice", "email": "alice@example.com"},
 		{"name": "Bob", "email": "bob@example.com"},
 	})
@@ -47,7 +47,7 @@ func TestLoadFixture_EmptyData(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Should handle empty data gracefully
-	err := LoadFixture(db, "users", []map[string]interface{}{})
+	err := LoadFixture(db, "users", []map[string]any{})
 	if err != nil {
 		t.Errorf("LoadFixture() with empty data failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestLoadFixture_InvalidTable(t *testing.T) {
 	db := tc.DB()
 
 	// Should fail for non-existent table
-	err := LoadFixture(db, "nonexistent", []map[string]interface{}{
+	err := LoadFixture(db, "nonexistent", []map[string]any{
 		{"name": "Alice"},
 	})
 	if err == nil {
@@ -321,7 +321,7 @@ func TestMustLoadFixture(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Should succeed and not panic
-	MustLoadFixture(t, db, "users", []map[string]interface{}{
+	MustLoadFixture(t, db, "users", []map[string]any{
 		{"name": "Alice"},
 	})
 
@@ -344,7 +344,7 @@ func TestMustLoadFixture_Panic(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// This should succeed without panic
-	MustLoadFixture(t, db, "users", []map[string]interface{}{
+	MustLoadFixture(t, db, "users", []map[string]any{
 		{"name": "Alice"},
 	})
 

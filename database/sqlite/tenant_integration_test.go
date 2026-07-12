@@ -37,7 +37,7 @@ func TestScopeToTenant(t *testing.T) {
 	tests := []struct {
 		name   string
 		column string
-		value  interface{}
+		value  any
 		seed   []tenantRow
 		want   int
 	}{

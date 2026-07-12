@@ -137,3 +137,18 @@ func TestTenant_DefaultHeaderName(t *testing.T) {
 		t.Errorf("Expected tenant-789, got %s (ok=%v)", tenantID, ok)
 	}
 }
+
+func TestTenantContext(t *testing.T) {
+	ctx := SetTenantInContext(context.Background(), "tenant-1")
+	got, ok := TenantFromContext(ctx)
+	if !ok || got != "tenant-1" {
+		t.Errorf("TenantFromContext: got (%q,%v)", got, ok)
+	}
+	if _, ok := TenantFromContext(context.Background()); ok {
+		t.Errorf("empty ctx should return ok=false")
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ratelimit.go: RateLimiter, token bucket, helpers, RateLimit middleware
+// ─────────────────────────────────────────────────────────────────────────────

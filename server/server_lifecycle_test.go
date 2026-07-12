@@ -429,7 +429,7 @@ func TestRegisterDefaultEndpoints_Health(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -484,7 +484,7 @@ func TestRegisterDefaultEndpoints_Info(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["service"] != "test-service" {
 		t.Errorf("service: want test-service, got %v", result["service"])
@@ -509,7 +509,7 @@ func TestRegisterDefaultEndpoints_Metrics(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if _, ok := result["goroutines"]; !ok {
 		t.Error("expected goroutines in metrics response")
@@ -752,7 +752,7 @@ func TestHealth_DegradedComponent(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "degraded" {
 		t.Errorf("health status: want degraded, got %v", result["status"])
@@ -800,7 +800,7 @@ func TestLivenessEndpoint(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "alive" {
 		t.Errorf("liveness status: want alive, got %v", result["status"])
@@ -829,7 +829,7 @@ func TestReadinessEndpoint_Ready(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "ready" {
 		t.Errorf("readiness: want ready, got %v", result["status"])

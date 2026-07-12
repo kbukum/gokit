@@ -31,11 +31,11 @@ const (
 	FieldVersion     = "version"
 )
 
-// Fields builds a map[string]interface{} from alternating key-value pairs.
+// Fields builds a map[string]any from alternating key-value pairs.
 //
 //	logger.Info("done", logger.Fields("op", "save", "id", 42))
-func Fields(kvs ...interface{}) map[string]interface{} {
-	m := make(map[string]interface{}, len(kvs)/2)
+func Fields(kvs ...any) map[string]any {
+	m := make(map[string]any, len(kvs)/2)
 	for i := 0; i < len(kvs)-1; i += 2 {
 		if key, ok := kvs[i].(string); ok {
 			m[key] = kvs[i+1]
@@ -45,8 +45,8 @@ func Fields(kvs ...interface{}) map[string]interface{} {
 }
 
 // ErrorFields creates fields for an operation that failed.
-func ErrorFields(op string, err error) map[string]interface{} {
-	m := map[string]interface{}{
+func ErrorFields(op string, err error) map[string]any {
+	m := map[string]any{
 		FieldOperation: op,
 	}
 	if err != nil {
@@ -56,17 +56,17 @@ func ErrorFields(op string, err error) map[string]interface{} {
 }
 
 // DurationFields creates fields for a timed operation.
-func DurationFields(op string, d time.Duration) map[string]interface{} {
-	return map[string]interface{}{
+func DurationFields(op string, d time.Duration) map[string]any {
+	return map[string]any{
 		FieldOperation: op,
 		FieldDuration:  d.Milliseconds(),
 	}
 }
 
 // MergeWithError adds an error field to an existing map.
-func MergeWithError(fields map[string]interface{}, err error) map[string]interface{} {
+func MergeWithError(fields map[string]any, err error) map[string]any {
 	if fields == nil {
-		fields = make(map[string]interface{})
+		fields = make(map[string]any)
 	}
 	if err != nil {
 		fields[FieldError] = err.Error()
@@ -75,9 +75,9 @@ func MergeWithError(fields map[string]interface{}, err error) map[string]interfa
 }
 
 // MergeWithDuration adds a duration field to an existing map.
-func MergeWithDuration(fields map[string]interface{}, d time.Duration) map[string]interface{} {
+func MergeWithDuration(fields map[string]any, d time.Duration) map[string]any {
 	if fields == nil {
-		fields = make(map[string]interface{})
+		fields = make(map[string]any)
 	}
 	fields[FieldDuration] = d.Milliseconds()
 	return fields
@@ -85,8 +85,8 @@ func MergeWithDuration(fields map[string]interface{}, d time.Duration) map[strin
 
 // ServiceFields creates the standard service identification fields
 // for the unified log schema (consistent across gokit, rskit, and pykit).
-func ServiceFields(service, environment, version string) map[string]interface{} {
-	return map[string]interface{}{
+func ServiceFields(service, environment, version string) map[string]any {
+	return map[string]any{
 		FieldService:     service,
 		FieldEnvironment: environment,
 		FieldVersion:     version,

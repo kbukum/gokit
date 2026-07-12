@@ -109,7 +109,7 @@ func (c *Connector[T]) initClient() (T, error) {
 	c.client = client
 	c.hasClient = true
 
-	logging.Info("Connector: client created", map[string]interface{}{ //nolint:contextcheck // lazy init has no request context
+	logging.Info("Connector: client created", map[string]any{
 		"service": c.serviceName,
 	})
 

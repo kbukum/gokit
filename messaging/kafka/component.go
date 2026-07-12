@@ -99,7 +99,7 @@ func (c *Component) startConsumer(cr messaging.ConsumerRunner) {
 	go func() {
 		defer c.wg.Done()
 		if err := cr.Consume(c.consumeCtx); err != nil && !errors.Is(err, context.Canceled) {
-			c.log.Error("Consumer stopped with error", map[string]interface{}{
+			c.log.Error("Consumer stopped with error", map[string]any{
 				"topic": cr.Topic(),
 				"error": err.Error(),
 			})
@@ -332,7 +332,7 @@ func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) erro
 	for i, t := range topics {
 		created[i] = t.Topic
 	}
-	c.log.DebugCtx(ctx, "Kafka topics ensured", map[string]interface{}{
+	c.log.DebugCtx(ctx, "Kafka topics ensured", map[string]any{
 		"topics": created,
 	})
 

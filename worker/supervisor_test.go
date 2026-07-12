@@ -2,6 +2,7 @@ package worker_test
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -279,5 +280,92 @@ func TestSupervisorHealthCheckWithDeadWorkers(t *testing.T) {
 		default:
 			return
 		}
+	}
+}
+
+func TestSupervisorMaxRestartsWithFastBackoff(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[string, string](func(
+		ctx context.Context, task string, emit func(worker.Event[string]),
+	) error {
+		panic("always crash")
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:      "sup-max",
+		Size:      1,
+		QueueSize: 10,
+		Supervisor: &worker.SupervisorConfig{
+			RestartPolicy: worker.RestartOnFailure,
+			MaxRestarts:   2,
+			BackoffBase:   time.Millisecond, // fast for tests
+		},
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	// Submit tasks that panic — after MaxRestarts the worker becomes unhealthy
+	for i := range 3 {
+		handle, err := pool.Submit(context.Background(), fmt.Sprintf("crash-%d", i))
+		if err != nil {
+			// After enough panics, submit may fail with no healthy workers
+			break
+		}
+		for range handle.Events() {
+		}
+		handle.Result() //nolint:errcheck // intentional in test cleanup
+	}
+
+	// Next submit should fail: no healthy workers
+	_, err := pool.Submit(context.Background(), "should-fail")
+	if err == nil {
+		t.Fatal("expected error after max restarts exceeded")
+	}
+}
+func TestSupervisorRestartAlways(t *testing.T) {
+	t.Parallel()
+
+	var successCount atomic.Int32
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		if task < 0 {
+			panic("negative")
+		}
+		successCount.Add(1)
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{
+		Name:      "restart-always",
+		Size:      1,
+		QueueSize: 10,
+		Supervisor: &worker.SupervisorConfig{
+			RestartPolicy: worker.RestartAlways,
+			MaxRestarts:   0,
+			BackoffBase:   time.Millisecond,
+		},
+	})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	// Panic task
+	handle, _ := pool.Submit(context.Background(), -1)
+	for range handle.Events() {
+	}
+	handle.Result() //nolint:errcheck // intentional in test cleanup
+
+	// Successful task should still work since policy is RestartAlways
+	handle2, err := pool.Submit(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("submit after panic with RestartAlways should work: %v", err)
+	}
+	for range handle2.Events() {
+	}
+	if _, err := handle2.Result(); err != nil {
+		t.Fatalf("task should succeed: %v", err)
+	}
+	if successCount.Load() != 1 {
+		t.Fatalf("expected 1 success, got %d", successCount.Load())
 	}
 }

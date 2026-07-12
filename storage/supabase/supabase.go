@@ -193,7 +193,7 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 		}
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"prefix": folder,
 		"limit":  1000,
 	}

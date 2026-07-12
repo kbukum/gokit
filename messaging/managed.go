@@ -58,7 +58,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 	m.done = make(chan struct{})
 	m.mu.Unlock()
 
-	m.log.InfoCtx(ctx, "Starting managed consumer", map[string]interface{}{
+	m.log.InfoCtx(ctx, "Starting managed consumer", map[string]any{
 		"topic": m.topic,
 	})
 
@@ -67,7 +67,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 
 		if err := m.consumer.Consume(consumeCtx, m.handler); err != nil {
 			if !errors.Is(err, context.Canceled) {
-				m.log.ErrorCtx(consumeCtx, "Managed consumer stopped with error", map[string]interface{}{
+				m.log.ErrorCtx(consumeCtx, "Managed consumer stopped with error", map[string]any{
 					"topic": m.topic,
 					"error": err.Error(),
 				})
@@ -78,7 +78,7 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 		m.isRunning = false
 		m.mu.Unlock()
 
-		m.log.InfoCtx(consumeCtx, "Managed consumer stopped", map[string]interface{}{
+		m.log.InfoCtx(consumeCtx, "Managed consumer stopped", map[string]any{
 			"topic": m.topic,
 		})
 	}()
@@ -102,7 +102,7 @@ func (m *ManagedConsumer) Stop(ctx context.Context) error { //nolint:contextchec
 		return nil
 	}
 
-	m.log.Info("Stopping managed consumer", map[string]interface{}{
+	m.log.Info("Stopping managed consumer", map[string]any{
 		"topic": m.topic,
 	})
 
@@ -122,7 +122,7 @@ func (m *ManagedConsumer) Stop(ctx context.Context) error { //nolint:contextchec
 		select {
 		case <-done:
 		case <-waitCtx.Done():
-			m.log.Warn("Managed consumer stop timed out", map[string]interface{}{
+			m.log.Warn("Managed consumer stop timed out", map[string]any{
 				"topic": m.topic,
 				"err":   waitCtx.Err().Error(),
 			})

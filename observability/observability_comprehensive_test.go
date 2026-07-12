@@ -182,7 +182,7 @@ func TestOperationContextAllAttributes(t *testing.T) {
 	}
 
 	s := spans[0]
-	attrMap := make(map[string]interface{})
+	attrMap := make(map[string]any)
 	for _, a := range s.Attributes {
 		attrMap[string(a.Key)] = a.Value.AsInterface()
 	}
@@ -377,7 +377,7 @@ func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 		t.Fatalf("expected 1 span, got %d", len(spans))
 	}
 
-	attrMap := make(map[string]interface{})
+	attrMap := make(map[string]any)
 	for _, a := range spans[0].Attributes {
 		attrMap[string(a.Key)] = a.Value.AsInterface()
 	}
