@@ -11,12 +11,12 @@ import (
 	"google.golang.org/grpc/status"
 
 	apperrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // UnaryServerLoggingInterceptor returns a unary server interceptor that logs
 // each incoming RPC with method, duration, and status code.
-func UnaryServerLoggingInterceptor(log *logger.Logger) grpc.UnaryServerInterceptor {
+func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},

@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider/namedregistry"
 	"github.com/kbukum/gokit/resilience"
 )
@@ -14,7 +14,7 @@ import (
 // ProviderFactory creates a Registry and Discovery pair from a Config.
 // The factory reads generic connection fields (Addr, Scheme, Token) directly
 // from Config, and exotic provider-specific settings from Config.ProviderOptions.
-type ProviderFactory func(cfg Config, log *logger.Logger) (Registry, Discovery, error)
+type ProviderFactory func(cfg Config, log *logging.Logger) (Registry, Discovery, error)
 
 // ProviderRegistry stores discovery provider factories by name.
 type ProviderRegistry struct {
@@ -46,7 +46,7 @@ type Component struct {
 	discovery     Discovery
 	client        *Client
 	cfg           Config
-	log           *logger.Logger
+	log           *logging.Logger
 	providers     *ProviderRegistry
 	localIPFinder func(probeTarget string) (string, error)
 	ipProbeTarget string
@@ -68,7 +68,7 @@ func WithIPProbeTarget(addr string) ComponentOption {
 
 // NewComponent creates a discovery Component for use with the component registry.
 // reg must not be nil; an error is returned if it is.
-func NewComponent(reg *ProviderRegistry, cfg Config, log *logger.Logger, opts ...ComponentOption) (*Component, error) {
+func NewComponent(reg *ProviderRegistry, cfg Config, log *logging.Logger, opts ...ComponentOption) (*Component, error) {
 	if reg == nil {
 		return nil, fmt.Errorf("discovery: provider registry must not be nil")
 	}

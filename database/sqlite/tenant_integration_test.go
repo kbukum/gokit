@@ -8,7 +8,7 @@ import (
 
 	. "github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // newTenantTestDB creates an in-memory SQLite database for tenant tests.
@@ -16,7 +16,7 @@ func newTenantTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	cfg := Config{Enabled: true, DSN: ":memory:"}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
 	if err != nil {
 		t.Fatalf("newTenantTestDB: %v", err)

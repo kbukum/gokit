@@ -12,14 +12,14 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 )
 
 // Component wraps injected Producer and Consumer(s) and implements component.Component.
 type Component struct {
 	cfg        Config
-	log        *logger.Logger
+	log        *logging.Logger
 	producer   messaging.ProducerCloser
 	consumers  []messaging.ConsumerRunner
 	consumeCtx context.Context
@@ -33,7 +33,7 @@ type Component struct {
 var _ component.Component = (*Component)(nil)
 
 // NewComponent creates a Kafka component for use with the component registry.
-func NewComponent(cfg Config, log *logger.Logger) *Component {
+func NewComponent(cfg Config, log *logging.Logger) *Component {
 	return &Component{
 		cfg: cfg,
 		log: log.WithComponent("kafka"),

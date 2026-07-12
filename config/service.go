@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Environment represents the deployment environment.
@@ -50,7 +50,7 @@ type ServiceConfig struct {
 	Address     string        `yaml:"address" mapstructure:"address"`
 	Port        int           `yaml:"port" mapstructure:"port"`
 	Debug       bool          `yaml:"debug" mapstructure:"debug"`
-	Logging     logger.Config `yaml:"logging" mapstructure:"logging"`
+	Logging     logging.Config `yaml:"logging" mapstructure:"logging"`
 }
 
 // GetEnvironment returns the environment as a typed Environment value.

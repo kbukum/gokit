@@ -8,7 +8,7 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 	"github.com/kbukum/gokit/resilience"
@@ -19,14 +19,14 @@ type Consumer struct {
 	reader         *kafkago.Reader
 	topic          string
 	groupID        string
-	log            *logger.Logger
+	log            *logging.Logger
 	failures       int
 	errCount       *atomic.Int64 // tracks kafka-go internal error count for rate-limiting
 	commitStrategy messaging.CommitStrategy
 }
 
 // NewConsumer creates a new Kafka consumer for a single topic.
-func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *logger.Logger) (*Consumer, error) {
+func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *logging.Logger) (*Consumer, error) {
 	common.ApplyDefaults()
 	if err := common.Validate(); err != nil {
 		return nil, fmt.Errorf("kafka consumer common config: %w", err)
@@ -52,7 +52,7 @@ func NewConsumer(common messaging.Config, cfg kafka.Config, topic string, log *l
 	}
 
 	if log == nil {
-		log = logger.NewDefault("messaging")
+		log = logging.NewDefault("messaging")
 	}
 	clog := log.WithComponent("kafka.consumer")
 

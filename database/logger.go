@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // parseLogLevel converts a string log level to GORM's LogLevel.
@@ -28,12 +28,12 @@ func parseLogLevel(level string) gormlogger.LogLevel {
 }
 
 type gormLoggerAdapter struct {
-	log           *logger.Logger
+	log           *logging.Logger
 	logLevel      gormlogger.LogLevel
 	slowThreshold time.Duration
 }
 
-func newGormLogger(log *logger.Logger, slowThreshold time.Duration, logLevel gormlogger.LogLevel) gormlogger.Interface {
+func newGormLogger(log *logging.Logger, slowThreshold time.Duration, logLevel gormlogger.LogLevel) gormlogger.Interface {
 	return &gormLoggerAdapter{
 		log:           log.WithComponent("gorm"),
 		logLevel:      logLevel,

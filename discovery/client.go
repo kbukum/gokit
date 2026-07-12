@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ClientConfig configures the discovery Client.
@@ -35,14 +35,14 @@ type Client struct {
 	fallback  map[string][]ServiceInstance
 	cache     *instanceCache
 	cfg       ClientConfig
-	log       *logger.Logger
+	log       *logging.Logger
 	r         *rand.Rand
 	mu        sync.Mutex
 	rrIndex   map[string]int
 }
 
 // NewClient creates a Client that wraps the given Discovery backend.
-func NewClient(disc Discovery, cfg ClientConfig, log *logger.Logger) *Client {
+func NewClient(disc Discovery, cfg ClientConfig, log *logging.Logger) *Client {
 	ttl := cfg.CacheTTL
 	if ttl == 0 {
 		ttl = 30 * time.Second

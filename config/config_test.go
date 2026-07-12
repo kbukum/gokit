@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/util"
 )
 
@@ -46,11 +46,11 @@ func TestServiceConfigValidate(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		{"valid development", ServiceConfig{Name: "svc", Environment: "development", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
-		{"valid staging", ServiceConfig{Name: "svc", Environment: "staging", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
-		{"valid production", ServiceConfig{Name: "svc", Environment: "production", Logging: logger.Config{Level: "info", Format: "console"}}, false, ""},
-		{"missing name", ServiceConfig{Environment: "production", Logging: logger.Config{Level: "info", Format: "console"}}, true, "config.name is required"},
-		{"invalid environment", ServiceConfig{Name: "svc", Environment: "invalid", Logging: logger.Config{Level: "info", Format: "console"}}, true, "config.environment must be one of"},
+		{"valid development", ServiceConfig{Name: "svc", Environment: "development", Logging: logging.Config{Level: "info", Format: "console"}}, false, ""},
+		{"valid staging", ServiceConfig{Name: "svc", Environment: "staging", Logging: logging.Config{Level: "info", Format: "console"}}, false, ""},
+		{"valid production", ServiceConfig{Name: "svc", Environment: "production", Logging: logging.Config{Level: "info", Format: "console"}}, false, ""},
+		{"missing name", ServiceConfig{Environment: "production", Logging: logging.Config{Level: "info", Format: "console"}}, true, "config.name is required"},
+		{"invalid environment", ServiceConfig{Name: "svc", Environment: "invalid", Logging: logging.Config{Level: "info", Format: "console"}}, true, "config.environment must be one of"},
 	}
 
 	for _, tc := range tests {
@@ -255,7 +255,7 @@ func TestApplyDefaultsDoesNotOverridePresetValues(t *testing.T) {
 		Environment: "staging",
 		Version:     "2.0.0",
 		Debug:       false,
-		Logging:     logger.Config{Level: "debug", Format: "json", ServiceName: "custom"},
+		Logging:     logging.Config{Level: "debug", Format: "json", ServiceName: "custom"},
 	}
 	cfg.ApplyDefaults()
 
@@ -312,7 +312,7 @@ func TestGetServiceConfig(t *testing.T) {
 }
 
 func TestValidateEmptyEnvironment(t *testing.T) {
-	cfg := ServiceConfig{Name: "svc", Environment: "", Logging: logger.Config{Level: "info", Format: "console"}}
+	cfg := ServiceConfig{Name: "svc", Environment: "", Logging: logging.Config{Level: "info", Format: "console"}}
 	err := cfg.Validate()
 	if err == nil {
 		t.Fatal("expected validation error for empty environment")
@@ -323,7 +323,7 @@ func TestValidateEmptyEnvironment(t *testing.T) {
 }
 
 func TestValidateInvalidLogging(t *testing.T) {
-	cfg := ServiceConfig{Name: "svc", Environment: "development", Logging: logger.Config{Level: "invalid", Format: "console"}}
+	cfg := ServiceConfig{Name: "svc", Environment: "development", Logging: logging.Config{Level: "invalid", Format: "console"}}
 	err := cfg.Validate()
 	if err == nil {
 		t.Fatal("expected validation error for invalid logging level")
@@ -334,7 +334,7 @@ func TestValidateInvalidLogging(t *testing.T) {
 }
 
 func TestValidateInvalidLogFormat(t *testing.T) {
-	cfg := ServiceConfig{Name: "svc", Environment: "development", Logging: logger.Config{Level: "info", Format: "xml"}}
+	cfg := ServiceConfig{Name: "svc", Environment: "development", Logging: logging.Config{Level: "info", Format: "xml"}}
 	err := cfg.Validate()
 	if err == nil {
 		t.Fatal("expected validation error for invalid logging format")
@@ -347,7 +347,7 @@ func TestValidateInvalidLogFormat(t *testing.T) {
 func TestValidateAllValidEnvironments(t *testing.T) {
 	for _, env := range []string{"development", "staging", "production"} {
 		t.Run(env, func(t *testing.T) {
-			cfg := ServiceConfig{Name: "svc", Environment: env, Logging: logger.Config{Level: "info", Format: "console"}}
+			cfg := ServiceConfig{Name: "svc", Environment: env, Logging: logging.Config{Level: "info", Format: "console"}}
 			if err := cfg.Validate(); err != nil {
 				t.Errorf("unexpected error for env %q: %v", env, err)
 			}
@@ -379,8 +379,8 @@ func (m *advancedMockFS) LoadEnv(path string) error {
 }
 func (m *advancedMockFS) Getwd() (string, error) { return m.cwd, nil }
 
-func validLogging() logger.Config {
-	return logger.Config{Level: "info", Format: "console"}
+func validLogging() logging.Config {
+	return logging.Config{Level: "info", Format: "console"}
 }
 
 func TestLoadConfigFromYAMLInline(t *testing.T) {

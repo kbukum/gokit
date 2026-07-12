@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
@@ -25,7 +25,7 @@ import (
 // helpers
 // ---------------------------------------------------------------------------
 
-func testLogger() *logger.Logger { return logger.NewDefault("test") }
+func testLogger() *logging.Logger { return logging.NewDefault("test") }
 
 func validInsecureConfig() grpccfg.Config {
 	return grpccfg.Config{

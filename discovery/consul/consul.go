@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/consul/api"
 
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Provider implements both discovery.Registry and discovery.Discovery using HashiCorp Consul.
@@ -19,14 +19,14 @@ type Provider struct {
 	client *api.Client
 	cfg    discovery.Config
 	consul *Config
-	log    *logger.Logger
+	log    *logging.Logger
 	stats  discovery.RegistryStats
 }
 
 // Register registers the consul discovery provider into the given registry.
 // It returns an error if "consul" is already registered.
 func Register(reg *discovery.ProviderRegistry) error {
-	return reg.Register("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	return reg.Register("consul", func(cfg discovery.Config, log *logging.Logger) (discovery.Registry, discovery.Discovery, error) {
 		// Build consul config from generic Config fields + ProviderOptions
 		consulCfg := &Config{
 			Addr:   cfg.Addr,
@@ -68,7 +68,7 @@ func mergeProviderOptions(consulCfg *Config, opts map[string]any) error {
 }
 
 // NewProvider creates a Provider from the given Config.
-func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*Provider, error) {
+func NewProvider(cfg discovery.Config, consulCfg *Config, log *logging.Logger) (*Provider, error) {
 	consulCfg.ApplyDefaults()
 	if err := consulCfg.Validate(); err != nil {
 		return nil, fmt.Errorf("consul config: %w", err)

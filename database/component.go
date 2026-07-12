@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/util"
 )
 
@@ -13,7 +13,7 @@ import (
 type Component struct {
 	db         *DB
 	cfg        Config
-	log        *logger.Logger
+	log        *logging.Logger
 	models     []interface{}
 	driverFunc DriverFunc
 	driverName string
@@ -22,7 +22,7 @@ type Component struct {
 // NewComponent creates a database component for use with the component registry.
 // Drivers are opt-in: call WithDriver or WithDriverFromRegistry before Start.
 // The Config.Enabled flag can be used to skip initialization at runtime.
-func NewComponent(cfg Config, log *logger.Logger) *Component {
+func NewComponent(cfg Config, log *logging.Logger) *Component {
 	return &Component{
 		cfg: cfg,
 		log: log.WithComponent("database"),

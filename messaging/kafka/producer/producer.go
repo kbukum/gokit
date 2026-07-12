@@ -10,7 +10,7 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 	"github.com/kbukum/gokit/resilience"
@@ -26,13 +26,13 @@ type Producer struct {
 	retryAttempts  int
 	retryBackoff   time.Duration
 	requestTimeout time.Duration
-	log            *logger.Logger
+	log            *logging.Logger
 	mu             sync.RWMutex
 	closed         bool
 }
 
 // NewProducer creates a new Kafka producer with eager initialization.
-func NewProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+func NewProducer(common messaging.Config, cfg kafka.Config, log *logging.Logger) (*Producer, error) {
 	p, err := newProducer(common, cfg, log)
 	if err != nil {
 		return nil, err
@@ -45,11 +45,11 @@ func NewProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) 
 
 // NewLazyProducer creates a Producer that initializes the underlying writer
 // on first use (thread-safe). Useful when Kafka may not be available at startup.
-func NewLazyProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+func NewLazyProducer(common messaging.Config, cfg kafka.Config, log *logging.Logger) (*Producer, error) {
 	return newProducer(common, cfg, log)
 }
 
-func newProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) (*Producer, error) {
+func newProducer(common messaging.Config, cfg kafka.Config, log *logging.Logger) (*Producer, error) {
 	common.ApplyDefaults()
 	if err := common.Validate(); err != nil {
 		return nil, fmt.Errorf("kafka producer common config: %w", err)
@@ -78,7 +78,7 @@ func newProducer(common messaging.Config, cfg kafka.Config, log *logger.Logger) 
 		name = defaultProviderName
 	}
 	if log == nil {
-		log = logger.NewDefault("messaging")
+		log = logging.NewDefault("messaging")
 	}
 	return &Producer{
 		cfg:            cfg,

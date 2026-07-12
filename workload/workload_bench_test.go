@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
-func benchFactory(_ Config, _ any, _ *logger.Logger) (Manager, error) {
+func benchFactory(_ Config, _ any, _ *logging.Logger) (Manager, error) {
 	return nil, nil //nolint:nilnil // benchmark stub: no error path exercised
 }
 

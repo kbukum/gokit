@@ -10,7 +10,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // mockRegistry implements discovery.Registry for testing.
@@ -62,7 +62,7 @@ func (m *mockRegistry) Close() error {
 
 // TestDiscoveryServerComponent_LifecycleSuccess tests successful start/stop cycle.
 func TestDiscoveryServerComponent_LifecycleSuccess(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 	cfg := &Config{
 		Host: "localhost",
@@ -114,7 +114,7 @@ func TestDiscoveryServerComponent_LifecycleSuccess(t *testing.T) {
 
 // TestDiscoveryServerComponent_NameAndComponents verifies component properties.
 func TestDiscoveryServerComponent_NameAndComponents(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 	cfg := &Config{
 		Host: "localhost",
@@ -149,7 +149,7 @@ func TestDiscoveryServerComponent_NameAndComponents(t *testing.T) {
 
 // TestDiscoveryServerComponent_RegistrationFailure tests handling of registration errors.
 func TestDiscoveryServerComponent_RegistrationFailure(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 	registry.registerErr = errors.New("registration service unavailable")
 
@@ -185,7 +185,7 @@ func TestDiscoveryServerComponent_RegistrationFailure(t *testing.T) {
 
 // TestDiscoveryServerComponent_DeregistrationError tests that deregistration errors don't prevent shutdown.
 func TestDiscoveryServerComponent_DeregistrationError(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 
 	cfg := &Config{
@@ -227,7 +227,7 @@ func TestDiscoveryServerComponent_DeregistrationError(t *testing.T) {
 
 // TestDiscoveryServerComponent_NilRegistry tests validation of required parameters.
 func TestDiscoveryServerComponent_NilRegistry(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	cfg := &Config{
 		Host: "localhost",
 		Port: 5555,
@@ -253,7 +253,7 @@ func TestDiscoveryServerComponent_NilRegistry(t *testing.T) {
 
 // TestDiscoveryServerComponent_NilInnerComponent tests validation of required parameters.
 func TestDiscoveryServerComponent_NilInnerComponent(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 
 	dsc, err := NewDiscoveryServerComponent(
@@ -274,7 +274,7 @@ func TestDiscoveryServerComponent_NilInnerComponent(t *testing.T) {
 
 // TestDiscoveryServerComponent_LocalIPResolution tests automatic local IP resolution.
 func TestDiscoveryServerComponent_LocalIPResolution(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 	cfg := &Config{
 		Host: "localhost",
@@ -302,7 +302,7 @@ func TestDiscoveryServerComponent_LocalIPResolution(t *testing.T) {
 
 // TestDiscoveryServerComponent_Describe tests the Describe method.
 func TestDiscoveryServerComponent_Describe(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 	cfg := &Config{
 		Host: "localhost",
@@ -333,7 +333,7 @@ func TestDiscoveryServerComponent_Describe(t *testing.T) {
 
 // TestDiscoveryServerComponent_MultipleInstances tests multiple instances with different IDs.
 func TestDiscoveryServerComponent_MultipleInstances(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	registry := newMockRegistry()
 
 	// Create first instance

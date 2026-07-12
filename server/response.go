@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // DataResponse is the standard success envelope.
@@ -42,7 +42,7 @@ func RespondWithError(c *gin.Context, err error) {
 	pd.Instance = c.Request.URL.Path
 
 	if appErr.HTTPStatus >= http.StatusInternalServerError {
-		logger.Error("HTTP error response", map[string]interface{}{
+		logging.Error("HTTP error response", map[string]interface{}{
 			"method": c.Request.Method,
 			"path":   c.Request.URL.Path,
 			"status": appErr.HTTPStatus,

@@ -19,9 +19,9 @@ import (
 	gkconfig "github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
 	appErrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
-	"github.com/kbukum/gokit/pipeline"
+	"github.com/kbukum/gokit/stream"
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/validation"
 )
@@ -47,7 +47,7 @@ func newTestConfig(name string) *testConfig {
 			Name:        name,
 			Version:     "0.1.0",
 			Environment: "development",
-			Logging:     logger.Config{Level: "info", Format: "json", Output: "stdout"},
+			Logging:     logging.Config{Level: "info", Format: "json", Output: "stdout"},
 		},
 	}
 }
@@ -279,16 +279,16 @@ func TestIntegration_Config_Component_MultipleComponentsFromConfig(t *testing.T)
 func TestIntegration_Provider_Pipeline_ProviderFeedsPipeline(t *testing.T) {
 	// Create a provider-backed iterator
 	data := []int{1, 2, 3, 4, 5}
-	p := pipeline.FromSlice(data)
+	p := stream.FromSlice(data)
 
 	// Apply pipeline operators: double values, keep those > 4
-	doubled := pipeline.Map(p, func(_ context.Context, v int) (int, error) {
+	doubled := stream.Map(p, func(_ context.Context, v int) (int, error) {
 		return v * 2, nil
 	})
-	filtered := pipeline.Filter(doubled, func(v int) bool { return v > 4 })
+	filtered := stream.Filter(doubled, func(v int) bool { return v > 4 })
 
 	ctx := context.Background()
-	results, err := pipeline.Collect(ctx, filtered)
+	results, err := stream.Collect(ctx, filtered)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -305,14 +305,14 @@ func TestIntegration_Provider_Pipeline_ProviderFeedsPipeline(t *testing.T) {
 }
 
 func TestIntegration_Provider_Pipeline_MapFilterReduce(t *testing.T) {
-	p := pipeline.FromSlice([]int{1, 2, 3, 4, 5})
-	mapped := pipeline.Map(p, func(_ context.Context, v int) (string, error) {
+	p := stream.FromSlice([]int{1, 2, 3, 4, 5})
+	mapped := stream.Map(p, func(_ context.Context, v int) (string, error) {
 		return fmt.Sprintf("item-%d", v), nil
 	})
-	filtered := pipeline.Filter(mapped, func(v string) bool { return v != "item-3" })
+	filtered := stream.Filter(mapped, func(v string) bool { return v != "item-3" })
 
 	ctx := context.Background()
-	results, err := pipeline.Collect(ctx, filtered)
+	results, err := stream.Collect(ctx, filtered)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -322,8 +322,8 @@ func TestIntegration_Provider_Pipeline_MapFilterReduce(t *testing.T) {
 }
 
 func TestIntegration_Provider_Pipeline_ErrorPropagation(t *testing.T) {
-	p := pipeline.FromSlice([]int{1, 2, 3})
-	failing := pipeline.Map(p, func(_ context.Context, v int) (int, error) {
+	p := stream.FromSlice([]int{1, 2, 3})
+	failing := stream.Map(p, func(_ context.Context, v int) (int, error) {
 		if v == 2 {
 			return 0, appErrors.InvalidInput("value", "cannot be 2")
 		}
@@ -331,7 +331,7 @@ func TestIntegration_Provider_Pipeline_ErrorPropagation(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	_, err := pipeline.Collect(ctx, failing)
+	_, err := stream.Collect(ctx, failing)
 	if err == nil {
 		t.Fatal("expected error from pipeline")
 	}
@@ -345,12 +345,12 @@ func TestIntegration_Provider_Pipeline_ErrorPropagation(t *testing.T) {
 }
 
 func TestIntegration_Provider_Pipeline_ConcatPipelines(t *testing.T) {
-	p1 := pipeline.FromSlice([]int{1, 2})
-	p2 := pipeline.FromSlice([]int{3, 4})
-	combined := pipeline.Concat(p1, p2)
+	p1 := stream.FromSlice([]int{1, 2})
+	p2 := stream.FromSlice([]int{3, 4})
+	combined := stream.Concat(p1, p2)
 
 	ctx := context.Background()
-	results, err := pipeline.Collect(ctx, combined)
+	results, err := stream.Collect(ctx, combined)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -661,14 +661,14 @@ func TestIntegration_Observability_Errors_ContextPropagation(t *testing.T) {
 // ─── 8. Logger → Config ─────────────────────────────────────────────────────
 
 func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
-	cfg := &logger.Config{
+	cfg := &logging.Config{
 		Level:       "debug",
 		Format:      "json",
 		Output:      "stdout",
 		ServiceName: "test-svc",
 	}
 
-	log := logger.New(cfg, "integration-test")
+	log := logging.New(cfg, "integration-test")
 	if log == nil {
 		t.Fatal("logger should not be nil")
 	}
@@ -681,7 +681,7 @@ func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
 }
 
 func TestIntegration_Logger_Config_DefaultLogger(t *testing.T) {
-	log := logger.NewDefault("default-test")
+	log := logging.NewDefault("default-test")
 	if log == nil {
 		t.Fatal("default logger should not be nil")
 	}
@@ -689,12 +689,12 @@ func TestIntegration_Logger_Config_DefaultLogger(t *testing.T) {
 }
 
 func TestIntegration_Logger_Config_LoggerWithContext(t *testing.T) {
-	cfg := &logger.Config{
+	cfg := &logging.Config{
 		Level:       "info",
 		Format:      "json",
 		ServiceName: "ctx-test",
 	}
-	log := logger.New(cfg, "ctx-test")
+	log := logging.New(cfg, "ctx-test")
 	enriched := log.WithComponent("database").WithFields(map[string]interface{}{
 		"connection_pool": 10,
 	})
@@ -704,11 +704,11 @@ func TestIntegration_Logger_Config_LoggerWithContext(t *testing.T) {
 // ─── 9. Pipeline → Reduce ──────────────────────────────────────────────────
 
 func TestIntegration_Pipeline_Reduce(t *testing.T) {
-	p := pipeline.FromSlice([]int{1, 2, 3, 4, 5})
-	sumPipeline := pipeline.Reduce(p, 0, func(acc, v int) int { return acc + v })
+	p := stream.FromSlice([]int{1, 2, 3, 4, 5})
+	sumPipeline := stream.Reduce(p, 0, func(acc, v int) int { return acc + v })
 
 	ctx := context.Background()
-	results, err := pipeline.Collect(ctx, sumPipeline)
+	results, err := stream.Collect(ctx, sumPipeline)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -764,8 +764,8 @@ func TestIntegration_Validation_Pipeline_ValidateThenTransform(t *testing.T) {
 		{Name: "Charlie", Email: "charlie@test.com"},
 	}
 
-	p := pipeline.FromSlice(inputs)
-	validated := pipeline.Map(p, func(_ context.Context, u UserInput) (string, error) {
+	p := stream.FromSlice(inputs)
+	validated := stream.Map(p, func(_ context.Context, u UserInput) (string, error) {
 		v := validation.New()
 		v.Required("name", u.Name)
 		v.Pattern("email", u.Email, `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
@@ -776,7 +776,7 @@ func TestIntegration_Validation_Pipeline_ValidateThenTransform(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	_, err := pipeline.Collect(ctx, validated)
+	_, err := stream.Collect(ctx, validated)
 	if err == nil {
 		t.Fatal("expected validation error for empty name")
 	}
@@ -854,11 +854,11 @@ func TestIntegration_FullStack_ConfigDIComponentPipeline(t *testing.T) {
 	defer registry.StopAll(ctx)
 
 	// 4. Pipeline processes data
-	data := pipeline.FromSlice([]int{10, 20, 30, 40, 50})
-	processed := pipeline.Map(data, func(_ context.Context, v int) (int, error) {
+	data := stream.FromSlice([]int{10, 20, 30, 40, 50})
+	processed := stream.Map(data, func(_ context.Context, v int) (int, error) {
 		return v * 2, nil
 	})
-	results, err := pipeline.Collect(ctx, processed)
+	results, err := stream.Collect(ctx, processed)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}
@@ -876,14 +876,14 @@ func TestIntegration_FullStack_ConfigDIComponentPipeline(t *testing.T) {
 func TestIntegration_Pipeline_TapSideEffects(t *testing.T) {
 	var sideEffects []int
 
-	p := pipeline.FromSlice([]int{1, 2, 3})
-	tapped := pipeline.Tap(p, func(_ context.Context, v int) error {
+	p := stream.FromSlice([]int{1, 2, 3})
+	tapped := stream.Tap(p, func(_ context.Context, v int) error {
 		sideEffects = append(sideEffects, v)
 		return nil
 	})
 
 	ctx := context.Background()
-	results, err := pipeline.Collect(ctx, tapped)
+	results, err := stream.Collect(ctx, tapped)
 	if err != nil {
 		t.Fatalf("collect: %v", err)
 	}

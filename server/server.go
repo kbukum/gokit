@@ -13,7 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/endpoint"
 	"github.com/kbukum/gokit/server/middleware"
 )
@@ -25,7 +25,7 @@ type Server struct {
 	engine     *gin.Engine
 	mux        *http.ServeMux
 	config     Config
-	log        *logger.Logger
+	log        *logging.Logger
 	mounts     []MountedHandler // tracked for summary display
 	listener   net.Listener     // set by Start(); used by ListenAddr()
 }
@@ -38,7 +38,7 @@ type MountedHandler struct {
 
 // New creates a new Server. The Gin engine is created but no middleware is
 // applied yet — call ApplyDefaults on the config first if needed.
-func New(cfg *Config, log *logger.Logger) *Server {
+func New(cfg *Config, log *logging.Logger) *Server {
 	// Set Gin mode based on global zerolog level.
 	if zerolog.GlobalLevel() <= zerolog.DebugLevel {
 		gin.SetMode(gin.DebugMode)

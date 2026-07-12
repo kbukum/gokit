@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // HostResolver resolves the Docker daemon host for a given context.
@@ -44,7 +44,7 @@ type ManagerPool struct {
 	cacheTTL      time.Duration
 	cfg           *Config
 	defaultLabels map[string]string
-	log           *logger.Logger
+	log           *logging.Logger
 }
 
 // ManagerPoolOption configures a ManagerPool.
@@ -57,7 +57,7 @@ func WithCacheTTL(ttl time.Duration) ManagerPoolOption {
 
 // NewManagerPool creates a pool that resolves Docker hosts dynamically.
 // When resolver is nil, it behaves like a single-host manager.
-func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string]string, log *logger.Logger, opts ...ManagerPoolOption) (*ManagerPool, error) {
+func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string]string, log *logging.Logger, opts ...ManagerPoolOption) (*ManagerPool, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err

@@ -1,0 +1,53 @@
+// Package stream provides composable, pull-based data stream operators.
+//
+// Pipelines are lazy — no work happens until values are pulled via Collect,
+// Drain, or ForEach. Each stage pulls from the previous stage on demand,
+// providing natural backpressure without explicit flow control.
+//
+// The Iterator interface is structurally compatible with provider.Iterator[T],
+// so provider streams plug directly into pipelines.
+//
+// # Operators
+//
+// Synchronous (single-goroutine):
+//
+//   - Map: transform each value
+//   - FlatMap: transform each value into multiple values
+//   - Filter: keep values matching a predicate
+//   - Tap: side-effect without altering the value (logging, metrics, mid-pipeline publish)
+//   - TapEach: per-element side-effect on []T (e.g., after FanOut)
+//   - FanOut: apply multiple functions in parallel, collect results as []O
+//   - Reduce: accumulate all values into one result
+//   - Concat: join pipelines sequentially
+//
+// Concurrent (multi-goroutine):
+//
+//   - Buffer: decouple producer/consumer with a buffered channel
+//   - Parallel: concurrent Map with a worker pool (order NOT preserved)
+//   - Merge: combine multiple pipelines concurrently (order NOT preserved)
+//
+// Stream/time-aware:
+//
+//   - Throttle: rate-limit values (drop values arriving faster than interval)
+//   - Batch: collect N items or wait timeout, emit as slice
+//   - Debounce: wait for silence before emitting the latest value
+//   - TumblingWindow: non-overlapping fixed-duration windows
+//   - SlidingWindow: overlapping windows with configurable slide
+//
+// # Usage
+//
+//	src := stream.FromSlice([]int{1, 2, 3, 4, 5})
+//	doubled := stream.Map(src, func(_ context.Context, n int) (int, error) {
+//	    return n * 2, nil
+//	})
+//	evens := stream.Filter(doubled, func(n int) bool { return n%2 == 0 })
+//	results, _ := stream.Collect(ctx, evens)
+//
+// With providers:
+//
+//	src := stream.From(audioSource)
+//	transcribed := stream.FlatMap(src, transcriber.Execute)
+//	tapped := stream.Tap(transcribed, kafkaPublish.Send)
+//	identified := stream.Map(tapped, speakerID.Execute)
+//	stream.Drain(identified, finalSink.Send).Run(ctx)
+package stream

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Provider implements discovery.Registry and discovery.Discovery using an in-memory list of
@@ -20,7 +20,7 @@ type Provider struct {
 // Register registers the static and k8s discovery providers into the given registry.
 // It returns an error if either provider name is already registered.
 func Register(reg *discovery.ProviderRegistry) error {
-	if err := reg.Register("static", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	if err := reg.Register("static", func(cfg discovery.Config, _ *logging.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	}); err != nil {
@@ -28,7 +28,7 @@ func Register(reg *discovery.ProviderRegistry) error {
 	}
 
 	// k8s uses the static provider as a fallback.
-	return reg.Register("k8s", func(cfg discovery.Config, _ *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	return reg.Register("k8s", func(cfg discovery.Config, _ *logging.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
 		return p, p, nil
 	})

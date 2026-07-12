@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ── helpers ─────────────────────────────────────────────────────────
@@ -56,8 +56,8 @@ func (m *mockDiscovery) Watch(ctx context.Context, _ string) (<-chan []ServiceIn
 func (m *mockDiscovery) Close() error { return nil }
 
 // testLogger creates a minimal logger for testing.
-func testLogger() *logger.Logger {
-	return logger.New(&logger.Config{Level: "error", Format: "json"}, "test")
+func testLogger() *logging.Logger {
+	return logging.New(&logging.Config{Level: "error", Format: "json"}, "test")
 }
 
 // ── ServiceInstance tests ───────────────────────────────────────────

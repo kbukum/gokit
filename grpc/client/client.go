@@ -10,15 +10,15 @@ import (
 
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/interceptor"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
 // NewClient creates a gRPC client connection using the provided configuration
-// and logger. It configures keepalive, TLS, message size limits, and attaches
+// and logging. It configures keepalive, TLS, message size limits, and attaches
 // logging and resilience interceptors.
-func NewClient(cfg grpccfg.Config, log *logger.Logger) (*grpc.ClientConn, error) {
+func NewClient(cfg grpccfg.Config, log *logging.Logger) (*grpc.ClientConn, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("grpc client config: %w", err)
@@ -53,7 +53,7 @@ func NewClient(cfg grpccfg.Config, log *logger.Logger) (*grpc.ClientConn, error)
 }
 
 // buildDialOptions assembles all gRPC dial options from config.
-func buildDialOptions(cfg grpccfg.Config, log *logger.Logger) ([]grpc.DialOption, error) {
+func buildDialOptions(cfg grpccfg.Config, log *logging.Logger) ([]grpc.DialOption, error) {
 	opts := make([]grpc.DialOption, 0, 5)
 
 	// Transport credentials

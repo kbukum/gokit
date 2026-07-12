@@ -8,7 +8,7 @@ import (
 
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/interceptor"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 )
 
@@ -109,7 +109,7 @@ func (b *ClientOptionsBuilder) buildUnaryInterceptors() []grpc.UnaryClientInterc
 	interceptors := make([]grpc.UnaryClientInterceptor, 0, len(b.customInterceptors)+2)
 
 	if b.enableLogging {
-		log := logger.NewDefault("grpc-client")
+		log := logging.NewDefault("grpc-client")
 		interceptors = append(interceptors, interceptor.UnaryClientLoggingInterceptor(log))
 	}
 	if b.resiliencePolicy != nil {
@@ -122,7 +122,7 @@ func (b *ClientOptionsBuilder) buildUnaryInterceptors() []grpc.UnaryClientInterc
 func (b *ClientOptionsBuilder) buildStreamInterceptors() []grpc.StreamClientInterceptor {
 	var interceptors []grpc.StreamClientInterceptor
 	if b.enableLogging {
-		log := logger.NewDefault("grpc-client")
+		log := logging.NewDefault("grpc-client")
 		interceptors = append(interceptors, interceptor.StreamClientLoggingInterceptor(log))
 	}
 	interceptors = append(interceptors, b.streamInterceptors...)

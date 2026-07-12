@@ -10,7 +10,7 @@ import (
 
 	. "github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // helper to create a DB instance with SQLite in-memory for testing.
@@ -18,7 +18,7 @@ func newTestDB(t *testing.T) *DB {
 	t.Helper()
 	cfg := Config{Enabled: true, DSN: ":memory:"}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
 	if err != nil {
 		t.Fatalf("newTestDB: %v", err)
@@ -266,7 +266,7 @@ func TestConcurrentQueries(t *testing.T) {
 	// Use shared cache for concurrent goroutine access
 	cfg := Config{Enabled: true, DSN: "file::memory:?cache=shared"}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
 	if err != nil {
 		t.Fatalf("newTestDB: %v", err)

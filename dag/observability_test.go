@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 )
 
@@ -42,7 +42,7 @@ func TestWithTracing_PropagatesError(t *testing.T) {
 }
 
 func TestWithLogging_Success(t *testing.T) {
-	log := logger.NewDefault("dag-test")
+	log := logging.NewDefault("dag-test")
 	inner := newFuncNode("log-node", func(_ context.Context, _ *State) (any, error) {
 		return "logged", nil
 	})
@@ -62,7 +62,7 @@ func TestWithLogging_Success(t *testing.T) {
 }
 
 func TestWithLogging_Error(t *testing.T) {
-	log := logger.NewDefault("dag-test")
+	log := logging.NewDefault("dag-test")
 	nodeErr := errors.New("log-fail")
 	inner := newFuncNode("fail-log", func(_ context.Context, _ *State) (any, error) {
 		return nil, nodeErr

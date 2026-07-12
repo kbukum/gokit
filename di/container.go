@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // RegistrationMode determines how a component should be resolved
@@ -355,7 +355,7 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 					registration.key, err)
 			}
 			registration.circuitBreaker.RecordFailure()
-			logger.Debug("Lazy component initialization failed", map[string]interface{}{
+			logging.Debug("Lazy component initialization failed", map[string]interface{}{
 				"component": registration.key,
 				"attempt":   attempt + 1,
 				"error":     err.Error(),
@@ -377,7 +377,7 @@ func (c *UnifiedContainer) initializeWithRetry(registration *ComponentRegistrati
 		registration.mutex.Unlock()
 		registration.circuitBreaker.RecordSuccess()
 
-		logger.Info("Lazy component initialized successfully", map[string]interface{}{
+		logging.Info("Lazy component initialized successfully", map[string]interface{}{
 			"component": registration.key,
 			"attempts":  attempt + 1,
 		})

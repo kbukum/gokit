@@ -6,7 +6,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // DiscoveryServerComponent wraps a Server with service discovery integration.
@@ -16,7 +16,7 @@ type DiscoveryServerComponent struct {
 	registry  discovery.Registry
 	serviceID string
 	svcInfo   *discovery.ServiceInfo
-	log       *logger.Logger
+	log       *logging.Logger
 }
 
 // NewDiscoveryServerComponent creates a discovery-enabled server component.
@@ -42,7 +42,7 @@ func NewDiscoveryServerComponent(
 	port int,
 	tags []string,
 	metadata map[string]string,
-	log *logger.Logger,
+	log *logging.Logger,
 ) (*DiscoveryServerComponent, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("registry cannot be nil")

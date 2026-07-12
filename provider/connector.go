@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Connector provides thread-safe deferred initialization for any client type
@@ -109,7 +109,7 @@ func (c *Connector[T]) initClient() (T, error) {
 	c.client = client
 	c.hasClient = true
 
-	logger.Info("Connector: client created", map[string]interface{}{ //nolint:contextcheck // lazy init has no request context
+	logging.Info("Connector: client created", map[string]interface{}{ //nolint:contextcheck // lazy init has no request context
 		"service": c.serviceName,
 	})
 
@@ -154,7 +154,7 @@ func (c *Connector[T]) IsConnected() bool {
 // if configured. Both client creation and fn are inside the resilience
 // boundary, so creation failures also count toward circuit breaker thresholds.
 func Call[C, R any](ctx context.Context, c *Connector[C], fn func(C) (R, error)) (R, error) {
-	//nolint:contextcheck // GetClient is a lazy initializer with no request context; logger.Info inside is annotated
+	//nolint:contextcheck // GetClient is a lazy initializer with no request context; logging.Info inside is annotated
 	return ExecuteWithResilience(ctx, c.state, func() (R, error) {
 		client, err := c.GetClient()
 		if err != nil {

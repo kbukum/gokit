@@ -8,12 +8,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // UnaryClientLoggingInterceptor returns a unary client interceptor that logs
 // each RPC call with method, duration, and status.
-func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientInterceptor {
+func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,
 		method string,
@@ -58,7 +58,7 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 
 // StreamClientLoggingInterceptor returns a stream client interceptor that logs
 // stream establishment with method, duration, and status.
-func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterceptor {
+func StreamClientLoggingInterceptor(log *logging.Logger) grpc.StreamClientInterceptor {
 	return func(
 		ctx context.Context,
 		desc *grpc.StreamDesc,

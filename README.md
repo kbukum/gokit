@@ -60,11 +60,11 @@ package main
 import (
     "context"
     "github.com/kbukum/gokit/bootstrap"
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
 )
 
 func main() {
-    log := logger.New(&logger.Config{Level: "info", Format: "console"}, "my-service")
+    log := logging.New(&logging.Config{Level: "info", Format: "console"}, "my-service")
 
     app := bootstrap.NewApp("my-service", "1.0.0", bootstrap.WithLogger(log))
     app.OnConfigure(func(ctx context.Context, app *bootstrap.App) error {

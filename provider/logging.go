@@ -4,12 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // WithLogging returns a Middleware that logs each Execute call.
 // Logs: provider name, duration, and success/error status.
-func WithLogging[I, O any](log *logger.Logger) Middleware[I, O] {
+func WithLogging[I, O any](log *logging.Logger) Middleware[I, O] {
 	return func(inner RequestResponse[I, O]) RequestResponse[I, O] {
 		return &loggingRR[I, O]{inner: inner, log: log}
 	}
@@ -17,7 +17,7 @@ func WithLogging[I, O any](log *logger.Logger) Middleware[I, O] {
 
 type loggingRR[I, O any] struct {
 	inner RequestResponse[I, O]
-	log   *logger.Logger
+	log   *logging.Logger
 }
 
 func (l *loggingRR[I, O]) Name() string                         { return l.inner.Name() }

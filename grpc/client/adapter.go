@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider"
 )
 
@@ -23,14 +23,14 @@ var (
 type Adapter struct {
 	config grpccfg.Config
 	conn   *grpc.ClientConn
-	log    *logger.Logger
+	log    *logging.Logger
 }
 
 // AdapterOption configures an Adapter during creation.
 type AdapterOption func(*Adapter)
 
 // NewAdapter creates a gRPC adapter with a managed connection.
-func NewAdapter(cfg grpccfg.Config, log *logger.Logger, opts ...AdapterOption) (*Adapter, error) {
+func NewAdapter(cfg grpccfg.Config, log *logging.Logger, opts ...AdapterOption) (*Adapter, error) {
 	conn, err := NewClient(cfg, log)
 	if err != nil {
 		return nil, err

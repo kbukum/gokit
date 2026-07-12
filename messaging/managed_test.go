@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // stubConsumer is a minimal Consumer implementation for testing.
@@ -36,8 +36,8 @@ func (s *stubConsumer) Close() error {
 	return nil
 }
 
-func newTestLogger() *logger.Logger {
-	return logger.NewDefault("test")
+func newTestLogger() *logging.Logger {
+	return logging.NewDefault("test")
 }
 
 func TestManagedConsumer_StartAndStop(t *testing.T) {

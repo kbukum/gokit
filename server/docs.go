@@ -9,7 +9,7 @@ import (
 
 	scalar "github.com/MarceloPetrucio/go-scalar-api-reference"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // APIDoc describes a single OpenAPI specification to serve via Scalar.
@@ -104,7 +104,7 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 
 		htmlContent, err := scalar.ApiReferenceHTML(opts)
 		if err != nil {
-			logger.Error("failed to render API docs", map[string]interface{}{
+			logging.Error("failed to render API docs", map[string]interface{}{
 				"path":  d.UIPath,
 				"error": err.Error(),
 			})
@@ -116,7 +116,7 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", html)
 		})
 
-		logger.Debug("API docs mounted", map[string]interface{}{
+		logging.Debug("API docs mounted", map[string]interface{}{
 			"ui": d.UIPath, "spec": d.SpecPath,
 		})
 	}

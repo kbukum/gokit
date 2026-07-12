@@ -1,7 +1,7 @@
 package consumer
 
 import (
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
@@ -20,7 +20,7 @@ type ManagedConsumerConfig struct {
 	Config  kafka.Config
 	Topic   string
 	Handler messaging.MessageHandler
-	Log     *logger.Logger
+	Log     *logging.Logger
 }
 
 // NewManagedConsumer creates a managed consumer with lifecycle support.

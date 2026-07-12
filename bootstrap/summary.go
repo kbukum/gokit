@@ -11,7 +11,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/di"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ComponentStatus holds the tracked status of a component during bootstrap.
@@ -201,7 +201,7 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 // It auto-collects infrastructure, routes, and health from the component
 // registry and DI registrations from the container. Manual Track* calls
 // are only needed for non-component items (e.g., auth config).
-func (s *Summary) DisplaySummary(registry *component.Registry, container di.Container, log *logger.Logger) {
+func (s *Summary) DisplaySummary(registry *component.Registry, container di.Container, log *logging.Logger) {
 	ctx := context.Background()
 
 	// --- Auto-collect from registry ---

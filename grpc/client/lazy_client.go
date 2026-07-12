@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // LazyClient provides thread-safe lazy initialization for gRPC clients.
@@ -27,7 +27,7 @@ type LazyClient[T any] struct {
 	serviceName  string
 	factory      ConnectionFactory
 	createClient func(grpc.ClientConnInterface) T
-	log          *logger.Logger
+	log          *logging.Logger
 
 	mu          sync.RWMutex
 	conn        *grpc.ClientConn
@@ -48,7 +48,7 @@ func NewLazyClient[T any](
 	serviceName string,
 	factory ConnectionFactory,
 	createClient func(grpc.ClientConnInterface) T,
-	log ...*logger.Logger,
+	log ...*logging.Logger,
 ) *LazyClient[T] {
 	lc := &LazyClient[T]{
 		serviceName:  serviceName,
@@ -188,7 +188,7 @@ func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]interface{}) {
 	if c.log != nil {
 		c.log.Debug(msg, fields...)
 	} else {
-		logger.Debug(msg, fields...)
+		logging.Debug(msg, fields...)
 	}
 }
 
@@ -196,7 +196,7 @@ func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]interface{}) {
 	if c.log != nil {
 		c.log.Info(msg, fields...)
 	} else {
-		logger.Info(msg, fields...)
+		logging.Info(msg, fields...)
 	}
 }
 
@@ -204,6 +204,6 @@ func (c *LazyClient[T]) logError(msg string, fields ...map[string]interface{}) {
 	if c.log != nil {
 		c.log.Error(msg, fields...)
 	} else {
-		logger.Error(msg, fields...)
+		logging.Error(msg, fields...)
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/di"
 	"github.com/kbukum/gokit/hook"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // App represents a generic application with uniform lifecycle management.
@@ -33,7 +33,7 @@ type App[C Config] struct {
 	Cfg        C
 	Container  di.Container
 	Components *component.Registry
-	Logger     *logger.Logger
+	Logger     *logging.Logger
 	Summary    *Summary
 
 	gracefulTimeout time.Duration
@@ -42,7 +42,7 @@ type App[C Config] struct {
 }
 
 // NewApp creates a new application instance from a typed config.
-// It applies defaults, validates the config, and initializes the logger.
+// It applies defaults, validates the config, and initializes the logging.
 func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -74,7 +74,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.logger != nil {
 		app.Logger = o.logger
 	} else {
-		app.Logger = logger.New(&base.Logging, base.Name)
+		app.Logger = logging.New(&base.Logging, base.Name)
 	}
 
 	app.Summary = NewSummary(base.Name, base.Version)

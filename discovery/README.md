@@ -14,10 +14,10 @@ go get github.com/kbukum/gokit/discovery@latest
 import (
     "github.com/kbukum/gokit/discovery"
     _ "github.com/kbukum/gokit/discovery/consul"  // register consul provider
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
 )
 
-log := logger.New()
+log := logging.New()
 comp := discovery.NewComponent(discovery.Config{
     Enabled:  true,
     Provider: "consul",

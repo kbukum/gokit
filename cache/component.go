@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Component wraps Store and implements component.Component.
@@ -14,12 +14,12 @@ type Component struct {
 	registry    *FactoryRegistry
 	cfg         Config
 	providerCfg any
-	log         *logger.Logger
+	log         *logging.Logger
 }
 
 // NewComponent creates a cache component. The registry is explicit and must
 // contain the selected provider.
-func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) *Component {
+func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) *Component {
 	return &Component{
 		registry:    registry,
 		cfg:         cfg,

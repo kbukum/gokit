@@ -15,10 +15,10 @@ import (
     grpccfg "github.com/kbukum/gokit/grpc"
     "github.com/kbukum/gokit/grpc/client"
     "github.com/kbukum/gokit/grpc/interceptor"
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
 )
 
-log := logger.New()
+log := logging.New()
 cfg := grpccfg.Config{Host: "localhost", Port: 50051, Enabled: true}
 
 // Direct connection

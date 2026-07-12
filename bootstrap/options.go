@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/di"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Option configures the App during creation.
@@ -13,7 +13,7 @@ type Option func(*appOptions)
 
 // appOptions collects all option values before applying to App.
 type appOptions struct {
-	logger          *logger.Logger
+	logger          *logging.Logger
 	container       di.Container
 	gracefulTimeout *time.Duration
 }
@@ -29,7 +29,7 @@ func resolveOptions(opts []Option) *appOptions {
 
 // WithLogger sets a custom logger for the application.
 // If not set, the logger is auto-initialized from the config's Logging field.
-func WithLogger(l *logger.Logger) Option {
+func WithLogger(l *logging.Logger) Option {
 	return func(o *appOptions) {
 		o.logger = l
 	}

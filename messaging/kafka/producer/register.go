@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
@@ -16,7 +16,7 @@ func Register(registry *messaging.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("kafka producer: messaging registry is nil")
 	}
-	return registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, log *logger.Logger) (messaging.Producer, error) {
+	return registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, log *logging.Logger) (messaging.Producer, error) {
 		cfg, ok := adapterCfg.(*kafka.Config)
 		if !ok {
 			return nil, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*kafka.Config", Actual: adapterCfg}

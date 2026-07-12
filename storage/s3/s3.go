@@ -11,14 +11,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/storage"
 )
 
 // Register registers the S3 storage provider into the given registry.
 // It returns an error if the provider is already registered.
 func Register(reg *storage.FactoryRegistry) error {
-	return reg.Register(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+	return reg.Register(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logging.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 )
 
@@ -31,8 +31,8 @@ func testConn(t *testing.T) *grpc.ClientConn {
 	return cc
 }
 
-func testLogger() *logger.Logger {
-	return logger.NewDefault("test")
+func testLogger() *logging.Logger {
+	return logging.NewDefault("test")
 }
 
 func mockInvoker(retErr error) grpc.UnaryInvoker {

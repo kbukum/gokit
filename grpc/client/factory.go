@@ -4,7 +4,7 @@ import (
 	"google.golang.org/grpc"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ConnectionFactory defines the interface for creating gRPC connections.
@@ -18,11 +18,11 @@ type ConnectionFactory interface {
 // DefaultConnectionFactory creates gRPC connections using gokit Config.
 type DefaultConnectionFactory struct {
 	cfg grpccfg.Config
-	log *logger.Logger
+	log *logging.Logger
 }
 
-// NewDefaultConnectionFactory creates a factory that builds connections using the provided config and logger.
-func NewDefaultConnectionFactory(cfg grpccfg.Config, log *logger.Logger) *DefaultConnectionFactory {
+// NewDefaultConnectionFactory creates a factory that builds connections using the provided config and logging.
+func NewDefaultConnectionFactory(cfg grpccfg.Config, log *logging.Logger) *DefaultConnectionFactory {
 	return &DefaultConnectionFactory{cfg: cfg, log: log}
 }
 

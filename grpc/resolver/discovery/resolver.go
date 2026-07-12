@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/resolver"
 
 	disc "github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // discoveryResolver watches a discovery backend and pushes address updates to gRPC.
@@ -16,7 +16,7 @@ type discoveryResolver struct {
 	serviceName string
 	discovery   disc.Discovery
 	cc          resolver.ClientConn
-	log         *logger.Logger
+	log         *logging.Logger
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -27,7 +27,7 @@ func newDiscoveryResolver(
 	serviceName string,
 	discovery disc.Discovery,
 	cc resolver.ClientConn,
-	log *logger.Logger,
+	log *logging.Logger,
 ) *discoveryResolver {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &discoveryResolver{

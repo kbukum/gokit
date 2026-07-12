@@ -16,7 +16,7 @@ Every package has its own `README.md` with API examples — start there for deta
 |---|---|---|
 | `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, RFC 7807 |
 | `config` | `gokit/config` | Base configuration with `Environment` type and defaults |
-| `logger` | `gokit/logger` | Structured logging via zerolog with context injection |
+| `logging` | `gokit/logging` | Structured logging via zerolog with context injection |
 | `util` | `gokit/util` | Generic slice, map, pointer, functional utilities |
 | `version` | `gokit/version` | Build version info — git commit, branch, build time |
 | `encryption` | `gokit/encryption` | AES-256-GCM encryption for sensitive data |
@@ -26,7 +26,7 @@ Every package has its own `README.md` with API examples — start there for deta
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting |
 | `provider` | `gokit/provider` | Generic provider framework + sink combinators |
-| `pipeline` | `gokit/pipeline` | Pull-based pipeline (Throttle, Batch, Debounce, Window) |
+| `stream` | `gokit/stream` | Pull-based stream (Throttle, Batch, Debounce, Window) |
 | `dag` | `gokit/dag` | DAG execution engine — batch / streaming / cascade |
 | `media` | `gokit/media` | Media type detection from content bytes |
 | `security` | `gokit/security` | TLS configuration and certificate utilities |
@@ -70,12 +70,12 @@ Every package has its own `README.md` with API examples — start there for deta
 
 | Group | Packages | Focus |
 |---|---|---|
-| **Foundation** | errors, config, logger, version | Configuration, logging, errors |
+| **Foundation** | errors, config, logging, version | Configuration, logging, errors |
 | **Utilities** | util, encryption, validation | Helpers and data validation |
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle, provider pattern |
 | **Auth & Authz** | auth, authz | Authentication and authorization |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Data & Flow** | pipeline, dag, sse, media, stateful | Pipelines, DAGs, SSE, media, accumulation |
+| **Data & Flow** | stream, dag, sse, media, stateful | Streams, DAGs, SSE, media, accumulation |
 | **Infrastructure** | database, cache, messaging, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |

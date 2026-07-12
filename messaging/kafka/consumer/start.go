@@ -3,7 +3,7 @@ package consumer
 import (
 	"context"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
@@ -24,7 +24,7 @@ func StartConsumer(
 	groupID string,
 	topic string,
 	handler func(ctx context.Context, data []byte) error,
-	log *logger.Logger,
+	log *logging.Logger,
 ) (*ManagedConsumer, error) {
 	mc, err := NewManagedConsumer(ManagedConsumerConfig{ //nolint:contextcheck // kafka-go connection error logger callback fires without a request context
 		Common: messaging.Config{Adapter: "kafka", ConsumerGroup: groupID},

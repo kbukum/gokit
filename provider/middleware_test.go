@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider"
 )
@@ -27,7 +27,7 @@ func TestChain_Empty(t *testing.T) {
 
 func TestChain_SingleMiddleware(t *testing.T) {
 	p := &echoProvider{name: "test"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	wrapped := provider.Chain(
 		provider.WithLogging[string, string](log),
 	)(p)
@@ -87,7 +87,7 @@ func (o *orderTracker[I, O]) Execute(ctx context.Context, input I) (O, error) {
 
 func TestWithLogging_Success(t *testing.T) {
 	p := &echoProvider{name: "log-test"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	wrapped := provider.WithLogging[string, string](log)(p)
 
 	result, err := wrapped.Execute(context.Background(), "hello")
@@ -104,7 +104,7 @@ func TestWithLogging_Success(t *testing.T) {
 
 func TestWithLogging_Error(t *testing.T) {
 	p := &failingChatProvider2{}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	wrapped := provider.WithLogging[string, string](log)(p)
 
 	_, err := wrapped.Execute(context.Background(), "hello")
@@ -153,7 +153,7 @@ func TestWithTracing_Error(t *testing.T) {
 
 func TestWithLogging_DelegatesIsAvailable(t *testing.T) {
 	p := &echoProvider{name: "avail-test"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	wrapped := provider.WithLogging[string, string](log)(p)
 
 	if !wrapped.IsAvailable(context.Background()) {
@@ -231,7 +231,7 @@ func TestWithTracing_DelegatesIsAvailable(t *testing.T) {
 
 func TestChain_WithResilienceAndLogging(t *testing.T) {
 	p := &echoProvider{name: "composed"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 
 	wrapped := provider.Chain(
 		provider.WithLogging[string, string](log),
@@ -254,7 +254,7 @@ func TestChain_WithResilienceAndLogging(t *testing.T) {
 
 func TestChain_AllMiddlewares(t *testing.T) {
 	p := &echoProvider{name: "full-stack"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	meter := observability.Meter("test")
 	metrics, err := observability.NewMetrics(meter)
 	if err != nil {

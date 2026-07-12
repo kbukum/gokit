@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // DefaultStopTimeout bounds ManagedConsumer.Stop when the caller's ctx has
@@ -19,7 +19,7 @@ type ManagedConsumer struct {
 	consumer  Consumer
 	handler   MessageHandler
 	topic     string
-	log       *logger.Logger
+	log       *logging.Logger
 	isRunning bool
 	cancelFn  context.CancelFunc
 	done      chan struct{}
@@ -30,7 +30,7 @@ type ManagedConsumer struct {
 type ManagedConsumerConfig struct {
 	Consumer Consumer
 	Handler  MessageHandler
-	Log      *logger.Logger
+	Log      *logging.Logger
 }
 
 // NewManagedConsumer creates a managed consumer with lifecycle support.

@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 	"github.com/kbukum/gokit/testutil"
 )
@@ -24,7 +24,7 @@ func init() {
 type Component struct {
 	srv     *server.Server
 	ts      *httptest.Server
-	log     *logger.Logger
+	log     *logging.Logger
 	started bool
 	mu      sync.RWMutex
 }
@@ -36,7 +36,7 @@ var (
 
 // NewComponent creates a new test server component.
 func NewComponent() *Component {
-	log := logger.NewDefault("server-test")
+	log := logging.NewDefault("server-test")
 	cfg := &server.Config{
 		Host:    "127.0.0.1",
 		Port:    0,
