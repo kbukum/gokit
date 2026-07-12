@@ -82,8 +82,9 @@ func RespondAccepted(c *gin.Context, data any) {
 
 // --- Convenience error response helpers ---
 
-// RespondBadRequest sends a 400 response with the given message.
-func RespondBadRequest(c *gin.Context, message string) {
+// RespondInvalidInput sends a 422 Unprocessable Entity response with the given
+// message (the invalid-input error code maps to 422 per errors.InvalidInput).
+func RespondInvalidInput(c *gin.Context, message string) {
 	RespondWithError(c, apperrors.InvalidInput("", message))
 }
 

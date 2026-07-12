@@ -2,7 +2,9 @@ package httpclient
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -43,12 +45,38 @@ func TestAPIKeyAuthHeader_CustomName(t *testing.T) {
 	}
 }
 
-func TestAPIKeyAuthQuery(t *testing.T) {
-	auth := APIKeyAuthQuery("secret-key", "api_key")
+func TestAPIKeyAuth_UsesHeaderNotQuery(t *testing.T) {
+	auth := APIKeyAuth("secret-key")
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", "http://example.com/path", http.NoBody)
 	auth.apply(req)
-	if got := req.URL.Query().Get("api_key"); got != "secret-key" {
-		t.Errorf("got %q, want %q", got, "secret-key")
+	if got := req.Header.Get("X-API-Key"); got != "secret-key" {
+		t.Errorf("header X-API-Key = %q, want %q", got, "secret-key")
+	}
+	if req.URL.RawQuery != "" {
+		t.Errorf("credentials must never be placed in the query string, got %q", req.URL.RawQuery)
+	}
+}
+
+func TestAuthConfig_RedactsSecrets(t *testing.T) {
+	for _, a := range []*AuthConfig{
+		BearerAuth("super-secret-token"),
+		BasicAuth("alice", "hunter2"),
+		APIKeyAuth("api-secret"),
+	} {
+		s := a.String()
+		for _, secret := range []string{"super-secret-token", "hunter2", "api-secret"} {
+			if strings.Contains(s, secret) {
+				t.Errorf("String() leaked secret %q: %s", secret, s)
+			}
+		}
+		if g := fmt.Sprintf("%#v", a); strings.Contains(g, "hunter2") ||
+			strings.Contains(g, "super-secret-token") || strings.Contains(g, "api-secret") {
+			t.Errorf("%%#v leaked a secret: %s", g)
+		}
+	}
+	var nilAuth *AuthConfig
+	if nilAuth.String() != "AuthConfig(none)" {
+		t.Errorf("nil String() = %q", nilAuth.String())
 	}
 }
 

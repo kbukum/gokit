@@ -243,6 +243,34 @@ func TestApplyMiddleware_ChangesHandler(t *testing.T) {
 	}
 }
 
+func TestApplyMiddleware_EmitsSecureHeadersByDefault(t *testing.T) {
+	s := newTestServer(t)
+	s.Handle("/svc/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	s.ApplyMiddleware()
+
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/svc/x")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	for _, key := range []string{
+		"Content-Security-Policy",
+		"X-Content-Type-Options",
+		"Referrer-Policy",
+		"Permissions-Policy",
+	} {
+		if resp.Header.Get(key) == "" {
+			t.Errorf("secure-by-default: missing %q header", key)
+		}
+	}
+}
+
 func TestApplyMiddleware_AddsRequestID(t *testing.T) {
 	s := newTestServer(t)
 	s.GinEngine().GET("/ping", func(c *gin.Context) {

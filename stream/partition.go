@@ -124,9 +124,9 @@ func (s *partitionState[T]) start(createCtx, firstNextCtx context.Context, p *Pi
 func (s *partitionState[T]) consume(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.finish(ctx, result[T]{err: fmt.Errorf("pipeline: partition predicate panic: %v", r)})
+			s.finish(result[T]{err: fmt.Errorf("stream: partition predicate panic: %v", r)})
 		} else {
-			s.finish(ctx, result[T]{})
+			s.finish(result[T]{})
 		}
 	}()
 	defer func() { _ = s.closeSource() }()
@@ -134,7 +134,7 @@ func (s *partitionState[T]) consume(ctx context.Context) {
 	for {
 		val, ok, err := s.source.Next(ctx)
 		if err != nil {
-			s.finish(ctx, result[T]{err: err})
+			s.finish(result[T]{err: err})
 			return
 		}
 		if !ok {
@@ -172,11 +172,16 @@ func (s *partitionState[T]) send(ctx context.Context, branch partitionBranch, r 
 	}
 }
 
-func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
+// finish delivers the terminal result to both branches exactly once and closes
+// them. The terminal error is delivered with sendTerminal, which blocks until
+// each branch drains it or is closed. It deliberately does not select on the tee
+// context: when the terminal error is the cancellation itself, that context is
+// already canceled, so a ctx arm would race the delivery and drop the error.
+func (s *partitionState[T]) finish(terminal result[T]) {
 	s.finishOnce.Do(func() {
 		if terminal.err != nil {
-			_ = s.send(ctx, partitionMatch, terminal)
-			_ = s.send(ctx, partitionReject, terminal)
+			s.sendTerminal(partitionMatch, terminal)
+			s.sendTerminal(partitionReject, terminal)
 		}
 		s.mu.Lock()
 		cancel := s.cancel
@@ -187,6 +192,30 @@ func (s *partitionState[T]) finish(ctx context.Context, terminal result[T]) {
 		close(s.out[partitionMatch])
 		close(s.out[partitionReject])
 	})
+}
+
+// sendTerminal delivers the terminal result to a branch. It blocks until the
+// consumer drains the 1-slot buffer (so an already-buffered value is never
+// dropped) or the branch is closed. It does not drop buffered data and does not
+// select on the tee context (see finish). This cannot deadlock in supported
+// usage: every standard consumer (Collect/Drain/ForEach) closes its branch on
+// return — including on its own cancellation — which closes closeCh; the Iterator
+// contract requires callers to Close(), so a consumer that stops reading without
+// closing is a contract violation.
+func (s *partitionState[T]) sendTerminal(branch partitionBranch, r result[T]) {
+	idx := int(branch)
+	s.mu.Lock()
+	closed := s.closed[idx]
+	closeCh := s.closeCh[idx]
+	out := s.out[idx]
+	s.mu.Unlock()
+	if closed {
+		return
+	}
+	select {
+	case out <- r:
+	case <-closeCh:
+	}
 }
 
 func (s *partitionState[T]) closeBranch(branch partitionBranch) error {

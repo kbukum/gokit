@@ -1,80 +1,33 @@
 package chain
 
-import (
-	"encoding/json"
-	"time"
-)
-
-// StepStatus represents the current state of a chain step.
+// StepStatus reports the lifecycle state of a chain step as it is emitted
+// through a ChainProgressFn. A typed chain short-circuits on the first failure
+// and returns the offending error, so only the in-flight states are observed
+// through progress: Running while a step executes and Completed once it
+// succeeds. Failure and cancellation are surfaced through the returned error.
 type StepStatus string
 
 const (
-	StatusPending   StepStatus = "pending"
-	StatusRunning   StepStatus = "running"
+	// StatusRunning indicates the step has started executing.
+	StatusRunning StepStatus = "running"
+	// StatusCompleted indicates the step finished successfully.
 	StatusCompleted StepStatus = "completed"
-	StatusFailed    StepStatus = "failed"
-	StatusSkipped   StepStatus = "skipped"
-	StatusCanceled  StepStatus = "canceled"
 )
 
-// StepProgress is a progress update for a single step.
+// StepProgress is a single progress update emitted for a step.
 type StepProgress struct {
-	StepIndex       int        `json:"step_index"`
-	StepID          string     `json:"step_id"`
-	Status          StepStatus `json:"status"`
-	ProgressPercent uint8      `json:"progress_percent"`
-	Message         string     `json:"message,omitempty"`
+	// StepIndex is the zero-based position of the step in the chain.
+	StepIndex int `json:"step_index"`
+	// StepID is the unique identifier of the step.
+	StepID string `json:"step_id"`
+	// Status is the current lifecycle state of the step.
+	Status StepStatus `json:"status"`
+	// ProgressPercent is the completion percentage, clamped to 0..=100.
+	ProgressPercent uint8 `json:"progress_percent"`
+	// Message is an optional human-readable progress message.
+	Message string `json:"message,omitempty"`
 }
 
-// ChainProgressFn is the chain-level progress callback.
+// ChainProgressFn receives chain-level progress updates. It must be safe to
+// call synchronously from the executing goroutine and must not block.
 type ChainProgressFn func(StepProgress)
-
-// StepResult holds the outcome of a single step execution.
-type StepResult struct {
-	StepID   string        `json:"step_id"`
-	Status   StepStatus    `json:"status"`
-	Duration time.Duration `json:"duration"`
-	Output   any           `json:"output"`
-	Error    string        `json:"error,omitempty"`
-}
-
-// ChainResult holds the overall chain execution result.
-type ChainResult struct {
-	Steps         []StepResult  `json:"steps"`
-	TotalDuration time.Duration `json:"total_duration"`
-	FinalOutput   any           `json:"final_output,omitempty"`
-	Success       bool          `json:"success"`
-}
-
-// CompletedSteps returns the number of steps that finished successfully.
-func (r *ChainResult) CompletedSteps() int {
-	n := 0
-	for _, s := range r.Steps {
-		if s.Status == StatusCompleted {
-			n++
-		}
-	}
-	return n
-}
-
-// FailedStep returns the first failed step, or nil if none failed.
-func (r *ChainResult) FailedStep() *StepResult {
-	for i := range r.Steps {
-		if r.Steps[i].Status == StatusFailed {
-			return &r.Steps[i]
-		}
-	}
-	return nil
-}
-
-// MarshalJSON implements custom JSON serialization for ChainResult.
-func (r *ChainResult) MarshalJSON() ([]byte, error) {
-	type Alias ChainResult
-	return json.Marshal(&struct {
-		*Alias
-		TotalDuration string `json:"total_duration"`
-	}{
-		Alias:         (*Alias)(r),
-		TotalDuration: r.TotalDuration.String(),
-	})
-}

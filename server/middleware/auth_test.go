@@ -40,16 +40,30 @@ func TestBuildAuthOptions_AllOptions(t *testing.T) {
 
 func TestAuth_QueryTokenConfigError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	_, err := Auth(fakeTokenValidator{}, WithQueryTokenParam("token"))
+	_, err := Auth(fakeTokenValidator{}, storeClaims, WithQueryTokenParam("token"))
 	if err == nil || !strings.Contains(err.Error(), "WithQueryTokenAllowedPaths") {
 		t.Errorf("got %v want config error", err)
+	}
+}
+
+func TestAuth_NilValidator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	if _, err := Auth(nil, storeClaims); err == nil || !strings.Contains(err.Error(), "TokenValidator") {
+		t.Errorf("got %v want non-nil TokenValidator error", err)
+	}
+}
+
+func TestOptionalAuth_NilValidator(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	if _, err := OptionalAuth(nil, storeClaims); err == nil || !strings.Contains(err.Error(), "TokenValidator") {
+		t.Errorf("got %v want non-nil TokenValidator error", err)
 	}
 }
 
 func TestAuth_SkipPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, err := Auth(fakeTokenValidator{err: errors.New("nope")}, WithSkipPaths("/public"))
+	h, err := Auth(fakeTokenValidator{err: errors.New("nope")}, storeClaims, WithSkipPaths("/public"))
 	if err != nil {
 		t.Fatalf("Auth: %v", err)
 	}
@@ -67,7 +81,7 @@ func TestAuth_SkipPath(t *testing.T) {
 func TestAuth_MissingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, _ := Auth(fakeTokenValidator{claims: "u"})
+	h, _ := Auth(fakeTokenValidator{claims: "u"}, storeClaims)
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
@@ -82,7 +96,7 @@ func TestAuth_MissingToken(t *testing.T) {
 func TestAuth_ValidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, _ := Auth(fakeTokenValidator{claims: "claims"})
+	h, _ := Auth(fakeTokenValidator{claims: "claims"}, storeClaims)
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
@@ -98,7 +112,7 @@ func TestAuth_ValidToken(t *testing.T) {
 func TestAuth_InvalidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, _ := Auth(fakeTokenValidator{err: errors.New("bad")})
+	h, _ := Auth(fakeTokenValidator{err: errors.New("bad")}, storeClaims)
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
@@ -116,7 +130,7 @@ func TestAuth_QueryTokenFallback(t *testing.T) {
 	called := 0
 	r := gin.New()
 	h, err := Auth(
-		fakeTokenValidator{claims: "c"},
+		fakeTokenValidator{claims: "c"}, storeClaims,
 		WithQueryTokenParam("token"),
 		WithQueryTokenAllowedPaths("/sse"),
 		WithQueryTokenWarningLogger(func(*gin.Context, string) { called++ }),
@@ -138,7 +152,7 @@ func TestAuth_QueryTokenFallback(t *testing.T) {
 func TestAuth_NoSchemeRawHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h, _ := Auth(fakeTokenValidator{claims: "c"}, WithScheme(""))
+	h, _ := Auth(fakeTokenValidator{claims: "c"}, storeClaims, WithScheme(""))
 	r.Use(h)
 	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 

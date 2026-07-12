@@ -26,8 +26,9 @@ type Server struct {
 	mux        *http.ServeMux
 	config     Config
 	log        *logging.Logger
-	mounts     []MountedHandler // tracked for summary display
-	listener   net.Listener     // set by Start(); used by ListenAddr()
+	mounts     []MountedHandler      // tracked for summary display
+	listener   net.Listener          // set by Start(); used by ListenAddr()
+	secHeaders middleware.Middleware // built once from config; no-op when disabled
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -85,12 +86,30 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
 	}
 
+	log = log.WithComponent("server")
+
+	// Build the security-headers middleware once. Config.Validate is the trust
+	// boundary that rejects an invalid SecurityHeaders config, so a validated
+	// config never reaches the error branch here. If an unvalidated invalid
+	// config does reach New, fall back to the secure defaults — which build from
+	// a nil config and therefore cannot fail — rather than serving responses
+	// without protective headers. New is an infallible constructor with no
+	// request context, so the fallback is silent by design; the invalid config
+	// is surfaced to callers through Config.Validate.
+	secHeaders, err := middleware.SecurityHeaders(&cfg.SecurityHeaders)
+	if err != nil {
+		if secHeaders, err = middleware.SecurityHeaders(nil); err != nil {
+			secHeaders = nil
+		}
+	}
+
 	return &Server{
 		httpServer: httpServer,
 		engine:     engine,
 		mux:        mux,
 		config:     *cfg,
-		log:        log.WithComponent("server"),
+		log:        log,
+		secHeaders: secHeaders,
 	}
 }
 
@@ -206,9 +225,14 @@ func (s *Server) ApplyMiddleware() {
 	stack := []middleware.Middleware{
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
+	}
+	if s.secHeaders != nil {
+		stack = append(stack, s.secHeaders)
+	}
+	stack = append(stack,
 		middleware.CORS(&s.config.CORS),
 		middleware.RequestLogger(s.log),
-	}
+	)
 	if s.config.MaxBodySize != "" {
 		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodySize))
 	}

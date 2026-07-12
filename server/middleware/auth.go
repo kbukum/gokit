@@ -1,17 +1,39 @@
 package middleware
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/kbukum/gokit/auth"
-	"github.com/kbukum/gokit/auth/authctx"
-	"github.com/kbukum/gokit/authz"
 )
+
+// TokenValidator validates a bearer token and returns the parsed claims. It is
+// declared locally so the transport layer (L5) never imports the auth module
+// (L6): any concrete validator with this method — including auth.TokenValidator —
+// satisfies it structurally and is injected by the composing application.
+type TokenValidator interface {
+	// ValidateToken parses and verifies token, returning opaque claims. The
+	// claims type is genuinely caller-defined, so any is the documented
+	// opaque-value exception here; downstream handlers recover the concrete
+	// type through the ClaimsSetter's paired getter.
+	ValidateToken(token string) (any, error)
+}
+
+// PermissionChecker reports whether a subject holds a permission. Declared
+// locally to keep L5 free of the authz module (L6); any authz.Checker satisfies
+// it structurally.
+type PermissionChecker interface {
+	HasPermission(subject, permission string) bool
+}
+
+// ClaimsSetter stores validated claims on ctx, returning the derived context.
+// It is injected rather than imported so the server never depends on the auth
+// module's context package; pass auth/authctx.Set (or an equivalent) from the
+// composing application. The claims value is opaque by design.
+type ClaimsSetter func(ctx context.Context, claims any) context.Context
 
 // QueryTokenWarningFunc logs a warning whenever query-token authentication is used.
 type QueryTokenWarningFunc func(c *gin.Context, tokenParam string)
@@ -64,7 +86,17 @@ func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 }
 
 // Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
-func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
+//
+// setClaims is the injected sink for validated claims (typically auth/authctx.Set),
+// keeping the transport layer decoupled from the auth module. Both validator and
+// setClaims must be non-nil.
+func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	if validator == nil {
+		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil TokenValidator")
+	}
+	if setClaims == nil {
+		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil ClaimsSetter")
+	}
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
 		return nil, err
@@ -91,7 +123,7 @@ func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, e
 			return
 		}
 
-		ctx := authctx.Set(c.Request.Context(), claims)
+		ctx := setClaims(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}, nil
@@ -101,7 +133,16 @@ func Auth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, e
 // (no Authorization header / empty token) to proceed. A *present but invalid* token
 // is always rejected with 401 — this is a deliberate secure-by-default contract:
 // callers that want pass-through-on-failure should use no auth middleware at all.
-func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.HandlerFunc, error) {
+//
+// setClaims is the injected sink for validated claims. Both validator and
+// setClaims must be non-nil.
+func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	if validator == nil {
+		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil TokenValidator")
+	}
+	if setClaims == nil {
+		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil ClaimsSetter")
+	}
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
 		return nil, err
@@ -120,7 +161,7 @@ func OptionalAuth(validator auth.TokenValidator, opts ...AuthOption) (gin.Handle
 			return
 		}
 
-		ctx := authctx.Set(c.Request.Context(), claims)
+		ctx := setClaims(c.Request.Context(), claims)
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}, nil
@@ -137,8 +178,8 @@ func Require(check func(c *gin.Context) bool) gin.HandlerFunc {
 	}
 }
 
-// RequirePermission is a guard middleware that uses an authz.Checker.
-func RequirePermission(checker authz.Checker, required string, subjectExtractor func(*gin.Context) string) gin.HandlerFunc {
+// RequirePermission is a guard middleware that uses a PermissionChecker.
+func RequirePermission(checker PermissionChecker, required string, subjectExtractor func(*gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subject := subjectExtractor(c)
 		if !checker.HasPermission(subject, required) {

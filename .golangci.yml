@@ -174,6 +174,31 @@ linters:
               desc: "observability must not import L7 AI modules."
             - pkg: github.com/kbukum/gokit/inference
               desc: "observability must not import L7 AI modules."
+        transport-no-auth:
+          # Enforce layer direction L5 (transport) -/-> L6 (auth/authz):
+          # transport adapters accept auth as injected middleware (local
+          # interfaces + injected ClaimsSetter), they never import the auth
+          # modules. Keeps server/grpc/connect/sse free of auth logic.
+          list-mode: lax
+          files:
+            - "$gokit/server/**/*.go"
+            - "$gokit/grpc/**/*.go"
+            - "$gokit/connect/**/*.go"
+            - "$gokit/sse/**/*.go"
+          deny:
+            - pkg: github.com/kbukum/gokit/auth
+              desc: "transport (L5) must not import auth (L6); inject a TokenValidator and ClaimsSetter instead."
+            - pkg: github.com/kbukum/gokit/authz
+              desc: "transport (L5) must not import authz (L6); inject a PermissionChecker instead."
+        errors-no-grpc:
+          # Core errors are transport-agnostic: gRPC status mapping lives in the
+          # grpc transport (grpc.ToGRPCStatus/FromGRPC), never in errors.
+          list-mode: lax
+          files:
+            - "$gokit/errors/**/*.go"
+          deny:
+            - pkg: google.golang.org/grpc
+              desc: "errors (core) must not import gRPC; status mapping belongs in the grpc transport."
 
 issues:
   max-issues-per-linter: 0
