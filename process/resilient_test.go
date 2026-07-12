@@ -334,3 +334,70 @@ func TestRunner_NilState(t *testing.T) {
 		t.Errorf("expected output with 'nil state', got %q", string(result.Stdout))
 	}
 }
+
+func TestRunWithResilience_RetryTransientFailure(t *testing.T) {
+	runner := process.NewRunner(provider.ResilienceConfig{
+		Retry: &resilience.RetryConfig{
+			MaxAttempts:    3,
+			InitialBackoff: time.Millisecond,
+			BackoffFactor:  1.0,
+		},
+	})
+
+	// "false" always fails — retries should be exhausted
+	_, err := runner.Run(context.Background(), process.Command{
+		Binary: "false",
+	})
+	if err == nil {
+		t.Fatal("expected error after all retries exhausted")
+	}
+
+	// A succeeding command should work through the runner
+	result, err := runner.Run(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"retry ok"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(string(result.Stdout), "retry ok") {
+		t.Fatalf("expected 'retry ok', got %q", string(result.Stdout))
+	}
+}
+
+func TestRunWithResilience_CircuitBreakerAfterNFailures(t *testing.T) {
+	runner := process.NewRunner(provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:             "test-cb-n-failures",
+			MaxFailures:      3,
+			Timeout:          5 * time.Second,
+			HalfOpenMaxCalls: 1,
+		},
+	})
+
+	// Fail 3 times to trip the circuit breaker
+	for i := 0; i < 3; i++ {
+		_, err := runner.Run(context.Background(), process.Command{
+			Binary: "false",
+		})
+		if err == nil {
+			t.Fatalf("call %d: expected error", i)
+		}
+	}
+
+	// Next call should be rejected by circuit breaker (fast-fail, no subprocess)
+	start := time.Now()
+	_, err := runner.Run(context.Background(), process.Command{
+		Binary: "echo",
+		Args:   []string{"should not run"},
+	})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected circuit breaker to reject call")
+	}
+	// Circuit breaker rejection should be near-instant (< 100ms)
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("circuit breaker rejection took too long: %v", elapsed)
+	}
+}

@@ -1,6 +1,6 @@
 # version
 
-Build-time version information with Git metadata, injected via `-ldflags`.
+Build-time version information with Git metadata, derived from embedded build info (debug.ReadBuildInfo), optionally overridden at link time via an unexported seam.
 
 ## Install
 
@@ -32,10 +32,10 @@ func main() {
 Build with ldflags:
 
 ```bash
-go build -ldflags "-X github.com/kbukum/gokit/version.Version=1.2.3 \
-  -X github.com/kbukum/gokit/version.GitCommit=$(git rev-parse --short HEAD) \
-  -X github.com/kbukum/gokit/version.GitBranch=$(git rev-parse --abbrev-ref HEAD) \
-  -X github.com/kbukum/gokit/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+go build -ldflags "-X github.com/kbukum/gokit/version.buildVersion=1.2.3 \
+  -X github.com/kbukum/gokit/version.buildGitCommit=$(git rev-parse --short HEAD) \
+  -X github.com/kbukum/gokit/version.buildGitBranch=$(git rev-parse --abbrev-ref HEAD) \
+  -X github.com/kbukum/gokit/version.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
 
 ## Key Types & Functions
@@ -46,7 +46,7 @@ go build -ldflags "-X github.com/kbukum/gokit/version.Version=1.2.3 \
 | `GetVersionInfo()` | Returns full `*VersionInfo` struct |
 | `GetShortVersion()` | Returns `version-commit` string |
 | `GetFullVersion()` | Returns detailed version string |
-| `Version` / `GitCommit` / `GitBranch` / `BuildTime` | Linker-injected variables |
+| `buildVersion` / `buildGitCommit` / `buildGitBranch` / `buildTime` | Unexported link-time override seam (no runtime mutation) |
 
 ---
 

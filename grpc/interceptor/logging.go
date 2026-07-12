@@ -8,16 +8,16 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // UnaryClientLoggingInterceptor returns a unary client interceptor that logs
 // each RPC call with method, duration, and status.
-func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientInterceptor {
+func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,
 		method string,
-		req, reply interface{},
+		req, reply any,
 		cc *grpc.ClientConn,
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
@@ -26,7 +26,7 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.DebugCtx(ctx, "gRPC call started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC call started", map[string]any{
 			"service": service,
 			"method":  methodName,
 			"target":  cc.Target(),
@@ -35,7 +35,7 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		duration := time.Since(start)
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"service":     service,
 			"method":      methodName,
 			"duration_ms": duration.Milliseconds(),
@@ -58,7 +58,7 @@ func UnaryClientLoggingInterceptor(log *logger.Logger) grpc.UnaryClientIntercept
 
 // StreamClientLoggingInterceptor returns a stream client interceptor that logs
 // stream establishment with method, duration, and status.
-func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterceptor {
+func StreamClientLoggingInterceptor(log *logging.Logger) grpc.StreamClientInterceptor {
 	return func(
 		ctx context.Context,
 		desc *grpc.StreamDesc,
@@ -71,7 +71,7 @@ func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterce
 		service := path.Dir(method)[1:]
 		methodName := path.Base(method)
 
-		log.DebugCtx(ctx, "gRPC stream started", map[string]interface{}{
+		log.DebugCtx(ctx, "gRPC stream started", map[string]any{
 			"service":        service,
 			"method":         methodName,
 			"target":         cc.Target(),
@@ -82,7 +82,7 @@ func StreamClientLoggingInterceptor(log *logger.Logger) grpc.StreamClientInterce
 		stream, err := streamer(ctx, desc, cc, method, opts...)
 		duration := time.Since(start)
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"service":     service,
 			"method":      methodName,
 			"duration_ms": duration.Milliseconds(),

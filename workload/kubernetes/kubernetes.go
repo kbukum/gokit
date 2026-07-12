@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/workload"
 )
 
@@ -21,7 +21,7 @@ import (
 // invoking [workload.New]. Returns an error if the provider name is
 // already registered.
 func Register(registry *workload.FactoryRegistry) error {
-	return registry.Register(workload.ProviderKubernetes, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
+	return registry.Register(workload.ProviderKubernetes, func(cfg workload.Config, providerCfg any, log *logging.Logger) (workload.Manager, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)
@@ -43,11 +43,11 @@ type Manager struct {
 	client        kubernetes.Interface
 	cfg           *Config
 	defaultLabels map[string]string
-	log           *logger.Logger
+	log           *logging.Logger
 }
 
 // NewManager creates a new Kubernetes workload manager.
-func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger) (*Manager, error) {
+func NewManager(cfg *Config, defaultLabels map[string]string, log *logging.Logger) (*Manager, error) {
 	restCfg, err := buildRestConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("kubernetes: build config: %w", err)
@@ -68,7 +68,7 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger
 
 // Deploy creates and starts a Kubernetes workload (Pod or Job).
 func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*workload.DeployResult, error) {
-	m.log.InfoCtx(ctx, "deploying workload", map[string]interface{}{
+	m.log.InfoCtx(ctx, "deploying workload", map[string]any{
 		"name":  req.Name,
 		"image": req.Image,
 		"type":  m.cfg.WorkloadType,

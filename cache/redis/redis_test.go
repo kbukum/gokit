@@ -9,7 +9,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 
 	"github.com/kbukum/gokit/cache"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 func newTestClient(t *testing.T) (*Client, *miniredis.Miniredis) {
@@ -20,7 +20,7 @@ func newTestClient(t *testing.T) (*Client, *miniredis.Miniredis) {
 	}
 	t.Cleanup(mini.Close)
 
-	client, err := New(Config{Enabled: true, Addr: mini.Addr()}, logger.NewDefault("test"))
+	client, err := New(Config{Enabled: true, Addr: mini.Addr()}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

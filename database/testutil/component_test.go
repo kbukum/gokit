@@ -230,7 +230,7 @@ func TestComponent_Restore(t *testing.T) {
 func TestComponent_RestoreBeforeStart(t *testing.T) {
 	tc := NewComponent()
 
-	if err := tc.Restore(context.Background(), map[string]interface{}{}); err == nil {
+	if err := tc.Restore(context.Background(), map[string]any{}); err == nil {
 		t.Error("Restore() before Start() should fail, got nil error")
 	}
 }

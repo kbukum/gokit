@@ -11,7 +11,7 @@ import (
 	disc "github.com/kbukum/gokit/discovery"
 	grpccfg "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/client"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ResolverConnectionFactory creates gRPC connections using the native gRPC resolver.
@@ -20,7 +20,7 @@ import (
 type ResolverConnectionFactory struct {
 	builder  *ResolverBuilder
 	gRPCCfg  grpccfg.Config
-	log      *logger.Logger
+	log      *logging.Logger
 	dialOpts []grpc.DialOption
 }
 
@@ -29,7 +29,7 @@ type ResolverConnectionFactory struct {
 func NewResolverConnectionFactory(
 	discovery disc.Discovery,
 	gRPCCfg grpccfg.Config,
-	log *logger.Logger,
+	log *logging.Logger,
 	resolverOpts ...Option,
 ) *ResolverConnectionFactory {
 	return &ResolverConnectionFactory{
@@ -44,7 +44,7 @@ func NewResolverConnectionFactory(
 func (f *ResolverConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	target := f.builder.Scheme() + ":///" + serviceName
 
-	f.log.Debug("Creating gRPC connection with discovery resolver", map[string]interface{}{
+	f.log.Debug("Creating gRPC connection with discovery resolver", map[string]any{
 		"service": serviceName,
 		"target":  target,
 	})

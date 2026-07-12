@@ -2,14 +2,14 @@
 
 A tour of common gokit patterns. For per-package details, see each package's own `README.md`.
 
-## Config + Logger
+## Config + Logging
 
 ```go
 package main
 
 import (
     "github.com/kbukum/gokit/config"
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
 )
 
 type ServiceConfig struct {
@@ -27,7 +27,7 @@ func main() {
     }
     cfg.ApplyDefaults()
 
-    log := logger.New(&logger.Config{
+    log := logging.New(&logging.Config{
         Level:  "info",
         Format: "console",
     }, cfg.Name)

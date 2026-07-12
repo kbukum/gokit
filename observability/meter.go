@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // MeterConfig configures the OpenTelemetry meter provider.
@@ -79,7 +79,7 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 		otel.SetMeterProvider(mp)
 	}
 
-	logger.InfoCtx(ctx, "meter initialized", logger.Fields(
+	logging.InfoCtx(ctx, "meter initialized", logging.Fields(
 		"service", config.ServiceName,
 		"endpoint", config.Endpoint,
 		"interval", config.Interval.String(),

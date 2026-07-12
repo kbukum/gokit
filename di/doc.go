@@ -2,12 +2,12 @@
 //
 // The primary API uses type-safe keys ([Key]) with generics:
 //
-//	var loggerKey = di.NameKey[*logger.Logger]("logger")
+//	var loggerKey = di.NameKey[*logging.Logger]("logger")
 //
 //	// Registration
-//	di.Provide(c, loggerKey, func() (*logger.Logger, error) { return logger.New() })
+//	di.Provide(c, loggerKey, func() (*logging.Logger, error) { return logging.NewDefault("app"), nil })
 //	di.ProvideSingleton(c, loggerKey, existingLogger)
-//	di.ProvideTransient(c, loggerKey, func() (*logger.Logger, error) { return logger.New() })
+//	di.ProvideTransient(c, loggerKey, func() (*logging.Logger, error) { return logging.NewDefault("app"), nil })
 //
 //	// Resolution
 //	log, err := di.ResolveKey(c, loggerKey)

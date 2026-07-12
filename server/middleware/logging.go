@@ -7,12 +7,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // RequestLogger returns middleware that logs every request with method,
 // path, status code, and duration. Health-check paths are silently skipped.
-func RequestLogger(log *logger.Logger) Middleware {
+func RequestLogger(log *logging.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isHealthEndpoint(r.URL.Path) {
@@ -25,7 +25,7 @@ func RequestLogger(log *logger.Logger) Middleware {
 			next.ServeHTTP(sw, r)
 			duration := time.Since(start)
 
-			fields := map[string]interface{}{
+			fields := map[string]any{
 				"method":      r.Method,
 				"path":        r.URL.Path,
 				"status":      sw.status,
@@ -60,7 +60,7 @@ func GinRequestLogger() gin.HandlerFunc {
 			path = path + "?" + q
 		}
 
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"method":  c.Request.Method,
 			"path":    path,
 			"status":  status,
@@ -101,10 +101,10 @@ func isHealthEndpoint(path string) bool {
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
 // If log is nil, the global logger is used.
 // Shared by both Gin and net/http request logger middleware.
-func logByStatus(log *logger.Logger, fields map[string]interface{}, status int) {
-	logErr := logger.Error
-	logWarn := logger.Warn
-	logDebug := logger.Debug
+func logByStatus(log *logging.Logger, fields map[string]any, status int) {
+	logErr := logging.Error
+	logWarn := logging.Warn
+	logDebug := logging.Debug
 	if log != nil {
 		logErr = log.Error
 		logWarn = log.Warn

@@ -63,7 +63,7 @@ func TestTracing_SetsHTTPAttributes(t *testing.T) {
 		t.Fatal("expected at least one span")
 	}
 
-	attrs := make(map[string]interface{})
+	attrs := make(map[string]any)
 	for _, a := range spans[0].Attributes {
 		switch a.Value.Type().String() {
 		case "STRING":

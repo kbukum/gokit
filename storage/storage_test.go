@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ func TestNew_UnsupportedProvider(t *testing.T) {
 func TestFactoryRegistry_AddRemove(t *testing.T) {
 	registry := NewFactoryRegistry()
 	//nolint:nilnil // test stub factory: no storage and no error
-	if err := registry.Register("test-provider", func(Config, any, *logger.Logger) (Storage, error) { return nil, nil }); err != nil {
+	if err := registry.Register("test-provider", func(Config, any, *logging.Logger) (Storage, error) { return nil, nil }); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 	if _, ok := registry.Get("test-provider"); !ok {
@@ -210,7 +210,7 @@ func TestFactoryRegistry_AddRemove(t *testing.T) {
 func TestFactoryRegistry_RegisterDuplicateErrors(t *testing.T) {
 	registry := NewFactoryRegistry()
 	//nolint:nilnil // test stub factory: no storage and no error
-	stub := func(Config, any, *logger.Logger) (Storage, error) { return nil, nil }
+	stub := func(Config, any, *logging.Logger) (Storage, error) { return nil, nil }
 	if err := registry.Register("dup", stub); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}

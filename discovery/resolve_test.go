@@ -141,3 +141,53 @@ func TestServiceResolver_CustomTimeout(t *testing.T) {
 		t.Fatalf("expected http://10.0.0.4:3000, got %s", url)
 	}
 }
+
+// ── ServiceResolver extended tests ──────────────────────────────────
+
+func TestServiceResolver_AllowlistBlocks(t *testing.T) {
+	disc := &stubDiscoveryClient{
+		instances: map[string]ServiceInstance{
+			"allowed": {Address: "10.0.0.1", Port: 80},
+			"blocked": {Address: "10.0.0.2", Port: 80},
+		},
+	}
+	resolver := NewServiceResolver(disc, []string{"allowed"})
+
+	if _, err := resolver.Resolve("blocked"); err == nil {
+		t.Fatal("expected error for non-allowlisted service")
+	}
+}
+
+func TestServiceResolver_EmptyAllowlistPermitsAll(t *testing.T) {
+	disc := &stubDiscoveryClient{
+		instances: map[string]ServiceInstance{
+			"any": {Address: "10.0.0.1", Port: 80},
+		},
+	}
+	resolver := NewServiceResolver(disc, nil)
+
+	url, err := resolver.Resolve("any")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if url != "http://10.0.0.1:80" {
+		t.Errorf("got %q, want %q", url, "http://10.0.0.1:80")
+	}
+}
+
+func TestServiceResolver_WithStrategyOption(t *testing.T) {
+	disc := &stubDiscoveryClient{
+		instances: map[string]ServiceInstance{
+			"svc": {Address: "10.0.0.1", Port: 80},
+		},
+	}
+	resolver := NewServiceResolver(disc, nil, WithStrategy(RoundRobin))
+
+	url, err := resolver.Resolve("svc")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if url != "http://10.0.0.1:80" {
+		t.Errorf("got %q, want %q", url, "http://10.0.0.1:80")
+	}
+}

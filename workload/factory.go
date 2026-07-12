@@ -3,14 +3,14 @@ package workload
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 // ManagerFactory creates a Manager implementation from core config and
 // provider-specific config. Each provider type-asserts providerCfg to its
 // own config type.
-type ManagerFactory func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error)
+type ManagerFactory func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error)
 
 // FactoryRegistry stores workload manager factories by provider name.
 //
@@ -48,7 +48,7 @@ func (r *FactoryRegistry) Names() []string {
 // New creates a workload Manager using the provided registry. The registry
 // is mandatory: pass an explicit *FactoryRegistry with the desired
 // providers registered (for example via docker.Register, kubernetes.Register).
-func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -64,6 +64,6 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) 
 		return nil, fmt.Errorf("workload: unsupported provider %q (not registered)", cfg.Provider)
 	}
 
-	l.Info("initializing workload manager", map[string]interface{}{"provider": cfg.Provider})
+	l.Info("initializing workload manager", map[string]any{"provider": cfg.Provider})
 	return f(cfg, providerCfg, l)
 }

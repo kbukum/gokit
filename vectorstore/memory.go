@@ -236,7 +236,7 @@ func matchesFilter(payload *PointPayload, filter *SearchFilter) bool {
 }
 
 // valueEquals compares two values for equality.
-func valueEquals(a, b interface{}) bool {
+func valueEquals(a, b any) bool {
 	if a == b {
 		return true
 	}

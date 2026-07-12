@@ -53,4 +53,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/kbukum/gokit => ../
+replace (
+	github.com/kbukum/gokit => ../
+	github.com/kbukum/gokit/discovery => ../discovery
+)

@@ -12,7 +12,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/di"
 	"github.com/kbukum/gokit/hook"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // App represents a generic application with uniform lifecycle management.
@@ -33,7 +33,7 @@ type App[C Config] struct {
 	Cfg        C
 	Container  di.Container
 	Components *component.Registry
-	Logger     *logger.Logger
+	Logger     *logging.Logger
 	Summary    *Summary
 
 	gracefulTimeout time.Duration
@@ -42,7 +42,7 @@ type App[C Config] struct {
 }
 
 // NewApp creates a new application instance from a typed config.
-// It applies defaults, validates the config, and initializes the logger.
+// It applies defaults, validates the config, and initializes the logging.
 func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -74,7 +74,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.logger != nil {
 		app.Logger = o.logger
 	} else {
-		app.Logger = logger.New(&base.Logging, base.Name)
+		app.Logger = logging.New(&base.Logging, base.Name)
 	}
 
 	app.Summary = NewSummary(base.Name, base.Version)
@@ -158,7 +158,7 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 	go func() {
 		select {
 		case sig := <-sigCh:
-			a.Logger.InfoCtx(taskCtx, "Received signal — canceling task", map[string]interface{}{
+			a.Logger.InfoCtx(taskCtx, "Received signal — canceling task", map[string]any{
 				"signal": sig.String(),
 			})
 			cancel()
@@ -184,7 +184,7 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 func (a *App[C]) startup(ctx context.Context) error {
 	start := time.Now()
 
-	a.Logger.InfoCtx(ctx, "Starting application", map[string]interface{}{
+	a.Logger.InfoCtx(ctx, "Starting application", map[string]any{
 		"name":    a.Name,
 		"version": a.Version,
 	})
@@ -201,7 +201,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 		// Partial rollback: run OnStop hooks for cleanup of any resources
 		// that configure callbacks may have set up.
 		if stopErr := a.emitLifecycleHooks(ctx, EventStop); stopErr != nil {
-			a.Logger.ErrorCtx(ctx, "OnStop hook error during startup rollback", map[string]interface{}{
+			a.Logger.ErrorCtx(ctx, "OnStop hook error during startup rollback", map[string]any{
 				"error": stopErr.Error(),
 			})
 		}
@@ -215,7 +215,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 
 	// Ready check — verify all components are healthy
 	if err := a.ReadyCheck(ctx); err != nil {
-		a.Logger.WarnCtx(ctx, "Ready check reported issues", map[string]interface{}{
+		a.Logger.WarnCtx(ctx, "Ready check reported issues", map[string]any{
 			"error": err.Error(),
 		})
 	}
@@ -244,7 +244,7 @@ func (a *App[C]) configure(ctx context.Context) error {
 		return nil
 	}
 
-	a.Logger.DebugCtx(ctx, "Phase 2: Running configuration callbacks", map[string]interface{}{
+	a.Logger.DebugCtx(ctx, "Phase 2: Running configuration callbacks", map[string]any{
 		"count": len(a.onConfigure),
 	})
 
@@ -266,7 +266,7 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 
 	select {
 	case sig := <-sigCh:
-		a.Logger.InfoCtx(ctx, "Received shutdown signal — graceful shutdown starting", map[string]interface{}{
+		a.Logger.InfoCtx(ctx, "Received shutdown signal — graceful shutdown starting", map[string]any{
 			"signal": sig.String(),
 		})
 		return sig
@@ -305,7 +305,7 @@ func (a *App[C]) stop() error {
 // shutdownWith runs the actual shutdown sequence. If ctx has no deadline,
 // gracefulTimeout is applied so a misbehaving Stop cannot block forever.
 func (a *App[C]) shutdownWith(parent context.Context) error {
-	a.Logger.InfoCtx(parent, "Shutting down application", map[string]interface{}{
+	a.Logger.InfoCtx(parent, "Shutting down application", map[string]any{
 		"timeout": a.gracefulTimeout.String(),
 	})
 
@@ -320,7 +320,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Run OnStop hooks before stopping components — collect all errors.
 	if err := a.emitLifecycleHooks(ctx, EventStop); err != nil {
-		a.Logger.ErrorCtx(ctx, "OnStop hook error", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "OnStop hook error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
@@ -328,7 +328,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Stop all components (reverse order)
 	if err := a.Components.StopAll(ctx); err != nil {
-		a.Logger.ErrorCtx(ctx, "Shutdown completed with errors", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "Shutdown completed with errors", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
@@ -336,7 +336,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	// Close DI container (lazy components only — singletons are component-managed)
 	if err := a.Container.Close(); err != nil {
-		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]interface{}{
+		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)

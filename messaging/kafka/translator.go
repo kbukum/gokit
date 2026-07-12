@@ -30,7 +30,7 @@ func FromKafka(err error, topic string) *apperrors.AppError {
 			Message:    "Message queue is temporarily unavailable. Your request has been noted.",
 			HTTPStatus: http.StatusServiceUnavailable,
 			Retryable:  true,
-			Details:    map[string]interface{}{"topic": topic},
+			Details:    map[string]any{"topic": topic},
 		}).WithCause(err)
 	}
 

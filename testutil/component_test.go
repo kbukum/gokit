@@ -15,8 +15,8 @@ type mockComponent struct {
 	started       bool
 	stopped       bool
 	resetCalled   bool
-	snapshotData  interface{}
-	restoreData   interface{}
+	snapshotData  any
+	restoreData   any
 	startErr      error
 	stopErr       error
 	resetErr      error
@@ -31,7 +31,7 @@ func newMockComponent(name string) *mockComponent {
 		name:          name,
 		healthStatus:  component.StatusHealthy,
 		healthMessage: "OK",
-		snapshotData:  map[string]interface{}{name + "_key": name + "_value"},
+		snapshotData:  map[string]any{name + "_key": name + "_value"},
 	}
 }
 
@@ -70,18 +70,18 @@ func (m *mockComponent) Reset(ctx context.Context) error {
 		return m.resetErr
 	}
 	m.resetCalled = true
-	m.snapshotData = map[string]interface{}{m.name + "_key": m.name + "_value"}
+	m.snapshotData = map[string]any{m.name + "_key": m.name + "_value"}
 	return nil
 }
 
-func (m *mockComponent) Snapshot(ctx context.Context) (interface{}, error) {
+func (m *mockComponent) Snapshot(ctx context.Context) (any, error) {
 	if m.snapshotErr != nil {
 		return nil, m.snapshotErr
 	}
 	return m.snapshotData, nil
 }
 
-func (m *mockComponent) Restore(ctx context.Context, snapshot interface{}) error {
+func (m *mockComponent) Restore(ctx context.Context, snapshot any) error {
 	if m.restoreErr != nil {
 		return m.restoreErr
 	}

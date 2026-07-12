@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ProducerFactory constructs a producer for a registered adapter.
@@ -14,10 +14,10 @@ import (
 // adapterCfg carries adapter-specific configuration, matching cache/storage
 // factory registration: registration is config-free, while construction is
 // runtime-configured and may create multiple instances from one registry.
-type ProducerFactory func(context.Context, Config, any, *logger.Logger) (Producer, error)
+type ProducerFactory func(context.Context, Config, any, *logging.Logger) (Producer, error)
 
 // ConsumerFactory constructs a consumer for a registered adapter and topic.
-type ConsumerFactory func(context.Context, Config, any, *logger.Logger, string) (Consumer, error)
+type ConsumerFactory func(context.Context, Config, any, *logging.Logger, string) (Consumer, error)
 
 // ConfigTypeError reports an adapter-specific adapter config type mismatch.
 type ConfigTypeError struct {
@@ -84,7 +84,7 @@ func (r *Registry) RegisterConsumer(adapter string, factory ConsumerFactory) err
 }
 
 // NewProducer constructs a producer using cfg.Adapter and runtime adapter config.
-func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, log *logger.Logger) (Producer, error) {
+func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, log *logging.Logger) (Producer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -110,7 +110,7 @@ func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, 
 }
 
 // NewConsumer constructs a consumer using cfg.Adapter, runtime adapter config, and topic.
-func (r *Registry) NewConsumer(ctx context.Context, cfg Config, adapterCfg any, log *logger.Logger, topic string) (Consumer, error) {
+func (r *Registry) NewConsumer(ctx context.Context, cfg Config, adapterCfg any, log *logging.Logger, topic string) (Consumer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -154,9 +154,9 @@ func (r *Registry) ConsumerAdapters() []string {
 	return sortedKeys(r.consumers)
 }
 
-func messagingLogger(log *logger.Logger) *logger.Logger {
+func messagingLogger(log *logging.Logger) *logging.Logger {
 	if log == nil {
-		log = logger.NewDefault("messaging") //nolint:contextcheck // default logger construction has no request-scoped operation; ctx is passed to adapter factories separately
+		log = logging.NewDefault("messaging") //nolint:contextcheck // default logger construction has no request-scoped operation; ctx is passed to adapter factories separately
 	}
 	return log.WithComponent("messaging")
 }

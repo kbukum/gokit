@@ -4,10 +4,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
-func benchProviderFactory(_ Config, _ *logger.Logger) (Registry, Discovery, error) {
+func benchProviderFactory(_ Config, _ *logging.Logger) (Registry, Discovery, error) {
 	return nil, nil, nil
 }
 

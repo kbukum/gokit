@@ -7,7 +7,7 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
@@ -20,7 +20,7 @@ func TestProducer_Name(t *testing.T) {
 }
 
 func TestProducer_Name_DefaultFromConstructor(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka"}, kafka.Config{Brokers: []string{"localhost:9092"}}, log)
 	if err != nil {
 		t.Fatalf("NewLazyProducer() error: %v", err)
@@ -45,7 +45,7 @@ func TestProducer_IsAvailable_Closed(t *testing.T) {
 }
 
 func TestNewLazyProducer_Valid(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	cfg := kafka.Config{Brokers: []string{"localhost:9092"}}
 	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka", Name: "events"}, cfg, log)
 	if err != nil {
@@ -66,7 +66,7 @@ func TestNewLazyProducer_Valid(t *testing.T) {
 }
 
 func TestNewLazyProducer_DisabledCommonConfig(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	enabled := false
 	_, err := NewLazyProducer(messaging.Config{Adapter: "kafka", Enabled: &enabled}, kafka.Config{}, log)
 	if err == nil {
@@ -75,7 +75,7 @@ func TestNewLazyProducer_DisabledCommonConfig(t *testing.T) {
 }
 
 func TestNewLazyProducer_InvalidConfig(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	cfg := kafka.Config{
 		Brokers:      []string{"localhost:9092"},
 		BatchTimeout: "not-a-duration",
@@ -87,7 +87,7 @@ func TestNewLazyProducer_InvalidConfig(t *testing.T) {
 }
 
 func TestProducer_Close_NilWriter(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	p := &Producer{cfg: kafka.Config{}, log: log.WithComponent("test")}
 	if err := p.Close(); err != nil {
 		t.Fatalf("Close() error on nil writer: %v", err)
@@ -98,7 +98,7 @@ func TestProducer_Close_NilWriter(t *testing.T) {
 }
 
 func TestProducer_Close_Idempotent(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	p := &Producer{cfg: kafka.Config{}, log: log.WithComponent("test")}
 	_ = p.Close()
 	if err := p.Close(); err != nil {
@@ -115,7 +115,7 @@ func TestProducer_Stats_NilWriter(t *testing.T) {
 }
 
 func TestProducer_WriteMessages_Closed(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	p, err := NewLazyProducer(messaging.Config{Adapter: "kafka"}, kafka.Config{}, log)
 	if err != nil {
 		t.Fatal(err)

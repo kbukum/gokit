@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // BaseLazyComponent provides thread-safe lazy initialization for components
@@ -54,7 +54,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 		return fmt.Errorf("no initializer for component: %s", b.name)
 	}
 
-	logger.DebugCtx(ctx, "Initializing lazy component", map[string]interface{}{
+	logging.DebugCtx(ctx, "Initializing lazy component", map[string]any{
 		"component": b.name,
 	})
 
@@ -66,7 +66,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 	b.initialized = true
 	b.lastError = nil
 
-	logger.DebugCtx(ctx, "Lazy component initialized", map[string]interface{}{
+	logging.DebugCtx(ctx, "Lazy component initialized", map[string]any{
 		"component": b.name,
 	})
 	return nil

@@ -13,11 +13,11 @@ go get github.com/kbukum/gokit/connect@latest
 ```go
 import (
     goconnect "github.com/kbukum/gokit/connect"
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
     "connectrpc.com/connect"
 )
 
-log := logger.NewDefault("my-service")
+log := logging.NewDefault("my-service")
 
 // Create Connect service handler with interceptors
 path, handler := userv1connect.NewUserServiceHandler(svc,
@@ -186,7 +186,7 @@ import (
     "github.com/kbukum/gokit/auth/jwt"
     "github.com/kbukum/gokit/auth/authctx"
     goconnect "github.com/kbukum/gokit/connect"
-    "github.com/kbukum/gokit/logger"
+    "github.com/kbukum/gokit/logging"
     "github.com/kbukum/gokit/server"
     
     "yourproject/gen/user/v1/userv1connect"
@@ -252,7 +252,7 @@ func (s *UserService) GetProfile(
 }
 
 func main() {
-    log := logger.New()
+    log := logging.NewDefault("my-service")
 
     // Setup JWT service
     jwtCfg := &jwt.Config{

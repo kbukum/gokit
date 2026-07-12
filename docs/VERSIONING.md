@@ -121,7 +121,7 @@ For major versions ≥2, Go requires a version suffix in the module path:
 module github.com/kbukum/gokit/v2
 
 // imports
-import "github.com/kbukum/gokit/v2/logger"
+import "github.com/kbukum/gokit/v2/logging"
 ```
 
 ### Non-Breaking Changes

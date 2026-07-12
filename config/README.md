@@ -75,7 +75,7 @@ fmt.Printf("Running %s on %s:%d in %s mode\n",
 | `Address` | `string` | `"0.0.0.0"` | Service bind address |
 | `Port` | `int` | `50051` | Service port |
 | `Debug` | `bool` | `false` | Debug mode (auto-enabled in development) |
-| `Logging` | `logger.Config` | | Logging configuration (level, format, etc.) |
+| `Logging` | `logging.Config` | | Logging configuration (level, format, etc.) |
 
 ### Environment Type
 

@@ -10,7 +10,7 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/client"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/workload"
 )
 
@@ -19,7 +19,7 @@ import (
 // invoking [workload.New]. Returns an error if the provider name is
 // already registered.
 func Register(registry *workload.FactoryRegistry) error {
-	return registry.Register(workload.ProviderDocker, func(cfg workload.Config, providerCfg any, log *logger.Logger) (workload.Manager, error) {
+	return registry.Register(workload.ProviderDocker, func(cfg workload.Config, providerCfg any, log *logging.Logger) (workload.Manager, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)
@@ -41,7 +41,7 @@ type Manager struct {
 	client        *client.Client
 	cfg           *Config
 	defaultLabels map[string]string
-	log           *logger.Logger
+	log           *logging.Logger
 }
 
 // Client returns the underlying Docker SDK client for direct operations
@@ -49,7 +49,7 @@ type Manager struct {
 func (m *Manager) Client() *client.Client { return m.client }
 
 // NewManager creates a new Docker workload manager.
-func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger) (*Manager, error) {
+func NewManager(cfg *Config, defaultLabels map[string]string, log *logging.Logger) (*Manager, error) {
 	opts := []client.Opt{
 		client.WithHost(cfg.Host),
 	}
@@ -75,7 +75,7 @@ func NewManager(cfg *Config, defaultLabels map[string]string, log *logger.Logger
 
 // Deploy creates and starts a Docker container.
 func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*workload.DeployResult, error) {
-	m.log.InfoCtx(ctx, "deploying workload", map[string]interface{}{
+	m.log.InfoCtx(ctx, "deploying workload", map[string]any{
 		"name":  req.Name,
 		"image": req.Image,
 	})
@@ -102,7 +102,7 @@ func (m *Manager) Deploy(ctx context.Context, req workload.DeployRequest) (*work
 		return nil, fmt.Errorf("docker: start container: %w", err)
 	}
 
-	m.log.InfoCtx(ctx, "workload deployed", map[string]interface{}{
+	m.log.InfoCtx(ctx, "workload deployed", map[string]any{
 		"id":   resp.ID[:12],
 		"name": req.Name,
 	})

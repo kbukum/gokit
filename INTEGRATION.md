@@ -17,14 +17,14 @@ import (
 	"context"
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 )
 
 func setupDiscoveryServer(
 	httpServer *server.Component,
 	discoveryRegistry discovery.Registry,
-	log *logger.Logger,
+	log *logging.Logger,
 ) (*server.DiscoveryServerComponent, error) {
 	// Wrap the server with automatic discovery registration
 	discoveryServer, err := server.NewDiscoveryServerComponent(
@@ -32,7 +32,7 @@ func setupDiscoveryServer(
 		discoveryRegistry,
 		"payment-svc-1",      // unique service instance ID
 		"payment-service",    // logical service name
-		"",                   // auto-detect local IP
+		"127.0.0.1",          // advertised address
 		8080,                 // port to register
 		[]string{"v1", "prod"}, // optional tags
 		map[string]string{"region": "us-west"},
@@ -46,18 +46,22 @@ func setupDiscoveryServer(
 
 func main() {
 	ctx := context.Background()
-	
-	// Create HTTP server
-	httpServer := server.NewServer(ctx, server.Config{
+	log := logging.NewDefault("payment-service")
+
+	// Create HTTP server component
+	httpServer := server.NewComponent(server.New(&server.Config{
 		Port:    8080,
 		Network: "tcp",
-	})
-	
-	// Setup discovery registry (e.g., Consul)
-	discoveryRegistry := discovery.NewConsulRegistry(/* ... */)
-	
+	}, log))
+
+	// Setup discovery provider (e.g., Consul) — implements discovery.Registry
+	consulProvider, err := consul.NewProvider(discovery.Config{}, nil, log)
+	if err != nil {
+		panic(err)
+	}
+
 	// Wrap with discovery
-	discServer, err := setupDiscoveryServer(httpServer, discoveryRegistry, log)
+	discServer, err := setupDiscoveryServer(httpServer, consulProvider, log)
 	if err != nil {
 		panic(err)
 	}
@@ -89,13 +93,13 @@ package main
 
 import (
 	"context"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/middleware"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
 
-func setupHandler(baseHandler messaging.MessageHandler, log *logger.Logger) messaging.MessageHandler {
+func setupHandler(baseHandler messaging.MessageHandler, log *logging.Logger) messaging.MessageHandler {
 	// Build a resilient message handler with multiple layers
 	return middleware.NewStack(baseHandler).
 		WithRetry(middleware.RetryMiddlewareConfig{
@@ -163,7 +167,7 @@ import (
 	"context"
 	"github.com/kbukum/gokit/discovery"
 	"github.com/kbukum/gokit/grpc/client"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"google.golang.org/grpc"
 	
 	analysispb "github.com/myorg/analysis/api"
@@ -171,7 +175,7 @@ import (
 
 func setupAnalysisClient(
 	discoveryClient *discovery.Client,
-	log *logger.Logger,
+	log *logging.Logger,
 ) *client.LazyClient[analysispb.AnalysisServiceClient] {
 	// Create a discovery-based connection factory
 	factory := client.NewDiscoveryConnectionFactory(
@@ -192,9 +196,10 @@ func setupAnalysisClient(
 }
 
 func main() {
-	discoveryClient := discovery.NewConsulClient(/* ... */)
-	log := logger.New()
-	
+	log := logging.NewDefault("my-service")
+	consulProvider, _ := consul.NewProvider(discovery.Config{}, nil, log)
+	discoveryClient := discovery.NewClient(consulProvider, discovery.ClientConfig{}, log)
+
 	// Setup lazy gRPC client
 	analysisClient := setupAnalysisClient(discoveryClient, log)
 	
@@ -234,7 +239,7 @@ package main
 
 import (
 	"context"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
 )
@@ -245,7 +250,7 @@ type OrderCreatedEvent struct {
 	Amount     float64
 }
 
-func publishOrderEvents(kafkaProducer messaging.Producer, log *logger.Logger) *messaging.EventPublisher {
+func publishOrderEvents(kafkaProducer messaging.Producer, log *logging.Logger) *messaging.EventPublisher {
 	// Wrap the producer with auto-envelope support
 	return messaging.NewEventPublisher(kafkaProducer, "order-service")
 }
@@ -308,7 +313,7 @@ import (
 	"time"
 	
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/worker"
 )
@@ -316,7 +321,7 @@ import (
 type HealthCheckService struct {
 	cacheSvc      interface{}      // Your cache service
 	degradation   *resilience.DegradationManager
-	log           *logger.Logger
+	log           *logging.Logger
 }
 
 func (h *HealthCheckService) checkCacheHealth(ctx context.Context) error {
@@ -343,7 +348,7 @@ func (h *HealthCheckService) shouldUseCacheOptimization() bool {
 	return false
 }
 
-func setupHealthChecker(log *logger.Logger) *worker.TickerWorker {
+func setupHealthChecker(log *logging.Logger) *worker.TickerWorker {
 	degradation := resilience.NewDegradationManager()
 	healthChecker := &HealthCheckService{
 		degradation: degradation,
@@ -399,16 +404,16 @@ All five patterns work together in a complete microservice:
 // main.go — complete microservice wiring
 func main() {
 	ctx := context.Background()
-	log := logger.New()
+	log := logging.NewDefault("my-service")
 	
-	// Setup discovery
-	discoveryRegistry := discovery.NewConsulRegistry(/* ... */)
-	discoveryClient := discovery.NewConsulClient(/* ... */)
+	// Setup discovery provider (Consul) — serves as both Registry and Discovery
+	consulProvider, _ := consul.NewProvider(discovery.Config{}, nil, log)
+	discoveryClient := discovery.NewClient(consulProvider, discovery.ClientConfig{}, log)
 	
 	// 1. HTTP server with discovery
-	httpServer := server.NewServer(ctx, server.Config{Port: 8080})
+	httpServer := server.NewComponent(server.New(&server.Config{Port: 8080}, log))
 	discServer, _ := server.NewDiscoveryServerComponent(
-		httpServer, discoveryRegistry, "svc-1", "my-service", "", 8080, nil, nil, log)
+		httpServer, consulProvider, "svc-1", "my-service", "127.0.0.1", 8080, nil, nil, log)
 	component.Register(discServer)
 	
 	// 2. Kafka message handler with middleware stack

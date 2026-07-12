@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -148,9 +148,9 @@ func (m *mockManager) HealthCheck(_ context.Context) error {
 // Helper
 // ---------------------------------------------------------------------------
 
-func testLogger() *logger.Logger {
-	cfg := &logger.Config{Level: "error", Format: "json"}
-	return logger.New(cfg, "workload-test")
+func testLogger() *logging.Logger {
+	cfg := &logging.Config{Level: "error", Format: "json"}
+	return logging.New(cfg, "workload-test")
 }
 
 // ===========================================================================
@@ -852,7 +852,7 @@ func TestConfig_DefaultLabels(t *testing.T) {
 
 func TestFactory_RegisterAndCreate(t *testing.T) {
 	reg := NewFactoryRegistry()
-	mustReg(t, reg, "test-provider", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "test-provider", func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -923,7 +923,7 @@ func TestComponent_StartDisabled(t *testing.T) {
 
 func TestComponent_StartWithRegisteredFactory(t *testing.T) {
 	reg := NewFactoryRegistry()
-	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -948,7 +948,7 @@ func TestComponent_StartUnknownProvider(t *testing.T) {
 
 func TestComponent_Stop(t *testing.T) {
 	reg := NewFactoryRegistry()
-	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -988,7 +988,7 @@ func TestComponent_HealthNotInitialized(t *testing.T) {
 
 func TestComponent_HealthWithManager(t *testing.T) {
 	reg := NewFactoryRegistry()
-	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 		return newMockManager(), nil
 	})
 
@@ -1006,7 +1006,7 @@ func TestComponent_HealthCheckFails(t *testing.T) {
 	reg := NewFactoryRegistry()
 	unhealthy := newMockManager()
 	unhealthy.healthy = false
-	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logger.Logger) (Manager, error) {
+	mustReg(t, reg, "mock", func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 		return unhealthy, nil
 	})
 

@@ -112,7 +112,7 @@ func (m *Manager[K, V]) Delete(key K) bool {
 // List returns all currently managed keys.
 func (m *Manager[K, V]) List() []K {
 	var keys []K
-	m.accumulators.Range(func(key, value interface{}) bool {
+	m.accumulators.Range(func(key, value any) bool {
 		keys = append(keys, key.(K))
 		return true
 	})
@@ -145,7 +145,7 @@ func (m *Manager[K, V]) Cleanup() int {
 	ctx := context.Background()
 	count := 0
 
-	m.accumulators.Range(func(key, value interface{}) bool {
+	m.accumulators.Range(func(key, value any) bool {
 		acc := value.(*Accumulator[V])
 		if acc.IsExpired(ctx) {
 			k := key.(K)
@@ -174,7 +174,7 @@ func (m *Manager[K, V]) Close() error {
 		}
 
 		// Close all accumulators
-		m.accumulators.Range(func(key, value interface{}) bool {
+		m.accumulators.Range(func(key, value any) bool {
 			acc := value.(*Accumulator[V])
 			_ = acc.Close()
 			return true

@@ -69,7 +69,7 @@ func ApplyToGorm[T any](db *gorm.DB, params Params, config Config) (*Result[T], 
 func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
 	pattern := "%" + strings.ToLower(search) + "%"
 	conds := make([]string, 0, len(fields))
-	args := make([]interface{}, 0, len(fields))
+	args := make([]any, 0, len(fields))
 	for _, f := range fields {
 		conds = append(conds, fmt.Sprintf("LOWER(%s) LIKE ?", f))
 		args = append(args, pattern)

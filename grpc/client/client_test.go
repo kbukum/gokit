@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
@@ -25,7 +25,7 @@ import (
 // helpers
 // ---------------------------------------------------------------------------
 
-func testLogger() *logger.Logger { return logger.NewDefault("test") }
+func testLogger() *logging.Logger { return logging.NewDefault("test") }
 
 func validInsecureConfig() grpccfg.Config {
 	return grpccfg.Config{
@@ -579,7 +579,7 @@ func TestClientOptionsBuilder_WithCustomInterceptors(t *testing.T) {
 
 	cfg := validInsecureConfig()
 	called := false
-	customUnary := func(ctx context.Context, method string, req, reply interface{},
+	customUnary := func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
 	) error {
 		called = true
@@ -600,7 +600,7 @@ func TestClientOptionsBuilder_CustomUnaryRunsAfterResilience(t *testing.T) {
 	builder := NewClientOptionsBuilder(&cfg)
 
 	customSawDeadline := false
-	builder.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{},
+	builder.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption,
 	) error {
 		_, customSawDeadline = ctx.Deadline()
@@ -616,7 +616,7 @@ func TestClientOptionsBuilder_CustomUnaryRunsAfterResilience(t *testing.T) {
 		if idx == len(interceptors) {
 			return nil
 		}
-		return interceptors[idx](ctx, "/pkg.Svc/Method", nil, nil, cc, func(nextCtx context.Context, method string, req, reply interface{},
+		return interceptors[idx](ctx, "/pkg.Svc/Method", nil, nil, cc, func(nextCtx context.Context, method string, req, reply any,
 			cc *grpc.ClientConn, opts ...grpc.CallOption,
 		) error {
 			return call(idx+1, nextCtx)

@@ -86,11 +86,11 @@ func newAppleSecretFunc(cfg AppleConfig) func() (string, error) {
 		}
 
 		now := time.Now()
-		header := map[string]interface{}{
+		header := map[string]any{
 			"alg": "ES256",
 			"kid": cfg.KeyID,
 		}
-		claims := map[string]interface{}{
+		claims := map[string]any{
 			"iss": cfg.TeamID,
 			"iat": now.Unix(),
 			"exp": now.Add(5 * time.Minute).Unix(),

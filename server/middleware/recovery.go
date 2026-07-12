@@ -10,12 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Recovery returns middleware that recovers from panics and returns a
 // 500 Problem Details error response.
-func Recovery(log *logger.Logger) Middleware {
+func Recovery(log *logging.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() { //nolint:contextcheck // panic recovery closure passes r.Context() to the panic logger explicitly
@@ -43,8 +43,8 @@ func GinRecovery() gin.HandlerFunc {
 
 // logRecoveredPanic logs a recovered panic with stack trace.
 // If log is nil, the global logger is used.
-func logRecoveredPanic(ctx context.Context, log *logger.Logger, err interface{}, path, method, remoteAddr string) {
-	fields := map[string]interface{}{
+func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, path, method, remoteAddr string) {
+	fields := map[string]any{
 		"error":     fmt.Sprintf("%v", err),
 		"stack":     string(debug.Stack()),
 		"path":      path,
@@ -54,6 +54,6 @@ func logRecoveredPanic(ctx context.Context, log *logger.Logger, err interface{},
 	if log != nil {
 		log.ErrorCtx(ctx, "Panic recovered", fields)
 	} else {
-		logger.ErrorCtx(ctx, "Panic recovered", fields)
+		logging.ErrorCtx(ctx, "Panic recovered", fields)
 	}
 }

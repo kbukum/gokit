@@ -116,7 +116,7 @@ func Example_fixtures() {
 	db.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
 
 	// Load fixture data
-	dbtestutil.LoadFixture(db.DB(), "users", []map[string]interface{}{
+	dbtestutil.LoadFixture(db.DB(), "users", []map[string]any{
 		{"name": "Alice", "email": "alice@example.com"},
 		{"name": "Bob", "email": "bob@example.com"},
 	})

@@ -4,7 +4,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 const (
@@ -115,7 +115,7 @@ func (c *Client) SendFrame(frame Frame) bool {
 		return true
 	default:
 		// Channel full, client is too slow
-		logger.Warn("[SSE] Client channel full, dropping message", map[string]interface{}{
+		logging.Warn("[SSE] Client channel full, dropping message", map[string]any{
 			"client_id": c.id,
 		})
 		return false
@@ -178,7 +178,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client.id] = client
 			h.mu.Unlock()
-			logger.Debug("[SSE_HUB] Client registered", map[string]interface{}{
+			logging.Debug("[SSE_HUB] Client registered", map[string]any{
 				"client_id":     client.id,
 				"total_clients": len(h.clients),
 			})
@@ -190,7 +190,7 @@ func (h *Hub) Run() {
 				client.Close()
 			}
 			h.mu.Unlock()
-			logger.Debug("[SSE_HUB] Client unregistered", map[string]interface{}{
+			logging.Debug("[SSE_HUB] Client unregistered", map[string]any{
 				"client_id":     client.id,
 				"total_clients": len(h.clients),
 			})
@@ -220,7 +220,7 @@ func (h *Hub) closeAllClients() {
 		client.Close()
 		delete(h.clients, id)
 	}
-	logger.Debug("[SSE_HUB] All clients closed during shutdown")
+	logging.Debug("[SSE_HUB] All clients closed during shutdown")
 }
 
 // Register adds a client to the hub.
@@ -298,7 +298,7 @@ func (h *Hub) dispatch(msg *Message) {
 	for clientID, client := range h.clients {
 		matched, err := path.Match(msg.Pattern, clientID)
 		if err != nil {
-			logger.Error("[SSE_HUB] Pattern match error", map[string]interface{}{
+			logging.Error("[SSE_HUB] Pattern match error", map[string]any{
 				"pattern": msg.Pattern,
 				"error":   err.Error(),
 			})
@@ -312,8 +312,8 @@ func (h *Hub) dispatch(msg *Message) {
 	}
 
 	if matchCount > 0 {
-		logger.Debug("[SSE_HUB] Broadcast sent",
-			map[string]interface{}{
+		logging.Debug("[SSE_HUB] Broadcast sent",
+			map[string]any{
 				"pattern":     msg.Pattern,
 				"event":       msg.Event,
 				"match_count": matchCount,
@@ -321,8 +321,8 @@ func (h *Hub) dispatch(msg *Message) {
 			},
 		)
 	} else {
-		logger.Debug("[SSE_HUB] No clients matched pattern",
-			map[string]interface{}{
+		logging.Debug("[SSE_HUB] No clients matched pattern",
+			map[string]any{
 				"pattern":       msg.Pattern,
 				"event":         msg.Event,
 				"total_clients": len(h.clients),

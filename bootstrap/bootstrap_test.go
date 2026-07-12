@@ -9,7 +9,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // testConfig is a minimal config for testing that satisfies the Config interface.
@@ -487,7 +487,7 @@ func TestWaitForSignalContextCancellation(t *testing.T) {
 
 func TestWithLogger(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
-	customLogger := logger.NewDefault("custom-logger")
+	customLogger := logging.NewDefault("custom-logger")
 
 	app, err := NewApp(cfg, WithLogger(customLogger))
 	if err != nil {

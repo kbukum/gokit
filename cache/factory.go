@@ -3,12 +3,12 @@ package cache
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 // Factory creates a cache store from core and provider-specific config.
-type Factory func(cfg Config, providerCfg any, log *logger.Logger) (Store, error)
+type Factory func(cfg Config, providerCfg any, log *logging.Logger) (Store, error)
 
 // FactoryRegistry stores cache backend factories by provider name.
 type FactoryRegistry struct {
@@ -31,7 +31,7 @@ func (r *FactoryRegistry) Get(name string) (Factory, bool) {
 }
 
 // New creates a Store using an explicitly populated registry.
-func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Store, error) {
+func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) (Store, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err

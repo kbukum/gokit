@@ -10,7 +10,7 @@ import (
 	"github.com/hashicorp/consul/api"
 
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Provider implements both discovery.Registry and discovery.Discovery using HashiCorp Consul.
@@ -19,14 +19,14 @@ type Provider struct {
 	client *api.Client
 	cfg    discovery.Config
 	consul *Config
-	log    *logger.Logger
+	log    *logging.Logger
 	stats  discovery.RegistryStats
 }
 
 // Register registers the consul discovery provider into the given registry.
 // It returns an error if "consul" is already registered.
 func Register(reg *discovery.ProviderRegistry) error {
-	return reg.Register("consul", func(cfg discovery.Config, log *logger.Logger) (discovery.Registry, discovery.Discovery, error) {
+	return reg.Register("consul", func(cfg discovery.Config, log *logging.Logger) (discovery.Registry, discovery.Discovery, error) {
 		// Build consul config from generic Config fields + ProviderOptions
 		consulCfg := &Config{
 			Addr:   cfg.Addr,
@@ -68,7 +68,7 @@ func mergeProviderOptions(consulCfg *Config, opts map[string]any) error {
 }
 
 // NewProvider creates a Provider from the given Config.
-func NewProvider(cfg discovery.Config, consulCfg *Config, log *logger.Logger) (*Provider, error) {
+func NewProvider(cfg discovery.Config, consulCfg *Config, log *logging.Logger) (*Provider, error) {
 	consulCfg.ApplyDefaults()
 	if err := consulCfg.Validate(); err != nil {
 		return nil, fmt.Errorf("consul config: %w", err)
@@ -138,7 +138,7 @@ func (c *Provider) Register(ctx context.Context, service *discovery.ServiceInfo)
 	reg.Check = c.buildHealthCheck(service)
 
 	if err := c.client.Agent().ServiceRegister(reg); err != nil {
-		c.log.ErrorCtx(ctx, "failed to register service", map[string]interface{}{
+		c.log.ErrorCtx(ctx, "failed to register service", map[string]any{
 			"service_id": service.ID, "error": err.Error(),
 		})
 		return fmt.Errorf("consul register %q: %w", service.Name, err)
@@ -149,7 +149,7 @@ func (c *Provider) Register(ctx context.Context, service *discovery.ServiceInfo)
 	c.stats.LastHeartbeat = time.Now()
 	c.mu.Unlock()
 
-	c.log.DebugCtx(ctx, "service registered", map[string]interface{}{
+	c.log.DebugCtx(ctx, "service registered", map[string]any{
 		"service_id": service.ID, "address": service.Address, "port": service.Port,
 	})
 	return nil
@@ -167,7 +167,7 @@ func (c *Provider) Deregister(ctx context.Context, serviceID string) error {
 	}
 	c.mu.Unlock()
 
-	c.log.DebugCtx(ctx, "service deregistered", map[string]interface{}{"service_id": serviceID})
+	c.log.DebugCtx(ctx, "service deregistered", map[string]any{"service_id": serviceID})
 	return nil
 }
 
@@ -226,7 +226,7 @@ func (c *Provider) Watch(ctx context.Context, serviceName string) (<-chan []disc
 				if ctx.Err() != nil {
 					return
 				}
-				c.log.WarnCtx(ctx, "consul watch error", map[string]interface{}{
+				c.log.WarnCtx(ctx, "consul watch error", map[string]any{
 					"service": serviceName, "error": err.Error(),
 				})
 				select {

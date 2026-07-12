@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Foundational Parity (codec, fs)
+- **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a
+  documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`,
+  extension-based `CodecForName`/`CodecForPath`, `value` deep-merge with per-key array
+  strategies, and bounded length-delimited `framing` (`WriteFrame`/`ReadFrame`, generic
+  `WriteValue`/`ReadValue`). Promotes `pelletier/go-toml/v2` to a direct dependency.
+- **fs** (NEW module, light mirror of rskit-fs): safe path helpers
+  (`ValidateRelativePath`, `SafeJoin`, `NormalizeRelativePath`, `Canonicalize`,
+  `ConfinePath`/`ConfineExistingPath` with symlink-escape rejection), temp files/dirs,
+  atomic writes (`WriteAtomic`/`WriteAtomicReplace`), permissions, and metadata.
+  `watch` is intentionally rskit-only.
+- Fuzz tests for the codecs, frame reader, and path-safety validation.
+
+### Changed (Breaking API Changes) — Foundational Parity
+- Renamed package `github.com/kbukum/gokit/logger` → `.../logging` and
+  `github.com/kbukum/gokit/pipeline` → `.../stream` (canonical cross-kit names); all
+  imports, `doc.go`, `domains.toml`, `MODULE-INDEX.md`, and `parity-matrix.md` updated.
+- **logging**: dropped the mutable package-level registry, reassignable global singleton,
+  and `init()` side effects in favor of an injected `Registry` and an install-once
+  `Default()` backed by `sync.OnceValue`.
+- **version**: immutable build-info via `sync.OnceValue`/`compute(source)`; no mutable
+  exported vars.
+- **errors**: `FormatResourceError[T]` is now generic; `Details map[string]any` is kept as
+  a documented RFC 9457 extension-member opaque exception.
+- **schema**: added `limits.go` (`ValidationLimits`/`DefaultLimits`/`LimitError`) and
+  `validate.go` (`CompiledSchema`/`Compile`/`CompileWithLimits`).
+
 ### Added — Documentation & Project Hygiene
 - README: sibling-projects callout and `Project Documentation` index linking
   every governance doc.
@@ -44,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 - All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`. Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
+- **security**: documented, time-boxed govulncheck suppression for `GO-2026-5932` (deprecated, unfixable `golang.org/x/crypto/openpgp`; not imported or reachable in any module). Removed the two stale `moby/moby` suppressions now that `workload` links `moby/moby/client`.
 
 ## [0.2.0] - 2026-04-25
 

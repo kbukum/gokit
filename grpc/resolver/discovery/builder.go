@@ -4,7 +4,7 @@ import (
 	"google.golang.org/grpc/resolver"
 
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 const defaultScheme = "consul"
@@ -24,18 +24,18 @@ func WithScheme(scheme string) Option {
 // ResolverBuilder implements resolver.Builder using a discovery.Discovery backend.
 type ResolverBuilder struct {
 	discovery discovery.Discovery
-	log       *logger.Logger
+	log       *logging.Logger
 	scheme    string
 }
 
 // NewResolverBuilder creates a resolver builder backed by the given Discovery provider.
-func NewResolverBuilder(disc discovery.Discovery, log *logger.Logger, opts ...Option) *ResolverBuilder {
+func NewResolverBuilder(disc discovery.Discovery, log *logging.Logger, opts ...Option) *ResolverBuilder {
 	o := &options{scheme: defaultScheme}
 	for _, opt := range opts {
 		opt(o)
 	}
 	if log == nil {
-		log = logger.GetGlobalLogger()
+		log = logging.Default()
 	}
 	return &ResolverBuilder{
 		discovery: disc,
@@ -49,7 +49,7 @@ func NewResolverBuilder(disc discovery.Discovery, log *logger.Logger, opts ...Op
 func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	serviceName := target.Endpoint()
 
-	b.log.Debug("Building discovery resolver", map[string]interface{}{
+	b.log.Debug("Building discovery resolver", map[string]any{
 		"service": serviceName,
 		"scheme":  b.scheme,
 	})

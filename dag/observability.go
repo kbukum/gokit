@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 )
 
@@ -66,13 +66,13 @@ func (n *metricsNode) Run(ctx context.Context, state *State) (any, error) {
 
 // WithLogging wraps a Node with execution logging.
 // Logs: node name, duration, and success/error status.
-func WithLogging(node Node, log *logger.Logger) Node {
+func WithLogging(node Node, log *logging.Logger) Node {
 	return &loggingNode{inner: node, log: log}
 }
 
 type loggingNode struct {
 	inner Node
-	log   *logger.Logger
+	log   *logging.Logger
 }
 
 func (n *loggingNode) Name() string { return n.inner.Name() }
@@ -82,7 +82,7 @@ func (n *loggingNode) Run(ctx context.Context, state *State) (any, error) {
 	result, err := n.inner.Run(ctx, state)
 	duration := time.Since(start)
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"node":     n.inner.Name(),
 		"duration": duration.String(),
 	}

@@ -3,14 +3,14 @@ package storage
 import (
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
 // StorageFactory creates a Storage implementation from core config and
 // provider-specific configuration. Each provider type-asserts providerCfg
 // to its own config type.
-type StorageFactory func(cfg Config, providerCfg any, log *logger.Logger) (Storage, error)
+type StorageFactory func(cfg Config, providerCfg any, log *logging.Logger) (Storage, error)
 
 // FactoryRegistry stores storage factories by provider name.
 type FactoryRegistry struct {
@@ -40,7 +40,7 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 // New creates a Storage implementation using the provided registry.
 // The registry is mandatory; pass an explicit *FactoryRegistry with the desired
 // provider registered (e.g. via local.Register, s3.Register, etc.).
-func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) (Storage, error) {
+func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -56,6 +56,6 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) 
 		return nil, fmt.Errorf("storage: unsupported provider %q (not registered)", cfg.Provider)
 	}
 
-	l.Debug("initializing storage", map[string]interface{}{"provider": cfg.Provider})
+	l.Debug("initializing storage", map[string]any{"provider": cfg.Provider})
 	return f(cfg, providerCfg, l)
 }

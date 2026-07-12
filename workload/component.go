@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Component wraps Manager and implements component.Component for lifecycle management.
@@ -14,14 +14,14 @@ type Component struct {
 	registry    *FactoryRegistry
 	cfg         Config
 	providerCfg any
-	log         *logger.Logger
+	log         *logging.Logger
 }
 
 // NewComponent creates a workload component for use with the component registry.
 // registry is mandatory; construct one and register the desired provider(s)
 // (e.g. via [github.com/kbukum/gokit/workload/docker.Register]) before
 // passing it.
-func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logger.Logger) *Component {
+func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) *Component {
 	return &Component{
 		registry:    registry,
 		cfg:         cfg,

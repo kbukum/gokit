@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 )
 
@@ -36,7 +36,7 @@ func Register(registry *messaging.Registry) error {
 	if registry == nil {
 		return fmt.Errorf("memory: messaging registry is nil")
 	}
-	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger) (messaging.Producer, error) {
+	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger) (messaging.Producer, error) {
 		broker, err := brokerFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err
@@ -51,7 +51,7 @@ func Register(registry *messaging.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logger.Logger, topic string) (messaging.Consumer, error) {
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger, topic string) (messaging.Consumer, error) {
 		broker, err := brokerFromProviderCfg(adapterCfg)
 		if err != nil {
 			return nil, err

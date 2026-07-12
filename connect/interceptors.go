@@ -9,7 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	apperrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -18,20 +18,20 @@ import (
 
 // LoggingInterceptor returns a Connect interceptor that logs every RPC call
 // with procedure name, duration, and outcome.
-func LoggingInterceptor(log *logger.Logger) connect.UnaryInterceptorFunc {
+func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			start := time.Now()
 			procedure := req.Spec().Procedure
 
-			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]interface{}{
+			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]any{
 				"procedure": procedure,
 			})
 
 			resp, err := next(ctx, req)
 			duration := time.Since(start)
 
-			fields := map[string]interface{}{
+			fields := map[string]any{
 				"procedure":   procedure,
 				"duration_ms": duration.Milliseconds(),
 			}

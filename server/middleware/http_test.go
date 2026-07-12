@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/middleware"
 )
 
@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestRecovery_NoPanic(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	handler := middleware.Recovery(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -31,7 +31,7 @@ func TestRecovery_NoPanic(t *testing.T) {
 }
 
 func TestRecovery_Panic(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	handler := middleware.Recovery(log)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		panic("test panic")
 	}))
@@ -184,7 +184,7 @@ func TestCORS_Credentials(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRequestLogger_LogsRequest(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	handler := middleware.RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}))
@@ -198,7 +198,7 @@ func TestRequestLogger_LogsRequest(t *testing.T) {
 }
 
 func TestRequestLogger_SkipsHealth(t *testing.T) {
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	called := false
 	handler := middleware.RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
@@ -291,7 +291,7 @@ func TestStatusWriter_Flush(t *testing.T) {
 
 	// The statusWriter is internal but we test it through RequestLogger
 	// which wraps the writer. We verify streaming works by checking Flush propagation.
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	handler := middleware.RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()

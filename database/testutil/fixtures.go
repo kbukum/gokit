@@ -9,7 +9,7 @@ import (
 
 // LoadFixture loads test data into a table.
 // Data should be a slice of maps where each map represents a row.
-func LoadFixture(db *gorm.DB, table string, data []map[string]interface{}) error {
+func LoadFixture(db *gorm.DB, table string, data []map[string]any) error {
 	if len(data) == 0 {
 		return nil
 	}
@@ -24,7 +24,7 @@ func LoadFixture(db *gorm.DB, table string, data []map[string]interface{}) error
 }
 
 // MustLoadFixture loads test data and fails the test on error.
-func MustLoadFixture(t *testing.T, db *gorm.DB, table string, data []map[string]interface{}) {
+func MustLoadFixture(t *testing.T, db *gorm.DB, table string, data []map[string]any) {
 	t.Helper()
 	if err := LoadFixture(db, table, data); err != nil {
 		t.Fatalf("LoadFixture failed: %v", err)

@@ -15,7 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 	"github.com/kbukum/gokit/server/endpoint"
 )
@@ -36,7 +36,7 @@ func newTestConfig() *server.Config {
 
 func newTestServer(t *testing.T) *server.Server {
 	t.Helper()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	return server.New(newTestConfig(), log)
 }
 
@@ -73,7 +73,7 @@ func TestNew_GinEngineAccessible(t *testing.T) {
 func TestNew_ConfigStored(t *testing.T) {
 	cfg := newTestConfig()
 	cfg.Host = "127.0.0.1"
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 	got := s.Config()
 	if got.Host != "127.0.0.1" {
@@ -83,7 +83,7 @@ func TestNew_ConfigStored(t *testing.T) {
 
 func TestNew_AddrFormats(t *testing.T) {
 	cfg := &server.Config{Host: "0.0.0.0", Port: 9999}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 	if got := s.Addr(); got != "0.0.0.0:9999" {
 		t.Errorf("addr: want 0.0.0.0:9999, got %s", got)
@@ -293,7 +293,7 @@ func TestStart_BindsPort(t *testing.T) {
 	port := freePort(t)
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	ctx := context.Background()
@@ -314,7 +314,7 @@ func TestStart_ServesHTTP(t *testing.T) {
 	port := freePort(t)
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	s.GinEngine().GET("/hello", func(c *gin.Context) {
@@ -343,7 +343,7 @@ func TestStop_GracefulShutdown(t *testing.T) {
 	port := freePort(t)
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	ctx := context.Background()
@@ -374,7 +374,7 @@ func TestStart_PortInUse(t *testing.T) {
 
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	ctx := context.Background()
@@ -387,7 +387,7 @@ func TestStart_PortInUse(t *testing.T) {
 func TestStart_CancelledContext(t *testing.T) {
 	cfg := &server.Config{Host: "127.0.0.1", Port: freePort(t)}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -429,7 +429,7 @@ func TestRegisterDefaultEndpoints_Health(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -484,7 +484,7 @@ func TestRegisterDefaultEndpoints_Info(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["service"] != "test-service" {
 		t.Errorf("service: want test-service, got %v", result["service"])
@@ -509,7 +509,7 @@ func TestRegisterDefaultEndpoints_Metrics(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if _, ok := result["goroutines"]; !ok {
 		t.Error("expected goroutines in metrics response")
@@ -639,7 +639,7 @@ func TestComponent_HealthWhenInitialized(t *testing.T) {
 func TestComponent_Describe(t *testing.T) {
 	cfg := &server.Config{Host: "0.0.0.0", Port: 8080}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 	c := server.NewComponent(s)
 
@@ -702,7 +702,7 @@ func TestComponent_StartStop(t *testing.T) {
 	port := freePort(t)
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 	c := server.NewComponent(s)
 
@@ -752,7 +752,7 @@ func TestHealth_DegradedComponent(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "degraded" {
 		t.Errorf("health status: want degraded, got %v", result["status"])
@@ -800,7 +800,7 @@ func TestLivenessEndpoint(t *testing.T) {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "alive" {
 		t.Errorf("liveness status: want alive, got %v", result["status"])
@@ -829,7 +829,7 @@ func TestReadinessEndpoint_Ready(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status: want 200, got %d", resp.StatusCode)
 	}
-	var result map[string]interface{}
+	var result map[string]any
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result["status"] != "ready" {
 		t.Errorf("readiness: want ready, got %v", result["status"])
@@ -889,7 +889,7 @@ func TestStartStop_MultipleCycles(t *testing.T) {
 		port := freePort(t)
 		cfg := &server.Config{Host: "127.0.0.1", Port: port}
 		cfg.ApplyDefaults()
-		log := logger.NewDefault("test")
+		log := logging.NewDefault("test")
 		s := server.New(cfg, log)
 
 		ctx := context.Background()
@@ -910,7 +910,7 @@ func TestStop_DuringActiveRequests(t *testing.T) {
 	port := freePort(t)
 	cfg := &server.Config{Host: "127.0.0.1", Port: port}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	s := server.New(cfg, log)
 
 	reqStarted := make(chan struct{})

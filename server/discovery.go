@@ -6,7 +6,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // DiscoveryServerComponent wraps a Server with service discovery integration.
@@ -16,7 +16,7 @@ type DiscoveryServerComponent struct {
 	registry  discovery.Registry
 	serviceID string
 	svcInfo   *discovery.ServiceInfo
-	log       *logger.Logger
+	log       *logging.Logger
 }
 
 // NewDiscoveryServerComponent creates a discovery-enabled server component.
@@ -42,7 +42,7 @@ func NewDiscoveryServerComponent(
 	port int,
 	tags []string,
 	metadata map[string]string,
-	log *logger.Logger,
+	log *logging.Logger,
 ) (*DiscoveryServerComponent, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("registry cannot be nil")
@@ -90,7 +90,7 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to start inner server: %w", err)
 	}
 
-	dsc.log.DebugCtx(ctx, "Starting service registration", map[string]interface{}{
+	dsc.log.DebugCtx(ctx, "Starting service registration", map[string]any{
 		"service_id":   dsc.serviceID,
 		"service_name": dsc.svcInfo.Name,
 		"address":      dsc.svcInfo.Address,
@@ -99,19 +99,19 @@ func (dsc *DiscoveryServerComponent) Start(ctx context.Context) error {
 
 	// Register with discovery
 	if err := dsc.registry.Register(ctx, dsc.svcInfo); err != nil {
-		dsc.log.ErrorCtx(ctx, "Failed to register with discovery", map[string]interface{}{
+		dsc.log.ErrorCtx(ctx, "Failed to register with discovery", map[string]any{
 			"error": err.Error(),
 		})
 		// Stop the server if registration fails
 		if stopErr := dsc.inner.Stop(ctx); stopErr != nil {
-			dsc.log.WarnCtx(ctx, "Failed to stop server after registration failure", map[string]interface{}{
+			dsc.log.WarnCtx(ctx, "Failed to stop server after registration failure", map[string]any{
 				"error": stopErr.Error(),
 			})
 		}
 		return fmt.Errorf("failed to register service: %w", err)
 	}
 
-	dsc.log.DebugCtx(ctx, "Service registered with discovery", map[string]interface{}{
+	dsc.log.DebugCtx(ctx, "Service registered with discovery", map[string]any{
 		"service_id": dsc.serviceID,
 	})
 	return nil
@@ -123,7 +123,7 @@ func (dsc *DiscoveryServerComponent) Stop(ctx context.Context) error {
 
 	// Deregister from discovery
 	if err := dsc.registry.Deregister(ctx, dsc.serviceID); err != nil {
-		dsc.log.WarnCtx(ctx, "Failed to deregister from discovery", map[string]interface{}{
+		dsc.log.WarnCtx(ctx, "Failed to deregister from discovery", map[string]any{
 			"error": err.Error(),
 		})
 		// Continue to stop the server even if deregistration fails

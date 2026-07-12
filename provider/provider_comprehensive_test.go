@@ -12,7 +12,7 @@ import (
 	"time"
 
 	goerrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider"
 	"github.com/kbukum/gokit/resilience"
@@ -530,7 +530,7 @@ func TestChain_ThreePlusMiddlewares_WithCustom(t *testing.T) {
 		return &orderTracker[string, string]{inner: inner, tag: "custom", order: &order}
 	}
 
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	meter := observability.Meter("test")
 	metrics, err := observability.NewMetrics(meter)
 	if err != nil {
@@ -571,7 +571,7 @@ func TestChain_ThreePlusMiddlewares_WithCustom(t *testing.T) {
 func TestChain_WithResilienceWrapper(t *testing.T) {
 	t.Parallel()
 	p := &echoProvider{name: "mw-res"}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 
 	chained := provider.Chain(
 		provider.WithLogging[string, string](log),
@@ -655,7 +655,7 @@ func TestAdapt_Middleware_Resilience_Pipeline(t *testing.T) {
 	)
 
 	// Add middleware
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	chained := provider.Chain(
 		provider.WithLogging[string, string](log),
 	)(adapted)
@@ -1100,7 +1100,7 @@ func TestMeta_PropagationThroughMiddlewareChain(t *testing.T) {
 	wrapped := provider.WithMeta[string, string](inner, meta)
 
 	// Wrap with middleware chain
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	chained := provider.Chain(
 		provider.WithLogging[string, string](log),
 	)(wrapped)

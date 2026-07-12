@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // DefaultStopTimeout is applied to a component's Stop call only when the
@@ -60,7 +60,7 @@ func (r *Registry) Register(c Component) error {
 	r.entries = append(r.entries, entry)
 	r.lookup[name] = entry
 
-	logger.Debug("Component registered", map[string]interface{}{
+	logging.Debug("Component registered", map[string]any{
 		"component": name,
 	})
 	return nil
@@ -110,7 +110,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		return nil
 	}
 
-	logger.DebugCtx(ctx, "Starting components", map[string]interface{}{
+	logging.DebugCtx(ctx, "Starting components", map[string]any{
 		"pending": len(pending),
 		"total":   total,
 	})
@@ -125,13 +125,13 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		entry.state = StateStarting
 		r.mu.Unlock()
 
-		logger.DebugCtx(ctx, "Starting component", map[string]interface{}{"component": name})
+		logging.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
 		if err := entry.component.Start(ctx); err != nil {
 			r.mu.Lock()
 			entry.state = StateFailed
 			r.mu.Unlock()
 
-			logger.ErrorCtx(ctx, "Component start failed", map[string]interface{}{
+			logging.ErrorCtx(ctx, "Component start failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -144,10 +144,10 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		r.mu.Unlock()
 		startedThisCall = append(startedThisCall, entry)
 
-		logger.DebugCtx(ctx, "Component started", map[string]interface{}{"component": name})
+		logging.DebugCtx(ctx, "Component started", map[string]any{"component": name})
 	}
 
-	logger.InfoCtx(ctx, "All components started successfully")
+	logging.InfoCtx(ctx, "All components started successfully")
 	return nil
 }
 
@@ -164,7 +164,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 
 		stopCtx, cancel := stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
-			logger.ErrorCtx(ctx, "Rollback stop failed", map[string]interface{}{
+			logging.ErrorCtx(ctx, "Rollback stop failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -197,7 +197,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	}
 	r.mu.RUnlock()
 
-	logger.InfoCtx(ctx, "Stopping all components")
+	logging.InfoCtx(ctx, "Stopping all components")
 
 	var errs []error
 	for _, entry := range toStop {
@@ -207,17 +207,17 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		entry.state = StateStopping
 		r.mu.Unlock()
 
-		logger.DebugCtx(ctx, "Stopping component", map[string]interface{}{"component": name})
+		logging.DebugCtx(ctx, "Stopping component", map[string]any{"component": name})
 
 		stopCtx, cancel := stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
 			errs = append(errs, fmt.Errorf("failed to stop %s: %w", name, err))
-			logger.ErrorCtx(ctx, "Component stop failed", map[string]interface{}{
+			logging.ErrorCtx(ctx, "Component stop failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
 		} else {
-			logger.InfoCtx(ctx, "Component stopped", map[string]interface{}{"component": name})
+			logging.InfoCtx(ctx, "Component stopped", map[string]any{"component": name})
 		}
 		cancel()
 
@@ -230,7 +230,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		return errors.Join(errs...)
 	}
 
-	logger.InfoCtx(ctx, "All components stopped successfully")
+	logging.InfoCtx(ctx, "All components stopped successfully")
 	return nil
 }
 

@@ -86,4 +86,5 @@ replace (
 	github.com/kbukum/gokit => ../
 	github.com/kbukum/gokit/auth => ../auth
 	github.com/kbukum/gokit/authz => ../authz
+	github.com/kbukum/gokit/discovery => ../discovery
 )

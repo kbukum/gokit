@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	grpccfg "github.com/kbukum/gokit/grpc"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 
 	"github.com/kbukum/gokit/discovery"
 )
@@ -21,7 +21,7 @@ import (
 type DiscoveryConnectionFactory struct {
 	discoveryClient *discovery.Client
 	gRPCCfg         grpccfg.Config
-	log             *logger.Logger
+	log             *logging.Logger
 	dialOpts        []grpc.DialOption
 }
 
@@ -31,7 +31,7 @@ type DiscoveryConnectionFactory struct {
 //   - discoveryClient: The discovery client to use for resolving service addresses.
 //     This client handles caching, load balancing, and fallback endpoints.
 //   - gRPCCfg: Base gRPC configuration for TLS, keepalive, message sizes, and timeouts.
-//   - log: Optional logger; if nil, uses the global logger.
+//   - log: Optional logger; if nil, uses the global logging.
 //   - opts: Additional gRPC dial options to apply when creating connections.
 //
 // The factory will use the discovery client's load balancing strategy to select
@@ -40,7 +40,7 @@ type DiscoveryConnectionFactory struct {
 func NewDiscoveryConnectionFactory(
 	discoveryClient *discovery.Client,
 	gRPCCfg grpccfg.Config,
-	log *logger.Logger,
+	log *logging.Logger,
 	opts ...grpc.DialOption,
 ) *DiscoveryConnectionFactory {
 	return &DiscoveryConnectionFactory{
@@ -71,7 +71,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	}
 	instance, err := f.discoveryClient.DiscoverOne(ctx, query)
 	if err != nil {
-		f.logError("Failed to discover service", map[string]interface{}{
+		f.logError("Failed to discover service", map[string]any{
 			"service": serviceName,
 			"error":   err.Error(),
 		})
@@ -81,7 +81,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	// Build target address from the discovered instance
 	target := instance.Address + ":" + fmt.Sprint(instance.Port)
 
-	f.logDebug("Creating gRPC connection via discovery", map[string]interface{}{
+	f.logDebug("Creating gRPC connection via discovery", map[string]any{
 		"service":  serviceName,
 		"target":   target,
 		"instance": instance.ID,
@@ -100,7 +100,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	// Create the gRPC connection
 	conn, err := grpc.NewClient(target, opts...)
 	if err != nil {
-		f.logError("Failed to create gRPC connection", map[string]interface{}{
+		f.logError("Failed to create gRPC connection", map[string]any{
 			"service": serviceName,
 			"target":  target,
 			"error":   err.Error(),
@@ -108,7 +108,7 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 		return nil, fmt.Errorf("failed to connect to %s at %s: %w", serviceName, target, err)
 	}
 
-	f.logDebug("gRPC connection created via discovery", map[string]interface{}{
+	f.logDebug("gRPC connection created via discovery", map[string]any{
 		"service": serviceName,
 		"target":  target,
 	})
@@ -167,19 +167,19 @@ func (f *DiscoveryConnectionFactory) transportCredentials() (credentials.Transpo
 	return credentials.NewTLS(tlsCfg), nil
 }
 
-func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]interface{}) {
+func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]any) {
 	if f.log != nil {
 		f.log.Debug(msg, fields...)
 	} else {
-		logger.Debug(msg, fields...)
+		logging.Debug(msg, fields...)
 	}
 }
 
-func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]interface{}) {
+func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]any) {
 	if f.log != nil {
 		f.log.Error(msg, fields...)
 	} else {
-		logger.Error(msg, fields...)
+		logging.Error(msg, fields...)
 	}
 }
 

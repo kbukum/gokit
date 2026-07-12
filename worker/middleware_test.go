@@ -117,3 +117,42 @@ func TestPanicErrorString(t *testing.T) {
 		t.Fatalf("expected 'worker: panic recovered', got %q", s)
 	}
 }
+
+func TestMiddlewareChainPanicRecovery(t *testing.T) {
+	t.Parallel()
+
+	inner := worker.HandlerFunc[string, string](func(
+		ctx context.Context, task string, emit func(worker.Event[string]),
+	) error {
+		if task == "panic" {
+			panic("boom")
+		}
+		return nil
+	})
+
+	wrapped := worker.Chain(
+		worker.WithRecovery[string, string](),
+	)(inner)
+
+	pool := worker.NewPool(wrapped, worker.PoolConfig{Name: "panic-mw", Size: 1})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handle, err := pool.Submit(context.Background(), "panic")
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	for range handle.Events() {
+	}
+
+	_, herr := handle.Result()
+	if herr == nil {
+		t.Fatal("expected error from panic")
+	}
+
+	// WithRecovery wraps non-error panics as *PanicError
+	var panicErr *worker.PanicError
+	if !errors.As(herr, &panicErr) {
+		t.Fatalf("expected *PanicError, got %T: %v", herr, herr)
+	}
+}

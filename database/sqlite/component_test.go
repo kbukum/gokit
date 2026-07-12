@@ -7,7 +7,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 func testConfig() database.Config {
@@ -21,7 +21,7 @@ func testConfig() database.Config {
 
 func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 	cfg := testConfig()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 	ctx := context.Background()
 
@@ -42,7 +42,7 @@ func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = true
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	type User struct {
@@ -67,7 +67,7 @@ func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 func TestComponentWithAutoMigrateDisabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = false
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	type User struct {
@@ -91,7 +91,7 @@ func TestComponentWithAutoMigrateDisabled(t *testing.T) {
 
 func TestNewWithContextSQLiteAdapter(t *testing.T) {
 	cfg := testConfig()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 
 	db, err := database.NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestNewWithContextSQLiteAdapter(t *testing.T) {
 func TestComponentStartWithInvalidDSN(t *testing.T) {
 	cfg := testConfig()
 	cfg.DSN = "/invalid/path/to/db.db"
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 
 	err := comp.Start(context.Background())
@@ -122,7 +122,7 @@ func TestComponentStartWithInvalidDSN(t *testing.T) {
 
 func TestComponentHealthAfterStart(t *testing.T) {
 	cfg := testConfig()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 	ctx := context.Background()
 
@@ -143,7 +143,7 @@ func TestComponentHealthAfterStart(t *testing.T) {
 
 func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 	cfg := testConfig()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 	ctx := context.Background()
 
@@ -161,7 +161,7 @@ func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 
 func TestComponentContextInHealthCheck(t *testing.T) {
 	cfg := testConfig()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
 	ctx := context.Background()
 	if err := comp.Start(ctx); err != nil {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // MemoryConfig configures the in-memory cache backend.
@@ -41,7 +41,7 @@ func newMemoryStore(cfg MemoryConfig, clock func() time.Time) *MemoryStore {
 
 // RegisterMemory registers the core memory backend into an explicit registry.
 func RegisterMemory(reg *FactoryRegistry) error {
-	return reg.Register(ProviderMemory, func(cfg Config, providerCfg any, _ *logger.Logger) (Store, error) {
+	return reg.Register(ProviderMemory, func(cfg Config, providerCfg any, _ *logging.Logger) (Store, error) {
 		memCfg := MemoryConfig{DefaultTTL: cfg.DefaultTTL}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*MemoryConfig)

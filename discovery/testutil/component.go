@@ -99,7 +99,7 @@ func (c *Component) Reset(_ context.Context) error {
 	return nil
 }
 
-func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
+func (c *Component) Snapshot(_ context.Context) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if !c.started {
@@ -121,7 +121,7 @@ func (c *Component) Snapshot(_ context.Context) (interface{}, error) {
 	return snap, nil
 }
 
-func (c *Component) Restore(_ context.Context, s interface{}) error {
+func (c *Component) Restore(_ context.Context, s any) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.started {

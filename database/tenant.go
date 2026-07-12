@@ -17,6 +17,6 @@ func SetSessionVariable(db *gorm.DB, name, value string, isLocal bool) error {
 // database session for multi-tenant queries.
 //
 // Example: scopedDB := ScopeToTenant(db, "workspace_id", workspaceID)
-func ScopeToTenant(db *gorm.DB, column string, value interface{}) *gorm.DB {
+func ScopeToTenant(db *gorm.DB, column string, value any) *gorm.DB {
 	return db.Where(column+" = ?", value)
 }

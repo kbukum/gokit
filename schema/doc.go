@@ -14,4 +14,9 @@
 //
 //	s := schema.Generate[SearchInput]()
 //	// s is a map[string]any representing the JSON Schema for SearchInput.
+//
+// Values are validated against schemas with [Validate], or by pre-checking a
+// schema once with [Compile] and reusing the resulting [CompiledSchema].
+// Both apply [ValidationLimits] (depth, node count, and string-byte bounds) to
+// guard against resource exhaustion from untrusted schema or value input.
 package schema

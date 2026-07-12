@@ -1,6 +1,7 @@
 package worker_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kbukum/gokit/worker"
@@ -109,5 +110,48 @@ func TestProgressEventZeroTotal(t *testing.T) {
 	e := worker.ProgressEvent[string](50, 0, "unknown")
 	if e.Progress.Percent != 0 {
 		t.Fatalf("expected percent=0 when total=0, got %f", e.Progress.Percent)
+	}
+}
+
+func TestEventOrdering(t *testing.T) {
+	t.Parallel()
+
+	h := worker.HandlerFunc[int, int](func(
+		ctx context.Context, task int, emit func(worker.Event[int]),
+	) error {
+		emit(worker.ProgressEvent[int](1, 3, "step 1"))
+		emit(worker.ProgressEvent[int](2, 3, "step 2"))
+		emit(worker.PartialEvent(task * 2))
+		return nil
+	})
+
+	pool := worker.NewPool(h, worker.PoolConfig{Name: "order-test", Size: 1})
+	defer func() { _ = pool.Stop(context.Background()) }()
+
+	handle, err := pool.Submit(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+
+	types := make([]worker.EventType, 0, 4)
+	for e := range handle.Events() {
+		types = append(types, e.Type)
+	}
+
+	// Expected: Progress, Progress, Partial, Result
+	expected := []worker.EventType{
+		worker.EventProgress,
+		worker.EventProgress,
+		worker.EventPartial,
+		worker.EventResult,
+	}
+
+	if len(types) != len(expected) {
+		t.Fatalf("expected %d events, got %d: %v", len(expected), len(types), types)
+	}
+	for i := range expected {
+		if types[i] != expected[i] {
+			t.Errorf("event[%d]: expected %s, got %s", i, expected[i], types[i])
+		}
 	}
 }

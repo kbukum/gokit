@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 func TestRegistryRequiresExplicitMemoryRegistration(t *testing.T) {
@@ -79,7 +79,7 @@ func TestNewUsesRegisteredProvider(t *testing.T) {
 	if err := RegisterMemory(reg); err != nil {
 		t.Fatalf("RegisterMemory: %v", err)
 	}
-	store, err := New(reg, Config{Provider: ProviderMemory}, nil, logger.NewDefault("test"))
+	store, err := New(reg, Config{Provider: ProviderMemory}, nil, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

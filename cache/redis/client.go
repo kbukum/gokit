@@ -11,20 +11,20 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 
 	"github.com/kbukum/gokit/cache"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Client wraps a go-redis client with gokit logging.
 type Client struct {
 	rdb    *goredis.Client
-	log    *logger.Logger
+	log    *logging.Logger
 	cfg    Config
 	closed bool
 	mu     sync.Mutex
 }
 
-// New creates a new Redis client with the given configuration and logger.
-func New(cfg Config, log *logger.Logger) (*Client, error) {
+// New creates a new Redis client with the given configuration and logging.
+func New(cfg Config, log *logging.Logger) (*Client, error) {
 	cfg.ApplyDefaults()
 
 	if err := cfg.Validate(); err != nil {
@@ -79,7 +79,7 @@ func New(cfg Config, log *logger.Logger) (*Client, error) {
 
 	rdb := goredis.NewClient(opts)
 
-	log.Debug("Redis client created", map[string]interface{}{
+	log.Debug("Redis client created", map[string]any{
 		"addr":      cfg.Addr,
 		"db":        cfg.DB,
 		"pool_size": cfg.PoolSize,

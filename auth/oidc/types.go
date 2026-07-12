@@ -52,5 +52,5 @@ type UserInfo struct {
 	Locale string `json:"locale,omitempty"`
 
 	// Raw holds all claims from the provider for project-specific extraction.
-	Raw map[string]interface{} `json:"raw,omitempty"`
+	Raw map[string]any `json:"raw,omitempty"`
 }

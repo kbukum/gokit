@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/cache"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/provider"
 )
 
@@ -14,7 +14,7 @@ var _ provider.Provider = (*Client)(nil)
 
 // Register registers the Redis backend in an explicit cache registry.
 func Register(reg *cache.FactoryRegistry) error {
-	return reg.Register(cache.ProviderRedis, func(_ cache.Config, providerCfg any, log *logger.Logger) (cache.Store, error) {
+	return reg.Register(cache.ProviderRedis, func(_ cache.Config, providerCfg any, log *logging.Logger) (cache.Store, error) {
 		cfg, ok := providerCfg.(*Config)
 		if !ok {
 			return nil, &cache.ConfigTypeError{Provider: cache.ProviderRedis, Expected: "*redis.Config", Actual: providerCfg}

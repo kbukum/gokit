@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ClientConfig configures the discovery Client.
@@ -35,14 +35,14 @@ type Client struct {
 	fallback  map[string][]ServiceInstance
 	cache     *instanceCache
 	cfg       ClientConfig
-	log       *logger.Logger
+	log       *logging.Logger
 	r         *rand.Rand
 	mu        sync.Mutex
 	rrIndex   map[string]int
 }
 
 // NewClient creates a Client that wraps the given Discovery backend.
-func NewClient(disc Discovery, cfg ClientConfig, log *logger.Logger) *Client {
+func NewClient(disc Discovery, cfg ClientConfig, log *logging.Logger) *Client {
 	ttl := cfg.CacheTTL
 	if ttl == 0 {
 		ttl = 30 * time.Second
@@ -100,7 +100,7 @@ func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...s
 		// Try static fallback
 		if fb, ok := c.fallback[serviceName]; ok && len(fb) > 0 {
 			if err != nil {
-				c.log.DebugCtx(ctx, "primary discovery failed, using static fallback", map[string]interface{}{
+				c.log.DebugCtx(ctx, "primary discovery failed, using static fallback", map[string]any{
 					"service": serviceName, "error": err.Error(),
 				})
 			}

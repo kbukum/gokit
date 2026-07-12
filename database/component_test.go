@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 func fakeDriver(string) gorm.Dialector { return nil }
@@ -18,7 +18,7 @@ func TestComponent_Name(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	want := "database"
@@ -33,7 +33,7 @@ func TestComponent_Interface(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	var _ component.Component = comp
@@ -46,7 +46,7 @@ func TestComponent_WithDriver(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	result := comp.WithDriver(fakeDriver)
@@ -62,7 +62,7 @@ func TestComponent_RequiresExplicitDriver(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	ctx := context.Background()
@@ -85,7 +85,7 @@ func TestComponent_WithAutoMigrate_Chaining(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
 
 	type User struct {
@@ -104,7 +104,7 @@ func TestComponent_Health_BeforeStart(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
 
 	ctx := context.Background()
@@ -129,7 +129,7 @@ func TestComponent_Describe(t *testing.T) {
 		MaxOpenConns: 30,
 		AutoMigrate:  true,
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	desc := comp.Describe()
@@ -155,7 +155,7 @@ func TestNewWithContext_InvalidType(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 
 	invalidDialector := "not-a-dialector"
 	db, err := NewWithContext(context.Background(), invalidDialector, cfg, log)
@@ -177,7 +177,7 @@ func TestComponent_Stop_BeforeStart(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
 
 	ctx := context.Background()
@@ -195,7 +195,7 @@ func TestComponent_ChainedMethods(t *testing.T) {
 		AutoMigrate: true,
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 
 	type User struct {
 		ID uint
@@ -216,7 +216,7 @@ func TestComponent_DB_ReturnsNilBeforeStart(t *testing.T) {
 		Enabled: true,
 		DSN:     ":memory:",
 	}
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
 	if db := comp.DB(); db != nil {
@@ -231,7 +231,7 @@ func TestComponent_Disabled(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
 
 	ctx := context.Background()
@@ -261,7 +261,7 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 		DSN: ":memory:",
 	}
 	cfg.ApplyDefaults()
-	log := logger.NewDefault("test")
+	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
 
 	ctx := context.Background()

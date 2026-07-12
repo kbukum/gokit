@@ -18,9 +18,9 @@ type TestComponent interface {
 
 	// Snapshot captures the current state of the component.
 	// The returned data can be passed to Restore() to return to this state.
-	Snapshot(ctx context.Context) (interface{}, error)
+	Snapshot(ctx context.Context) (any, error)
 
 	// Restore restores the component to a previously captured state.
 	// The snapshot parameter should be a value returned by Snapshot().
-	Restore(ctx context.Context, snapshot interface{}) error
+	Restore(ctx context.Context, snapshot any) error
 }

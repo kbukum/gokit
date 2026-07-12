@@ -10,5 +10,5 @@
 //
 //   - DAG: dag.FromProvider(sink) creates a DAG node
 //   - Worker: worker.FromProvider(sink) creates a worker handler
-//   - Pipeline: pipeline.From(stream) or pipeline.Drain(sink.Send)
+//   - Stream: stream.From(iter) or stream.Drain(sink.Send)
 package bridge

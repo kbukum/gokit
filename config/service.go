@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Environment represents the deployment environment.
@@ -44,13 +44,13 @@ func (e Environment) IsDevelopment() bool {
 //	    Database database.Config `yaml:"database" mapstructure:"database"`
 //	}
 type ServiceConfig struct {
-	Name        string        `yaml:"name" mapstructure:"name"`
-	Environment string        `yaml:"environment" mapstructure:"environment"`
-	Version     string        `yaml:"version" mapstructure:"version"`
-	Address     string        `yaml:"address" mapstructure:"address"`
-	Port        int           `yaml:"port" mapstructure:"port"`
-	Debug       bool          `yaml:"debug" mapstructure:"debug"`
-	Logging     logger.Config `yaml:"logging" mapstructure:"logging"`
+	Name        string         `yaml:"name" mapstructure:"name"`
+	Environment string         `yaml:"environment" mapstructure:"environment"`
+	Version     string         `yaml:"version" mapstructure:"version"`
+	Address     string         `yaml:"address" mapstructure:"address"`
+	Port        int            `yaml:"port" mapstructure:"port"`
+	Debug       bool           `yaml:"debug" mapstructure:"debug"`
+	Logging     logging.Config `yaml:"logging" mapstructure:"logging"`
 }
 
 // GetEnvironment returns the environment as a typed Environment value.

@@ -27,7 +27,7 @@ func TestConcurrentResolveSlowConstructor(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errs := make([]error, 20)
-	vals := make([]interface{}, 20)
+	vals := make([]any, 20)
 
 	for i := 0; i < 20; i++ {
 		wg.Add(1)
@@ -684,7 +684,7 @@ func TestCloseLazyResolved(t *testing.T) {
 	c := NewContainer()
 	closed := false
 
-	_ = c.RegisterLazy("closer", func() interface{} {
+	_ = c.RegisterLazy("closer", func() any {
 		return &mockCloser{onClose: func() error {
 			closed = true
 			return nil
@@ -710,7 +710,7 @@ func TestCloseLazyUnresolved(t *testing.T) {
 	c := NewContainer()
 	closed := false
 
-	_ = c.RegisterLazy("closer", func() interface{} {
+	_ = c.RegisterLazy("closer", func() any {
 		return &mockCloser{onClose: func() error {
 			closed = true
 			return nil

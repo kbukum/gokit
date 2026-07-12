@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/resilience"
 )
 
@@ -31,12 +31,12 @@ func testConn(t *testing.T) *grpc.ClientConn {
 	return cc
 }
 
-func testLogger() *logger.Logger {
-	return logger.NewDefault("test")
+func testLogger() *logging.Logger {
+	return logging.NewDefault("test")
 }
 
 func mockInvoker(retErr error) grpc.UnaryInvoker {
-	return func(ctx context.Context, method string, req, reply interface{},
+	return func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, opts ...grpc.CallOption,
 	) error {
 		return retErr
@@ -44,7 +44,7 @@ func mockInvoker(retErr error) grpc.UnaryInvoker {
 }
 
 func deadlineCapturingInvoker(captured *time.Time) grpc.UnaryInvoker {
-	return func(ctx context.Context, method string, req, reply interface{},
+	return func(ctx context.Context, method string, req, reply any,
 		cc *grpc.ClientConn, opts ...grpc.CallOption,
 	) error {
 		if dl, ok := ctx.Deadline(); ok {

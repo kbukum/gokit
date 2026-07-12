@@ -146,7 +146,7 @@ func (s *Service[T]) ValidatorFunc() func(string) (any, error) {
 
 // keyFunc is the jwt.Keyfunc used during token parsing.
 func (s *Service[T]) keyFunc(verifyKey any) gojwt.Keyfunc {
-	return func(token *gojwt.Token) (interface{}, error) {
+	return func(token *gojwt.Token) (any, error) {
 		// Verify signing method matches expected
 		expected := s.cfg.signingMethod()
 		if token.Method.Alg() != expected.Alg() {

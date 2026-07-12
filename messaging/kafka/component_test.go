@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // mockProducer implements messaging.ProducerCloser for testing
@@ -40,7 +40,7 @@ func (m *mockConsumer) Close() error {
 func (m *mockConsumer) Topic() string { return m.topic }
 
 func TestComponent_NewComponent(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	cfg := Config{Brokers: []string{"localhost:9092"}}
 	comp := NewComponent(cfg, log)
 	if comp == nil {
@@ -49,7 +49,7 @@ func TestComponent_NewComponent(t *testing.T) {
 }
 
 func TestComponent_Name(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	if comp.Name() != "kafka" {
 		t.Errorf("Name() = %q, want kafka", comp.Name())
@@ -57,7 +57,7 @@ func TestComponent_Name(t *testing.T) {
 }
 
 func TestComponent_SetProducer(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	mp := &mockProducer{}
 	comp.SetProducer(mp)
@@ -67,7 +67,7 @@ func TestComponent_SetProducer(t *testing.T) {
 }
 
 func TestComponent_AddConsumer(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	mc := &mockConsumer{topic: "events"}
 	comp.AddConsumer(mc)
@@ -80,7 +80,7 @@ func TestComponent_AddConsumer(t *testing.T) {
 }
 
 func TestComponent_Describe(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	cfg := Config{Brokers: []string{"b1:9092", "b2:9092"}}
 	comp := NewComponent(cfg, log)
 	mp := &mockProducer{}
@@ -98,7 +98,7 @@ func TestComponent_Describe(t *testing.T) {
 }
 
 func TestComponent_StartStop(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	mc := &mockConsumer{topic: "test"}
 	comp.AddConsumer(mc)
@@ -131,7 +131,7 @@ func TestComponent_StartStop(t *testing.T) {
 }
 
 func TestComponent_StopNotRunning(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	if err := comp.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop() on not-running component should not error: %v", err)
@@ -139,7 +139,7 @@ func TestComponent_StopNotRunning(t *testing.T) {
 }
 
 func TestComponent_AddConsumer_WhileRunning(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 
 	ctx := context.Background()
@@ -160,7 +160,7 @@ func TestComponent_AddConsumer_WhileRunning(t *testing.T) {
 }
 
 func TestComponent_Health_NotRunning(t *testing.T) {
-	log := logger.New(&logger.Config{Level: "error"}, "test")
+	log := logging.New(&logging.Config{Level: "error"}, "test")
 	comp := NewComponent(Config{}, log)
 	health := comp.Health(context.Background())
 	if health.Status != component.StatusUnhealthy {

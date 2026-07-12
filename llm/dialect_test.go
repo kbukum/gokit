@@ -85,3 +85,10 @@ func mustReg(tb testing.TB, reg *DialectRegistry, name string, d Dialect) {
 		tb.Fatalf("register %q: %v", name, err)
 	}
 }
+
+func TestDialectRegistry_RejectsNilDialect(t *testing.T) {
+	reg := NewDialectRegistry()
+	if err := reg.Register("nil-d", nil); err == nil {
+		t.Fatal("expected error for nil dialect")
+	}
+}

@@ -128,7 +128,7 @@ func Example_customTestComponent() {
 
 	// TestComponent interface additions
 	_ = func(c *MyTestComponent) error { return nil }
-	_ = func(c *MyTestComponent) (interface{}, error) { return map[string]interface{}{}, nil }
+	_ = func(c *MyTestComponent) (any, error) { return map[string]any{}, nil }
 	_ = func(c *MyTestComponent) error { return nil }
 
 	fmt.Println("TestComponent interface implemented")

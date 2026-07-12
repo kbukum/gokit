@@ -37,7 +37,7 @@ func TestRefreshToken_JSONResponse(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "new-access-token",
 			"token_type":    "Bearer",
 			"expires_in":    3600,
@@ -105,7 +105,7 @@ func TestRefreshToken_FormEncodedResponse(t *testing.T) {
 
 func TestRefreshToken_DefaultsTokenType(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "at",
 			"expires_in":   3600,
 		})
@@ -131,7 +131,7 @@ func TestRefreshToken_SendsScopes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		receivedScope = r.FormValue("scope")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "at",
 		})
 	}))
@@ -157,7 +157,7 @@ func TestRefreshToken_SendsExtraParams(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		receivedAudience = r.FormValue("audience")
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token": "at",
 		})
 	}))
@@ -237,7 +237,7 @@ func TestRefreshToken_ContextCancellation(t *testing.T) {
 
 func TestRefreshToken_TokenRotation(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
 			"access_token":  "rotated-access",
 			"refresh_token": "rotated-refresh",
 			"id_token":      "rotated-id",

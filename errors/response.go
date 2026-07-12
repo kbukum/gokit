@@ -50,7 +50,9 @@ type ProblemDetail struct {
 	Code ErrorCode `json:"code"`
 	// Retryable indicates whether the client may retry the request.
 	Retryable bool `json:"retryable"`
-	// Details contains additional context for the error.
+	// Details carries RFC 9457 problem-detail extension members (arbitrary
+	// JSON). This is a deliberate, documented opaque-value exception to the
+	// no-any rule; see AppError.Details.
 	Details map[string]any `json:"details,omitempty"`
 }
 

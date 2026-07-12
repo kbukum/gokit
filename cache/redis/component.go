@@ -5,18 +5,18 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 // Component wraps Client and implements component.Component for lifecycle management.
 type Component struct {
 	client *Client
 	cfg    Config
-	log    *logger.Logger
+	log    *logging.Logger
 }
 
 // NewComponent creates a Redis component for use with the component registry.
-func NewComponent(cfg Config, log *logger.Logger) *Component {
+func NewComponent(cfg Config, log *logging.Logger) *Component {
 	return &Component{
 		cfg: cfg,
 		log: log.WithComponent("redis"),

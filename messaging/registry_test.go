@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 )
 
 type registryProducer struct{}
@@ -35,7 +35,7 @@ func TestRegistryExplicitRegistration(t *testing.T) {
 		t.Fatalf("new registry has consumer adapters: %v", got)
 	}
 
-	_, err := reg.NewProducer(context.Background(), Config{Adapter: "kafka"}, nil, logger.NewDefault("registry-test"))
+	_, err := reg.NewProducer(context.Background(), Config{Adapter: "kafka"}, nil, logging.NewDefault("registry-test"))
 	if err == nil {
 		t.Fatal("expected unregistered producer adapter error")
 	}
@@ -47,7 +47,7 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 	reg := NewRegistry()
 	producerCfg := struct{ Name string }{Name: "producer-a"}
 	consumerCfg := struct{ Name string }{Name: "consumer-a"}
-	if err := reg.RegisterProducer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logger.Logger) (Producer, error) {
+	if err := reg.RegisterProducer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logging.Logger) (Producer, error) {
 		if cfg.Adapter != "custom" {
 			t.Fatalf("cfg.Adapter = %q, want custom", cfg.Adapter)
 		}
@@ -61,7 +61,7 @@ func TestRegistryConstructsWithRuntimeConfig(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("register producer: %v", err)
 	}
-	if err := reg.RegisterConsumer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logger.Logger, topic string) (Consumer, error) {
+	if err := reg.RegisterConsumer("custom", func(_ context.Context, cfg Config, adapterCfg any, log *logging.Logger, topic string) (Consumer, error) {
 		if cfg.Adapter != "custom" {
 			t.Fatalf("cfg.Adapter = %q, want custom", cfg.Adapter)
 		}
@@ -92,7 +92,7 @@ func TestRegistryRejectsDuplicateAdapters(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
-	factory := func(context.Context, Config, any, *logger.Logger) (Producer, error) {
+	factory := func(context.Context, Config, any, *logging.Logger) (Producer, error) {
 		return registryProducer{}, nil
 	}
 	if err := reg.RegisterProducer("memory", factory); err != nil {
@@ -107,7 +107,7 @@ func TestRegistryHonorsConfiguredProducerTopics(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
-	if err := reg.RegisterProducer("custom", func(context.Context, Config, any, *logger.Logger) (Producer, error) {
+	if err := reg.RegisterProducer("custom", func(context.Context, Config, any, *logging.Logger) (Producer, error) {
 		return registryProducer{}, nil
 	}); err != nil {
 		t.Fatalf("register producer: %v", err)
@@ -128,7 +128,7 @@ func TestRegistryHonorsConfiguredConsumerSubscriptions(t *testing.T) {
 	t.Parallel()
 
 	reg := NewRegistry()
-	if err := reg.RegisterConsumer("custom", func(_ context.Context, _ Config, _ any, _ *logger.Logger, topic string) (Consumer, error) {
+	if err := reg.RegisterConsumer("custom", func(_ context.Context, _ Config, _ any, _ *logging.Logger, topic string) (Consumer, error) {
 		return registryConsumer{topic: topic}, nil
 	}); err != nil {
 		t.Fatalf("register consumer: %v", err)

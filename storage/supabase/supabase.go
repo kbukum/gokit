@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/storage"
 )
 
 // Register registers the Supabase storage provider into the given registry.
 // It returns an error if the provider is already registered.
 func Register(reg *storage.FactoryRegistry) error {
-	return reg.Register(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logger.Logger) (storage.Storage, error) {
+	return reg.Register(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logging.Logger) (storage.Storage, error) {
 		c := &Config{}
 		if providerCfg != nil {
 			pc, ok := providerCfg.(*Config)
@@ -193,7 +193,7 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 		}
 	}
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"prefix": folder,
 		"limit":  1000,
 	}

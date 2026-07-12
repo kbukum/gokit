@@ -16,7 +16,7 @@ import (
 	disc "github.com/kbukum/gokit/discovery"
 	grpccfg "github.com/kbukum/gokit/grpc"
 	resdisc "github.com/kbukum/gokit/grpc/resolver/discovery"
-	"github.com/kbukum/gokit/logger"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/security"
 )
 
@@ -111,7 +111,7 @@ func waitFor(t *testing.T, cond func() bool, msg string) {
 	t.Fatalf("timed out waiting for: %s", msg)
 }
 
-func testLogger() *logger.Logger { return logger.GetGlobalLogger() }
+func testLogger() *logging.Logger { return logging.Default() }
 
 // ─── ResolverBuilder ───────────────────────────────────────────────────────
 

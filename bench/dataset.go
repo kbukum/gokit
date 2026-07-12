@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kbukum/gokit/pipeline"
+	"github.com/kbukum/gokit/stream"
 )
 
 // DatasetManifest describes a labeled dataset on disk.
@@ -76,12 +76,12 @@ func (d *DatasetLoader[L]) Manifest() (*DatasetManifest, error) {
 
 // All loads all samples into memory.
 func (d *DatasetLoader[L]) All(ctx context.Context) ([]Sample[L], error) {
-	return pipeline.Collect(ctx, d.Pipeline())
+	return stream.Collect(ctx, d.Pipeline())
 }
 
 // Pipeline returns a Pipeline[Sample[L]] for composition.
-func (d *DatasetLoader[L]) Pipeline() *pipeline.Pipeline[Sample[L]] {
-	return pipeline.FromFunc(func(ctx context.Context) pipeline.Iterator[Sample[L]] {
+func (d *DatasetLoader[L]) Pipeline() *stream.Pipeline[Sample[L]] {
+	return stream.FromFunc(func(ctx context.Context) stream.Iterator[Sample[L]] {
 		iter, err := d.Iterator(ctx)
 		if err != nil {
 			return &errIter[Sample[L]]{err: err}
@@ -90,8 +90,8 @@ func (d *DatasetLoader[L]) Pipeline() *pipeline.Pipeline[Sample[L]] {
 	})
 }
 
-// Iterator returns a pipeline.Iterator that lazily loads samples.
-func (d *DatasetLoader[L]) Iterator(ctx context.Context) (pipeline.Iterator[Sample[L]], error) {
+// Iterator returns a stream.Iterator that lazily loads samples.
+func (d *DatasetLoader[L]) Iterator(ctx context.Context) (stream.Iterator[Sample[L]], error) {
 	manifest, err := d.loadManifest()
 	if err != nil {
 		return nil, err
