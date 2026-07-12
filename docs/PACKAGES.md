@@ -23,7 +23,7 @@ Every package has its own `README.md` with API examples — start there for deta
 | `version` | `gokit/version` | Build version info — git commit, branch, build time |
 | `encryption` | `gokit/encryption` | AES-256-GCM encryption for sensitive data |
 | `validation` | `gokit/validation` | Struct tag and programmatic validation |
-| `di` | `gokit/di` | DI container with lazy/eager init, retry, circuit breaker |
+| `di` | `gokit/di` | Type-keyed dependency injection with eager/singleton/transient modes and closeable lifecycle |
 | `resilience` | `gokit/resilience` | Circuit breaker, retry, bulkhead, rate limiting |
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting |
