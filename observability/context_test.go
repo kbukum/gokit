@@ -102,7 +102,6 @@ func TestOperationContextWithMetadata(t *testing.T) {
 func TestOperationContextAllAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
@@ -147,7 +146,6 @@ func TestOperationContextAllAttributes(t *testing.T) {
 func TestOperationContextWithoutUserID(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "", nil)
@@ -170,7 +168,6 @@ func TestOperationContextWithoutUserID(t *testing.T) {
 func TestOperationContextSpanAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "user-1", nil)
@@ -204,7 +201,6 @@ func TestOperationContextSpanAttributes(t *testing.T) {
 func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "", nil)
@@ -234,7 +230,6 @@ func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 func TestConcurrentOperationContexts(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
@@ -250,7 +245,6 @@ func TestConcurrentOperationContexts(t *testing.T) {
 			oc := NewOperationContext("svc", fmt.Sprintf("op-%d", id), fmt.Sprintf("req-%d", id), "", metrics)
 			ctx := context.Background()
 			ctx, span := oc.StartSpanForOperation(ctx, fmt.Sprintf("span-%d", id))
-			time.Sleep(time.Millisecond)
 			oc.EndOperation(ctx, span, "ok", nil)
 		}(i)
 	}

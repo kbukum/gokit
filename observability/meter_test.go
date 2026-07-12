@@ -131,7 +131,6 @@ func TestConcurrentRecordRequestStartEnd(t *testing.T) {
 			defer wg.Done()
 			ctx := context.Background()
 			metrics.RecordRequestStart(ctx)
-			time.Sleep(time.Millisecond)
 			method := fmt.Sprintf("GET /item/%d", id)
 			metrics.RecordRequestEnd(ctx, "svc", method, "ok", 5*time.Millisecond)
 		}(i)

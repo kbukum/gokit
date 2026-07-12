@@ -12,7 +12,6 @@ import (
 func TestStartNamedSpan(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	_, span := StartNamedSpan(
@@ -41,7 +40,6 @@ func TestStartNamedSpan(t *testing.T) {
 func TestSpanSetAttributesAllKinds(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	kinds := []SpanKind{

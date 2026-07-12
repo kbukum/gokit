@@ -112,7 +112,6 @@ func TestSetSpanAttributes(t *testing.T) {
 	// Use SDK tracer so span.IsRecording() returns true
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	ctx, span := StartSpan(context.Background(), "test-attrs")
@@ -138,7 +137,6 @@ func TestSetSpanAttributesNoSpan(t *testing.T) {
 func TestSetSpanError(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	ctx, span := StartSpan(context.Background(), "test-error")
@@ -250,7 +248,6 @@ func TestInitTracerSecure(t *testing.T) {
 func TestSpanNestingParentChild(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	ctx := context.Background()
@@ -284,7 +281,6 @@ func TestSpanNestingParentChild(t *testing.T) {
 func TestThreeLevelSpanNesting(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	defer tp.Shutdown(context.Background())
 	setTracerProvider(t, tp)
 
 	ctx := context.Background()
