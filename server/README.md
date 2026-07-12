@@ -82,7 +82,8 @@ server:   # or http:
 | `ContentType` | Spec MIME type | `"application/json"` |
 | `Host` | Override spec `host` field | *(none)* |
 | `BasePath` | Override spec `basePath` field | *(none)* |
-| `DarkMode` | Dark theme | `true` |
+| `DarkMode` | Dark theme (`*bool`; nil ⇒ enabled) | `true` |
+| `HideModels` | Hide the "Models" sidebar section | `false` |
 | `HideAI` | Hide Scalar's AI assistant | `false` |
 | `Theme` | Scalar theme (`"moon"`, `"purple"`, `"deepSpace"`, etc.) | *(default)* |
 | `CustomCSS` | Additional CSS | *(none)* |

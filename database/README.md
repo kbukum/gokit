@@ -25,8 +25,10 @@ comp := database.NewComponent(cfg, log).
 ## Registry-driven selection
 
 ```go
+import "gorm.io/driver/postgres"
+
 drivers := database.NewDriverRegistry()
-if err := postgresadapter.Register(drivers); err != nil {
+if err := drivers.Register("postgres", postgres.Open); err != nil {
     return err
 }
 
@@ -39,6 +41,8 @@ comp := database.NewComponent(cfg, log).
 `database/sqlite` is a nested adapter module for tests/local development:
 
 ```go
+import "github.com/kbukum/gokit/database/sqlite"
+
 drivers := database.NewDriverRegistry()
 if err := sqlite.Register(drivers); err != nil {
     return err

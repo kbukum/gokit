@@ -14,20 +14,23 @@ Every package has its own `README.md` with API examples — start there for deta
 
 | Package | Import | Description |
 |---|---|---|
-| `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, RFC 7807 |
+| `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, RFC 9457 |
 | `config` | `gokit/config` | Base configuration with `Environment` type and defaults |
 | `logging` | `gokit/logging` | Structured logging via zerolog with context injection |
 | `util` | `gokit/util` | Generic slice, map, pointer, functional utilities |
+| `codec` | `gokit/codec` | Pluggable structured-text codecs (JSON, TOML, …) over a shared value tree |
+| `fs` | `gokit/fs` | Local filesystem primitives — safe paths, atomic writes, temp files, metadata |
 | `version` | `gokit/version` | Build version info — git commit, branch, build time |
 | `encryption` | `gokit/encryption` | AES-256-GCM encryption for sensitive data |
 | `validation` | `gokit/validation` | Struct tag and programmatic validation |
-| `di` | `gokit/di` | DI container with lazy/eager init, retry, circuit breaker |
+| `di` | `gokit/di` | Type-keyed dependency injection with eager/singleton/transient modes and closeable lifecycle |
 | `resilience` | `gokit/resilience` | Circuit breaker, retry, bulkhead, rate limiting |
 | `observability` | `gokit/observability` | OpenTelemetry tracing, metrics, health checking |
 | `sse` | `gokit/sse` | Server-sent events broadcasting |
 | `provider` | `gokit/provider` | Generic provider framework + sink combinators |
 | `stream` | `gokit/stream` | Pull-based stream (Throttle, Batch, Debounce, Window) |
 | `dag` | `gokit/dag` | DAG execution engine — batch / streaming / cascade |
+| `chain` | `gokit/chain` | Sequential chain execution — step piping, progress, cancellation |
 | `media` | `gokit/media` | Media type detection from content bytes |
 | `security` | `gokit/security` | TLS configuration and certificate utilities |
 | `process` | `gokit/process` | Subprocess execution with cancellation |
@@ -54,15 +57,18 @@ Every package has its own `README.md` with API examples — start there for deta
 | `testutil` | `gokit/testutil` | Component lifecycle & state-management testing |
 | `stateful` | `gokit/stateful` | Push-based stateful accumulation |
 | `llm` | `gokit/llm` | LLM chat completion abstraction |
+| `inference` | `gokit/inference` | Model-serving runtime adapters — Triton, KServe v2, vLLM, TGI |
+| `ai` | `gokit/ai` | Universal AI/ML primitives — value types, sentinel errors, semantic keys |
 | `bench` | `gokit/bench` | Evaluation framework — datasets, evaluators, reports |
-| `bench/viz` | `gokit/bench/viz` | SVG ROC / confusion / calibration plots |
+| `bench/viz` | `gokit/bench/viz` | Pure-Go SVG ROC / confusion / calibration / distribution plots |
 | `bench/storage` | `gokit/bench/storage` | Bench storage adapter |
 | `agent` | `gokit/agent` | Agentic loop — LLM, tools, context management |
 | `tool` | `gokit/tool` | Type-safe tool definitions with auto-generated schemas |
 | `schema` | `gokit/schema` | JSON Schema generation from Go types |
 | `hook` | `gokit/hook` | Generic event hook system |
 | `mcp` | `gokit/mcp` | Model Context Protocol server / client |
-| `explain` | `gokit/explain` | Structured explanation generation via LLM |
+| `skill` | `gokit/skill` | SDK-free skill manifests, loading, registry, activation |
+| `git` | `gokit/git` | Git repository operations — capability interfaces, embedded/CLI backends |
 | `embedding` | `gokit/embedding` | Cosine similarity, distance metrics, pooling |
 | `vectorstore` | `gokit/vectorstore` | Vector similarity search abstraction |
 
@@ -70,20 +76,21 @@ Every package has its own `README.md` with API examples — start there for deta
 
 | Group | Packages | Focus |
 |---|---|---|
-| **Foundation** | errors, config, logging, version | Configuration, logging, errors |
+| **Foundation** | errors, config, logging, version, codec, fs | Configuration, logging, errors, encoding, filesystem |
 | **Utilities** | util, encryption, validation | Helpers and data validation |
 | **Architecture** | di, provider, component, bootstrap | DI, lifecycle, provider pattern |
 | **Auth & Authz** | auth, authz | Authentication and authorization |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Data & Flow** | stream, dag, sse, media, stateful | Streams, DAGs, SSE, media, accumulation |
+| **Data & Flow** | stream, dag, chain, sse, media, stateful | Streams, DAGs, chains, SSE, media, accumulation |
 | **Infrastructure** | database, cache, messaging, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload, worker | Subprocess and container workloads |
 | **Testing** | testutil | Component lifecycle testing infrastructure |
-| **AI** | llm, agent, tool, hook, mcp, schema, explain | LLM orchestration & tooling |
+| **AI** | ai, llm, inference, agent, tool, hook, mcp, skill, schema | LLM orchestration & tooling |
 | **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking |
 | **Vectors** | embedding, vectorstore | Embedding & similarity search |
+| **Devtools** | git | Git repository operations |
 
 See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) for the layering rationale.
 

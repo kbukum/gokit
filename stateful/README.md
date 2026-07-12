@@ -10,7 +10,7 @@ Push-based stateful accumulation with configurable triggers, bounded buffers, an
 - ✅ **Rate limiting** - MinInterval prevents too-frequent flushes
 - ✅ **Keep-alive TTL** - Sliding window expiration (reset on activity)
 - ✅ **Type-aware measurement** - Count, bytes, tokens, custom
-- ✅ **Pluggable storage** - Memory (built-in), Redis, or custom
+- ✅ **Pluggable storage** - Memory (built-in) or custom (implement `Store`)
 - ✅ **Multi-tenant** - Manager handles multiple accumulators
 - ✅ **Thread-safe** - Concurrent append operations
 - ✅ **Zero dependencies** - Core uses only stdlib
@@ -64,7 +64,7 @@ acc.Append(ctx, event)
 mgr := stateful.NewManager(
     func(userID string) *stateful.Accumulator[LogEntry] {
         return stateful.NewAccumulator(
-            stateful.NewRedisStore[LogEntry](redis, "logs:"+userID),
+            stateful.NewMemoryStore[LogEntry](),
             config,
         )
     },

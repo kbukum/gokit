@@ -28,8 +28,10 @@ func (t *tracingRR[I, O]) Execute(ctx context.Context, input I) (O, error) {
 	ctx, span := observability.StartSpan(ctx, spanName)
 	defer span.End()
 
-	observability.SetSpanAttribute(ctx, observability.AttrServiceName, t.serviceName)
-	observability.SetSpanAttribute(ctx, observability.AttrOperationName, t.inner.Name())
+	observability.SetSpanAttributes(ctx,
+		observability.StringAttribute(observability.AttrServiceName, t.serviceName),
+		observability.StringAttribute(observability.AttrOperationName, t.inner.Name()),
+	)
 
 	output, err := t.inner.Execute(ctx, input)
 	if err != nil {

@@ -9,50 +9,39 @@ import (
 
 // MetricAttribute is a typed, transport-neutral metric attribute.
 type MetricAttribute struct {
-	key   string
-	value any
+	key string
+	val attrValue
 }
 
 // MetricStringAttribute creates a string metric attribute.
 func MetricStringAttribute(key, value string) MetricAttribute {
-	return MetricAttribute{key: key, value: value}
+	return MetricAttribute{key: key, val: stringValue(value)}
 }
 
 // MetricIntAttribute creates an int metric attribute.
 func MetricIntAttribute(key string, value int) MetricAttribute {
-	return MetricAttribute{key: key, value: value}
+	return MetricAttribute{key: key, val: intValue(value)}
 }
 
 // MetricInt64Attribute creates an int64 metric attribute.
 func MetricInt64Attribute(key string, value int64) MetricAttribute {
-	return MetricAttribute{key: key, value: value}
+	return MetricAttribute{key: key, val: int64Value(value)}
 }
 
 // MetricFloat64Attribute creates a float64 metric attribute.
 func MetricFloat64Attribute(key string, value float64) MetricAttribute {
-	return MetricAttribute{key: key, value: value}
+	return MetricAttribute{key: key, val: float64Value(value)}
 }
 
 // MetricBoolAttribute creates a bool metric attribute.
 func MetricBoolAttribute(key string, value bool) MetricAttribute {
-	return MetricAttribute{key: key, value: value}
+	return MetricAttribute{key: key, val: boolValue(value)}
 }
 
 func metricAttributes(attrs []MetricAttribute) metric.MeasurementOption {
 	values := make([]attribute.KeyValue, 0, len(attrs))
 	for _, attr := range attrs {
-		switch value := attr.value.(type) {
-		case string:
-			values = append(values, attribute.String(attr.key, value))
-		case int:
-			values = append(values, attribute.Int(attr.key, value))
-		case int64:
-			values = append(values, attribute.Int64(attr.key, value))
-		case float64:
-			values = append(values, attribute.Float64(attr.key, value))
-		case bool:
-			values = append(values, attribute.Bool(attr.key, value))
-		}
+		values = append(values, attr.val.keyValue(attr.key))
 	}
 	return metric.WithAttributes(values...)
 }

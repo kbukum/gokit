@@ -705,13 +705,35 @@ func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
 
 	registry := component.NewRegistry()
 	container := di.NewContainer()
-	container.RegisterSingleton("service.user", "user-svc")
-	container.RegisterSingleton("repository.user", "user-repo")
-	container.RegisterSingleton("handler.users", "users-handler")
-	container.RegisterSingleton("config", "cfg")
+	_ = di.Register(container, "user-svc", di.WithName("service.user"))
+	_ = di.Register(container, "user-repo", di.WithName("repository.user"))
+	_ = di.Register(container, "users-handler", di.WithName("handler.users"))
+	_ = di.Register(container, "cfg", di.WithName("config"))
 
 	// Should not panic
 	s.DisplaySummary(registry, container, nil)
+}
+
+func TestRegistrationStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		info di.RegistrationInfo
+		icon string
+	}{
+		{"transient uninitialized", di.RegistrationInfo{Mode: di.Transient, Initialized: false}, "🔁"},
+		{"transient reported initialized", di.RegistrationInfo{Mode: di.Transient, Initialized: true}, "🔁"},
+		{"singleton cached", di.RegistrationInfo{Mode: di.Singleton, Initialized: true}, "✅"},
+		{"singleton not resolved", di.RegistrationInfo{Mode: di.Singleton, Initialized: false}, "💤"},
+		{"eager", di.RegistrationInfo{Mode: di.Eager, Initialized: true}, "✅"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := registrationStatus(tc.info); got != tc.icon {
+				t.Errorf("registrationStatus(%+v) = %q, expected %q", tc.info, got, tc.icon)
+			}
+		})
+	}
 }
 
 func TestTreePrefix(t *testing.T) {

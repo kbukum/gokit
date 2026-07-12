@@ -27,7 +27,7 @@ belongs in the owner so every consumer benefits.
 For each candidate, name the concern, locate its owning package, and confirm the change calls
 the owner rather than rewriting it:
 
-- **Errors.** gokit `AppError` (RFC 7807) with typed error codes and wrapped cause via `%w`.
+- **Errors.** gokit `AppError` (RFC 9457) with typed error codes and wrapped cause via `%w`.
   A fresh `errors.New`/`fmt.Errorf` sentinel for a shared concern, or a bespoke error struct
   duplicating `AppError`, is duplication. Use `errors.Is/As/Join`.
 - **Resilience.** Retries / timeouts / circuit-breaking come from `resilience`, not hand-rolled

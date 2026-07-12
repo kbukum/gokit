@@ -76,13 +76,17 @@ func (o *orderTrackingComponent) Stop(ctx context.Context) error {
 }
 func (o *orderTrackingComponent) Health(ctx context.Context) component.Health { return o.health }
 
-// failCloseContainer is a di.Container wrapper that returns an error from Close().
-type failCloseContainer struct {
-	di.Container
-	closeErr error
-}
+// failCloser returns an error from Close(); registering it in a real container
+// exercises the container-close error path during shutdown.
+type failCloser struct{}
 
-func (f *failCloseContainer) Close() error { return f.closeErr }
+func containerWithFailingClose(closeErr error) *di.Container {
+	c := di.NewContainer()
+	_ = di.RegisterCloseable(c, failCloser{}, func(context.Context, failCloser) error {
+		return closeErr
+	})
+	return c
+}
 
 // ── 1. Config validation failure recovery ───────────────────────────────────
 
@@ -422,14 +426,11 @@ func TestReadyCheckWarningDoesNotBlockStartup(t *testing.T) {
 	}
 }
 
-// ── 8. Container.Close() failures during shutdown ───────────────────────────
+// ── 8. Container.Close(ctx) failures during shutdown ────────────────────────
 
 func TestContainerCloseErrorDuringShutdown(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
-	container := &failCloseContainer{
-		Container: di.NewContainer(),
-		closeErr:  fmt.Errorf("container close failed"),
-	}
+	container := containerWithFailingClose(fmt.Errorf("container close failed"))
 	app, _ := NewApp(cfg, WithContainer(container))
 
 	err := app.RunTask(context.Background(), func(ctx context.Context) error {
@@ -446,10 +447,7 @@ func TestContainerCloseErrorDuringShutdown(t *testing.T) {
 
 func TestMultipleShutdownErrors(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
-	container := &failCloseContainer{
-		Container: di.NewContainer(),
-		closeErr:  fmt.Errorf("container close error"),
-	}
+	container := containerWithFailingClose(fmt.Errorf("container close error"))
 	app, _ := NewApp(cfg, WithContainer(container))
 
 	app.OnStop(func(ctx context.Context) error {

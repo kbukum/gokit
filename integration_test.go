@@ -435,21 +435,17 @@ func TestIntegration_DI_Component_Bootstrap_FullLifecycle(t *testing.T) {
 	dbComp := &trackingComponent{name: "postgres"}
 	cacheComp := &trackingComponent{name: "redis"}
 
-	if err := container.RegisterSingleton("db", dbComp); err != nil {
+	if err := di.Register(container, dbComp, di.WithName("db")); err != nil {
 		t.Fatalf("register db: %v", err)
 	}
-	if err := container.RegisterSingleton("cache", cacheComp); err != nil {
+	if err := di.Register(container, cacheComp, di.WithName("cache")); err != nil {
 		t.Fatalf("register cache: %v", err)
 	}
 
 	// Resolve from container
-	resolved, err := container.Resolve("db")
+	resolvedComp, err := di.Resolve[*trackingComponent](context.Background(), container, di.WithName("db"))
 	if err != nil {
 		t.Fatalf("resolve db: %v", err)
-	}
-	resolvedComp, ok := resolved.(*trackingComponent)
-	if !ok {
-		t.Fatal("resolved value is not *trackingComponent")
 	}
 	if resolvedComp.Name() != "postgres" {
 		t.Errorf("expected postgres, got %s", resolvedComp.Name())
@@ -481,25 +477,30 @@ func TestIntegration_DI_Component_RegistrationModes(t *testing.T) {
 
 	// Eager registration
 	callCount := 0
-	container.RegisterEager("eager-svc", func() (any, error) {
+	eager := func() *trackingComponent {
 		callCount++
-		return &trackingComponent{name: "eager"}, nil
-	})
+		return &trackingComponent{name: "eager"}
+	}()
+	if err := di.Register(container, eager, di.WithName("eager-svc")); err != nil {
+		t.Fatalf("register eager-svc: %v", err)
+	}
 	if callCount != 1 {
-		t.Errorf("eager should call factory immediately, callCount=%d", callCount)
+		t.Errorf("eager should build the value immediately, callCount=%d", callCount)
 	}
 
-	// Lazy registration
+	// Lazy (singleton) registration
 	lazyCount := 0
-	container.RegisterLazy("lazy-svc", func() (any, error) {
+	if err := di.RegisterSingleton(container, func(context.Context) (*trackingComponent, error) {
 		lazyCount++
 		return &trackingComponent{name: "lazy"}, nil
-	})
+	}, di.WithName("lazy-svc")); err != nil {
+		t.Fatalf("register lazy-svc: %v", err)
+	}
 	if lazyCount != 0 {
 		t.Error("lazy should not call factory until resolve")
 	}
 
-	_, err := container.Resolve("lazy-svc")
+	_, err := di.Resolve[*trackingComponent](context.Background(), container, di.WithName("lazy-svc"))
 	if err != nil {
 		t.Fatalf("resolve lazy: %v", err)
 	}
@@ -728,18 +729,14 @@ func TestIntegration_DI_Resilience_CircuitBreakerInContainer(t *testing.T) {
 		Timeout:     100 * time.Millisecond,
 	})
 
-	container.RegisterSingleton("circuit-breaker", cb)
+	if err := di.Register(container, cb, di.WithName("circuit-breaker")); err != nil {
+		t.Fatalf("register circuit-breaker: %v", err)
+	}
 
-	resolved, err := container.Resolve("circuit-breaker")
+	resolvedCB, err := di.Resolve[*resilience.CircuitBreaker](context.Background(), container, di.WithName("circuit-breaker"))
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-
-	resolvedCB, ok := resolved.(*resilience.CircuitBreaker)
-	if !ok {
-		t.Fatal("resolved value is not *CircuitBreaker")
-	}
-
 	// Use the resolved circuit breaker
 	execErr := resolvedCB.Execute(func() error { return nil })
 	if execErr != nil {
@@ -826,7 +823,7 @@ func TestIntegration_Component_Health_ObservabilityContext(t *testing.T) {
 func TestIntegration_Errors_DI_ResolveNonexistentReturnsError(t *testing.T) {
 	container := di.NewContainer()
 
-	_, err := container.Resolve("nonexistent")
+	_, err := di.Resolve[string](context.Background(), container, di.WithName("nonexistent"))
 	if err == nil {
 		t.Fatal("expected error for nonexistent key")
 	}
@@ -840,7 +837,9 @@ func TestIntegration_FullStack_ConfigDIComponentPipeline(t *testing.T) {
 
 	// 2. DI container
 	container := di.NewContainer()
-	container.RegisterSingleton("config", cfg)
+	if err := di.Register(container, cfg, di.WithName("config")); err != nil {
+		t.Fatalf("register config: %v", err)
+	}
 
 	// 3. Components
 	db := &trackingComponent{name: cfg.Name + "-db"}

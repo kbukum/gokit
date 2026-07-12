@@ -84,48 +84,48 @@ func main() {
 
 | Operator | Description |
 |----------|-------------|
-| `Map[T, O](p Pipeline[T], fn func(context.Context, T) (O, error)) Pipeline[O]` | Transform each value |
-| `FlatMap[T, O](p Pipeline[T], fn func(context.Context, T) (Iterator[O], error)) Pipeline[O]` | Transform each value into multiple values |
-| `Filter[T](p Pipeline[T], pred func(T) bool) Pipeline[T]` | Keep values matching predicate |
-| `Tap[T](p Pipeline[T], fn func(context.Context, T) error) Pipeline[T]` | Side-effect without altering value (logging, metrics) |
-| `TapEach[T](p Pipeline[[]T], fn func(context.Context, T) error) Pipeline[[]T]` | Per-element side-effect on slices |
-| `FanOut[T, O](p Pipeline[T], fns ...func(context.Context, T) (O, error)) Pipeline[[]O]` | Apply multiple functions in parallel, collect as slice |
-| `Reduce[T, O](p Pipeline[T], init O, fn func(O, T) O)` | Accumulate all values into one result |
-| `Concat[T](pipelines ...Pipeline[T]) Pipeline[T]` | Join pipelines sequentially |
+| `Map[I, O](p *Pipeline[I], fn func(context.Context, I) (O, error)) *Pipeline[O]` | Transform each value |
+| `FlatMap[I, O](p *Pipeline[I], fn func(context.Context, I) (Iterator[O], error)) *Pipeline[O]` | Transform each value into multiple values |
+| `Filter[T](p *Pipeline[T], fn func(T) bool) *Pipeline[T]` | Keep values matching predicate |
+| `Tap[T](p *Pipeline[T], fn func(context.Context, T) error) *Pipeline[T]` | Side-effect without altering value (logging, metrics) |
+| `TapEach[T](p *Pipeline[[]T], fns ...func(context.Context, T) error) *Pipeline[[]T]` | Per-element side-effect on slices |
+| `FanOut[I, O](p *Pipeline[I], fns ...func(context.Context, I) (O, error)) *Pipeline[[]O]` | Apply multiple functions in parallel, collect as slice |
+| `Reduce[T, R](p *Pipeline[T], init R, fn func(R, T) R) *Pipeline[R]` | Accumulate all values into one result |
+| `Concat[T](pipelines ...*Pipeline[T]) *Pipeline[T]` | Join pipelines sequentially |
 
 ### Concurrent Operators
 
 | Operator | Description |
 |----------|-------------|
-| `Buffer[T](p Pipeline[T], size int) Pipeline[T]` | Decouple producer/consumer with buffered channel |
-| `Parallel[T, O](p Pipeline[T], workers int, fn func(context.Context, T) (O, error)) Pipeline[O]` | Concurrent Map with worker pool (order NOT preserved) |
-| `Merge[T](pipelines ...Pipeline[T]) Pipeline[T]` | Combine pipelines concurrently (order NOT preserved) |
+| `Buffer[T](p *Pipeline[T], size int) *Pipeline[T]` | Decouple producer/consumer with buffered channel |
+| `Parallel[I, O](p *Pipeline[I], n int, fn func(context.Context, I) (O, error)) *Pipeline[O]` | Concurrent Map with worker pool (order NOT preserved) |
+| `Merge[T](pipelines ...*Pipeline[T]) *Pipeline[T]` | Combine pipelines concurrently (order NOT preserved) |
 
 ### Stream/Time-Aware Operators
 
 | Operator | Description |
 |----------|-------------|
-| `Throttle[T](p Pipeline[T], interval time.Duration) Pipeline[T]` | Rate-limit values (drop values arriving faster than interval) |
-| `Batch[T](p Pipeline[T], size int, timeout time.Duration) Pipeline[[]T]` | Collect N items or wait timeout, emit as slice |
-| `Debounce[T](p Pipeline[T], quiet time.Duration) Pipeline[T]` | Wait for silence before emitting latest value |
-| `TumblingWindow[T](p Pipeline[T], duration time.Duration) Pipeline[[]T]` | Non-overlapping fixed-duration windows |
-| `SlidingWindow[T](p Pipeline[T], duration, slide time.Duration) Pipeline[[]T]` | Overlapping windows with configurable slide |
+| `Throttle[T](p *Pipeline[T], interval time.Duration) *Pipeline[T]` | Rate-limit values (drop values arriving faster than interval) |
+| `Batch[T](p *Pipeline[T], size int, timeout time.Duration) *Pipeline[[]T]` | Collect N items or wait timeout, emit as slice |
+| `Debounce[T](p *Pipeline[T], duration time.Duration) *Pipeline[T]` | Wait for silence before emitting latest value |
+| `TumblingWindow[T](p *Pipeline[T], duration time.Duration) *Pipeline[[]T]` | Non-overlapping fixed-duration windows |
+| `SlidingWindow[T](p *Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) *Pipeline[[]T]` | Overlapping event-time windows with configurable slide |
 
 ### Terminal Operators
 
 | Operator | Description |
 |----------|-------------|
-| `Collect[T](ctx context.Context, p Pipeline[T]) ([]T, error)` | Pull all values into a slice |
-| `Drain[T](p Pipeline[T], fn func(context.Context, T) error) Runnable` | Pull values and pass to function, discard results |
-| `ForEach[T](ctx context.Context, p Pipeline[T], fn func(T) error) error` | Apply function to each value |
+| `Collect[T](ctx context.Context, p *Pipeline[T]) ([]T, error)` | Pull all values into a slice |
+| `Drain[T](p *Pipeline[T], sink func(context.Context, T) error) *Runnable` | Pull values and pass to a sink, discard results |
+| `ForEach[T](ctx context.Context, p *Pipeline[T], fn func(context.Context, T) error) error` | Apply function to each value |
 
 ### Source Constructors
 
 | Constructor | Description |
 |-------------|-------------|
-| `FromSlice[T](items []T) Pipeline[T]` | Create pipeline from slice |
-| `From[T](it Iterator[T]) Pipeline[T]` | Create pipeline from any iterator (including `provider.Iterator[T]`) |
-| `FromFunc[T](fn func(context.Context) (T, bool, error)) Pipeline[T]` | Create pipeline from generator function |
+| `FromSlice[T](items []T) *Pipeline[T]` | Create pipeline from slice |
+| `From[T](iter Iterator[T]) *Pipeline[T]` | Create pipeline from any iterator (including `provider.Iterator[T]`) |
+| `FromFunc[T](fn func(context.Context) Iterator[T]) *Pipeline[T]` | Create pipeline from an iterator-producing function |
 
 ## Usage Examples
 
@@ -155,7 +155,7 @@ activeUsers, err := stream.Collect(ctx, active)
 
 ```go
 // Stream of events
-events := stream.FromFunc(eventSource.Next)
+events := stream.From(eventSource) // eventSource implements Iterator[Event]
 
 // Rate-limit to 10 events/sec
 throttled := stream.Throttle(events, 100*time.Millisecond)
@@ -203,7 +203,7 @@ stream.Drain(identified, finalSink.Send).Run(ctx)
 
 ```go
 // Stream of metrics
-metrics := stream.FromFunc(metricSource.Next)
+metrics := stream.From(metricSource) // metricSource implements Iterator[Metric]
 
 // Create 1-minute tumbling windows
 windows := stream.TumblingWindow(metrics, 1*time.Minute)

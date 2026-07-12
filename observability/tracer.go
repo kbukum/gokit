@@ -133,27 +133,13 @@ func SpanFromContext(ctx context.Context) trace.Span {
 	return trace.SpanFromContext(ctx)
 }
 
-// SetSpanAttribute sets an attribute on the current span in context.
-func SetSpanAttribute(ctx context.Context, key string, value any) {
+// SetSpanAttributes sets typed attributes on the current span in context.
+func SetSpanAttributes(ctx context.Context, attrs ...SpanAttribute) {
 	span := SpanFromContext(ctx)
 	if span == nil || !span.IsRecording() {
 		return
 	}
-
-	switch v := value.(type) {
-	case string:
-		span.SetAttributes(attribute.String(key, v))
-	case int:
-		span.SetAttributes(attribute.Int(key, v))
-	case int64:
-		span.SetAttributes(attribute.Int64(key, v))
-	case float64:
-		span.SetAttributes(attribute.Float64(key, v))
-	case bool:
-		span.SetAttributes(attribute.Bool(key, v))
-	case []string:
-		span.SetAttributes(attribute.StringSlice(key, v))
-	}
+	span.SetAttributes(toOTelSpanAttributes(attrs)...)
 }
 
 // SetSpanError records an error on the current span in context.

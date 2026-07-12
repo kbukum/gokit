@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -247,5 +248,95 @@ func TestBackoffDelay(t *testing.T) {
 
 	if got := BackoffDelay(3, cfg); got != 250*time.Millisecond {
 		t.Fatalf("BackoffDelay() = %v, want 250ms", got)
+	}
+}
+
+// seededRand returns a deterministic Float64 source for reproducible jitter.
+func seededRand(seed uint64) func() float64 {
+	return rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15)).Float64
+}
+
+func TestCalculateBackoff_InjectedRandIsDeterministic(t *testing.T) {
+	t.Parallel()
+	newCfg := func() RetryConfig {
+		return RetryConfig{
+			InitialBackoff: 100 * time.Millisecond,
+			MaxBackoff:     10 * time.Second,
+			BackoffFactor:  2.0,
+			Jitter:         0.5,
+			Rand:           seededRand(42),
+		}
+	}
+
+	// Same seed → identical backoff sequence.
+	a, b := newCfg(), newCfg()
+	for attempt := 1; attempt <= 5; attempt++ {
+		if got, want := calculateBackoff(attempt, a), calculateBackoff(attempt, b); got != want {
+			t.Fatalf("attempt %d: %v != %v (injected RNG must be deterministic)", attempt, got, want)
+		}
+	}
+}
+
+func TestCalculateBackoff_InjectedRandControlsJitter(t *testing.T) {
+	t.Parallel()
+	// Rand fixed at 0.0 → jitter term is (0*2-1)*range = -range (lower bound).
+	low := RetryConfig{
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+		BackoffFactor:  1.0,
+		Jitter:         0.5,
+		Rand:           func() float64 { return 0.0 },
+	}
+	// Rand fixed at just below 1.0 → jitter term approaches +range (upper bound).
+	high := low
+	high.Rand = func() float64 { return 0.999999 }
+
+	base := 100 * time.Millisecond
+	gotLow := calculateBackoff(1, low)
+	gotHigh := calculateBackoff(1, high)
+
+	if gotLow >= base {
+		t.Errorf("Rand=0 should push backoff below base: got %v, base %v", gotLow, base)
+	}
+	if gotHigh <= base {
+		t.Errorf("Rand≈1 should push backoff above base: got %v, base %v", gotHigh, base)
+	}
+}
+
+func TestBackoffDelay_ClampsAttemptBelowOne(t *testing.T) {
+	cfg := RetryConfig{
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+		BackoffFactor:  2.0,
+		Strategy:       ExponentialBackoff,
+	}
+	if got, want := BackoffDelay(0, cfg), BackoffDelay(1, cfg); got != want {
+		t.Fatalf("attempt<1 should clamp to 1: got %v, want %v", got, want)
+	}
+}
+
+func TestCalculateBackoff_ConstantAndLinearStrategies(t *testing.T) {
+	base := 100 * time.Millisecond
+	constCfg := RetryConfig{InitialBackoff: base, MaxBackoff: time.Minute, Strategy: ConstantBackoff}
+	if got := calculateBackoff(3, constCfg); got != base {
+		t.Fatalf("constant backoff should stay at base: got %v", got)
+	}
+
+	linearCfg := RetryConfig{InitialBackoff: base, MaxBackoff: time.Minute, Strategy: LinearBackoff}
+	if got := calculateBackoff(3, linearCfg); got != 3*base {
+		t.Fatalf("linear backoff attempt 3 should be 3x base: got %v", got)
+	}
+}
+
+func TestCalculateBackoff_NegativeJitterFallsBackToInitial(t *testing.T) {
+	cfg := RetryConfig{
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+		Strategy:       ConstantBackoff,
+		Jitter:         2.0,                         // large jitter range
+		Rand:           func() float64 { return 0 }, // pushes jitter fully negative
+	}
+	if got := calculateBackoff(1, cfg); got != cfg.InitialBackoff {
+		t.Fatalf("negative backoff should fall back to InitialBackoff: got %v", got)
 	}
 }

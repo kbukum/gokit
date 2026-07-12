@@ -31,7 +31,7 @@ func main() {
 
     // Start a span
     ctx, span := observability.StartSpan(ctx, "process-request")
-    observability.SetSpanAttribute(ctx, "user.id", "abc-123")
+    observability.SetSpanAttributes(ctx, observability.StringAttribute("user.id", "abc-123"))
     defer span.End()
 
     // Health checks
@@ -50,7 +50,7 @@ func main() {
 | `InitTracer()` / `TracerConfig` | OpenTelemetry tracer setup |
 | `InitMeter()` / `MeterConfig` | OpenTelemetry metrics setup |
 | `StartSpan()` / `SpanFromContext()` | Distributed tracing helpers |
-| `SetSpanAttribute()` / `SetSpanError()` | Span enrichment |
+| `SetSpanAttributes()` / `SetSpanError()` | Span enrichment |
 | `Metrics` | Pre-built metric instruments for requests, operations, errors |
 | `OperationContext` | Combines tracing + metrics for tracked operations |
 | `ServiceHealth` / `HealthChecker` | Service health aggregation |

@@ -44,7 +44,7 @@ func main() {
 | `Coalesce[T]()` | Return first non-zero value |
 | `SanitizeString()` / `SanitizeEnvValue()` | Input sanitization |
 | `IsSafeString()` | SQL injection / XSS detection |
-| `ValidateUUID()` / `ValidateNonEmpty()` | Input validation helpers |
+| `ParseSize()` / `MaskSecret()` | Human-readable size parsing and secret masking |
 
 ---
 
