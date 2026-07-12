@@ -5,7 +5,7 @@
 // generic and typed end-to-end — there is no untyped registration or lookup:
 //
 //	c := di.NewContainer()
-//	defer c.Close()
+//	defer func() { _ = c.Close() }()
 //
 //	// Pre-built value (eager).
 //	_ = di.Register(c, logging.NewDefault("app"))
