@@ -102,6 +102,38 @@ func TestBroadcasterDropsOverflowWithoutBlocking(t *testing.T) {
 	}
 }
 
+func TestBroadcasterZeroValueUsable(t *testing.T) {
+	t.Parallel()
+
+	// A zero-value Broadcaster must lazily initialize and never panic: Subscribe,
+	// Broadcast, and Close all work with the default buffer.
+	var b stream.Broadcaster[int]
+	if got := b.Buffer(); got != stream.DefaultBroadcastBuffer {
+		t.Fatalf("zero-value buffer = %d, want %d", got, stream.DefaultBroadcastBuffer)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sub := b.Subscribe(ctx)
+	b.Broadcast(9)
+	if v := <-sub; v != 9 {
+		t.Fatalf("zero-value delivery = %d, want 9", v)
+	}
+
+	b.Close() // must not panic on a lazily-initialized done channel
+	expectClosed(t, sub, "zero-value subscription")
+}
+
+func TestBroadcasterZeroValueCloseWithoutSubscribers(t *testing.T) {
+	t.Parallel()
+
+	// Close on a never-used zero value must not panic on close(nil) and stays
+	// idempotent.
+	var b stream.Broadcaster[int]
+	b.Close()
+	b.Close()
+}
+
 func TestBroadcasterSubscribeCanceledContext(t *testing.T) {
 	t.Parallel()
 

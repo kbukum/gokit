@@ -19,7 +19,9 @@ const DefaultBroadcastBuffer = 64
 // config reloads, service discovery, cache invalidation, and secret rotation.
 //
 // Share a Broadcaster by pointer; every holder observes the same subscriber set.
-// It is safe for concurrent use.
+// It is safe for concurrent use. NewBroadcaster is the canonical constructor,
+// but the zero value is also usable: it lazily initializes on first use with the
+// default buffer.
 type Broadcaster[T any] struct {
 	mu     sync.Mutex
 	subs   []*subscriber[T]
@@ -59,8 +61,25 @@ func NewBroadcaster[T any](opts ...BroadcasterOption) *Broadcaster[T] {
 	return &Broadcaster[T]{buffer: cfg.buffer, done: make(chan struct{})}
 }
 
-// Buffer returns the per-subscriber buffer size.
-func (b *Broadcaster[T]) Buffer() int { return b.buffer }
+// Buffer returns the effective per-subscriber buffer size.
+func (b *Broadcaster[T]) Buffer() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.ensureInit()
+	return b.buffer
+}
+
+// ensureInit lazily initializes the fields a zero-value Broadcaster leaves
+// unset, so it is safe to use without NewBroadcaster (mirroring the zero-value
+// readiness of sync primitives). Callers must hold b.mu.
+func (b *Broadcaster[T]) ensureInit() {
+	if b.done == nil {
+		b.done = make(chan struct{})
+	}
+	if b.buffer < 1 {
+		b.buffer = DefaultBroadcastBuffer
+	}
+}
 
 // SubscriberCount returns the number of currently live subscribers.
 func (b *Broadcaster[T]) SubscriberCount() int {
@@ -75,27 +94,30 @@ func (b *Broadcaster[T]) SubscriberCount() int {
 // context, or to a closed Broadcaster, returns an already-closed channel
 // without registering a subscriber or spawning a watcher goroutine.
 func (b *Broadcaster[T]) Subscribe(ctx context.Context) <-chan T {
-	ch := make(chan T, b.buffer)
-
 	if ctx.Err() != nil {
+		ch := make(chan T)
 		close(ch)
 		return ch
 	}
 
 	b.mu.Lock()
+	b.ensureInit()
 	if b.closed {
 		b.mu.Unlock()
+		ch := make(chan T)
 		close(ch)
 		return ch
 	}
+	ch := make(chan T, b.buffer)
 	sub := &subscriber[T]{ch: ch}
 	b.subs = append(b.subs, sub)
+	done := b.done
 	b.mu.Unlock()
 
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-b.done:
+		case <-done:
 		}
 		b.remove(sub)
 	}()
@@ -129,6 +151,7 @@ func (b *Broadcaster[T]) Close() {
 	if b.closed {
 		return
 	}
+	b.ensureInit()
 	b.closed = true
 	close(b.done)
 	for _, sub := range b.subs {

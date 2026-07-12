@@ -173,11 +173,10 @@ func (s *partitionState[T]) send(ctx context.Context, branch partitionBranch, r 
 }
 
 // finish delivers the terminal result to both branches exactly once and closes
-// them. The terminal error is delivered with sendTerminal, which never selects
-// on the tee context — that context is already canceled at termination, so
-// selecting on it would race the delivery and drop the terminal error — yet
-// still cannot block: it drops a buffered value to make room when a branch was
-// abandoned without being closed.
+// them. The terminal error is delivered with sendTerminal, which blocks until
+// each branch drains it or is closed. It deliberately does not select on the tee
+// context: when the terminal error is the cancellation itself, that context is
+// already canceled, so a ctx arm would race the delivery and drop the error.
 func (s *partitionState[T]) finish(terminal result[T]) {
 	s.finishOnce.Do(func() {
 		if terminal.err != nil {
@@ -195,12 +194,14 @@ func (s *partitionState[T]) finish(terminal result[T]) {
 	})
 }
 
-// sendTerminal delivers the terminal result to a branch, prioritizing it over
-// any buffered value. It never selects on the (already-canceled) tee context,
-// and it never blocks indefinitely: if the 1-slot buffer is full because the
-// consumer abandoned the branch without closing it, the buffered value is
-// dropped so the terminal error takes its place. The tee goroutine is the only
-// sender, so once a slot is freed the send always makes progress.
+// sendTerminal delivers the terminal result to a branch. It blocks until the
+// consumer drains the 1-slot buffer (so an already-buffered value is never
+// dropped) or the branch is closed. It does not drop buffered data and does not
+// select on the tee context (see finish). This cannot deadlock in supported
+// usage: every standard consumer (Collect/Drain/ForEach) closes its branch on
+// return — including on its own cancellation — which closes closeCh; the Iterator
+// contract requires callers to Close(), so a consumer that stops reading without
+// closing is a contract violation.
 func (s *partitionState[T]) sendTerminal(branch partitionBranch, r result[T]) {
 	idx := int(branch)
 	s.mu.Lock()
@@ -210,21 +211,6 @@ func (s *partitionState[T]) sendTerminal(branch partitionBranch, r result[T]) {
 	s.mu.Unlock()
 	if closed {
 		return
-	}
-	select {
-	case out <- r:
-		return
-	case <-closeCh:
-		return
-	default:
-	}
-	// Buffer full and branch not closed: drop the buffered value to free the
-	// slot, then deliver the terminal error into it.
-	select {
-	case <-out:
-	case <-closeCh:
-		return
-	default:
 	}
 	select {
 	case out <- r:
