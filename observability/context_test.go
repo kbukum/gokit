@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric/noop"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -104,7 +103,7 @@ func TestOperationContextAllAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
@@ -149,7 +148,7 @@ func TestOperationContextWithoutUserID(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "", nil)
 	ctx := context.Background()
@@ -172,7 +171,7 @@ func TestOperationContextSpanAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "user-1", nil)
 	ctx := context.Background()
@@ -206,7 +205,7 @@ func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	oc := NewOperationContext("svc", "op", "req-1", "", nil)
 	ctx := context.Background()
@@ -236,7 +235,7 @@ func TestConcurrentOperationContexts(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)

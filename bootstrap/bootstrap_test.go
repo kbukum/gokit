@@ -714,6 +714,28 @@ func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
 	s.DisplaySummary(registry, container, nil)
 }
 
+func TestRegistrationStatus(t *testing.T) {
+	tests := []struct {
+		name string
+		info di.RegistrationInfo
+		icon string
+	}{
+		{"transient uninitialized", di.RegistrationInfo{Mode: di.Transient, Initialized: false}, "🔁"},
+		{"transient reported initialized", di.RegistrationInfo{Mode: di.Transient, Initialized: true}, "🔁"},
+		{"singleton cached", di.RegistrationInfo{Mode: di.Singleton, Initialized: true}, "✅"},
+		{"singleton not resolved", di.RegistrationInfo{Mode: di.Singleton, Initialized: false}, "💤"},
+		{"eager", di.RegistrationInfo{Mode: di.Eager, Initialized: true}, "✅"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := registrationStatus(tc.info); got != tc.icon {
+				t.Errorf("registrationStatus(%+v) = %q, expected %q", tc.info, got, tc.icon)
+			}
+		})
+	}
+}
+
 func TestTreePrefix(t *testing.T) {
 	// Last item should use └──
 	if p := treePrefix(2, 3); p != "└──" {

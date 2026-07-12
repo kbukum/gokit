@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"testing"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
 
@@ -30,7 +29,7 @@ func TestTraceContextCarriers(t *testing.T) {
 }
 
 func TestInjectExtractTraceContext(t *testing.T) {
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	setTextMapPropagator(t, propagation.TraceContext{})
 
 	ctx, span := StartNamedSpan(context.Background(), "test-tracer", "op")
 	defer span.End()

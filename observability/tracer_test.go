@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -114,7 +113,7 @@ func TestSetSpanAttribute(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	ctx, span := StartSpan(context.Background(), "test-attrs")
 	defer span.End()
@@ -128,9 +127,6 @@ func TestSetSpanAttribute(t *testing.T) {
 		BoolAttribute("bool-key", true),
 		StringSliceAttribute("string-slice-key", []string{"a", "b"}),
 	)
-
-	// Reset to noop
-	otel.SetTracerProvider(otel.GetTracerProvider())
 }
 
 func TestSetSpanAttributeNoSpan(t *testing.T) {
@@ -143,7 +139,7 @@ func TestSetSpanError(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	ctx, span := StartSpan(context.Background(), "test-error")
 	defer span.End()
@@ -255,7 +251,7 @@ func TestSpanNestingParentChild(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	ctx := context.Background()
 	ctx, parentSpan := StartSpan(ctx, "parent-op")
@@ -289,7 +285,7 @@ func TestThreeLevelSpanNesting(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	ctx := context.Background()
 	ctx, grandparent := StartSpan(ctx, "grandparent")

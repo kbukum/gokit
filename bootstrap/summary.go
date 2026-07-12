@@ -471,12 +471,8 @@ func (s *Summary) displayDIRegistrations(container *di.Container) {
 		fmt.Fprintf(s.writer, "   %s %s %s (%d)\n", groupPrefix, g.icon, g.plural, len(g.items))
 		for j, item := range g.items {
 			name := strings.TrimPrefix(item.Key, g.label+".")
-			status := "✅"
-			if !item.Initialized {
-				status = "💤"
-			}
 			itemPrefix := treePrefix(j, len(g.items))
-			fmt.Fprintf(s.writer, "   %s   %s %s %s\n", cont, itemPrefix, status, name)
+			fmt.Fprintf(s.writer, "   %s   %s %s %s\n", cont, itemPrefix, registrationStatus(item), name)
 		}
 	}
 
@@ -485,13 +481,24 @@ func (s *Summary) displayDIRegistrations(container *di.Container) {
 		groupPrefix := treePrefix(displayIdx-1, totalGroups)
 		fmt.Fprintf(s.writer, "   %s 🔧 infrastructure (%d)\n", groupPrefix, len(infra))
 		for j, item := range infra {
-			status := "✅"
-			if !item.Initialized {
-				status = "💤"
-			}
 			itemPrefix := treePrefix(j, len(infra))
-			fmt.Fprintf(s.writer, "      %s %s %s\n", itemPrefix, status, item.Key)
+			fmt.Fprintf(s.writer, "      %s %s %s\n", itemPrefix, registrationStatus(item), item.Key)
 		}
+	}
+}
+
+// registrationStatus returns the tree marker for a DI registration. Transient
+// registrations are resolved fresh on every request and are never cached, so
+// they get their own marker rather than being shown as an uninitialized
+// singleton. 💤 is reserved for singletons that have not been resolved yet.
+func registrationStatus(item di.RegistrationInfo) string {
+	switch {
+	case item.Mode == di.Transient:
+		return "🔁"
+	case item.Initialized:
+		return "✅"
+	default:
+		return "💤"
 	}
 }
 

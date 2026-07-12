@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -14,7 +13,7 @@ func TestStartNamedSpan(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	_, span := StartNamedSpan(
 		context.Background(),
@@ -43,7 +42,7 @@ func TestSpanSetAttributesAllKinds(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	defer tp.Shutdown(context.Background())
-	otel.SetTracerProvider(tp)
+	setTracerProvider(t, tp)
 
 	kinds := []SpanKind{
 		SpanKindInternal,
