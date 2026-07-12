@@ -89,3 +89,5 @@ replace github.com/kbukum/gokit/server => ../../server
 replace github.com/kbukum/gokit/auth => ../../auth
 
 replace github.com/kbukum/gokit/authz => ../../authz
+
+replace github.com/kbukum/gokit/discovery => ../../discovery
