@@ -28,7 +28,7 @@ type Store struct{ dsn string }
 func main() {
     ctx := context.Background()
     c := di.NewContainer()
-    defer c.Close()
+    defer func() { _ = c.Close() }()
 
     // Pre-built value (eager).
     _ = di.Register(c, "Hello, World!", di.WithName("greeting"))
