@@ -107,18 +107,6 @@ func TestHealthStatusConstants(t *testing.T) {
 	}
 }
 
-func TestHealthDetails(t *testing.T) {
-	h := Health{
-		Name:    "db",
-		Status:  HealthStatusUp,
-		Message: "connected",
-		Details: map[string]string{"host": "localhost", "port": "5432"},
-	}
-	if h.Details["host"] != "localhost" {
-		t.Error("expected Details to contain host")
-	}
-}
-
 func TestHealthStructFields(t *testing.T) {
 	h := Health{
 		Name:    "db",

@@ -170,13 +170,13 @@ func TestResolve_TypeMismatch_ReturnsError(t *testing.T) {
 
 func TestNilContainer_Errors(t *testing.T) {
 	t.Parallel()
-	if err := di.Register[int](nil, 1); err == nil {
+	if err := di.Register(nil, 1); err == nil {
 		t.Error("Register on nil container should error")
 	}
-	if err := di.RegisterSingleton[int](nil, func(context.Context) (int, error) { return 0, nil }); err == nil {
+	if err := di.RegisterSingleton(nil, func(context.Context) (int, error) { return 0, nil }); err == nil {
 		t.Error("RegisterSingleton on nil container should error")
 	}
-	if err := di.RegisterTransient[int](nil, func(context.Context) (int, error) { return 0, nil }); err == nil {
+	if err := di.RegisterTransient(nil, func(context.Context) (int, error) { return 0, nil }); err == nil {
 		t.Error("RegisterTransient on nil container should error")
 	}
 	if _, err := di.Resolve[int](context.Background(), nil); err == nil {
