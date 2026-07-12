@@ -15,7 +15,7 @@ func (g *greetingService) Greet(name string) string {
 
 func ExampleRegister() {
 	c := di.NewContainer()
-	defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close(context.Background()) }()
 
 	_ = di.Register(c, &greetingService{greeting: "Hello"})
 
@@ -26,7 +26,7 @@ func ExampleRegister() {
 
 func ExampleResolve() {
 	c := di.NewContainer()
-	defer func() { _ = c.Close() }()
+	defer func() { _ = c.Close(context.Background()) }()
 
 	_ = di.RegisterSingleton(c, func(context.Context) (int, error) { return 42, nil })
 

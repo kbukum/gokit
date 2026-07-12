@@ -28,8 +28,9 @@ func buildOptions(opts []Option) options {
 }
 
 // Register registers a pre-built value for type T. The value is returned as-is
-// on every [Resolve]. Re-registering the same key replaces the prior entry; the
-// replaced value is not closed, so close any resource you replace.
+// on every [Resolve]. Re-registering the same key replaces the prior entry.
+// Register does not close the value; use [RegisterCloseable] for a resource whose
+// cleanup the container should own.
 func Register[T any](c *Container, value T, opts ...Option) error {
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
@@ -48,7 +49,9 @@ func Register[T any](c *Container, value T, opts ...Option) error {
 // RegisterSingleton registers a factory for type T that is invoked once on
 // first [Resolve]; the result is cached and returned on every subsequent
 // resolve. The factory resolves its own dependencies from c using the passed
-// [context.Context].
+// [context.Context]. The cached value is not closed by [Container.Close]; use
+// [RegisterSingletonCloseable] for a resource whose cleanup the container should
+// own.
 func RegisterSingleton[T any](c *Container, ctor func(context.Context) (T, error), opts ...Option) error {
 	if c == nil {
 		return fmt.Errorf("di: container is nil")

@@ -78,13 +78,13 @@ func (o *orderTrackingComponent) Health(ctx context.Context) component.Health { 
 
 // failCloser returns an error from Close(); registering it in a real container
 // exercises the container-close error path during shutdown.
-type failCloser struct{ closeErr error }
-
-func (f failCloser) Close() error { return f.closeErr }
+type failCloser struct{}
 
 func containerWithFailingClose(closeErr error) *di.Container {
 	c := di.NewContainer()
-	_ = di.Register(c, failCloser{closeErr: closeErr})
+	_ = di.RegisterCloseable(c, failCloser{}, func(context.Context, failCloser) error {
+		return closeErr
+	})
 	return c
 }
 
@@ -426,7 +426,7 @@ func TestReadyCheckWarningDoesNotBlockStartup(t *testing.T) {
 	}
 }
 
-// ── 8. Container.Close() failures during shutdown ───────────────────────────
+// ── 8. Container.Close(ctx) failures during shutdown ────────────────────────
 
 func TestContainerCloseErrorDuringShutdown(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")

@@ -3,6 +3,7 @@ package di_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -236,49 +237,156 @@ func (c closer) Close() error {
 	return c.err
 }
 
-func TestClose_CallsCloseableOnce(t *testing.T) {
+func TestClose_RunsDisposerOnce(t *testing.T) {
 	t.Parallel()
 	c := di.NewContainer()
 	var closed int32
-	_ = di.Register(c, closer{closed: &closed})
+	_ = di.RegisterCloseable(c, &svc{}, func(context.Context, *svc) error {
+		atomic.AddInt32(&closed, 1)
+		return nil
+	})
 
-	if err := c.Close(); err != nil {
+	if err := c.Close(context.Background()); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if err := c.Close(); err != nil {
+	if err := c.Close(context.Background()); err != nil {
 		t.Fatalf("second Close: %v", err)
 	}
 	if got := atomic.LoadInt32(&closed); got != 1 {
-		t.Fatalf("Close called %d times, want 1", got)
+		t.Fatalf("disposer called %d times, want 1", got)
+	}
+}
+
+func TestClose_PlainRegisterNotClosed(t *testing.T) {
+	t.Parallel()
+	c := di.NewContainer()
+	var closed int32
+	// A plain Register value that also happens to implement Close() must NOT be
+	// closed by the container — the caller owns it.
+	_ = di.Register(c, closer{closed: &closed})
+
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := atomic.LoadInt32(&closed); got != 0 {
+		t.Fatalf("plain Register value was closed %d times, want 0", got)
 	}
 }
 
 func TestClose_UnresolvedSingletonNotConstructed(t *testing.T) {
 	t.Parallel()
 	c := di.NewContainer()
-	var constructed int32
-	_ = di.RegisterSingleton(c, func(context.Context) (*svc, error) {
+	var constructed, closed int32
+	_ = di.RegisterSingletonCloseable(c, func(context.Context) (*svc, error) {
 		atomic.AddInt32(&constructed, 1)
 		return &svc{}, nil
+	}, func(context.Context, *svc) error {
+		atomic.AddInt32(&closed, 1)
+		return nil
 	})
-	if err := c.Close(); err != nil {
+	if err := c.Close(context.Background()); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
 	if got := atomic.LoadInt32(&constructed); got != 0 {
 		t.Fatalf("Close constructed an unresolved singleton: %d", got)
+	}
+	if got := atomic.LoadInt32(&closed); got != 0 {
+		t.Fatalf("Close ran disposer for unresolved singleton: %d", got)
+	}
+}
+
+func TestClose_ResolvedSingletonClosed(t *testing.T) {
+	t.Parallel()
+	c := di.NewContainer()
+	var closed int32
+	_ = di.RegisterSingletonCloseable(c, func(context.Context) (*svc, error) {
+		return &svc{}, nil
+	}, func(context.Context, *svc) error {
+		atomic.AddInt32(&closed, 1)
+		return nil
+	})
+	if _, err := di.Resolve[*svc](context.Background(), c); err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := atomic.LoadInt32(&closed); got != 1 {
+		t.Fatalf("resolved singleton disposer called %d times, want 1", got)
+	}
+}
+
+func TestClose_ReverseOrder(t *testing.T) {
+	t.Parallel()
+	c := di.NewContainer()
+	var order []string
+	var mu sync.Mutex
+	record := func(name string) di.Disposer[*svc] {
+		return func(context.Context, *svc) error {
+			mu.Lock()
+			order = append(order, name)
+			mu.Unlock()
+			return nil
+		}
+	}
+	_ = di.RegisterCloseable(c, &svc{}, record("a"), di.WithName("a"))
+	_ = di.RegisterCloseable(c, &svc{}, record("b"), di.WithName("b"))
+	_ = di.RegisterCloseable(c, &svc{}, record("c"), di.WithName("c"))
+
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if want := []string{"c", "b", "a"}; !slices.Equal(order, want) {
+		t.Fatalf("close order = %v, want %v (LIFO)", order, want)
+	}
+}
+
+func TestClose_ReregisteredValueStillClosed(t *testing.T) {
+	t.Parallel()
+	c := di.NewContainer()
+	var oldClosed, newClosed int32
+	_ = di.RegisterCloseable(c, &svc{}, func(context.Context, *svc) error {
+		atomic.AddInt32(&oldClosed, 1)
+		return nil
+	}, di.WithName("db"))
+	// Replace the same key — the previously registered resource must still be
+	// closed by the container that owns it.
+	_ = di.RegisterCloseable(c, &svc{}, func(context.Context, *svc) error {
+		atomic.AddInt32(&newClosed, 1)
+		return nil
+	}, di.WithName("db"))
+
+	if err := c.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := atomic.LoadInt32(&oldClosed); got != 1 {
+		t.Fatalf("replaced resource closed %d times, want 1", got)
+	}
+	if got := atomic.LoadInt32(&newClosed); got != 1 {
+		t.Fatalf("current resource closed %d times, want 1", got)
 	}
 }
 
 func TestClose_JoinsErrors(t *testing.T) {
 	t.Parallel()
 	c := di.NewContainer()
-	var closed int32
 	boom := errors.New("close failed")
-	_ = di.Register(c, closer{closed: &closed, err: boom})
+	var ranSecond int32
+	_ = di.RegisterCloseable(c, &svc{}, func(context.Context, *svc) error {
+		atomic.AddInt32(&ranSecond, 1)
+		return nil
+	}, di.WithName("first"))
+	_ = di.RegisterCloseable(c, &svc{}, func(context.Context, *svc) error {
+		return boom
+	}, di.WithName("second"))
 
-	err := c.Close()
+	err := c.Close(context.Background())
 	if !errors.Is(err, boom) {
 		t.Fatalf("expected joined close error, got %v", err)
+	}
+	// A failing disposer must not stop the rest from running.
+	if got := atomic.LoadInt32(&ranSecond); got != 1 {
+		t.Fatalf("remaining disposer ran %d times, want 1", got)
 	}
 }
 

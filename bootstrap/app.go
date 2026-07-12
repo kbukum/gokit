@@ -334,8 +334,9 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 		shutdownErrs = append(shutdownErrs, err)
 	}
 
-	// Close DI container (lazy components only — singletons are component-managed)
-	if err := a.Container.Close(); err != nil {
+	// Close DI container: runs disposers for container-owned resources
+	// (RegisterCloseable / RegisterSingletonCloseable) in reverse order.
+	if err := a.Container.Close(ctx); err != nil {
 		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]any{
 			"error": err.Error(),
 		})

@@ -37,6 +37,16 @@ import (
 type Container struct {
 	mu      sync.RWMutex
 	entries map[typeKey]*entry
+
+	closersMu sync.Mutex
+	closers   []closerEntry
+}
+
+// closerEntry is one recorded disposal thunk, tracked in registration/
+// construction order so [Container.Close] can run them in reverse.
+type closerEntry struct {
+	key typeKey
+	fn  func(context.Context) error
 }
 
 // typeKey identifies a registration by concrete type and optional name.
@@ -70,6 +80,9 @@ type entry struct {
 	mu          sync.Mutex
 	value       any
 	initialized bool
+	// disposer, when set, releases the constructed value; it is recorded in the
+	// container's ordered closer list on first resolve of a singleton.
+	disposer func(context.Context, any) error
 }
 
 // NewContainer returns an empty container.
@@ -92,6 +105,13 @@ func (c *Container) lookup(k typeKey) (*entry, bool) {
 	e, ok := c.entries[k]
 	c.mu.RUnlock()
 	return e, ok
+}
+
+// addCloser appends a disposal thunk to the ordered closer list.
+func (c *Container) addCloser(k typeKey, fn func(context.Context) error) {
+	c.closersMu.Lock()
+	c.closers = append(c.closers, closerEntry{key: k, fn: fn})
+	c.closersMu.Unlock()
 }
 
 // resKey is the context key under which the active resolution chain is stored.
@@ -130,10 +150,10 @@ func (c *Container) resolveKey(ctx context.Context, k typeKey) (any, error) {
 	}
 	childCtx := context.WithValue(ctx, resKey{}, &resNode{key: k, parent: chain})
 
-	return e.resolve(childCtx)
+	return e.resolve(childCtx, c, k)
 }
 
-func (e *entry) resolve(ctx context.Context) (any, error) {
+func (e *entry) resolve(ctx context.Context, c *Container, k typeKey) (any, error) {
 	switch e.mode {
 	case modeEager:
 		return e.value, nil
@@ -151,34 +171,34 @@ func (e *entry) resolve(ctx context.Context) (any, error) {
 		}
 		e.value = v
 		e.initialized = true
+		if e.disposer != nil {
+			value, dispose := v, e.disposer
+			c.addCloser(k, func(ctx context.Context) error { return dispose(ctx, value) })
+		}
 		return v, nil
 	}
 }
 
-// Close calls Close on every resolved value that implements
-// interface{ Close() error }, once, and clears the container so a second call
-// is a no-op. Errors are joined. Only currently-registered values are closed;
-// a value dropped by re-registering its key is the caller's to close.
-func (c *Container) Close() error {
+// Close runs every recorded disposer in reverse order of registration or
+// construction (LIFO), then clears the container so a second call is a no-op.
+// All disposers run even if some fail; their errors are joined. Only values
+// registered with [RegisterCloseable] or [RegisterSingletonCloseable] are
+// closed — a plain [Register]/[RegisterSingleton] value is the caller's to
+// release. The context bounds shutdown and is passed to each disposer.
+func (c *Container) Close(ctx context.Context) error {
+	c.closersMu.Lock()
+	closers := c.closers
+	c.closers = nil
+	c.closersMu.Unlock()
+
 	c.mu.Lock()
-	entries := c.entries
 	c.entries = make(map[typeKey]*entry)
 	c.mu.Unlock()
 
 	var errs []error
-	for _, e := range entries {
-		e.mu.Lock()
-		value := e.value
-		live := e.mode == modeEager || e.initialized
-		e.mu.Unlock()
-
-		if !live || value == nil {
-			continue
-		}
-		if closer, ok := value.(interface{ Close() error }); ok {
-			if err := closer.Close(); err != nil {
-				errs = append(errs, fmt.Errorf("di: close %s: %w", e.displayKey(), err))
-			}
+	for i := len(closers) - 1; i >= 0; i-- {
+		if err := closers[i].fn(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("di: close %s: %w", closers[i].key, err))
 		}
 	}
 	return errors.Join(errs...)
