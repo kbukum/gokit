@@ -119,7 +119,7 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 			observability.StringAttribute(semconv.GenAIRequestModel, req.Model),
 		),
 	)
-	chunkCh, model, err := p.adapter.streamChunks(ctx, req)
+	chunkCh, model, cancel, err := p.adapter.streamChunks(ctx, req)
 	if err != nil {
 		span.RecordError(err)
 		span.End()
@@ -129,7 +129,7 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 		model = p.model
 	}
 	p.lifecycle.Touch()
-	rawCh := streamEventsFromChunks(chunkCh, model)
+	rawCh := streamEventsFromChunks(chunkCh, model, cancel)
 	out := make(chan StreamEvent, cap(rawCh)+1)
 	go func() {
 		defer close(out)
@@ -159,10 +159,15 @@ func mergeStreamToolDelta(calls []streamToolCall, delta streamToolCall) []stream
 	return streamwire.MergeToolDelta(calls, delta)
 }
 
-func streamEventsFromChunks(chunkCh <-chan streamChunk, model string) <-chan StreamEvent {
+// streamEventsFromChunks transforms upstream chunks into canonical StreamEvent
+// values. It always calls cancel when it finishes — including on early return
+// paths (upstream error, tool-arg size cap) — so the producer goroutine is torn
+// down and never blocks on a send into the abandoned chunk channel.
+func streamEventsFromChunks(chunkCh <-chan streamChunk, model string, cancel context.CancelFunc) <-chan StreamEvent {
 	eventCh := make(chan StreamEvent, 16)
 	go func() {
 		defer close(eventCh)
+		defer cancel()
 		var contentBuf strings.Builder
 		var streamCalls []streamToolCall
 		for chunk := range chunkCh {

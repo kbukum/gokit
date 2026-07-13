@@ -42,10 +42,11 @@ func CompleteStructured[T any](ctx context.Context, p provider.RequestResponse[C
 	}
 
 	content := extractJSON(resp.Text())
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
+	var decoded T
+	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
 		return result, fmt.Errorf("llm: unmarshal structured response: %w", err)
 	}
-	return result, nil
+	return decoded, nil
 }
 
 // extractJSON pulls a JSON object from LLM output that may contain markdown fences.

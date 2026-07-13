@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"testing"
 
 	"github.com/kbukum/gokit/llm/internal/streamwire"
@@ -18,7 +19,9 @@ func TestStreamEventsFromChunksPropagatesToolUseDecodeError(t *testing.T) {
 	}
 	close(chunkCh)
 
-	events := streamEventsFromChunks(chunkCh, "test-model")
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := streamEventsFromChunks(chunkCh, "test-model", cancel)
 	var (
 		sawError    bool
 		sawComplete bool

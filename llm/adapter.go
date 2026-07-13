@@ -143,34 +143,40 @@ func (a *Adapter) Execute(ctx context.Context, req CompletionRequest) (Completio
 // Stream sends a completion request and returns canonical stream events.
 // The channel is closed when the stream ends or an error occurs.
 func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamEvent, error) {
-	chunkCh, model, err := a.streamChunks(ctx, req)
+	chunkCh, model, cancel, err := a.streamChunks(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	return streamEventsFromChunks(chunkCh, model), nil
+	return streamEventsFromChunks(chunkCh, model, cancel), nil
 }
 
-func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, err error) {
+// streamChunks starts the upstream stream and returns the chunk channel plus a
+// cancel func that tears down the producer goroutine and underlying connection.
+// The consumer must call cancel when it stops reading (on completion or early
+// return) so the producer never blocks on a send into an abandoned channel.
+func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, cancel context.CancelFunc, err error) {
 	a.applyDefaults(&req)
 	req.Stream = true
 
 	body, err := a.dialect.BuildRequest(req)
 	if err != nil {
-		return nil, "", fmt.Errorf("llm: build stream request: %w", err)
+		return nil, "", nil, fmt.Errorf("llm: build stream request: %w", err)
 	}
 
-	streamResp, err := a.rest.HTTP().DoStream(ctx, httpclient.Request{
+	streamCtx, cancel := context.WithCancel(ctx)
+	streamResp, err := a.rest.HTTP().DoStream(streamCtx, httpclient.Request{
 		Method: http.MethodPost,
 		Path:   a.dialect.ChatPath(),
 		Body:   body,
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("llm: stream: %w", err)
+		cancel()
+		return nil, "", nil, fmt.Errorf("llm: stream: %w", err)
 	}
 
 	ch := make(chan streamChunk, 1)
-	go a.readStream(ctx, streamResp, ch)
-	return ch, req.Model, nil
+	go a.readStream(streamCtx, streamResp, ch)
+	return ch, req.Model, cancel, nil
 }
 
 // --- Accessors ---
