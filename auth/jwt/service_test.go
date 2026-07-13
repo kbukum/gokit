@@ -1,6 +1,11 @@
 package jwt
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
 	"strings"
 	"testing"
 	"time"
@@ -432,5 +437,199 @@ func TestParse_ErrorDoesNotLeakSecret(t *testing.T) {
 	_, err := svc.Parse("invalid.token.string")
 	if err != nil && strings.Contains(err.Error(), cfg.Secret) {
 		t.Error("error message should not contain the secret key")
+	}
+}
+
+func asymmetricConfig(t *testing.T, method SigningMethod, withPublic bool) *Config {
+	t.Helper()
+	cfg := &Config{
+		Method:          method,
+		Issuer:          "test-issuer",
+		Audience:        []string{"test-audience"},
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: time.Hour,
+	}
+	switch method {
+	case RS256:
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			t.Fatalf("rsa keygen: %v", err)
+		}
+		cfg.PrivateKey = key
+		if withPublic {
+			cfg.PublicKey = &key.PublicKey
+		}
+	case ES256:
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatalf("ecdsa keygen: %v", err)
+		}
+		cfg.PrivateKey = key
+		if withPublic {
+			cfg.PublicKey = &key.PublicKey
+		}
+	case EdDSA:
+		pub, priv, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatalf("ed25519 keygen: %v", err)
+		}
+		cfg.PrivateKey = priv
+		if withPublic {
+			cfg.PublicKey = pub
+		}
+	case HS256:
+	}
+	return cfg
+}
+
+func TestRoundTrip_AsymmetricMethods(t *testing.T) {
+	t.Parallel()
+	for _, method := range []SigningMethod{RS256, ES256, EdDSA} {
+		for _, withPublic := range []bool{false, true} {
+			name := string(method)
+			if withPublic {
+				name += "-explicit-public"
+			} else {
+				name += "-derived-public"
+			}
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				cfg := asymmetricConfig(t, method, withPublic)
+				svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
+				if err != nil {
+					t.Fatalf("NewService: %v", err)
+				}
+				access, err := svc.GenerateAccess(&testClaims{UserID: "u1"})
+				if err != nil {
+					t.Fatalf("GenerateAccess: %v", err)
+				}
+				parsed, err := svc.Parse(access)
+				if err != nil {
+					t.Fatalf("Parse: %v", err)
+				}
+				if parsed.UserID != "u1" {
+					t.Fatalf("UserID = %q, want u1", parsed.UserID)
+				}
+				refresh, err := svc.GenerateRefresh(&testClaims{UserID: "u1"})
+				if err != nil {
+					t.Fatalf("GenerateRefresh: %v", err)
+				}
+				if _, err := svc.ParseRefresh(refresh); err != nil {
+					t.Fatalf("ParseRefresh: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestParse_RejectsUnexpectedSigningMethod(t *testing.T) {
+	t.Parallel()
+	hmacSvc, err := NewService(newTestConfig(), func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	token, err := hmacSvc.GenerateAccess(&testClaims{UserID: "u1"})
+	if err != nil {
+		t.Fatalf("GenerateAccess: %v", err)
+	}
+	rsSvc, err := NewService(asymmetricConfig(t, RS256, false), func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService RS256: %v", err)
+	}
+	if _, err := rsSvc.Parse(token); err == nil {
+		t.Fatal("expected rejection of HS256 token by RS256 verifier")
+	}
+}
+
+func TestApplyDefaultsSetsMethod(t *testing.T) {
+	t.Parallel()
+	cfg := &Config{}
+	cfg.ApplyDefaults()
+	if cfg.Method != RS256 {
+		t.Fatalf("default method = %q, want RS256", cfg.Method)
+	}
+}
+
+func TestFindRegisteredClaims_TypedNilPointer(t *testing.T) {
+	t.Parallel()
+	var typedNil *testClaims
+	if rc := findRegisteredClaims(typedNil); rc != nil {
+		t.Fatal("expected nil for typed nil pointer")
+	}
+}
+
+func TestGenerateReturnsSignError(t *testing.T) {
+	t.Parallel()
+	// A Service configured for RS256 but given a non-RSA sign key forces
+	// SignedString to fail without going through NewService validation.
+	svc := &Service[*testClaims]{cfg: Config{Method: RS256, PrivateKey: "not-a-key"}, newEmpty: func() *testClaims { return &testClaims{} }}
+	if _, err := svc.Generate(&testClaims{UserID: "u1"}); err == nil {
+		t.Fatal("expected sign error from Generate")
+	}
+	if _, err := svc.generateWithKey(&testClaims{UserID: "u1"}, "not-a-key"); err == nil {
+		t.Fatal("expected sign error from generateWithKey")
+	}
+}
+
+func TestValidateRequiredClaims(t *testing.T) {
+	t.Parallel()
+	svc, err := NewService(newTestConfig(), func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	now := time.Now()
+	full := func() *testClaims {
+		return &testClaims{RegisteredClaims: gojwt.RegisteredClaims{
+			ExpiresAt: gojwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  gojwt.NewNumericDate(now),
+			NotBefore: gojwt.NewNumericDate(now),
+			Issuer:    "test-issuer",
+			Audience:  gojwt.ClaimStrings{"test-audience"},
+		}}
+	}
+	if err := svc.validateRequiredClaims(full()); err != nil {
+		t.Fatalf("full claims rejected: %v", err)
+	}
+
+	mutators := map[string]func(*testClaims){
+		"exp": func(c *testClaims) { c.ExpiresAt = nil },
+		"iat": func(c *testClaims) { c.IssuedAt = nil },
+		"nbf": func(c *testClaims) { c.NotBefore = nil },
+		"iss": func(c *testClaims) { c.Issuer = "" },
+		"aud": func(c *testClaims) { c.Audience = nil },
+	}
+	for name, mutate := range mutators {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			claims := full()
+			mutate(claims)
+			if err := svc.validateRequiredClaims(claims); err == nil {
+				t.Fatalf("expected error for missing %s", name)
+			}
+		})
+	}
+}
+
+func TestParse_RejectsTokenMissingNotBefore(t *testing.T) {
+	t.Parallel()
+	cfg := newTestConfig()
+	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	now := time.Now()
+	claims := &testClaims{RegisteredClaims: gojwt.RegisteredClaims{
+		ExpiresAt: gojwt.NewNumericDate(now.Add(time.Hour)),
+		IssuedAt:  gojwt.NewNumericDate(now),
+		Issuer:    cfg.Issuer,
+		Audience:  gojwt.ClaimStrings(cfg.Audience),
+	}}
+	token := gojwt.NewWithClaims(gojwt.SigningMethodHS256, claims)
+	signed, err := token.SignedString([]byte(cfg.Secret))
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	if _, err := svc.Parse(signed); err == nil {
+		t.Fatal("expected rejection of token missing nbf claim")
 	}
 }

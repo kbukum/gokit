@@ -7,10 +7,10 @@ import (
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
-// StorageFactory creates a Storage implementation from core config and
-// provider-specific configuration. Each provider type-asserts providerCfg
-// to its own config type.
-type StorageFactory func(cfg Config, providerCfg any, log *logging.Logger) (Storage, error)
+// StorageFactory creates a Storage implementation from core configuration.
+// Provider-specific configuration is captured by the typed provider Register
+// function, keeping runtime selection free of untyped config blobs.
+type StorageFactory func(cfg Config, log *logging.Logger) (Storage, error)
 
 // FactoryRegistry stores storage factories by provider name.
 type FactoryRegistry struct {
@@ -22,12 +22,7 @@ func NewFactoryRegistry() *FactoryRegistry {
 	return &FactoryRegistry{inner: namedregistry.New[StorageFactory]("storage")}
 }
 
-// Register stores a storage backend factory for the given provider name.
-// It returns an error if name or factory are invalid, or if a duplicate
-// name is registered.
-//
-// Note: prior versions panicked on duplicate; callers must now check the
-// returned error.
+// Register stores a configured storage backend factory for the given provider name.
 func (r *FactoryRegistry) Register(name string, f StorageFactory) error {
 	return r.inner.Register(name, f)
 }
@@ -38,9 +33,8 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 }
 
 // New creates a Storage implementation using the provided registry.
-// The registry is mandatory; pass an explicit *FactoryRegistry with the desired
-// provider registered (e.g. via local.Register, s3.Register, etc.).
-func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) (Storage, error) {
+// Provider-specific settings are supplied by the typed provider Register call.
+func New(reg *FactoryRegistry, cfg Config, log *logging.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -49,7 +43,11 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger)
 		return nil, fmt.Errorf("storage: factory registry is nil")
 	}
 
-	l := log.WithComponent("storage")
+	l := log
+	if l == nil {
+		l = logging.NewDefault("storage") //nolint:contextcheck // default logger construction has no request-scoped operation
+	}
+	l = l.WithComponent("storage")
 
 	f, ok := reg.Get(cfg.Provider)
 	if !ok {
@@ -57,5 +55,5 @@ func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger)
 	}
 
 	l.Debug("initializing storage", map[string]any{"provider": cfg.Provider})
-	return f(cfg, providerCfg, l)
+	return f(cfg, l)
 }

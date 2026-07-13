@@ -25,22 +25,24 @@ func safePath(basePath, path string) (string, error) {
 	return fullPath, nil
 }
 
-// Register registers the local storage provider into the given registry.
-// It returns an error if the provider is already registered.
-func Register(reg *storage.FactoryRegistry) error {
-	return reg.Register(storage.ProviderLocal, func(cfg storage.Config, providerCfg any, log *logging.Logger) (storage.Storage, error) {
-		c := &Config{}
-		if providerCfg != nil {
-			pc, ok := providerCfg.(*Config)
-			if !ok {
-				return nil, fmt.Errorf("local: expected *local.Config, got %T", providerCfg)
-			}
-			c = pc
-		}
-		c.ApplyDefaults()
-		if err := c.Validate(); err != nil {
-			return nil, err
-		}
+// Register registers a configured local storage provider into the given registry.
+// Pass an optional Config to override defaults.
+func Register(reg *storage.FactoryRegistry, configs ...Config) error {
+	if reg == nil {
+		return fmt.Errorf("local: storage registry is nil")
+	}
+	if len(configs) > 1 {
+		return fmt.Errorf("local: at most one config may be provided, got %d", len(configs))
+	}
+	c := Config{}
+	if len(configs) > 0 {
+		c = configs[0]
+	}
+	c.ApplyDefaults()
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	return reg.Register(storage.ProviderLocal, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
 		return NewStorage(c.BasePath)
 	})
 }

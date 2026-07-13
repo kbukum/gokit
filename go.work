@@ -5,6 +5,7 @@ toolchain go1.26.5
 use (
 	.
 	./agent
+	./ai
 	./auth
 	./authz
 	./bench
@@ -20,7 +21,6 @@ use (
 	./discovery
 	./discovery/testutil
 	./embedding
-	./ai
 	./git
 	./git/testutil
 	./grpc
@@ -43,11 +43,13 @@ use (
 	./skill
 	./stateful
 	./storage
+	./storage/gcs
 	./storage/s3
 	./storage/testutil
 	./testutil
 	./tool
 	./vectorstore
+	./vectorstore/qdrant
 	./workload
 	./workload/testutil
 )

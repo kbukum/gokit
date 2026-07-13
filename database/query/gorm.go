@@ -71,14 +71,23 @@ func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
 	conds := make([]string, 0, len(fields))
 	args := make([]any, 0, len(fields))
 	for _, f := range fields {
+		if !isSafeIdentifier(f) {
+			continue
+		}
 		conds = append(conds, fmt.Sprintf("LOWER(%s) LIKE ?", f))
 		args = append(args, pattern)
+	}
+	if len(conds) == 0 {
+		return db
 	}
 	return db.Where(strings.Join(conds, " OR "), args...)
 }
 
 func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 	field := config.ResolveField(cond.Field)
+	if !isSafeIdentifier(field) {
+		return db
+	}
 
 	switch cond.Operator {
 	case OpEq:
@@ -128,13 +137,18 @@ func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 func applySort(db *gorm.DB, sortBy, sortOrder string, config Config) *gorm.DB {
 	if sortBy != "" {
 		for _, f := range config.AllowedSortFields {
-			if f == sortBy {
-				order := config.ResolveField(sortBy)
-				if sortOrder == "desc" {
-					order += " DESC"
-				}
-				return db.Order(order)
+			if f != sortBy {
+				continue
 			}
+			col := config.ResolveField(sortBy)
+			if !isSafeIdentifier(col) {
+				break
+			}
+			order := col
+			if sortOrder == "desc" {
+				order += " DESC"
+			}
+			return db.Order(order)
 		}
 	}
 	if config.DefaultSort != "" {
@@ -167,10 +181,14 @@ func ComputeFacetsWithFilters(
 	facets := make(map[string]map[string]int)
 
 	for _, field := range facetFields {
+		col := config.ResolveField(field)
+		if !isSafeIdentifier(col) {
+			continue
+		}
 		facetKey := config.ResolveFacetLabel(field)
 		facets[facetKey] = make(map[string]int)
 
-		otherConds := excludeFieldConditions(conditions, field, config)
+		otherConds := excludeFieldConditions(conditions, col, config)
 		baseQuery := buildBaseQuery(db, otherConds, config)
 
 		var total int64
@@ -183,8 +201,8 @@ func ComputeFacetsWithFilters(
 			Count int
 		}
 		var counts []facetCount
-		groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", field)).
-			Group(field).Scan(&counts)
+		groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", col)).
+			Group(col).Scan(&counts)
 
 		for _, c := range counts {
 			facets[facetKey][c.Value] = c.Count
@@ -202,10 +220,10 @@ func buildBaseQuery(db *gorm.DB, conditions []Condition, config Config) *gorm.DB
 	return q
 }
 
-func excludeFieldConditions(conditions []Condition, excludeField string, config Config) []Condition {
+func excludeFieldConditions(conditions []Condition, excludeCol string, config Config) []Condition {
 	var result []Condition
 	for _, c := range conditions {
-		if config.ResolveField(c.Field) != excludeField {
+		if config.ResolveField(c.Field) != excludeCol {
 			result = append(result, c)
 		}
 	}

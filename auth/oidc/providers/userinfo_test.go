@@ -84,14 +84,18 @@ func TestUserInfoNoEndpoint(t *testing.T) {
 	}
 }
 
-func TestUserInfoWithAccessTokenPlaceholder(t *testing.T) {
-	var receivedPath string
+// TestUserInfoNeverSendsTokenInQueryString locks in header-only bearer auth:
+// the access token must never appear in the request URL (query or path), and a
+// legacy "{access_token}" placeholder in the configured endpoint must be
+// stripped rather than substituted. The token travels only in the
+// Authorization header.
+func TestUserInfoNeverSendsTokenInQueryString(t *testing.T) {
+	var receivedURL, authHeader string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedPath = r.URL.Path + "?" + r.URL.RawQuery
+		receivedURL = r.URL.String()
+		authHeader = r.Header.Get("Authorization")
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"id": "u1",
-		})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1"})
 	}))
 	defer server.Close()
 
@@ -102,12 +106,17 @@ func TestUserInfoWithAccessTokenPlaceholder(t *testing.T) {
 		UserInfo:         UserInfoMapper{SubjectKey: "id"},
 	})
 
-	_, err := p.UserInfo(context.Background(), "my-tok-123")
-	if err != nil {
+	if _, err := p.UserInfo(context.Background(), "my-tok-123"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(receivedPath, "access_token=my-tok-123") {
-		t.Errorf("expected access_token in URL, got path: %s", receivedPath)
+	if strings.Contains(receivedURL, "my-tok-123") {
+		t.Errorf("access token leaked into request URL: %s", receivedURL)
+	}
+	if strings.Contains(receivedURL, "%7Baccess_token%7D") || strings.Contains(receivedURL, "{access_token}") {
+		t.Errorf("literal placeholder leaked into request URL: %s", receivedURL)
+	}
+	if authHeader != "Bearer my-tok-123" {
+		t.Errorf("Authorization header = %q, want 'Bearer my-tok-123'", authHeader)
 	}
 }
 
@@ -359,5 +368,28 @@ func TestCommaSeparatedScopesInResponse(t *testing.T) {
 	}
 	if tokens.Scopes[0] != "user.info.basic" || tokens.Scopes[1] != "video.list" {
 		t.Errorf("Scopes = %v, want [user.info.basic video.list]", tokens.Scopes)
+	}
+}
+
+func TestFetchJSON_Errors(t *testing.T) {
+	ctx := context.Background()
+	var out map[string]any
+	if err := FetchJSON(ctx, nil, "http://\x7f/bad", "tok", &out); err == nil {
+		t.Error("expected request-construction error")
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	if err := FetchJSON(ctx, nil, url, "tok", &out); err == nil {
+		t.Error("expected connection error")
+	}
+
+	fail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no", http.StatusUnauthorized)
+	}))
+	defer fail.Close()
+	if err := FetchJSON(ctx, nil, fail.URL, "tok", &out); err == nil {
+		t.Error("expected HTTP status error")
 	}
 }

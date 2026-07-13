@@ -8,11 +8,12 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
+func TestRegisterWithExplicitConfigConstructs(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	cfg := &Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}
+	if err := Register(reg, *cfg); err != nil {
 		t.Fatalf("register nats: %v", err)
 	}
 	if got := reg.ProducerAdapters(); len(got) != 1 || got[0] != "nats" {
@@ -22,8 +23,7 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 		t.Fatalf("consumer adapters = %v, want [nats]", got)
 	}
 
-	cfg := &Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}
-	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto}, cfg, nil)
+	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto}, nil)
 	if err != nil {
 		t.Fatalf("new nats producer: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if closeErr := producer.(interface{ Close() error }).Close(); closeErr != nil {
 		t.Fatalf("close nats producer: %v", closeErr)
 	}
-	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto, ConsumerGroup: "workers"}, cfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto, ConsumerGroup: "workers"}, nil, "events")
 	if err != nil {
 		t.Fatalf("new nats consumer: %v", err)
 	}
@@ -113,27 +113,14 @@ func TestRegisterRejectsNilRegistry(t *testing.T) {
 	}
 }
 
-func TestFactoryRejectsWrongConfigType(t *testing.T) {
-	t.Parallel()
-
-	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
-		t.Fatalf("register nats: %v", err)
-	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto}, struct{}{}, nil)
-	if err == nil {
-		t.Fatal("expected config type error")
-	}
-}
-
 func TestRegisterRejectsUnsupportedCommonConfig(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	if err := Register(reg, Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}); err != nil {
 		t.Fatalf("register nats: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "nats"}, &Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "nats"}, nil)
 	if err == nil {
 		t.Fatal("expected unsupported delivery guarantee error")
 	}
@@ -143,7 +130,7 @@ func TestRegisterRejectsAdapterManagedDLQ(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	if err := Register(reg, Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}); err != nil {
 		t.Fatalf("register nats: %v", err)
 	}
 	_, err := reg.NewProducer(context.Background(), messaging.Config{
@@ -151,8 +138,57 @@ func TestRegisterRejectsAdapterManagedDLQ(t *testing.T) {
 		DeliveryGuarantee: messaging.DeliveryAtMostOnce,
 		CommitStrategy:    messaging.CommitAuto,
 		DLQ:               messaging.DLQPolicy{Enabled: true},
-	}, &Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}, nil)
+	}, nil)
 	if err == nil {
 		t.Fatal("expected adapter-managed DLQ error")
+	}
+}
+
+func TestConsumerRejectsUnsupportedCommonConfig(t *testing.T) {
+	t.Parallel()
+	reg := messaging.NewRegistry()
+	if err := Register(reg, Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true}); err != nil {
+		t.Fatalf("register nats: %v", err)
+	}
+	base := messaging.Config{Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto, MaxInFlight: 1}
+
+	cases := map[string]func(c messaging.Config) messaging.Config{
+		"commit": func(c messaging.Config) messaging.Config {
+			c.CommitStrategy = messaging.CommitAfterHandlerSuccess
+			return c
+		},
+		"inflight": func(c messaging.Config) messaging.Config { c.MaxInFlight = 2; return c },
+		"dlq":      func(c messaging.Config) messaging.Config { c.DLQ = messaging.DLQPolicy{Enabled: true}; return c },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := reg.NewConsumer(context.Background(), mutate(base), nil, "events"); err == nil {
+				t.Fatalf("expected consumer rejection for %s", name)
+			}
+		})
+	}
+}
+
+func TestConsumerRejectsQueueGroupMismatch(t *testing.T) {
+	t.Parallel()
+	reg := messaging.NewRegistry()
+	if err := Register(reg, Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true, QueueGroup: "preset"}); err != nil {
+		t.Fatalf("register nats: %v", err)
+	}
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{
+		Adapter: "nats", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto,
+		MaxInFlight: 1, ConsumerGroup: "workers",
+	}, nil, "events")
+	if err == nil {
+		t.Fatal("expected queue_group mismatch error")
+	}
+}
+
+func TestRegisterRejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+
+	if err := Register(messaging.NewRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
 	}
 }

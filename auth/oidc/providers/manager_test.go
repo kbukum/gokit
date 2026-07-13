@@ -276,3 +276,20 @@ func TestParseIDTokenClaims_InvalidFormat(t *testing.T) {
 		t.Error("expected error for invalid token")
 	}
 }
+
+func TestManager_UnknownProviderErrors(t *testing.T) {
+	m := NewManager()
+	ctx := context.Background()
+	if _, err := m.Exchange(ctx, "nope", "code"); err == nil {
+		t.Error("Exchange: expected unknown-provider error")
+	}
+	if _, err := m.UserInfo(ctx, "nope", "tok"); err == nil {
+		t.Error("UserInfo: expected unknown-provider error")
+	}
+	if _, err := m.Refresh(ctx, "nope", oidc.RefreshInput{RefreshToken: "rt"}); err == nil {
+		t.Error("Refresh: expected unknown-provider error")
+	}
+	if _, _, err := m.ExchangeAndUserInfo(ctx, "nope", "code"); err == nil {
+		t.Error("ExchangeAndUserInfo: expected unknown-provider error")
+	}
+}

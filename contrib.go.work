@@ -13,5 +13,7 @@ use (
 	./messaging/kafka
 	./messaging/nats
 	./messaging/rabbitmq
+	./storage/gcs
 	./storage/s3
+	./vectorstore/qdrant
 )

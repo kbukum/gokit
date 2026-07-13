@@ -15,23 +15,18 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
-// Register registers the Supabase storage provider into the given registry.
-// It returns an error if the provider is already registered.
-func Register(reg *storage.FactoryRegistry) error {
-	return reg.Register(storage.ProviderSupabase, func(cfg storage.Config, providerCfg any, log *logging.Logger) (storage.Storage, error) {
-		c := &Config{}
-		if providerCfg != nil {
-			pc, ok := providerCfg.(*Config)
-			if !ok {
-				return nil, fmt.Errorf("supabase: expected *supabase.Config, got %T", providerCfg)
-			}
-			c = pc
-		}
-		c.ApplyDefaults()
-		if err := c.Validate(); err != nil {
-			return nil, err
-		}
-		return NewStorage(c)
+// Register registers a configured Supabase storage provider into the given registry.
+func Register(reg *storage.FactoryRegistry, cfg Config) error {
+	if reg == nil {
+		return fmt.Errorf("supabase: storage registry is nil")
+	}
+	c := cfg
+	c.ApplyDefaults()
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	return reg.Register(storage.ProviderSupabase, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+		return NewStorage(&c)
 	})
 }
 

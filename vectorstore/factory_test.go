@@ -24,7 +24,7 @@ func TestNewConfigDrivenMemory(t *testing.T) {
 	if err := RegisterMemory(reg); err != nil {
 		t.Fatalf("RegisterMemory: %v", err)
 	}
-	store, err := New(reg, Config{Provider: ProviderMemory, Metric: MetricDot}, nil)
+	store, err := New(reg, Config{Provider: ProviderMemory, Metric: MetricDot})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -42,5 +42,34 @@ func TestMetricNames(t *testing.T) {
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("metric %q should be supported: %v", metric, err)
 		}
+	}
+}
+
+func TestNewRejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+
+	if _, err := New(nil, Config{Provider: ProviderMemory, Metric: MetricCosine}); err == nil {
+		t.Fatal("expected error for nil registry")
+	}
+}
+
+func TestNewRejectsUnregisteredProvider(t *testing.T) {
+	t.Parallel()
+
+	reg := NewFactoryRegistry()
+	if _, err := New(reg, Config{Provider: "nope", Metric: MetricCosine}); err == nil {
+		t.Fatal("expected error for unregistered provider")
+	}
+}
+
+func TestNewRejectsInvalidMetric(t *testing.T) {
+	t.Parallel()
+
+	reg := NewFactoryRegistry()
+	if err := RegisterMemory(reg); err != nil {
+		t.Fatalf("RegisterMemory: %v", err)
+	}
+	if _, err := New(reg, Config{Provider: ProviderMemory, Metric: "hamming"}); err == nil {
+		t.Fatal("expected error for unsupported metric")
 	}
 }

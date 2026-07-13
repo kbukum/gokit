@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -344,5 +345,145 @@ func TestSearchFilterMustMatch(t *testing.T) {
 
 	if filter.Must[0].Field != "field1" || filter.Must[0].Value != "value1" {
 		t.Errorf("filter.Must[0] = (%v, %v), want (field1, value1)", filter.Must[0].Field, filter.Must[0].Value)
+	}
+}
+
+func TestInMemoryStoreSearchWrongDimensions(t *testing.T) {
+	t.Parallel()
+
+	store := NewInMemoryStore()
+	ctx := context.Background()
+	if err := store.EnsureCollection(ctx, "c", 3); err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if _, err := store.Search(ctx, "c", []float32{1, 2}, 5, nil); err == nil {
+		t.Fatal("expected dimension mismatch error")
+	}
+}
+
+func TestInMemoryStoreDeleteKeepsOtherPoints(t *testing.T) {
+	t.Parallel()
+
+	store := NewInMemoryStore()
+	ctx := context.Background()
+	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, nil); err != nil {
+		t.Fatalf("Upsert a: %v", err)
+	}
+	if err := store.Upsert(ctx, "c", "b", []float32{0, 1}, nil); err != nil {
+		t.Fatalf("Upsert b: %v", err)
+	}
+	if err := store.Delete(ctx, "c", "a"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	results, err := store.Search(ctx, "c", []float32{0, 1}, 5, nil)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 || results[0].ID != "b" {
+		t.Fatalf("expected only point b to remain, got %+v", results)
+	}
+}
+
+func TestInMemoryStoreFilterSkipsNilPayload(t *testing.T) {
+	t.Parallel()
+
+	store := NewInMemoryStore()
+	ctx := context.Background()
+	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, nil); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	filter := NewSearchFilter().MustMatch("kind", "doc")
+	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, filter)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("nil-payload point must not match filter, got %+v", results)
+	}
+}
+
+func TestInMemoryStoreFilterMatchesStructuredValue(t *testing.T) {
+	t.Parallel()
+
+	store := NewInMemoryStore()
+	ctx := context.Background()
+	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	payload := NewPointPayload().WithField("tags", []string{"x", "y"})
+	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, payload); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	match := NewSearchFilter().MustMatch("tags", []string{"x", "y"})
+	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, match)
+	if err != nil {
+		t.Fatalf("Search match: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected structured value to match via deep compare, got %+v", results)
+	}
+	miss := NewSearchFilter().MustMatch("tags", []string{"z"})
+	results, err = store.Search(ctx, "c", []float32{1, 0}, 5, miss)
+	if err != nil {
+		t.Fatalf("Search miss: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected structured value mismatch, got %+v", results)
+	}
+}
+
+func TestMetricErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	err := &MetricError{Metric: "hamming"}
+	msg := err.Error()
+	if !strings.Contains(msg, "hamming") || !strings.Contains(msg, MetricCosine) {
+		t.Fatalf("unexpected metric error message: %q", msg)
+	}
+}
+
+func TestInMemoryStoreFilterMatchesNilValue(t *testing.T) {
+	t.Parallel()
+
+	store := NewInMemoryStore()
+	ctx := context.Background()
+	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, NewPointPayload().WithField("owner", nil)); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	filter := NewSearchFilter().MustMatch("owner", nil)
+	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, filter)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("nil field value should match nil filter value, got %+v", results)
+	}
+}
+
+func TestConfigApplyDefaults(t *testing.T) {
+	t.Parallel()
+
+	var cfg Config
+	cfg.ApplyDefaults()
+	if cfg.Provider != DefaultProvider {
+		t.Errorf("Provider default = %q, want %q", cfg.Provider, DefaultProvider)
+	}
+	if cfg.Metric != DefaultMetric {
+		t.Errorf("Metric default = %q, want %q", cfg.Metric, DefaultMetric)
+	}
+
+	custom := Config{Provider: "qdrant", Metric: MetricL2}
+	custom.ApplyDefaults()
+	if custom.Provider != "qdrant" || custom.Metric != MetricL2 {
+		t.Errorf("ApplyDefaults overrode explicit values: %+v", custom)
 	}
 }

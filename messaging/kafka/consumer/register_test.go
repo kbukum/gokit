@@ -8,11 +8,12 @@ import (
 	"github.com/kbukum/gokit/messaging/kafka"
 )
 
-func TestRegisterIsExplicitConfigFreeAndConstructs(t *testing.T) {
+func TestRegisterWithExplicitConfigConstructs(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
+	if err := Register(reg, *cfg); err != nil {
 		t.Fatalf("register kafka consumer: %v", err)
 	}
 	if got := reg.ConsumerAdapters(); len(got) != 1 || got[0] != "kafka" {
@@ -22,8 +23,7 @@ func TestRegisterIsExplicitConfigFreeAndConstructs(t *testing.T) {
 		t.Fatalf("producer adapters = %v, want []", got)
 	}
 
-	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
-	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group"}, cfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group"}, nil, "events")
 	if err != nil {
 		t.Fatalf("new kafka consumer: %v", err)
 	}
@@ -48,21 +48,8 @@ func TestRegisterIsExplicitConfigFreeAndConstructs(t *testing.T) {
 func TestRegisterRejectsNilRegistry(t *testing.T) {
 	t.Parallel()
 
-	if err := Register(nil); err == nil {
+	if err := Register(nil, kafka.Config{}); err == nil {
 		t.Fatal("expected nil registry error")
-	}
-}
-
-func TestFactoryRejectsWrongConfigType(t *testing.T) {
-	t.Parallel()
-
-	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
-		t.Fatalf("register kafka consumer: %v", err)
-	}
-	_, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka"}, struct{}{}, nil, "events")
-	if err == nil {
-		t.Fatal("expected config type error")
 	}
 }
 
@@ -70,11 +57,10 @@ func TestRegisterRejectsUnsupportedMaxInFlight(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	if err := Register(reg, kafka.Config{Brokers: []string{"127.0.0.1:1"}}); err != nil {
 		t.Fatalf("register kafka consumer: %v", err)
 	}
-	cfg := &kafka.Config{Brokers: []string{"127.0.0.1:1"}}
-	_, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group", MaxInFlight: 2}, cfg, nil, "events")
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "kafka", ConsumerGroup: "test-group", MaxInFlight: 2}, nil, "events")
 	if err == nil {
 		t.Fatal("expected max_in_flight unsupported error")
 	}

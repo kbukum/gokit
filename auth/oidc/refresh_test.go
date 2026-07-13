@@ -264,3 +264,22 @@ func TestRefreshToken_TokenRotation(t *testing.T) {
 		t.Errorf("expected rotated-id, got %s", result.IDToken)
 	}
 }
+
+func TestParseTokenResponse_InvalidBody(t *testing.T) {
+	if _, err := parseTokenResponse([]byte("%zz")); err == nil {
+		t.Fatal("expected parse error for malformed body")
+	}
+	if _, err := parseTokenResponse([]byte("token_type=bearer")); err == nil {
+		t.Fatal("expected missing access_token error")
+	}
+}
+
+func TestRefreshToken_BadEndpoint(t *testing.T) {
+	_, err := RefreshToken(context.Background(), RefreshConfig{
+		TokenEndpoint: "http://\x7f/bad",
+		RefreshToken:  "rt",
+	})
+	if err == nil {
+		t.Fatal("expected request-construction error")
+	}
+}

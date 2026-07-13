@@ -8,11 +8,12 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
+func TestRegisterWithExplicitConfigConstructs(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	cfg := &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}
+	if err := Register(reg, *cfg); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
 	if got := reg.ConsumerAdapters(); len(got) != 1 || got[0] != "rabbitmq" {
@@ -22,8 +23,7 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 		t.Fatalf("producer adapters = %v, want [rabbitmq]", got)
 	}
 
-	cfg := &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}
-	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq"}, cfg, nil)
+	producer, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq"}, nil)
 	if err != nil {
 		t.Fatalf("new rabbitmq producer: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
 	if closeErr := producer.(interface{ Close() error }).Close(); closeErr != nil {
 		t.Fatalf("close rabbitmq producer: %v", closeErr)
 	}
-	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "rabbitmq", ConsumerGroup: "workers"}, cfg, nil, "events")
+	consumer, err := reg.NewConsumer(context.Background(), messaging.Config{Adapter: "rabbitmq", ConsumerGroup: "workers"}, nil, "events")
 	if err != nil {
 		t.Fatalf("new rabbitmq consumer: %v", err)
 	}
@@ -113,44 +113,98 @@ func TestRegisterRejectsNilRegistry(t *testing.T) {
 	}
 }
 
-func TestFactoryRejectsWrongConfigType(t *testing.T) {
+func TestRegisterRejectsUnsupportedCommonConfig(t *testing.T) {
 	t.Parallel()
-
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	if err := Register(reg, Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq"}, struct{}{}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryExactlyOnce}, nil)
 	if err == nil {
-		t.Fatal("expected config type error")
-	}
-}
-
-func TestRegisterRejectsUnsupportedExactlyOnce(t *testing.T) {
-	t.Parallel()
-
-	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
-		t.Fatalf("register rabbitmq: %v", err)
-	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryExactlyOnce}, &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}, nil)
-	if err == nil {
-		t.Fatal("expected exactly-once unsupported error")
+		t.Fatal("expected unsupported delivery guarantee error")
 	}
 }
 
 func TestRegisterRejectsAdapterManagedDLQ(t *testing.T) {
 	t.Parallel()
-
 	reg := messaging.NewRegistry()
-	if err := Register(reg); err != nil {
+	if err := Register(reg, Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}); err != nil {
 		t.Fatalf("register rabbitmq: %v", err)
 	}
-	_, err := reg.NewProducer(context.Background(), messaging.Config{
-		Adapter: "rabbitmq",
-		DLQ:     messaging.DLQPolicy{Enabled: true},
-	}, &Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}, nil)
+	_, err := reg.NewProducer(context.Background(), messaging.Config{Adapter: "rabbitmq", DLQ: messaging.DLQPolicy{Enabled: true}}, nil)
 	if err == nil {
 		t.Fatal("expected adapter-managed DLQ error")
+	}
+}
+
+func TestConsumerRejectsUnsupportedCommonConfig(t *testing.T) {
+	t.Parallel()
+	reg := messaging.NewRegistry()
+	if err := Register(reg, Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true}); err != nil {
+		t.Fatalf("register rabbitmq: %v", err)
+	}
+	base := messaging.Config{Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto, MaxInFlight: 1}
+
+	cases := map[string]func(c messaging.Config) messaging.Config{
+		"at-least-once-commit": func(c messaging.Config) messaging.Config {
+			c.DeliveryGuarantee = messaging.DeliveryAtLeastOnce
+			c.CommitStrategy = messaging.CommitAuto
+			return c
+		},
+		"at-most-once-commit": func(c messaging.Config) messaging.Config {
+			c.CommitStrategy = messaging.CommitAfterHandlerSuccess
+			return c
+		},
+		"exactly-once": func(c messaging.Config) messaging.Config {
+			c.DeliveryGuarantee = messaging.DeliveryExactlyOnce
+			return c
+		},
+		"dlq": func(c messaging.Config) messaging.Config { c.DLQ = messaging.DLQPolicy{Enabled: true}; return c },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := reg.NewConsumer(context.Background(), mutate(base), nil, "events"); err == nil {
+				t.Fatalf("expected consumer rejection for %s", name)
+			}
+		})
+	}
+}
+
+func TestConsumerRejectsPrefetchMismatch(t *testing.T) {
+	t.Parallel()
+	reg := messaging.NewRegistry()
+	if err := Register(reg, Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true, PrefetchCount: 5}); err != nil {
+		t.Fatalf("register rabbitmq: %v", err)
+	}
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{
+		Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto,
+		MaxInFlight: 1,
+	}, nil, "events")
+	if err == nil {
+		t.Fatal("expected prefetch_count mismatch error")
+	}
+}
+
+func TestConsumerRejectsQueueNameMismatch(t *testing.T) {
+	t.Parallel()
+	reg := messaging.NewRegistry()
+	if err := Register(reg, Config{URL: "amqp://127.0.0.1:1/", AllowInsecureDev: true, QueueName: "preset"}); err != nil {
+		t.Fatalf("register rabbitmq: %v", err)
+	}
+	_, err := reg.NewConsumer(context.Background(), messaging.Config{
+		Adapter: "rabbitmq", DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto,
+		MaxInFlight: 1, ConsumerGroup: "workers",
+	}, nil, "events")
+	if err == nil {
+		t.Fatal("expected queue_name mismatch error")
+	}
+}
+
+func TestRegisterRejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+
+	if err := Register(messaging.NewRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
 	}
 }

@@ -31,16 +31,16 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// Register adds config-free in-memory producer and consumer factories to registry.
-func Register(registry *messaging.Registry) error {
+// Register adds typed in-memory producer and consumer factories to registry.
+func Register(registry *messaging.Registry, configs ...Config) error {
 	if registry == nil {
 		return fmt.Errorf("memory: messaging registry is nil")
 	}
-	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger) (messaging.Producer, error) {
-		broker, err := brokerFromProviderCfg(adapterCfg)
-		if err != nil {
-			return nil, err
-		}
+	broker, err := brokerFromConfig(configs...)
+	if err != nil {
+		return err
+	}
+	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, _ *logging.Logger) (messaging.Producer, error) {
 		if common.DeliveryGuarantee == messaging.DeliveryExactlyOnce {
 			return nil, fmt.Errorf("memory: exactly-once delivery is not supported")
 		}
@@ -51,11 +51,7 @@ func Register(registry *messaging.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger, topic string) (messaging.Consumer, error) {
-		broker, err := brokerFromProviderCfg(adapterCfg)
-		if err != nil {
-			return nil, err
-		}
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, _ *logging.Logger, topic string) (messaging.Consumer, error) {
 		if err := validateCommonConsumer(common); err != nil {
 			return nil, err
 		}
@@ -63,25 +59,22 @@ func Register(registry *messaging.Registry) error {
 	})
 }
 
-func brokerFromProviderCfg(adapterCfg any) (*InMemoryBroker, error) {
-	if adapterCfg == nil {
+func brokerFromConfig(configs ...Config) (*InMemoryBroker, error) {
+	if len(configs) > 1 {
+		return nil, fmt.Errorf("memory: at most one config may be provided, got %d", len(configs))
+	}
+	if len(configs) == 0 {
 		return NewBroker(), nil
 	}
-	if broker, ok := adapterCfg.(*InMemoryBroker); ok {
-		return broker, nil
+	cfg := configs[0]
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
-	if cfg, ok := adapterCfg.(*Config); ok {
-		out := *cfg
-		out.ApplyDefaults()
-		if err := out.Validate(); err != nil {
-			return nil, err
-		}
-		if out.Broker != nil {
-			return out.Broker, nil
-		}
-		return NewBrokerWithBuffer(out.BufferSize), nil
+	if cfg.Broker != nil {
+		return cfg.Broker, nil
 	}
-	return nil, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*memory.InMemoryBroker or *memory.Config", Actual: adapterCfg}
+	return NewBrokerWithBuffer(cfg.BufferSize), nil
 }
 
 func validateCommonConsumer(cfg messaging.Config) error {

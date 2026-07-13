@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"hash/fnv"
 	"io"
 	"strings"
@@ -233,4 +234,57 @@ func TestContentAddressableStorage_EmptyContent(t *testing.T) {
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+// failReader always fails on Read, exercising io.Copy error paths.
+type failReader struct{}
+
+func (failReader) Read([]byte) (int, error) { return 0, errors.New("read boom") }
+
+func TestContentAddressableStorage_StoreExistsError(t *testing.T) {
+	t.Parallel()
+	ms := newMockStorage()
+	ms.failOn = "exists"
+	cas := NewContentAddressableStorage(ms)
+	if _, _, err := cas.Store(context.Background(), bytes.NewReader([]byte("x")), ""); err == nil {
+		t.Fatal("expected exists error")
+	}
+}
+
+func TestContentAddressableStorage_StoreUploadError(t *testing.T) {
+	t.Parallel()
+	ms := newMockStorage()
+	ms.failOn = "upload"
+	cas := NewContentAddressableStorage(ms)
+	if _, _, err := cas.Store(context.Background(), bytes.NewReader([]byte("x")), ""); err == nil {
+		t.Fatal("expected upload error")
+	}
+}
+
+func TestContentAddressableStorage_StoreCopyError(t *testing.T) {
+	t.Parallel()
+	cas := NewContentAddressableStorage(newMockStorage())
+	if _, _, err := cas.Store(context.Background(), failReader{}, ""); err == nil {
+		t.Fatal("expected copy error from failing reader")
+	}
+}
+
+func TestContentAddressableStorage_ExistsDeleteURLErrors(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	exists := newMockStorage()
+	exists.failOn = "exists"
+	if _, err := NewContentAddressableStorage(exists).Exists(ctx, "h"); err == nil {
+		t.Fatal("Exists should propagate error")
+	}
+	del := newMockStorage()
+	del.failOn = "delete"
+	if err := NewContentAddressableStorage(del).Delete(ctx, "h"); err == nil {
+		t.Fatal("Delete should propagate error")
+	}
+	u := newMockStorage()
+	u.failOn = "url"
+	if _, err := NewContentAddressableStorage(u).URL(ctx, "h"); err == nil {
+		t.Fatal("URL should propagate error")
+	}
 }

@@ -244,3 +244,66 @@ func TestExchangeJSONCustomClientIDParam(t *testing.T) {
 		t.Errorf("client_key = %q, want 'test-client-id'", req["client_key"])
 	}
 }
+
+func TestResolveClient_NonNil(t *testing.T) {
+	c := &http.Client{}
+	if resolveClient(c) != c {
+		t.Fatal("expected provided client to be returned")
+	}
+	if resolveClient(nil) != DefaultHTTPClient {
+		t.Fatal("expected DefaultHTTPClient for nil")
+	}
+}
+
+func TestExchangeCode_BadURL(t *testing.T) {
+	_, err := ExchangeCode(context.Background(), nil, "http://\x7f/bad", mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	if err == nil {
+		t.Fatal("expected request-construction error")
+	}
+}
+
+func TestExchangeCode_ConnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	_, err := ExchangeCode(context.Background(), nil, url, mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	if err == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestExchangeCode_BadJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+	_, err := ExchangeCode(context.Background(), nil, srv.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+}
+
+func TestExchangeJSON_Errors(t *testing.T) {
+	_, err := ExchangeJSON(context.Background(), nil, "http://\x7f/bad", mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	if err == nil {
+		t.Fatal("expected request-construction error")
+	}
+
+	fail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no", http.StatusBadRequest)
+	}))
+	defer fail.Close()
+	_, err = ExchangeJSON(context.Background(), nil, fail.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	if err == nil {
+		t.Fatal("expected HTTP error")
+	}
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer bad.Close()
+	_, err = ExchangeJSON(context.Background(), nil, bad.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+}

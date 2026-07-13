@@ -15,23 +15,25 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
-// Register registers the S3 storage provider into the given registry.
-// It returns an error if the provider is already registered.
-func Register(reg *storage.FactoryRegistry) error {
-	return reg.Register(storage.ProviderS3, func(cfg storage.Config, providerCfg any, log *logging.Logger) (storage.Storage, error) {
-		c := &Config{}
-		if providerCfg != nil {
-			pc, ok := providerCfg.(*Config)
-			if !ok {
-				return nil, fmt.Errorf("s3: expected *s3.Config, got %T", providerCfg)
-			}
-			c = pc
-		}
-		c.ApplyDefaults()
-		if err := c.Validate(); err != nil {
-			return nil, err
-		}
-		return NewStorage(context.Background(), c)
+// Register registers a configured S3 storage provider into the given registry.
+// Pass an optional Config to override defaults.
+func Register(reg *storage.FactoryRegistry, configs ...Config) error {
+	if reg == nil {
+		return fmt.Errorf("s3: storage registry is nil")
+	}
+	if len(configs) > 1 {
+		return fmt.Errorf("s3: at most one config may be provided, got %d", len(configs))
+	}
+	c := Config{}
+	if len(configs) > 0 {
+		c = configs[0]
+	}
+	c.ApplyDefaults()
+	if err := c.Validate(); err != nil {
+		return err
+	}
+	return reg.Register(storage.ProviderS3, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+		return NewStorage(context.Background(), &c)
 	})
 }
 

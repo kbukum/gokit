@@ -264,3 +264,126 @@ func TestEngine_ConditionBranches(t *testing.T) {
 		t.Fatalf("expected branch coverage allow, got %+v", decision)
 	}
 }
+
+func TestEngine_NewEngineRejectsEmptyRoleName(t *testing.T) {
+	if _, err := NewEngine([]Role{{Name: ""}}, nil); err == nil {
+		t.Fatal("expected empty role name error")
+	}
+}
+
+func TestEngine_RoleCycleAndUnknownInherit(t *testing.T) {
+	engine, err := NewEngine([]Role{
+		{Name: "a", Inherits: []string{"b", "missing"}},
+		{Name: "b", Inherits: []string{"a"}, Permissions: []Permission{{Resource: "doc", Action: "read"}}},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	req := Request{
+		Subject:  Subject{Roles: []string{"a"}},
+		Resource: Resource{Type: "doc"},
+		Action:   "read",
+	}
+	if !engine.Allowed(req) {
+		t.Fatal("expected allow via inherited role despite cycle")
+	}
+	if engine.Allowed(Request{Subject: Subject{Roles: []string{"unknown"}}, Resource: Resource{Type: "doc"}, Action: "read"}) {
+		t.Fatal("unknown role must not grant access")
+	}
+}
+
+func TestEngine_PolicyEmptyDimensionDenies(t *testing.T) {
+	engine, err := NewEngine(nil, []Policy{{
+		Name:      "no-resources",
+		Effect:    EffectAllow,
+		Actions:   []string{"read"},
+		Resources: nil,
+	}})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	if engine.Allowed(Request{Resource: Resource{Type: "doc"}, Action: "read"}) {
+		t.Fatal("policy with empty resources must not match")
+	}
+}
+
+func TestEngine_ConditionMissingAttributeDenies(t *testing.T) {
+	engine, err := NewEngine(nil, []Policy{{
+		Name:      "needs-attr",
+		Effect:    EffectAllow,
+		Actions:   []string{"read"},
+		Resources: []string{"doc"},
+		Conditions: []Condition{{
+			Source:   AttributeSourceSubject,
+			Key:      "team",
+			Operator: OperatorEquals,
+			Values:   []string{"x"},
+		}},
+	}})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	if engine.Allowed(Request{Resource: Resource{Type: "doc"}, Action: "read"}) {
+		t.Fatal("missing subject attribute must deny")
+	}
+}
+
+func TestEngine_ConditionCompareSource(t *testing.T) {
+	policy := Policy{
+		Name:      "owner-match",
+		Effect:    EffectAllow,
+		Actions:   []string{"read"},
+		Resources: []string{"doc"},
+		Conditions: []Condition{{
+			Source:        AttributeSourceSubject,
+			Key:           "id",
+			Operator:      OperatorEquals,
+			CompareSource: AttributeSourceResource,
+			CompareKey:    "owner",
+		}},
+	}
+	engine, err := NewEngine(nil, []Policy{policy})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+
+	match := Request{
+		Subject:  Subject{ID: "u1"},
+		Resource: Resource{Type: "doc", Attributes: Attributes{"owner": "u1"}},
+		Action:   "read",
+	}
+	if !engine.Allowed(match) {
+		t.Fatal("expected allow when subject id equals resource owner")
+	}
+
+	noCompare := Request{
+		Subject:  Subject{ID: "u1"},
+		Resource: Resource{Type: "doc"},
+		Action:   "read",
+	}
+	if engine.Allowed(noCompare) {
+		t.Fatal("missing compare attribute must deny")
+	}
+}
+
+func TestEngine_AttributeValueSources(t *testing.T) {
+	policy := Policy{
+		Name:      "resource-type",
+		Effect:    EffectAllow,
+		Actions:   []string{"read"},
+		Resources: []string{"doc"},
+		Conditions: []Condition{{
+			Source:   AttributeSourceResource,
+			Key:      "type",
+			Operator: OperatorOneOf,
+			Values:   []string{"doc", "file"},
+		}},
+	}
+	engine, err := NewEngine(nil, []Policy{policy})
+	if err != nil {
+		t.Fatalf("NewEngine: %v", err)
+	}
+	if !engine.Allowed(Request{Resource: Resource{Type: "doc"}, Action: "read"}) {
+		t.Fatal("expected allow via resource type attribute")
+	}
+}

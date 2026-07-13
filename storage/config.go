@@ -9,6 +9,7 @@ import (
 const (
 	ProviderLocal    = "local"
 	ProviderS3       = "s3"
+	ProviderGCS      = "gcs"
 	ProviderSupabase = "supabase"
 )
 
@@ -20,7 +21,7 @@ const (
 )
 
 // Config holds provider-agnostic storage configuration.
-// Provider-specific settings are passed separately via providerCfg (any).
+// Provider-specific settings are supplied by typed provider Register functions.
 type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `mapstructure:"name" json:"name"`

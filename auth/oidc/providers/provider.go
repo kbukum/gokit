@@ -134,11 +134,11 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 		return nil, fmt.Errorf("%s: userinfo endpoint not configured", p.cfg.ProviderName)
 	}
 
-	// Build request URL — some providers use query params for access token
-	reqURL := p.cfg.UserInfoEndpoint
-	if strings.Contains(reqURL, "{access_token}") {
-		reqURL = strings.ReplaceAll(reqURL, "{access_token}", url.QueryEscape(accessToken))
-	}
+	// Build the request URL. The access token is sent only in the Authorization
+	// header (see FetchJSON); it is never placed in the query string. Any legacy
+	// "{access_token}" query parameter in the configured endpoint is dropped so
+	// it neither substitutes the token nor leaks as a literal query value.
+	reqURL := stripAccessTokenPlaceholder(p.cfg.UserInfoEndpoint)
 
 	var raw map[string]any
 	if err := FetchJSON(ctx, p.cfg.HTTPClient, reqURL, accessToken, &raw); err != nil {
@@ -157,6 +157,30 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	}
 
 	return info, nil
+}
+
+// stripAccessTokenPlaceholder removes any query parameter whose value carries a
+// legacy "{access_token}" placeholder. Bearer tokens are header-only; a stale
+// placeholder must not substitute the token or leak into the query string.
+func stripAccessTokenPlaceholder(endpoint string) string {
+	if !strings.Contains(endpoint, "{access_token}") {
+		return endpoint
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return endpoint
+	}
+	q := u.Query()
+	for k, vs := range q {
+		for _, v := range vs {
+			if strings.Contains(v, "{access_token}") {
+				q.Del(k)
+				break
+			}
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // --- oidc.ProviderMeta implementation ---

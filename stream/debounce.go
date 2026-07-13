@@ -71,6 +71,10 @@ func (it *debounceIter[T]) Next(ctx context.Context) (result T, ok bool, err err
 				if hasValue {
 					return latest, true, nil
 				}
+				if err := ctx.Err(); err != nil {
+					var zero T
+					return zero, false, err
+				}
 				var zero T
 				return zero, false, nil
 			}

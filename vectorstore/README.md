@@ -31,7 +31,7 @@ func main() {
 	store, err := vectorstore.New(reg, vectorstore.Config{
 		Provider: vectorstore.ProviderMemory,
 		Metric:   vectorstore.MetricCosine,
-	}, nil)
+	})
 	if err != nil {
 		panic(err)
 	}

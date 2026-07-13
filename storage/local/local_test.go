@@ -3,6 +3,7 @@ package local
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"mime"
 	"os"
@@ -652,4 +653,171 @@ func TestNewStorage_ResolvesRelativePath(t *testing.T) {
 
 func TestStorage_ImplementsInterface(t *testing.T) {
 	var _ storage.Storage = (*Storage)(nil)
+}
+
+func TestRegister_CapturesConfig(t *testing.T) {
+	t.Parallel()
+	reg := storage.NewFactoryRegistry()
+	if err := Register(reg, Config{BasePath: t.TempDir()}); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	f, ok := reg.Get(storage.ProviderLocal)
+	if !ok {
+		t.Fatal("local provider missing")
+	}
+	s, err := f(storage.Config{}, nil)
+	if err != nil || s == nil {
+		t.Fatalf("factory = %v, %v", s, err)
+	}
+}
+
+func TestRegister_DefaultsWhenNoConfig(t *testing.T) {
+	t.Parallel()
+	reg := storage.NewFactoryRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatalf("Register with defaults: %v", err)
+	}
+	if _, ok := reg.Get(storage.ProviderLocal); !ok {
+		t.Fatal("local provider missing")
+	}
+}
+
+func TestUpload_MkdirFailsUnderFile(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	// Create a regular file where a directory is expected, so MkdirAll fails.
+	if err := os.WriteFile(filepath.Join(base, "file"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	if err := s.Upload(context.Background(), "file/child.txt", strings.NewReader("y")); err == nil {
+		t.Fatal("expected upload error when parent is a file")
+	}
+}
+
+// errReader fails on Read, exercising the io.Copy error path in Upload.
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) { return 0, errors.New("read boom") }
+
+func TestNewStorage_MkdirFailsWhenBaseIsFile(t *testing.T) {
+	t.Parallel()
+	base := filepath.Join(t.TempDir(), "afile")
+	if err := os.WriteFile(base, []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := NewStorage(base); err == nil {
+		t.Fatal("expected mkdir error when base path is a file")
+	}
+}
+
+func TestUpload_CreateFailsOnDirectoryTarget(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(base, "dir"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Creating a file at an existing directory path fails.
+	if err := s.Upload(context.Background(), "dir", errReader{}); err == nil {
+		t.Fatal("expected create error targeting a directory")
+	}
+}
+
+func TestUpload_CopyError(t *testing.T) {
+	t.Parallel()
+	s, err := NewStorage(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if err := s.Upload(context.Background(), "file.txt", errReader{}); err == nil {
+		t.Fatal("expected copy error from failing reader")
+	}
+}
+
+func TestDelete_NonEmptyDirectoryError(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(base, "dir", "sub"), 0o750); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Removing a non-empty directory returns an error that is not IsNotExist.
+	if err := s.Delete(context.Background(), "dir"); err == nil {
+		t.Fatal("expected delete error on non-empty directory")
+	}
+}
+
+func TestExists_StatErrorNotNotExist(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "f"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// Stat through a non-directory parent yields ENOTDIR (not IsNotExist).
+	if _, err := s.Exists(context.Background(), "f/child"); err == nil {
+		t.Fatal("expected stat error through non-directory parent")
+	}
+}
+
+func TestDownload_PermissionError(t *testing.T) {
+	t.Parallel()
+	if os.Geteuid() == 0 {
+		t.Skip("running as root bypasses file permissions")
+	}
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	p := filepath.Join(base, "secret.txt")
+	if err := os.WriteFile(p, []byte("x"), 0o000); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if _, err := s.Download(context.Background(), "secret.txt"); err == nil {
+		t.Fatal("expected permission error opening unreadable file")
+	}
+}
+
+func TestList_ErrorThroughNonDirectoryParent(t *testing.T) {
+	t.Parallel()
+	base := t.TempDir()
+	s, err := NewStorage(base)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "f"), []byte("x"), 0o600); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// Walking under a file yields a non-IsNotExist error.
+	if _, err := s.List(context.Background(), "f/sub"); err == nil {
+		t.Fatal("expected list error walking under a file")
+	}
+}
+
+func TestRegister_RejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{BasePath: t.TempDir()}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}
+
+func TestRegister_RejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+	if err := Register(storage.NewFactoryRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
+	}
 }

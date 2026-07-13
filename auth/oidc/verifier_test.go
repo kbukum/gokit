@@ -516,3 +516,70 @@ func containsStr(haystack []string, needle string) bool {
 
 // silence unused-import warnings if any helper is removed during edits.
 var _ = fmt.Sprintf
+
+func TestVerifier_VerifyExpected_NonceMatch(t *testing.T) {
+	t.Parallel()
+	kit := newRSATestKit(t)
+	v, err := oidc.NewVerifier(context.Background(), kit.issuer(), oidc.VerifierConfig{ClientID: "cid"})
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	tok := kit.signRS256(t, kit.kid, map[string]any{
+		"iss":   kit.issuer(),
+		"sub":   "user-1",
+		"aud":   "cid",
+		"exp":   float64(time.Now().Add(time.Hour).Unix()),
+		"iat":   float64(time.Now().Unix()),
+		"nonce": "expected-nonce",
+	})
+
+	if _, err := v.VerifyExpected(context.Background(), tok, oidc.VerifyExpectations{Nonce: "expected-nonce"}); err != nil {
+		t.Fatalf("matching nonce rejected: %v", err)
+	}
+	if _, err := v.VerifyExpected(context.Background(), "malformed", oidc.VerifyExpectations{Nonce: "x"}); err == nil {
+		t.Fatal("expected verify error for malformed token")
+	}
+}
+
+func TestVerifier_Verify_MalformedHeader(t *testing.T) {
+	t.Parallel()
+	kit := newRSATestKit(t)
+	v, err := oidc.NewVerifier(context.Background(), kit.issuer(), oidc.VerifierConfig{ClientID: "cid"})
+	if err != nil {
+		t.Fatalf("NewVerifier: %v", err)
+	}
+	if _, err := v.Verify(context.Background(), "!!!.body.sig"); err == nil {
+		t.Fatal("expected decode-header error")
+	}
+}
+
+func TestNewVerifier_BadIssuerURL(t *testing.T) {
+	t.Parallel()
+	_, err := oidc.NewVerifier(context.Background(), "http://\x7f", oidc.VerifierConfig{ClientID: "c"})
+	if err == nil {
+		t.Fatal("expected request-construction error")
+	}
+}
+
+func TestNewVerifier_ConnectionRefused(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	issuer := srv.URL
+	srv.Close()
+	_, err := oidc.NewVerifier(context.Background(), issuer, oidc.VerifierConfig{ClientID: "c"})
+	if err == nil {
+		t.Fatal("expected connection error")
+	}
+}
+
+func TestNewVerifier_InvalidDiscoveryJSON(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer srv.Close()
+	_, err := oidc.NewVerifier(context.Background(), srv.URL, oidc.VerifierConfig{ClientID: "c"})
+	if err == nil || !strings.Contains(err.Error(), "discovery") {
+		t.Fatalf("got %v want discovery decode error", err)
+	}
+}

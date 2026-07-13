@@ -9,26 +9,11 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// ProducerFactory constructs a producer for a registered adapter.
-//
-// adapterCfg carries adapter-specific configuration, matching cache/storage
-// factory registration: registration is config-free, while construction is
-// runtime-configured and may create multiple instances from one registry.
-type ProducerFactory func(context.Context, Config, any, *logging.Logger) (Producer, error)
+// ProducerFactory constructs a producer for a registered, typed adapter configuration.
+type ProducerFactory func(context.Context, Config, *logging.Logger) (Producer, error)
 
-// ConsumerFactory constructs a consumer for a registered adapter and topic.
-type ConsumerFactory func(context.Context, Config, any, *logging.Logger, string) (Consumer, error)
-
-// ConfigTypeError reports an adapter-specific adapter config type mismatch.
-type ConfigTypeError struct {
-	Adapter  string
-	Expected string
-	Actual   any
-}
-
-func (e *ConfigTypeError) Error() string {
-	return fmt.Sprintf("messaging: adapter %s expected adapter config %s, got %T", e.Adapter, e.Expected, e.Actual)
-}
+// ConsumerFactory constructs a consumer for a registered, typed adapter configuration and topic.
+type ConsumerFactory func(context.Context, Config, *logging.Logger, string) (Consumer, error)
 
 // Registry stores explicitly registered messaging adapter factories.
 // Registries are application-owned and injected; packages never register
@@ -83,8 +68,8 @@ func (r *Registry) RegisterConsumer(adapter string, factory ConsumerFactory) err
 	return nil
 }
 
-// NewProducer constructs a producer using cfg.Adapter and runtime adapter config.
-func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, log *logging.Logger) (Producer, error) {
+// NewProducer constructs a producer using cfg.Adapter and the adapter config captured at registration.
+func (r *Registry) NewProducer(ctx context.Context, cfg Config, log *logging.Logger) (Producer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -99,7 +84,7 @@ func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, 
 		return nil, fmt.Errorf("messaging: producer adapter %q is not registered", cfg.Adapter)
 	}
 	msgLog := messagingLogger(log) //nolint:contextcheck // logger fallback construction has no request-scoped operation; ctx is passed to adapter factory
-	producer, err := factory(ctx, cfg, adapterCfg, msgLog)
+	producer, err := factory(ctx, cfg, msgLog)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +94,8 @@ func (r *Registry) NewProducer(ctx context.Context, cfg Config, adapterCfg any, 
 	return producer, nil
 }
 
-// NewConsumer constructs a consumer using cfg.Adapter, runtime adapter config, and topic.
-func (r *Registry) NewConsumer(ctx context.Context, cfg Config, adapterCfg any, log *logging.Logger, topic string) (Consumer, error) {
+// NewConsumer constructs a consumer using cfg.Adapter, the adapter config captured at registration, and topic.
+func (r *Registry) NewConsumer(ctx context.Context, cfg Config, log *logging.Logger, topic string) (Consumer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -137,7 +122,7 @@ func (r *Registry) NewConsumer(ctx context.Context, cfg Config, adapterCfg any, 
 		return nil, fmt.Errorf("messaging: consumer adapter %q is not registered", cfg.Adapter)
 	}
 	msgLog := messagingLogger(log) //nolint:contextcheck // logger fallback construction has no request-scoped operation; ctx is passed to adapter factory
-	return factory(ctx, cfg, adapterCfg, msgLog, topic)
+	return factory(ctx, cfg, msgLog, topic)
 }
 
 // ProducerAdapters returns registered producer adapter names.

@@ -59,10 +59,16 @@ func (m *mockStorage) Exists(_ context.Context, path string) (bool, error) {
 }
 
 func (m *mockStorage) URL(_ context.Context, path string) (string, error) {
+	if m.failOn == "url" {
+		return "", fmt.Errorf("mock url error")
+	}
 	return "https://example.com/" + path, nil
 }
 
 func (m *mockStorage) List(_ context.Context, prefix string) ([]FileInfo, error) {
+	if m.failOn == "list" {
+		return nil, fmt.Errorf("mock list error")
+	}
 	var files []FileInfo
 	for k, v := range m.data {
 		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
