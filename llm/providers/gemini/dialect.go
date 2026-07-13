@@ -10,6 +10,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
+	"github.com/kbukum/gokit/llm/providers/common"
 )
 
 // Register installs the Gemini dialect in the supplied registry.
@@ -104,10 +105,8 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	// Embed the model in the body so the adapter can use it for the path
 	body["_model"] = req.Model
 
-	if req.Extra != nil {
-		for k, v := range req.Extra {
-			body[k] = v
-		}
+	if err := common.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
+		return nil, errors.New(errors.ErrCodeInvalidInput, "gemini: invalid request extra", http.StatusBadRequest).WithCause(err)
 	}
 
 	return body, nil
@@ -160,17 +159,10 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 			msg.Content = ai.TextContent(part.Text)
 		}
 		if part.FunctionCall != nil {
-			var input map[string]any
-			if len(part.FunctionCall.Args) > 0 {
-				_ = json.Unmarshal(part.FunctionCall.Args, &input)
-			}
-			if input == nil {
-				input = map[string]any{}
-			}
 			msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
 				ID:    fmt.Sprintf("call_%d", i),
 				Name:  part.FunctionCall.Name,
-				Input: input,
+				Input: ai.NormalizeToolInput(part.FunctionCall.Args),
 			})
 		}
 	}
@@ -264,7 +256,7 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 			parts = append(parts, map[string]any{
 				"functionCall": map[string]any{
 					"name": tb.Name,
-					"args": tb.Input,
+					"args": ai.NormalizeToolInput(tb.Input),
 				},
 			})
 		}

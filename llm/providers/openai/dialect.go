@@ -10,6 +10,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
+	"github.com/kbukum/gokit/llm/providers/common"
 )
 
 // Register installs the OpenAI dialect in the supplied registry.
@@ -65,10 +66,8 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.ToolChoice != nil {
 		body["tool_choice"] = encodeToolChoice(req.ToolChoice)
 	}
-	if req.Extra != nil {
-		for k, v := range req.Extra {
-			body[k] = v
-		}
+	if err := common.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
+		return nil, errors.New(errors.ErrCodeInvalidInput, "openai: invalid request extra", http.StatusBadRequest).WithCause(err)
 	}
 
 	return body, nil
@@ -114,17 +113,10 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}
 
 	for _, tc := range choice.Message.ToolCalls {
-		var input map[string]any
-		if tc.Function.Arguments != "" {
-			_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
-		}
-		if input == nil {
-			input = map[string]any{}
-		}
 		msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
 			ID:    tc.ID,
 			Name:  tc.Function.Name,
-			Input: input,
+			Input: ai.NormalizeToolInput(json.RawMessage(tc.Function.Arguments)),
 		})
 	}
 
@@ -227,13 +219,12 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 		if len(msg.ToolCalls) > 0 {
 			var tcs []map[string]any
 			for _, tb := range msg.ToolCalls {
-				argsJSON, _ := json.Marshal(tb.Input)
 				tcs = append(tcs, map[string]any{
 					"id":   tb.ID,
 					"type": "function",
 					"function": map[string]any{
 						"name":      tb.Name,
-						"arguments": string(argsJSON),
+						"arguments": string(ai.NormalizeToolInput(tb.Input)),
 					},
 				})
 			}

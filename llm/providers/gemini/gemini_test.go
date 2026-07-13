@@ -254,22 +254,22 @@ func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
-		want []ai.ToolUseBlock
+		want []toolCallWant
 	}{
 		{
 			name: "single tool call",
 			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"NYC"}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_0", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+			want: []toolCallWant{{ID: "call_0", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
 		},
 		{
 			name: "empty args",
 			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"ping","args":{}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_0", Name: "ping", Input: map[string]any{}}},
+			want: []toolCallWant{{ID: "call_0", Name: "ping", Input: map[string]any{}}},
 		},
 		{
 			name: "multi tool",
 			raw:  `{"candidates":[{"content":{"parts":[{"functionCall":{"name":"search","args":{"q":"x"}}},{"functionCall":{"name":"lookup","args":{"id":7}}}],"role":"model"},"finishReason":"TOOL_USE"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_0", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_1", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+			want: []toolCallWant{{ID: "call_0", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_1", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
 		},
 	}
 	for _, tt := range tests {
@@ -278,14 +278,7 @@ func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseResponse: %v", err)
 			}
-			if len(resp.Message.ToolCalls) != len(tt.want) {
-				t.Fatalf("tool calls=%d want=%d", len(resp.Message.ToolCalls), len(tt.want))
-			}
-			for i := range tt.want {
-				if resp.Message.ToolCalls[i].ID != tt.want[i].ID || resp.Message.ToolCalls[i].Name != tt.want[i].Name {
-					t.Fatalf("tool[%d]=%+v want %+v", i, resp.Message.ToolCalls[i], tt.want[i])
-				}
-			}
+			assertToolCalls(t, resp.Message.ToolCalls, tt.want)
 		})
 	}
 }

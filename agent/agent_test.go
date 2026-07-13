@@ -2,6 +2,7 @@ package agent_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -70,7 +71,7 @@ func textResponse(text string) llm.CompletionResponse {
 }
 
 func toolCallResponse(toolName, _ string) llm.CompletionResponse {
-	return llm.CompletionResponse{Message: chat.AssistantMessage{Content: []ai.ContentPart{ai.Text{Text: "use tool"}}, ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: toolName, Input: map[string]any{}}}}, StopReason: chat.FinishReasonToolUse, Usage: llm.Usage{InputTokens: 20, OutputTokens: 10}}
+	return llm.CompletionResponse{Message: chat.AssistantMessage{Content: []ai.ContentPart{ai.Text{Text: "use tool"}}, ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: toolName, Input: json.RawMessage(`{}`)}}}, StopReason: chat.FinishReasonToolUse, Usage: llm.Usage{InputTokens: 20, OutputTokens: 10}}
 }
 
 func makeMockTool(name, result string) *tool.Registry {

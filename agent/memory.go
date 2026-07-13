@@ -158,23 +158,11 @@ func copyContentBlocks(blocks []ai.ContentPart) []ai.ContentPart {
 }
 
 func copyToolUseBlock(blk ai.ToolUseBlock) ai.ToolUseBlock {
-	if blk.Input == nil {
-		blk.Input = map[string]any{}
+	if len(blk.Input) == 0 {
 		return blk
 	}
-	data, err := json.Marshal(blk.Input)
-	if err != nil {
-		cpy := make(map[string]any, len(blk.Input))
-		for k, v := range blk.Input {
-			cpy[k] = v
-		}
-		blk.Input = cpy
-		return blk
-	}
-	var input map[string]any
-	if err := json.Unmarshal(data, &input); err != nil || input == nil {
-		input = map[string]any{}
-	}
-	blk.Input = input
+	cpy := make(json.RawMessage, len(blk.Input))
+	copy(cpy, blk.Input)
+	blk.Input = cpy
 	return blk
 }

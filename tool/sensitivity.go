@@ -71,3 +71,9 @@ func (DenyHumanApproval) Approve(context.Context, ToolCall) (bool, error) { retu
 // ErrToolDenied is returned by Registry.Call when the tool is denied by the
 // sensitivity evaluator, the human approval step, or an authorizer.
 var ErrToolDenied = errors.New("tool: call denied")
+
+// ErrInvalidToolInput is returned by Registry.Call when the raw input fails
+// JSON Schema validation against the tool's InputSchema. Validation runs
+// before authorization and invocation so untrusted, model-produced arguments
+// fail closed and never reach the tool handler.
+var ErrInvalidToolInput = errors.New("tool: invalid input")

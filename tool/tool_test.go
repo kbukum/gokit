@@ -3,9 +3,11 @@ package tool_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/tool"
 )
 
@@ -273,6 +275,44 @@ func TestResult_SetMeta(t *testing.T) {
 
 // --- Registry tests ---
 
+func TestRegistry_ComponentLifecycle(t *testing.T) {
+	reg := tool.NewRegistry()
+	mustReg(t, reg, tool.FromFunc("search", "Search", doSearch).AsCallable())
+
+	if reg.Name() != "tool-registry" {
+		t.Errorf("Name() = %q", reg.Name())
+	}
+	// Before Start the registry reports degraded.
+	if h := reg.Health(context.Background()); h.Status != component.StatusDegraded {
+		t.Errorf("pre-start health = %v, want degraded", h.Status)
+	}
+	if err := reg.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if h := reg.Health(context.Background()); h.Status != component.StatusHealthy {
+		t.Errorf("post-start health = %v, want healthy", h.Status)
+	}
+	if got := reg.Names(); len(got) != 1 || got[0] != "search" {
+		t.Errorf("Names() = %v, want [search]", got)
+	}
+	if got := reg.ToolSpecs(); len(got) != 1 || got[0].Name != "search" {
+		t.Errorf("ToolSpecs() = %+v", got)
+	}
+	if err := reg.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if h := reg.Health(context.Background()); h.Status != component.StatusDegraded {
+		t.Errorf("post-stop health = %v, want degraded", h.Status)
+	}
+}
+
+func TestRegistry_RegisterNil(t *testing.T) {
+	reg := tool.NewRegistry()
+	if err := reg.Register(nil); err == nil {
+		t.Fatal("expected error registering nil callable")
+	}
+}
+
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	reg := tool.NewRegistry()
 	st := tool.FromFunc("search", "Search", doSearch)
@@ -399,6 +439,45 @@ func TestRegistry_CallBatch(t *testing.T) {
 
 	if results[2].Err == nil {
 		t.Error("expected error for nonexistent tool")
+	}
+}
+
+func TestRegistry_CallBatch_Empty(t *testing.T) {
+	reg := tool.NewRegistry()
+	results := reg.CallBatch(tool.Background(), nil, tool.BatchOptions{})
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestRegistry_CallBatch_FailFast(t *testing.T) {
+	failFn := func(ctx context.Context, in SearchInput) (SearchOutput, error) {
+		return SearchOutput{}, errors.New("boom")
+	}
+	reg := tool.NewRegistry()
+	mustReg(t, reg, tool.FromFunc("fail_tool", "always fails", failFn).AsCallable())
+
+	calls := []tool.BatchCall{
+		{Name: "fail_tool", ID: "c1", Input: json.RawMessage(`{"query":"a"}`)},
+		{Name: "fail_tool", ID: "c2", Input: json.RawMessage(`{"query":"b"}`)},
+		{Name: "fail_tool", ID: "c3", Input: json.RawMessage(`{"query":"c"}`)},
+	}
+	results := reg.CallBatch(tool.Background(), calls, tool.BatchOptions{Concurrency: 1, FailFast: true})
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	// With serial fail-fast the first call fails and later calls are stopped.
+	if results[0].Err == nil {
+		t.Fatal("expected first call to fail")
+	}
+	stopped := 0
+	for _, r := range results[1:] {
+		if r.Err != nil {
+			stopped++
+		}
+	}
+	if stopped == 0 {
+		t.Fatal("fail-fast should stop at least one subsequent call")
 	}
 }
 

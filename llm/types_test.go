@@ -74,14 +74,18 @@ func TestUsage_Fields(t *testing.T) {
 func TestExtra_Field(t *testing.T) {
 	req := CompletionRequest{
 		Messages: []chat.Message{chat.User("test")},
-		Extra:    map[string]any{"think": false, "format": "json"},
+		Extra:    RawJSON(`{"think":false,"format":"json"}`),
 	}
 
-	if req.Extra["think"] != false {
+	var fields map[string]any
+	if err := json.Unmarshal(req.Extra, &fields); err != nil {
+		t.Fatalf("Extra is not a JSON object: %v", err)
+	}
+	if fields["think"] != false {
 		t.Error("Extra['think'] should be false")
 	}
-	if req.Extra["format"] != "json" {
-		t.Errorf("Extra['format'] = %v, want json", req.Extra["format"])
+	if fields["format"] != "json" {
+		t.Errorf("Extra['format'] = %v, want json", fields["format"])
 	}
 }
 
@@ -253,7 +257,7 @@ func TestContentParts(t *testing.T) {
 		t.Errorf("ai.Image.BlockType() = %q", ib.BlockType())
 	}
 
-	tub := ai.ToolUseBlock{ID: "1", Name: "test", Input: map[string]any{}}
+	tub := ai.ToolUseBlock{ID: "1", Name: "test", Input: json.RawMessage(`{}`)}
 	if tub.BlockType() != "tool_use" {
 		t.Errorf("ai.ToolUseBlock.BlockType() = %q", tub.BlockType())
 	}

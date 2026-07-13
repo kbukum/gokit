@@ -10,6 +10,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
+	"github.com/kbukum/gokit/llm/providers/common"
 )
 
 // Register installs the Anthropic dialect in the supplied registry.
@@ -68,10 +69,8 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.ToolChoice != nil {
 		body["tool_choice"] = encodeToolChoice(req.ToolChoice)
 	}
-	if req.Extra != nil {
-		for k, v := range req.Extra {
-			body[k] = v
-		}
+	if err := common.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
+		return nil, errors.New(errors.ErrCodeInvalidInput, "anthropic: invalid request extra", http.StatusBadRequest).WithCause(err)
 	}
 
 	return body, nil
@@ -107,17 +106,10 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		case "text":
 			msg.Content = ai.TextContent(block.Text)
 		case "tool_use":
-			var input map[string]any
-			if len(block.Input) > 0 {
-				_ = json.Unmarshal(block.Input, &input)
-			}
-			if input == nil {
-				input = map[string]any{}
-			}
 			msg.ToolCalls = append(msg.ToolCalls, ai.ToolUseBlock{
 				ID:    block.ID,
 				Name:  block.Name,
-				Input: input,
+				Input: ai.NormalizeToolInput(block.Input),
 			})
 		}
 	}
@@ -211,7 +203,7 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 					"type":  "tool_use",
 					"id":    tb.ID,
 					"name":  tb.Name,
-					"input": tb.Input,
+					"input": ai.NormalizeToolInput(tb.Input),
 				})
 			}
 			return map[string]any{

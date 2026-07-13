@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/kbukum/gokit/ai"
@@ -175,6 +176,10 @@ func streamEventsFromChunks(chunkCh <-chan streamChunk, model string) <-chan Str
 			}
 			for _, tc := range chunk.ToolCalls {
 				streamCalls = mergeStreamToolDelta(streamCalls, tc)
+				if streamwire.ToolArgsSize(streamCalls) > streamwire.MaxToolArgsBytes {
+					eventCh <- StreamError{Err: fmt.Errorf("llm: streamed tool arguments exceeded %d bytes", streamwire.MaxToolArgsBytes)}
+					return
+				}
 				eventCh <- ToolUseDelta{Index: tc.Index, ID: tc.ID, Name: tc.Name, InputDelta: tc.InputDelta}
 			}
 			if chunk.Done {

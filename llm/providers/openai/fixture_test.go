@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
@@ -14,7 +15,7 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 		name         string
 		nonStreaming string
 		streaming    []string
-		want         []ai.ToolUseBlock
+		want         []toolCallWant
 	}{
 		{
 			name:         "single tool call",
@@ -24,7 +25,7 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 				`{"choices":[{"delta":{"tool_calls":[{"index":0,"type":"function","function":{"arguments":"\"NYC\"}"}}]},"finish_reason":null}]}`,
 				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 			},
-			want: []ai.ToolUseBlock{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+			want: []toolCallWant{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
 		},
 		{
 			name:         "multi tool response",
@@ -34,7 +35,7 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 				`{"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_3","type":"function","function":{"name":"lookup","arguments":"{\"id\":7}"}}]},"finish_reason":null}]}`,
 				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 			},
-			want: []ai.ToolUseBlock{{ID: "call_2", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_3", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+			want: []toolCallWant{{ID: "call_2", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_3", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
 		},
 		{
 			name:         "empty args",
@@ -43,7 +44,7 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 				`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_4","type":"function","function":{"name":"ping","arguments":"{}"}}]},"finish_reason":null}]}`,
 				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 			},
-			want: []ai.ToolUseBlock{{ID: "call_4", Name: "ping", Input: map[string]any{}}},
+			want: []toolCallWant{{ID: "call_4", Name: "ping", Input: map[string]any{}}},
 		},
 		{
 			name:         "nested input",
@@ -52,7 +53,7 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 				`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_5","type":"function","function":{"name":"plan_trip","arguments":"{\"trip\":{\"city\":\"Paris\",\"days\":[1,2]},\"prefs\":{\"food\":true}}"}}]},"finish_reason":null}]}`,
 				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 			},
-			want: []ai.ToolUseBlock{{ID: "call_5", Name: "plan_trip", Input: map[string]any{"trip": map[string]any{"city": "Paris", "days": []any{float64(1), float64(2)}}, "prefs": map[string]any{"food": true}}}},
+			want: []toolCallWant{{ID: "call_5", Name: "plan_trip", Input: map[string]any{"trip": map[string]any{"city": "Paris", "days": []any{float64(1), float64(2)}}, "prefs": map[string]any{"food": true}}}},
 		},
 	}
 
@@ -62,13 +63,9 @@ func TestDialect_ToolUseFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseResponse: %v", err)
 			}
-			if !reflect.DeepEqual(resp.Message.ToolCalls, tt.want) {
-				t.Fatalf("non-streaming tool calls = %#v, want %#v", resp.Message.ToolCalls, tt.want)
-			}
+			assertToolCalls(t, resp.Message.ToolCalls, tt.want)
 			got := assembleToolUseBlocks(t, d, tt.streaming)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("streaming tool calls = %#v, want %#v", got, tt.want)
-			}
+			assertToolCalls(t, got, tt.want)
 		})
 	}
 }
@@ -90,4 +87,39 @@ func assembleToolUseBlocks(t *testing.T, d *Dialect, events []string) []ai.ToolU
 		t.Fatalf("ToolUseBlocks: %v", err)
 	}
 	return blocks
+}
+
+// toolCallWant is the readable expectation form for a decoded tool call: the
+// arguments are compared by JSON value (not raw bytes) so key ordering and
+// whitespace differences between streaming and non-streaming paths do not
+// matter.
+type toolCallWant struct {
+	ID    string
+	Name  string
+	Input map[string]any
+}
+
+func assertToolCalls(t *testing.T, got []ai.ToolUseBlock, want []toolCallWant) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("tool calls = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].ID != want[i].ID || got[i].Name != want[i].Name {
+			t.Fatalf("tool[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+		gm := map[string]any{}
+		if len(got[i].Input) > 0 {
+			if err := json.Unmarshal(got[i].Input, &gm); err != nil {
+				t.Fatalf("tool[%d] input not a JSON object: %v", i, err)
+			}
+		}
+		w := want[i].Input
+		if w == nil {
+			w = map[string]any{}
+		}
+		if !reflect.DeepEqual(gm, w) {
+			t.Fatalf("tool[%d] input = %#v, want %#v", i, gm, w)
+		}
+	}
 }

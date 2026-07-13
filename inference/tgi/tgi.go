@@ -15,6 +15,7 @@ import (
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/httpclient"
+	"github.com/kbukum/gokit/httpclient/sse"
 	"github.com/kbukum/gokit/inference"
 )
 
@@ -87,7 +88,7 @@ func (p *Provider) Descriptor() inference.Descriptor {
 		Name:            Kind,
 		Description:     "Hugging Face TGI OpenAI-compatible text-generation inference adapter",
 		ServingProtocol: "openai-v1-completions",
-		Capabilities:    inference.CapabilityHints{SupportsStreaming: false},
+		Capabilities:    inference.CapabilityHints{SupportsStreaming: true},
 		Available:       true,
 	}
 }
@@ -125,6 +126,27 @@ func (p *Provider) Health(ctx context.Context) component.Health {
 	return component.Health{Name: p.Name(), Status: component.StatusHealthy, Message: msg}
 }
 
+// PredictStream streams /v1/completions via the shared OAI-compat helper.
+func (p *Provider) PredictStream(ctx context.Context, req inference.PredictRequest) (<-chan ai.StreamEvent, error) {
+	ch, err := inference.OAICompatPredictStream(ctx, Kind, p.openStream, req)
+	if err == nil {
+		p.lifecycle.Touch()
+	}
+	return ch, err
+}
+
+func (p *Provider) openStream(ctx context.Context, path string, body any) (sse.Reader, error) {
+	resp, err := p.client.DoStream(ctx, httpclient.Request{Method: http.MethodPost, Path: path, Body: body})
+	if err != nil {
+		return nil, err
+	}
+	if resp.SSE == nil {
+		_ = resp.Close()
+		return nil, fmt.Errorf("tgi: server did not return an SSE stream")
+	}
+	return resp.SSE, nil
+}
+
 func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]byte, error) {
 	if method != http.MethodPost {
 		return nil, fmt.Errorf("tgi: unsupported method %s", method)
@@ -137,6 +159,7 @@ func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]b
 }
 
 var (
-	_ inference.Inference = (*Provider)(nil)
-	_ component.Component = (*Provider)(nil)
+	_ inference.Inference          = (*Provider)(nil)
+	_ inference.StreamingInference = (*Provider)(nil)
+	_ component.Component          = (*Provider)(nil)
 )

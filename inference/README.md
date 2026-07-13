@@ -15,8 +15,8 @@ go get github.com/kbukum/gokit/inference/vllm
 | --- | --- | --- | --- |
 | `echo` | local test adapter | No | ✅ Implemented |
 | `triton` | KServe v2 HTTP | No | ✅ Implemented |
-| `vllm` | OpenAI-compatible `/v1/completions` | No | ✅ Implemented |
-| `tgi` | OpenAI-compatible `/v1/completions` | No | ✅ Implemented |
+| `vllm` | OpenAI-compatible `/v1/completions` | Yes | ✅ Implemented |
+| `tgi` | OpenAI-compatible `/v1/completions` | Yes | ✅ Implemented |
 
 ## Quick start
 

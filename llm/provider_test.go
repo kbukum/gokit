@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -329,7 +330,7 @@ func TestCountTokensApprox_MultipleMessages(t *testing.T) {
 func TestCountTokensApprox_WithToolCalls(t *testing.T) {
 	msgs := []chat.Message{
 		chat.AssistantMessage{
-			ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+			ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "get_weather", Input: json.RawMessage(`{"city":"NYC"}`)}},
 		},
 	}
 	count := chat.CountTokensApprox(msgs)

@@ -64,14 +64,14 @@ func TestCompletionResponseHasToolCalls(t *testing.T) {
 	if resp.HasToolCalls() {
 		t.Fatal("empty response should not have tool calls")
 	}
-	resp.Message.ToolCalls = []ai.ToolUseBlock{{ID: "1", Name: "test", Input: map[string]any{}}}
+	resp.Message.ToolCalls = []ai.ToolUseBlock{{ID: "1", Name: "test", Input: json.RawMessage(`{}`)}}
 	if !resp.HasToolCalls() {
 		t.Fatal("response with tool calls should return true")
 	}
 }
 
 func TestAssistantMessageWithToolCalls(t *testing.T) {
-	msg := chat.AssistantMessage{ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "search", Input: map[string]any{"q": "test"}}, {ID: "call_2", Name: "fetch", Input: map[string]any{"url": "https://example.com"}}}}
+	msg := chat.AssistantMessage{ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "search", Input: json.RawMessage(`{"q":"test"}`)}, {ID: "call_2", Name: "fetch", Input: json.RawMessage(`{"url":"https://example.com"}`)}}}
 	if !msg.HasToolCalls() || len(msg.ToolCalls) != 2 {
 		t.Fatalf("msg=%+v", msg)
 	}

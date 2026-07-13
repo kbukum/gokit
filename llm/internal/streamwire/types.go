@@ -2,6 +2,7 @@ package streamwire
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/kbukum/gokit/ai"
 )
@@ -64,19 +65,36 @@ func MergeToolDelta(calls []ToolCall, delta ToolCall) []ToolCall {
 	return append(calls, delta)
 }
 
+// MaxToolArgsBytes bounds the total accumulated tool-call argument bytes for a
+// single streamed message. Streamed tool arguments are untrusted model output;
+// without a bound a server could stream unbounded deltas and exhaust memory.
+// Stream assemblers abort the message with an error once the running total of
+// [ToolArgsSize] exceeds this cap.
+const MaxToolArgsBytes = 1 << 20 // 1 MiB
+
+// ToolArgsSize returns the total accumulated InputDelta bytes across calls. It
+// lets a stream assembler enforce [MaxToolArgsBytes] as deltas arrive.
+func ToolArgsSize(calls []ToolCall) int {
+	n := 0
+	for i := range calls {
+		n += len(calls[i].InputDelta)
+	}
+	return n
+}
+
 func ToolUseBlocks(calls []ToolCall) ([]ai.ToolUseBlock, error) {
 	blocks := make([]ai.ToolUseBlock, 0, len(calls))
 	for _, call := range calls {
-		var input map[string]any
 		if call.InputDelta != "" {
-			if err := json.Unmarshal([]byte(call.InputDelta), &input); err != nil {
-				return nil, err
+			if !json.Valid([]byte(call.InputDelta)) {
+				return nil, fmt.Errorf("streamwire: tool %q has invalid JSON arguments", call.Name)
 			}
 		}
-		if input == nil {
-			input = map[string]any{}
-		}
-		blocks = append(blocks, ai.ToolUseBlock{ID: call.ID, Name: call.Name, Input: input})
+		blocks = append(blocks, ai.ToolUseBlock{
+			ID:    call.ID,
+			Name:  call.Name,
+			Input: ai.NormalizeToolInput(json.RawMessage(call.InputDelta)),
+		})
 	}
 	return blocks, nil
 }
