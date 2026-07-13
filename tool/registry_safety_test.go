@@ -146,6 +146,37 @@ func TestRegistry_Call_DestructiveAndSensitiveApprovesOnce(t *testing.T) {
 	}
 }
 
+// Two sensitive predicates that both resolve to DecisionRequireApproval must
+// elicit human approval exactly once for the dispatch, not once per predicate.
+func TestRegistry_Call_MultipleApprovalPredicatesApproveOnce(t *testing.T) {
+	called := false
+	tl := tool.FromFuncInputOnly("search", "Search", func(_ context.Context, in gatedInput) (string, error) {
+		called = true
+		return in.Query, nil
+	})
+	tl.Def.Envelope.SensitiveInvocations = []tool.SensitivePredicate{
+		{JSONPath: "$.query", Matcher: tool.MatcherExists},
+		{JSONPath: "$.query", Matcher: tool.MatcherExists},
+	}
+	reg := tool.NewRegistry()
+	if err := reg.Register(tl.AsCallable()); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	approver := &countingApprover{}
+	reg.WithSensitivityEvaluator(requireApprovalEvaluator{}).WithHumanApproval(approver)
+
+	res, err := reg.Call(tool.NewContext(context.Background()), "search", json.RawMessage(`{"query":"x"}`))
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if !called || res == nil {
+		t.Fatal("approved tool should run")
+	}
+	if approver.calls != 1 {
+		t.Fatalf("human approver called %d times, want exactly 1", approver.calls)
+	}
+}
+
 func TestRegistry_Call_DestructiveProceedsWithApproval(t *testing.T) {
 	called := false
 	reg := destructiveRegistry(t, &called)

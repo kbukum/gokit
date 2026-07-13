@@ -234,11 +234,13 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 				span.RecordError(err)
 				return nil, err
 			case DecisionRequireApproval:
-				if err := r.requireApproval(ctx.Context, approval, call, reason); err != nil {
-					span.RecordError(err)
-					return nil, err
+				if !approved {
+					if err := r.requireApproval(ctx.Context, approval, call, reason); err != nil {
+						span.RecordError(err)
+						return nil, err
+					}
+					approved = true
 				}
-				approved = true
 			default:
 				err := fmt.Errorf("tool %q: unknown evaluator decision %q", name, decision)
 				span.RecordError(err)
