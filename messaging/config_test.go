@@ -1,6 +1,9 @@
 package messaging
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestConfigApplyDefaultsAndValidate(t *testing.T) {
 	t.Parallel()
@@ -37,6 +40,12 @@ func TestConfigValidateRejectsInvalidValues(t *testing.T) {
 		"consumer_group": {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, ConsumerGroup: "bad group", RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
 		"topic":          {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, Topics: []string{"bad topic"}, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
 		"dlq":            {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: "bad suffix"}},
+		"name":           {Adapter: "memory", Name: "bad name", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"retry_attempts": {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RetryAttempts: -1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"subscription":   {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, Subscriptions: []string{"bad sub"}, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"retry_backoff":  {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "nonsense", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"timeout_parse":  {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "nonsense", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: DefaultDLQSuffix}},
+		"dlq_whitespace": {Adapter: "memory", DeliveryGuarantee: DeliveryAtLeastOnce, CommitStrategy: CommitAfterHandlerSuccess, MaxInFlight: 1, RequestTimeout: "1s", RetryBackoff: "1s", DLQ: DLQPolicy{Suffix: "bad\tsuffix"}},
 	}
 	for name, cfg := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -56,5 +65,20 @@ func TestValidateTopic(t *testing.T) {
 	}
 	if err := ValidateTopic("events created"); err == nil {
 		t.Fatal("expected invalid topic error")
+	}
+	if err := ValidateTopic(""); err == nil {
+		t.Fatal("expected empty topic error")
+	}
+	if err := ValidateTopic(strings.Repeat("a", 250)); err == nil {
+		t.Fatal("expected over-length topic error")
+	}
+	if err := ValidateTopic("events/created"); err == nil {
+		t.Fatal("expected path-separator topic error")
+	}
+	if err := ValidateTopic("events\x01"); err == nil {
+		t.Fatal("expected control-character topic error")
+	}
+	if err := ValidateTopic("events@created"); err == nil {
+		t.Fatal("expected unsupported-character topic error")
 	}
 }

@@ -41,3 +41,44 @@ func TestGenerateNonce_FormatAndUniqueness(t *testing.T) {
 		seen[n] = true
 	}
 }
+
+func TestNewPKCE_FormatAndValidation(t *testing.T) {
+	t.Parallel()
+	pkce, err := oidc.NewPKCE()
+	if err != nil {
+		t.Fatalf("NewPKCE: %v", err)
+	}
+	if pkce.CodeChallengeMethod != "S256" {
+		t.Fatalf("method = %q, want S256", pkce.CodeChallengeMethod)
+	}
+	if err := oidc.ValidatePKCE(pkce); err != nil {
+		t.Fatalf("valid PKCE rejected: %v", err)
+	}
+}
+
+func TestValidatePKCE_Rejections(t *testing.T) {
+	t.Parallel()
+	cases := map[string]*oidc.PKCE{
+		"empty-verifier":  {CodeChallenge: "c", CodeChallengeMethod: "S256"},
+		"empty-challenge": {CodeVerifier: "v", CodeChallengeMethod: "S256"},
+		"wrong-method":    {CodeVerifier: "v", CodeChallenge: "c", CodeChallengeMethod: "plain"},
+	}
+	for name, pkce := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if err := oidc.ValidatePKCE(pkce); err == nil {
+				t.Fatalf("expected rejection for %s", name)
+			}
+		})
+	}
+}
+
+func TestValidateSecretMatch_Missing(t *testing.T) {
+	t.Parallel()
+	if err := oidc.ValidateState("", "actual"); err == nil {
+		t.Fatal("expected missing-state error")
+	}
+	if err := oidc.ValidateNonce("expected", ""); err == nil {
+		t.Fatal("expected missing-nonce error")
+	}
+}

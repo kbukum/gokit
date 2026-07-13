@@ -173,10 +173,14 @@ func (b *Broadcaster[T]) remove(sub *subscriber[T]) {
 	}
 	sub.closed = true
 	for i, s := range b.subs {
-		if s == sub {
-			b.subs = append(b.subs[:i], b.subs[i+1:]...)
-			break
+		if s != sub {
+			continue
 		}
+		copy(b.subs[i:], b.subs[i+1:])
+		last := len(b.subs) - 1
+		b.subs[last] = nil
+		b.subs = b.subs[:last]
+		break
 	}
 	close(sub.ch)
 }

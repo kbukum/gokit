@@ -107,3 +107,23 @@ func TestSourceAccessor(t *testing.T) {
 		t.Errorf("Source() = %q, want %q", pub.Source(), "my-service")
 	}
 }
+
+func TestEventPublisher_ProducerAccessor(t *testing.T) {
+	t.Parallel()
+	producer := &mockProducer{}
+	pub := messaging.NewEventPublisher(producer, "svc")
+	if pub.Producer() != producer {
+		t.Fatal("Producer() did not return the underlying producer")
+	}
+}
+
+func TestEventPublisher_MarshalErrorPropagates(t *testing.T) {
+	t.Parallel()
+	pub := messaging.NewEventPublisher(&mockProducer{}, "svc")
+	if err := pub.Publish(context.Background(), "topic", "evt", make(chan int)); err == nil {
+		t.Fatal("expected marshal error from Publish")
+	}
+	if err := pub.PublishKeyed(context.Background(), "topic", "evt", make(chan int), "key"); err == nil {
+		t.Fatal("expected marshal error from PublishKeyed")
+	}
+}

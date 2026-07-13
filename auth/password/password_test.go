@@ -515,3 +515,29 @@ func TestArgon2Hash_CannotBeVerifiedByBcrypt(t *testing.T) {
 		t.Error("bcrypt verifier should reject argon2 hash format")
 	}
 }
+
+func TestBcryptHasher_InvalidCostHashError(t *testing.T) {
+	h := &BcryptHasher{cost: 32}
+	if _, err := h.Hash("password123"); err == nil {
+		t.Fatal("expected bcrypt hash error for out-of-range cost")
+	}
+}
+
+func TestArgon2Hasher_Verify_BadBase64(t *testing.T) {
+	h := NewArgon2Hasher()
+	badSalt := "$argon2id$v=19$m=65536,t=1,p=4$!!!$aGFzaA"
+	if err := h.Verify("password123", badSalt); err == nil {
+		t.Error("expected decode-salt error")
+	}
+	badHash := "$argon2id$v=19$m=65536,t=1,p=4$c29tZXNhbHQ$!!!"
+	if err := h.Verify("password123", badHash); err == nil {
+		t.Error("expected decode-hash error")
+	}
+}
+
+func TestConfig_Validate_Argon2ThreadsTooLow(t *testing.T) {
+	cfg := Config{Algorithm: AlgorithmArgon2id, Argon2Time: 3, Argon2Memory: 64 * 1024, Argon2Threads: 0, MinLength: 8}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected argon2_threads validation error")
+	}
+}

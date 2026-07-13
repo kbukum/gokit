@@ -130,3 +130,58 @@ func TestGitHubEmailNotNeeded(t *testing.T) {
 		t.Error("should set EmailVerified=true when email present")
 	}
 }
+
+func TestFetchGitHubPrimaryEmail_Paths(t *testing.T) {
+	ctx := context.Background()
+
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"email": "a@x.com", "primary": false, "verified": true},
+			{"email": "b@x.com", "primary": true, "verified": true},
+		})
+	}))
+	defer primary.Close()
+	email, verified, err := fetchGitHubPrimaryEmail(ctx, primary.URL, "tok")
+	if err != nil || email != "b@x.com" || !verified {
+		t.Fatalf("primary: %q %v %v", email, verified, err)
+	}
+
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"email": "only@x.com", "primary": false, "verified": false},
+		})
+	}))
+	defer first.Close()
+	email, _, err = fetchGitHubPrimaryEmail(ctx, first.URL, "tok")
+	if err != nil || email != "only@x.com" {
+		t.Fatalf("first-fallback: %q %v", email, err)
+	}
+
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
+	}))
+	defer empty.Close()
+	if email, _, err = fetchGitHubPrimaryEmail(ctx, empty.URL, "tok"); err != nil || email != "" {
+		t.Fatalf("empty: %q %v", email, err)
+	}
+
+	if _, _, err = fetchGitHubPrimaryEmail(ctx, "http://\x7f/bad", "tok"); err == nil {
+		t.Error("expected request-construction error")
+	}
+
+	fail := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no", http.StatusForbidden)
+	}))
+	defer fail.Close()
+	if _, _, err = fetchGitHubPrimaryEmail(ctx, fail.URL, "tok"); err == nil {
+		t.Error("expected HTTP status error")
+	}
+
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer bad.Close()
+	if _, _, err = fetchGitHubPrimaryEmail(ctx, bad.URL, "tok"); err == nil {
+		t.Error("expected decode error")
+	}
+}

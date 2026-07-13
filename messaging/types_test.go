@@ -192,3 +192,29 @@ func TestNewMessagePreservesHeaders(t *testing.T) {
 		t.Errorf("Headers[h] = %q, want v", msg.Headers["h"])
 	}
 }
+
+func TestUnmarshalMessageJSON(t *testing.T) {
+	t.Parallel()
+	msg := Message{Value: []byte(`{"name":"Alice","age":30}`)}
+	out, err := UnmarshalMessageJSON[struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}](msg)
+	if err != nil {
+		t.Fatalf("UnmarshalMessageJSON() error: %v", err)
+	}
+	if out.Name != "Alice" || out.Age != 30 {
+		t.Fatalf("decoded = %+v", out)
+	}
+
+	if _, err := UnmarshalMessageJSON[map[string]string](Message{Value: []byte("not json")}); err == nil {
+		t.Fatal("expected unmarshal error for invalid JSON")
+	}
+}
+
+func TestMessage_RoutingKey(t *testing.T) {
+	t.Parallel()
+	if got := (Message{Key: "partition-1"}).RoutingKey(); got != "partition-1" {
+		t.Fatalf("RoutingKey() = %q, want partition-1", got)
+	}
+}

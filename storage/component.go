@@ -10,21 +10,22 @@ import (
 
 // Component wraps Storage and implements component.Component for lifecycle management.
 type Component struct {
-	storage     Storage
-	registry    *FactoryRegistry
-	cfg         Config
-	providerCfg any
-	log         *logging.Logger
+	storage  Storage
+	registry *FactoryRegistry
+	cfg      Config
+	log      *logging.Logger
 }
 
 // NewComponent creates a storage component for use with the component registry.
 // registry is mandatory; construct one and register the desired provider(s) before passing it.
-func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) *Component {
+func NewComponent(registry *FactoryRegistry, cfg Config, log *logging.Logger) *Component {
+	if log == nil {
+		log = logging.NewDefault("storage") //nolint:contextcheck // default logger construction has no request-scoped operation
+	}
 	return &Component{
-		registry:    registry,
-		cfg:         cfg,
-		providerCfg: providerCfg,
-		log:         log.WithComponent("storage"),
+		registry: registry,
+		cfg:      cfg,
+		log:      log.WithComponent("storage"),
 	}
 }
 
@@ -46,7 +47,7 @@ func (c *Component) Start(_ context.Context) error {
 		return nil
 	}
 
-	s, err := New(c.registry, c.cfg, c.providerCfg, c.log) //nolint:contextcheck // storage init has no request context
+	s, err := New(c.registry, c.cfg, c.log) //nolint:contextcheck // storage init has no request context
 	if err != nil {
 		return fmt.Errorf("storage start: %w", err)
 	}
@@ -96,13 +97,6 @@ func (c *Component) Health(ctx context.Context) component.Health {
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
 	details := fmt.Sprintf("provider=%s", c.cfg.Provider)
-
-	// Try to extract bucket from provider config via BucketDescriber interface.
-	if bp, ok := c.providerCfg.(BucketDescriber); ok {
-		if b := bp.GetBucket(); b != "" {
-			details += fmt.Sprintf(" bucket=%s", b)
-		}
-	}
 
 	return component.Description{
 		Name:    "Storage",

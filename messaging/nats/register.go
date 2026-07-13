@@ -9,16 +9,17 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-// Register adds config-free NATS producer and consumer factories to registry.
-func Register(registry *messaging.Registry) error {
+// Register adds typed NATS producer and consumer factories to registry.
+func Register(registry *messaging.Registry, configs ...Config) error {
 	if registry == nil {
 		return fmt.Errorf("nats: messaging registry is nil")
 	}
-	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger) (messaging.Producer, error) {
-		cfg, err := configFromProviderCfg(adapterCfg)
-		if err != nil {
-			return nil, err
-		}
+	cfg, err := configFromRegistration(configs...)
+	if err != nil {
+		return err
+	}
+	if err := registry.RegisterProducer(adapterName, func(_ context.Context, common messaging.Config, _ *logging.Logger) (messaging.Producer, error) {
+		cfg := cfg
 		if commonErr := validateCommon(common); commonErr != nil {
 			return nil, commonErr
 		}
@@ -31,11 +32,8 @@ func Register(registry *messaging.Registry) error {
 	}); err != nil {
 		return err
 	}
-	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, adapterCfg any, _ *logging.Logger, topic string) (messaging.Consumer, error) {
-		cfg, err := configFromProviderCfg(adapterCfg)
-		if err != nil {
-			return nil, err
-		}
+	return registry.RegisterConsumer(adapterName, func(_ context.Context, common messaging.Config, _ *logging.Logger, topic string) (messaging.Consumer, error) {
+		cfg := cfg
 		if commonErr := validateCommon(common); commonErr != nil {
 			return nil, commonErr
 		}
@@ -49,25 +47,16 @@ func Register(registry *messaging.Registry) error {
 	})
 }
 
-func configFromProviderCfg(adapterCfg any) (Config, error) {
-	if adapterCfg == nil {
-		cfg := Config{}
-		cfg.ApplyDefaults()
-		if err := cfg.Validate(); err != nil {
-			return Config{}, err
-		}
-		return cfg, nil
+func configFromRegistration(configs ...Config) (Config, error) {
+	cfg := Config{}
+	if len(configs) > 0 {
+		cfg = configs[0]
 	}
-	cfg, ok := adapterCfg.(*Config)
-	if !ok {
-		return Config{}, &messaging.ConfigTypeError{Adapter: adapterName, Expected: "*nats.Config", Actual: adapterCfg}
-	}
-	out := *cfg
-	out.ApplyDefaults()
-	if err := out.Validate(); err != nil {
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
-	return out, nil
+	return cfg, nil
 }
 
 func validateCommon(cfg messaging.Config) error {

@@ -282,3 +282,146 @@ func TestMiddleware(t *testing.T) {
 		}
 	})
 }
+
+func TestValidatePrefixRejectsInvalid(t *testing.T) {
+	t.Parallel()
+	hasher := testHasher(t)
+	cases := []string{"", "ab", "bad/prefix", "bad prefix"}
+	for _, prefix := range cases {
+		if _, err := hasher.GenerateKey(prefix); err == nil {
+			t.Fatalf("GenerateKey(%q) expected prefix rejection", prefix)
+		}
+	}
+}
+
+func TestIsExpiredPastGrace(t *testing.T) {
+	t.Parallel()
+	past := time.Now().Add(-time.Hour)
+	future := time.Now().Add(time.Hour)
+
+	if !(&Key{ExpiresAt: &past}).IsExpiredPastGrace() {
+		t.Fatal("expired key without grace should be past grace")
+	}
+	if (&Key{ExpiresAt: &past, GraceEndsAt: &future}).IsExpiredPastGrace() {
+		t.Fatal("expired key within grace should not be past grace")
+	}
+	if !(&Key{GraceEndsAt: &past}).IsExpiredPastGrace() {
+		t.Fatal("key past grace end should be past grace")
+	}
+	if (&Key{ExpiresAt: &future}).IsExpiredPastGrace() {
+		t.Fatal("unexpired key should not be past grace")
+	}
+}
+
+func TestValidateKeyErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	t.Run("malformed key", func(t *testing.T) {
+		t.Parallel()
+		manager := NewManager(newMemStore(), testHasher(t))
+		if _, err := manager.ValidateKey(context.Background(), "no-separator"); err == nil {
+			t.Fatal("expected malformed key error")
+		}
+	})
+
+	t.Run("invalid prefix", func(t *testing.T) {
+		t.Parallel()
+		manager := NewManager(newMemStore(), testHasher(t))
+		if _, err := manager.ValidateKey(context.Background(), "ab.secret"); err == nil {
+			t.Fatal("expected invalid prefix error")
+		}
+	})
+
+	t.Run("store list error", func(t *testing.T) {
+		t.Parallel()
+		store := newMemStore()
+		store.listErr = errors.New("list failed")
+		manager := NewManager(store, testHasher(t))
+		if _, err := manager.ValidateKey(context.Background(), "pkg.secret"); err == nil {
+			t.Fatal("expected store list error")
+		}
+	})
+
+	t.Run("unknown key", func(t *testing.T) {
+		t.Parallel()
+		manager := NewManager(newMemStore(), testHasher(t))
+		if _, err := manager.ValidateKey(context.Background(), "pkg.secret"); err == nil {
+			t.Fatal("expected unknown key error")
+		}
+	})
+
+	t.Run("insufficient scope", func(t *testing.T) {
+		t.Parallel()
+		store := newMemStore()
+		manager := NewManager(store, testHasher(t))
+		issued, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", []string{"read"}, nil)
+		if err != nil {
+			t.Fatalf("IssueKey: %v", err)
+		}
+		if _, err := manager.ValidateKey(context.Background(), issued.PlainKey, "write"); err == nil {
+			t.Fatal("expected insufficient scope error")
+		}
+	})
+}
+
+func TestIssueKeyRejectsInvalidPrefix(t *testing.T) {
+	t.Parallel()
+	manager := NewManager(newMemStore(), testHasher(t))
+	if _, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "ab", nil, nil); err == nil {
+		t.Fatal("expected invalid prefix error")
+	}
+}
+
+func TestValidateRejectsRevokedAndExpired(t *testing.T) {
+	t.Parallel()
+	if err := Validate(&Key{IsActive: false}); err == nil {
+		t.Fatal("expected revoked key error")
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := Validate(&Key{IsActive: true, ExpiresAt: &past}); err == nil {
+		t.Fatal("expected expired key error")
+	}
+}
+
+type failingStore struct {
+	*memStore
+	createErr     error
+	updateUsedErr error
+}
+
+func (s *failingStore) Create(ctx context.Context, key *Key) error {
+	if s.createErr != nil {
+		return s.createErr
+	}
+	return s.memStore.Create(ctx, key)
+}
+
+func (s *failingStore) UpdateLastUsed(ctx context.Context, id string, usedAt time.Time) error {
+	if s.updateUsedErr != nil {
+		return s.updateUsedErr
+	}
+	return s.memStore.UpdateLastUsed(ctx, id, usedAt)
+}
+
+func TestIssueKeyPropagatesCreateError(t *testing.T) {
+	t.Parallel()
+	store := &failingStore{memStore: newMemStore(), createErr: errors.New("create failed")}
+	manager := NewManager(store, testHasher(t))
+	if _, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", nil, nil); err == nil {
+		t.Fatal("expected create error to propagate")
+	}
+}
+
+func TestValidateKeyPropagatesUpdateLastUsedError(t *testing.T) {
+	t.Parallel()
+	store := &failingStore{memStore: newMemStore()}
+	manager := NewManager(store, testHasher(t))
+	issued, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", nil, nil)
+	if err != nil {
+		t.Fatalf("IssueKey: %v", err)
+	}
+	store.updateUsedErr = errors.New("update failed")
+	if _, err := manager.ValidateKey(context.Background(), issued.PlainKey); err == nil {
+		t.Fatal("expected UpdateLastUsed error to propagate")
+	}
+}

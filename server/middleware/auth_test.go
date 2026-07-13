@@ -216,3 +216,13 @@ func TestRequirePermission(t *testing.T) {
 // ─────────────────────────────────────────────────────────────────────────────
 // middleware.go: GinWrap + Chain
 // ─────────────────────────────────────────────────────────────────────────────
+
+func TestAuth_NilClaimsSetter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	if _, err := Auth(fakeTokenValidator{}, nil); err == nil || !strings.Contains(err.Error(), "ClaimsSetter") {
+		t.Errorf("got %v want non-nil ClaimsSetter error", err)
+	}
+	if _, err := OptionalAuth(fakeTokenValidator{}, nil); err == nil || !strings.Contains(err.Error(), "ClaimsSetter") {
+		t.Errorf("got %v want non-nil ClaimsSetter error", err)
+	}
+}

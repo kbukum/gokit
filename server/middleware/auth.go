@@ -87,15 +87,35 @@ func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 
 // Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
 //
-// setClaims is the injected sink for validated claims (typically auth/authctx.Set),
-// keeping the transport layer decoupled from the auth module. Both validator and
-// setClaims must be non-nil.
+// It applies [RejectMissing]: requests without credentials are rejected with 401.
+// A present-but-invalid token is always rejected. setClaims is the injected sink
+// for validated claims (typically auth/authctx.Set), keeping the transport layer
+// decoupled from the auth module. Both validator and setClaims must be non-nil.
 func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	return newAuthHandler("Auth", validator, setClaims, RejectMissing, opts...)
+}
+
+// OptionalAuth validates a token if present but allows unauthenticated requests
+// (no Authorization header / empty token) to proceed. It applies [AcceptMissing].
+// A *present but invalid* token is always rejected with 401 — this is a
+// deliberate secure-by-default contract: callers that want pass-through-on-failure
+// should use no auth middleware at all.
+//
+// setClaims is the injected sink for validated claims. Both validator and
+// setClaims must be non-nil.
+func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
+	return newAuthHandler("OptionalAuth", validator, setClaims, AcceptMissing, opts...)
+}
+
+// newAuthHandler builds the token-authentication middleware shared by Auth and
+// OptionalAuth. policy governs only the missing-credential case; an invalid
+// token is always rejected.
+func newAuthHandler(name string, validator TokenValidator, setClaims ClaimsSetter, policy MissingTokenPolicy, opts ...AuthOption) (gin.HandlerFunc, error) {
 	if validator == nil {
-		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil TokenValidator")
+		return nil, fmt.Errorf("middleware/auth: %s requires a non-nil TokenValidator", name)
 	}
 	if setClaims == nil {
-		return nil, fmt.Errorf("middleware/auth: Auth requires a non-nil ClaimsSetter")
+		return nil, fmt.Errorf("middleware/auth: %s requires a non-nil ClaimsSetter", name)
 	}
 	o := buildAuthOptions(opts...)
 	if err := o.validateQueryTokenConfig(); err != nil {
@@ -113,45 +133,11 @@ func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) 
 
 		token, ok := extractToken(c, o)
 		if !ok {
+			if policy == AcceptMissing {
+				c.Next()
+				return
+			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
-			return
-		}
-
-		claims, err := validator.ValidateToken(token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
-
-		ctx := setClaims(c.Request.Context(), claims)
-		c.Request = c.Request.WithContext(ctx)
-		c.Next()
-	}, nil
-}
-
-// OptionalAuth validates a token if present but allows unauthenticated requests
-// (no Authorization header / empty token) to proceed. A *present but invalid* token
-// is always rejected with 401 — this is a deliberate secure-by-default contract:
-// callers that want pass-through-on-failure should use no auth middleware at all.
-//
-// setClaims is the injected sink for validated claims. Both validator and
-// setClaims must be non-nil.
-func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
-	if validator == nil {
-		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil TokenValidator")
-	}
-	if setClaims == nil {
-		return nil, fmt.Errorf("middleware/auth: OptionalAuth requires a non-nil ClaimsSetter")
-	}
-	o := buildAuthOptions(opts...)
-	if err := o.validateQueryTokenConfig(); err != nil {
-		return nil, err
-	}
-
-	return func(c *gin.Context) {
-		token, ok := extractToken(c, o)
-		if !ok {
-			c.Next()
 			return
 		}
 

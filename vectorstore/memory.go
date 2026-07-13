@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"sync"
 )
@@ -235,19 +236,25 @@ func matchesFilter(payload *PointPayload, filter *SearchFilter) bool {
 	return true
 }
 
-// valueEquals compares two values for equality.
+// valueEquals compares two payload values, falling back to JSON for values
+// whose dynamic type is not directly comparable (slices, maps).
 func valueEquals(a, b any) bool {
-	if a == b {
+	if isComparable(a) && isComparable(b) && a == b {
 		return true
 	}
 
-	// Try JSON marshaling for deep comparison
 	aJSON, err1 := json.Marshal(a)
 	bJSON, err2 := json.Marshal(b)
-
 	if err1 == nil && err2 == nil {
 		return bytes.Equal(aJSON, bJSON)
 	}
 
 	return false
+}
+
+func isComparable(v any) bool {
+	if v == nil {
+		return true
+	}
+	return reflect.TypeOf(v).Comparable()
 }

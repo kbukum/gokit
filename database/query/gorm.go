@@ -71,14 +71,23 @@ func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
 	conds := make([]string, 0, len(fields))
 	args := make([]any, 0, len(fields))
 	for _, f := range fields {
+		if !isSafeIdentifier(f) {
+			continue
+		}
 		conds = append(conds, fmt.Sprintf("LOWER(%s) LIKE ?", f))
 		args = append(args, pattern)
+	}
+	if len(conds) == 0 {
+		return db
 	}
 	return db.Where(strings.Join(conds, " OR "), args...)
 }
 
 func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 	field := config.ResolveField(cond.Field)
+	if !isSafeIdentifier(field) {
+		return db
+	}
 
 	switch cond.Operator {
 	case OpEq:
@@ -128,13 +137,18 @@ func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 func applySort(db *gorm.DB, sortBy, sortOrder string, config Config) *gorm.DB {
 	if sortBy != "" {
 		for _, f := range config.AllowedSortFields {
-			if f == sortBy {
-				order := config.ResolveField(sortBy)
-				if sortOrder == "desc" {
-					order += " DESC"
-				}
-				return db.Order(order)
+			if f != sortBy {
+				continue
 			}
+			col := config.ResolveField(sortBy)
+			if !isSafeIdentifier(col) {
+				break
+			}
+			order := col
+			if sortOrder == "desc" {
+				order += " DESC"
+			}
+			return db.Order(order)
 		}
 	}
 	if config.DefaultSort != "" {
@@ -167,6 +181,9 @@ func ComputeFacetsWithFilters(
 	facets := make(map[string]map[string]int)
 
 	for _, field := range facetFields {
+		if !isSafeIdentifier(field) {
+			continue
+		}
 		facetKey := config.ResolveFacetLabel(field)
 		facets[facetKey] = make(map[string]int)
 

@@ -104,3 +104,35 @@ func TestNewAppleSecretFunc_InvalidAndValidPEM(t *testing.T) {
 		t.Fatal("expected generated secret")
 	}
 }
+
+func TestGenericProvider_Refresh_CustomFunc(t *testing.T) {
+	called := false
+	p := NewGeneric(GenericConfig{
+		ProviderConfig: mockProviderConfig(),
+		ProviderName:   "custom-refresh",
+		RefreshFunc: func(_ context.Context, _ *http.Client, _ ProviderConfig, in oidc.RefreshInput) (*oidc.TokenResult, error) {
+			called = true
+			return &oidc.TokenResult{AccessToken: "refreshed-" + in.RefreshToken}, nil
+		},
+	})
+	res, err := p.Refresh(context.Background(), oidc.RefreshInput{RefreshToken: "rt"})
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	if !called || res.AccessToken != "refreshed-rt" {
+		t.Fatalf("custom refresh not used: %+v", res)
+	}
+}
+
+func TestGenericProvider_Refresh_CustomFuncError(t *testing.T) {
+	p := NewGeneric(GenericConfig{
+		ProviderConfig: mockProviderConfig(),
+		ProviderName:   "custom-refresh-err",
+		RefreshFunc: func(_ context.Context, _ *http.Client, _ ProviderConfig, _ oidc.RefreshInput) (*oidc.TokenResult, error) {
+			return nil, context.Canceled
+		},
+	})
+	if _, err := p.Refresh(context.Background(), oidc.RefreshInput{RefreshToken: "rt"}); err == nil {
+		t.Fatal("expected custom refresh error")
+	}
+}

@@ -599,3 +599,139 @@ func TestParseFromRequest_DisallowedFilter(t *testing.T) {
 		t.Error("disallowed filter field should be ignored")
 	}
 }
+
+func TestParseCondition_EscapedValue(t *testing.T) {
+	t.Parallel()
+	// like.a\.b => value should unescape the backslash, keeping the dot.
+	cond := parseCondition("name", `like.a\.b`)
+	if cond == nil || cond.Operator != OpLike || cond.Value != "a.b" {
+		t.Fatalf("cond = %+v", cond)
+	}
+}
+
+func TestParseArrayValues_EscapesAndTrimming(t *testing.T) {
+	t.Parallel()
+	got := parseArrayValues(`a, b\,c , ,d`)
+	want := []string{"a", "b,c", "d"}
+	if len(got) != len(want) {
+		t.Fatalf("got %#v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestParseArrayValues_TrailingEscape(t *testing.T) {
+	t.Parallel()
+	// A dangling backslash at the end must not panic and is dropped.
+	got := parseArrayValues(`x\`)
+	if len(got) != 1 || got[0] != "x" {
+		t.Fatalf("got %#v", got)
+	}
+}
+
+func TestParseFilterString_MalformedAndDisallowed(t *testing.T) {
+	t.Parallel()
+	// No '=' => skipped; disallowed field => skipped; valid => kept.
+	conds := parseFilterString("bogus&status=eq.active&secret=eq.x", []string{"status"})
+	if len(conds) != 1 || conds[0].Field != "status" {
+		t.Fatalf("conds = %+v", conds)
+	}
+}
+
+func TestIsFieldAllowed(t *testing.T) {
+	t.Parallel()
+	if !isFieldAllowed("anything", nil) {
+		t.Fatal("empty allow-list should permit all")
+	}
+	if isFieldAllowed("x", []string{"y"}) {
+		t.Fatal("field not in allow-list should be rejected")
+	}
+	if !isFieldAllowed("y", []string{"y"}) {
+		t.Fatal("field in allow-list should be permitted")
+	}
+}
+
+func TestConfigPageSizeOverrides(t *testing.T) {
+	t.Parallel()
+	c := Config{DefaultPageSize: 7, MaxPageSize: 9}
+	if c.defaultPageSize() != 7 {
+		t.Fatalf("defaultPageSize = %d", c.defaultPageSize())
+	}
+	if c.maxPageSize() != 9 {
+		t.Fatalf("maxPageSize = %d", c.maxPageSize())
+	}
+	empty := Config{}
+	if empty.defaultPageSize() != DefaultPageSize || empty.maxPageSize() != MaxPageSize {
+		t.Fatalf("empty defaults wrong: %d/%d", empty.defaultPageSize(), empty.maxPageSize())
+	}
+}
+
+func TestClampUpperBound(t *testing.T) {
+	t.Parallel()
+	if clamp(500, 1, 100) != 100 {
+		t.Fatal("expected upper clamp")
+	}
+	if clamp(-5, 1, 100) != 1 {
+		t.Fatal("expected lower clamp")
+	}
+	if clamp(50, 1, 100) != 50 {
+		t.Fatal("expected passthrough")
+	}
+}
+
+func TestDefaultIncludeConfig(t *testing.T) {
+	t.Parallel()
+	c := DefaultIncludeConfig()
+	if c.MaxDepth != 3 || len(c.AllowedPaths) != 0 {
+		t.Fatalf("DefaultIncludeConfig = %+v", c)
+	}
+	if c.IsPathAllowed("anything") {
+		t.Fatal("no paths allowed by default")
+	}
+}
+
+func TestIncludeSet_HasAndHasExact_PrefixMatch(t *testing.T) {
+	t.Parallel()
+	set := IncludeSet{
+		Paths:  []IncludePath{{Parts: []string{"a", "b"}, Raw: "a.b"}},
+		ByRoot: map[string][]IncludePath{"a": {{Parts: []string{"a", "b"}, Raw: "a.b"}}},
+	}
+	if !set.Has("a") {
+		t.Fatal("Has(parent) should match prefix")
+	}
+	if !set.Has("a.b") || !set.HasExact("a.b") {
+		t.Fatal("exact path should match")
+	}
+	if set.HasExact("a") {
+		t.Fatal("HasExact(parent) should not match")
+	}
+	if set.Has("z") || set.HasExact("z") {
+		t.Fatal("unknown root should not match")
+	}
+}
+
+func TestMatchParts_DoubleStarInMiddle(t *testing.T) {
+	t.Parallel()
+	// "**" consumes intermediate segments and matches the trailing tail.
+	if !matchPath("a.b.c.d", "a.**.d") {
+		t.Fatal("expected ** to bridge middle segments")
+	}
+	if matchPath("a.b.c", "a.x.c") {
+		t.Fatal("literal mismatch should fail")
+	}
+	if matchPath("a.b", "a.b.c") {
+		t.Fatal("pattern longer than path should fail")
+	}
+}
+
+func TestParseFromRequest_ConfiguredPageSizeParam(t *testing.T) {
+	t.Parallel()
+	r := httptest.NewRequest("GET", "/?page_size=5", http.NoBody)
+	p := ParseFromRequest(r, Config{})
+	if p.PageSize != 5 {
+		t.Fatalf("PageSize = %d", p.PageSize)
+	}
+}
