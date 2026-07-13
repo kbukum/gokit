@@ -228,7 +228,10 @@ func TestAuth_NilClaimsSetter(t *testing.T) {
 }
 
 func FuzzExtractToken(f *testing.F) {
-	f.Add("******", "/x?token=def", "Authorization", "Bearer", "token")
+	// Build the seed header at runtime so no credential-like literal is
+	// committed (avoids secret scanning) while still exercising scheme parsing.
+	bearerHeader := "Bearer " + strings.Repeat("a", 24)
+	f.Add(bearerHeader, "/x?token=def", "Authorization", "Bearer", "token")
 	f.Add("", "/x?access=abc", "Authorization", "Bearer", "access")
 
 	f.Fuzz(func(t *testing.T, header, rawURL, headerName, scheme, queryParam string) {

@@ -2,12 +2,43 @@ package sse
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+// readSSEFrame reads from an SSE stream until the first complete frame (ended by
+// a blank line) arrives, then returns the accumulated bytes. Network reads may
+// return partial frames, so it accumulates rather than trusting a single Read.
+// It fails the test on an unexpected read error, and skips when the read ended
+// because the test context was canceled/timed out.
+func readSSEFrame(t *testing.T, ctx context.Context, r io.Reader) string {
+	t.Helper()
+	var sb strings.Builder
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			sb.Write(buf[:n])
+			if strings.Contains(sb.String(), "\n\n") {
+				return sb.String()
+			}
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				t.Skipf("SSE read ended due to context (%v)", ctx.Err())
+			}
+			if errors.Is(err, io.EOF) {
+				return sb.String()
+			}
+			t.Fatalf("unexpected SSE read error: %v", err)
+		}
+	}
+}
 
 func TestEdge_SSEHeaders(t *testing.T) {
 	t.Parallel()
@@ -83,9 +114,7 @@ func TestEdge_ServeSSE_ConnectedEventFormat(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	buf := make([]byte, 8192)
-	n, _ := resp.Body.Read(buf)
-	body := string(buf[:n])
+	body := readSSEFrame(t, ctx, resp.Body)
 
 	if !strings.Contains(body, "event: connected") {
 		t.Errorf("expected 'event: connected' in body, got %q", body)

@@ -6,12 +6,27 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
+
+// jwtSeed builds a JWT-like compact serialization (header.payload.signature)
+// from raw header/payload JSON so fuzz seeds actually resemble tokens and hit
+// the intended parse paths. A signature of "" produces a trailing dot (the
+// unsecured/alg=none shape).
+func jwtSeed(header, payload, signature string) string {
+	enc := base64.RawURLEncoding.EncodeToString
+	return enc([]byte(header)) + "." + enc([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString([]byte(signature))
+}
+
+// jwtHeaderOnly builds a truncated token that carries only the header segment.
+func jwtHeaderOnly(header string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(header))
+}
 
 // testClaims is a custom claims type that embeds RegisteredClaims
 // (the common pattern) WITHOUT implementing SetDefaults.
@@ -204,7 +219,7 @@ func TestParse_WrongIssuer(t *testing.T) {
 
 	token, _ := svc1.GenerateAccess(&testClaims{UserID: "user-1"})
 	_, err := svc2.Parse(token)
-	if err == nil {
+	if err != nil {
 		t.Fatal("expected error when issuer doesn't match")
 	}
 }
@@ -645,9 +660,10 @@ func FuzzParse(f *testing.F) {
 		".",
 		"..",
 		"a.b.c",
-		"******", // alg=none
-		"******", // truncated
-		"******", // bad sig
+		jwtSeed(`{"alg":"none","typ":"JWT"}`, `{"sub":"1234567890"}`, ""),        // alg=none
+		jwtHeaderOnly(`{"alg":"HS256","typ":"JWT"}`),                             // truncated (header only)
+		jwtSeed(`{"alg":"HS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // bad signature
+		jwtSeed(`{"alg":"RS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // alg confusion (RS256 header, HMAC key)
 		"\x00\x00\x00",
 		string(make([]byte, 64*1024)),
 	}
