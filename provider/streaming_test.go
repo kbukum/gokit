@@ -385,6 +385,7 @@ func TestDrainIterator_ExactlyWindowSizeItems(t *testing.T) {
 		t.Fatalf("expected 0 drained items (all read), got %d", len(drained))
 	}
 }
+
 func TestDrainIterator_MaxDrainZero(t *testing.T) {
 	t.Parallel()
 	inner := newSliceIter(1, 2, 3)
@@ -403,6 +404,7 @@ func TestDrainIterator_MaxDrainZero(t *testing.T) {
 		t.Fatalf("expected 0 drained items (maxDrain=0), got %d", len(drained))
 	}
 }
+
 func TestDrainIterator_CloseErrorPropagation(t *testing.T) {
 	t.Parallel()
 	closeErr := errors.New("iterator close error")
@@ -417,6 +419,7 @@ func TestDrainIterator_CloseErrorPropagation(t *testing.T) {
 		t.Fatalf("expected 'iterator close error', got %q", err.Error())
 	}
 }
+
 func TestMergedIterator_ErrorFromSource(t *testing.T) {
 	t.Parallel()
 	s1 := &streamTestHelper[string, int]{
@@ -487,6 +490,7 @@ func TestContextCancellation_Stream(t *testing.T) {
 		t.Fatal("expected timeout error from blocked iterator")
 	}
 }
+
 func TestWindowedStream_ExactWindowSize(t *testing.T) {
 	t.Parallel()
 	inner := &streamTestHelper[string, int]{

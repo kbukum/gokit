@@ -260,6 +260,7 @@ func TestConnector_WithResilienceConfig(t *testing.T) {
 		t.Fatalf("expected result-from-client, got %q", result)
 	}
 }
+
 func TestConnector_ResetDuringActiveCall(t *testing.T) {
 	t.Parallel()
 	createCount := atomic.Int32{}
@@ -296,6 +297,7 @@ func TestConnector_ResetDuringActiveCall(t *testing.T) {
 		t.Fatalf("expected client-v2, got %q", result2)
 	}
 }
+
 func TestConnector_ConcurrentCloseAndCall(t *testing.T) {
 	t.Parallel()
 	c := provider.NewConnector(provider.ConnectorConfig[string]{
@@ -335,6 +337,7 @@ func TestConnector_ConcurrentCloseAndCall(t *testing.T) {
 	wg.Wait()
 	// No panics = success; some errors are expected since Close resets state
 }
+
 func TestConnector_WithCircuitBreakerResilience(t *testing.T) {
 	t.Parallel()
 	callCount := atomic.Int32{}

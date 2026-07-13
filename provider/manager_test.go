@@ -36,6 +36,7 @@ func TestManager_WithLoggerAndDefault(t *testing.T) {
 		t.Fatalf("expected echo provider, got %q", p.Name())
 	}
 }
+
 func TestManager_InitializeWithResilience_FactoryError(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -57,6 +58,7 @@ func TestManager_InitializeWithResilience_FactoryError(t *testing.T) {
 		t.Fatalf("expected factory error in message, got %q", err.Error())
 	}
 }
+
 func TestManager_InitializeWithContext_CancellationMidInit(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -80,6 +82,7 @@ func TestManager_InitializeWithContext_CancellationMidInit(t *testing.T) {
 		t.Fatal("expected error from canceled context during init")
 	}
 }
+
 func TestManager_CloseAll_MixedCloseableNonCloseable(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -105,6 +108,7 @@ func TestManager_CloseAll_MixedCloseableNonCloseable(t *testing.T) {
 		t.Fatal("expected Close to be called on closeable provider")
 	}
 }
+
 func TestManager_SetDefault_NonExistent(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -119,6 +123,7 @@ func TestManager_SetDefault_NonExistent(t *testing.T) {
 		t.Fatalf("expected 'not initialized' error, got %q", err.Error())
 	}
 }
+
 func TestManager_Get_NoDefaultNoProviders(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -130,6 +135,7 @@ func TestManager_Get_NoDefaultNoProviders(t *testing.T) {
 		t.Fatal("expected error when no providers exist")
 	}
 }
+
 func TestManager_CloseAll_WithCloseError(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
@@ -150,6 +156,7 @@ func TestManager_CloseAll_WithCloseError(t *testing.T) {
 		t.Fatalf("expected 'close error' in message, got %q", err.Error())
 	}
 }
+
 func TestManager_InitializeWithResilience_InitError(t *testing.T) {
 	t.Parallel()
 	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()

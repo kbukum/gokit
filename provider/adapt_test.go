@@ -289,6 +289,7 @@ func TestContextCancellation_RequestResponse(t *testing.T) {
 		t.Fatalf("expected DeadlineExceeded, got %v", err)
 	}
 }
+
 func TestLargePayload_Adapt(t *testing.T) {
 	t.Parallel()
 	largeInput := strings.Repeat("x", 1<<16) // 64KB

@@ -29,6 +29,7 @@ func TestHealthStatus_Transitions(t *testing.T) {
 		})
 	}
 }
+
 func TestHealthCheck_UnavailableProvider(t *testing.T) {
 	t.Parallel()
 	p := &healthCheckProvider{
@@ -54,6 +55,7 @@ func TestHealthCheck_UnavailableProvider(t *testing.T) {
 		t.Fatal("unavailable provider should return false from IsAvailable")
 	}
 }
+
 func TestHealthCheck_DegradedProvider(t *testing.T) {
 	t.Parallel()
 	p := &healthCheckProvider{
@@ -73,6 +75,7 @@ func TestHealthCheck_DegradedProvider(t *testing.T) {
 		t.Fatalf("expected latency_ms=500, got %v", health.Details["latency_ms"])
 	}
 }
+
 func TestHealthCheck_WithTimeout(t *testing.T) {
 	t.Parallel()
 	p := &slowHealthProvider{

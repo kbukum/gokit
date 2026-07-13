@@ -19,6 +19,7 @@ func TestAdaptSink_IsAvailableDelegates(t *testing.T) {
 		t.Fatal("expected adapted sink to be available")
 	}
 }
+
 func TestContextCancellation_Sink(t *testing.T) {
 	t.Parallel()
 	sink := provider.NewSinkFunc("blocking-sink", func(ctx context.Context, _ string) error {

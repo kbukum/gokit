@@ -2,11 +2,11 @@ package dag
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
 
-	"errors"
 	"github.com/kbukum/gokit/util"
 )
 

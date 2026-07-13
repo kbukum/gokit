@@ -384,6 +384,7 @@ func TestWithStreamResilience_NameAndIsAvailable(t *testing.T) {
 		t.Fatal("expected wrapped stream to be available")
 	}
 }
+
 func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
 	t.Parallel()
 	callCount := atomic.Int32{}
@@ -425,6 +426,7 @@ func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
 		t.Fatalf("expected SERVICE_UNAVAILABLE, got %s", appErr.Code)
 	}
 }
+
 func TestWithStreamResilience_RateLimiterDuringIteration(t *testing.T) {
 	t.Parallel()
 	stream := &streamTestHelper[string, int]{
@@ -463,6 +465,7 @@ func TestWithStreamResilience_RateLimiterDuringIteration(t *testing.T) {
 		t.Fatalf("expected 3 items, got %d", len(results))
 	}
 }
+
 func TestWithStreamResilience_ErrorPropagation(t *testing.T) {
 	t.Parallel()
 	stream := &streamTestHelper[string, int]{
@@ -498,6 +501,7 @@ func TestWithStreamResilience_ErrorPropagation(t *testing.T) {
 		t.Fatal("expected error from iterator")
 	}
 }
+
 func TestWithStreamResilience_EmptyConfig(t *testing.T) {
 	t.Parallel()
 	stream := &streamTestHelper[string, int]{
@@ -548,6 +552,7 @@ func TestWithDuplexResilience_CircuitBreakerOnOpen(t *testing.T) {
 		t.Fatalf("expected ErrCircuitOpen in cause chain, got %v", err)
 	}
 }
+
 func TestWithDuplexResilience_ConcurrentSendRecv(t *testing.T) {
 	t.Parallel()
 	stream := newControlledDuplexStream()
@@ -612,6 +617,7 @@ func TestWithDuplexResilience_ConcurrentSendRecv(t *testing.T) {
 		t.Errorf("Close: %v", err)
 	}
 }
+
 func TestWithDuplexResilience_ClosePropagation(t *testing.T) {
 	t.Parallel()
 	stream := newControlledDuplexStream()
@@ -644,6 +650,7 @@ func TestWithDuplexResilience_ClosePropagation(t *testing.T) {
 		t.Fatalf("expected 'close error', got %q", err.Error())
 	}
 }
+
 func TestWithDuplexResilience_EmptyConfig(t *testing.T) {
 	t.Parallel()
 	stream := newControlledDuplexStream()
@@ -658,6 +665,7 @@ func TestWithDuplexResilience_EmptyConfig(t *testing.T) {
 		t.Fatalf("expected passthrough, got %s", wrapped.Name())
 	}
 }
+
 func TestWithDuplexResilience_NameAndIsAvailable(t *testing.T) {
 	t.Parallel()
 	duplex := &controlledDuplex{
@@ -714,6 +722,7 @@ func TestWithSinkResilience_CircuitBreakerTrips(t *testing.T) {
 		t.Fatalf("expected SERVICE_UNAVAILABLE, got %s", appErr.Code)
 	}
 }
+
 func TestWithSinkResilience_EmptyConfig(t *testing.T) {
 	t.Parallel()
 	sink := provider.NewSinkFunc("passthrough-sink", func(_ context.Context, _ string) error {
@@ -725,6 +734,7 @@ func TestWithSinkResilience_EmptyConfig(t *testing.T) {
 		t.Fatalf("expected passthrough, got %s", wrapped.Name())
 	}
 }
+
 func TestWithSinkResilience_NameAndIsAvailable(t *testing.T) {
 	t.Parallel()
 	sink := provider.NewSinkFunc("delegate-sink", func(_ context.Context, _ string) error {

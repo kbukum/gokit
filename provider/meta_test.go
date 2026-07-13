@@ -365,6 +365,7 @@ func TestMeta_DurationAndBoolBranches(t *testing.T) {
 		t.Fatal("expected non-bool value to fail")
 	}
 }
+
 func TestWithStreamMeta_ExecuteAndMeta(t *testing.T) {
 	t.Parallel()
 	stream := &streamTestHelper[string, int]{
@@ -415,6 +416,7 @@ func TestWithStreamMeta_ExecuteAndMeta(t *testing.T) {
 		t.Fatalf("expected latency_ms=50, got %v", lat)
 	}
 }
+
 func TestWithSinkMeta_SendAndMeta(t *testing.T) {
 	t.Parallel()
 	var received []string
@@ -441,6 +443,7 @@ func TestWithSinkMeta_SendAndMeta(t *testing.T) {
 		t.Fatalf("expected cost=0.5, got %v", cost)
 	}
 }
+
 func TestMetaProvider_InterfaceSatisfaction(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -485,6 +488,7 @@ func TestMetaProvider_InterfaceSatisfaction(t *testing.T) {
 		})
 	}
 }
+
 func TestMeta_PropagationThroughMiddlewareChain(t *testing.T) {
 	t.Parallel()
 	inner := &echoProvider{name: "meta-chain"}

@@ -1,9 +1,10 @@
 package dag
 
 import (
-	"go.yaml.in/yaml/v3"
 	"testing"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestScheduleConfig_UnmarshalYAML_SecFields(t *testing.T) {

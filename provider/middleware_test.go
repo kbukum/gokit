@@ -323,6 +323,7 @@ func TestChain_ThreePlusMiddlewares_WithCustom(t *testing.T) {
 		t.Fatalf("custom middleware not executed, order=%v", order)
 	}
 }
+
 func TestChain_WithResilienceWrapper(t *testing.T) {
 	t.Parallel()
 	p := &echoProvider{name: "mw-res"}
