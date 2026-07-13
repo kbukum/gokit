@@ -17,10 +17,15 @@ import (
 // normalized to its JSON encoding on decode.
 type RawJSON []byte
 
-// MarshalJSON returns the raw bytes unchanged, or "null" when empty.
+// MarshalJSON returns the raw bytes unchanged, or "null" when empty. It fails
+// closed when the bytes are not a valid JSON value, so a RawJSON constructed
+// from arbitrary bytes cannot silently emit a malformed request payload.
 func (m RawJSON) MarshalJSON() ([]byte, error) {
 	if len(m) == 0 {
 		return []byte("null"), nil
+	}
+	if !json.Valid(m) {
+		return nil, fmt.Errorf("llm.RawJSON: invalid JSON value")
 	}
 	return m, nil
 }

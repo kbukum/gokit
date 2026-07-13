@@ -110,6 +110,15 @@ func TestRawJSON_YAMLNull(t *testing.T) {
 	}
 }
 
+func TestRawJSON_MarshalJSONInvalid(t *testing.T) {
+	if _, err := RawJSON(`{bad`).MarshalJSON(); err == nil {
+		t.Fatal("MarshalJSON should fail closed on invalid JSON")
+	}
+	if _, err := json.Marshal(CompletionRequest{Extra: RawJSON(`not json`)}); err == nil {
+		t.Fatal("marshaling a request with invalid Extra should fail")
+	}
+}
+
 func TestRawJSON_MarshalYAMLInvalidJSON(t *testing.T) {
 	if _, err := RawJSON(`{bad`).MarshalYAML(); err == nil {
 		t.Fatal("MarshalYAML should fail on invalid JSON")

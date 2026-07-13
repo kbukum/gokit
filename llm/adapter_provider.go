@@ -140,7 +140,7 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 			}
 			select {
 			case out <- evt:
-			case <-streamCtx.Done():
+			case <-ctx.Done():
 				return
 			}
 		}
