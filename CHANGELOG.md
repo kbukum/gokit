@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (Breaking API Changes) — Typed AI/LLM/tool APIs
+- **ai / llm**: `ai.ToolUseBlock.Input` and `llm.CompletionRequest.Extra` no longer expose
+  `map[string]any`; they now carry raw JSON (`llm.RawJSON`) as an opaque, untrusted-by-default
+  trust boundary that is validated at the edge instead of eagerly decoded.
+- **tool**: tool-input schema is the documented opaque `schema.JSON` exception and per-tool
+  resilience policy is a typed `*resilience.Policy` (via `Registry.WithToolPolicy` /
+  `Registry.PolicyFor`); `Registry.Call` fails closed — raw input is JSON-Schema validated
+  (`ErrInvalidToolInput`) before authorization or any side effect, and destructive tools
+  (`SafetyDestructive`) are always human-gated and default to deny until an approver is wired.
+- **llm**: `CompleteStructured[T]` is now generic, decoding model output into a concrete `T`
+  and returning the zero value (never a partial one) on decode failure.
+
+### Added — Typed AI/LLM/tool APIs & Inference Streaming
+- **ai**: `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy
+  coercion.
+- **llm**: `RawJSON` request-extension carrier round-trips through both JSON and YAML and merges
+  fail closed (a non-object extension is rejected rather than silently corrupting the request).
+- **llm**: streamed tool-call arguments (untrusted) are bounded at `streamwire.MaxToolArgsBytes`
+  (1 MiB) so a server cannot exhaust memory with unbounded deltas.
+- **inference**: TGI and vLLM adapters implement `PredictStream` over a shared
+  OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context
+  cancellation and terminal error events.
+
 ### Added — Foundational Parity (codec, fs)
 - **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a
   documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`,
