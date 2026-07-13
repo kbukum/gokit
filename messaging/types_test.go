@@ -218,3 +218,16 @@ func TestMessage_RoutingKey(t *testing.T) {
 		t.Fatalf("RoutingKey() = %q, want partition-1", got)
 	}
 }
+
+func FuzzParseData(f *testing.F) {
+	f.Add([]byte(`{"id":1}`))
+	f.Add([]byte(`not-json`))
+
+	type payload struct {
+		ID int `json:"id"`
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		_, _ = ParseData[payload](Event{Data: data})
+	})
+}

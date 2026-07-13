@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBearerAuth(t *testing.T) {
@@ -103,5 +105,68 @@ func TestAuthNone(t *testing.T) {
 	auth.apply(req) // should not modify request
 	if req.Header.Get("Authorization") != "" {
 		t.Error("AuthNone should not set Authorization header")
+	}
+}
+
+func TestAuth_EmptyBearerToken(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Auth", r.Header.Get("Authorization"))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	a, err := New(Config{
+		BaseURL: ts.URL,
+		Timeout: 5 * time.Second,
+		Auth:    BearerAuth(""),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	// Go's http.Header.Set trims trailing space, so "Bearer " becomes "Bearer"
+	got := resp.Headers["X-Auth"]
+	if !strings.HasPrefix(got, "Bearer") {
+		t.Errorf("expected Bearer prefix, got %q", got)
+	}
+}
+
+func TestAuth_APIKeyHeader_SpecialChars(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Key", r.Header.Get("X-API-Key"))
+		if r.URL.RawQuery != "" {
+			t.Errorf("credentials leaked into query string: %q", r.URL.RawQuery)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	a, err := New(Config{
+		BaseURL: ts.URL,
+		Timeout: 5 * time.Second,
+		Auth:    APIKeyAuth("k3y+val/ue="),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, _ := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	if resp.Headers["X-Key"] != "k3y+val/ue=" {
+		t.Errorf("api key = %q", resp.Headers["X-Key"])
+	}
+}
+
+func TestAuth_NilApply(t *testing.T) {
+	cfg := &AuthConfig{Type: AuthCustom, Apply: nil}
+	req, _ := http.NewRequest("GET", "http://example.com", http.NoBody)
+	// Should not panic
+	cfg.apply(req)
+}
+
+func TestAuth_APIKey_EmptyName_FallsBackToDefault(t *testing.T) {
+	cfg := &AuthConfig{Type: AuthAPIKey, Key: "secret", Name: ""}
+	req, _ := http.NewRequest("GET", "http://example.com", http.NoBody)
+	cfg.apply(req)
+	if req.Header.Get("X-API-Key") != "secret" {
+		t.Error("empty name should fallback to X-API-Key")
 	}
 }

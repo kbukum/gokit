@@ -289,3 +289,287 @@ func TestNewBulkhead_DefaultsMaxConcurrent(t *testing.T) {
 		t.Fatalf("expected default MaxConcurrent 10, got %d", b.Available())
 	}
 }
+
+func TestBulkhead_ExactlyMaxConcurrentAllSucceed(t *testing.T) {
+	const maxConcurrent = 5
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "exact",
+		MaxConcurrent: maxConcurrent,
+	})
+
+	var running int32
+	var maxRunning int32
+	var wg sync.WaitGroup
+
+	for i := 0; i < maxConcurrent; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := b.Execute(context.Background(), func() error {
+				cur := atomic.AddInt32(&running, 1)
+				for {
+					old := atomic.LoadInt32(&maxRunning)
+					if cur <= old || atomic.CompareAndSwapInt32(&maxRunning, old, cur) {
+						break
+					}
+				}
+				time.Sleep(20 * time.Millisecond)
+				atomic.AddInt32(&running, -1)
+				return nil
+			})
+			if err != nil {
+				t.Errorf("expected success, got %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if int(maxRunning) != maxConcurrent {
+		t.Errorf("expected peak concurrency %d, got %d", maxConcurrent, maxRunning)
+	}
+}
+
+func TestBulkhead_MaxConcurrentPlusOneRejected(t *testing.T) {
+	const maxConcurrent = 2
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "plus-one",
+		MaxConcurrent: maxConcurrent,
+		MaxWait:       0,
+	})
+
+	started := make(chan struct{}, maxConcurrent)
+	release := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Fill all slots.
+	for i := 0; i < maxConcurrent; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = b.Execute(context.Background(), func() error {
+				started <- struct{}{}
+				<-release
+				return nil
+			})
+		}()
+	}
+	for i := 0; i < maxConcurrent; i++ {
+		<-started
+	}
+
+	// The (maxConcurrent+1)th call should be rejected.
+	err := b.Execute(context.Background(), func() error { return nil })
+	if !errors.Is(err, ErrBulkheadFull) {
+		t.Errorf("expected ErrBulkheadFull, got %v", err)
+	}
+
+	close(release)
+	wg.Wait()
+}
+
+func TestBulkhead_MaxWaitTimeoutPrecision(t *testing.T) {
+	const maxWait = 50 * time.Millisecond
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "precision",
+		MaxConcurrent: 1,
+		MaxWait:       maxWait,
+	})
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		b.Execute(context.Background(), func() error {
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	<-started
+
+	start := time.Now()
+	err := b.Execute(context.Background(), func() error { return nil })
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, ErrBulkheadTimeout) {
+		t.Errorf("expected ErrBulkheadTimeout, got %v", err)
+	}
+
+	const tolerance = 50 * time.Millisecond
+	if elapsed < maxWait-tolerance || elapsed > maxWait+tolerance {
+		t.Errorf("timeout precision: expected ~%v, got %v", maxWait, elapsed)
+	}
+
+	close(release)
+}
+
+func TestBulkhead_CallbackOrdering(t *testing.T) {
+	var events []string
+	var mu sync.Mutex
+
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "order",
+		MaxConcurrent: 1,
+		OnAcquire: func(_ string) {
+			mu.Lock()
+			events = append(events, "acquire")
+			mu.Unlock()
+		},
+		OnRelease: func(_ string) {
+			mu.Lock()
+			events = append(events, "release")
+			mu.Unlock()
+		},
+	})
+
+	_ = b.Execute(context.Background(), func() error {
+		mu.Lock()
+		events = append(events, "fn")
+		mu.Unlock()
+		return nil
+	})
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	expected := []string{"acquire", "fn", "release"}
+	if len(events) != len(expected) {
+		t.Fatalf("expected %v, got %v", expected, events)
+	}
+	for i, e := range expected {
+		if events[i] != e {
+			t.Errorf("event[%d] = %q, want %q", i, events[i], e)
+		}
+	}
+}
+
+func TestBulkhead_OnRejectCalled(t *testing.T) {
+	t.Parallel()
+	var rejectCount int32
+
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "reject-cb",
+		MaxConcurrent: 1,
+		MaxWait:       0,
+		OnReject: func(_ string) {
+			atomic.AddInt32(&rejectCount, 1)
+		},
+	})
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		b.Execute(context.Background(), func() error {
+			close(started)
+			<-release
+			return nil
+		})
+	}()
+	<-started
+
+	_ = b.Execute(context.Background(), func() error { return nil })
+	_ = b.Execute(context.Background(), func() error { return nil })
+
+	close(release)
+	time.Sleep(5 * time.Millisecond)
+
+	if atomic.LoadInt32(&rejectCount) != 2 {
+		t.Errorf("expected 2 rejections, got %d", rejectCount)
+	}
+}
+
+func TestBulkhead_PanicReleasesSlot(t *testing.T) {
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "panic-slot",
+		MaxConcurrent: 1,
+		MaxWait:       0,
+	})
+
+	// Execute with a panic. The bulkhead uses defer for release, so the
+	// channel-based semaphore should be freed if fn() panics because the
+	// deferred release in Execute runs. But fn() panics before Execute's
+	// defer completes normally — let's verify.
+	func() {
+		defer func() { _ = recover() }()
+		_ = b.Execute(context.Background(), func() error { panic("kaboom") })
+	}()
+
+	// Slot should be available (defer releases even on panic).
+	if b.Available() != 1 {
+		t.Errorf("expected 1 available slot after panic, got %d", b.Available())
+	}
+
+	// Should be able to execute again.
+	err := b.Execute(context.Background(), func() error { return nil })
+	if err != nil {
+		t.Errorf("expected success after panic recovery, got %v", err)
+	}
+}
+
+func TestBulkhead_ConcurrentReleaseAcquireRace(t *testing.T) {
+	t.Parallel()
+	const maxConcurrent = 3
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "race",
+		MaxConcurrent: maxConcurrent,
+		MaxWait:       100 * time.Millisecond,
+	})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = b.Execute(context.Background(), func() error {
+				time.Sleep(time.Millisecond)
+				return nil
+			})
+		}()
+	}
+	wg.Wait()
+
+	if b.Available() != maxConcurrent {
+		t.Errorf("expected %d available after all done, got %d", maxConcurrent, b.Available())
+	}
+}
+
+func TestBulkhead_AvailableAccuracyDuringExecution(t *testing.T) {
+	const maxConcurrent = 5
+	b := NewBulkhead(BulkheadConfig{
+		Name:          "avail",
+		MaxConcurrent: maxConcurrent,
+	})
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+
+	// Occupy 3 slots.
+	for i := 0; i < 3; i++ {
+		go func() {
+			b.Execute(context.Background(), func() error {
+				started <- struct{}{}
+				<-release
+				return nil
+			})
+		}()
+	}
+	for i := 0; i < 3; i++ {
+		<-started
+	}
+
+	if got := b.Available(); got != 2 {
+		t.Errorf("expected 2 available, got %d", got)
+	}
+	if got := b.InUse(); got != 3 {
+		t.Errorf("expected 3 in use, got %d", got)
+	}
+	if got := b.MaxConcurrent(); got != maxConcurrent {
+		t.Errorf("expected MaxConcurrent=%d, got %d", maxConcurrent, got)
+	}
+
+	close(release)
+	time.Sleep(10 * time.Millisecond)
+
+	if got := b.Available(); got != maxConcurrent {
+		t.Errorf("expected %d available after release, got %d", maxConcurrent, got)
+	}
+}

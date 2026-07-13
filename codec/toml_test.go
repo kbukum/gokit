@@ -50,3 +50,23 @@ func TestTOMLRejectsNilValue(t *testing.T) {
 		t.Fatalf("expected serialize error, got %v", err)
 	}
 }
+
+// FuzzTOMLDecode ensures the TOML codec never panics on arbitrary input.
+func FuzzTOMLDecode(f *testing.F) {
+	seeds := []string{"", "= bad", "a = 1", "[t]\nx = true", "name = 'svc'"}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	c := codec.NewTOMLCodec()
+	f.Fuzz(func(t *testing.T, contents string) {
+		value, err := c.DecodeValue(contents)
+		if err != nil {
+			return
+		}
+		if _, err := c.EncodeValue(value); err != nil {
+			// Some decoded trees (for example those containing nil) have no TOML
+			// representation; a typed error is acceptable, a panic is not.
+			_ = err
+		}
+	})
+}

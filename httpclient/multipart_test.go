@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -228,5 +229,65 @@ func TestAdapter_Do_Multipart(t *testing.T) {
 	}
 	if got := resp.Text(); got != `{"text":"hello world"}` {
 		t.Errorf("body = %q, want json", got)
+	}
+}
+
+func TestMultipartBody_EmptyFieldsWithFile(t *testing.T) {
+	mp := &MultipartBody{
+		Fields: nil,
+		Files: []FileField{
+			{FieldName: "f", FileName: "test.txt", Data: []byte("content")},
+		},
+	}
+	r, ct, err := mp.encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ct, "multipart/form-data") {
+		t.Errorf("content-type = %q, want multipart/form-data", ct)
+	}
+	data, _ := io.ReadAll(r)
+	if !strings.Contains(string(data), "content") {
+		t.Error("file data not in multipart body")
+	}
+}
+
+func TestMultipartBody_FileDataTakesPriorityOverReader(t *testing.T) {
+	mp := &MultipartBody{
+		Files: []FileField{
+			{
+				FieldName: "f",
+				FileName:  "test.txt",
+				Data:      []byte("from-data"),
+				Reader:    strings.NewReader("from-reader"),
+			},
+		},
+	}
+	r, _, err := mp.encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(r)
+	// Data takes priority since it's checked first
+	if !strings.Contains(string(body), "from-data") {
+		t.Error("expected Data field to be used")
+	}
+}
+
+func TestEscapeQuotes(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{`normal`, `normal`},
+		{`has"quote`, `has\"quote`},
+		{`has\slash`, `has\\slash`},
+		{`"both\"`, `\"both\\\"`},
+	}
+	for _, tt := range tests {
+		got := escapeQuotes(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeQuotes(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }

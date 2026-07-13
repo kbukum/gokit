@@ -165,3 +165,15 @@ func TestFromProvider_InDAG(t *testing.T) {
 		t.Fatalf("expected 'processed:raw-data', got %q", out)
 	}
 }
+
+func TestUnavailableNode_ReturnsErrUnavailable(t *testing.T) {
+	node := NewUnavailableNode("ser")
+	if node.Name() != "ser" {
+		t.Fatalf("expected name 'ser', got %q", node.Name())
+	}
+
+	_, err := node.Run(context.Background(), NewState())
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("expected ErrUnavailable, got %v", err)
+	}
+}

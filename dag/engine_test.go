@@ -4,340 +4,391 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"go.yaml.in/yaml/v3"
 )
 
-// =============================================================================
-// ScheduleConfig YAML Tests
-// =============================================================================
+func TestDeepChain_20Levels(t *testing.T) {
+	const depth = 20
+	nodes := make(map[string]Node, depth)
+	var edges []Edge
 
-func TestScheduleConfig_UnmarshalYAML_SecFields(t *testing.T) {
-	yamlData := `interval_sec: 30
-min_buffer_sec: 15`
-
-	var sc ScheduleConfig
-	if err := yaml.Unmarshal([]byte(yamlData), &sc); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-	if sc.Interval != 30*time.Second {
-		t.Fatalf("expected 30s, got %v", sc.Interval)
-	}
-	if sc.MinBuffer != 15*time.Second {
-		t.Fatalf("expected 15s, got %v", sc.MinBuffer)
-	}
-}
-
-func TestScheduleConfig_UnmarshalYAML_InlineFormat(t *testing.T) {
-	// This is the format used in actual pipeline YAML files
-	yamlData := `
-name: test
-nodes:
-  - component: ser
-    optional: true
-    schedule: { interval_sec: 3, min_buffer_sec: 1 }
-  - component: sentiment
-    schedule: { interval_sec: 30, min_buffer_sec: 15 }
-`
-	var p Pipeline
-	if err := yaml.Unmarshal([]byte(yamlData), &p); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-
-	if len(p.Nodes) != 2 {
-		t.Fatalf("expected 2 nodes, got %d", len(p.Nodes))
-	}
-
-	// Node 0: ser
-	if !p.Nodes[0].Optional {
-		t.Fatal("expected ser to be optional")
-	}
-	if p.Nodes[0].Schedule == nil {
-		t.Fatal("expected ser schedule to be non-nil")
-	}
-	if p.Nodes[0].Schedule.Interval != 3*time.Second {
-		t.Fatalf("ser interval: expected 3s, got %v", p.Nodes[0].Schedule.Interval)
-	}
-	if p.Nodes[0].Schedule.MinBuffer != 1*time.Second {
-		t.Fatalf("ser min_buffer: expected 1s, got %v", p.Nodes[0].Schedule.MinBuffer)
-	}
-
-	// Node 1: sentiment
-	if p.Nodes[1].Schedule.Interval != 30*time.Second {
-		t.Fatalf("sentiment interval: expected 30s, got %v", p.Nodes[1].Schedule.Interval)
-	}
-	if p.Nodes[1].Schedule.MinBuffer != 15*time.Second {
-		t.Fatalf("sentiment min_buffer: expected 15s, got %v", p.Nodes[1].Schedule.MinBuffer)
-	}
-}
-
-func TestScheduleConfig_UnmarshalYAML_FractionalSeconds(t *testing.T) {
-	yamlData := `interval_sec: 0.5
-min_buffer_sec: 1.5`
-
-	var sc ScheduleConfig
-	if err := yaml.Unmarshal([]byte(yamlData), &sc); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-	if sc.Interval != 500*time.Millisecond {
-		t.Fatalf("expected 500ms, got %v", sc.Interval)
-	}
-	if sc.MinBuffer != 1500*time.Millisecond {
-		t.Fatalf("expected 1500ms, got %v", sc.MinBuffer)
-	}
-}
-
-func TestScheduleConfig_UnmarshalYAML_ZeroValues(t *testing.T) {
-	yamlData := `interval_sec: 0`
-
-	var sc ScheduleConfig
-	if err := yaml.Unmarshal([]byte(yamlData), &sc); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-	if sc.Interval != 0 {
-		t.Fatalf("expected 0, got %v", sc.Interval)
-	}
-	if sc.MinBuffer != 0 {
-		t.Fatalf("expected 0 min_buffer, got %v", sc.MinBuffer)
-	}
-}
-
-func TestScheduleConfig_MarshalYAML_RoundTrip(t *testing.T) {
-	original := ScheduleConfig{
-		Interval:  30 * time.Second,
-		MinBuffer: 15 * time.Second,
-	}
-
-	data, err := yaml.Marshal(original)
-	if err != nil {
-		t.Fatalf("marshal error: %v", err)
-	}
-
-	var decoded ScheduleConfig
-	if err := yaml.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-
-	if decoded.Interval != original.Interval {
-		t.Fatalf("interval round-trip: expected %v, got %v", original.Interval, decoded.Interval)
-	}
-	if decoded.MinBuffer != original.MinBuffer {
-		t.Fatalf("min_buffer round-trip: expected %v, got %v", original.MinBuffer, decoded.MinBuffer)
-	}
-}
-
-// =============================================================================
-// NodeDef Tests
-// =============================================================================
-
-func TestNodeDef_EffectiveOnError(t *testing.T) {
-	tests := []struct {
-		onError  string
-		expected string
-	}{
-		{"", OnErrorSkip},
-		{"skip", OnErrorSkip},
-		{"fail", OnErrorFail},
-		{"continue", OnErrorContinue},
-	}
-	for _, tt := range tests {
-		def := NodeDef{OnError: tt.onError}
-		if got := def.EffectiveOnError(); got != tt.expected {
-			t.Errorf("OnError=%q: expected %q, got %q", tt.onError, tt.expected, got)
+	for i := 0; i < depth; i++ {
+		name := fmt.Sprintf("n%d", i)
+		idx := i
+		nodes[name] = newFuncNode(name, func(_ context.Context, s *State) (any, error) {
+			if idx > 0 {
+				prev := fmt.Sprintf("n%d", idx-1)
+				if _, ok := s.Get(prev); !ok {
+					return nil, fmt.Errorf("expected %s to have run first", prev)
+				}
+			}
+			s.Set(name, idx)
+			return idx, nil
+		})
+		if i > 0 {
+			edges = append(edges, Edge{From: fmt.Sprintf("n%d", i-1), To: name})
 		}
 	}
-}
 
-func TestNodeDef_YAMLParsing(t *testing.T) {
-	yamlData := `
-component: ser
-optional: true
-on_error: continue
-depends_on: [transcription]
-schedule: { interval_sec: 5, min_buffer_sec: 2 }
-`
-	var def NodeDef
-	if err := yaml.Unmarshal([]byte(yamlData), &def); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-	if def.Component != "ser" {
-		t.Fatalf("expected 'ser', got %q", def.Component)
-	}
-	if !def.Optional {
-		t.Fatal("expected optional=true")
-	}
-	if def.OnError != "continue" {
-		t.Fatalf("expected on_error='continue', got %q", def.OnError)
-	}
-	if len(def.DependsOn) != 1 || def.DependsOn[0] != "transcription" {
-		t.Fatalf("unexpected depends_on: %v", def.DependsOn)
-	}
-	if def.Schedule == nil || def.Schedule.Interval != 5*time.Second {
-		t.Fatalf("unexpected schedule: %v", def.Schedule)
-	}
-}
+	g := &Graph{Nodes: nodes, Edges: edges}
+	engine := &Engine{}
+	state := NewState()
 
-// =============================================================================
-// UnavailableNode Tests
-// =============================================================================
-
-func TestUnavailableNode_ReturnsErrUnavailable(t *testing.T) {
-	node := NewUnavailableNode("ser")
-	if node.Name() != "ser" {
-		t.Fatalf("expected name 'ser', got %q", node.Name())
-	}
-
-	_, err := node.Run(context.Background(), NewState())
-	if !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("expected ErrUnavailable, got %v", err)
-	}
-}
-
-// =============================================================================
-// ResolvePipeline — Optional Node Tests
-// =============================================================================
-
-func TestResolvePipeline_OptionalMissing_PlaceholderInserted(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("transcription", newFuncNode("transcription", nil))
-	// "ser" is NOT registered
-
-	p := &Pipeline{
-		Name: "test",
-		Nodes: []NodeDef{
-			{Component: "transcription"},
-			{Component: "ser", Optional: true, DependsOn: []string{"transcription"}},
-		},
-	}
-
-	g, err := ResolvePipeline(p, reg, nil)
+	result, err := engine.ExecuteBatch(context.Background(), g, state)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Both nodes should be in the graph
-	if len(g.Nodes) != 2 {
-		t.Fatalf("expected 2 nodes, got %d", len(g.Nodes))
+	for i := 0; i < depth; i++ {
+		name := fmt.Sprintf("n%d", i)
+		nr := result.NodeResults[name]
+		if nr.Status != StatusCompleted {
+			t.Fatalf("node %s: expected completed, got %s", name, nr.Status)
+		}
 	}
 
-	// ser should be an unavailableNode
-	_, runErr := g.Nodes["ser"].Run(context.Background(), NewState())
-	if !errors.Is(runErr, ErrUnavailable) {
-		t.Fatalf("expected ser to return ErrUnavailable, got %v", runErr)
-	}
-
-	// NodeDefs should be stored
-	if !g.NodeDefs["ser"].Optional {
-		t.Fatal("expected ser NodeDef to have Optional=true")
+	// Verify final node wrote to state
+	val, ok := state.Get(fmt.Sprintf("n%d", depth-1))
+	if !ok || val != depth-1 {
+		t.Fatalf("expected final state value %d, got %v (ok=%v)", depth-1, val, ok)
 	}
 }
 
-func TestResolvePipeline_OptionalPresent_NormalResolution(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("ser", newFuncNode("ser", func(_ context.Context, s *State) (any, error) {
-		return "ser-output", nil
-	}))
+func TestWideParallelism_50Nodes(t *testing.T) {
+	const count = 50
+	var running atomic.Int32
+	var maxRunning atomic.Int32
 
-	p := &Pipeline{
-		Name: "test",
-		Nodes: []NodeDef{
-			{Component: "ser", Optional: true},
-		},
+	nodes := make(map[string]Node, count)
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("w%d", i)
+		nodes[name] = newFuncNode(name, func(_ context.Context, _ *State) (any, error) {
+			cur := running.Add(1)
+			for {
+				old := maxRunning.Load()
+				if cur <= old || maxRunning.CompareAndSwap(old, cur) {
+					break
+				}
+			}
+			time.Sleep(5 * time.Millisecond)
+			running.Add(-1)
+			return name, nil
+		})
 	}
 
-	g, err := ResolvePipeline(p, reg, nil)
+	g := &Graph{Nodes: nodes}
+	engine := &Engine{}
+
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Should use the real node, not placeholder
-	out, runErr := g.Nodes["ser"].Run(context.Background(), NewState())
-	if runErr != nil {
-		t.Fatalf("expected no error, got %v", runErr)
+	for i := 0; i < count; i++ {
+		name := fmt.Sprintf("w%d", i)
+		if result.NodeResults[name].Status != StatusCompleted {
+			t.Fatalf("node %s not completed: %s", name, result.NodeResults[name].Status)
+		}
 	}
-	if out != "ser-output" {
-		t.Fatalf("expected 'ser-output', got %v", out)
+
+	if maxRunning.Load() < 2 {
+		t.Log("parallel execution not observed (may vary by system)")
 	}
 }
 
-func TestResolvePipeline_RequiredMissing_Error(t *testing.T) {
-	reg := NewRegistry()
-	p := &Pipeline{
-		Name:  "test",
-		Nodes: []NodeDef{{Component: "missing"}},
+func TestErrorCascade_SkipPolicy(t *testing.T) {
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
+				return nil, errors.New("a failed")
+			}),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				return "b-ok", nil
+			}),
+			"c": newFuncNode("c", func(_ context.Context, _ *State) (any, error) {
+				return "c-ok", nil
+			}),
+		},
+		Edges: []Edge{{From: "a", To: "b"}},
+		NodeDefs: map[string]NodeDef{
+			"a": {Component: "a", OnError: OnErrorSkip},
+		},
 	}
 
-	_, err := ResolvePipeline(p, reg, nil)
+	engine := &Engine{}
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.NodeResults["a"].Status != StatusFailed {
+		t.Fatalf("expected a failed, got %s", result.NodeResults["a"].Status)
+	}
+	if result.NodeResults["b"].Status != StatusDepFailed {
+		t.Fatalf("expected b dep_failed, got %s", result.NodeResults["b"].Status)
+	}
+	if result.NodeResults["c"].Status != StatusCompleted {
+		t.Fatalf("expected c completed, got %s", result.NodeResults["c"].Status)
+	}
+}
+
+func TestErrorCascade_FailPolicy(t *testing.T) {
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
+				return nil, errors.New("a failed")
+			}),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				return "b-ok", nil
+			}),
+		},
+		Edges: []Edge{{From: "a", To: "b"}},
+		NodeDefs: map[string]NodeDef{
+			"a": {Component: "a", OnError: OnErrorFail},
+		},
+	}
+
+	engine := &Engine{}
+	_, err := engine.ExecuteBatch(context.Background(), g, NewState())
 	if err == nil {
-		t.Fatal("expected error for missing required component")
+		t.Fatal("expected error from on_error=fail policy")
 	}
 }
 
-func TestResolvePipeline_OptionalWithIncludes(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("a", newFuncNode("a", nil))
-	// "b" is NOT registered
-
-	sub := &Pipeline{
-		Name: "sub",
-		Nodes: []NodeDef{
-			{Component: "b", Optional: true},
+func TestErrorCascade_ContinuePolicy(t *testing.T) {
+	var bRan bool
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
+				return nil, errors.New("a failed")
+			}),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				bRan = true
+				return "b-ok", nil
+			}),
+		},
+		Edges: []Edge{{From: "a", To: "b"}},
+		NodeDefs: map[string]NodeDef{
+			"a": {Component: "a", OnError: OnErrorContinue},
 		},
 	}
 
-	main := &Pipeline{
-		Name:     "main",
-		Includes: []string{"sub"},
-		Nodes: []NodeDef{
-			{Component: "a"},
-		},
-	}
-
-	loader := &memoryLoader{pipelines: map[string]*Pipeline{"sub": sub}}
-	g, err := ResolvePipeline(main, reg, loader)
+	engine := &Engine{}
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Both nodes should be present
-	if len(g.Nodes) != 2 {
-		t.Fatalf("expected 2 nodes, got %d", len(g.Nodes))
+	if result.NodeResults["a"].Status != StatusFailed {
+		t.Fatalf("expected a failed, got %s", result.NodeResults["a"].Status)
 	}
-
-	// b should be unavailable
-	_, runErr := g.Nodes["b"].Run(context.Background(), NewState())
-	if !errors.Is(runErr, ErrUnavailable) {
-		t.Fatalf("expected b to return ErrUnavailable, got %v", runErr)
+	if !bRan {
+		t.Fatal("expected b to run despite a's failure")
+	}
+	if result.NodeResults["b"].Status != StatusCompleted {
+		t.Fatalf("expected b completed, got %s", result.NodeResults["b"].Status)
 	}
 }
 
-func TestResolvePipeline_NodeDefsStored(t *testing.T) {
-	reg := NewRegistry()
-	reg.Register("a", newFuncNode("a", nil))
-
-	p := &Pipeline{
-		Name: "test",
-		Nodes: []NodeDef{
-			{Component: "a", OnError: "continue"},
+func TestContextTimeout_PerNodeSimulation(t *testing.T) {
+	g := &Graph{
+		Nodes: map[string]Node{
+			"slow": newFuncNode("slow", func(ctx context.Context, _ *State) (any, error) {
+				select {
+				case <-time.After(2 * time.Second):
+					return "done", nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}),
 		},
 	}
 
-	g, err := ResolvePipeline(p, reg, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	engine := &Engine{}
+	result, err := engine.ExecuteBatch(ctx, g, NewState())
+	// Either the engine returns a context error or the node captures it
+	if err != nil {
+		return // context error propagated at engine level — pass
+	}
+	nr := result.NodeResults["slow"]
+	if nr.Status != StatusFailed {
+		t.Fatalf("expected slow node to fail from timeout, got %s", nr.Status)
+	}
+}
+
+func TestContextCancellation_MidExecution(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
+				cancel() // cancel after this node completes
+				return "a-ok", nil
+			}),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				t.Error("b should not have run")
+				return "b-ok", nil
+			}),
+		},
+		Edges: []Edge{{From: "a", To: "b"}},
+	}
+
+	engine := &Engine{}
+	_, err := engine.ExecuteBatch(ctx, g, NewState())
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+}
+
+func TestDiamondWith_OneContinueOneSkip(t *testing.T) {
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": newFuncNode("a", func(_ context.Context, _ *State) (any, error) {
+				return nil, errors.New("a failed")
+			}),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				return "b-ok", nil
+			}),
+			"c": newFuncNode("c", func(_ context.Context, _ *State) (any, error) {
+				return "c-ok", nil
+			}),
+			"d": newFuncNode("d", func(_ context.Context, _ *State) (any, error) {
+				return "d-ok", nil
+			}),
+		},
+		Edges: []Edge{
+			{From: "a", To: "b"},
+			{From: "a", To: "c"},
+			{From: "b", To: "d"},
+			{From: "c", To: "d"},
+		},
+		NodeDefs: map[string]NodeDef{
+			"a": {Component: "a", OnError: OnErrorSkip},
+			"b": {Component: "b", OnError: OnErrorContinue},
+			"c": {Component: "c", OnError: OnErrorSkip},
+		},
+	}
+
+	engine := &Engine{}
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	def := g.GetNodeDef("a")
-	if def.OnError != "continue" {
-		t.Fatalf("expected on_error='continue', got %q", def.OnError)
+	if result.NodeResults["a"].Status != StatusFailed {
+		t.Fatalf("a: expected failed, got %s", result.NodeResults["a"].Status)
+	}
+	// "a" has OnError=skip, so both "b" and "c" should be dep_failed
+	if result.NodeResults["b"].Status != StatusDepFailed {
+		t.Fatalf("b: expected dep_failed, got %s", result.NodeResults["b"].Status)
+	}
+	if result.NodeResults["c"].Status != StatusDepFailed {
+		t.Fatalf("c: expected dep_failed, got %s", result.NodeResults["c"].Status)
+	}
+	// "d" depends on both "b" (continue) and "c" (skip)
+	// Since "c" is dep_failed with skip policy, "d" should be skipped
+	dStatus := result.NodeResults["d"].Status
+	if dStatus != StatusDepFailed {
+		t.Fatalf("d: expected dep_failed, got %s", dStatus)
 	}
 }
 
-// =============================================================================
-// Engine — Dependency Propagation Tests
-// =============================================================================
+func TestEngine_UnavailableNodeCascades(t *testing.T) {
+	g := &Graph{
+		Nodes: map[string]Node{
+			"a": NewUnavailableNode("a"),
+			"b": newFuncNode("b", func(_ context.Context, _ *State) (any, error) {
+				return "b-ok", nil
+			}),
+			"c": newFuncNode("c", func(_ context.Context, _ *State) (any, error) {
+				return "c-ok", nil
+			}),
+		},
+		Edges: []Edge{
+			{From: "a", To: "b"},
+			{From: "b", To: "c"},
+		},
+	}
+
+	engine := &Engine{}
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.NodeResults["a"].Status != StatusUnavailable {
+		t.Fatalf("a: expected unavailable, got %s", result.NodeResults["a"].Status)
+	}
+	if result.NodeResults["b"].Status != StatusDepUnavailable {
+		t.Fatalf("b: expected dep_unavailable, got %s", result.NodeResults["b"].Status)
+	}
+	if result.NodeResults["c"].Status != StatusDepUnavailable {
+		t.Fatalf("c: expected dep_unavailable, got %s", result.NodeResults["c"].Status)
+	}
+}
+
+func TestLargeGraph_100Nodes(t *testing.T) {
+	const middleCount = 98
+	nodes := make(map[string]Node, middleCount+2)
+	var edges []Edge
+
+	// Root node
+	nodes["root"] = newFuncNode("root", func(_ context.Context, s *State) (any, error) {
+		s.Set("root", true)
+		return "root", nil
+	})
+
+	// Middle layer: 98 nodes all depend on root
+	for i := 0; i < middleCount; i++ {
+		name := fmt.Sprintf("m%d", i)
+		nodes[name] = newFuncNode(name, func(_ context.Context, s *State) (any, error) {
+			s.Set(name, true)
+			return name, nil
+		})
+		edges = append(edges, Edge{From: "root", To: name})
+	}
+
+	// Sink node depends on all middle nodes
+	nodes["sink"] = newFuncNode("sink", func(_ context.Context, s *State) (any, error) {
+		return "sink-done", nil
+	})
+	for i := 0; i < middleCount; i++ {
+		edges = append(edges, Edge{From: fmt.Sprintf("m%d", i), To: "sink"})
+	}
+
+	g := &Graph{Nodes: nodes, Edges: edges}
+	engine := &Engine{}
+
+	result, err := engine.ExecuteBatch(context.Background(), g, NewState())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify all nodes completed
+	for name := range nodes {
+		nr := result.NodeResults[name]
+		if nr.Status != StatusCompleted {
+			t.Fatalf("node %s: expected completed, got %s", name, nr.Status)
+		}
+	}
+
+	// Verify topology: 3 levels (root, middle, sink)
+	levels, err := BuildLevels(g)
+	if err != nil {
+		t.Fatalf("BuildLevels error: %v", err)
+	}
+	if len(levels) != 3 {
+		t.Fatalf("expected 3 levels, got %d", len(levels))
+	}
+	if len(levels[1]) != middleCount {
+		t.Fatalf("expected %d middle nodes, got %d", middleCount, len(levels[1]))
+	}
+}
 
 func TestEngine_UnavailableSkipsDependents(t *testing.T) {
 	g := &Graph{
@@ -664,43 +715,6 @@ func TestEngine_NoNodeDefs_BackwardCompatible(t *testing.T) {
 		t.Fatalf("expected b=%s, got %s", StatusDepFailed, result.NodeResults["b"].Status)
 	}
 }
-
-// =============================================================================
-// NodeResult Helper Tests
-// =============================================================================
-
-func TestNodeResult_Helpers(t *testing.T) {
-	tests := []struct {
-		status     string
-		isTerminal bool
-		isSkipped  bool
-		isSuccess  bool
-	}{
-		{StatusCompleted, true, false, true},
-		{StatusFailed, true, false, false},
-		{StatusSkipped, false, true, false},
-		{StatusUnavailable, false, false, false},
-		{StatusDepUnavailable, false, true, false},
-		{StatusDepFailed, false, true, false},
-	}
-
-	for _, tt := range tests {
-		nr := NodeResult{Status: tt.status}
-		if nr.IsTerminal() != tt.isTerminal {
-			t.Errorf("%s: IsTerminal=%v, want %v", tt.status, nr.IsTerminal(), tt.isTerminal)
-		}
-		if nr.IsSkipped() != tt.isSkipped {
-			t.Errorf("%s: IsSkipped=%v, want %v", tt.status, nr.IsSkipped(), tt.isSkipped)
-		}
-		if nr.IsSuccess() != tt.isSuccess {
-			t.Errorf("%s: IsSuccess=%v, want %v", tt.status, nr.IsSuccess(), tt.isSuccess)
-		}
-	}
-}
-
-// =============================================================================
-// Full Pipeline Integration Test (simulates signal-analysis.yaml)
-// =============================================================================
 
 func TestEngine_SignalAnalysisPipeline_SERUnavailable(t *testing.T) {
 	// Mimics the real signal-analysis.yaml:

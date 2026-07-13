@@ -2,9 +2,7 @@ package discovery
 
 import (
 	"context"
-	"errors"
 	"testing"
-	"time"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logging"
@@ -34,8 +32,11 @@ func (f *componentFakeProvider) Deregister(_ context.Context, serviceID string) 
 }
 
 func (f *componentFakeProvider) UpdateHealth(context.Context, string, bool, string) error { return nil }
-func (f *componentFakeProvider) Stats() RegistryStats                                     { return f.stats }
-func (f *componentFakeProvider) Close() error                                             { f.closed = true; return nil }
+
+func (f *componentFakeProvider) Stats() RegistryStats { return f.stats }
+
+func (f *componentFakeProvider) Close() error { f.closed = true; return nil }
+
 func (f *componentFakeProvider) Discover(_ context.Context, name string) ([]ServiceInstance, error) {
 	instances := f.instances[name]
 	if len(instances) == 0 {
@@ -183,72 +184,5 @@ func TestComponentStartErrorPaths(t *testing.T) {
 				t.Fatal("Start succeeded, want error")
 			}
 		})
-	}
-}
-
-func TestConfigRetryConfigAndResolveAddr(t *testing.T) {
-	t.Parallel()
-
-	retry := RegistrationConfig{MaxRetries: 4, RetryInterval: "250ms"}.RetryConfig()
-	if retry.MaxAttempts != 4 || retry.InitialBackoff != 250*time.Millisecond || retry.MaxBackoff != 2*time.Second {
-		t.Fatalf("RetryConfig = %+v, want attempts=4 initial=250ms max=2s", retry)
-	}
-	fallbackRetry := RegistrationConfig{MaxRetries: 2, RetryInterval: "bad"}.RetryConfig()
-	if fallbackRetry.InitialBackoff != 2*time.Second {
-		t.Fatalf("RetryConfig invalid interval initial = %v, want 2s", fallbackRetry.InitialBackoff)
-	}
-
-	mock := &mockDiscovery{instances: map[string][]ServiceInstance{"db": {makeInstance("db-1", "db", "127.0.0.1", 5432)}}}
-	host, port, err := ResolveAddr(mock, "db")
-	if err != nil {
-		t.Fatalf("ResolveAddr: %v", err)
-	}
-	if host != "127.0.0.1" || port != 5432 {
-		t.Fatalf("ResolveAddr = %s:%d, want 127.0.0.1:5432", host, port)
-	}
-	mock.err = errors.New("backend down")
-	if _, _, err := ResolveAddr(mock, "db"); err == nil {
-		t.Fatal("ResolveAddr backend error succeeded, want error")
-	}
-	mock.err = nil
-	if _, _, err := ResolveAddr(mock, "missing"); err == nil {
-		t.Fatal("ResolveAddr missing service succeeded, want error")
-	}
-}
-
-func TestClientAdditionalBranches(t *testing.T) {
-	t.Parallel()
-
-	httpViaTag := makeInstance("tag-http", "svc", "10.0.0.1", 80)
-	httpViaTag.Protocol = ""
-	httpViaTag.Tags = []string{"protocol:http"}
-	mock := &mockDiscovery{instances: map[string][]ServiceInstance{"svc": {httpViaTag}}}
-	client := NewClient(mock, ClientConfig{CacheTTL: time.Minute, StaticEndpoints: []StaticEndpoint{{Name: "fb", Address: "", Port: 8080, Healthy: false}}}, testLogger())
-	defer func() {
-		if err := client.Close(); err != nil {
-			t.Fatalf("Close: %v", err)
-		}
-	}()
-	got, err := client.DiscoverOne(context.Background(), Query{ServiceName: "svc", Protocol: "http", Strategy: LeastConn})
-	if err != nil {
-		t.Fatalf("DiscoverOne: %v", err)
-	}
-	if got.ID != "tag-http" {
-		t.Fatalf("DiscoverOne = %q, want tag-http", got.ID)
-	}
-
-	required := NewClient(&mockDiscovery{err: errors.New("down")}, ClientConfig{Services: []string{"must"}, Criticality: map[string]Criticality{"must": CriticalityRequired}}, testLogger())
-	defer required.Close()
-	if _, err := required.DiscoverAll(context.Background()); err == nil {
-		t.Fatal("DiscoverAll required failure succeeded, want error")
-	}
-}
-
-func TestServiceInstanceHostPort(t *testing.T) {
-	t.Parallel()
-
-	inst := ServiceInstance{Address: "127.0.0.1", Port: 8080}
-	if got := inst.HostPort(); got != "127.0.0.1:8080" {
-		t.Fatalf("HostPort = %q, want 127.0.0.1:8080", got)
 	}
 }

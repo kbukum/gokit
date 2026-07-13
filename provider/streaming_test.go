@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/provider"
 )
@@ -349,3 +350,226 @@ func TestDrainIterator_MaxDrainLimit(t *testing.T) {
 		t.Errorf("drained %d items, want 3 (max)", len(drained))
 	}
 }
+
+func TestDrainIterator_ExactlyWindowSizeItems(t *testing.T) {
+	t.Parallel()
+	inner := newSliceIter(1, 2, 3)
+	drain := provider.DrainIterator(inner, 3)
+
+	// Read all items
+	var results []int
+	for {
+		v, ok, err := drain.Next(context.Background())
+		if err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		if !ok {
+			break
+		}
+		results = append(results, v)
+	}
+
+	if len(results) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(results))
+	}
+
+	if err := drain.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	type drainGetter interface {
+		Drained() []int
+	}
+	drained := drain.(drainGetter).Drained()
+	if len(drained) != 0 {
+		t.Fatalf("expected 0 drained items (all read), got %d", len(drained))
+	}
+}
+func TestDrainIterator_MaxDrainZero(t *testing.T) {
+	t.Parallel()
+	inner := newSliceIter(1, 2, 3)
+	drain := provider.DrainIterator(inner, 0)
+
+	// Don't read any, close immediately with maxDrain=0
+	if err := drain.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	type drainGetter interface {
+		Drained() []int
+	}
+	drained := drain.(drainGetter).Drained()
+	if len(drained) != 0 {
+		t.Fatalf("expected 0 drained items (maxDrain=0), got %d", len(drained))
+	}
+}
+func TestDrainIterator_CloseErrorPropagation(t *testing.T) {
+	t.Parallel()
+	closeErr := errors.New("iterator close error")
+	inner := &countingIterator[int]{items: []int{1, 2, 3}, closeErr: closeErr}
+	drain := provider.DrainIterator[int](inner, 10)
+
+	err := drain.Close()
+	if err == nil {
+		t.Fatal("expected close error to propagate")
+	}
+	if err.Error() != "iterator close error" {
+		t.Fatalf("expected 'iterator close error', got %q", err.Error())
+	}
+}
+func TestMergedIterator_ErrorFromSource(t *testing.T) {
+	t.Parallel()
+	s1 := &streamTestHelper[string, int]{
+		name: "s1-ok",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return newSliceIter(1, 2), nil
+		},
+	}
+	s2 := &streamTestHelper[string, int]{
+		name: "s2-err",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return &errorAtNIterator{items: []int{10, 20, 30}, errAt: 0}, nil
+		},
+	}
+
+	fan := provider.FanOutStream("fan", s1, s2)
+	iter, err := fan.Execute(context.Background(), "x")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	// Read all available items; should eventually get an error
+	sawError := false
+	for i := 0; i < 10; i++ {
+		_, _, err := iter.Next(context.Background())
+		if err != nil {
+			sawError = true
+			break
+		}
+	}
+	if !sawError {
+		t.Fatal("expected error from merged iterator")
+	}
+}
+
+func TestContextCancellation_Stream(t *testing.T) {
+	t.Parallel()
+	stream := &streamTestHelper[string, int]{
+		name: "blocking-stream",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return &blockingIterator{
+				items:   []int{1, 2, 3, 4, 5},
+				blockAt: 1,
+				unblock: make(chan struct{}), // never unblocked
+			}, nil
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	iter, err := stream.Execute(ctx, "x")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	// First item should succeed
+	_, ok, err := iter.Next(ctx)
+	if err != nil || !ok {
+		t.Fatalf("first Next: ok=%v, err=%v", ok, err)
+	}
+
+	// Second item should block and timeout
+	_, _, err = iter.Next(ctx)
+	if err == nil {
+		t.Fatal("expected timeout error from blocked iterator")
+	}
+}
+func TestWindowedStream_ExactWindowSize(t *testing.T) {
+	t.Parallel()
+	inner := &streamTestHelper[string, int]{
+		name: "source",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return newSliceIter(1, 2, 3, 4), nil
+		},
+	}
+
+	summer := &rrTestHelper[[]int, int]{
+		name: "sum",
+		fn: func(_ context.Context, batch []int) (int, error) {
+			sum := 0
+			for _, v := range batch {
+				sum += v
+			}
+			return sum, nil
+		},
+	}
+
+	// Window size = 4, exactly matches item count
+	windowed := provider.WindowedStream[string, int, int]("exact", inner, 4, summer)
+	iter, err := windowed.Execute(context.Background(), "x")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	v, ok, err := iter.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if !ok || v != 10 {
+		t.Fatalf("expected 10, got %d (ok=%v)", v, ok)
+	}
+
+	// Second call should return no more items
+	_, ok, err = iter.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next: %v", err)
+	}
+	if ok {
+		t.Fatal("expected no more items")
+	}
+}
+
+func TestFanOutStream_MultipleErrorSources(t *testing.T) {
+	t.Parallel()
+	s1 := &streamTestHelper[string, int]{
+		name: "err-s1",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return &errorAtNIterator{items: []int{1, 2, 3}, errAt: 1}, nil
+		},
+	}
+	s2 := &streamTestHelper[string, int]{
+		name: "err-s2",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return &errorAtNIterator{items: []int{10, 20, 30}, errAt: 0}, nil
+		},
+	}
+
+	fan := provider.FanOutStream("multi-err", s1, s2)
+	iter, err := fan.Execute(context.Background(), "x")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	// Should encounter at least one error
+	sawError := false
+	for i := 0; i < 10; i++ {
+		_, ok, err := iter.Next(context.Background())
+		if err != nil {
+			sawError = true
+			break
+		}
+		if !ok {
+			break
+		}
+	}
+	if !sawError {
+		t.Fatal("expected error from at least one source")
+	}
+}
+
+// Additional: SinkResilience with Bulkhead

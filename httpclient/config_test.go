@@ -79,3 +79,53 @@ func TestDefaultRateLimiterConfig(t *testing.T) {
 		t.Errorf("expected name 'test', got %q", cfg.Name)
 	}
 }
+
+func TestConfig_Validate_ZeroTimeout_AfterDefaults(t *testing.T) {
+	cfg := Config{Timeout: 0}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected zero timeout to be defaulted, got error: %v", err)
+	}
+	if cfg.Timeout != 30*time.Second {
+		t.Errorf("timeout = %v, want 30s", cfg.Timeout)
+	}
+}
+
+func TestConfig_Validate_NegativeTimeout(t *testing.T) {
+	cfg := Config{Timeout: -1 * time.Second}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Error("ApplyDefaults should have corrected negative timeout")
+	}
+}
+
+func TestDefaultRetryConfig_HasRetryIf(t *testing.T) {
+	cfg := DefaultRetryConfig()
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if cfg.RetryIf == nil {
+		t.Fatal("expected RetryIf to be set")
+	}
+	// Should return true for retryable errors
+	if !cfg.RetryIf(NewServerError(500, nil)) {
+		t.Error("RetryIf should return true for server error")
+	}
+	if cfg.RetryIf(NewNotFoundError(nil)) {
+		t.Error("RetryIf should return false for not-found error")
+	}
+}
+
+func TestDefaultCircuitBreakerConfig_NotNil(t *testing.T) {
+	cfg := DefaultCircuitBreakerConfig("test-cb")
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+}
+
+func TestDefaultRateLimiterConfig_NotNil(t *testing.T) {
+	cfg := DefaultRateLimiterConfig("test-rl")
+	if cfg == nil {
+		t.Fatal("expected non-nil config")
+	}
+}

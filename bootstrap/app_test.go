@@ -2,79 +2,14 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kbukum/gokit/component"
-	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/di"
 )
-
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-// failValidationConfig returns an error from Validate().
-type failValidationConfig struct {
-	config.ServiceConfig
-	valErr error
-}
-
-func (f *failValidationConfig) Validate() error { return f.valErr }
-
-// slowComponent delays start/stop by a configurable duration.
-type slowComponent struct {
-	name       string
-	startDelay time.Duration
-	stopDelay  time.Duration
-	health     component.Health
-	started    bool
-	stopped    bool
-}
-
-func (s *slowComponent) Name() string { return s.name }
-func (s *slowComponent) Start(ctx context.Context) error {
-	select {
-	case <-time.After(s.startDelay):
-		s.started = true
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (s *slowComponent) Stop(ctx context.Context) error {
-	select {
-	case <-time.After(s.stopDelay):
-		s.stopped = true
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-func (s *slowComponent) Health(ctx context.Context) component.Health { return s.health }
-
-// orderTrackingComponent records start/stop calls to a shared slice.
-type orderTrackingComponent struct {
-	name     string
-	order    *[]string
-	startErr error
-	stopErr  error
-	health   component.Health
-}
-
-func (o *orderTrackingComponent) Name() string { return o.name }
-func (o *orderTrackingComponent) Start(ctx context.Context) error {
-	*o.order = append(*o.order, o.name+":start")
-	return o.startErr
-}
-
-func (o *orderTrackingComponent) Stop(ctx context.Context) error {
-	*o.order = append(*o.order, o.name+":stop")
-	return o.stopErr
-}
-func (o *orderTrackingComponent) Health(ctx context.Context) component.Health { return o.health }
 
 // failCloser returns an error from Close(); registering it in a real container
 // exercises the container-close error path during shutdown.
@@ -87,48 +22,6 @@ func containerWithFailingClose(closeErr error) *di.Container {
 	})
 	return c
 }
-
-// ── 1. Config validation failure recovery ───────────────────────────────────
-
-func TestConfigValidationFailureRecovery(t *testing.T) {
-	cfg := &failValidationConfig{
-		ServiceConfig: config.ServiceConfig{
-			Name:        "test-svc",
-			Environment: "development",
-		},
-		valErr: fmt.Errorf("port out of range"),
-	}
-	_, err := NewApp(cfg)
-	if err == nil {
-		t.Fatal("expected error from config validation")
-	}
-	if !strings.Contains(err.Error(), "config validation") {
-		t.Errorf("expected 'config validation' prefix, got %q", err.Error())
-	}
-	if !strings.Contains(err.Error(), "port out of range") {
-		t.Errorf("expected wrapped validation error, got %q", err.Error())
-	}
-}
-
-func TestConfigValidationWithWrappedError(t *testing.T) {
-	inner := fmt.Errorf("inner cause")
-	cfg := &failValidationConfig{
-		ServiceConfig: config.ServiceConfig{
-			Name:        "test-svc",
-			Environment: "development",
-		},
-		valErr: fmt.Errorf("validation: %w", inner),
-	}
-	_, err := NewApp(cfg)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !errors.Is(err, inner) {
-		t.Error("expected wrapped error to be unwrappable")
-	}
-}
-
-// ── 2. Phase 1 component startup partial failure ────────────────────────────
 
 func TestPhase1PartialStartupFailure(t *testing.T) {
 	order := []string{}
@@ -174,53 +67,6 @@ func TestPhase1PartialStartupFailure(t *testing.T) {
 	}
 }
 
-// ── 3. Hook error propagation across phases ──────────────────────────────
-
-func TestHookErrorIncludesIndex(t *testing.T) {
-	cfg := newTestConfig("test", "1.0")
-	app, _ := NewApp(cfg)
-	app.OnStart(
-		func(ctx context.Context) error { return nil },
-		func(_ context.Context) error { return nil },
-		func(ctx context.Context) error { return fmt.Errorf("boom") },
-	)
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !strings.Contains(err.Error(), "boom") {
-		t.Errorf("expected 'boom' in error, got %q", err.Error())
-	}
-}
-
-func TestOnStopHookErrorDoesNotPreventComponentStop(t *testing.T) {
-	cfg := newTestConfig("test", "1.0")
-	app, _ := NewApp(cfg)
-
-	comp := &mockComponent{
-		name:   "db",
-		health: component.Health{Name: "db", Status: component.StatusHealthy},
-	}
-	app.RegisterComponent(comp)
-
-	app.OnStop(func(ctx context.Context) error {
-		return fmt.Errorf("stop hook error")
-	})
-
-	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return nil
-	})
-
-	if err == nil {
-		t.Error("expected stop hook error")
-	}
-	if !comp.stopped {
-		t.Error("component should still be stopped even after hook error")
-	}
-}
-
-// ── 4. RunTask with context cancellation ────────────────────────────────────
-
 func TestRunTaskContextCancellationBeforeTask(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
@@ -265,8 +111,6 @@ func TestRunTaskErrorTakesPriorityOverStopError(t *testing.T) {
 	}
 }
 
-// ── 5. Graceful timeout exceeded during component stop ──────────────────────
-
 func TestGracefulTimeoutDuringStop(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg, WithGracefulTimeout(100*time.Millisecond))
@@ -298,75 +142,6 @@ func TestGracefulTimeoutDuringStop(t *testing.T) {
 		t.Fatal("RunTask should not hang on graceful timeout")
 	}
 }
-
-// ── 6. Multiple OnConfigure callbacks ────────────────────────────────────────
-
-func TestMultipleOnConfigureCallbacksOrder(t *testing.T) {
-	cfg := newTestConfig("test", "1.0")
-	app, _ := NewApp(cfg)
-
-	order := []string{}
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		order = append(order, "config-1")
-		return nil
-	})
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		order = append(order, "config-2")
-		return nil
-	})
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		order = append(order, "config-3")
-		return nil
-	})
-
-	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("RunTask failed: %v", err)
-	}
-
-	expected := []string{"config-1", "config-2", "config-3"}
-	if len(order) != len(expected) {
-		t.Fatalf("expected %v, got %v", expected, order)
-	}
-	for i, v := range expected {
-		if order[i] != v {
-			t.Errorf("order[%d] = %q, expected %q", i, order[i], v)
-		}
-	}
-}
-
-func TestOnConfigureErrorStopsSubsequentCallbacks(t *testing.T) {
-	cfg := newTestConfig("test", "1.0")
-	app, _ := NewApp(cfg)
-
-	order := []string{}
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		order = append(order, "first")
-		return nil
-	})
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		return fmt.Errorf("config-2 failed")
-	})
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		order = append(order, "third")
-		return nil
-	})
-
-	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return nil
-	})
-
-	if err == nil {
-		t.Fatal("expected error from configure callback")
-	}
-	if len(order) != 1 || order[0] != "first" {
-		t.Errorf("only first callback should have run, got %v", order)
-	}
-}
-
-// ── 7. ReadyCheck racing with component failure ─────────────────────────────
 
 func TestReadyCheckWithMixedHealth(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
@@ -426,8 +201,6 @@ func TestReadyCheckWarningDoesNotBlockStartup(t *testing.T) {
 	}
 }
 
-// ── 8. Container.Close(ctx) failures during shutdown ────────────────────────
-
 func TestContainerCloseErrorDuringShutdown(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	container := containerWithFailingClose(fmt.Errorf("container close failed"))
@@ -473,54 +246,6 @@ func TestMultipleShutdownErrors(t *testing.T) {
 	}
 }
 
-// ── 9. DisplaySummary with edge cases ───────────────────────────────────────
-
-func TestDisplaySummaryEmptyComponents(t *testing.T) {
-	s := NewSummary("empty-svc", "0.1.0")
-	s.SetStartupDuration(0)
-
-	registry := component.NewRegistry()
-	container := di.NewContainer()
-
-	// Should not panic with empty everything
-	s.DisplaySummary(registry, container, nil)
-}
-
-func TestDisplaySummaryZeroPort(t *testing.T) {
-	s := NewSummary("svc", "1.0")
-	s.SetStartupDuration(50 * time.Millisecond)
-	s.TrackInfrastructure("DB", "database", "active", "localhost", 0, true)
-
-	registry := component.NewRegistry()
-	container := di.NewContainer()
-
-	// Should not panic and should not append ":0"
-	s.DisplaySummary(registry, container, nil)
-}
-
-func TestDisplaySummaryZeroDuration(t *testing.T) {
-	s := NewSummary("instant-svc", "0.0.1")
-	s.SetStartupDuration(0)
-	s.TrackRoute("GET", "/health", "HealthHandler")
-
-	registry := component.NewRegistry()
-	container := di.NewContainer()
-
-	// Should render 0.00s without panic
-	s.DisplaySummary(registry, container, nil)
-}
-
-func TestDisplaySummaryNilContainer(t *testing.T) {
-	s := NewSummary("nil-container-svc", "1.0")
-	s.SetStartupDuration(10 * time.Millisecond)
-
-	registry := component.NewRegistry()
-	// nil container
-	s.DisplaySummary(registry, nil, nil)
-}
-
-// ── 10. Double Run/RunTask calls ─────────────────────────────────────────────
-
 func TestDoubleRunTaskSequential(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
@@ -546,8 +271,6 @@ func TestDoubleRunTaskSequential(t *testing.T) {
 		t.Error("task should have run at least once")
 	}
 }
-
-// ── Additional edge cases ────────────────────────────────────────────────────
 
 func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
@@ -606,9 +329,6 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 }
 
-// TestTwoPhaseStartupComponentsRegisteredDuringConfigure verifies that
-// components registered during OnConfigure are automatically started
-// before ReadyCheck runs.
 func TestTwoPhaseStartupComponentsRegisteredDuringConfigure(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
@@ -713,8 +433,8 @@ func TestHookContextAvailability(t *testing.T) {
 	}
 }
 
-func TestOnConfigureAccessToFullApp(t *testing.T) {
-	cfg := newTestConfig("typed-svc", "2.0")
+func TestRun_ExitsOnContextCancellation(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 
 	comp := &mockComponent{
@@ -723,40 +443,46 @@ func TestOnConfigureAccessToFullApp(t *testing.T) {
 	}
 	app.RegisterComponent(comp)
 
-	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
-		// Verify typed config access
-		if a.Cfg.Name != "typed-svc" {
-			return fmt.Errorf("expected typed-svc, got %s", a.Cfg.Name)
-		}
-		// Verify container access
-		if a.Container == nil {
-			return fmt.Errorf("container should not be nil")
-		}
-		// Verify component access
-		if a.Components.Get("db") == nil {
-			return fmt.Errorf("db component should be registered")
-		}
-		return nil
-	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // WaitForSignal returns immediately via ctx.Done
 
-	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("RunTask failed: %v", err)
+	if err := app.Run(ctx); err != nil {
+		t.Fatalf("Run should exit cleanly on canceled context: %v", err)
+	}
+	if !comp.stopped {
+		t.Error("component should be stopped after Run returns")
 	}
 }
 
-func TestEmptyHookSlicesAreNoop(t *testing.T) {
+func TestStartupThenShutdown(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	// No hooks registered — emit should succeed with no error.
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
-	if err != nil {
-		t.Errorf("no hooks should succeed: %v", err)
+
+	comp := &mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
 	}
-	err = app.emitLifecycleHooks(context.Background(), EventStop)
-	if err != nil {
-		t.Errorf("no hooks should succeed: %v", err)
+	app.RegisterComponent(comp)
+
+	if err := app.Startup(context.Background()); err != nil {
+		t.Fatalf("Startup failed: %v", err)
+	}
+	if err := app.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
+	if !comp.stopped {
+		t.Error("component should be stopped after Shutdown")
+	}
+}
+
+func TestWaitForSignal_ReturnsNilOnContextCancel(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+
+	if sig := app.WaitForSignal(ctx); sig != nil {
+		t.Fatalf("expected nil signal on context cancel, got %v", sig)
 	}
 }

@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -110,5 +111,35 @@ func TestParseDuration_Invalid(t *testing.T) {
 	d := ParseDuration("not-a-duration")
 	if d != 0 {
 		t.Errorf("ParseDuration('not-a-duration') = %v, want 0", d)
+	}
+}
+
+func TestConfigRetryConfigAndResolveAddr(t *testing.T) {
+	t.Parallel()
+
+	retry := RegistrationConfig{MaxRetries: 4, RetryInterval: "250ms"}.RetryConfig()
+	if retry.MaxAttempts != 4 || retry.InitialBackoff != 250*time.Millisecond || retry.MaxBackoff != 2*time.Second {
+		t.Fatalf("RetryConfig = %+v, want attempts=4 initial=250ms max=2s", retry)
+	}
+	fallbackRetry := RegistrationConfig{MaxRetries: 2, RetryInterval: "bad"}.RetryConfig()
+	if fallbackRetry.InitialBackoff != 2*time.Second {
+		t.Fatalf("RetryConfig invalid interval initial = %v, want 2s", fallbackRetry.InitialBackoff)
+	}
+
+	mock := &mockDiscovery{instances: map[string][]ServiceInstance{"db": {makeInstance("db-1", "db", "127.0.0.1", 5432)}}}
+	host, port, err := ResolveAddr(mock, "db")
+	if err != nil {
+		t.Fatalf("ResolveAddr: %v", err)
+	}
+	if host != "127.0.0.1" || port != 5432 {
+		t.Fatalf("ResolveAddr = %s:%d, want 127.0.0.1:5432", host, port)
+	}
+	mock.err = errors.New("backend down")
+	if _, _, err := ResolveAddr(mock, "db"); err == nil {
+		t.Fatal("ResolveAddr backend error succeeded, want error")
+	}
+	mock.err = nil
+	if _, _, err := ResolveAddr(mock, "missing"); err == nil {
+		t.Fatal("ResolveAddr missing service succeeded, want error")
 	}
 }

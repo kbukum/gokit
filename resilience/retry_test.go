@@ -3,7 +3,10 @@ package resilience
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"math/rand/v2"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -338,5 +341,279 @@ func TestCalculateBackoff_NegativeJitterFallsBackToInitial(t *testing.T) {
 	}
 	if got := calculateBackoff(1, cfg); got != cfg.InitialBackoff {
 		t.Fatalf("negative backoff should fall back to InitialBackoff: got %v", got)
+	}
+}
+
+func TestRetry_BackoffTimingVerification(t *testing.T) {
+	cfg := RetryConfig{
+		MaxAttempts:    4,
+		InitialBackoff: 50 * time.Millisecond,
+		MaxBackoff:     5 * time.Second,
+		BackoffFactor:  2.0,
+		Jitter:         0,
+	}
+
+	var timestamps []time.Time
+	_, _ = Retry(context.Background(), cfg, func() (int, error) {
+		timestamps = append(timestamps, time.Now())
+		return 0, errors.New("keep going")
+	})
+
+	// Expected gaps: 50ms, 100ms, 200ms (between attempts 1-2, 2-3, 3-4).
+	expectedGaps := []time.Duration{
+		50 * time.Millisecond,
+		100 * time.Millisecond,
+		200 * time.Millisecond,
+	}
+	const tolerance = 50 * time.Millisecond
+
+	for i := 0; i < len(timestamps)-1; i++ {
+		gap := timestamps[i+1].Sub(timestamps[i])
+		if gap < expectedGaps[i]-tolerance || gap > expectedGaps[i]+tolerance {
+			t.Errorf("gap[%d]: expected ~%v, got %v", i, expectedGaps[i], gap)
+		}
+	}
+}
+
+func TestRetry_JitterBoundsVerification(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// Test asserts 5–15 ms gaps with ±15 ms tolerance, but Windows'
+		// timer granularity (~16 ms) snaps sleeps onto coarse ticks and
+		// blows past the upper bound. Tracked in #114.
+		t.Skip("Windows clock resolution coarser than test tolerances")
+	}
+	const jitter = 0.5
+	cfg := RetryConfig{
+		MaxAttempts:    20,
+		InitialBackoff: 10 * time.Millisecond,
+		MaxBackoff:     10 * time.Second,
+		BackoffFactor:  1.0, // constant base backoff = 10ms
+		Jitter:         jitter,
+	}
+
+	var timestamps []time.Time
+	_, _ = Retry(context.Background(), cfg, func() (int, error) {
+		timestamps = append(timestamps, time.Now())
+		return 0, errors.New("retry")
+	})
+
+	// Expected base backoff is 10ms. With jitter=0.5, actual delay ∈ [5ms, 15ms].
+	lower := time.Duration(float64(10*time.Millisecond) * (1 - jitter))
+	upper := time.Duration(float64(10*time.Millisecond) * (1 + jitter))
+	const tol = 15 * time.Millisecond // generous scheduling tolerance
+
+	for i := 0; i < len(timestamps)-1; i++ {
+		gap := timestamps[i+1].Sub(timestamps[i])
+		if gap < lower-tol || gap > upper+tol {
+			t.Errorf("gap[%d]=%v not in [%v, %v] (with ±%v tolerance)", i, gap, lower, upper, tol)
+		}
+	}
+}
+
+func TestRetry_RetryIfFilterSpecificErrors(t *testing.T) {
+	t.Parallel()
+	errTemp := errors.New("temporary")
+	errPerm := errors.New("permanent")
+
+	cfg := RetryConfig{
+		MaxAttempts:    5,
+		InitialBackoff: time.Millisecond,
+		BackoffFactor:  1.0,
+		RetryIf: func(err error) bool {
+			return errors.Is(err, errTemp)
+		},
+	}
+
+	t.Run("retries_temporary", func(t *testing.T) {
+		t.Parallel()
+		callCount := 0
+		_, _ = Retry(context.Background(), cfg, func() (int, error) {
+			callCount++
+			return 0, errTemp
+		})
+		if callCount != 5 {
+			t.Errorf("expected 5 attempts for temp error, got %d", callCount)
+		}
+	})
+
+	t.Run("stops_on_permanent", func(t *testing.T) {
+		t.Parallel()
+		callCount := 0
+		_, err := Retry(context.Background(), cfg, func() (int, error) {
+			callCount++
+			return 0, errPerm
+		})
+		if callCount != 1 {
+			t.Errorf("expected 1 attempt for perm error, got %d", callCount)
+		}
+		if !errors.Is(err, errPerm) {
+			t.Errorf("expected permanent error, got %v", err)
+		}
+	})
+}
+
+func TestRetry_OnRetryCorrectAttemptAndError(t *testing.T) {
+	t.Parallel()
+	type record struct {
+		attempt int
+		errMsg  string
+	}
+	var records []record
+	var mu sync.Mutex
+
+	cfg := RetryConfig{
+		MaxAttempts:    4,
+		InitialBackoff: time.Millisecond,
+		BackoffFactor:  1.0,
+		OnRetry: func(attempt int, err error, _ time.Duration) {
+			mu.Lock()
+			records = append(records, record{attempt, err.Error()})
+			mu.Unlock()
+		},
+	}
+
+	callCount := 0
+	_, _ = Retry(context.Background(), cfg, func() (int, error) {
+		callCount++
+		return 0, fmt.Errorf("err-%d", callCount)
+	})
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// OnRetry called after each failed attempt (except the last).
+	if len(records) != 3 {
+		t.Fatalf("expected 3 OnRetry calls, got %d", len(records))
+	}
+	for i, r := range records {
+		wantAttempt := i + 1
+		wantErr := fmt.Sprintf("err-%d", i+1)
+		if r.attempt != wantAttempt {
+			t.Errorf("record[%d].attempt = %d, want %d", i, r.attempt, wantAttempt)
+		}
+		if r.errMsg != wantErr {
+			t.Errorf("record[%d].err = %q, want %q", i, r.errMsg, wantErr)
+		}
+	}
+}
+
+func TestRetry_ContextTimeoutMidRetry(t *testing.T) {
+	cfg := RetryConfig{
+		MaxAttempts:    100,
+		InitialBackoff: 50 * time.Millisecond,
+		BackoffFactor:  1.0,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+
+	callCount := 0
+	_, err := Retry(ctx, cfg, func() (int, error) {
+		callCount++
+		return 0, errors.New("fail")
+	})
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected DeadlineExceeded, got %v", err)
+	}
+	// With 50ms backoff and 80ms timeout: attempt 1 at 0ms, sleep 50ms,
+	// attempt 2 at ~50ms, sleep 50ms → context expires ~80ms.
+	if callCount > 5 {
+		t.Errorf("too many attempts (%d) – context should have stopped retries", callCount)
+	}
+}
+
+func TestRetry_BackoffHitsMaxCap(t *testing.T) {
+	t.Parallel()
+	cfg := RetryConfig{
+		MaxAttempts:    6,
+		InitialBackoff: 100 * time.Millisecond,
+		MaxBackoff:     200 * time.Millisecond,
+		BackoffFactor:  10.0,
+		Jitter:         0,
+	}
+
+	// Verify calculateBackoff caps at MaxBackoff.
+	for attempt := 1; attempt <= 5; attempt++ {
+		b := calculateBackoff(attempt, cfg)
+		if b > cfg.MaxBackoff {
+			t.Errorf("attempt %d: backoff %v exceeds MaxBackoff %v", attempt, b, cfg.MaxBackoff)
+		}
+	}
+}
+
+func TestRetry_ZeroMaxAttemptsDefaultsToThree(t *testing.T) {
+	t.Parallel()
+	cfg := RetryConfig{
+		MaxAttempts:    0,
+		InitialBackoff: time.Millisecond,
+		BackoffFactor:  1.0,
+	}
+
+	callCount := 0
+	_, _ = Retry(context.Background(), cfg, func() (int, error) {
+		callCount++
+		return 0, errors.New("fail")
+	})
+
+	if callCount != 3 {
+		t.Errorf("expected default 3 attempts for zero MaxAttempts, got %d", callCount)
+	}
+}
+
+func TestRetry_LargeMaxAttemptsImmediateSuccess(t *testing.T) {
+	t.Parallel()
+	cfg := RetryConfig{
+		MaxAttempts:    1000,
+		InitialBackoff: time.Millisecond,
+		BackoffFactor:  1.0,
+	}
+
+	callCount := 0
+	result, err := Retry(context.Background(), cfg, func() (string, error) {
+		callCount++
+		if callCount >= 2 {
+			return "ok", nil
+		}
+		return "", errors.New("once")
+	})
+	if err != nil {
+		t.Errorf("expected success, got %v", err)
+	}
+	if result != "ok" {
+		t.Errorf("expected 'ok', got %q", result)
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 calls, got %d", callCount)
+	}
+}
+
+func TestCalculateBackoff_ExtremeInputs(t *testing.T) {
+	t.Parallel()
+	cfg := RetryConfig{
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     time.Second,
+		BackoffFactor:  2.0,
+		Jitter:         1.0, // maximum jitter
+	}
+
+	for attempt := 1; attempt <= 100; attempt++ {
+		d := calculateBackoff(attempt, cfg)
+		if d < 0 {
+			t.Errorf("attempt %d: negative backoff %v", attempt, d)
+		}
+		if d > cfg.MaxBackoff {
+			// With jitter the pre-cap value may exceed max, but the cap should apply.
+			// However jitter is applied before the cap check, so this may technically
+			// be possible in pathological cases. Verify the implementation caps it.
+			expected := float64(cfg.InitialBackoff) * math.Pow(cfg.BackoffFactor, float64(attempt-1))
+			if expected > float64(cfg.MaxBackoff) && d > cfg.MaxBackoff {
+				// calculateBackoff caps at MaxBackoff; jitter applied before cap.
+				// So capped value should be MaxBackoff.
+				if d != cfg.MaxBackoff {
+					t.Errorf("attempt %d: expected cap at %v, got %v", attempt, cfg.MaxBackoff, d)
+				}
+			}
+		}
 	}
 }

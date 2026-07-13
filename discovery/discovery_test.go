@@ -82,3 +82,12 @@ func TestEndpoint_IsAlias(t *testing.T) {
 		t.Error("Endpoint alias should be interchangeable with ServiceInstance")
 	}
 }
+
+func TestServiceInstanceHostPort(t *testing.T) {
+	t.Parallel()
+
+	inst := ServiceInstance{Address: "127.0.0.1", Port: 8080}
+	if got := inst.HostPort(); got != "127.0.0.1:8080" {
+		t.Fatalf("HostPort = %q, want 127.0.0.1:8080", got)
+	}
+}

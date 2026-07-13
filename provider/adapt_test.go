@@ -1,9 +1,15 @@
-package provider
+package provider_test
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/provider"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // --- test helpers ---
@@ -47,7 +53,7 @@ func TestAdapt_BasicMapping(t *testing.T) {
 		},
 	}
 
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		backend,
 		"domain-service",
 		func(_ context.Context, in domainInput) (backendInput, error) {
@@ -85,7 +91,7 @@ func TestAdapt_MapInError(t *testing.T) {
 	}
 
 	mapInErr := errors.New("invalid input")
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		backend,
 		"err-service",
 		func(_ context.Context, _ domainInput) (backendInput, error) {
@@ -112,7 +118,7 @@ func TestAdapt_MapOutError(t *testing.T) {
 	}
 
 	mapOutErr := errors.New("bad output")
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		backend,
 		"out-err",
 		func(_ context.Context, in domainInput) (backendInput, error) {
@@ -139,7 +145,7 @@ func TestAdapt_BackendError(t *testing.T) {
 		},
 	}
 
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		backend,
 		"be-err",
 		func(_ context.Context, in domainInput) (backendInput, error) {
@@ -163,7 +169,7 @@ func TestAdapt_IsAvailableDelegates(t *testing.T) {
 		execFn:    nil,
 	}
 
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		backend,
 		"avail-test",
 		func(_ context.Context, in domainInput) (backendInput, error) {
@@ -191,9 +197,9 @@ func TestAdapt_ComposesWithResilience(t *testing.T) {
 	}
 
 	// Wrap backend with resilience first, then adapt
-	resilient := WithResilience[backendInput, backendOutput](backend, ResilienceConfig{})
+	resilient := provider.WithResilience[backendInput, backendOutput](backend, provider.ResilienceConfig{})
 
-	adapted := Adapt[domainInput, domainOutput, backendInput, backendOutput](
+	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		resilient,
 		"composed",
 		func(_ context.Context, in domainInput) (backendInput, error) {
@@ -213,5 +219,93 @@ func TestAdapt_ComposesWithResilience(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("expected 1 call, got %d", calls)
+	}
+}
+
+func TestAdapt_Middleware_Resilience_Pipeline(t *testing.T) {
+	t.Parallel()
+	backend := &echoProvider{name: "backend"}
+
+	// provider.Adapt string→string to string→string with transformation
+	adapted := provider.Adapt[string, string, string, string](
+		backend,
+		"adapted",
+		func(_ context.Context, in string) (string, error) {
+			return "transformed:" + in, nil
+		},
+		func(out string) (string, error) {
+			return "mapped:" + out, nil
+		},
+	)
+
+	// Add middleware
+	log := logging.NewDefault("test")
+	chained := provider.Chain(
+		provider.WithLogging[string, string](log),
+	)(adapted)
+
+	// Add resilience
+	resilient := provider.WithResilience(chained, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "pipeline-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+	})
+
+	result, err := resilient.Execute(context.Background(), "input")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "mapped:echo:transformed:input" {
+		t.Fatalf("expected 'mapped:echo:transformed:input', got %q", result)
+	}
+}
+
+func TestContextCancellation_RequestResponse(t *testing.T) {
+	t.Parallel()
+	callStarted := make(chan struct{})
+	p := &rrTestHelper[string, string]{
+		name: "blocking-rr",
+		fn: func(ctx context.Context, in string) (string, error) {
+			close(callStarted)
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(5 * time.Second):
+				return "late", nil
+			}
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := p.Execute(ctx, "test")
+	if err == nil {
+		t.Fatal("expected context cancellation error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	}
+}
+func TestLargePayload_Adapt(t *testing.T) {
+	t.Parallel()
+	largeInput := strings.Repeat("x", 1<<16) // 64KB
+
+	backend := &echoProvider{name: "large-backend"}
+	adapted := provider.Adapt[string, string, string, string](
+		backend,
+		"large-adapted",
+		func(_ context.Context, in string) (string, error) { return in, nil },
+		func(out string) (string, error) { return out, nil },
+	)
+
+	result, err := adapted.Execute(context.Background(), largeInput)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "echo:"+largeInput {
+		t.Fatalf("payload corrupted: expected len %d, got len %d", len("echo:")+len(largeInput), len(result))
 	}
 }

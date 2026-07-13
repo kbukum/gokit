@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/provider"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // --- Test types for Stateful ---
@@ -375,5 +376,49 @@ func TestStateful_StoreSaveError(t *testing.T) {
 	}
 	if err.Error() != "save failed" {
 		t.Fatalf("expected 'save failed', got %q", err.Error())
+	}
+}
+
+func TestStateful_WithResilience_Combination(t *testing.T) {
+	t.Parallel()
+	store := provider.NewMemoryStore[chatState]()
+	inner := &chatProvider{}
+
+	stateful := provider.NewStateful(provider.StatefulConfig[chatRequest, chatResponse, chatState]{
+		Inner:   inner,
+		Store:   store,
+		KeyFunc: func(req chatRequest) string { return req.SessionID },
+		Inject:  func(req chatRequest, _ *chatState) chatRequest { return req },
+		Extract: func(_ chatRequest, resp chatResponse) *chatState {
+			return &chatState{Messages: resp.History}
+		},
+		TTL: time.Minute,
+	})
+
+	resilient := provider.WithResilience[chatRequest, chatResponse](stateful, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "stateful-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "stateful-rl",
+			Rate:  10000,
+			Burst: 100,
+		},
+	})
+
+	resp, err := resilient.Execute(context.Background(), chatRequest{SessionID: "s1", Message: "hi"})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if resp.Reply != "echo:hi" {
+		t.Fatalf("expected echo:hi, got %q", resp.Reply)
+	}
+
+	// Verify state was saved through the combined pipeline
+	state, _ := store.Load(context.Background(), "s1")
+	if state == nil || len(state.Messages) != 1 {
+		t.Fatalf("expected state to be saved, got %v", state)
 	}
 }
