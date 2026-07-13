@@ -324,3 +324,17 @@ func TestList_Paginated(t *testing.T) {
 		t.Fatalf("expected 2 files across pages, got %d", len(files))
 	}
 }
+
+func TestRegisterRejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{Bucket: "bucket"}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}
+
+func TestRegisterRejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+	if err := Register(storage.NewFactoryRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
+	}
+}

@@ -14,6 +14,9 @@ import (
 
 // Register registers a configured Qdrant backend into the given registry.
 func Register(reg *vectorstore.FactoryRegistry, cfg Config) error {
+	if reg == nil {
+		return fmt.Errorf("qdrant: vectorstore registry is nil")
+	}
 	c := cfg
 	c.ApplyDefaults()
 	if err := c.Validate(); err != nil {

@@ -20,6 +20,9 @@ import (
 
 // Register registers a configured GCS storage provider into the given registry.
 func Register(reg *storage.FactoryRegistry, cfg Config) error {
+	if reg == nil {
+		return fmt.Errorf("gcs: storage registry is nil")
+	}
 	c := cfg
 	c.ApplyDefaults()
 	if err := c.Validate(); err != nil {

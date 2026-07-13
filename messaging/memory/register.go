@@ -60,6 +60,9 @@ func Register(registry *messaging.Registry, configs ...Config) error {
 }
 
 func brokerFromConfig(configs ...Config) (*InMemoryBroker, error) {
+	if len(configs) > 1 {
+		return nil, fmt.Errorf("memory: at most one config may be provided, got %d", len(configs))
+	}
 	if len(configs) == 0 {
 		return NewBroker(), nil
 	}

@@ -200,3 +200,11 @@ func TestConsumerRejectsQueueNameMismatch(t *testing.T) {
 		t.Fatal("expected queue_name mismatch error")
 	}
 }
+
+func TestRegisterRejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+
+	if err := Register(messaging.NewRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
+	}
+}

@@ -300,3 +300,10 @@ func TestStoreMethodsReturnErrorOnUpstreamFailure(t *testing.T) {
 		t.Error("Delete should surface upstream 500")
 	}
 }
+
+func TestRegisterRejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{URL: "http://localhost:6333"}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}

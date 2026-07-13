@@ -43,6 +43,9 @@ func Register(registry *messaging.Registry, configs ...Config) error {
 }
 
 func configFromRegistration(configs ...Config) (Config, error) {
+	if len(configs) > 1 {
+		return Config{}, fmt.Errorf("rabbitmq: at most one config may be provided, got %d", len(configs))
+	}
 	cfg := Config{}
 	if len(configs) > 0 {
 		cfg = configs[0]

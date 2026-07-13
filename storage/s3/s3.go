@@ -18,6 +18,12 @@ import (
 // Register registers a configured S3 storage provider into the given registry.
 // Pass an optional Config to override defaults.
 func Register(reg *storage.FactoryRegistry, configs ...Config) error {
+	if reg == nil {
+		return fmt.Errorf("s3: storage registry is nil")
+	}
+	if len(configs) > 1 {
+		return fmt.Errorf("s3: at most one config may be provided, got %d", len(configs))
+	}
 	c := Config{}
 	if len(configs) > 0 {
 		c = configs[0]

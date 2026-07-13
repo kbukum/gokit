@@ -225,3 +225,10 @@ func TestRegisteredFactoryConstructsStorage(t *testing.T) {
 		t.Fatal("expected store from factory")
 	}
 }
+
+func TestRegisterRejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{Bucket: "bucket"}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}

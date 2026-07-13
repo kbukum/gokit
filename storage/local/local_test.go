@@ -807,3 +807,17 @@ func TestList_ErrorThroughNonDirectoryParent(t *testing.T) {
 		t.Fatal("expected list error walking under a file")
 	}
 }
+
+func TestRegister_RejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{BasePath: t.TempDir()}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}
+
+func TestRegister_RejectsMultipleConfigs(t *testing.T) {
+	t.Parallel()
+	if err := Register(storage.NewFactoryRegistry(), Config{}, Config{}); err == nil {
+		t.Fatal("expected too-many-configs error")
+	}
+}
