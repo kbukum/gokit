@@ -219,7 +219,7 @@ func TestParse_WrongIssuer(t *testing.T) {
 
 	token, _ := svc1.GenerateAccess(&testClaims{UserID: "user-1"})
 	_, err := svc2.Parse(token)
-	if err != nil {
+	if err == nil {
 		t.Fatal("expected error when issuer doesn't match")
 	}
 }

@@ -32,6 +32,15 @@ func TestMergeExtra(t *testing.T) {
 			},
 		},
 		{
+			name:  "json null is no-op",
+			extra: json.RawMessage(` null `),
+			check: func(t *testing.T, body map[string]any) {
+				if len(body) != 1 {
+					t.Fatalf("body mutated: %v", body)
+				}
+			},
+		},
+		{
 			name:  "merges scalar and nested members",
 			extra: json.RawMessage(`{"think":false,"opts":{"a":1}}`),
 			check: func(t *testing.T, body map[string]any) {
@@ -77,6 +86,7 @@ func TestMergeExtra(t *testing.T) {
 
 func FuzzMergeExtra(f *testing.F) {
 	f.Add([]byte(""))
+	f.Add([]byte("null"))
 	f.Add([]byte("{}"))
 	f.Add([]byte(`{"a":1}`))
 	f.Add([]byte(`{"nested":{"x":[1,2]}}`))
