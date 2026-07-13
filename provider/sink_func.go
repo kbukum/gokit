@@ -25,8 +25,13 @@ func NewSinkFunc[I any](name string, fn func(context.Context, I) error) Sink[I] 
 	return &SinkFunc[I]{name: name, fn: fn}
 }
 
-func (s *SinkFunc[I]) Name() string                       { return s.name }
-func (s *SinkFunc[I]) IsAvailable(_ context.Context) bool { return true }
+func (s *SinkFunc[I]) Name() string { return s.name }
+
+// IsAvailable reports whether the sink can accept sends. A SinkFunc built with
+// a nil function is never available, since Send always fails with
+// [ErrNilSinkFunc].
+func (s *SinkFunc[I]) IsAvailable(_ context.Context) bool { return s.fn != nil }
+
 func (s *SinkFunc[I]) Send(ctx context.Context, input I) error {
 	if s.fn == nil {
 		return ErrNilSinkFunc
