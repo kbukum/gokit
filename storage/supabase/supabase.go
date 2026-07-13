@@ -17,6 +17,9 @@ import (
 
 // Register registers a configured Supabase storage provider into the given registry.
 func Register(reg *storage.FactoryRegistry, cfg Config) error {
+	if reg == nil {
+		return fmt.Errorf("supabase: storage registry is nil")
+	}
 	c := cfg
 	c.ApplyDefaults()
 	if err := c.Validate(); err != nil {

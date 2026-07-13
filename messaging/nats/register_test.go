@@ -8,7 +8,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-func TestRegisterIsExplicitConfigFreeLazyAndConstructs(t *testing.T) {
+func TestRegisterWithExplicitConfigConstructs(t *testing.T) {
 	t.Parallel()
 
 	reg := messaging.NewRegistry()

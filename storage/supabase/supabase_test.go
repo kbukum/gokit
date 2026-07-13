@@ -330,6 +330,13 @@ func TestRegisterRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestRegisterRejectsNilRegistry(t *testing.T) {
+	t.Parallel()
+	if err := Register(nil, Config{URL: "https://p.supabase.co", Bucket: "b", SecretKey: "s"}); err == nil {
+		t.Fatal("expected nil registry error")
+	}
+}
+
 func TestConfigValidate(t *testing.T) {
 	t.Parallel()
 	c := Config{URL: "u", Bucket: "b", SecretKey: "s"}

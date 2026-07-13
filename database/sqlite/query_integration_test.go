@@ -282,6 +282,23 @@ func TestComputeFacetsWithFilters_NilAndUnsafe(t *testing.T) {
 	}
 }
 
+func TestComputeFacetsWithFilters_AliasedField(t *testing.T) {
+	t.Parallel()
+	db := newQueryTestDB(t)
+	conds := []query.Condition{{Field: "cat", Operator: query.OpEq, Value: "tools"}}
+	cfg := query.Config{
+		FacetFields:  []string{"cat"},
+		FieldAliases: map[string]string{"cat": "category"},
+		FacetLabels:  map[string]string{"cat": "Category"},
+	}
+	facets := query.ComputeFacetsWithFilters(db.Model(&widget{}), cfg.FacetFields, conds, cfg)
+	// The facet's own condition must be excluded from cross-filtering, so both
+	// categories are counted despite the resolved-column alias.
+	if facets["Category"]["tools"] != 2 || facets["Category"]["toys"] != 2 {
+		t.Fatalf("aliased-facet cross-filter = %+v", facets)
+	}
+}
+
 func TestApplyIncludes(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)

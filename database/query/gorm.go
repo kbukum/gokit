@@ -181,13 +181,14 @@ func ComputeFacetsWithFilters(
 	facets := make(map[string]map[string]int)
 
 	for _, field := range facetFields {
-		if !isSafeIdentifier(field) {
+		col := config.ResolveField(field)
+		if !isSafeIdentifier(col) {
 			continue
 		}
 		facetKey := config.ResolveFacetLabel(field)
 		facets[facetKey] = make(map[string]int)
 
-		otherConds := excludeFieldConditions(conditions, field, config)
+		otherConds := excludeFieldConditions(conditions, col, config)
 		baseQuery := buildBaseQuery(db, otherConds, config)
 
 		var total int64
@@ -200,8 +201,8 @@ func ComputeFacetsWithFilters(
 			Count int
 		}
 		var counts []facetCount
-		groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", field)).
-			Group(field).Scan(&counts)
+		groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", col)).
+			Group(col).Scan(&counts)
 
 		for _, c := range counts {
 			facets[facetKey][c.Value] = c.Count
@@ -219,10 +220,10 @@ func buildBaseQuery(db *gorm.DB, conditions []Condition, config Config) *gorm.DB
 	return q
 }
 
-func excludeFieldConditions(conditions []Condition, excludeField string, config Config) []Condition {
+func excludeFieldConditions(conditions []Condition, excludeCol string, config Config) []Condition {
 	var result []Condition
 	for _, c := range conditions {
-		if config.ResolveField(c.Field) != excludeField {
+		if config.ResolveField(c.Field) != excludeCol {
 			result = append(result, c)
 		}
 	}
