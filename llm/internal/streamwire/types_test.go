@@ -123,18 +123,22 @@ func TestToolUseBlocks(t *testing.T) {
 	blocks, err := ToolUseBlocks([]ToolCall{
 		{ID: "a", Name: "search", InputDelta: `{"q":"x"}`},
 		{ID: "b", Name: "empty", InputDelta: ``},
+		{ID: "c", Name: "blank", InputDelta: "  \n\t"},
 	})
 	if err != nil {
 		t.Fatalf("ToolUseBlocks() error: %v", err)
 	}
-	if len(blocks) != 2 {
-		t.Fatalf("len(blocks) = %d, want 2", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("len(blocks) = %d, want 3", len(blocks))
 	}
 	if blocks[0].ID != "a" || string(blocks[0].Input) != `{"q":"x"}` {
 		t.Errorf("block[0] = %+v", blocks[0])
 	}
 	if string(blocks[1].Input) != `{}` {
 		t.Errorf("empty input normalized to %q, want {}", blocks[1].Input)
+	}
+	if string(blocks[2].Input) != `{}` {
+		t.Errorf("whitespace-only input normalized to %q, want {}", blocks[2].Input)
 	}
 }
 

@@ -85,15 +85,14 @@ func ToolArgsSize(calls []ToolCall) int {
 func ToolUseBlocks(calls []ToolCall) ([]ai.ToolUseBlock, error) {
 	blocks := make([]ai.ToolUseBlock, 0, len(calls))
 	for _, call := range calls {
-		if call.InputDelta != "" {
-			if !json.Valid([]byte(call.InputDelta)) {
-				return nil, fmt.Errorf("streamwire: tool %q has invalid JSON arguments", call.Name)
-			}
+		input := ai.NormalizeToolInput(json.RawMessage(call.InputDelta))
+		if !json.Valid(input) {
+			return nil, fmt.Errorf("streamwire: tool %q has invalid JSON arguments", call.Name)
 		}
 		blocks = append(blocks, ai.ToolUseBlock{
 			ID:    call.ID,
 			Name:  call.Name,
-			Input: ai.NormalizeToolInput(json.RawMessage(call.InputDelta)),
+			Input: input,
 		})
 	}
 	return blocks, nil
