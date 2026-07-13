@@ -134,7 +134,7 @@ func (p *Provider) PredictStream(ctx context.Context, req inference.PredictReque
 	return ch, err
 }
 
-func (p *Provider) openStream(ctx context.Context, path string, body any) (sse.Reader, error) {
+func (p *Provider) openStream(ctx context.Context, path string, body json.RawMessage) (sse.Reader, error) {
 	resp, err := p.client.DoStream(ctx, httpclient.Request{Method: http.MethodPost, Path: path, Body: body})
 	if err != nil {
 		return nil, err

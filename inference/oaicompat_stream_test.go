@@ -2,6 +2,7 @@ package inference
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -38,7 +39,7 @@ func collectStream(t *testing.T, ch <-chan ai.StreamEvent) (string, []error) {
 
 func TestOAICompatPredictStream_TextDeltas(t *testing.T) {
 	t.Parallel()
-	stream := func(_ context.Context, path string, _ any) (sse.Reader, error) {
+	stream := func(_ context.Context, path string, _ json.RawMessage) (sse.Reader, error) {
 		if path != "/v1/completions" {
 			t.Fatalf("path = %q", path)
 		}
@@ -64,9 +65,45 @@ func TestOAICompatPredictStream_TextDeltas(t *testing.T) {
 	}
 }
 
+func TestOAICompatPredictStream_RequestBody(t *testing.T) {
+	t.Parallel()
+	var got json.RawMessage
+	stream := func(_ context.Context, _ string, body json.RawMessage) (sse.Reader, error) {
+		got = body
+		return sseReaderFrom("data: [DONE]\n\n"), nil
+	}
+	req := PredictRequest{
+		ModelName:  "m",
+		Inputs:     map[string]Value{"prompt": TextValue("hi")},
+		Parameters: map[string]any{"temperature": 0.5},
+	}
+
+	ch, err := OAICompatPredictStream(context.Background(), "vllm", stream, req)
+	if err != nil {
+		t.Fatalf("OAICompatPredictStream: %v", err)
+	}
+	collectStream(t, ch)
+
+	var payload struct {
+		Model       string  `json:"model"`
+		Prompt      string  `json:"prompt"`
+		Stream      bool    `json:"stream"`
+		Temperature float64 `json:"temperature"`
+	}
+	if err := json.Unmarshal(got, &payload); err != nil {
+		t.Fatalf("request body is not valid JSON: %v (%s)", err, got)
+	}
+	if payload.Model != "m" || payload.Prompt != "hi" || !payload.Stream {
+		t.Fatalf("unexpected request body: %s", got)
+	}
+	if payload.Temperature != 0.5 {
+		t.Fatalf("parameters not merged: %s", got)
+	}
+}
+
 func TestOAICompatPredictStream_MissingModel(t *testing.T) {
 	t.Parallel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		t.Fatal("stream should not open without a model")
 		return nil, errUnexpectedOpen
 	}
@@ -78,7 +115,7 @@ func TestOAICompatPredictStream_MissingModel(t *testing.T) {
 
 func TestOAICompatPredictStream_MissingPrompt(t *testing.T) {
 	t.Parallel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		t.Fatal("stream should not open without a prompt")
 		return nil, errUnexpectedOpen
 	}
@@ -90,7 +127,7 @@ func TestOAICompatPredictStream_MissingPrompt(t *testing.T) {
 
 func TestOAICompatPredictStream_OpenError(t *testing.T) {
 	t.Parallel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		return nil, errors.New("boom")
 	}
 	req := PredictRequest{ModelName: "m", Inputs: map[string]Value{"prompt": TextValue("hi")}}
@@ -101,7 +138,7 @@ func TestOAICompatPredictStream_OpenError(t *testing.T) {
 
 func TestOAICompatPredictStream_InvalidChunk(t *testing.T) {
 	t.Parallel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		return sseReaderFrom("data: {not json}\n\n"), nil
 	}
 	req := PredictRequest{ModelName: "m", Inputs: map[string]Value{"prompt": TextValue("hi")}}
@@ -119,7 +156,7 @@ func TestOAICompatPredictStream_ContextCancel(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		return sseReaderFrom("data: {\"choices\":[{\"text\":\"x\"}]}\n\n"), nil
 	}
 	req := PredictRequest{ModelName: "m", Inputs: map[string]Value{"prompt": TextValue("hi")}}
@@ -134,7 +171,7 @@ func TestOAICompatPredictStream_ContextCancel(t *testing.T) {
 
 func TestOAICompatPredictStream_ReadError(t *testing.T) {
 	t.Parallel()
-	stream := func(context.Context, string, any) (sse.Reader, error) {
+	stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 		return sse.NewReader(io.NopCloser(errReader{})), nil
 	}
 	req := PredictRequest{ModelName: "m", Inputs: map[string]Value{"prompt": TextValue("hi")}}
@@ -154,7 +191,7 @@ func FuzzOAICompatPredictStream(f *testing.F) {
 	f.Add("garbage\n\n")
 	f.Add("")
 	f.Fuzz(func(t *testing.T, sseText string) {
-		stream := func(context.Context, string, any) (sse.Reader, error) {
+		stream := func(context.Context, string, json.RawMessage) (sse.Reader, error) {
 			return sseReaderFrom(sseText), nil
 		}
 		req := PredictRequest{ModelName: "m", Inputs: map[string]Value{"prompt": TextValue("hi")}}

@@ -12,10 +12,11 @@ import (
 	"github.com/kbukum/gokit/httpclient/sse"
 )
 
-// OAICompatStreamFunc opens a Server-Sent Events stream for a POST body against
-// path. The caller owns transport, auth, headers, and retries; the returned
-// reader is closed by [OAICompatPredictStream] when the stream ends.
-type OAICompatStreamFunc func(ctx context.Context, path string, body any) (sse.Reader, error)
+// OAICompatStreamFunc opens a Server-Sent Events stream, POSTing the
+// pre-marshaled JSON body to path. The caller owns transport, auth, headers,
+// and retries; the returned reader is closed by [OAICompatPredictStream] when
+// the stream ends.
+type OAICompatStreamFunc func(ctx context.Context, path string, body json.RawMessage) (sse.Reader, error)
 
 // OAICompatPredictStream is a shared implementation of
 // [StreamingInference.PredictStream] for adapters that wrap an
@@ -45,8 +46,12 @@ func OAICompatPredictStream(ctx context.Context, kind string, open OAICompatStre
 	for k, v := range req.Parameters {
 		body[k] = v
 	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("%s: encode request: %w", kind, err)
+	}
 
-	reader, err := open(ctx, "/v1/completions", body)
+	reader, err := open(ctx, "/v1/completions", raw)
 	if err != nil {
 		return nil, fmt.Errorf("%s: open stream: %w", kind, err)
 	}

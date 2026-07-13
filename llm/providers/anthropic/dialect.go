@@ -10,7 +10,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
-	"github.com/kbukum/gokit/llm/providers/common"
+	"github.com/kbukum/gokit/llm/providers/internal/dialect"
 )
 
 // Register installs the Anthropic dialect in the supplied registry.
@@ -69,7 +69,7 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.ToolChoice != nil {
 		body["tool_choice"] = encodeToolChoice(req.ToolChoice)
 	}
-	if err := common.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
+	if err := dialect.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
 		return nil, errors.New(errors.ErrCodeInvalidInput, "anthropic: invalid request extra", http.StatusBadRequest).WithCause(err)
 	}
 

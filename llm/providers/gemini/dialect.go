@@ -10,7 +10,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
-	"github.com/kbukum/gokit/llm/providers/common"
+	"github.com/kbukum/gokit/llm/providers/internal/dialect"
 )
 
 // Register installs the Gemini dialect in the supplied registry.
@@ -105,7 +105,7 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	// Embed the model in the body so the adapter can use it for the path
 	body["_model"] = req.Model
 
-	if err := common.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
+	if err := dialect.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
 		return nil, errors.New(errors.ErrCodeInvalidInput, "gemini: invalid request extra", http.StatusBadRequest).WithCause(err)
 	}
 
