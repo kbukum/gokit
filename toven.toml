@@ -1,0 +1,70 @@
+[project]
+name = "gokit"
+root = "."
+base_ref = "origin/main"
+
+# Smart defaults fill in tasks, run strategy, and toolchain probes.
+# Uncomment to override, e.g.:
+#   run_strategy = "leaf-to-top"
+[ecosystems.go]
+modules = "auto"
+
+[ecosystems.go.tasks.build]
+argv = ["go", "-C", "{module.root}", "build", "{args}", "{module.selector}"]
+fan_out = "per-module"
+selector = ["./..."]
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.check]
+argv = ["go", "-C", "{module.root}", "vet", "{args}", "{module.selector}"]
+fan_out = "per-module"
+selector = ["./..."]
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.format]
+argv = ["gofmt", "-w", "{args}", "{workspace.root}"]
+cacheable = false
+fan_out = "whole-workspace"
+kind = "format"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.format-check]
+argv = ["gofmt", "-l", "{args}", "{workspace.root}"]
+fan_out = "whole-workspace"
+kind = "format"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.lint]
+argv = ["golangci-lint", "run", "--allow-parallel-runners", "{args}", "{module.selector}"]
+fan_out = "per-module"
+selector = ["{module.root}/..."]
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.run]
+argv = ["go", "-C", "{module.root}", "run", ".", "{args}"]
+fan_out = "per-module"
+persistent = true
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.test]
+argv = ["go", "-C", "{module.root}", "test", "{args}", "{module.selector}"]
+fan_out = "per-module"
+selector = ["./..."]
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.tidy]
+argv = ["go", "-C", "{module.root}", "mod", "tidy", "-diff", "{args}"]
+fan_out = "per-module"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.tidy-fix]
+argv = ["go", "-C", "{module.root}", "mod", "tidy", "{args}"]
+cacheable = false
+fan_out = "per-module"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.vuln]
+argv = ["govulncheck", "-C", "{module.root}", "{args}", "{module.selector}"]
+fan_out = "per-module"
+selector = ["./..."]
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
