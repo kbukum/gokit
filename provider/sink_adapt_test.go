@@ -23,10 +23,12 @@ func TestAdaptSink_IsAvailableDelegates(t *testing.T) {
 func TestContextCancellation_Sink(t *testing.T) {
 	t.Parallel()
 	sink := provider.NewSinkFunc("blocking-sink", func(ctx context.Context, _ string) error {
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(5 * time.Second):
+		case <-timer.C:
 			return nil
 		}
 	})

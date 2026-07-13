@@ -51,9 +51,6 @@ func TestHealthCheck_UnavailableProvider(t *testing.T) {
 	if p.IsAvailable(context.Background()) {
 		t.Fatal("unavailable provider should return false from IsAvailable")
 	}
-	if p.IsAvailable(context.Background()) {
-		t.Fatal("unavailable provider should return false from IsAvailable")
-	}
 }
 
 func TestHealthCheck_DegradedProvider(t *testing.T) {

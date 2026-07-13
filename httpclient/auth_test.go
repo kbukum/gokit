@@ -123,7 +123,10 @@ func TestAuth_EmptyBearerToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, _ := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	resp, err := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
 	// Go's http.Header.Set trims trailing space, so "Bearer " becomes "Bearer"
 	got := resp.Headers["X-Auth"]
 	if !strings.HasPrefix(got, "Bearer") {
@@ -149,7 +152,10 @@ func TestAuth_APIKeyHeader_SpecialChars(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, _ := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	resp, err := a.Do(context.Background(), Request{Method: "GET", Path: "/"})
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
 	if resp.Headers["X-Key"] != "k3y+val/ue=" {
 		t.Errorf("api key = %q", resp.Headers["X-Key"])
 	}
