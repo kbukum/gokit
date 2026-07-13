@@ -29,7 +29,10 @@ func TestEdge_SSEHeaders(t *testing.T) {
 	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, http.NoBody)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return // timeout acceptable for SSE
+		if ctx.Err() != nil {
+			t.Skipf("request ended due to context (%v); SSE stream held open", ctx.Err())
+		}
+		t.Fatalf("unexpected request error: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -73,7 +76,10 @@ func TestEdge_ServeSSE_ConnectedEventFormat(t *testing.T) {
 	req, _ := http.NewRequestWithContext(ctx, "GET", server.URL, http.NoBody)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return
+		if ctx.Err() != nil {
+			t.Skipf("request ended due to context (%v); SSE stream held open", ctx.Err())
+		}
+		t.Fatalf("unexpected request error: %v", err)
 	}
 	defer resp.Body.Close()
 
