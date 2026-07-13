@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -270,5 +271,201 @@ func TestRateLimiter_WaitNBlocksThenAllows(t *testing.T) {
 	rl.AllowN(1) // drain so WaitN must reserve and wait
 	if err := rl.WaitN(context.Background(), 1); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRateLimiter_AllowNExceedsBurst(t *testing.T) {
+	t.Parallel()
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "exceed",
+		Rate:  100,
+		Burst: 5,
+	})
+
+	// n > Burst should always be false.
+	if rl.AllowN(6) {
+		t.Error("AllowN(6) with Burst=5 should be false")
+	}
+	if rl.AllowN(100) {
+		t.Error("AllowN(100) with Burst=5 should be false")
+	}
+}
+
+func TestRateLimiter_TokenRefillRateAccuracy(t *testing.T) {
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "refill",
+		Rate:  100.0, // 100 tokens/sec → 1 token per 10ms
+		Burst: 10,
+	})
+
+	// Exhaust all tokens.
+	rl.AllowN(10)
+
+	// Wait 50ms → expect ~5 tokens refilled.
+	time.Sleep(55 * time.Millisecond)
+
+	tokens := rl.Tokens()
+	if tokens < 3 || tokens > 8 {
+		t.Errorf("expected ~5 tokens after 50ms at rate 100/s, got %.2f", tokens)
+	}
+}
+
+func TestRateLimiter_WaitCancellation(t *testing.T) {
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "cancel",
+		Rate:  1.0, // Very slow: 1 token/sec
+		Burst: 1,
+	})
+
+	rl.Allow() // Exhaust
+
+	ctx, cancel := context.WithCancel(context.Background())
+	start := time.Now()
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	err := rl.Wait(ctx)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("Wait should return promptly on cancel, took %v", elapsed)
+	}
+}
+
+func TestRateLimiter_ExecuteWaitUnderContention(t *testing.T) {
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "contention",
+		Rate:  200.0, // 200 tokens/sec
+		Burst: 5,
+	})
+
+	var completed int32
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := rl.ExecuteWait(ctx, func() error {
+				atomic.AddInt32(&completed, 1)
+				return nil
+			})
+			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("unexpected error: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if c := atomic.LoadInt32(&completed); c == 0 {
+		t.Error("expected some goroutines to complete")
+	}
+}
+
+func TestRateLimiter_OnLimitCallbackVerification(t *testing.T) {
+	t.Parallel()
+	var limitedCount int32
+
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "cb-verify",
+		Rate:  100.0,
+		Burst: 2,
+		OnLimit: func(name string) {
+			if name != "cb-verify" {
+				return
+			}
+			atomic.AddInt32(&limitedCount, 1)
+		},
+	})
+
+	// Exhaust burst.
+	rl.Allow()
+	rl.Allow()
+
+	// These should trigger OnLimit.
+	rl.Allow()
+	rl.Allow()
+	rl.Allow()
+
+	if atomic.LoadInt32(&limitedCount) != 3 {
+		t.Errorf("expected 3 OnLimit calls, got %d", limitedCount)
+	}
+}
+
+func TestRateLimiter_ZeroRateDefaultsToTen(t *testing.T) {
+	t.Parallel()
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "zero-rate",
+		Rate:  0,
+		Burst: 0,
+	})
+
+	// With default Rate=10 and default Burst=int(Rate)=10, should allow 10.
+	allowed := 0
+	for i := 0; i < 15; i++ {
+		if rl.Allow() {
+			allowed++
+		}
+	}
+	if allowed != 10 {
+		t.Errorf("expected 10 allowed with default rate, got %d", allowed)
+	}
+}
+
+func TestRateLimiter_BurstExhaustionThenRefill(t *testing.T) {
+	rl := NewRateLimiter(RateLimiterConfig{
+		Name:  "burst-refill",
+		Rate:  100.0,
+		Burst: 3,
+	})
+
+	// Exhaust all burst tokens.
+	for i := 0; i < 3; i++ {
+		if !rl.Allow() {
+			t.Fatalf("Allow() should succeed for token %d", i)
+		}
+	}
+	if rl.Allow() {
+		t.Error("should be rejected after burst exhaustion")
+	}
+
+	// Wait enough for at least 1 token refill (10ms at 100/s).
+	time.Sleep(15 * time.Millisecond)
+	if !rl.Allow() {
+		t.Error("should allow after refill time")
+	}
+}
+
+func TestRateLimiter_AllowVsAllowNConsistency(t *testing.T) {
+	t.Parallel()
+	rl1 := NewRateLimiter(RateLimiterConfig{Name: "a1", Rate: 100, Burst: 5})
+	rl2 := NewRateLimiter(RateLimiterConfig{Name: "a2", Rate: 100, Burst: 5})
+
+	// AllowN(1) five times on rl1.
+	var count1 int
+	for i := 0; i < 10; i++ {
+		if rl1.AllowN(1) {
+			count1++
+		}
+	}
+
+	// Allow() five times on rl2.
+	var count2 int
+	for i := 0; i < 10; i++ {
+		if rl2.Allow() {
+			count2++
+		}
+	}
+
+	if count1 != count2 {
+		t.Errorf("Allow and AllowN(1) should behave identically: got %d vs %d", count1, count2)
 	}
 }

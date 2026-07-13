@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/kbukum/gokit/ai"
@@ -118,7 +119,7 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 			observability.StringAttribute(semconv.GenAIRequestModel, req.Model),
 		),
 	)
-	chunkCh, model, err := p.adapter.streamChunks(ctx, req)
+	chunkCh, model, streamCtx, cancel, err := p.adapter.streamChunks(ctx, req)
 	if err != nil {
 		span.RecordError(err)
 		span.End()
@@ -128,7 +129,7 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 		model = p.model
 	}
 	p.lifecycle.Touch()
-	rawCh := streamEventsFromChunks(chunkCh, model)
+	rawCh := streamEventsFromChunks(streamCtx, chunkCh, model, cancel)
 	out := make(chan StreamEvent, cap(rawCh)+1)
 	go func() {
 		defer close(out)
@@ -137,7 +138,11 @@ func (p *AdapterProvider) Stream(ctx context.Context, req CompletionRequest) (<-
 			if errEvt, ok := evt.(StreamError); ok && errEvt.Err != nil {
 				span.RecordError(errEvt.Err)
 			}
-			out <- evt
+			select {
+			case out <- evt:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 	return out, nil
@@ -158,24 +163,47 @@ func mergeStreamToolDelta(calls []streamToolCall, delta streamToolCall) []stream
 	return streamwire.MergeToolDelta(calls, delta)
 }
 
-func streamEventsFromChunks(chunkCh <-chan streamChunk, model string) <-chan StreamEvent {
+// streamEventsFromChunks transforms upstream chunks into canonical StreamEvent
+// values. Every send is guarded by ctx so a consumer that stops reading (after
+// canceling ctx) never wedges this goroutine. It always calls cancel when it
+// finishes — including on early return paths (upstream error, tool-arg size
+// cap, ctx cancellation) — so the producer goroutine is torn down and never
+// blocks on a send into the abandoned chunk channel.
+func streamEventsFromChunks(ctx context.Context, chunkCh <-chan streamChunk, model string, cancel context.CancelFunc) <-chan StreamEvent {
 	eventCh := make(chan StreamEvent, 16)
 	go func() {
 		defer close(eventCh)
+		defer cancel()
+		send := func(ev StreamEvent) bool {
+			select {
+			case eventCh <- ev:
+				return true
+			case <-ctx.Done():
+				return false
+			}
+		}
 		var contentBuf strings.Builder
 		var streamCalls []streamToolCall
 		for chunk := range chunkCh {
 			if chunk.Err != nil {
-				eventCh <- StreamError{Err: chunk.Err}
+				send(StreamError{Err: chunk.Err})
 				return
 			}
 			if chunk.Content != "" {
 				contentBuf.WriteString(chunk.Content)
-				eventCh <- TextDelta{Text: chunk.Content}
+				if !send(TextDelta{Text: chunk.Content}) {
+					return
+				}
 			}
 			for _, tc := range chunk.ToolCalls {
 				streamCalls = mergeStreamToolDelta(streamCalls, tc)
-				eventCh <- ToolUseDelta{Index: tc.Index, ID: tc.ID, Name: tc.Name, InputDelta: tc.InputDelta}
+				if streamwire.ToolArgsSize(streamCalls) > streamwire.MaxToolArgsBytes {
+					send(StreamError{Err: fmt.Errorf("llm: streamed tool arguments exceeded %d bytes", streamwire.MaxToolArgsBytes)})
+					return
+				}
+				if !send(ToolUseDelta{Index: tc.Index, ID: tc.ID, Name: tc.Name, InputDelta: tc.InputDelta}) {
+					return
+				}
 			}
 			if chunk.Done {
 				break
@@ -187,7 +215,7 @@ func streamEventsFromChunks(chunkCh <-chan streamChunk, model string) <-chan Str
 		}
 		toolCalls, err := streamwire.ToolUseBlocks(streamCalls)
 		if err != nil {
-			eventCh <- StreamError{Err: err}
+			send(StreamError{Err: err})
 			return
 		}
 		msg.ToolCalls = toolCalls
@@ -195,7 +223,7 @@ func streamEventsFromChunks(chunkCh <-chan streamChunk, model string) <-chan Str
 		if len(msg.ToolCalls) > 0 {
 			stopReason = chat.FinishReasonToolUse
 		}
-		eventCh <- MessageComplete{Response: CompletionResponse{Message: msg, Model: model, StopReason: stopReason}}
+		send(MessageComplete{Response: CompletionResponse{Message: msg, Model: model, StopReason: stopReason}})
 	}()
 	return eventCh
 }

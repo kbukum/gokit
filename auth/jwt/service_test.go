@@ -6,12 +6,27 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"strings"
 	"testing"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
+
+// jwtSeed builds a JWT-like compact serialization (header.payload.signature)
+// from raw header/payload JSON so fuzz seeds actually resemble tokens and hit
+// the intended parse paths. A signature of "" produces a trailing dot (the
+// unsecured/alg=none shape).
+func jwtSeed(header, payload, signature string) string {
+	enc := base64.RawURLEncoding.EncodeToString
+	return enc([]byte(header)) + "." + enc([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString([]byte(signature))
+}
+
+// jwtHeaderOnly builds a truncated token that carries only the header segment.
+func jwtHeaderOnly(header string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(header))
+}
 
 // testClaims is a custom claims type that embeds RegisteredClaims
 // (the common pattern) WITHOUT implementing SetDefaults.
@@ -632,4 +647,47 @@ func TestParse_RejectsTokenMissingNotBefore(t *testing.T) {
 	if _, err := svc.Parse(signed); err == nil {
 		t.Fatal("expected rejection of token missing nbf claim")
 	}
+}
+
+// FuzzParse exercises the JWT Service.Parse path with arbitrary input bytes.
+// The contract is: Parse must not panic on any input. Invalid tokens must
+// surface as errors, not crashes. Algorithm-confusion seeds (alg=none,
+// alg=HS256-against-RSA-key, malformed compact form, oversize segments) are
+// added to ensure the corpus exercises the security-critical paths.
+func FuzzParse(f *testing.F) {
+	seeds := []string{
+		"",
+		".",
+		"..",
+		"a.b.c",
+		jwtSeed(`{"alg":"none","typ":"JWT"}`, `{"sub":"1234567890"}`, ""),        // alg=none
+		jwtHeaderOnly(`{"alg":"HS256","typ":"JWT"}`),                             // truncated (header only)
+		jwtSeed(`{"alg":"HS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // bad signature
+		jwtSeed(`{"alg":"RS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // alg confusion (RS256 header, HMAC key)
+		"\x00\x00\x00",
+		string(make([]byte, 64*1024)),
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	type fuzzClaims struct {
+		gojwt.RegisteredClaims
+	}
+	cfg := &Config{
+		Method:             HS256,
+		Secret:             "fuzz-secret-32-bytes-or-more-for-test",
+		AllowSymmetricHMAC: true,
+		Issuer:             "fuzz-issuer",
+		Audience:           []string{"fuzz-audience"},
+	}
+	svc, err := NewService(cfg, func() *fuzzClaims { return &fuzzClaims{} })
+	if err != nil {
+		f.Fatalf("NewService: %v", err)
+	}
+
+	f.Fuzz(func(t *testing.T, token string) {
+		// Contract: never panic. Errors are expected on garbage input.
+		_, _ = svc.Parse(token)
+	})
 }

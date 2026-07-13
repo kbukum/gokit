@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"testing"
@@ -130,5 +131,84 @@ func TestIsHelpers(t *testing.T) {
 	}
 	if IsRetryable(validation) {
 		t.Error("validation should not be retryable")
+	}
+}
+
+func TestClassifyStatusCode_NonStandardCodes(t *testing.T) {
+	tests := []struct {
+		code      int
+		wantCode  ErrorCode
+		retryable bool
+	}{
+		{418, ErrCodeValidation, false}, // I'm a teapot
+		{451, ErrCodeValidation, false}, // Unavailable For Legal Reasons
+		{502, ErrCodeServer, true},      // Bad Gateway
+		{599, ErrCodeServer, true},      // custom 5xx
+		{100, ErrCodeServer, false},     // Informational - falls to default
+		{301, ErrCodeServer, false},     // Redirect - falls to default
+	}
+	for _, tt := range tests {
+		e := ClassifyStatusCode(tt.code, []byte("body"))
+		if e == nil {
+			t.Errorf("code %d: expected error, got nil", tt.code)
+			continue
+		}
+		if e.Code != tt.wantCode {
+			t.Errorf("code %d: got Code=%v, want %v", tt.code, e.Code, tt.wantCode)
+		}
+		if e.Retryable != tt.retryable {
+			t.Errorf("code %d: got Retryable=%v, want %v", tt.code, e.Retryable, tt.retryable)
+		}
+	}
+}
+
+func TestClassifyStatusCode_2xx_ReturnsNil(t *testing.T) {
+	for code := 200; code < 300; code++ {
+		if e := ClassifyStatusCode(code, nil); e != nil {
+			t.Errorf("code %d: expected nil, got %v", code, e)
+		}
+	}
+}
+
+func TestClassifyStatusCode_BodyPreserved(t *testing.T) {
+	body := []byte(`{"error":"detail"}`)
+	e := ClassifyStatusCode(500, body)
+	if e == nil {
+		t.Fatal("expected error")
+	}
+	if !bytes.Equal(e.Body, body) {
+		t.Error("body not preserved in error")
+	}
+}
+
+func TestError_Unwrap_Chaining(t *testing.T) {
+	inner := fmt.Errorf("connection refused")
+	e := NewConnectionError(inner)
+	if !errors.Is(e.Unwrap(), inner) {
+		t.Error("Unwrap did not return inner error")
+	}
+}
+
+func TestIsCheckers_NonHttpError(t *testing.T) {
+	plain := fmt.Errorf("some error")
+	if IsTimeout(plain) || IsConnection(plain) || IsAuth(plain) ||
+		IsNotFound(plain) || IsRateLimit(plain) || IsServerError(plain) || IsRetryable(plain) {
+		t.Error("Is* helpers should return false for non-httpclient errors")
+	}
+}
+
+func TestError_ErrorFormat_WithStatusCode(t *testing.T) {
+	e := NewServerError(503, nil)
+	want := "httpclient: server (HTTP 503): HTTP 503"
+	if e.Error() != want {
+		t.Errorf("Error() = %q, want %q", e.Error(), want)
+	}
+}
+
+func TestError_ErrorFormat_WithoutStatusCode(t *testing.T) {
+	e := NewTimeoutError(fmt.Errorf("dial timeout"))
+	want := "httpclient: timeout: dial timeout"
+	if e.Error() != want {
+		t.Errorf("Error() = %q, want %q", e.Error(), want)
 	}
 }

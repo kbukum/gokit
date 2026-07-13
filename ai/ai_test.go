@@ -1,6 +1,7 @@
 package ai_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -17,7 +18,7 @@ func TestContentPartVariants(t *testing.T) {
 		ai.Audio{Source: "memory", MimeType: "audio/wav"},
 		ai.Video{Source: "memory", MimeType: "video/mp4"},
 		ai.File{Source: "file:///x", Name: "x.txt"},
-		ai.ToolUseBlock{ID: "call_1", Name: "search", Input: map[string]any{"q": "go"}},
+		ai.ToolUseBlock{ID: "call_1", Name: "search", Input: json.RawMessage(`{"q":"go"}`)},
 		ai.ToolResultBlock{ID: "call_1", Content: "ok"},
 	}
 	want := []string{"text", "image", "audio", "video", "file", "tool_use", "tool_result"}

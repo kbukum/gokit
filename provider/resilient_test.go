@@ -3,6 +3,9 @@ package provider_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -366,5 +369,471 @@ func TestManagerInitializeWithResilience(t *testing.T) {
 	}
 	if result != "echo:hello" {
 		t.Fatalf("expected echo:hello, got %s", result)
+	}
+}
+
+func TestWithStreamResilience_NameAndIsAvailable(t *testing.T) {
+	cfg := provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{Name: "s", Rate: 100, Burst: 10},
+	}
+	wrapped := provider.WithStreamResilience[string, byte](&splitProvider{}, cfg)
+	if wrapped.Name() != "split" {
+		t.Fatalf("expected name split, got %q", wrapped.Name())
+	}
+	if !wrapped.IsAvailable(context.Background()) {
+		t.Fatal("expected wrapped stream to be available")
+	}
+}
+
+func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
+	t.Parallel()
+	callCount := atomic.Int32{}
+	stream := &streamTestHelper[string, int]{
+		name: "cb-stream",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			callCount.Add(1)
+			return nil, errors.New("stream open failed")
+		},
+	}
+
+	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:             "stream-cb",
+			MaxFailures:      2,
+			Timeout:          time.Second,
+			HalfOpenMaxCalls: 1,
+		},
+	})
+
+	// Trip the circuit breaker
+	for i := 0; i < 2; i++ {
+		_, err := wrapped.Execute(context.Background(), "input")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	}
+
+	// Next call should be rejected by CB
+	_, err := wrapped.Execute(context.Background(), "input")
+	if err == nil {
+		t.Fatal("expected circuit breaker error")
+	}
+	appErr, ok := goerrors.AsAppError(err)
+	if !ok {
+		t.Fatalf("expected AppError, got %T: %v", err, err)
+	}
+	if appErr.Code != goerrors.ErrCodeServiceUnavailable {
+		t.Fatalf("expected SERVICE_UNAVAILABLE, got %s", appErr.Code)
+	}
+}
+
+func TestWithStreamResilience_RateLimiterDuringIteration(t *testing.T) {
+	t.Parallel()
+	stream := &streamTestHelper[string, int]{
+		name: "rl-stream",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return newSliceIter(1, 2, 3), nil
+		},
+	}
+
+	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "stream-rl",
+			Rate:  1000,
+			Burst: 10,
+		},
+	})
+
+	iter, err := wrapped.Execute(context.Background(), "input")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	var results []int
+	for {
+		v, ok, err := iter.Next(context.Background())
+		if err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		if !ok {
+			break
+		}
+		results = append(results, v)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(results))
+	}
+}
+
+func TestWithStreamResilience_ErrorPropagation(t *testing.T) {
+	t.Parallel()
+	stream := &streamTestHelper[string, int]{
+		name: "err-stream",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return &errorAtNIterator{items: []int{1, 2, 3}, errAt: 1}, nil
+		},
+	}
+
+	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "err-rl",
+			Rate:  1000,
+			Burst: 10,
+		},
+	})
+
+	iter, err := wrapped.Execute(context.Background(), "input")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	// First item should succeed
+	v, ok, err := iter.Next(context.Background())
+	if err != nil || !ok || v != 1 {
+		t.Fatalf("first Next: v=%d, ok=%v, err=%v", v, ok, err)
+	}
+
+	// Second should error
+	_, _, err = iter.Next(context.Background())
+	if err == nil {
+		t.Fatal("expected error from iterator")
+	}
+}
+
+func TestWithStreamResilience_EmptyConfig(t *testing.T) {
+	t.Parallel()
+	stream := &streamTestHelper[string, int]{
+		name: "empty-cfg",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return newSliceIter(1), nil
+		},
+	}
+
+	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{})
+	if wrapped.Name() != "empty-cfg" {
+		t.Fatalf("expected passthrough, got %s", wrapped.Name())
+	}
+}
+
+func TestWithDuplexResilience_CircuitBreakerOnOpen(t *testing.T) {
+	t.Parallel()
+	openErr := errors.New("connection failed")
+	duplex := &controlledDuplex{
+		name:      "cb-duplex",
+		available: true,
+		openErr:   openErr,
+	}
+
+	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:             "duplex-cb",
+			MaxFailures:      2,
+			Timeout:          time.Second,
+			HalfOpenMaxCalls: 1,
+		},
+	})
+
+	// Trip the circuit breaker
+	for i := 0; i < 2; i++ {
+		_, err := wrapped.Open(context.Background())
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	}
+
+	// Next call should be rejected by CB
+	_, err := wrapped.Open(context.Background())
+	if err == nil {
+		t.Fatal("expected circuit breaker error")
+	}
+	if !errors.Is(err, resilience.ErrCircuitOpen) {
+		t.Fatalf("expected ErrCircuitOpen in cause chain, got %v", err)
+	}
+}
+
+func TestWithDuplexResilience_ConcurrentSendRecv(t *testing.T) {
+	t.Parallel()
+	stream := newControlledDuplexStream()
+	duplex := &controlledDuplex{
+		name:      "concurrent-duplex",
+		available: true,
+		stream:    stream,
+	}
+
+	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "duplex-rl",
+			Rate:  10000,
+			Burst: 100,
+		},
+	})
+
+	ds, err := wrapped.Open(context.Background())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	const n = 5
+	var wg sync.WaitGroup
+
+	// Send messages concurrently
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			if err := ds.Send(fmt.Sprintf("msg%d", i)); err != nil {
+				t.Errorf("Send %d: %v", i, err)
+			}
+		}(i)
+	}
+
+	// Receive messages concurrently
+	received := make([]string, n)
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			v, err := ds.Recv()
+			if err != nil {
+				t.Errorf("Recv %d: %v", i, err)
+				return
+			}
+			received[i] = v
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify all received
+	for i, v := range received {
+		if !strings.HasPrefix(v, "echo:msg") {
+			t.Errorf("received[%d] = %q, expected echo:msg*", i, v)
+		}
+	}
+
+	if err := ds.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+}
+
+func TestWithDuplexResilience_ClosePropagation(t *testing.T) {
+	t.Parallel()
+	stream := newControlledDuplexStream()
+	stream.closeErr = errors.New("close error")
+	duplex := &controlledDuplex{
+		name:      "close-duplex",
+		available: true,
+		stream:    stream,
+	}
+
+	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "duplex-close-rl",
+			Rate:  10000,
+			Burst: 100,
+		},
+	})
+
+	ds, err := wrapped.Open(context.Background())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+
+	// Close should propagate through the resilience wrapper
+	err = ds.Close()
+	if err == nil {
+		t.Fatal("expected close error to propagate")
+	}
+	if err.Error() != "close error" {
+		t.Fatalf("expected 'close error', got %q", err.Error())
+	}
+}
+
+func TestWithDuplexResilience_EmptyConfig(t *testing.T) {
+	t.Parallel()
+	stream := newControlledDuplexStream()
+	duplex := &controlledDuplex{
+		name:      "passthrough-duplex",
+		available: true,
+		stream:    stream,
+	}
+
+	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{})
+	if wrapped.Name() != "passthrough-duplex" {
+		t.Fatalf("expected passthrough, got %s", wrapped.Name())
+	}
+}
+
+func TestWithDuplexResilience_NameAndIsAvailable(t *testing.T) {
+	t.Parallel()
+	duplex := &controlledDuplex{
+		name:      "delegate-duplex",
+		available: true,
+	}
+
+	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "delegate-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+	})
+
+	if wrapped.Name() != "delegate-duplex" {
+		t.Fatalf("expected delegate-duplex, got %s", wrapped.Name())
+	}
+	if !wrapped.IsAvailable(context.Background()) {
+		t.Fatal("expected available")
+	}
+}
+
+func TestWithSinkResilience_CircuitBreakerTrips(t *testing.T) {
+	t.Parallel()
+	sink := provider.NewSinkFunc("cb-sink", func(_ context.Context, _ string) error {
+		return errors.New("send failed")
+	})
+
+	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:             "sink-cb",
+			MaxFailures:      2,
+			Timeout:          time.Second,
+			HalfOpenMaxCalls: 1,
+		},
+	})
+
+	// Trip the circuit breaker
+	for i := 0; i < 2; i++ {
+		_ = wrapped.Send(context.Background(), "msg")
+	}
+
+	// Next call should be rejected by CB
+	err := wrapped.Send(context.Background(), "msg")
+	if err == nil {
+		t.Fatal("expected circuit breaker error")
+	}
+	appErr, ok := goerrors.AsAppError(err)
+	if !ok {
+		t.Fatalf("expected AppError, got %T: %v", err, err)
+	}
+	if appErr.Code != goerrors.ErrCodeServiceUnavailable {
+		t.Fatalf("expected SERVICE_UNAVAILABLE, got %s", appErr.Code)
+	}
+}
+
+func TestWithSinkResilience_EmptyConfig(t *testing.T) {
+	t.Parallel()
+	sink := provider.NewSinkFunc("passthrough-sink", func(_ context.Context, _ string) error {
+		return nil
+	})
+
+	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{})
+	if wrapped.Name() != "passthrough-sink" {
+		t.Fatalf("expected passthrough, got %s", wrapped.Name())
+	}
+}
+
+func TestWithSinkResilience_NameAndIsAvailable(t *testing.T) {
+	t.Parallel()
+	sink := provider.NewSinkFunc("delegate-sink", func(_ context.Context, _ string) error {
+		return nil
+	})
+
+	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "sink-delegate-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+	})
+
+	if wrapped.Name() != "delegate-sink" {
+		t.Fatalf("expected delegate-sink, got %s", wrapped.Name())
+	}
+	if !wrapped.IsAvailable(context.Background()) {
+		t.Fatal("expected available")
+	}
+}
+
+func TestWithResilience_RateLimiterTimeout(t *testing.T) {
+	t.Parallel()
+	p := &echoProvider{name: "rl-timeout"}
+	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+		RateLimiter: &resilience.RateLimiterConfig{
+			Name:  "tight-rl",
+			Rate:  0.001, // Very low rate
+			Burst: 1,
+		},
+	})
+
+	// First call should succeed (uses initial burst)
+	_, err := wrapped.Execute(context.Background(), "first")
+	if err != nil {
+		t.Fatalf("first call should succeed: %v", err)
+	}
+
+	// Second call with short timeout should fail
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err = wrapped.Execute(ctx, "second")
+	if err == nil {
+		t.Fatal("expected rate limiter error with short timeout")
+	}
+}
+
+func TestContextCancellation_ThroughResilience(t *testing.T) {
+	t.Parallel()
+	p := &rrTestHelper[string, string]{
+		name: "ctx-res",
+		fn: func(ctx context.Context, _ string) (string, error) {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(5 * time.Second):
+				return "late", nil
+			}
+		},
+	}
+
+	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "ctx-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err := wrapped.Execute(ctx, "test")
+	if err == nil {
+		t.Fatal("expected context error")
+	}
+}
+
+func TestWithSinkResilience_Bulkhead(t *testing.T) {
+	t.Parallel()
+	var callCount atomic.Int32
+	sink := provider.NewSinkFunc("bh-sink", func(_ context.Context, _ string) error {
+		callCount.Add(1)
+		time.Sleep(50 * time.Millisecond)
+		return nil
+	})
+
+	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+		Bulkhead: &resilience.BulkheadConfig{
+			Name:          "sink-bh",
+			MaxConcurrent: 1,
+			MaxWait:       0, // fail immediately if full
+		},
+	})
+
+	// One call should succeed
+	err := wrapped.Send(context.Background(), "msg")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

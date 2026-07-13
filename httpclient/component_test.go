@@ -92,3 +92,32 @@ func TestComponent_Health_Unhealthy_BeforeStart(t *testing.T) {
 		t.Errorf("expected unhealthy before Start(), got %s", health.Status)
 	}
 }
+
+func TestComponent_StartTwice(t *testing.T) {
+	c := NewComponent(Config{BaseURL: "http://example.com"})
+	if err := c.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Second start should succeed (re-creates adapter)
+	if err := c.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if c.Adapter() == nil {
+		t.Error("adapter should be set after Start")
+	}
+}
+
+func TestComponent_StopWithoutStart(t *testing.T) {
+	c := NewComponent(Config{BaseURL: "http://example.com"})
+	if err := c.Stop(context.Background()); err != nil {
+		t.Errorf("Stop without Start should not error: %v", err)
+	}
+}
+
+func TestComponent_HealthBeforeStart(t *testing.T) {
+	c := NewComponent(Config{BaseURL: "http://example.com"})
+	h := c.Health(context.Background())
+	if h.Status != "unhealthy" {
+		t.Errorf("health before start = %q, want unhealthy", h.Status)
+	}
+}

@@ -549,3 +549,31 @@ func TestClient_OptionalServiceFailure(t *testing.T) {
 		t.Fatal("expected error for optional service with no fallback")
 	}
 }
+
+func TestClientAdditionalBranches(t *testing.T) {
+	t.Parallel()
+
+	httpViaTag := makeInstance("tag-http", "svc", "10.0.0.1", 80)
+	httpViaTag.Protocol = ""
+	httpViaTag.Tags = []string{"protocol:http"}
+	mock := &mockDiscovery{instances: map[string][]ServiceInstance{"svc": {httpViaTag}}}
+	client := NewClient(mock, ClientConfig{CacheTTL: time.Minute, StaticEndpoints: []StaticEndpoint{{Name: "fb", Address: "", Port: 8080, Healthy: false}}}, testLogger())
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	}()
+	got, err := client.DiscoverOne(context.Background(), Query{ServiceName: "svc", Protocol: "http", Strategy: LeastConn})
+	if err != nil {
+		t.Fatalf("DiscoverOne: %v", err)
+	}
+	if got.ID != "tag-http" {
+		t.Fatalf("DiscoverOne = %q, want tag-http", got.ID)
+	}
+
+	required := NewClient(&mockDiscovery{err: errors.New("down")}, ClientConfig{Services: []string{"must"}, Criticality: map[string]Criticality{"must": CriticalityRequired}}, testLogger())
+	defer required.Close()
+	if _, err := required.DiscoverAll(context.Background()); err == nil {
+		t.Fatal("DiscoverAll required failure succeeded, want error")
+	}
+}

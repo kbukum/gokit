@@ -52,11 +52,11 @@ func TestCompleteStructured(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
-	var result struct {
+	type person struct {
 		Name string `json:"name"`
 		Age  int    `json:"age"`
 	}
-	err = CompleteStructured(context.Background(), a, "Extract info.", "Alice is 30.", &result)
+	result, err := CompleteStructured[person](context.Background(), a, "Extract info.", "Alice is 30.")
 	if err != nil {
 		t.Fatalf("CompleteStructured() error: %v", err)
 	}
@@ -80,15 +80,42 @@ func TestCompleteStructured_WithMarkdownFence(t *testing.T) {
 		t.Fatalf("error: %v", err)
 	}
 
-	var result struct {
+	type named struct {
 		Name string `json:"name"`
 	}
-	err = CompleteStructured(context.Background(), a, "Extract.", "Bob", &result)
+	result, err := CompleteStructured[named](context.Background(), a, "Extract.", "Bob")
 	if err != nil {
 		t.Fatalf("CompleteStructured() error: %v", err)
 	}
 	if result.Name != "Bob" {
 		t.Errorf("Name = %q, want %q", result.Name, "Bob")
+	}
+}
+
+func TestCompleteStructured_InvalidJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"content": "not json at all",
+			"model":   "test",
+		})
+	}))
+	defer srv.Close()
+
+	d := &mockDialect{}
+	a, err := NewWithDialect(d, Config{BaseURL: srv.URL, Model: "test"})
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	type named struct {
+		Name string `json:"name"`
+	}
+	result, err := CompleteStructured[named](context.Background(), a, "Extract.", "x")
+	if err == nil {
+		t.Fatalf("expected decode error, got result %+v", result)
+	}
+	if result.Name != "" {
+		t.Errorf("zero value not returned on error: %+v", result)
 	}
 }
 

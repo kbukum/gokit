@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -325,10 +324,7 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 	if a.config.Tools == nil {
 		return nil, fmt.Errorf("tool %q not found: no tool registry", tc.Name)
 	}
-	input, err := json.Marshal(tc.Input)
-	if err != nil {
-		return nil, fmt.Errorf("tool %q: marshal input: %w", tc.Name, err)
-	}
+	input := ai.NormalizeToolInput(tc.Input)
 	if hookErr := a.emitHookErr(ctx, ToolCallEvent{ToolUseID: tc.ID, Name: tc.Name, Input: input}); hookErr != nil {
 		return nil, hookErr
 	}
@@ -357,7 +353,7 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 
 func (a *Agent) toolPolicy(name string) *resilience.Policy {
 	if a.config.Tools != nil {
-		if p, ok := a.config.Tools.PolicyFor(name).(*resilience.Policy); ok {
+		if p := a.config.Tools.PolicyFor(name); p != nil {
 			return p
 		}
 	}

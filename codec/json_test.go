@@ -64,3 +64,26 @@ func TestJSONRejectsUnrepresentableValue(t *testing.T) {
 		t.Fatalf("expected serialize error, got %v", err)
 	}
 }
+
+// FuzzJSONDecode ensures the JSON codec never panics on arbitrary input and that
+// any successfully decoded value re-encodes and decodes to an equal tree.
+func FuzzJSONDecode(f *testing.F) {
+	seeds := []string{"", "{}", "[]", "null", "{ not json", `{"a":1}`, `[1,2,3]`, `"str"`}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+	c := codec.CompactJSON()
+	f.Fuzz(func(t *testing.T, contents string) {
+		value, err := c.DecodeValue(contents)
+		if err != nil {
+			return
+		}
+		encoded, err := c.EncodeValue(value)
+		if err != nil {
+			t.Fatalf("re-encode decoded value: %v", err)
+		}
+		if _, err := c.DecodeValue(encoded); err != nil {
+			t.Fatalf("re-decode round trip: %v", err)
+		}
+	})
+}

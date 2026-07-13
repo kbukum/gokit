@@ -22,8 +22,13 @@ func Complete(ctx context.Context, p provider.RequestResponse[CompletionRequest,
 	return resp.Text(), nil
 }
 
-// CompleteStructured sends a prompt expecting JSON and unmarshals the response into result.
-func CompleteStructured(ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string, result any) error {
+// CompleteStructured sends a prompt expecting JSON and decodes the response
+// into a value of type T. The model output is untrusted: it is decoded into the
+// concrete type T (a typed trust boundary that rejects shape-mismatched JSON)
+// rather than an opaque map, and a decode failure returns the zero T with an
+// error instead of a partially populated value.
+func CompleteStructured[T any](ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string) (T, error) {
+	var result T
 	system += "\n\nIMPORTANT: Respond with ONLY the JSON object. " +
 		"No markdown, no code blocks, no explanations. " +
 		"Start with { and end with }."
@@ -33,14 +38,15 @@ func CompleteStructured(ctx context.Context, p provider.RequestResponse[Completi
 		Messages:     []chat.Message{chat.User(user)},
 	})
 	if err != nil {
-		return err
+		return result, err
 	}
 
 	content := extractJSON(resp.Text())
-	if err := json.Unmarshal([]byte(content), result); err != nil {
-		return fmt.Errorf("llm: unmarshal structured response: %w", err)
+	var decoded T
+	if err := json.Unmarshal([]byte(content), &decoded); err != nil {
+		return result, fmt.Errorf("llm: unmarshal structured response: %w", err)
 	}
-	return nil
+	return decoded, nil
 }
 
 // extractJSON pulls a JSON object from LLM output that may contain markdown fences.

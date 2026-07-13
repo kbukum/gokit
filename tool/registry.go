@@ -12,6 +12,8 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider/namedregistry"
+	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/schema"
 )
 
 // Registry manages a collection of callable tools.
@@ -22,7 +24,7 @@ type Registry struct {
 	authorizer Authorizer
 	evaluator  SensitivityEvaluator
 	approval   HumanApproval
-	toolPolicy map[string]any
+	toolPolicy map[string]*resilience.Policy
 	lifecycle  ai.Lifecycle
 }
 
@@ -42,7 +44,7 @@ func NewRegistry() *Registry {
 		inner:      namedregistry.New[Callable]("tool"),
 		evaluator:  DenyOnSensitive{},
 		approval:   DenyHumanApproval{},
-		toolPolicy: map[string]any{},
+		toolPolicy: map[string]*resilience.Policy{},
 	}
 }
 
@@ -75,12 +77,11 @@ func (r *Registry) WithHumanApproval(h HumanApproval) *Registry {
 	return r
 }
 
-// WithToolPolicy attaches a per-tool resilience policy hint. The policy value
-// is opaque to the registry (it is stored, not enforced); orchestrators that
-// own the dispatch loop look up the policy via PolicyFor and wrap their
-// invocation. Storing a per-tool policy here keeps the registry as the single
-// source of truth for "what governs this tool".
-func (r *Registry) WithToolPolicy(name string, policy any) *Registry {
+// WithToolPolicy attaches a per-tool resilience policy. The policy is stored,
+// not enforced: orchestrators that own the dispatch loop look it up via
+// PolicyFor and wrap their invocation. Storing it here keeps the registry as
+// the single source of truth for "what governs this tool".
+func (r *Registry) WithToolPolicy(name string, policy *resilience.Policy) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if name == "" {
@@ -91,7 +92,7 @@ func (r *Registry) WithToolPolicy(name string, policy any) *Registry {
 }
 
 // PolicyFor returns the per-tool policy stored via WithToolPolicy, or nil.
-func (r *Registry) PolicyFor(name string) any {
+func (r *Registry) PolicyFor(name string) *resilience.Policy {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.toolPolicy[name]
@@ -163,9 +164,11 @@ func (r *Registry) Len() int { return r.inner.Len() }
 
 // Call invokes a tool by name with raw JSON input.
 //
-// Dispatch order: authz → sensitivity → (if RequireApproval) human approval →
-// invoke (D10). Any deny short-circuits with ErrToolDenied wrapped with the
-// reason; per-tool resilience policy is applied by callers via PolicyFor.
+// Dispatch order: schema validation → authz → sensitivity / destructive gate →
+// (if RequireApproval) human approval → invoke (D10). Invalid input fails closed
+// with ErrInvalidToolInput before any side effect; any deny short-circuits with
+// ErrToolDenied wrapped with the reason. Per-tool resilience policy is applied
+// by callers via PolicyFor.
 func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Result, error) {
 	spanCtx, span := observability.StartNamedSpan(ctx.Context, "github.com/kbukum/gokit/tool", "tool.call",
 		observability.WithSpanKind(observability.SpanKindInternal),
@@ -190,6 +193,12 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 	def := t.Definition()
 	call := ToolCall{Name: name, ToolUseID: ctx.ToolUseID, Input: input, Definition: def}
 
+	if result := t.Validate(input); !result.Valid {
+		err := fmt.Errorf("%w: %s", ErrInvalidToolInput, validationMessage(result))
+		span.RecordError(err)
+		return nil, err
+	}
+
 	r.mu.RLock()
 	authorizer := r.authorizer
 	evaluator := r.evaluator
@@ -209,6 +218,7 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 		}
 	}
 
+	approved := false
 	if evaluator != nil {
 		for _, predicate := range def.Envelope.SensitiveInvocations {
 			decision, reason, err := evaluator.Evaluate(ctx.Context, call, predicate)
@@ -224,26 +234,30 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 				span.RecordError(err)
 				return nil, err
 			case DecisionRequireApproval:
-				if approval == nil {
-					err := fmt.Errorf("%w: human approval required but no approver configured", ErrToolDenied)
-					span.RecordError(err)
-					return nil, err
-				}
-				approved, err := approval.Approve(ctx.Context, call)
-				if err != nil {
-					span.RecordError(err)
-					return nil, fmt.Errorf("tool %q: approval: %w", name, err)
-				}
 				if !approved {
-					err := fmt.Errorf("%w: human approval rejected", ErrToolDenied)
-					span.RecordError(err)
-					return nil, err
+					if err := r.requireApproval(ctx.Context, approval, call, reason); err != nil {
+						span.RecordError(err)
+						return nil, err
+					}
+					approved = true
 				}
 			default:
 				err := fmt.Errorf("tool %q: unknown evaluator decision %q", name, decision)
 				span.RecordError(err)
 				return nil, err
 			}
+		}
+	}
+
+	// Destructive tools are always human-gated: an irreversible mutation must
+	// be approved out of band. With the default DenyHumanApproval this fails
+	// closed until an operator wires a real approver. A prior sensitivity
+	// predicate may already have obtained approval for this dispatch; approve
+	// only once per call.
+	if def.Envelope.Safety == SafetyDestructive && !approved {
+		if err := r.requireApproval(ctx.Context, approval, call, "destructive tool requires human approval"); err != nil {
+			span.RecordError(err)
+			return nil, err
 		}
 	}
 
@@ -254,6 +268,35 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 		r.lifecycle.Touch()
 	}
 	return res, err
+}
+
+// requireApproval routes a call through the human approver, failing closed when
+// no approver is configured or approval is rejected.
+func (r *Registry) requireApproval(ctx context.Context, approval HumanApproval, call ToolCall, reason string) error {
+	if approval == nil {
+		return fmt.Errorf("%w: %s (no approver configured)", ErrToolDenied, reason)
+	}
+	approved, err := approval.Approve(ctx, call)
+	if err != nil {
+		return fmt.Errorf("tool %q: approval: %w", call.Name, err)
+	}
+	if !approved {
+		return fmt.Errorf("%w: %s (human approval rejected)", ErrToolDenied, reason)
+	}
+	return nil
+}
+
+// validationMessage renders a compact, human-readable summary of schema
+// validation failures for error text.
+func validationMessage(result schema.ValidationResult) string {
+	if len(result.Errors) == 0 {
+		return "input does not satisfy schema"
+	}
+	msgs := make([]string, 0, len(result.Errors))
+	for _, e := range result.Errors {
+		msgs = append(msgs, e.Error())
+	}
+	return strings.Join(msgs, "; ")
 }
 
 // BatchCall represents a single tool invocation in a batch.

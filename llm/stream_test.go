@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/ai/chat"
+	"github.com/kbukum/gokit/httpclient"
 )
 
 func collectStreamEvents(ch <-chan StreamEvent) (string, bool) {
@@ -186,6 +187,55 @@ func TestStream_SSE_NilReader(t *testing.T) {
 	chunk := <-ch
 	if !errors.Is(chunk.Err, ErrNoSSEReader) {
 		t.Errorf("expected ErrNoSSEReader, got %v", chunk.Err)
+	}
+}
+
+func TestStream_UnsupportedFormat_CtxCancelDoesNotBlock(t *testing.T) {
+	d := &mockDialect{streamFormat: StreamFormat(99)}
+	a, err := NewWithDialect(d, Config{BaseURL: "http://localhost:1"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ch := make(chan streamChunk) // unbuffered, no consumer: an unguarded send would deadlock
+	done := make(chan struct{})
+	go func() {
+		a.readStream(ctx, &httpclient.StreamResponse{}, ch)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("readStream blocked on an abandoned channel after context cancel")
+	}
+	if _, open := <-ch; open {
+		t.Fatal("expected channel to be closed without an emitted chunk")
+	}
+}
+
+func TestStream_NDJSON_NilBody_CtxCancelDoesNotBlock(t *testing.T) {
+	d := &mockDialect{streamFormat: StreamNDJSON}
+	a, err := NewWithDialect(d, Config{BaseURL: "http://localhost:1"})
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	ch := make(chan streamChunk) // unbuffered, no consumer
+	done := make(chan struct{})
+	go func() {
+		a.readNDJSONStream(ctx, nil, ch)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("readNDJSONStream blocked on an abandoned channel after context cancel")
 	}
 }
 

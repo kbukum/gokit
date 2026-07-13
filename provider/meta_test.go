@@ -1,9 +1,13 @@
-package provider
+package provider_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/provider"
 )
 
 // mockRR is a simple RequestResponse for testing.
@@ -19,7 +23,7 @@ func (m *mockRR) Execute(_ context.Context, input string) (string, error) {
 
 func TestWithMeta_Execute(t *testing.T) {
 	inner := &mockRR{name: "test-provider"}
-	wrapped := WithMeta[string, string](inner, Meta{
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{
 		"cost":       0.5,
 		"latency_ms": 100,
 		"requires":   "gpu",
@@ -37,7 +41,7 @@ func TestWithMeta_Execute(t *testing.T) {
 
 func TestWithMeta_Name(t *testing.T) {
 	inner := &mockRR{name: "my-service"}
-	wrapped := WithMeta[string, string](inner, Meta{"cost": 0.1})
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{"cost": 0.1})
 
 	if wrapped.Name() != "my-service" {
 		t.Errorf("Name() = %q, want %q", wrapped.Name(), "my-service")
@@ -46,7 +50,7 @@ func TestWithMeta_Name(t *testing.T) {
 
 func TestWithMeta_IsAvailable(t *testing.T) {
 	inner := &mockRR{name: "test"}
-	wrapped := WithMeta[string, string](inner, Meta{})
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{})
 
 	if !wrapped.IsAvailable(context.Background()) {
 		t.Error("IsAvailable() should return true")
@@ -55,10 +59,10 @@ func TestWithMeta_IsAvailable(t *testing.T) {
 
 func TestGetMeta(t *testing.T) {
 	inner := &mockRR{name: "test"}
-	meta := Meta{"cost": 0.5, "requires": "gpu"}
-	wrapped := WithMeta[string, string](inner, meta)
+	meta := provider.Meta{"cost": 0.5, "requires": "gpu"}
+	wrapped := provider.WithMeta[string, string](inner, meta)
 
-	got := GetMeta[string, string](wrapped)
+	got := provider.GetMeta[string, string](wrapped)
 	if cost, ok := got.Float("cost"); !ok || cost != 0.5 {
 		t.Errorf("cost = %v, %v, want 0.5, true", cost, ok)
 	}
@@ -69,30 +73,30 @@ func TestGetMeta(t *testing.T) {
 
 func TestGetMeta_NoMeta(t *testing.T) {
 	inner := &mockRR{name: "test"}
-	got := GetMeta[string, string](inner)
+	got := provider.GetMeta[string, string](inner)
 	if len(got) != 0 {
-		t.Errorf("expected empty Meta for unwrapped provider, got %v", got)
+		t.Errorf("expected empty provider.Meta for unwrapped provider, got %v", got)
 	}
 }
 
 func TestGetMetaFromAny(t *testing.T) {
 	inner := &mockRR{name: "test"}
-	wrapped := WithMeta[string, string](inner, Meta{"cost": 1.0})
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{"cost": 1.0})
 
-	got := GetMetaFromAny(wrapped)
+	got := provider.GetMetaFromAny(wrapped)
 	if cost, ok := got.Float("cost"); !ok || cost != 1.0 {
 		t.Errorf("cost = %v, %v", cost, ok)
 	}
 
 	// Non-meta provider.
-	got = GetMetaFromAny(inner)
+	got = provider.GetMetaFromAny(inner)
 	if len(got) != 0 {
-		t.Errorf("expected empty Meta, got %v", got)
+		t.Errorf("expected empty provider.Meta, got %v", got)
 	}
 }
 
 func TestMeta_Float(t *testing.T) {
-	m := Meta{
+	m := provider.Meta{
 		"f64": float64(3.14),
 		"f32": float32(2.71),
 		"int": 42,
@@ -125,7 +129,7 @@ func TestMeta_Float(t *testing.T) {
 }
 
 func TestMeta_String(t *testing.T) {
-	m := Meta{"region": "us-east-1", "count": 42}
+	m := provider.Meta{"region": "us-east-1", "count": 42}
 
 	s, ok := m.String("region")
 	if !ok || s != "us-east-1" {
@@ -144,7 +148,7 @@ func TestMeta_String(t *testing.T) {
 }
 
 func TestMeta_Duration(t *testing.T) {
-	m := Meta{
+	m := provider.Meta{
 		"dur":      500 * time.Millisecond,
 		"float_ms": 100.5,
 		"int_ms":   200,
@@ -173,7 +177,7 @@ func TestMeta_Duration(t *testing.T) {
 }
 
 func TestMeta_Bool(t *testing.T) {
-	m := Meta{"enabled": true, "count": 1}
+	m := provider.Meta{"enabled": true, "count": 1}
 
 	b, ok := m.Bool("enabled")
 	if !ok || !b {
@@ -187,7 +191,7 @@ func TestMeta_Bool(t *testing.T) {
 }
 
 func TestMeta_Has(t *testing.T) {
-	m := Meta{"key": "value"}
+	m := provider.Meta{"key": "value"}
 	if !m.Has("key") {
 		t.Error("Has(key) should be true")
 	}
@@ -197,8 +201,8 @@ func TestMeta_Has(t *testing.T) {
 }
 
 func TestMeta_Merge(t *testing.T) {
-	a := Meta{"cost": 0.5, "region": "us-east-1"}
-	b := Meta{"cost": 1.0, "gpu": true}
+	a := provider.Meta{"cost": 0.5, "region": "us-east-1"}
+	b := provider.Meta{"cost": 1.0, "gpu": true}
 
 	merged := a.Merge(b)
 
@@ -229,10 +233,10 @@ func TestMeta_Merge(t *testing.T) {
 
 func TestMetaProvider_Interface(t *testing.T) {
 	inner := &mockRR{name: "test"}
-	wrapped := WithMeta[string, string](inner, Meta{"x": 1})
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{"x": 1})
 
 	// Should implement MetaProvider.
-	mp, ok := wrapped.(MetaProvider)
+	mp, ok := wrapped.(provider.MetaProvider)
 	if !ok {
 		t.Fatal("wrapped provider should implement MetaProvider")
 	}
@@ -243,9 +247,9 @@ func TestMetaProvider_Interface(t *testing.T) {
 
 func TestMetaRR_String(t *testing.T) {
 	inner := &mockRR{name: "my-svc"}
-	wrapped := WithMeta[string, string](inner, Meta{})
+	wrapped := provider.WithMeta[string, string](inner, provider.Meta{})
 
-	s := wrapped.(*metaRR[string, string]).String()
+	s := fmt.Sprint(wrapped)
 	if s != "MetaProvider(my-svc)" {
 		t.Errorf("String() = %q, want MetaProvider(my-svc)", s)
 	}
@@ -266,7 +270,7 @@ func (m *mockSink) Send(_ context.Context, input string) error {
 
 func TestWithSinkMeta(t *testing.T) {
 	inner := &mockSink{name: "test-sink"}
-	wrapped := WithSinkMeta[string](inner, Meta{"cost": 0.5})
+	wrapped := provider.WithSinkMeta[string](inner, provider.Meta{"cost": 0.5})
 
 	// Test delegation.
 	if wrapped.Name() != "test-sink" {
@@ -283,9 +287,9 @@ func TestWithSinkMeta(t *testing.T) {
 	}
 
 	// Test meta.
-	mp, ok := wrapped.(MetaProvider)
+	mp, ok := wrapped.(provider.MetaProvider)
 	if !ok {
-		t.Fatal("should implement MetaProvider")
+		t.Fatal("should implement provider.MetaProvider")
 	}
 	cost, ok := mp.Meta().Float("cost")
 	if !ok || cost != 0.5 {
@@ -300,13 +304,13 @@ type mockStream struct {
 
 func (m *mockStream) Name() string                       { return m.name }
 func (m *mockStream) IsAvailable(_ context.Context) bool { return true }
-func (m *mockStream) Execute(_ context.Context, _ string) (Iterator[string], error) {
+func (m *mockStream) Execute(_ context.Context, _ string) (provider.Iterator[string], error) {
 	return nil, nil //nolint:nilnil // test mock: no iterator and no error
 }
 
 func TestWithStreamMeta(t *testing.T) {
 	inner := &mockStream{name: "test-stream"}
-	wrapped := WithStreamMeta[string, string](inner, Meta{"latency_ms": 100.0})
+	wrapped := provider.WithStreamMeta[string, string](inner, provider.Meta{"latency_ms": 100.0})
 
 	if wrapped.Name() != "test-stream" {
 		t.Errorf("Name() = %q", wrapped.Name())
@@ -319,9 +323,9 @@ func TestWithStreamMeta(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 
-	mp, ok := wrapped.(MetaProvider)
+	mp, ok := wrapped.(provider.MetaProvider)
 	if !ok {
-		t.Fatal("should implement MetaProvider")
+		t.Fatal("should implement provider.MetaProvider")
 	}
 	lat, ok := mp.Meta().Float("latency_ms")
 	if !ok || lat != 100.0 {
@@ -330,7 +334,7 @@ func TestWithStreamMeta(t *testing.T) {
 }
 
 func TestMeta_Duration_Int64(t *testing.T) {
-	m := Meta{"ms": int64(300)}
+	m := provider.Meta{"ms": int64(300)}
 	d, ok := m.Duration("ms")
 	if !ok || d != 300*time.Millisecond {
 		t.Errorf("Duration(int64) = %v, %v", d, ok)
@@ -343,4 +347,173 @@ func floatClose(a, b float64) bool {
 		diff = -diff
 	}
 	return diff < 0.01
+}
+
+func TestMeta_DurationAndBoolBranches(t *testing.T) {
+	m := provider.Meta{
+		"int64": int64(5),
+		"str":   "nope",
+		"flag":  "notbool",
+	}
+	if d, ok := m.Duration("int64"); !ok || d != 5*time.Millisecond {
+		t.Fatalf("expected 5ms from int64, got %v ok=%v", d, ok)
+	}
+	if _, ok := m.Duration("str"); ok {
+		t.Fatal("expected non-duration string to fail")
+	}
+	if _, ok := m.Bool("flag"); ok {
+		t.Fatal("expected non-bool value to fail")
+	}
+}
+
+func TestWithStreamMeta_ExecuteAndMeta(t *testing.T) {
+	t.Parallel()
+	stream := &streamTestHelper[string, int]{
+		name: "meta-stream",
+		fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+			return newSliceIter(1, 2, 3), nil
+		},
+	}
+
+	wrapped := provider.WithStreamMeta[string, int](stream, provider.Meta{"latency_ms": 50.0, "cost": 0.1})
+
+	if wrapped.Name() != "meta-stream" {
+		t.Fatalf("expected meta-stream, got %s", wrapped.Name())
+	}
+	if !wrapped.IsAvailable(context.Background()) {
+		t.Fatal("expected available")
+	}
+
+	// Execute should work normally
+	iter, err := wrapped.Execute(context.Background(), "input")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	defer iter.Close()
+
+	var results []int
+	for {
+		v, ok, err := iter.Next(context.Background())
+		if err != nil {
+			t.Fatalf("Next: %v", err)
+		}
+		if !ok {
+			break
+		}
+		results = append(results, v)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(results))
+	}
+
+	// Verify meta
+	mp, ok := wrapped.(provider.MetaProvider)
+	if !ok {
+		t.Fatal("expected provider.MetaProvider interface")
+	}
+	lat, ok := mp.Meta().Float("latency_ms")
+	if !ok || lat != 50.0 {
+		t.Fatalf("expected latency_ms=50, got %v", lat)
+	}
+}
+
+func TestWithSinkMeta_SendAndMeta(t *testing.T) {
+	t.Parallel()
+	var received []string
+	sink := provider.NewSinkFunc("meta-sink", func(_ context.Context, s string) error {
+		received = append(received, s)
+		return nil
+	})
+
+	wrapped := provider.WithSinkMeta[string](sink, provider.Meta{"cost": 0.5})
+
+	if err := wrapped.Send(context.Background(), "hello"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if len(received) != 1 || received[0] != "hello" {
+		t.Fatalf("expected [hello], got %v", received)
+	}
+
+	mp, ok := wrapped.(provider.MetaProvider)
+	if !ok {
+		t.Fatal("expected provider.MetaProvider interface")
+	}
+	cost, ok := mp.Meta().Float("cost")
+	if !ok || cost != 0.5 {
+		t.Fatalf("expected cost=0.5, got %v", cost)
+	}
+}
+
+func TestMetaProvider_InterfaceSatisfaction(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		provider any
+	}{
+		{
+			name:     "metaRR",
+			provider: provider.WithMeta[string, string](&echoProvider{name: "rr"}, provider.Meta{"x": 1}),
+		},
+		{
+			name: "metaSink",
+			provider: provider.WithSinkMeta[string](
+				provider.NewSinkFunc("sink", func(_ context.Context, _ string) error { return nil }),
+				provider.Meta{"y": 2},
+			),
+		},
+		{
+			name: "metaStream",
+			provider: provider.WithStreamMeta[string, int](
+				&streamTestHelper[string, int]{
+					name: "stream",
+					fn: func(_ context.Context, _ string) (provider.Iterator[int], error) {
+						return newSliceIter[int](), nil
+					},
+				},
+				provider.Meta{"z": 3},
+			),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			mp, ok := tt.provider.(provider.MetaProvider)
+			if !ok {
+				t.Fatalf("%s should implement provider.MetaProvider", tt.name)
+			}
+			if len(mp.Meta()) == 0 {
+				t.Fatal("expected non-empty meta")
+			}
+		})
+	}
+}
+
+func TestMeta_PropagationThroughMiddlewareChain(t *testing.T) {
+	t.Parallel()
+	inner := &echoProvider{name: "meta-chain"}
+	meta := provider.Meta{"cost": 0.5, "tier": "premium"}
+	wrapped := provider.WithMeta[string, string](inner, meta)
+
+	// Wrap with middleware chain
+	log := logging.NewDefault("test")
+	chained := provider.Chain(
+		provider.WithLogging[string, string](log),
+	)(wrapped)
+
+	// Execute should still work
+	result, err := chained.Execute(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "echo:test" {
+		t.Fatalf("expected echo:test, got %q", result)
+	}
+
+	// provider.Meta should be retrievable from any provider (check via provider.GetMetaFromAny)
+	got := provider.GetMetaFromAny(wrapped)
+	cost, ok := got.Float("cost")
+	if !ok || cost != 0.5 {
+		t.Fatalf("expected cost=0.5 from wrapped, got %v", cost)
+	}
 }

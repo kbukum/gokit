@@ -1,10 +1,19 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+type testProvider struct {
+	name      string
+	available bool
+}
+
+func (p *testProvider) Name() string                         { return p.name }
+func (p *testProvider) IsAvailable(ctx context.Context) bool { return p.available }
 
 func TestOperationRegistry_Resolve_SingleBinding(t *testing.T) {
 	t.Parallel()

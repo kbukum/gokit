@@ -44,7 +44,7 @@ func TestCountTokensApprox(t *testing.T) {
 	msgs := []Message{
 		System("You are helpful"),
 		User("What is 2+2?"),
-		AssistantMessage{ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "calculator", Input: map[string]any{"expr": "2+2"}}}},
+		AssistantMessage{ToolCalls: []ai.ToolUseBlock{{ID: "call_1", Name: "calculator", Input: json.RawMessage(`{"expr":"2+2"}`)}}},
 		ToolResultMsg("call_1", "4", false),
 	}
 	if got := CountTokensApprox(msgs); got < 10 {

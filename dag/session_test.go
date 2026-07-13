@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -162,5 +163,68 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 	}
 	if result3.NodeResults["c"].Status != StatusCompleted {
 		t.Fatalf("expected c completed with cached state, got %s", result3.NodeResults["c"].Status)
+	}
+}
+
+func TestSessionState_AcrossCycles(t *testing.T) {
+	sess := NewSession("persist-test")
+	pipeline := &Pipeline{
+		Nodes: []NodeDef{
+			{Component: "writer"},
+			{Component: "reader", DependsOn: []string{"writer"}},
+		},
+	}
+
+	g := &Graph{
+		Nodes: map[string]Node{
+			"writer": newFuncNode("writer", func(_ context.Context, s *State) (any, error) {
+				s.Set("writer", "written-value")
+				return "wrote", nil
+			}),
+			"reader": newFuncNode("reader", func(_ context.Context, s *State) (any, error) {
+				val, ok := s.Get("writer")
+				if !ok {
+					return nil, errors.New("writer state not found")
+				}
+				return val, nil
+			}),
+		},
+		Edges: []Edge{{From: "writer", To: "reader"}},
+	}
+
+	engine := &Engine{}
+
+	// Cycle 1: run only "writer"
+	filter1 := sess.ReadyFilter(pipeline, nil)
+	// Override to only run writer in cycle 1
+	cycle1Filter := func(name string, s *State) bool {
+		if name == "reader" {
+			return false
+		}
+		return filter1(name, s)
+	}
+
+	result1, err := engine.ExecuteStreaming(context.Background(), g, sess.State, cycle1Filter)
+	if err != nil {
+		t.Fatalf("cycle 1 error: %v", err)
+	}
+	if result1.NodeResults["writer"].Status != StatusCompleted {
+		t.Fatalf("cycle 1: writer expected completed, got %s", result1.NodeResults["writer"].Status)
+	}
+
+	// Cycle 2: run "reader" — should see writer's state from cycle 1
+	cycle2Filter := func(name string, s *State) bool {
+		return name == "reader"
+	}
+
+	result2, err := engine.ExecuteStreaming(context.Background(), g, sess.State, cycle2Filter)
+	if err != nil {
+		t.Fatalf("cycle 2 error: %v", err)
+	}
+	if result2.NodeResults["reader"].Status != StatusCompleted {
+		t.Fatalf("cycle 2: reader expected completed, got %s", result2.NodeResults["reader"].Status)
+	}
+	if result2.NodeResults["reader"].Output != "written-value" {
+		t.Fatalf("cycle 2: expected 'written-value', got %v", result2.NodeResults["reader"].Output)
 	}
 }

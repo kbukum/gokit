@@ -21,7 +21,10 @@ func (a *Adapter) readStream(ctx context.Context, resp *httpclient.StreamRespons
 	case StreamNDJSON:
 		a.readNDJSONStream(ctx, resp.Body, ch)
 	default:
-		ch <- streamChunk{Err: fmt.Errorf("unsupported stream format: %v", a.dialect.StreamFormat())}
+		select {
+		case ch <- streamChunk{Err: fmt.Errorf("unsupported stream format: %v", a.dialect.StreamFormat())}:
+		case <-ctx.Done():
+		}
 	}
 }
 
@@ -71,7 +74,10 @@ func (a *Adapter) readSSEStream(ctx context.Context, reader sse.Reader, ch chan<
 // readNDJSONStream reads newline-delimited JSON and parses each line.
 func (a *Adapter) readNDJSONStream(ctx context.Context, body io.ReadCloser, ch chan<- streamChunk) {
 	if body == nil {
-		ch <- streamChunk{Err: ErrNoStreamBody}
+		select {
+		case ch <- streamChunk{Err: ErrNoStreamBody}:
+		case <-ctx.Done():
+		}
 		return
 	}
 	defer func() { _ = body.Close() }()

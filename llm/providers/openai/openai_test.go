@@ -175,22 +175,22 @@ func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
 	tests := []struct {
 		name string
 		raw  string
-		want []ai.ToolUseBlock
+		want []toolCallWant
 	}{
 		{
 			name: "single tool call",
 			raw:  `{"id":"chatcmpl-1","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_1","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"NYC\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
+			want: []toolCallWant{{ID: "call_1", Name: "get_weather", Input: map[string]any{"city": "NYC"}}},
 		},
 		{
 			name: "empty args",
 			raw:  `{"id":"chatcmpl-2","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_2","type":"function","function":{"name":"ping","arguments":""}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_2", Name: "ping", Input: map[string]any{}}},
+			want: []toolCallWant{{ID: "call_2", Name: "ping", Input: map[string]any{}}},
 		},
 		{
 			name: "multi tool",
 			raw:  `{"id":"chatcmpl-3","model":"gpt-4o","choices":[{"message":{"tool_calls":[{"id":"call_3","type":"function","function":{"name":"search","arguments":"{\"q\":\"x\"}"}},{"id":"call_4","type":"function","function":{"name":"lookup","arguments":"{\"id\":7}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`,
-			want: []ai.ToolUseBlock{{ID: "call_3", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_4", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
+			want: []toolCallWant{{ID: "call_3", Name: "search", Input: map[string]any{"q": "x"}}, {ID: "call_4", Name: "lookup", Input: map[string]any{"id": float64(7)}}},
 		},
 	}
 	for _, tt := range tests {
@@ -199,17 +199,7 @@ func TestDialect_ParseResponse_ToolUseBlock(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseResponse: %v", err)
 			}
-			if len(resp.Message.ToolCalls) != len(tt.want) {
-				t.Fatalf("tool calls=%d want=%d", len(resp.Message.ToolCalls), len(tt.want))
-			}
-			for i := range tt.want {
-				if resp.Message.ToolCalls[i].ID != tt.want[i].ID || resp.Message.ToolCalls[i].Name != tt.want[i].Name {
-					t.Fatalf("tool[%d]=%+v want %+v", i, resp.Message.ToolCalls[i], tt.want[i])
-				}
-				if got, _ := json.Marshal(resp.Message.ToolCalls[i].Input); string(got) == "null" {
-					t.Fatalf("tool[%d] input nil", i)
-				}
-			}
+			assertToolCalls(t, resp.Message.ToolCalls, tt.want)
 		})
 	}
 }

@@ -2,6 +2,7 @@ package dag
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -220,4 +221,140 @@ func (m *memoryLoader) Load(name string) (*Pipeline, error) {
 		return nil, fmt.Errorf("pipeline %q not found", name)
 	}
 	return p, nil
+}
+
+func TestResolvePipeline_OptionalMissing_PlaceholderInserted(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register("transcription", newFuncNode("transcription", nil))
+	// "ser" is NOT registered
+
+	p := &Pipeline{
+		Name: "test",
+		Nodes: []NodeDef{
+			{Component: "transcription"},
+			{Component: "ser", Optional: true, DependsOn: []string{"transcription"}},
+		},
+	}
+
+	g, err := ResolvePipeline(p, reg, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Both nodes should be in the graph
+	if len(g.Nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(g.Nodes))
+	}
+
+	// ser should be an unavailableNode
+	_, runErr := g.Nodes["ser"].Run(context.Background(), NewState())
+	if !errors.Is(runErr, ErrUnavailable) {
+		t.Fatalf("expected ser to return ErrUnavailable, got %v", runErr)
+	}
+
+	// NodeDefs should be stored
+	if !g.NodeDefs["ser"].Optional {
+		t.Fatal("expected ser NodeDef to have Optional=true")
+	}
+}
+
+func TestResolvePipeline_OptionalPresent_NormalResolution(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register("ser", newFuncNode("ser", func(_ context.Context, s *State) (any, error) {
+		return "ser-output", nil
+	}))
+
+	p := &Pipeline{
+		Name: "test",
+		Nodes: []NodeDef{
+			{Component: "ser", Optional: true},
+		},
+	}
+
+	g, err := ResolvePipeline(p, reg, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should use the real node, not placeholder
+	out, runErr := g.Nodes["ser"].Run(context.Background(), NewState())
+	if runErr != nil {
+		t.Fatalf("expected no error, got %v", runErr)
+	}
+	if out != "ser-output" {
+		t.Fatalf("expected 'ser-output', got %v", out)
+	}
+}
+
+func TestResolvePipeline_RequiredMissing_Error(t *testing.T) {
+	reg := NewRegistry()
+	p := &Pipeline{
+		Name:  "test",
+		Nodes: []NodeDef{{Component: "missing"}},
+	}
+
+	_, err := ResolvePipeline(p, reg, nil)
+	if err == nil {
+		t.Fatal("expected error for missing required component")
+	}
+}
+
+func TestResolvePipeline_OptionalWithIncludes(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register("a", newFuncNode("a", nil))
+	// "b" is NOT registered
+
+	sub := &Pipeline{
+		Name: "sub",
+		Nodes: []NodeDef{
+			{Component: "b", Optional: true},
+		},
+	}
+
+	main := &Pipeline{
+		Name:     "main",
+		Includes: []string{"sub"},
+		Nodes: []NodeDef{
+			{Component: "a"},
+		},
+	}
+
+	loader := &memoryLoader{pipelines: map[string]*Pipeline{"sub": sub}}
+	g, err := ResolvePipeline(main, reg, loader)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Both nodes should be present
+	if len(g.Nodes) != 2 {
+		t.Fatalf("expected 2 nodes, got %d", len(g.Nodes))
+	}
+
+	// b should be unavailable
+	_, runErr := g.Nodes["b"].Run(context.Background(), NewState())
+	if !errors.Is(runErr, ErrUnavailable) {
+		t.Fatalf("expected b to return ErrUnavailable, got %v", runErr)
+	}
+}
+
+func TestResolvePipeline_NodeDefsStored(t *testing.T) {
+	reg := NewRegistry()
+	reg.Register("a", newFuncNode("a", nil))
+
+	p := &Pipeline{
+		Name: "test",
+		Nodes: []NodeDef{
+			{Component: "a", OnError: "continue"},
+		},
+	}
+
+	g, err := ResolvePipeline(p, reg, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	def := g.GetNodeDef("a")
+	if def.OnError != "continue" {
+		t.Fatalf("expected on_error='continue', got %q", def.OnError)
+	}
 }

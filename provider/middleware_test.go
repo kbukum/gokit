@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // --- Chain tests ---
@@ -273,5 +275,77 @@ func TestChain_AllMiddlewares(t *testing.T) {
 	}
 	if result != "echo:hello" {
 		t.Fatalf("expected echo:hello, got %q", result)
+	}
+}
+
+func TestChain_ThreePlusMiddlewares_WithCustom(t *testing.T) {
+	t.Parallel()
+	var order []string
+
+	customMW := func(inner provider.RequestResponse[string, string]) provider.RequestResponse[string, string] {
+		return &orderTracker[string, string]{inner: inner, tag: "custom", order: &order}
+	}
+
+	log := logging.NewDefault("test")
+	meter := observability.Meter("test")
+	metrics, err := observability.NewMetrics(meter)
+	if err != nil {
+		t.Fatalf("failed to create metrics: %v", err)
+	}
+
+	p := &echoProvider{name: "composed"}
+	wrapped := provider.Chain(
+		provider.WithLogging[string, string](log),
+		provider.WithMetrics[string, string](metrics),
+		provider.WithTracing[string, string]("test-svc"),
+		provider.Middleware[string, string](customMW),
+	)(p)
+
+	result, err := wrapped.Execute(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "echo:hello" {
+		t.Fatalf("expected echo:hello, got %q", result)
+	}
+
+	// Verify custom middleware was executed (among others)
+	hasCustomBefore, hasCustomAfter := false, false
+	for _, entry := range order {
+		if entry == "custom:before" {
+			hasCustomBefore = true
+		}
+		if entry == "custom:after" {
+			hasCustomAfter = true
+		}
+	}
+	if !hasCustomBefore || !hasCustomAfter {
+		t.Fatalf("custom middleware not executed, order=%v", order)
+	}
+}
+
+func TestChain_WithResilienceWrapper(t *testing.T) {
+	t.Parallel()
+	p := &echoProvider{name: "mw-res"}
+	log := logging.NewDefault("test")
+
+	chained := provider.Chain(
+		provider.WithLogging[string, string](log),
+	)(p)
+
+	resilient := provider.WithResilience(chained, provider.ResilienceConfig{
+		CircuitBreaker: &resilience.CircuitBreakerConfig{
+			Name:        "mw-res-cb",
+			MaxFailures: 5,
+			Timeout:     time.Second,
+		},
+	})
+
+	result, err := resilient.Execute(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "echo:test" {
+		t.Fatalf("expected echo:test, got %q", result)
 	}
 }

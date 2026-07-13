@@ -3,8 +3,11 @@ package tool_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/schema"
 	"github.com/kbukum/gokit/tool"
 )
@@ -124,14 +127,104 @@ func TestRegistry_Call_AuthorizerDenies(t *testing.T) {
 	}
 }
 
+type errAuthorizer struct{}
+
+func (errAuthorizer) Authorize(context.Context, tool.ToolCall) (allowed bool, reason string, err error) {
+	return false, "", errors.New("authz backend down")
+}
+
+func TestRegistry_Call_AuthorizerError(t *testing.T) {
+	t.Parallel()
+	r := tool.NewRegistry().WithAuthorizer(errAuthorizer{})
+	if err := r.Register(mkSensitiveTool(t, "x", nil)); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	_, err := r.Call(tool.Background(), "x", []byte(`{}`))
+	if err == nil || errors.Is(err, tool.ErrToolDenied) {
+		t.Fatalf("want internal authorize error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "authz backend down") {
+		t.Fatalf("error should wrap cause: %v", err)
+	}
+}
+
+type errEvaluator struct{}
+
+func (errEvaluator) Evaluate(context.Context, tool.ToolCall, tool.SensitivePredicate) (tool.Decision, string, error) {
+	return "", "", errors.New("evaluator exploded")
+}
+
+func TestRegistry_Call_EvaluatorError(t *testing.T) {
+	t.Parallel()
+	preds := []tool.SensitivePredicate{{JSONPath: "$.x", Matcher: tool.MatcherExists}}
+	r := tool.NewRegistry().WithSensitivityEvaluator(errEvaluator{})
+	if err := r.Register(mkSensitiveTool(t, "x", preds)); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	_, err := r.Call(tool.Background(), "x", []byte(`{"x":1}`))
+	if err == nil || !strings.Contains(err.Error(), "evaluator exploded") {
+		t.Fatalf("want wrapped evaluate error, got %v", err)
+	}
+}
+
+type unknownEvaluator struct{}
+
+func (unknownEvaluator) Evaluate(context.Context, tool.ToolCall, tool.SensitivePredicate) (tool.Decision, string, error) {
+	return tool.Decision("bogus"), "", nil
+}
+
+func TestRegistry_Call_UnknownDecisionFailsClosed(t *testing.T) {
+	t.Parallel()
+	preds := []tool.SensitivePredicate{{JSONPath: "$.x", Matcher: tool.MatcherExists}}
+	r := tool.NewRegistry().WithSensitivityEvaluator(unknownEvaluator{})
+	if err := r.Register(mkSensitiveTool(t, "x", preds)); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	_, err := r.Call(tool.Background(), "x", []byte(`{"x":1}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown evaluator decision") {
+		t.Fatalf("want unknown-decision error, got %v", err)
+	}
+}
+
+type errApprover struct{}
+
+func (errApprover) Approve(context.Context, tool.ToolCall) (bool, error) {
+	return false, errors.New("approver offline")
+}
+
+func TestRegistry_Call_ApproverError(t *testing.T) {
+	t.Parallel()
+	preds := []tool.SensitivePredicate{{JSONPath: "$.x", Matcher: tool.MatcherExists}}
+	r := tool.NewRegistry().
+		WithSensitivityEvaluator(approveAlways{}).
+		WithHumanApproval(errApprover{})
+	if err := r.Register(mkSensitiveTool(t, "x", preds)); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	_, err := r.Call(tool.Background(), "x", []byte(`{"x":1}`))
+	if err == nil || !strings.Contains(err.Error(), "approver offline") {
+		t.Fatalf("want wrapped approval error, got %v", err)
+	}
+}
+
+func TestRegistry_WithToolPolicy_EmptyNameIgnored(t *testing.T) {
+	t.Parallel()
+	r := tool.NewRegistry()
+	r.WithToolPolicy("", resilience.NewPolicy())
+	if got := r.PolicyFor(""); got != nil {
+		t.Fatalf("empty name should not store a policy, got %v", got)
+	}
+}
+
 func TestRegistry_PolicyFor_RoundTrip(t *testing.T) {
 	t.Parallel()
 	r := tool.NewRegistry()
-	r.WithToolPolicy("a", "policyA")
-	if got := r.PolicyFor("a"); got != "policyA" {
-		t.Fatalf("got %v", got)
+	policy := resilience.NewPolicy().WithTimeout(time.Second)
+	r.WithToolPolicy("a", policy)
+	if got := r.PolicyFor("a"); got != policy {
+		t.Fatalf("got %v, want %v", got, policy)
 	}
 	if got := r.PolicyFor("missing"); got != nil {
-		t.Fatalf("got %v", got)
+		t.Fatalf("got %v, want nil", got)
 	}
 }

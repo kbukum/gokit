@@ -42,6 +42,27 @@ func (m *mockComponent) Health(ctx context.Context) component.Health {
 	return m.health
 }
 
+// orderTrackingComponent records start/stop calls to a shared slice.
+type orderTrackingComponent struct {
+	name     string
+	order    *[]string
+	startErr error
+	stopErr  error
+	health   component.Health
+}
+
+func (o *orderTrackingComponent) Name() string { return o.name }
+func (o *orderTrackingComponent) Start(ctx context.Context) error {
+	*o.order = append(*o.order, o.name+":start")
+	return o.startErr
+}
+
+func (o *orderTrackingComponent) Stop(ctx context.Context) error {
+	*o.order = append(*o.order, o.name+":stop")
+	return o.stopErr
+}
+func (o *orderTrackingComponent) Health(ctx context.Context) component.Health { return o.health }
+
 func newTestConfig(name, version string) *testConfig {
 	return &testConfig{
 		ServiceConfig: config.ServiceConfig{

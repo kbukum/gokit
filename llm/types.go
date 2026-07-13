@@ -27,7 +27,12 @@ type CompletionRequest struct {
 	Tools         []ai.ToolSpec     `json:"tools,omitempty" yaml:"tools,omitempty"`
 	ToolChoice    *ToolChoice       `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	Extra         map[string]any    `json:"extra,omitempty" yaml:"extra"`
+	// Extra carries provider-specific request extensions as a raw JSON value
+	// that is merged into the outgoing request body. It is [RawJSON] rather than
+	// a decoded map so the public API stays free of any: each provider dialect
+	// decodes it at its own wire boundary. Like the rest of CompletionRequest it
+	// may be authored in JSON or YAML.
+	Extra RawJSON `json:"extra,omitempty" yaml:"extra,omitempty"`
 }
 
 type CompletionResponse struct {
