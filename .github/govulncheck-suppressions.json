@@ -43,11 +43,13 @@
         "skill",
         "stateful",
         "storage",
+        "storage/gcs",
         "storage/s3",
         "storage/testutil",
         "testutil",
         "tool",
         "vectorstore",
+        "vectorstore/qdrant",
         "workload",
         "workload/testutil"
       ],
