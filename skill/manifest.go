@@ -100,6 +100,13 @@ type Signature struct {
 	KeyID     string `yaml:"key_id" json:"key_id"`
 }
 
+// IsPresent reports whether the signature carries the fields required to
+// identify a signature scheme and payload. An empty or placeholder object
+// (e.g. `signature: {}` or a blank value) is not present.
+func (s *Signature) IsPresent() bool {
+	return s != nil && s.Algorithm != "" && s.Value != ""
+}
+
 // LoadManifest reads and parses a manifest file, enforcing MaxManifestBytes and
 // rejecting symlinks before reading.
 func LoadManifest(path string) (*Manifest, error) {

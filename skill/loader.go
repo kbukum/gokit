@@ -91,11 +91,21 @@ func NewLoader(opts ...LoaderOption) *Loader {
 // the manifest and any non-fatal verification warnings, and fails closed when
 // verification is denied.
 func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
-	manifest, err := loadManifest(filepath.Join(root, ManifestFileName), l.limits.Manifest)
+	canonRoot, err := fs.Canonicalize(root)
 	if err != nil {
 		return nil, nil, err
 	}
-	outcome, err := l.verifier.Verify(manifest, root)
+	return l.loadMetadata(canonRoot)
+}
+
+// loadMetadata verifies the manifest under an already-canonicalized root so the
+// verifier and warning logger see the same canonical root used for confinement.
+func (l *Loader) loadMetadata(canonRoot string) (*Manifest, []string, error) {
+	manifest, err := loadManifest(filepath.Join(canonRoot, ManifestFileName), l.limits.Manifest)
+	if err != nil {
+		return nil, nil, err
+	}
+	outcome, err := l.verifier.Verify(manifest, canonRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -103,7 +113,7 @@ func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
 	case VerificationVerified:
 		return manifest, nil, nil
 	case VerificationWarning:
-		l.logWarnings(root, outcome.Warnings)
+		l.logWarnings(canonRoot, outcome.Warnings)
 		return manifest, outcome.Warnings, nil
 	case VerificationDenied:
 		return nil, nil, fmt.Errorf("%w: %s", ErrVerificationDenied, outcome.Reason)
@@ -113,18 +123,19 @@ func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
 }
 
 // Load activates a skill pack: it loads verified metadata, the SKILL.md body,
-// and the inert reference and script asset inventory.
+// and the inert reference and script asset inventory. Every path is anchored to
+// the canonical pack root.
 func (l *Loader) Load(root string) (*Pack, error) {
 	canonRoot, err := fs.Canonicalize(root)
 	if err != nil {
 		return nil, err
 	}
-	manifest, warnings, err := l.LoadMetadata(root)
+	manifest, warnings, err := l.loadMetadata(canonRoot)
 	if err != nil {
 		return nil, err
 	}
 
-	mdPath := filepath.Join(root, SkillMarkdownFileName)
+	mdPath := filepath.Join(canonRoot, SkillMarkdownFileName)
 	if escErr := confineToRoot(canonRoot, mdPath); escErr != nil {
 		return nil, escErr
 	}
@@ -137,16 +148,16 @@ func (l *Loader) Load(root string) (*Pack, error) {
 	}
 
 	var total int64
-	refs, err := enumerateAssets(canonRoot, root, "references", &total, l.limits)
+	refs, err := enumerateAssets(canonRoot, "references", &total, l.limits)
 	if err != nil {
 		return nil, err
 	}
-	scripts, err := enumerateDeclaredScripts(canonRoot, root, manifest.Scripts, &total, l.limits)
+	scripts, err := enumerateDeclaredScripts(canonRoot, manifest.Scripts, &total, l.limits)
 	if err != nil {
 		return nil, err
 	}
 	return &Pack{
-		Root:                 root,
+		Root:                 canonRoot,
 		Manifest:             *manifest,
 		SkillBody:            splitFrontmatter(string(bodyBytes)),
 		References:           refs,
@@ -247,14 +258,14 @@ func hashAsset(path string, total *int64, limits Limits) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func enumerateDeclaredScripts(canonRoot, root string, scripts []Script, total *int64, limits Limits) ([]Asset, error) {
+func enumerateDeclaredScripts(canonRoot string, scripts []Script, total *int64, limits Limits) ([]Asset, error) {
 	assets := make([]Asset, 0, len(scripts))
 	for _, script := range scripts {
 		if err := fs.ValidateRelativePath(script.Path); err != nil {
 			return nil, fmt.Errorf("%w: invalid script path %q", ErrInvalidPackFile, script.Path)
 		}
 		clean := filepath.Clean(script.Path)
-		full := filepath.Join(root, clean)
+		full := filepath.Join(canonRoot, clean)
 		if err := confineToRoot(canonRoot, full); err != nil {
 			return nil, err
 		}
@@ -268,8 +279,8 @@ func enumerateDeclaredScripts(canonRoot, root string, scripts []Script, total *i
 	return assets, nil
 }
 
-func enumerateAssets(canonRoot, root, dir string, total *int64, limits Limits) ([]Asset, error) {
-	base := filepath.Join(root, filepath.Clean(dir))
+func enumerateAssets(canonRoot, dir string, total *int64, limits Limits) ([]Asset, error) {
+	base := filepath.Join(canonRoot, filepath.Clean(dir))
 	info, err := os.Lstat(base)
 	if err != nil {
 		if os.IsNotExist(err) {

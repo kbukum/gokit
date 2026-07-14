@@ -48,7 +48,7 @@ type WarnOnlyVerifier struct{}
 
 // Verify returns Verified for signed manifests and a Warning otherwise.
 func (WarnOnlyVerifier) Verify(manifest *Manifest, _ string) (VerificationOutcome, error) {
-	if manifest != nil && manifest.Signature != nil {
+	if manifest != nil && manifest.Signature.IsPresent() {
 		return Verified(), nil
 	}
 	return Warning("unsigned skill manifest"), nil

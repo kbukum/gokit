@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kbukum/gokit/fs"
 	"github.com/kbukum/gokit/skill"
 	"github.com/kbukum/gokit/util"
 )
@@ -161,6 +162,11 @@ func TestVerifierOutcomes(t *testing.T) {
 	unsigned := validManifest()
 	if out, _ := (skill.WarnOnlyVerifier{}).Verify(&unsigned, ""); out.Status != skill.VerificationWarning {
 		t.Fatalf("unsigned manifest should warn, got %+v", out)
+	}
+	placeholder := validManifest()
+	placeholder.Signature = &skill.Signature{}
+	if out, _ := (skill.WarnOnlyVerifier{}).Verify(&placeholder, ""); out.Status != skill.VerificationWarning {
+		t.Fatalf("placeholder signature should still warn, got %+v", out)
 	}
 	if out, _ := (skill.DenyVerifier{}).Verify(&signed, ""); out.Status != skill.VerificationDenied {
 		t.Fatalf("deny verifier should deny, got %+v", out)
@@ -413,5 +419,21 @@ func TestLoaderMissingSkillBodyReturnsIOError(t *testing.T) {
 	}
 	if errors.Is(err, skill.ErrInvalidPackFile) {
 		t.Fatalf("missing body should pass through as an IO error, got ErrInvalidPackFile: %v", err)
+	}
+}
+
+func TestLoaderPackRootIsCanonical(t *testing.T) {
+	dir := t.TempDir()
+	writePack(t, dir)
+	canon, err := fs.Canonicalize(dir)
+	if err != nil {
+		t.Fatalf("canonicalize: %v", err)
+	}
+	pack, err := skill.NewLoader().Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if pack.Root != canon {
+		t.Fatalf("pack root=%q, want canonical %q", pack.Root, canon)
 	}
 }

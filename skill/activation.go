@@ -17,7 +17,14 @@ func Activate(m Manifest, principalGrants, operatorCeiling []string, toolEnvelop
 		SkillName: m.Name,
 		Allowed:   true,
 		EffectiveSafety: EffectiveSafety(m, func(name string) tool.Safety {
-			return toolEnvelopes[name].Safety
+			env, ok := toolEnvelopes[name]
+			if !ok {
+				// A missing envelope means the referenced tool is unknown;
+				// report it as maximally unsafe so EffectiveSafety never
+				// under-reports on a denied decision.
+				return tool.SafetyDestructive
+			}
+			return env.Safety
 		}),
 		Tools: tools,
 	}

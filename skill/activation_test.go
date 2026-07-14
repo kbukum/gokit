@@ -60,6 +60,9 @@ func TestActivateDeniedWhenEnvelopeMissing(t *testing.T) {
 	if got.Allowed {
 		t.Fatal("expected denied for missing tool envelope")
 	}
+	if got.EffectiveSafety != tool.SafetyDestructive {
+		t.Fatalf("effective safety=%s, want destructive for missing envelope", got.EffectiveSafety)
+	}
 }
 
 func TestEffectiveSafetyMutatingManifest(t *testing.T) {
