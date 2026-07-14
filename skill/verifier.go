@@ -1,34 +1,57 @@
 package skill
 
-import (
-	"context"
-	"errors"
-	"log/slog"
+// VerificationStatus is the outcome kind of a manifest verification.
+type VerificationStatus int
+
+const (
+	// VerificationVerified indicates the manifest passed verification.
+	VerificationVerified VerificationStatus = iota
+	// VerificationWarning indicates verification succeeded with non-fatal warnings.
+	VerificationWarning
+	// VerificationDenied indicates verification rejected the manifest.
+	VerificationDenied
 )
 
-// ErrSignatureRejected is returned by DenyVerifier and signals that the
-// operator has chosen to reject all skill manifests until a real signature
-// verifier (Sigstore/cosign) is wired in.
-var ErrSignatureRejected = errors.New("skill: deny verifier rejects all signatures")
+// VerificationOutcome is the result of verifying a manifest at load time.
+type VerificationOutcome struct {
+	Status   VerificationStatus
+	Warnings []string
+	Reason   string
+}
 
-// Verifier validates a skill manifest's signature.
+// Verified reports a passing verification with no warnings.
+func Verified() VerificationOutcome { return VerificationOutcome{Status: VerificationVerified} }
+
+// Warning reports a passing verification carrying non-fatal warnings.
+func Warning(messages ...string) VerificationOutcome {
+	return VerificationOutcome{Status: VerificationWarning, Warnings: messages}
+}
+
+// Denied reports a rejected verification with a human-readable reason.
+func Denied(reason string) VerificationOutcome {
+	return VerificationOutcome{Status: VerificationDenied, Reason: reason}
+}
+
+// Verifier verifies a skill manifest at load time. The loader consults it after
+// parsing and validation: Denied fails the load, Warning is surfaced on the
+// pack, and Verified proceeds silently.
 //
 // Implementations MUST be safe for concurrent use.
 type Verifier interface {
-	Verify(manifestBytes []byte, sig Signature) error
+	Verify(manifest *Manifest, root string) (VerificationOutcome, error)
 }
 
-// WarnOnlyVerifier permits unsigned manifests with a warning log. Suitable
-// for development and tests; operators SHOULD pair it with DenyVerifier or a
-// real signature verifier in production.
-type WarnOnlyVerifier struct{ Logger *slog.Logger }
+// WarnOnlyVerifier permits unsigned manifests with a warning and treats any
+// signed manifest as verified. Suitable for development and tests; operators
+// SHOULD pair it with DenyVerifier or a real signature verifier in production.
+type WarnOnlyVerifier struct{}
 
-// Verify logs a warning when no signature is present and otherwise allows.
-func (v WarnOnlyVerifier) Verify(manifestBytes []byte, sig Signature) error {
-	if sig.Value == "" && v.Logger != nil {
-		v.Logger.WarnContext(context.Background(), "skill manifest signature missing", "manifest_bytes", len(manifestBytes))
+// Verify returns Verified for signed manifests and a Warning otherwise.
+func (WarnOnlyVerifier) Verify(manifest *Manifest, _ string) (VerificationOutcome, error) {
+	if manifest != nil && manifest.Signature != nil {
+		return Verified(), nil
 	}
-	return nil
+	return Warning("unsigned skill manifest"), nil
 }
 
 // DenyVerifier is the canonical operator-deny verifier: it rejects every
@@ -36,5 +59,7 @@ func (v WarnOnlyVerifier) Verify(manifestBytes []byte, sig Signature) error {
 // verifier (e.g., Sigstore/cosign) is wired in.
 type DenyVerifier struct{}
 
-// Verify always returns ErrSignatureRejected.
-func (DenyVerifier) Verify(_ []byte, _ Signature) error { return ErrSignatureRejected }
+// Verify always denies.
+func (DenyVerifier) Verify(*Manifest, string) (VerificationOutcome, error) {
+	return Denied("deny verifier: signatures rejected"), nil
+}

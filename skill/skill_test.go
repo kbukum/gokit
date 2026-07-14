@@ -56,7 +56,7 @@ signature:
   algorithm: ed25519
   value: abc
   key_id: test-key
-safety: read_only
+safety: read-only
 `
 
 func TestLoadManifestRejectsUnknownFields(t *testing.T) {
@@ -176,9 +176,6 @@ func TestManifestValidationFailures(t *testing.T) {
 func TestLoaderEdgeCasesAndVerifier(t *testing.T) {
 	if err := skill.Validate(nil); err == nil {
 		t.Fatal("nil manifest should fail")
-	}
-	if err := (skill.WarnOnlyVerifier{}).Verify(nil, skill.Signature{}); err != nil {
-		t.Fatal(err)
 	}
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, skill.ManifestFileName), manifest)

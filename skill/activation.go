@@ -1,6 +1,35 @@
 package skill
 
-import "github.com/kbukum/gokit/tool"
+import (
+	"fmt"
+
+	"github.com/kbukum/gokit/tool"
+)
+
+// Activate composes the effective safety and per-tool envelopes for a skill
+// into an ActivationDecision. The skill is Allowed only when every referenced
+// tool resolves to a present envelope whose required scopes survive
+// intersection with the principal grants and operator ceiling; otherwise the
+// decision fails closed and Reason names the first blocking tool.
+func Activate(m Manifest, principalGrants, operatorCeiling []string, toolEnvelopes map[string]tool.Envelope) ActivationDecision {
+	tools := EffectiveEnvelope(m, principalGrants, operatorCeiling, toolEnvelopes)
+	decision := ActivationDecision{
+		SkillName: m.Name,
+		Allowed:   true,
+		EffectiveSafety: EffectiveSafety(m, func(name string) tool.Safety {
+			return toolEnvelopes[name].Safety
+		}),
+		Tools: tools,
+	}
+	for i := range tools {
+		if !tools[i].Allowed {
+			decision.Allowed = false
+			decision.Reason = fmt.Sprintf("tool %q: %s", tools[i].Name, tools[i].Reason)
+			break
+		}
+	}
+	return decision
+}
 
 func EffectiveSafety(m Manifest, lookup func(toolName string) tool.Safety) tool.Safety {
 	maxSafety := toToolSafety(m.Safety)
