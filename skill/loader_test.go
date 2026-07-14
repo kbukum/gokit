@@ -386,3 +386,32 @@ func TestLoadReferenceDocRejectsEmptyName(t *testing.T) {
 		t.Fatalf("want ErrInvalidPackFile for empty name, got %v", err)
 	}
 }
+
+type badStatusVerifier struct{}
+
+func (badStatusVerifier) Verify(*skill.Manifest, string) (skill.VerificationOutcome, error) {
+	return skill.VerificationOutcome{Status: skill.VerificationStatus(99)}, nil
+}
+
+func TestLoaderFailsClosedOnUnknownVerificationStatus(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, skill.ManifestFileName), manifest)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "# body")
+	if _, err := skill.NewLoader(skill.WithVerifier(badStatusVerifier{})).Load(dir); !errors.Is(err, skill.ErrVerificationDenied) {
+		t.Fatalf("want ErrVerificationDenied for unknown status, got %v", err)
+	}
+}
+
+func TestLoaderMissingSkillBodyReturnsIOError(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, skill.ManifestFileName), manifest)
+	// SKILL.md is never written; the missing body is an IO failure, not a
+	// pack-file policy violation.
+	_, err := skill.NewLoader().Load(dir)
+	if err == nil {
+		t.Fatal("expected error for missing SKILL.md")
+	}
+	if errors.Is(err, skill.ErrInvalidPackFile) {
+		t.Fatalf("missing body should pass through as an IO error, got ErrInvalidPackFile: %v", err)
+	}
+}

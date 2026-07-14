@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/fs"
 )
 
@@ -99,13 +100,15 @@ func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
 		return nil, nil, err
 	}
 	switch outcome.Status {
-	case VerificationDenied:
-		return nil, nil, fmt.Errorf("%w: %s", ErrVerificationDenied, outcome.Reason)
+	case VerificationVerified:
+		return manifest, nil, nil
 	case VerificationWarning:
 		l.logWarnings(root, outcome.Warnings)
 		return manifest, outcome.Warnings, nil
+	case VerificationDenied:
+		return nil, nil, fmt.Errorf("%w: %s", ErrVerificationDenied, outcome.Reason)
 	default:
-		return manifest, nil, nil
+		return nil, nil, fmt.Errorf("%w: unknown verification status %d", ErrVerificationDenied, outcome.Status)
 	}
 }
 
@@ -316,13 +319,18 @@ func enumerateAssets(canonRoot, root, dir string, total *int64, limits Limits) (
 }
 
 // confineToRoot rejects path when, after resolving symlinks, it escapes
-// canonRoot. It reuses the fs owner's confinement and maps its error onto the
-// pack-file taxonomy so callers can match ErrInvalidPackFile.
+// canonRoot. It reuses the fs owner's confinement and maps only its policy
+// rejection (an escape) onto ErrInvalidPackFile; low-level IO failures (missing
+// or unreadable paths) are returned as-is per the package error taxonomy.
 func confineToRoot(canonRoot, path string) error {
-	if _, err := fs.ConfineExistingPath(canonRoot, path); err != nil {
+	_, err := fs.ConfineExistingPath(canonRoot, path)
+	if err == nil {
+		return nil
+	}
+	if appErr, ok := apperrors.AsAppError(err); ok && appErr.Code == apperrors.ErrCodeInvalidInput {
 		return fmt.Errorf("%w: %w", ErrInvalidPackFile, err)
 	}
-	return nil
+	return err
 }
 
 func splitFrontmatter(body string) string {
