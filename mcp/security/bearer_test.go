@@ -1,6 +1,7 @@
 package security
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,7 +35,10 @@ func TestParseBearer(t *testing.T) {
 func TestRequireBearerToken(t *testing.T) {
 	t.Parallel()
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
-	h := RequireBearerToken("s3cret", next)
+	h, err := RequireBearerToken("s3cret", next)
+	if err != nil {
+		t.Fatalf("RequireBearerToken: %v", err)
+	}
 
 	cases := []struct {
 		name   string
@@ -63,14 +67,15 @@ func TestRequireBearerToken(t *testing.T) {
 	}
 }
 
-func TestRequireBearerTokenEmptyPanics(t *testing.T) {
+func TestRequireBearerTokenEmptyFailsClosed(t *testing.T) {
 	t.Parallel()
-	defer func() {
-		if recover() == nil {
-			t.Fatal("empty token must panic to prevent unauthenticated deploy")
-		}
-	}()
-	RequireBearerToken("", http.NotFoundHandler())
+	h, err := RequireBearerToken("", http.NotFoundHandler())
+	if !errors.Is(err, ErrEmptyBearerToken) {
+		t.Fatalf("empty token must fail closed with ErrEmptyBearerToken, got err=%v", err)
+	}
+	if h != nil {
+		t.Fatal("empty token must not return a handler")
+	}
 }
 
 func FuzzParseBearer(f *testing.F) {

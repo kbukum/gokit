@@ -71,7 +71,10 @@ func (s *Server) StreamableHTTPHandler(cfg StreamableHTTPConfig, authToken strin
 	handler := sdkmcp.NewStreamableHTTPHandler(func(*http.Request) *sdkmcp.Server { return s.sdk }, opts)
 	wrapped := protection.Handler(handler)
 	if authToken != "" {
-		wrapped = security.RequireBearerToken(authToken, wrapped)
+		wrapped, err = security.RequireBearerToken(authToken, wrapped)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return wrapped, nil
 }
