@@ -1,17 +1,14 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
-	"log/slog"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Transport identifies a canonical MCP transport name.
+// Transport identifies a canonical MCP transport name. Only stdio and
+// Streamable HTTP are exposed; the obsolete standalone SSE transport is not.
 type Transport string
 
 const (
@@ -21,7 +18,8 @@ const (
 	TransportStreamableHTTP Transport = "streamable_http"
 )
 
-// ParseTransport validates a canonical MCP transport name.
+// ParseTransport validates a canonical MCP transport name, failing closed on
+// any unrecognized value.
 func ParseTransport(name string) (Transport, error) {
 	switch Transport(name) {
 	case TransportStdio, TransportStreamableHTTP:
@@ -29,71 +27,14 @@ func ParseTransport(name string) (Transport, error) {
 	default:
 		return "", fmt.Errorf(
 			"unsupported MCP transport %q: use %q or %q",
-			name,
-			TransportStdio,
-			TransportStreamableHTTP,
+			name, TransportStdio, TransportStreamableHTTP,
 		)
 	}
 }
 
-// StreamableHTTPConfig configures a hardened MCP Streamable HTTP handler.
-type StreamableHTTPConfig struct {
-	Stateless                  bool
-	JSONResponse               bool
-	Logger                     *slog.Logger
-	EventStore                 sdkmcp.EventStore
-	SessionTimeout             time.Duration
-	AllowedOrigins             []string
-	DisableLocalhostProtection bool
-}
-
-// NewStreamableHTTPOptions builds Streamable HTTP options with loopback protection enabled by default.
-// The returned CrossOriginProtection should be applied as middleware via protection.Handler(h).
-func NewStreamableHTTPOptions(cfg StreamableHTTPConfig) (*sdkmcp.StreamableHTTPOptions, *http.CrossOriginProtection, error) {
-	crossOriginProtection := http.NewCrossOriginProtection()
-	for _, origin := range cfg.AllowedOrigins {
-		normalizedOrigin, err := validateAllowedOrigin(origin)
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := crossOriginProtection.AddTrustedOrigin(normalizedOrigin); err != nil {
-			return nil, nil, fmt.Errorf("invalid allowed origin %q: %w", origin, err)
-		}
-	}
-	return &sdkmcp.StreamableHTTPOptions{
-		Stateless:                  cfg.Stateless,
-		JSONResponse:               cfg.JSONResponse,
-		Logger:                     cfg.Logger,
-		EventStore:                 cfg.EventStore,
-		SessionTimeout:             cfg.SessionTimeout,
-		DisableLocalhostProtection: cfg.DisableLocalhostProtection,
-	}, crossOriginProtection, nil
-}
-
-func validateAllowedOrigin(origin string) (string, error) {
-	parsed, err := url.Parse(origin)
-	if err != nil {
-		return "", fmt.Errorf("invalid allowed origin %q: %w", origin, err)
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", fmt.Errorf("invalid allowed origin %q: expected scheme and host", origin)
-	}
-	if parsed.Path != "" && parsed.Path != "/" {
-		return "", fmt.Errorf("origin must not contain a path: %s", origin)
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("origin must not contain query or fragment: %s", origin)
-	}
-	if parsed.User != nil {
-		return "", fmt.Errorf("origin must not contain user info: %s", origin)
-	}
-	if parsed.Opaque != "" {
-		return "", fmt.Errorf("invalid allowed origin %q: expected hierarchical URL", origin)
-	}
-	parsed.Scheme = strings.ToLower(parsed.Scheme)
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = ""
-	parsed.RawPath = ""
-	parsed.ForceQuery = false
-	return parsed.String(), nil
+// ServeStdio runs the server over the MCP stdio transport until ctx is
+// canceled or stdin closes. This is the default transport for local,
+// single-client MCP integrations (IDEs, agents).
+func (s *Server) ServeStdio(ctx context.Context) error {
+	return s.Run(ctx, &sdkmcp.StdioTransport{})
 }

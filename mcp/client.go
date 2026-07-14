@@ -8,6 +8,7 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/mcp/convert"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/schema"
 	"github.com/kbukum/gokit/tool"
@@ -44,7 +45,7 @@ func Connect(ctx context.Context, transport sdkmcp.Transport, opts *ConnectOptio
 		}
 		callables = append(callables, &remoteCallable{
 			session: session,
-			def:     mcpToolToDefinition(t),
+			def:     convert.ToDefinition(t),
 			mcpName: t.Name,
 			name:    name,
 		})
@@ -137,5 +138,5 @@ func (r *remoteCallable) Call(ctx *tool.Context, input json.RawMessage) (*tool.R
 		return nil, fmt.Errorf("mcp call %q: %w", r.name, err)
 	}
 
-	return mcpResultToResult(mcpResult), nil
+	return convert.ToToolResult(mcpResult), nil
 }

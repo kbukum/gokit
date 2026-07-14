@@ -1,4 +1,4 @@
-package mcp
+package convert
 
 import (
 	"encoding/json"
@@ -9,8 +9,8 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// definitionToMCPTool converts a kit tool.Definition to an MCP Tool.
-func definitionToMCPTool(def tool.Definition) *sdkmcp.Tool {
+// ToMCPTool converts a kit tool.Definition to an MCP Tool.
+func ToMCPTool(def tool.Definition) *sdkmcp.Tool {
 	t := &sdkmcp.Tool{
 		Name:        def.Name,
 		Description: def.Description,
@@ -66,8 +66,8 @@ func toMCPAnnotations(def tool.Definition) sdkmcp.ToolAnnotations {
 	return ann
 }
 
-// mcpToolToDefinition converts an MCP Tool to a kit tool.Definition.
-func mcpToolToDefinition(t *sdkmcp.Tool) tool.Definition {
+// ToDefinition converts an MCP Tool to a kit tool.Definition.
+func ToDefinition(t *sdkmcp.Tool) tool.Definition {
 	def := tool.Definition{
 		Name:        t.Name,
 		Description: t.Description,
@@ -136,8 +136,8 @@ func toSchemaJSON(v any) (schema.JSON, bool) {
 	return nil, false
 }
 
-// resultToMCPResult converts a kit tool.Result to an MCP CallToolResult.
-func resultToMCPResult(r *tool.Result) *sdkmcp.CallToolResult {
+// ToMCPResult converts a kit tool.Result to an MCP CallToolResult.
+func ToMCPResult(r *tool.Result) *sdkmcp.CallToolResult {
 	result := &sdkmcp.CallToolResult{
 		IsError: r.IsError,
 	}
@@ -161,8 +161,8 @@ func resultToMCPResult(r *tool.Result) *sdkmcp.CallToolResult {
 	return result
 }
 
-// mcpResultToResult converts an MCP CallToolResult to a kit tool.Result.
-func mcpResultToResult(r *sdkmcp.CallToolResult) *tool.Result {
+// ToToolResult converts an MCP CallToolResult to a kit tool.Result.
+func ToToolResult(r *sdkmcp.CallToolResult) *tool.Result {
 	result := &tool.Result{
 		IsError: r.IsError,
 	}

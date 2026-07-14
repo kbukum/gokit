@@ -1,74 +1,71 @@
-package mcp
+package mcp_test
 
 import (
-	"net/http"
-	"net/http/httptest"
+	"context"
 	"testing"
+	"time"
+
+	kitMcp "github.com/kbukum/gokit/mcp"
+	"github.com/kbukum/gokit/tool"
 )
 
 func TestParseTransport(t *testing.T) {
 	t.Parallel()
-
-	if transport, err := ParseTransport("stdio"); err != nil || transport != TransportStdio {
-		t.Fatalf("ParseTransport(stdio) = %q, %v", transport, err)
-	}
-	if transport, err := ParseTransport("streamable_http"); err != nil || transport != TransportStreamableHTTP {
-		t.Fatalf("ParseTransport(streamable_http) = %q, %v", transport, err)
-	}
-	if _, err := ParseTransport("sse"); err == nil {
-		t.Fatal("ParseTransport(sse) should reject obsolete transport names")
-	}
-}
-
-func TestNewStreamableHTTPOptions(t *testing.T) {
-	t.Parallel()
-
-	opts, protection, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
-		AllowedOrigins: []string{"HTTPS://APP.EXAMPLE.COM"},
-	})
-	if err != nil {
-		t.Fatalf("NewStreamableHTTPOptions() error = %v", err)
-	}
-	if opts.DisableLocalhostProtection {
-		t.Fatal("localhost protection should stay enabled by default")
-	}
-
-	trusted := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", http.NoBody)
-	trusted.Host = "127.0.0.1"
-	trusted.Header.Set("Origin", "https://app.example.com")
-	if err := protection.Check(trusted); err != nil {
-		t.Fatalf("trusted origin rejected: %v", err)
-	}
-
-	untrusted := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/mcp", http.NoBody)
-	untrusted.Host = "127.0.0.1"
-	untrusted.Header.Set("Origin", "https://evil.example.com")
-	if err := protection.Check(untrusted); err == nil {
-		t.Fatal("untrusted origin should be rejected")
-	}
-}
-
-func TestNewStreamableHTTPOptionsInvalidOrigin(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		origin string
+	valid := []struct {
+		in   string
+		want kitMcp.Transport
 	}{
-		{name: "missing scheme", origin: "localhost:3000"},
-		{name: "path", origin: "https://app.example.com/mcp"},
-		{name: "query", origin: "https://app.example.com?foo=bar"},
-		{name: "fragment", origin: "https://app.example.com#fragment"},
+		{"stdio", kitMcp.TransportStdio},
+		{"streamable_http", kitMcp.TransportStreamableHTTP},
 	}
+	for _, c := range valid {
+		got, err := kitMcp.ParseTransport(c.in)
+		if err != nil {
+			t.Errorf("ParseTransport(%q) unexpected error: %v", c.in, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("ParseTransport(%q) = %q want %q", c.in, got, c.want)
+		}
+	}
+	for _, in := range []string{"", "http", "sse", "STDIO", "grpc"} {
+		if _, err := kitMcp.ParseTransport(in); err == nil {
+			t.Errorf("ParseTransport(%q) must fail closed", in)
+		}
+	}
+}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if _, _, err := NewStreamableHTTPOptions(StreamableHTTPConfig{
-				AllowedOrigins: []string{tc.origin},
-			}); err == nil {
-				t.Fatalf("NewStreamableHTTPOptions() should reject %s origin %q", tc.name, tc.origin)
-			}
-		})
+func FuzzParseTransport(f *testing.F) {
+	for _, s := range []string{"stdio", "streamable_http", "sse", "", "x"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, name string) {
+		got, err := kitMcp.ParseTransport(name)
+		if err != nil {
+			return
+		}
+		// Only the two canonical transports may ever be accepted.
+		if got != kitMcp.TransportStdio && got != kitMcp.TransportStreamableHTTP {
+			t.Fatalf("accepted non-canonical transport %q", got)
+		}
+	})
+}
+
+func TestServeStdioReturnsOnCancel(t *testing.T) {
+	t.Parallel()
+	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry())
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- server.ServeStdio(ctx) }()
+
+	cancel()
+	select {
+	case <-done:
+		// Returned promptly after cancellation (error value is transport-dependent).
+	case <-time.After(3 * time.Second):
+		t.Fatal("ServeStdio did not return after context cancellation")
 	}
 }
