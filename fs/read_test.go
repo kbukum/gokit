@@ -2,6 +2,7 @@ package fs_test
 
 import (
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,5 +46,20 @@ func TestReadFileLimitRejectsDirectory(t *testing.T) {
 func TestReadFileLimitMissingFile(t *testing.T) {
 	if _, err := fs.ReadFileLimit(filepath.Join(t.TempDir(), "missing"), 16); err == nil {
 		t.Fatal("expected error for a missing file")
+	}
+}
+
+func TestReadFileLimitMaxInt64DoesNotOverflow(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := fs.ReadFileLimit(path, math.MaxInt64)
+	if err != nil {
+		t.Fatalf("max limit should read normally: %v", err)
+	}
+	if string(data) != "hello" {
+		t.Fatalf("data=%q", data)
 	}
 }

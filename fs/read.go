@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 
@@ -45,7 +46,13 @@ func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
 	if info.Size() > maxBytes {
 		return nil, fmt.Errorf("%w: %s (limit %d bytes)", ErrFileTooLarge, path, maxBytes)
 	}
-	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	// Read one byte past the limit to detect a file that grew after Stat,
+	// guarding against overflow when maxBytes is at its maximum.
+	probe := maxBytes
+	if probe < math.MaxInt64 {
+		probe++
+	}
+	data, err := io.ReadAll(io.LimitReader(f, probe))
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
 			fmt.Sprintf("failed to read '%s': %v", path, err),

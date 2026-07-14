@@ -2,9 +2,11 @@ package skill
 
 import "errors"
 
-// Sentinel errors for skill manifest, loading, verification, and registry
-// failures. Callers match with errors.Is; every returned error wraps one of
-// these so untrusted-input failures are classifiable and fail closed.
+// Sentinel errors for classifiable skill manifest, loading, verification, and
+// registry failures. Policy rejections (invalid manifest, parse/size/UTF-8/path
+// violations, verification denial, duplicate registration) wrap one of these so
+// callers can match with errors.Is; low-level IO failures (missing or unreadable
+// files) are returned as-is.
 var (
 	// ErrManifestInvalid marks a manifest that failed schema validation.
 	ErrManifestInvalid = errors.New("skill: invalid manifest")

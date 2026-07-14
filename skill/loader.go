@@ -216,8 +216,24 @@ func readBounded(path string, maxBytes int64) ([]byte, error) {
 }
 
 func hashAsset(path string, total *int64, limits Limits) (string, error) {
-	data, err := readBounded(path, limits.Asset)
+	remaining := limits.AssetTotal - *total
+	if remaining < 0 {
+		remaining = 0
+	}
+	// Bound this read by the smaller of the per-asset and remaining-total
+	// budgets so an oversized asset never fully materializes in memory before
+	// the aggregate limit is enforced.
+	limit := limits.Asset
+	overTotal := false
+	if remaining < limit {
+		limit = remaining
+		overTotal = true
+	}
+	data, err := readBounded(path, limit)
 	if err != nil {
+		if overTotal && errors.Is(err, ErrFileTooLarge) {
+			return "", fmt.Errorf("%w: reading %s", ErrAssetsTooLarge, path)
+		}
 		return "", err
 	}
 	*total += int64(len(data))
