@@ -17,9 +17,11 @@ var ErrEmptyBearerToken = errors.New("mcp: RequireBearerToken requires a non-emp
 // query strings. It fails closed on an empty token by returning
 // ErrEmptyBearerToken so a misconfiguration cannot silently disable auth.
 //
-// Comparison is constant-time regardless of the presented token's length:
-// both sides are reduced to a fixed-size SHA-256 digest before comparison, so
-// no timing side channel leaks the configured token's length.
+// Comparison of the presented and configured tokens is constant-time and does
+// not leak the configured secret's length: both are reduced to a fixed-size
+// SHA-256 digest before comparison. (Hashing the presented token is itself
+// O(len(token)); the constant-time property covers the comparison, not the
+// per-request hashing work.)
 func RequireBearerToken(token string, next http.Handler) (http.Handler, error) {
 	if token == "" {
 		return nil, ErrEmptyBearerToken

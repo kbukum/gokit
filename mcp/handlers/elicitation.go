@@ -25,10 +25,10 @@ func (h *Handler) Elicit(ctx context.Context, ss *sdkmcp.ServerSession, params *
 	if res == nil {
 		return nil, fmt.Errorf("mcp: elicitation returned no result")
 	}
-	if size := marshaledSize(res.Content); h.policy.ResultTooLarge(size) {
+	if reason, tooLarge := h.contentTooLarge(res.Content); tooLarge {
 		h.policy.AuditAccess(ctx, "elicitation", "elicitation/create", security.OutcomeResultTooLarge,
-			fmt.Sprintf("elicited content size %d exceeds limit %d", size, h.policy.MaxResultBytes))
-		return nil, fmt.Errorf("mcp: elicited content too large: exceeds %d bytes", h.policy.MaxResultBytes)
+			"elicited content "+reason)
+		return nil, fmt.Errorf("mcp: elicited content too large: %s", reason)
 	}
 	h.policy.AuditAccess(ctx, "elicitation", "elicitation/create", security.OutcomeSuccess, res.Action)
 	return res, nil

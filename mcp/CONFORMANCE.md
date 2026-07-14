@@ -27,7 +27,7 @@ Transports are locked to `stdio` and `streamable_http`; `sse` is not exposed as 
 | streamable_http transport | Present | Canonical name `streamable_http`; SSE is not a separate transport. |
 | Origin validation | Present | `NewStreamableHTTPOptions` validates and normalizes configured origins (rejects paths/queries/fragments/credentials/non-http/opaque) and preloads `http.CrossOriginProtection`. |
 | localhost bind | Present | SDK Streamable HTTP localhost protection stays enabled by default (`DisableLocalhostProtection` opt-in). |
-| HTTP bearer auth | Present | `StreamableHTTPHandler` optionally wraps the handler with constant-time bearer-token auth (token in header only; empty token panics at construction). |
+| HTTP bearer auth | Present | `StreamableHTTPHandler` optionally wraps the handler with constant-time bearer-token auth (token in header only; an empty token fails closed with `ErrEmptyBearerToken`). |
 | payload limits | Present | `WithMaxInputBytes`/`WithMaxResultBytes` enforce tool input/result payload policy; sampling/elicitation content is size-limited too. |
 | OAuth 2.1 + PKCE | Partial | Helper/options seam is composition-owned; this module does not implement a full authorization server. |
 
