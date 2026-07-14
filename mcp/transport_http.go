@@ -69,12 +69,15 @@ func (s *Server) StreamableHTTPHandler(cfg StreamableHTTPConfig, authToken strin
 		return nil, err
 	}
 	handler := sdkmcp.NewStreamableHTTPHandler(func(*http.Request) *sdkmcp.Server { return s.sdk }, opts)
-	wrapped := protection.Handler(handler)
+	var inner http.Handler = handler
 	if authToken != "" {
-		wrapped, err = security.RequireBearerToken(authToken, wrapped)
+		inner, err = security.RequireBearerToken(authToken, inner)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return wrapped, nil
+	// Origin/loopback cross-origin protection is the outermost guard, so blocked
+	// origins are rejected before the bearer challenge and never observe auth
+	// behavior.
+	return protection.Handler(inner), nil
 }

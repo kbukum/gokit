@@ -109,7 +109,12 @@ func (h *Handler) makeToolHandler(toolName, mcpName string) sdkmcp.ToolHandler {
 			return errorResult(err.Error()), nil //nolint:nilerr // fail-closed MCP error envelope
 		}
 
-		if result != nil && result.IsError {
+		if result == nil {
+			event.Outcome, event.Error = security.OutcomeToolError, "tool returned no result"
+			return errorResult("tool returned no result"), nil
+		}
+
+		if result.IsError {
 			event.Outcome, event.Error = security.OutcomeToolError, result.Text()
 			return convert.ToMCPResult(result), nil
 		}

@@ -11,12 +11,12 @@ import (
 // measured fails closed rather than bypassing the size gate. reason is a
 // human-readable rejection cause when tooLarge is true.
 func (h *Handler) contentTooLarge(v any) (reason string, tooLarge bool) {
+	if h.policy.MaxResultBytes <= 0 {
+		return "", false
+	}
 	data, err := json.Marshal(v)
 	if err != nil {
-		if h.policy.MaxResultBytes > 0 {
-			return fmt.Sprintf("content is not serializable and cannot be checked against limit %d", h.policy.MaxResultBytes), true
-		}
-		return "", false
+		return fmt.Sprintf("content is not serializable and cannot be checked against limit %d", h.policy.MaxResultBytes), true
 	}
 	if size := len(data); h.policy.ResultTooLarge(size) {
 		return fmt.Sprintf("size %d exceeds limit %d", size, h.policy.MaxResultBytes), true

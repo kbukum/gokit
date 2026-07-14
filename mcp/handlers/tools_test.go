@@ -32,6 +32,20 @@ func addTool() tool.Callable {
 	}).AsCallable()
 }
 
+// nilResultCallable models an untrusted tool that returns (nil, nil); the
+// handler must fail closed rather than dereference the nil result.
+type nilResultCallable struct{}
+
+func (nilResultCallable) Definition() tool.Definition { return tool.Definition{Name: "void"} }
+
+func (nilResultCallable) Validate(json.RawMessage) schema.ValidationResult {
+	return schema.ValidationResult{Valid: true}
+}
+
+func (nilResultCallable) Call(*tool.Context, json.RawMessage) (*tool.Result, error) {
+	return nil, nil //nolint:nilnil // models an untrusted tool returning no result
+}
+
 // auditSink is a concurrency-safe capturing auditor for handler tests.
 type auditSink struct {
 	mu     sync.Mutex
@@ -105,6 +119,19 @@ func TestToolHandlerSuccess(t *testing.T) {
 	}
 	if sink.last().Attributes["outcome"] != security.OutcomeSuccess {
 		t.Errorf("expected success outcome, got %q", sink.last().Attributes["outcome"])
+	}
+}
+
+func TestToolHandlerNilResultFailsClosed(t *testing.T) {
+	t.Parallel()
+	sink := &auditSink{}
+	h := newHandler(t, regWith(t, nilResultCallable{}), &security.Policy{Auditor: sink})
+	res := invoke(t, h, "void", "void", nil)
+	if !res.IsError {
+		t.Fatal("nil tool result must fail closed with an error result")
+	}
+	if sink.last().Attributes["outcome"] != security.OutcomeToolError {
+		t.Errorf("expected tool_error outcome, got %q", sink.last().Attributes["outcome"])
 	}
 }
 
