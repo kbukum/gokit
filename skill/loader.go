@@ -184,8 +184,11 @@ func (p *Pack) LoadReferenceDoc(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	full := filepath.Join(p.Root, "references", filepath.Clean(name))
+	full := filepath.Join(canonRoot, "references", filepath.Clean(name))
 	if err := confineToRoot(canonRoot, full); err != nil {
+		return nil, err
+	}
+	if err := rejectSymlinkSegments(canonRoot, full); err != nil {
 		return nil, err
 	}
 	return readBounded(full, p.limits.withDefaults().Asset)
@@ -206,6 +209,29 @@ func rejectSymlink(path string) error {
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("%w: symlinked files are not allowed: %s", ErrInvalidPackFile, path)
+	}
+	return nil
+}
+
+// rejectSymlinkSegments rejects a symlink on any path segment between canonRoot
+// (exclusive) and full (inclusive). Confinement alone permits symlinked
+// directories that still resolve under the root, so this enforces the loader's
+// reject-symlinks policy on every segment and closes the path-confusion / TOCTOU
+// gap that a symlinked intermediate directory would otherwise reopen.
+func rejectSymlinkSegments(canonRoot, full string) error {
+	rel, err := filepath.Rel(canonRoot, full)
+	if err != nil {
+		return err
+	}
+	current := canonRoot
+	for _, segment := range strings.Split(rel, string(os.PathSeparator)) {
+		if segment == "" || segment == "." {
+			continue
+		}
+		current = filepath.Join(current, segment)
+		if err := rejectSymlink(current); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -267,6 +293,9 @@ func enumerateDeclaredScripts(canonRoot string, scripts []Script, total *int64, 
 		clean := filepath.Clean(script.Path)
 		full := filepath.Join(canonRoot, clean)
 		if err := confineToRoot(canonRoot, full); err != nil {
+			return nil, err
+		}
+		if err := rejectSymlinkSegments(canonRoot, full); err != nil {
 			return nil, err
 		}
 		digest, err := hashAsset(full, total, limits)

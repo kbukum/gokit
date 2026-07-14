@@ -143,6 +143,39 @@ func TestLoadReferenceDocRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestLoadReferenceDocReadsDeclaredReference(t *testing.T) {
+	dir := t.TempDir()
+	writePack(t, dir)
+	pack, err := skill.NewLoader().Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := pack.LoadReferenceDoc("a.md")
+	if err != nil {
+		t.Fatalf("read reference: %v", err)
+	}
+	if string(data) != "ref" {
+		t.Fatalf("reference content=%q, want %q", data, "ref")
+	}
+}
+
+func TestLoadReferenceDocRejectsSymlinkedSubdir(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "references", "real"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "references", "real", "doc.md"), "hi")
+	// A symlinked directory resolving inside the pack passes confinement, so
+	// only per-segment symlink rejection can catch it.
+	if err := os.Symlink("real", filepath.Join(dir, "references", "link")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	pack := skill.Pack{Root: dir}
+	if _, err := pack.LoadReferenceDoc("link/doc.md"); !errors.Is(err, skill.ErrInvalidPackFile) {
+		t.Fatalf("want ErrInvalidPackFile for reference via symlinked dir, got %v", err)
+	}
+}
+
 func TestRegistryDuplicateWrapsSentinel(t *testing.T) {
 	reg := skill.NewRegistry()
 	if err := reg.Register(provider{manifest: validManifest()}); err != nil {
@@ -295,6 +328,23 @@ func TestLoaderRejectsOversizedScript(t *testing.T) {
 	loader := skill.NewLoader(skill.WithLimits(skill.Limits{Asset: 8}))
 	if _, err := loader.Load(dir); !errors.Is(err, skill.ErrFileTooLarge) {
 		t.Fatalf("want ErrFileTooLarge for oversized script, got %v", err)
+	}
+}
+
+func TestLoaderRejectsScriptThroughSymlinkedDir(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, skill.ManifestFileName), manifest)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "# body")
+	writeFile(t, filepath.Join(dir, "references", "a.md"), "ref")
+	// The declared script lives at scripts/run.sh, but "scripts" is a symlink
+	// to a real directory inside the pack. It passes confinement, so only
+	// per-segment symlink rejection can enforce the reject-symlinks policy.
+	writeFile(t, filepath.Join(dir, "real", "run.sh"), "echo nope")
+	if err := os.Symlink("real", filepath.Join(dir, "scripts")); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+	if _, err := skill.NewLoader().Load(dir); !errors.Is(err, skill.ErrInvalidPackFile) {
+		t.Fatalf("want ErrInvalidPackFile for script via symlinked dir, got %v", err)
 	}
 }
 

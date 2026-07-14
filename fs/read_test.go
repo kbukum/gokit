@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/fs"
 )
 
@@ -46,6 +47,25 @@ func TestReadFileLimitRejectsDirectory(t *testing.T) {
 func TestReadFileLimitMissingFile(t *testing.T) {
 	if _, err := fs.ReadFileLimit(filepath.Join(t.TempDir(), "missing"), 16); err == nil {
 		t.Fatal("expected error for a missing file")
+	}
+}
+
+func TestReadFileLimitRejectsNegativeLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "f.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := fs.ReadFileLimit(path, -1)
+	if err == nil {
+		t.Fatal("expected error for negative maxBytes")
+	}
+	if errors.Is(err, fs.ErrFileTooLarge) {
+		t.Fatalf("negative maxBytes must not masquerade as ErrFileTooLarge: %v", err)
+	}
+	appErr, ok := apperrors.AsAppError(err)
+	if !ok || appErr.Code != apperrors.ErrCodeInvalidInput {
+		t.Fatalf("want InvalidInput AppError, got %v", err)
 	}
 }
 

@@ -22,11 +22,16 @@ var (
 )
 
 // ReadFileLimit reads at most maxBytes from a regular file, failing closed once
-// the limit is exceeded so a caller never buffers an unbounded file. It resolves
+// the limit is exceeded so a caller never buffers an unbounded file. A negative
+// maxBytes is rejected with an InvalidInput [apperrors.AppError]. It resolves
 // symlinks like [os.Open]; callers that must reject symlinks verify the path
 // first. A non-regular target yields [ErrNotRegularFile], an oversized file
 // yields [ErrFileTooLarge], and other IO failures return a typed AppError.
 func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes < 0 {
+		return nil, apperrors.InvalidInput("maxBytes",
+			fmt.Sprintf("maxBytes must be non-negative, got %d", maxBytes))
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		code, status := osErrorCode(err)
