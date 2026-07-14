@@ -46,26 +46,26 @@ type SubprocessOutput struct {
 // Uses the process package for argv-only execution, process group isolation,
 // and SIGTERM→SIGKILL graceful shutdown.
 func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, SubprocessOutput] {
-	cfg = cfg.withDefaults()
+	base := cfg.withDefaults().Command
+
+	maxLineBytes := base.MaxOutputBytes
+	if maxLineBytes <= 0 {
+		maxLineBytes = defaultSubprocessLineBytes
+	}
+	if base.MaxOutputBytes <= 0 {
+		base.MaxOutputBytes = maxLineBytes
+	}
 
 	return HandlerFunc[SubprocessInput, SubprocessOutput](func(
 		ctx context.Context, task SubprocessInput, emit func(Event[SubprocessOutput]),
 	) error {
-		if cfg.Command.Binary == "" {
+		if base.Binary == "" {
 			return fmt.Errorf("worker: subprocess binary is required")
 		}
 
-		cmd := cfg.Command
+		cmd := base
 		cmd.Args = task.Args
 		cmd.Stdin = task.Stdin
-
-		maxLineBytes := cfg.Command.MaxOutputBytes
-		if maxLineBytes <= 0 {
-			maxLineBytes = defaultSubprocessLineBytes
-		}
-		if cmd.MaxOutputBytes <= 0 {
-			cmd.MaxOutputBytes = maxLineBytes
-		}
 
 		lines := map[process.StreamName]*lineEmitter{
 			process.StreamStdout: {stream: string(process.StreamStdout), maxBytes: maxLineBytes, emit: emit},
@@ -79,9 +79,9 @@ func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, Subproc
 		}
 		if err != nil {
 			if ctx.Err() != nil {
-				return fmt.Errorf("worker: %s killed by context: %w", cfg.Command.Binary, ctx.Err())
+				return fmt.Errorf("worker: %s killed by context: %w", base.Binary, ctx.Err())
 			}
-			return fmt.Errorf("worker: %s: %w", cfg.Command.Binary, err)
+			return fmt.Errorf("worker: %s: %w", base.Binary, err)
 		}
 
 		return nil

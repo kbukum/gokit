@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **llm**: `CompleteStructured[T]` is now generic, decoding model output into a concrete `T`
   and returning the zero value (never a partial one) on decode failure.
 
+### Changed (Breaking API Changes) — Hardened MCP protocol server
+- **mcp**: reshaped from a flat tool-bridge into a protocol-shaped, hardened server split by
+  concern (`security`, `convert`, `handlers`, thin composition root). `NewServer` now returns
+  a typed `*mcp.Server` (was the raw SDK server); transports are exposed as `Server.ServeStdio`
+  and `Server.StreamableHTTPHandler`, and only `stdio` + Streamable HTTP are supported (the
+  obsolete standalone SSE transport is dropped).
+- **mcp**: every `tools/call` runs a fail-closed hardening chain — capability allow-list →
+  input-size limit → JSON-Schema validation → authorization (`authz`) → registry human-in-the-
+  loop destructive gate → result-size limit → output-schema validation → audit
+  (`observability`). Untrusted client/model payloads stay typed as `json.RawMessage`; documented
+  JSON-Schema is `schema.JSON`.
+
+### Added — MCP protocol surface & hardening
+- **mcp**: protocol coverage for prompts, resources + templates (with subscribe), roots,
+  sampling, elicitation, progress, and logging; server→client sampling/elicitation size-limit
+  untrusted model/elicited content and fail closed.
+- **mcp**: Streamable HTTP hardening — Origin validation/normalization preloaded into
+  `http.CrossOriginProtection` (rejects paths/queries/fragments/credentials/opaque/non-http),
+  localhost protection on by default, and optional constant-time bearer-token auth (header only).
+
 ### Added — Typed AI/LLM/tool APIs & Inference Streaming
 - **ai**: `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy
   coercion.
