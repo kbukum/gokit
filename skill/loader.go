@@ -217,11 +217,15 @@ func rejectSymlink(path string) error {
 // (exclusive) and full (inclusive). Confinement alone permits symlinked
 // directories that still resolve under the root, so this enforces the loader's
 // reject-symlinks policy on every segment and closes the path-confusion / TOCTOU
-// gap that a symlinked intermediate directory would otherwise reopen.
+// gap that a symlinked intermediate directory would otherwise reopen. It fails
+// closed when full escapes canonRoot instead of probing paths outside the pack.
 func rejectSymlinkSegments(canonRoot, full string) error {
 	rel, err := filepath.Rel(canonRoot, full)
 	if err != nil {
 		return err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("%w: %s escapes pack root", ErrInvalidPackFile, full)
 	}
 	current := canonRoot
 	for _, segment := range strings.Split(rel, string(os.PathSeparator)) {
