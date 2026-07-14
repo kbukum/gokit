@@ -69,7 +69,7 @@ func TestAuthorize(t *testing.T) {
 		seen = req
 		return authz.Decision{Allowed: false, Reason: "nope"}, nil
 	})}
-	dec, err = p.Authorize(context.Background(), ToolAuthorizationRequest{ToolName: "del", MCPName: "svc_del"})
+	dec, err = p.Authorize(context.Background(), ToolAuthorizationRequest{ToolName: "del", MCPName: "svc_del", Arguments: json.RawMessage(`{"id":1}`)})
 	if err != nil {
 		t.Fatalf("decide: %v", err)
 	}
@@ -81,6 +81,9 @@ func TestAuthorize(t *testing.T) {
 	}
 	if seen.Context["mcp_name"] != "svc_del" {
 		t.Errorf("expected mcp_name in context, got %v", seen.Context)
+	}
+	if seen.Context["arguments"] != `{"id":1}` {
+		t.Errorf("expected raw arguments forwarded to decider, got %v", seen.Context)
 	}
 }
 

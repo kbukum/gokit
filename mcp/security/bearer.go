@@ -30,7 +30,8 @@ func RequireBearerToken(token string, next http.Handler) (http.Handler, error) {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, ok := parseBearer(r.Header.Get("Authorization"))
 		gotSum := sha256.Sum256([]byte(got))
-		if !ok || subtle.ConstantTimeCompare(gotSum[:], want[:]) != 1 {
+		match := subtle.ConstantTimeCompare(gotSum[:], want[:]) == 1
+		if !ok || !match {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

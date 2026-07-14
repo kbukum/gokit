@@ -30,8 +30,10 @@ const (
 )
 
 // ToolAuthorizationRequest is the input to a per-call tool authorization
-// decision. Arguments are the validated, untrusted client payload and are
-// carried as raw JSON so the decision hook never sees an opaque any.
+// decision. Arguments are the validated, untrusted client payload, carried as
+// raw JSON (never an opaque any). Policy.Authorize forwards the tool identity
+// and, when present, this raw argument payload to the injected authz.Decider
+// under the "mcp_name" and "arguments" context attributes.
 type ToolAuthorizationRequest struct {
 	// ToolName is the registry tool name (prefix stripped).
 	ToolName string

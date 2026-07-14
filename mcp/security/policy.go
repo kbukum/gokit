@@ -83,10 +83,14 @@ func (p *Policy) Authorize(ctx context.Context, req ToolAuthorizationRequest) (a
 }
 
 func authzRequest(req ToolAuthorizationRequest) authz.Request {
+	ctx := authz.Attributes{"mcp_name": req.MCPName}
+	if len(req.Arguments) > 0 {
+		ctx["arguments"] = string(req.Arguments)
+	}
 	return authz.Request{
 		Resource: authz.Resource{Type: "tool", ID: req.ToolName},
 		Action:   authz.ActionToolInvoke,
-		Context:  authz.Attributes{"mcp_name": req.MCPName},
+		Context:  ctx,
 	}
 }
 
