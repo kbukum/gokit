@@ -36,7 +36,7 @@ func (r *MemoryRegistry) Register(provider Provider) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.providers[m.Name]; exists {
-		return fmt.Errorf("skill: provider %q already registered", m.Name)
+		return fmt.Errorf("%w: provider %q", ErrAlreadyRegistered, m.Name)
 	}
 	r.providers[m.Name] = provider
 	return nil
