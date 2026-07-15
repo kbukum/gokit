@@ -29,14 +29,17 @@ var ErrImageTooLarge = errors.New("media: image exceeds maximum decode dimension
 //
 // It supports the pure-Go stdlib formats (JPEG, PNG, GIF); other detected image
 // formats wrap [ErrUnsupported]. Decode failures on a supported format (corrupt
-// or truncated data) preserve the underlying cause instead.
+// or truncated data) preserve the underlying cause instead. On any error the
+// returned [Format] is a best-effort signature detection (via [Detect]), which
+// may be [FormatUnknown] when the bytes match no known signature.
 func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 	cfg, name, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
+		detected := Detect(data).Format
 		if errors.Is(err, image.ErrFormat) {
-			return image.Config{}, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+			return image.Config{}, detected, fmt.Errorf("%w: %w", ErrUnsupported, err)
 		}
-		return image.Config{}, FormatUnknown, fmt.Errorf("media: decode config: %w", err)
+		return image.Config{}, detected, fmt.Errorf("media: decode config: %w", err)
 	}
 	return cfg, stdlibFormat(name), nil
 }
@@ -46,10 +49,12 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 // whose declared dimensions exceed [MaxDecodePixels] (wrapping [ErrImageTooLarge])
 // to bound memory use on untrusted content. Unrecognized formats wrap
 // [ErrUnsupported]; decode failures on a supported format preserve the cause.
+// On every error path the returned [Format] is the best-effort detected format
+// (which may be [FormatUnknown]), never silently discarded.
 func Decode(data []byte) (img image.Image, format Format, err error) {
 	cfg, format, err := DecodeConfig(data)
 	if err != nil {
-		return nil, FormatUnknown, err
+		return nil, format, err
 	}
 	if int64(cfg.Width)*int64(cfg.Height) > MaxDecodePixels {
 		return nil, format, fmt.Errorf("%w: %dx%d", ErrImageTooLarge, cfg.Width, cfg.Height)
@@ -57,7 +62,7 @@ func Decode(data []byte) (img image.Image, format Format, err error) {
 	img, name, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		if errors.Is(err, image.ErrFormat) {
-			return nil, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+			return nil, format, fmt.Errorf("%w: %w", ErrUnsupported, err)
 		}
 		return nil, format, fmt.Errorf("media: decode: %w", err)
 	}

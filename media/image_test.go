@@ -110,12 +110,40 @@ func TestDecodeConfig_CorruptSupportedFormatPreservesCause(t *testing.T) {
 	// Keep the 8-byte PNG signature (so the format is recognized) but cut off
 	// the IHDR header so decoding the config fails on a supported format.
 	truncated := full[:12]
-	_, _, err := DecodeConfig(truncated)
+	_, format, err := DecodeConfig(truncated)
 	if err == nil {
 		t.Fatal("expected error for truncated PNG")
 	}
 	if errors.Is(err, ErrUnsupported) {
 		t.Errorf("truncated PNG should not wrap ErrUnsupported, got %v", err)
+	}
+	// The error path still reports the best-effort detected format.
+	if format != FormatPNG {
+		t.Errorf("format = %q, want best-effort png on error", format)
+	}
+	// Decode surfaces the same best-effort format on its error path.
+	if _, dformat, derr := Decode(truncated); derr == nil || dformat != FormatPNG {
+		t.Errorf("Decode(truncated) = (%q, %v), want (png, error)", dformat, derr)
+	}
+}
+
+// riffWebP builds a minimal RIFF/WEBP header: detected as WebP but not decodable
+// by the stdlib, so it is an unsupported-but-known format.
+func riffWebP() []byte {
+	d := make([]byte, 12)
+	copy(d[0:4], "RIFF")
+	copy(d[8:12], "WEBP")
+	return d
+}
+
+func TestDecodeConfig_UnsupportedKnownFormatReportsFormat(t *testing.T) {
+	t.Parallel()
+	_, format, err := DecodeConfig(riffWebP())
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("expected ErrUnsupported for WebP, got %v", err)
+	}
+	if format != FormatWebP {
+		t.Errorf("format = %q, want best-effort webp on error", format)
 	}
 }
 
