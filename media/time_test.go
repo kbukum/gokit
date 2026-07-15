@@ -1,6 +1,7 @@
 package media
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -20,6 +21,9 @@ func TestTimestamp_Constructors(t *testing.T) {
 		{"seconds negative clamps", TimestampFromSeconds(-2), 0},
 		{"duration", TimestampFromDuration(3 * time.Second), 3_000_000},
 		{"duration negative clamps", TimestampFromDuration(-time.Second), 0},
+		{"millis overflow saturates", TimestampFromMillis(math.MaxInt64/1000 + 1), math.MaxInt64},
+		{"seconds overflow saturates", TimestampFromSeconds(1e18), math.MaxInt64},
+		{"seconds NaN clamps", TimestampFromSeconds(math.NaN()), 0},
 	}
 	for _, tt := range tests {
 		if tt.got != tt.want {
@@ -53,6 +57,9 @@ func TestTimestamp_Add(t *testing.T) {
 	}
 	if got := ts.Add(-2 * time.Second); got != 0 {
 		t.Errorf("Add past zero should clamp, got %d", got)
+	}
+	if got := Timestamp(math.MaxInt64 - 10).Add(time.Hour); got != math.MaxInt64 {
+		t.Errorf("Add overflow should saturate, got %d", got)
 	}
 }
 

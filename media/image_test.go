@@ -102,6 +102,23 @@ func TestDecode_ReturnsImageAndFormat(t *testing.T) {
 	}
 }
 
+func TestDecodeConfig_CorruptSupportedFormatPreservesCause(t *testing.T) {
+	t.Parallel()
+	// A truncated PNG carries a valid signature, so the failure is a decode
+	// error on a supported format, not an unsupported format.
+	full := encodePNG(t, 8, 8)
+	// Keep the 8-byte PNG signature (so the format is recognized) but cut off
+	// the IHDR header so decoding the config fails on a supported format.
+	truncated := full[:12]
+	_, _, err := DecodeConfig(truncated)
+	if err == nil {
+		t.Fatal("expected error for truncated PNG")
+	}
+	if errors.Is(err, ErrUnsupported) {
+		t.Errorf("truncated PNG should not wrap ErrUnsupported, got %v", err)
+	}
+}
+
 func TestDecode_Unsupported(t *testing.T) {
 	t.Parallel()
 	if _, _, err := Decode([]byte{0x00, 0x01, 0x02}); err == nil {

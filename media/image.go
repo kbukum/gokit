@@ -28,11 +28,15 @@ var ErrImageTooLarge = errors.New("media: image exceeds maximum decode dimension
 // and detected [Format] without decoding the full pixel buffer.
 //
 // It supports the pure-Go stdlib formats (JPEG, PNG, GIF); other detected image
-// formats return an error wrapping [ErrUnsupported].
+// formats wrap [ErrUnsupported]. Decode failures on a supported format (corrupt
+// or truncated data) preserve the underlying cause instead.
 func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 	cfg, name, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return image.Config{}, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+		if errors.Is(err, image.ErrFormat) {
+			return image.Config{}, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+		}
+		return image.Config{}, FormatUnknown, fmt.Errorf("media: decode config: %w", err)
 	}
 	return cfg, stdlibFormat(name), nil
 }
@@ -40,8 +44,8 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 // Decode fully decodes data into an [image.Image] using the stdlib decoders,
 // returning the detected [Format]. It first reads the header and rejects inputs
 // whose declared dimensions exceed [MaxDecodePixels] (wrapping [ErrImageTooLarge])
-// to bound memory use on untrusted content. Unsupported formats wrap
-// [ErrUnsupported].
+// to bound memory use on untrusted content. Unrecognized formats wrap
+// [ErrUnsupported]; decode failures on a supported format preserve the cause.
 func Decode(data []byte) (img image.Image, format Format, err error) {
 	cfg, format, err := DecodeConfig(data)
 	if err != nil {
@@ -52,7 +56,10 @@ func Decode(data []byte) (img image.Image, format Format, err error) {
 	}
 	img, name, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+		if errors.Is(err, image.ErrFormat) {
+			return nil, FormatUnknown, fmt.Errorf("%w: %w", ErrUnsupported, err)
+		}
+		return nil, format, fmt.Errorf("media: decode: %w", err)
 	}
 	return img, stdlibFormat(name), nil
 }
@@ -125,10 +132,10 @@ func stdlibFormat(name string) Format {
 type imageProber struct{}
 
 // Probe returns image [Metadata] (with Width/Height) for stdlib-decodable
-// images (JPEG, PNG, GIF). It wraps [ErrUnsupported] for non-images and
-// undecodable content so a [Registry] can fall back to signature-only
-// detection. Classification comes from the signature detector, which is
-// authoritative; the decoder contributes only the pixel dimensions.
+// images (JPEG, PNG, GIF). It returns an error for non-images and undecodable
+// content so a [Registry] can fall back to signature-only detection.
+// Classification comes from the signature detector, which is authoritative; the
+// decoder contributes only the pixel dimensions.
 func (imageProber) Probe(data []byte) (Metadata, error) {
 	cfg, _, err := DecodeConfig(data)
 	if err != nil {

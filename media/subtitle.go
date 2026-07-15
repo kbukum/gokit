@@ -88,6 +88,9 @@ func parseCues(content string, vtt bool) (SubtitleTrack, error) {
 		if !ok {
 			return SubtitleTrack{}, fmt.Errorf("%w: %q", ErrInvalidSubtitle, parts[1])
 		}
+		if end < start {
+			return SubtitleTrack{}, fmt.Errorf("%w: end %s precedes start %s", ErrInvalidSubtitle, end, start)
+		}
 		textLines := lines[idx+1:]
 		text := cleanCueText(strings.Join(textLines, "\n"), vtt)
 		if text == "" {

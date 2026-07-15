@@ -2,6 +2,7 @@ package media
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -9,15 +10,19 @@ import (
 //
 // Microsecond precision matches the internal timestamp resolution of common
 // container and codec formats, avoiding precision loss during conversion. A
-// Timestamp is never negative; constructors and arithmetic clamp at zero.
+// Timestamp is never negative: constructors and arithmetic clamp at zero and
+// saturate at the maximum representable value on overflow.
 //
 // It is the light-kit parallel of rskit's media Timestamp.
 type Timestamp int64
 
 // TimestampFromMillis builds a [Timestamp] from a millisecond value.
 func TimestampFromMillis(ms int64) Timestamp {
-	if ms < 0 {
-		ms = 0
+	if ms <= 0 {
+		return 0
+	}
+	if ms > math.MaxInt64/1000 {
+		return math.MaxInt64
 	}
 	return Timestamp(ms * 1000)
 }
@@ -32,10 +37,14 @@ func TimestampFromMicros(us int64) Timestamp {
 
 // TimestampFromSeconds builds a [Timestamp] from a floating-point seconds value.
 func TimestampFromSeconds(s float64) Timestamp {
-	if s < 0 {
-		s = 0
+	us := s * 1_000_000
+	if !(us > 0) { // false for negatives, zero, and NaN
+		return 0
 	}
-	return Timestamp(s * 1_000_000)
+	if us >= math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return Timestamp(us)
 }
 
 // TimestampFromDuration builds a [Timestamp] from a [time.Duration].
@@ -59,11 +68,17 @@ func (t Timestamp) Seconds() float64 { return float64(t) / 1_000_000 }
 // Duration returns the value as a [time.Duration].
 func (t Timestamp) Duration() time.Duration { return time.Duration(t) * time.Microsecond }
 
-// Add shifts the timestamp by a signed offset, clamping the result at zero.
+// Add shifts the timestamp by a signed offset, clamping the result at zero and
+// saturating at the maximum representable value on overflow.
 func (t Timestamp) Add(offset time.Duration) Timestamp {
-	us := int64(t) + offset.Microseconds()
+	cur := int64(t)
+	off := offset.Microseconds()
+	us := cur + off
+	if off > 0 && us < cur { // positive overflow wrapped around
+		return math.MaxInt64
+	}
 	if us < 0 {
-		us = 0
+		return 0
 	}
 	return Timestamp(us)
 }

@@ -44,6 +44,11 @@ func TestParseSRT_SkipsAndRejects(t *testing.T) {
 	if _, err := ParseSRT("1\n00:00:01,000 --> bad\nx"); !errors.Is(err, ErrInvalidSubtitle) {
 		t.Errorf("bad end: got %v", err)
 	}
+	// An inverted cue (end before start) is rejected rather than producing an
+	// invalid TimeRange.
+	if _, err := ParseSRT("1\n00:00:05,000 --> 00:00:02,000\nx"); !errors.Is(err, ErrInvalidSubtitle) {
+		t.Errorf("inverted cue: got %v", err)
+	}
 }
 
 func TestParseSRT_BlockWithoutText(t *testing.T) {
