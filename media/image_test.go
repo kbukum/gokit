@@ -165,6 +165,23 @@ func TestDecode_RejectsOversizedImage(t *testing.T) {
 	}
 }
 
+func TestDecode_PixelCountGuardBoundary(t *testing.T) {
+	t.Parallel()
+	// The guard divides rather than multiplies to stay overflow-safe; verify its
+	// boundary is inclusive of MaxDecodePixels and rejects one pixel past it.
+	// 10000x10000 == MaxDecodePixels: the guard must let it through (it then
+	// fails downstream on the absent pixel data, not with ErrImageTooLarge).
+	atLimit := craftPNGHeader(t, 10000, 10000)
+	if _, _, err := Decode(atLimit); errors.Is(err, ErrImageTooLarge) {
+		t.Fatalf("Decode at limit rejected as too large: %v", err)
+	}
+	// 10001x10000 is one row over the limit and must be rejected.
+	overLimit := craftPNGHeader(t, 10001, 10000)
+	if _, _, err := Decode(overLimit); !errors.Is(err, ErrImageTooLarge) {
+		t.Fatalf("Decode over limit = %v, want ErrImageTooLarge", err)
+	}
+}
+
 func TestStdlibFormat_UnknownPassesThrough(t *testing.T) {
 	t.Parallel()
 	if got := stdlibFormat("webp"); got != Format("webp") {

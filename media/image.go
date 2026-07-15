@@ -46,10 +46,11 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 
 // Decode fully decodes data into an [image.Image] using the stdlib decoders,
 // returning the detected [Format]. It first reads the header and rejects inputs
-// whose declared pixel count (width × height) exceeds [MaxDecodePixels] (wrapping
-// [ErrImageTooLarge]) to bound memory use on untrusted content. Unrecognized
-// formats wrap [ErrUnsupported]; decode failures on a supported format preserve
-// the cause.
+// whose declared pixel count (width × height) is non-positive or exceeds
+// [MaxDecodePixels] (wrapping [ErrImageTooLarge]) to bound memory use on
+// untrusted content; the check divides rather than multiplies so a maliciously
+// huge header cannot overflow past the limit. Unrecognized formats wrap
+// [ErrUnsupported]; decode failures on a supported format preserve the cause.
 // On every error path the returned [Format] is the best-effort detected format
 // (which may be [FormatUnknown]), never silently discarded.
 func Decode(data []byte) (img image.Image, format Format, err error) {
@@ -57,7 +58,7 @@ func Decode(data []byte) (img image.Image, format Format, err error) {
 	if err != nil {
 		return nil, format, err
 	}
-	if int64(cfg.Width)*int64(cfg.Height) > MaxDecodePixels {
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width) > MaxDecodePixels/int64(cfg.Height) {
 		return nil, format, fmt.Errorf("%w: %dx%d", ErrImageTooLarge, cfg.Width, cfg.Height)
 	}
 	img, name, err := image.Decode(bytes.NewReader(data))

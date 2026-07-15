@@ -11,7 +11,9 @@ import (
 // registry: constructed explicitly with functional options, never mutated
 // through package globals and never populated by init side effects.
 //
-// A zero Registry is not usable; construct one with [NewRegistry].
+// The zero Registry is safe to read but empty: its methods return no formats and
+// no probers. Use [NewRegistry] to obtain a Registry seeded with the built-in
+// formats and default image prober.
 type Registry struct {
 	formats map[Format]FormatInfo
 	probers []Prober
