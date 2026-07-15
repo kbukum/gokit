@@ -18,10 +18,16 @@ type Metadata struct {
 	Resolution Resolution `json:"resolution,omitzero"`
 }
 
-// Prober inspects the leading bytes of content and reports metadata for the
-// formats it understands. It is the light-kit parallel of rskit's MediaProbe
-// abstraction — a typed seam that backends implement, injected into a
-// [Registry] rather than registered through package globals.
+// Prober inspects the leading bytes of content and enriches its detection with
+// lightweight properties (e.g. pixel dimensions) for the formats it understands.
+// It is the light-kit parallel of rskit's MediaProbe abstraction — a typed seam
+// that backends implement, injected into a [Registry] rather than registered
+// through package globals.
+//
+// A [Registry] treats signature detection as authoritative for classification:
+// it derives [Metadata.Info] from its own [Detect] and uses only the extra
+// fields (such as [Metadata.Resolution]) a prober returns. The [Info] a prober
+// puts on its returned [Metadata] is therefore ignored by [Registry.Probe].
 //
 // A prober returns [ErrUnsupported] (wrapped is fine) when it does not
 // recognize the content, so a [Registry] can skip it and try the next prober.

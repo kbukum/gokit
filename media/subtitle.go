@@ -60,13 +60,16 @@ func ParseSRT(content string) (SubtitleTrack, error) {
 // header, ignores cue settings after the end timestamp, and decodes HTML
 // entities in cue text.
 func ParseVTT(content string) (SubtitleTrack, error) {
-	content = strings.TrimSpace(strings.TrimPrefix(normalizeSubtitle(content), "WEBVTT"))
 	return parseCues(content, true)
 }
 
 func parseCues(content string, vtt bool) (SubtitleTrack, error) {
+	content = normalizeSubtitle(content)
+	if vtt {
+		content = strings.TrimSpace(strings.TrimPrefix(content, "WEBVTT"))
+	}
 	var track SubtitleTrack
-	for _, block := range strings.Split(normalizeSubtitle(content), "\n\n") {
+	for _, block := range strings.Split(content, "\n\n") {
 		block = strings.TrimSpace(block)
 		if block == "" {
 			continue
