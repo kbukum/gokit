@@ -80,7 +80,9 @@ func (t Timestamp) String() string {
 	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, mins, secs, ms)
 }
 
-// TimeRange is a half-inclusive time window [Start, End] within a media file.
+// TimeRange is a half-open time window [Start, End) within a media file: Start
+// is included, End is excluded. Overlaps, Contains, Split, and Merge all follow
+// this model, so touching endpoints do not overlap.
 type TimeRange struct {
 	Start Timestamp `json:"start"`
 	End   Timestamp `json:"end"`
@@ -104,9 +106,9 @@ func (r TimeRange) Duration() time.Duration {
 	return (r.End - r.Start).Duration()
 }
 
-// Contains reports whether ts falls within [Start, End].
+// Contains reports whether ts falls within the half-open range [Start, End).
 func (r TimeRange) Contains(ts Timestamp) bool {
-	return ts >= r.Start && ts <= r.End
+	return ts >= r.Start && ts < r.End
 }
 
 // Overlaps reports whether this range and other share any instant.

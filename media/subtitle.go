@@ -167,7 +167,7 @@ func parseCueTime(s string) (Timestamp, bool) {
 	main, frac := s, int64(0)
 	if dot := strings.IndexByte(s, '.'); dot >= 0 {
 		var ok bool
-		if frac, ok = atoi(s[dot+1:]); !ok {
+		if frac, ok = parseFractionMillis(s[dot+1:]); !ok {
 			return 0, false
 		}
 		main = s[:dot]
@@ -186,6 +186,28 @@ func parseCueTime(s string) (Timestamp, bool) {
 		return 0, false
 	}
 	return TimestampFromMillis(h*3_600_000 + m*60_000 + sec*1000 + frac), true
+}
+
+// parseFractionMillis interprets the fractional part after the seconds separator
+// as milliseconds, scaling by digit count so "5" is 500ms and "50" is 500ms
+// (not 5ms). Digits beyond millisecond precision are truncated. It fails on an
+// empty or non-numeric fraction.
+func parseFractionMillis(s string) (int64, bool) {
+	n, ok := atoi(s)
+	if !ok {
+		return 0, false
+	}
+	switch {
+	case len(s) < 3:
+		for i := len(s); i < 3; i++ {
+			n *= 10
+		}
+	case len(s) > 3:
+		for i := 3; i < len(s); i++ {
+			n /= 10
+		}
+	}
+	return n, true
 }
 
 func atoi(s string) (int64, bool) {

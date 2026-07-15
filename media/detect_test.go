@@ -2,10 +2,9 @@ package media
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/kbukum/gokit/util"
 )
 
 // ftyp builds a 12-byte ISO BMFF header with the given brand at offset 8.
@@ -308,7 +307,7 @@ func TestDetectFile(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "test.png")
 	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}
-	if err := util.WriteFile(path, png); err != nil {
+	if err := os.WriteFile(path, png, 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	info, err := DetectFile(path)
@@ -328,7 +327,7 @@ func TestDetectFile_NotFound(t *testing.T) {
 func TestDetectFile_Empty(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "empty.bin")
-	if err := util.WriteFile(path, []byte{}); err != nil {
+	if err := os.WriteFile(path, []byte{}, 0o600); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if _, err := DetectFile(path); err == nil {

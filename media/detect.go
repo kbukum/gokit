@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,19 @@ import (
 
 // maxDetectBytes is the number of bytes needed for reliable detection.
 const maxDetectBytes = 4096
+
+// ftypMarker is the ISO BMFF box type ("ftyp") located at bytes 4..8.
+var ftypMarker = []byte("ftyp")
+
+// ftypBrand returns the 4-character major brand (bytes 8..12) of an ISO BMFF
+// "ftyp" header when data begins with a well-formed ftyp box. The single length
+// guard keeps every slice access provably in bounds.
+func ftypBrand(data []byte) (string, bool) {
+	if len(data) < 12 || !bytes.Equal(data[4:8], ftypMarker) {
+		return "", false
+	}
+	return string(data[8:12]), true
+}
 
 // Detect identifies the media type from raw bytes.
 // It inspects at most the first [maxDetectBytes] bytes.

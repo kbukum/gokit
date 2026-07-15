@@ -14,9 +14,7 @@ func detectVideo(data []byte) (Info, bool) {
 	}
 
 	// MP4 / MOV / M4V — ftyp box at offset 4.
-	if len(data) >= 12 && data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p' {
-		brand := string(data[8:12])
-
+	if brand, ok := ftypBrand(data); ok {
 		switch brand {
 		case "avif", "avis", "heic", "heix", "heif":
 			return Info{}, false // Image brands — let detectImage handle it.

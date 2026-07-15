@@ -58,8 +58,7 @@ func detectImage(data []byte) (Info, bool) {
 
 	// AVIF / HEIF — ftyp box with an image-specific brand (video ftyp handling
 	// defers these to detectImage).
-	if len(data) >= 12 && data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p' {
-		brand := string(data[8:12])
+	if brand, ok := ftypBrand(data); ok {
 		switch brand {
 		case "avif", "avis":
 			return Info{Type: Image, Format: FormatAVIF, MimeType: "image/avif", Container: "ISO BMFF"}, true

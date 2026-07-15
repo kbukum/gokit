@@ -85,6 +85,12 @@ func TestTimeRange_DurationAndContains(t *testing.T) {
 	if !r.Contains(TimestampFromMillis(2000)) {
 		t.Error("expected Contains(2000)")
 	}
+	if !r.Contains(TimestampFromMillis(1000)) {
+		t.Error("expected Contains(Start) — start is inclusive")
+	}
+	if r.Contains(TimestampFromMillis(3000)) {
+		t.Error("did not expect Contains(End) — end is exclusive")
+	}
 	if r.Contains(TimestampFromMillis(3001)) {
 		t.Error("did not expect Contains(3001)")
 	}

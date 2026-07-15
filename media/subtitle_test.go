@@ -104,6 +104,31 @@ func TestParseCueTime_MalformedVariants(t *testing.T) {
 	}
 }
 
+func TestParseCueTime_FractionScaledByDigits(t *testing.T) {
+	t.Parallel()
+	// The fraction after the seconds separator is milliseconds scaled by digit
+	// count: "5"->500ms, "50"->500ms, "500"->500ms, and >3 digits truncate to ms.
+	tests := []struct {
+		in     string
+		wantMs int64
+	}{
+		{"00:00:01.5", 1500},
+		{"00:00:01.50", 1500},
+		{"00:00:01.500", 1500},
+		{"00:00:01.5009", 1500},
+		{"00:00:01.000", 1000},
+	}
+	for _, tt := range tests {
+		track, err := ParseVTT("WEBVTT\n\n" + tt.in + " --> 00:00:09.000\nx")
+		if err != nil {
+			t.Fatalf("ParseVTT(%q): %v", tt.in, err)
+		}
+		if len(track.Entries) != 1 || track.Entries[0].Range.Start != TimestampFromMillis(tt.wantMs) {
+			t.Errorf("%q start = %v, want %dms", tt.in, track.Entries[0].Range.Start, tt.wantMs)
+		}
+	}
+}
+
 func TestParseCueTime_RejectsOverflowingField(t *testing.T) {
 	t.Parallel()
 	// A field large enough to overflow the int64-microsecond Timestamp must be
