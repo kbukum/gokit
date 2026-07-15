@@ -2,7 +2,7 @@
 
 Standing, re-runnable **whole-toolkit audit**, independent of any diff. Use it periodically,
 before a release, when onboarding to a module, or whenever you want assurance the tree as a
-whole still honors the baseline. It sequences the same eight focused passes in [`reviews/`](./)
+whole still honors the baseline. It sequences the same eight focused passes in [`references/`](./)
 but over the existing code rather than a change set.
 
 ## Run this in a separate, clean-context agent
@@ -13,9 +13,9 @@ prior session believed about it. Do not run it inline in a session that has been
 same code.
 
 - Hand the agent: the module(s)/domain to audit (or "the whole tree"), this file, and the
-  [`reviews/`](./) folder.
+  [`references/`](./) folder.
 - The agent judges the code as written, against the principles in
-  [`.github/copilot-instructions.md`](../../copilot-instructions.md) — not against any
+  [`.github/copilot-instructions.md`](../../../copilot-instructions.md) — not against any
   session's recollection.
 - **Optional roadmap check.** If there is a roadmap or versioning plan (e.g. under
   `tmp/release-parity-plan/`, `docs/VERSIONING.md`), pass it in *as context for intended state
@@ -76,7 +76,7 @@ Record every finding as:
 severity (blocker / should-fix / nit) — file:line — what's wrong — which principle — suggested fix
 ```
 
-Group findings by module and by pass so the report is actionable. See [`README.md`](./README.md)
+Group findings by module and by pass so the report is actionable. See [`SKILL.md`](../SKILL.md)
 for severity definitions.
 
 ## Validation

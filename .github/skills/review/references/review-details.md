@@ -30,7 +30,7 @@ no diff). State the mode up front.
    the final report.
 
 The reviewer judges code as written, against the rules below and the baseline in
-[`.github/copilot-instructions.md`](../../copilot-instructions.md). PR descriptions, commit
+[`.github/copilot-instructions.md`](../../../copilot-instructions.md). PR descriptions, commit
 messages, or plan/ADR docs are scope hints only — never justifications.
 
 ## Phase 2 — Passes
@@ -162,7 +162,7 @@ pass | severity (blocker/should-fix/nit) | file:line | finding | suggested fix
 ```
 
 Severity rule: **blocker** = principle violation, behavior is wrong, or a contract is broken
-(see [`README.md`](./README.md) for the full definition). Otherwise should-fix or nit.
+(see [`SKILL.md`](../SKILL.md) for the full definition). Otherwise should-fix or nit.
 
 Group by file in the final report. State explicitly any pass that was **skipped** (with the
 trigger that failed) and any pass that was **deferred** (with reason).
