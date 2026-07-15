@@ -20,9 +20,9 @@ import (
 // image; callers needing larger inputs must decode via the stdlib directly.
 const MaxDecodePixels = 100_000_000
 
-// ErrImageTooLarge is returned by [Decode] when the declared image dimensions
-// exceed [MaxDecodePixels].
-var ErrImageTooLarge = errors.New("media: image exceeds maximum decode dimensions")
+// ErrImageTooLarge is returned by [Decode] when the declared pixel count
+// (width × height) exceeds [MaxDecodePixels].
+var ErrImageTooLarge = errors.New("media: image exceeds maximum decode pixel count")
 
 // DecodeConfig reads only the header of data and returns the image dimensions
 // and detected [Format] without decoding the full pixel buffer.
@@ -46,9 +46,10 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 
 // Decode fully decodes data into an [image.Image] using the stdlib decoders,
 // returning the detected [Format]. It first reads the header and rejects inputs
-// whose declared dimensions exceed [MaxDecodePixels] (wrapping [ErrImageTooLarge])
-// to bound memory use on untrusted content. Unrecognized formats wrap
-// [ErrUnsupported]; decode failures on a supported format preserve the cause.
+// whose declared pixel count (width × height) exceeds [MaxDecodePixels] (wrapping
+// [ErrImageTooLarge]) to bound memory use on untrusted content. Unrecognized
+// formats wrap [ErrUnsupported]; decode failures on a supported format preserve
+// the cause.
 // On every error path the returned [Format] is the best-effort detected format
 // (which may be [FormatUnknown]), never silently discarded.
 func Decode(data []byte) (img image.Image, format Format, err error) {
