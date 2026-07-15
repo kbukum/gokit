@@ -19,6 +19,12 @@ var ErrInvalidSubtitle = errors.New("media: invalid subtitle timestamp")
 // [ErrInvalidSubtitle] instead of wrapping to a negative [Timestamp].
 const maxCueField = 1_000_000_000
 
+// maxCueFieldDigits bounds the digit-string length of a single field. maxCueField
+// is 10 digits, so any in-range value fits; the guard stops untrusted input from
+// forcing O(n) scanning via long zero-padding that stays numerically within
+// maxCueField (e.g. "000…0").
+const maxCueFieldDigits = 10
+
 // SubtitleEntry is a single timed subtitle cue.
 type SubtitleEntry struct {
 	Range TimeRange `json:"range"`
@@ -220,7 +226,7 @@ func parseFractionMillis(s string) (int64, bool) {
 }
 
 func atoi(s string) (int64, bool) {
-	if s == "" {
+	if s == "" || len(s) > maxCueFieldDigits {
 		return 0, false
 	}
 	var n int64

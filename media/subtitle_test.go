@@ -144,6 +144,17 @@ func TestParseCueTime_RejectsOverflowingField(t *testing.T) {
 	}
 }
 
+func TestParseCueTime_RejectsLongZeroPaddedField(t *testing.T) {
+	t.Parallel()
+	// A field padded with many leading zeros stays numerically within
+	// maxCueField yet would force O(n) scanning; the digit-length guard must
+	// reject it as invalid instead of parsing it (untrusted-content DoS guard).
+	field := strings.Repeat("0", 5000) + "1"
+	if _, err := ParseSRT("1\n" + field + ":00:00,000 --> 00:00:09,000\nx"); !errors.Is(err, ErrInvalidSubtitle) {
+		t.Errorf("long zero-padded field err = %v, want ErrInvalidSubtitle", err)
+	}
+}
+
 func TestParseCues_NormalizesBlankAndTagOnlyLines(t *testing.T) {
 	t.Parallel()
 	// A tag-only first text line leaves a leading blank line that must not
