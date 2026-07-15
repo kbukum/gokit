@@ -18,7 +18,7 @@ same code.
   [`.github/copilot-instructions.md`](../../../copilot-instructions.md) — not against any
   session's recollection.
 - **Optional roadmap check.** If there is a roadmap or versioning plan (e.g. under
-  `tmp/release-parity-plan/`, `docs/VERSIONING.md`), pass it in *as context for intended state
+  a `tmp/<plan-name>/` folder, `docs/VERSIONING.md`), pass it in *as context for intended state
   only* — "here is where the toolkit is meant to be; flag where the tree has not caught up." It
   frames expectations; it never excuses a baseline violation.
 

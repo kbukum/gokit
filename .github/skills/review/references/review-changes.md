@@ -17,7 +17,7 @@ produced the change.
 - The reviewer reads the code as-is; it does not trust prior reasoning about why the code
   "should" be correct.
 - **Optional plan check.** If a plan/spec exists (e.g. an entry under
-  `tmp/release-parity-plan/`, an issue, or a design doc), pass it in *as a scope checklist
+  a `tmp/<plan-name>/` folder, an issue, or a design doc), pass it in *as a scope checklist
   only* — "here is what this change set claimed to do; verify the diff actually did it, with
   tests." The plan defines intended scope; it never excuses a principle violation. If the diff
   diverges from the plan, report the divergence; the baseline in

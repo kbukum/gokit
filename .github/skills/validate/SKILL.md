@@ -39,7 +39,7 @@ toven test --base origin/main --merge-base    # run just those
 | Vet | `toven check` | `go vet` per module |
 | Test | `toven test -- -race -count=1 -shuffle=on` | see race note below |
 | Lint | `toven lint` | golangci-lint per module |
-| Format (write) | `toven format` | `gofmt -s -w` — but see gofumpt note |
+| Format (write) | `toven format` | `gofmt -w` — but see gofumpt note |
 | Format (check) | `toven format-check` | fails on unformatted files |
 | Tidy (check) | `toven tidy` | `go mod tidy -diff` |
 | Tidy (write) | `toven tidy-fix` | `go mod tidy` |
@@ -71,7 +71,7 @@ toven test --watch                                        # rerun affected tests
 ## gofumpt before lint (important)
 
 golangci-lint enforces **gofumpt** (stricter than gofmt), but `toven format` runs plain
-`gofmt -s`. After editing, run gofumpt on the changed dirs, then lint:
+`gofmt -w`. After editing, run gofumpt on the changed dirs, then lint:
 
 ```bash
 gofumpt -w <changed-dir>...

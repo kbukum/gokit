@@ -29,7 +29,7 @@ mkdir -p tmp/<plan-name>
 
 ## Structure
 
-Match the shape of existing plans (`tmp/release-parity-plan/`):
+Match this shape (the same layout every plan folder under `tmp/` uses):
 
 - **`README.md`** (always) — the overview: goal, how to read the folder, an ordered index of the
   step files with their dependency order, and the cross-cutting rules that apply to every step.
