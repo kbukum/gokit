@@ -50,6 +50,19 @@ func TestWithFormat_OverridesEntry(t *testing.T) {
 	}
 }
 
+func TestWithFormat_ZeroRegistryDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	// WithFormat must lazily initialize the catalog so it is safe to apply to a
+	// zero Registry, matching the documented "zero Registry is safe" contract.
+	var reg Registry
+	custom := FormatInfo{Format: FormatMP4, Type: Video, Extension: "mp4", MimeType: "video/custom"}
+	WithFormat(custom)(&reg)
+	fi, ok := reg.Lookup(FormatMP4)
+	if !ok || fi.MimeType != "video/custom" {
+		t.Errorf("WithFormat on zero Registry: %+v ok=%v", fi, ok)
+	}
+}
+
 func TestWithProber_NilIsIgnored(t *testing.T) {
 	t.Parallel()
 	var typedNil *imageProber // typed-nil interface value

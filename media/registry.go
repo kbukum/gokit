@@ -13,7 +13,8 @@ import (
 //
 // The zero Registry is safe to read but empty: its methods return no formats and
 // no probers. Use [NewRegistry] to obtain a Registry seeded with the built-in
-// formats and default image prober.
+// format catalog; add [WithImageProber] (or a custom [WithProber]) to enable
+// metadata enrichment.
 type Registry struct {
 	formats map[Format]FormatInfo
 	probers []Prober
@@ -22,9 +23,15 @@ type Registry struct {
 // Option configures a [Registry] at construction time.
 type Option func(*Registry)
 
-// WithFormat adds or overrides a [FormatInfo] catalog entry.
+// WithFormat adds or overrides a [FormatInfo] catalog entry. It lazily
+// initializes the catalog so the option is safe to apply to a zero Registry.
 func WithFormat(fi FormatInfo) Option {
-	return func(r *Registry) { r.formats[fi.Format] = fi }
+	return func(r *Registry) {
+		if r.formats == nil {
+			r.formats = make(map[Format]FormatInfo)
+		}
+		r.formats[fi.Format] = fi
+	}
 }
 
 // WithProber appends a [Prober] backend. Probers are tried in registration
