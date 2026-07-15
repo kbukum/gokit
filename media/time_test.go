@@ -164,4 +164,7 @@ func TestSegment_Builders(t *testing.T) {
 	if got := s.WithConfidence(-1.0); got.Confidence != 0 {
 		t.Errorf("confidence should clamp low, got %v", got.Confidence)
 	}
+	if got := s.WithConfidence(math.NaN()); got.Confidence != 0 {
+		t.Errorf("NaN confidence should be treated as unset, got %v", got.Confidence)
+	}
 }

@@ -176,8 +176,11 @@ func (s Segment) WithLabel(label string) Segment {
 }
 
 // WithConfidence returns a copy of the segment with the confidence clamped to
-// the range [0, 1].
+// the range [0, 1]. A NaN input is treated as unset (0).
 func (s Segment) WithConfidence(c float64) Segment {
+	if math.IsNaN(c) {
+		c = 0
+	}
 	s.Confidence = min(max(c, 0), 1)
 	return s
 }

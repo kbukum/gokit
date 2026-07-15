@@ -32,13 +32,15 @@ type SubtitleTrack struct {
 	Language string          `json:"language,omitempty"` // BCP 47 tag, optional
 }
 
-// Add appends a cue and returns the track for chaining.
+// Add returns a copy of the track with the cue appended; the receiver is
+// unchanged, so callers must use the returned value (supports chaining).
 func (t SubtitleTrack) Add(r TimeRange, text string) SubtitleTrack {
 	t.Entries = append(t.Entries, SubtitleEntry{Range: r, Text: text})
 	return t
 }
 
-// WithLanguage sets the track language (BCP 47 tag) and returns the track.
+// WithLanguage returns a copy of the track with the language (BCP 47 tag) set;
+// the receiver is unchanged, so callers must use the returned value.
 func (t SubtitleTrack) WithLanguage(lang string) SubtitleTrack {
 	t.Language = lang
 	return t
