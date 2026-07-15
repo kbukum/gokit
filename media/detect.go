@@ -1,63 +1,31 @@
-// Package media provides media type detection from content bytes.
-//
-// It uses magic byte (file signature) matching to identify common
-// video, audio, image, and text formats without external dependencies.
-//
-// Usage:
-//
-//	info := media.Detect(data)
-//	if info.Type == media.Video {
-//	    fmt.Println("Video format:", info.Format)
-//	}
 package media
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"unicode/utf8"
 )
 
-// Type represents a broad media category.
-type Type int
-
-const (
-	Unknown Type = iota
-	Video
-	Audio
-	Image
-	Text
-)
-
-// String returns the human-readable name.
-func (t Type) String() string {
-	switch t {
-	case Video:
-		return "video"
-	case Audio:
-		return "audio"
-	case Image:
-		return "image"
-	case Text:
-		return "text"
-	default:
-		return "unknown"
-	}
-}
-
-// Info holds the detected media information.
-type Info struct {
-	Type      Type   `json:"type"`
-	Format    string `json:"format"`    // e.g. "mp4", "jpeg", "wav"
-	MimeType  string `json:"mime_type"` // e.g. "video/mp4", "image/jpeg"
-	Container string `json:"container"` // e.g. "QuickTime", "RIFF", "Matroska"
-}
-
 // maxDetectBytes is the number of bytes needed for reliable detection.
 const maxDetectBytes = 4096
 
+// ftypMarker is the ISO BMFF box type ("ftyp") located at bytes 4..8.
+var ftypMarker = []byte("ftyp")
+
+// ftypBrand returns the 4-character major brand (bytes 8..12) of an ISO BMFF
+// "ftyp" header when data begins with a well-formed ftyp box. The single length
+// guard keeps every slice access provably in bounds.
+func ftypBrand(data []byte) (string, bool) {
+	if len(data) < 12 || !bytes.Equal(data[4:8], ftypMarker) {
+		return "", false
+	}
+	return string(data[8:12]), true
+}
+
 // Detect identifies the media type from raw bytes.
-// It inspects at most the first 4096 bytes.
+// It inspects at most the first [maxDetectBytes] bytes.
 func Detect(data []byte) Info {
 	if len(data) == 0 {
 		return Info{Type: Unknown}
@@ -76,17 +44,21 @@ func Detect(data []byte) Info {
 
 	// Fall back to text heuristic.
 	if isText(data) {
-		return Info{Type: Text, Format: "txt", MimeType: "text/plain"}
+		return Info{Type: Text, Format: FormatText, MimeType: "text/plain"}
 	}
 
 	return Info{Type: Unknown}
 }
 
-// DetectReader reads up to maxDetectBytes from r and detects the media type.
+// DetectReader reads up to [maxDetectBytes] from r and detects the media type.
+// It fills the detection window even when r yields the data in small chunks, so
+// multi-byte signatures (RIFF, ISO BMFF ftyp, MPEG-TS) are not missed by a
+// partial read. A stream shorter than the window is detected on what it holds;
+// an empty stream returns an error.
 func DetectReader(r io.Reader) (Info, error) {
 	buf := make([]byte, maxDetectBytes)
-	n, err := io.ReadAtLeast(r, buf, 1)
-	if err != nil {
+	n, err := io.ReadFull(r, buf)
+	if err != nil && err != io.ErrUnexpectedEOF {
 		return Info{}, fmt.Errorf("media: read failed: %w", err)
 	}
 	return Detect(buf[:n]), nil
@@ -107,14 +79,13 @@ func DetectFile(path string) (info Info, err error) {
 }
 
 // isText returns true if data appears to be UTF-8 text.
-// It checks that the data is valid UTF-8 and has a high ratio of
-// printable characters (letters, digits, punctuation, whitespace).
+// It checks that the data is valid UTF-8 and has a high ratio of printable
+// characters (letters, digits, punctuation, whitespace).
 func isText(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
 
-	// Check a reasonable sample.
 	sample := data
 	if len(sample) > maxDetectBytes {
 		sample = sample[:maxDetectBytes]
@@ -147,10 +118,8 @@ func isPrintableOrWhitespace(r rune) bool {
 	if r == utf8.RuneError {
 		return false
 	}
-	// Common whitespace.
 	if r == '\n' || r == '\r' || r == '\t' || r == ' ' {
 		return true
 	}
-	// Printable ASCII and common Unicode.
 	return r >= 0x20 && r != 0x7f
 }

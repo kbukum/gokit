@@ -31,7 +31,7 @@ Every package has its own `README.md` with API examples — start there for deta
 | `stream` | `gokit/stream` | Pull-based stream (Throttle, Batch, Debounce, Window) |
 | `dag` | `gokit/dag` | DAG execution engine — batch / streaming / cascade |
 | `chain` | `gokit/chain` | Sequential chain execution — step piping, progress, cancellation |
-| `media` | `gokit/media` | Media type detection from content bytes |
+| `media` | `gokit/media` | Light standalone kit: type/format detection, metadata, cheap image ops |
 | `security` | `gokit/security` | TLS configuration and certificate utilities |
 | `process` | `gokit/process` | Subprocess execution with cancellation |
 | `worker` | `gokit/worker` | Push-based worker pools with supervision |
