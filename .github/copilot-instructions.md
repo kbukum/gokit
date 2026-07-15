@@ -21,9 +21,12 @@ Shared engineering baseline — apply to all work here:
 - **Supply chain:** pin CI actions by SHA; scan dependencies (`govulncheck` + licenses); sign release artifacts; attach SBOM and provenance.
 - **Currency:** use current Go idioms and standards, not folklore — `log/slog`, `errors.Is/As/Join`, `slices`/`maps`/`cmp`, `any` over `interface{}`; verify the dependency is maintained, the stdlib doesn't already cover it, and no open CVE applies.
 
-Standing, re-runnable review prompts encoding this baseline live in
-[`.github/prompts/reviews/`](prompts/reviews/README.md) — run them in a fresh, clean-context
-agent after every change set and before releases.
+Standing, re-runnable development skills encoding this baseline live in
+[`.github/skills/`](skills/README.md) — the `review` skill runs the review passes in a
+fresh, clean-context agent after every change set and before releases; `create-branch`,
+`create-plan`, `apply-plan`, `apply-step`, `create-pr`, `validate`, `new-module`, `new-backend`,
+`parity`, and `release` cover the rest of the workflow. Validation is driven through `toven` (see
+`toven.toml`).
 
 ## Build, Test, and Lint
 

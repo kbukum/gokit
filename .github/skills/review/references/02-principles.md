@@ -1,7 +1,7 @@
 # Pass 02 — Principle conformance
 
 Each item here is a hard principle from
-[`.github/copilot-instructions.md`](../../copilot-instructions.md), not a preference. This is
+[`.github/copilot-instructions.md`](../../../copilot-instructions.md), not a preference. This is
 where vibe coding drifts most — especially around resilience, concurrency, and composition.
 
 > **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
