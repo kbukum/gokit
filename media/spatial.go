@@ -1,6 +1,9 @@
 package media
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+)
 
 // Resolution is a width × height in pixels. It is the light-kit parallel of
 // rskit's media Resolution and is used to enrich probe [Metadata].
@@ -72,10 +75,21 @@ func (r Resolution) ScaleBy(factor float64) Resolution { return r.scale(factor) 
 func (r Resolution) String() string { return fmt.Sprintf("%dx%d", r.Width, r.Height) }
 
 func (r Resolution) scale(factor float64) Resolution {
-	return Resolution{
-		Width:  int(float64(r.Width)*factor + 0.5),
-		Height: int(float64(r.Height)*factor + 0.5),
+	return Resolution{Width: scaleDim(r.Width, factor), Height: scaleDim(r.Height, factor)}
+}
+
+// scaleDim multiplies a dimension by factor, rounds to nearest, and clamps the
+// result to a valid non-negative int: NaN and negative results become zero and
+// overflow saturates, so scaling never yields a negative or wrapped dimension.
+func scaleDim(d int, factor float64) int {
+	v := math.Round(float64(d) * factor)
+	if !(v > 0) { // negative, zero, or NaN
+		return 0
 	}
+	if v >= float64(math.MaxInt) {
+		return math.MaxInt
+	}
+	return int(v)
 }
 
 func ratio(bound, dim int) float64 {

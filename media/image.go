@@ -66,7 +66,9 @@ func Decode(data []byte) (img image.Image, format Format, err error) {
 
 // Crop returns the sub-image of src bounded by r. It is a cheap, allocation-free
 // view when src supports SubImage (all stdlib image types do); otherwise the
-// pixels are copied. r is intersected with the source bounds.
+// pixels are copied. r is intersected with the source bounds, and the result
+// preserves the source coordinate space (its Bounds equal the intersected r)
+// on both paths.
 func Crop(src image.Image, r image.Rectangle) image.Image {
 	r = r.Intersect(src.Bounds())
 	type subImager interface {
@@ -75,10 +77,10 @@ func Crop(src image.Image, r image.Rectangle) image.Image {
 	if si, ok := src.(subImager); ok {
 		return si.SubImage(r)
 	}
-	dst := image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
-	for y := 0; y < r.Dy(); y++ {
-		for x := 0; x < r.Dx(); x++ {
-			dst.Set(x, y, src.At(r.Min.X+x, r.Min.Y+y))
+	dst := image.NewRGBA(r)
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			dst.Set(x, y, src.At(x, y))
 		}
 	}
 	return dst

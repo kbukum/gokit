@@ -64,7 +64,7 @@ func findEBMLDocType(data []byte) string {
 	if limit > 64 {
 		limit = 64
 	}
-	for i := 0; i < limit-4; i++ {
+	for i := 0; i+4 <= limit; i++ {
 		if string(data[i:i+4]) == "webm" {
 			return "webm"
 		}

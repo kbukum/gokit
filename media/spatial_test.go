@@ -1,6 +1,9 @@
 package media
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestResolution_Presets(t *testing.T) {
 	t.Parallel()
@@ -81,6 +84,16 @@ func TestResolution_Scaling(t *testing.T) {
 	}
 	if got := (Resolution{0, 0}).ScaleToFit(100, 100); got != (Resolution{0, 0}) {
 		t.Errorf("scaling zero resolution = %v, want 0x0", got)
+	}
+	// Degenerate factors must not yield negative or wrapped dimensions.
+	if got := r.ScaleBy(-2); got != (Resolution{0, 0}) {
+		t.Errorf("negative factor = %v, want 0x0", got)
+	}
+	if got := r.ScaleBy(math.NaN()); got != (Resolution{0, 0}) {
+		t.Errorf("NaN factor = %v, want 0x0", got)
+	}
+	if got := r.ScaleBy(math.MaxFloat64); got != (Resolution{math.MaxInt, math.MaxInt}) {
+		t.Errorf("overflowing factor = %v, want saturated", got)
 	}
 }
 

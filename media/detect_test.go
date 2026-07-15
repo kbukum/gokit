@@ -40,6 +40,17 @@ func mpegTS() []byte {
 	return d
 }
 
+// TestFindEBMLDocType_MatchesLastWindow guards against an off-by-one that
+// skipped the final 4-byte scan window, which would miss a "webm" doctype
+// sitting at the very end of the inspected bytes.
+func TestFindEBMLDocType_MatchesLastWindow(t *testing.T) {
+	t.Parallel()
+	data := append([]byte{0x1A, 0x45, 0xDF, 0xA3, 0, 0, 0, 0}, []byte("webm")...)
+	if got := findEBMLDocType(data); got != "webm" {
+		t.Errorf("findEBMLDocType = %q, want webm", got)
+	}
+}
+
 // TestDetect_Signatures verifies that each recognized byte signature maps to the
 // full expected [Info] (type, format, mime, and container) in one table. The
 // 4-byte rows also prove the shortest guarded signatures never read past the

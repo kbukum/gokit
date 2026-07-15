@@ -226,8 +226,11 @@ type stubImage struct{ image.Image }
 func TestCrop_CopyFallbackWithoutSubImage(t *testing.T) {
 	t.Parallel()
 	src := stubImage{image.NewRGBA(image.Rect(0, 0, 10, 10))}
-	cropped := Crop(src, image.Rect(2, 2, 6, 8))
-	if cropped.Bounds().Dx() != 4 || cropped.Bounds().Dy() != 6 {
-		t.Errorf("crop bounds = %v, want 4x6", cropped.Bounds())
+	want := image.Rect(2, 2, 6, 8)
+	cropped := Crop(src, want)
+	// The copy path must preserve the source coordinate space, matching the
+	// SubImage path (Bounds == the intersected crop rectangle).
+	if cropped.Bounds() != want {
+		t.Errorf("crop bounds = %v, want %v", cropped.Bounds(), want)
 	}
 }
