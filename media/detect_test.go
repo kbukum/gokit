@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/iotest"
 )
 
 // ftyp builds a 12-byte ISO BMFF header with the given brand at offset 8.
@@ -301,6 +302,18 @@ func TestDetectReader_Empty(t *testing.T) {
 	if _, err := DetectReader(bytes.NewReader(nil)); err == nil {
 		t.Error("expected error for empty reader")
 	}
+}
+
+func TestDetectReader_ChunkedReadFillsWindow(t *testing.T) {
+	t.Parallel()
+	// A reader that yields one byte per Read must not truncate detection: the
+	// 12-byte RIFF/WEBP signature is only decidable once bytes 8..12 arrive.
+	data := riff("WEBP")
+	info, err := DetectReader(iotest.OneByteReader(bytes.NewReader(data)))
+	if err != nil {
+		t.Fatalf("DetectReader: %v", err)
+	}
+	assertInfo(t, info, Image, FormatWebP, "image/webp")
 }
 
 func TestDetectReader_LargerThanWindow(t *testing.T) {

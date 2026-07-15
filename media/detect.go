@@ -51,10 +51,14 @@ func Detect(data []byte) Info {
 }
 
 // DetectReader reads up to [maxDetectBytes] from r and detects the media type.
+// It fills the detection window even when r yields the data in small chunks, so
+// multi-byte signatures (RIFF, ISO BMFF ftyp, MPEG-TS) are not missed by a
+// partial read. A stream shorter than the window is detected on what it holds;
+// an empty stream returns an error.
 func DetectReader(r io.Reader) (Info, error) {
 	buf := make([]byte, maxDetectBytes)
-	n, err := io.ReadAtLeast(r, buf, 1)
-	if err != nil {
+	n, err := io.ReadFull(r, buf)
+	if err != nil && err != io.ErrUnexpectedEOF {
 		return Info{}, fmt.Errorf("media: read failed: %w", err)
 	}
 	return Detect(buf[:n]), nil
