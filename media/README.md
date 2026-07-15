@@ -142,8 +142,7 @@ vtt := clip.VTT()                         // convert SRT → WebVTT
 The heavy path is **rskit or an external service**, never a Go reimplementation.
 gokit deliberately has **no cgo, no ffmpeg, and no Go DSP/matrix code**. Backend-only
 vocabulary (codec, color, filter graphs, pipeline/output configs) is intentionally
-omitted: without a transcoding executor it would be dead surface. See
-[`docs/parity-matrix.md`](../docs/parity-matrix.md).
+omitted: without a transcoding executor it would be dead surface.
 
 ## Supported formats (detection)
 
