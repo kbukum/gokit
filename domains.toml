@@ -46,7 +46,7 @@ modules = ["ai", "llm", "llm/providers", "embedding", "inference", "inference/tg
 depends_on = ["core", "patterns", "crosscutting", "transport", "auth"]
 
 [domains.media]
-description = "Media processing, transcription"
+description = "Light detection, metadata, image ops, time/spatial, subtitles"
 modules = ["media"]
 depends_on = ["core", "patterns", "crosscutting"]
 

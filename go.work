@@ -32,6 +32,7 @@ use (
 	./llm
 	./llm/providers
 	./mcp
+	./media
 	./messaging
 	./messaging/kafka
 	./messaging/nats

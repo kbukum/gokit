@@ -248,7 +248,7 @@ func TestDetect_ShortData(t *testing.T) {
 		name   string
 		data   []byte
 		typ    Type
-		format string
+		format Format
 	}{
 		{name: "jpeg", data: []byte{0xFF, 0xD8, 0xFF, 0x00}, typ: Image, format: "jpeg"},
 		{name: "flv", data: []byte{'F', 'L', 'V', 0x00}, typ: Video, format: "flv"},
@@ -763,7 +763,7 @@ func TestTypeString_OutOfRange(t *testing.T) {
 	}
 }
 
-func assertInfo(t *testing.T, got Info, wantType Type, wantFormat, wantMime string) {
+func assertInfo(t *testing.T, got Info, wantType Type, wantFormat Format, wantMime string) {
 	t.Helper()
 	if got.Type != wantType {
 		t.Errorf("Type = %v, want %v", got.Type, wantType)

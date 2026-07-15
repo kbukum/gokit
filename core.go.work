@@ -25,6 +25,7 @@ use (
 	./inference
 	./llm
 	./mcp
+	./media
 	./messaging
 	./schema
 	./server
