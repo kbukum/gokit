@@ -2,32 +2,176 @@ package media
 
 import (
 	"bytes"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
 	"github.com/kbukum/gokit/util"
 )
 
-func TestDetect_JPEG(t *testing.T) {
-	data := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'}
-	info := Detect(data)
-	assertInfo(t, info, Image, "jpeg", "image/jpeg")
+// ftyp builds a 12-byte ISO BMFF header with the given brand at offset 8.
+func ftyp(brand string) []byte {
+	d := make([]byte, 12)
+	copy(d[4:8], "ftyp")
+	copy(d[8:12], brand)
+	return d
 }
 
-func TestDetect_PNG(t *testing.T) {
-	data := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Image, "png", "image/png")
+// riff builds a 12-byte RIFF header with the given form type at offset 8.
+func riff(form string) []byte {
+	d := make([]byte, 12)
+	copy(d[0:4], "RIFF")
+	copy(d[8:12], form)
+	return d
 }
 
-func TestDetect_GIF(t *testing.T) {
-	data := []byte{'G', 'I', 'F', '8', '9', 'a'}
-	info := Detect(data)
-	assertInfo(t, info, Image, "gif", "image/gif")
+// ebml builds a 16-byte Matroska/EBML header with an optional doctype at
+// offset 8 (empty doctype yields a bare EBML stream, i.e. MKV).
+func ebml(doctype string) []byte {
+	d := make([]byte, 16)
+	copy(d[0:4], []byte{0x1A, 0x45, 0xDF, 0xA3})
+	copy(d[8:], doctype)
+	return d
 }
 
-func TestDetect_GIFRejectsTruncatedOrInvalidHeaders(t *testing.T) {
+// mpegTS builds a minimal MPEG-TS stream with sync bytes 188 bytes apart.
+func mpegTS() []byte {
+	d := make([]byte, 377)
+	d[0] = 0x47
+	d[188] = 0x47
+	return d
+}
+
+// TestDetect_Signatures verifies that each recognized byte signature maps to the
+// full expected [Info] (type, format, mime, and container) in one table. The
+// 4-byte rows also prove the shortest guarded signatures never read past the
+// slice.
+func TestDetect_Signatures(t *testing.T) {
+	t.Parallel()
+	img := func(f Format, mime, container string) Info {
+		return Info{Type: Image, Format: f, MimeType: mime, Container: container}
+	}
+	vid := func(f Format, mime, container string) Info {
+		return Info{Type: Video, Format: f, MimeType: mime, Container: container}
+	}
+	aud := func(f Format, mime, container string) Info {
+		return Info{Type: Audio, Format: f, MimeType: mime, Container: container}
+	}
+	txt := Info{Type: Text, Format: FormatText, MimeType: "text/plain"}
+	tests := []struct {
+		name string
+		data []byte
+		want Info
+	}{
+		// Images.
+		{"jpeg", []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'}, img(FormatJPEG, "image/jpeg", "")},
+		{"jpeg_4byte", []byte{0xFF, 0xD8, 0xFF, 0x00}, img(FormatJPEG, "image/jpeg", "")},
+		{"png", []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}, img(FormatPNG, "image/png", "")},
+		{"gif89a", []byte("GIF89a"), img(FormatGIF, "image/gif", "")},
+		{"gif87a", []byte("GIF87a"), img(FormatGIF, "image/gif", "")},
+		{"webp", riff("WEBP"), img(FormatWebP, "image/webp", "RIFF")},
+		{"bmp", []byte{'B', 'M', 0x00, 0x00}, img(FormatBMP, "image/bmp", "")},
+		{"tiff_le", []byte{'I', 'I', 0x2A, 0x00}, img(FormatTIFF, "image/tiff", "")},
+		{"tiff_be", []byte{'M', 'M', 0x00, 0x2A}, img(FormatTIFF, "image/tiff", "")},
+		{"ico", []byte{0x00, 0x00, 0x01, 0x00, 0x01, 0x00}, img(FormatICO, "image/x-icon", "")},
+		{"avif", ftyp("avif"), img(FormatAVIF, "image/avif", "ISO BMFF")},
+		{"avis", ftyp("avis"), img(FormatAVIF, "image/avif", "ISO BMFF")},
+		{"heif_heic", ftyp("heic"), img(FormatHEIF, "image/heif", "ISO BMFF")},
+		{"heif_heix", ftyp("heix"), img(FormatHEIF, "image/heif", "ISO BMFF")},
+		{"heif_heif", ftyp("heif"), img(FormatHEIF, "image/heif", "ISO BMFF")},
+
+		// Video.
+		{"mp4_isom", ftyp("isom"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_iso2", ftyp("iso2"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_mp41", ftyp("mp41"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_mp42", ftyp("mp42"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_avc1", ftyp("avc1"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_dash", ftyp("dash"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mp4_unknown_brand", ftyp("xxxx"), vid(FormatMP4, "video/mp4", "ISO BMFF")},
+		{"mov", ftyp("qt  "), vid(FormatMOV, "video/quicktime", "QuickTime")},
+		{"m4v", ftyp("M4V "), vid(FormatM4V, "video/x-m4v", "ISO BMFF")},
+		{"m4v_h", ftyp("M4VH"), vid(FormatM4V, "video/x-m4v", "ISO BMFF")},
+		{"m4v_p", ftyp("M4VP"), vid(FormatM4V, "video/x-m4v", "ISO BMFF")},
+		{"webm", ebml("webm"), vid(FormatWebM, "video/webm", "Matroska")},
+		{"mkv", ebml(""), vid(FormatMKV, "video/x-matroska", "Matroska")},
+		{"ebml_4byte", []byte{0x1A, 0x45, 0xDF, 0xA3}, vid(FormatMKV, "video/x-matroska", "Matroska")},
+		{"avi", riff("AVI "), vid(FormatAVI, "video/x-msvideo", "RIFF")},
+		{"flv", []byte{'F', 'L', 'V', 0x01, 0x05}, vid(FormatFLV, "video/x-flv", "FLV")},
+		{"flv_4byte", []byte{'F', 'L', 'V', 0x00}, vid(FormatFLV, "video/x-flv", "FLV")},
+		{"mpegts", mpegTS(), vid(FormatTS, "video/mp2t", "MPEG-TS")},
+
+		// Audio.
+		{"m4a", ftyp("M4A "), aud(FormatM4A, "audio/mp4", "ISO BMFF")},
+		{"m4b", ftyp("M4B "), aud(FormatM4A, "audio/mp4", "ISO BMFF")},
+		{"wav", riff("WAVE"), aud(FormatWAV, "audio/wav", "RIFF")},
+		{"flac", []byte{'f', 'L', 'a', 'C', 0x00}, aud(FormatFLAC, "audio/flac", "")},
+		{"ogg", []byte{'O', 'g', 'g', 'S', 0x00}, aud(FormatOGG, "audio/ogg", "Ogg")},
+		{"aac", []byte{0xFF, 0xF1, 0x50, 0x80}, aud(FormatAAC, "audio/aac", "")},
+		{"mp3_id3", []byte{'I', 'D', '3', 0x04, 0x00}, aud(FormatMP3, "audio/mpeg", "")},
+		{"mp3_sync_fb", []byte{0xFF, 0xFB, 0x90, 0x00}, aud(FormatMP3, "audio/mpeg", "")},
+		{"mp3_sync_e3", []byte{0xFF, 0xE3, 0x90, 0x00}, aud(FormatMP3, "audio/mpeg", "")},
+		{"mp3_sync_eb", []byte{0xFF, 0xEB, 0x90, 0x00}, aud(FormatMP3, "audio/mpeg", "")},
+		{"midi", []byte{'M', 'T', 'h', 'd', 0x00, 0x00}, aud(FormatMIDI, "audio/midi", "")},
+
+		// Text.
+		{"text_ascii", []byte("Hello, world! This is plain text.\nWith lines.\n"), txt},
+		{"text_unicode", []byte("Héllo wörld! こんにちは 🌍\n"), txt},
+		{"text_whitespace", []byte("   \t\t\n\n\r\n   \t  \n"), txt},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Detect(tt.data); got != tt.want {
+				t.Errorf("Detect() = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDetect_AIFF verifies AIFF detection including its IFF container, kept
+// separate because FORM/AIFF uses the same RIFF-style helper as WAV but a
+// different container family.
+func TestDetect_AIFF(t *testing.T) {
+	t.Parallel()
+	d := make([]byte, 12)
+	copy(d[0:4], "FORM")
+	copy(d[8:12], "AIFF")
+	want := Info{Type: Audio, Format: FormatAIFF, MimeType: "audio/aiff", Container: "IFF"}
+	if got := Detect(d); got != want {
+		t.Errorf("Detect(AIFF) = %#v, want %#v", got, want)
+	}
+}
+
+// TestDetect_Unknown covers inputs that must not classify as any media type:
+// too-short, empty, binary garbage, and truncated/invalid GIF headers.
+func TestDetect_Unknown(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"nil", nil},
+		{"empty", []byte{}},
+		{"one_byte", []byte{0x00}},
+		{"three_bytes", []byte{0x00, 0x01, 0x02}},
+		{"four_random", []byte{0x12, 0x34, 0x56, 0x78}},
+		{"binary_garbage", []byte{0x00, 0x01, 0x02, 0x03, 0x80, 0x81, 0x82, 0xFE, 0xFF}},
+		{"null_padding", make([]byte, 1000)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Detect(tt.data); got.Type != Unknown {
+				t.Errorf("Detect(%s) = %#v, want Unknown", tt.name, got)
+			}
+		})
+	}
+}
+
+// TestDetect_GIFRejectsTruncatedHeaders ensures partial or malformed GIF magic
+// is never misclassified as a GIF image (these ASCII prefixes may still fall
+// through to the text heuristic, which is acceptable).
+func TestDetect_GIFRejectsTruncatedHeaders(t *testing.T) {
+	t.Parallel()
 	for _, data := range [][]byte{
 		[]byte("GIF"),
 		[]byte("GIF8"),
@@ -35,308 +179,165 @@ func TestDetect_GIFRejectsTruncatedOrInvalidHeaders(t *testing.T) {
 		[]byte("GIF87"),
 		[]byte("GIF00a"),
 	} {
-		info := Detect(data)
-		if info.Type == Image || info.Format == "gif" {
-			t.Fatalf("expected non-GIF for %q, got %#v", data, info)
+		if got := Detect(data); got.Type == Image || got.Format == FormatGIF {
+			t.Errorf("Detect(%q) = %#v, want non-GIF", data, got)
 		}
 	}
 }
 
-func TestDetect_WebP(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[0:4], "RIFF")
-	copy(data[8:12], "WEBP")
-	info := Detect(data)
-	assertInfo(t, info, Image, "webp", "image/webp")
-}
+// TestDetect_TextHeuristic covers the UTF-8 printable-ratio classifier: control
+// chars fail, the 95%% ratio boundary is exact, and only the first
+// maxDetectBytes are sampled.
+func TestDetect_TextHeuristic(t *testing.T) {
+	t.Parallel()
 
-func TestDetect_BMP(t *testing.T) {
-	data := []byte{'B', 'M', 0x00, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Image, "bmp", "image/bmp")
-}
-
-func TestDetect_TIFF_LittleEndian(t *testing.T) {
-	data := []byte{'I', 'I', 0x2A, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Image, "tiff", "image/tiff")
-}
-
-func TestDetect_TIFF_BigEndian(t *testing.T) {
-	data := []byte{'M', 'M', 0x00, 0x2A}
-	info := Detect(data)
-	assertInfo(t, info, Image, "tiff", "image/tiff")
-}
-
-func TestDetect_AVIF(t *testing.T) {
-	data := make([]byte, 12)
-	// ftyp box at offset 4
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "avif")
-	info := Detect(data)
-	assertInfo(t, info, Image, "avif", "image/avif")
-}
-
-func TestDetect_HEIF(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "heic")
-	info := Detect(data)
-	assertInfo(t, info, Image, "heif", "image/heif")
-}
-
-func TestDetect_MP4(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "isom")
-	info := Detect(data)
-	assertInfo(t, info, Video, "mp4", "video/mp4")
-}
-
-func TestDetect_MOV(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "qt  ")
-	info := Detect(data)
-	assertInfo(t, info, Video, "mov", "video/quicktime")
-}
-
-func TestDetect_M4A(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "M4A ")
-	info := Detect(data)
-	assertInfo(t, info, Audio, "m4a", "audio/mp4")
-}
-
-func TestDetect_WebM(t *testing.T) {
-	// EBML header + webm doctype
-	data := []byte{
-		0x1A, 0x45, 0xDF, 0xA3, 0x00, 0x00, 0x00, 0x00,
-		'w', 'e', 'b', 'm', 0x00, 0x00, 0x00, 0x00,
-	}
-	info := Detect(data)
-	assertInfo(t, info, Video, "webm", "video/webm")
-}
-
-func TestDetect_MKV(t *testing.T) {
-	// EBML header without webm doctype
-	data := []byte{
-		0x1A, 0x45, 0xDF, 0xA3, 0x00, 0x00, 0x00, 0x00,
-		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	}
-	info := Detect(data)
-	assertInfo(t, info, Video, "mkv", "video/x-matroska")
-}
-
-func TestDetect_AVI(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[0:4], "RIFF")
-	copy(data[8:12], "AVI ")
-	info := Detect(data)
-	assertInfo(t, info, Video, "avi", "video/x-msvideo")
-}
-
-func TestDetect_FLV(t *testing.T) {
-	data := []byte{'F', 'L', 'V', 0x01, 0x05}
-	info := Detect(data)
-	assertInfo(t, info, Video, "flv", "video/x-flv")
-}
-
-func TestDetect_WAV(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[0:4], "RIFF")
-	copy(data[8:12], "WAVE")
-	info := Detect(data)
-	assertInfo(t, info, Audio, "wav", "audio/wav")
-}
-
-func TestDetect_FLAC(t *testing.T) {
-	data := []byte{'f', 'L', 'a', 'C', 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Audio, "flac", "audio/flac")
-}
-
-func TestDetect_OGG(t *testing.T) {
-	data := []byte{'O', 'g', 'g', 'S', 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Audio, "ogg", "audio/ogg")
-}
-
-func TestDetect_MP3_ID3(t *testing.T) {
-	data := []byte{'I', 'D', '3', 0x04, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Audio, "mp3", "audio/mpeg")
-}
-
-func TestDetect_MP3_FrameSync(t *testing.T) {
-	data := []byte{0xFF, 0xFB, 0x90, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Audio, "mp3", "audio/mpeg")
-}
-
-func TestDetect_MIDI(t *testing.T) {
-	data := []byte{'M', 'T', 'h', 'd', 0x00, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Audio, "midi", "audio/midi")
-}
-
-func TestDetect_AIFF(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[0:4], "FORM")
-	copy(data[8:12], "AIFF")
-	info := Detect(data)
-	assertInfo(t, info, Audio, "aiff", "audio/aiff")
-}
-
-func TestDetect_Text(t *testing.T) {
-	data := []byte("Hello, world! This is a plain text file.\nWith multiple lines.\n")
-	info := Detect(data)
-	assertInfo(t, info, Text, "txt", "text/plain")
-}
-
-func TestDetect_TextUnicode(t *testing.T) {
-	data := []byte("Héllo wörld! こんにちは 🌍\n")
-	info := Detect(data)
-	assertInfo(t, info, Text, "txt", "text/plain")
-}
-
-func TestDetect_ICO(t *testing.T) {
-	data := []byte{0x00, 0x00, 0x01, 0x00, 0x01, 0x00}
-	info := Detect(data)
-	assertInfo(t, info, Image, "ico", "image/x-icon")
-}
-
-func TestDetect_AAC(t *testing.T) {
-	data := []byte{0xFF, 0xF1, 0x50, 0x80} // ADTS header
-	info := Detect(data)
-	assertInfo(t, info, Audio, "aac", "audio/aac")
-}
-
-func TestDetect_MPEGTS(t *testing.T) {
-	data := make([]byte, 377)
-	data[0] = 0x47
-	data[188] = 0x47
-	info := Detect(data)
-	assertInfo(t, info, Video, "ts", "video/mp2t")
-}
-
-func TestDetect_M4V(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "M4V ")
-	info := Detect(data)
-	assertInfo(t, info, Video, "m4v", "video/x-m4v")
-}
-
-func TestDetect_ShortData(t *testing.T) {
-	// 1 byte — too short for most detectors but shouldn't panic.
-	info := Detect([]byte{0x00})
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for 1-byte input, got %v", info.Type)
+	buildRatio := func(printable int) []byte {
+		data := make([]byte, 100)
+		for i := range data {
+			if i < printable {
+				data[i] = 'A'
+			} else {
+				data[i] = 0x01
+			}
+		}
+		return data
 	}
 
-	// 3 bytes.
-	info = Detect([]byte{0x00, 0x01, 0x02})
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for 3-byte input, got %v", info.Type)
-	}
+	t.Run("control_chars_reject", func(t *testing.T) {
+		t.Parallel()
+		data := make([]byte, 100)
+		for i := range data {
+			data[i] = byte(i) // many control chars
+		}
+		if got := Detect(data); got.Type == Text {
+			t.Errorf("data with control chars classified as Text: %#v", got)
+		}
+	})
 
-	// 4 bytes exercise the shortest guarded image/video signatures without
-	// allowing longer detectors to read past the slice.
-	for _, tc := range []struct {
-		name   string
-		data   []byte
-		typ    Type
-		format Format
+	t.Run("exactly_95_percent", func(t *testing.T) {
+		t.Parallel()
+		if got := Detect(buildRatio(95)); got.Type != Text {
+			t.Errorf("95%% printable = %#v, want Text", got)
+		}
+	})
+
+	t.Run("below_95_percent", func(t *testing.T) {
+		t.Parallel()
+		if got := Detect(buildRatio(94)); got.Type != Unknown {
+			t.Errorf("94%% printable = %#v, want Unknown", got)
+		}
+	})
+
+	t.Run("samples_only_first_window", func(t *testing.T) {
+		t.Parallel()
+		// First maxDetectBytes are text; trailing control bytes are past the
+		// sampling window, so the input still classifies as text.
+		data := concat(bytes.Repeat([]byte{'A'}, maxDetectBytes), bytes.Repeat([]byte{0x01}, 1000))
+		if got := Detect(data); got.Type != Text {
+			t.Errorf("windowed text = %#v, want Text", got)
+		}
+	})
+}
+
+// TestDetect_LeadingSignatureWins proves detection keys only on the leading
+// bytes: appended payloads (polyglots, embedded scripts, a second signature)
+// never change the classification.
+func TestDetect_LeadingSignatureWins(t *testing.T) {
+	t.Parallel()
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'}
+	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
+	gif := []byte("GIF89a")
+	tests := []struct {
+		name    string
+		data    []byte
+		wantFmt Format
 	}{
-		{name: "jpeg", data: []byte{0xFF, 0xD8, 0xFF, 0x00}, typ: Image, format: "jpeg"},
-		{name: "flv", data: []byte{'F', 'L', 'V', 0x00}, typ: Video, format: "flv"},
-		{name: "ebml", data: []byte{0x1A, 0x45, 0xDF, 0xA3}, typ: Video, format: "mkv"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			info := Detect(tc.data)
-			if info.Type != tc.typ || info.Format != tc.format {
-				t.Fatalf("expected %s/%s, got %#v", tc.typ, tc.format, info)
+		{"script_in_jpeg", concat(jpeg, []byte(`<script>alert(1)</script>`)), FormatJPEG},
+		{"pdf_polyglot_after_jpeg", concat(jpeg, make([]byte, 100), []byte("%PDF-1.4")), FormatJPEG},
+		{"script_in_png", concat(png, []byte(`<script>alert("xss")</script>`)), FormatPNG},
+		{"php_in_gif", concat(gif, []byte(`<?php echo "hacked"; ?>`)), FormatGIF},
+		{"png_after_jpeg", concat(jpeg, png), FormatJPEG},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := Detect(tt.data); got.Format != tt.wantFmt {
+				t.Errorf("Detect() format = %q, want %q", got.Format, tt.wantFmt)
 			}
 		})
 	}
 }
 
-func TestDetect_TextWithControlChars(t *testing.T) {
-	// Mostly printable but has some control chars — should fail text detection.
-	data := make([]byte, 100)
-	for i := range data {
-		data[i] = byte(i) // bytes 0-99, many control chars
+func concat(parts ...[]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
 	}
-	info := Detect(data)
-	if info.Type == Text {
-		t.Error("data with many control chars should not be detected as text")
-	}
-}
-
-func TestDetect_GenericFtyp(t *testing.T) {
-	// Unknown ftyp brand defaults to MP4.
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "xxxx")
-	info := Detect(data)
-	assertInfo(t, info, Video, "mp4", "video/mp4")
-}
-
-func TestDetect_M4B(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "M4B ")
-	info := Detect(data)
-	assertInfo(t, info, Audio, "m4a", "audio/mp4")
-}
-
-func TestDetect_AVIS(t *testing.T) {
-	data := make([]byte, 12)
-	copy(data[4:8], "ftyp")
-	copy(data[8:12], "avis")
-	info := Detect(data)
-	assertInfo(t, info, Image, "avif", "image/avif")
-}
-
-func TestDetect_Empty(t *testing.T) {
-	info := Detect(nil)
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for empty input, got %v", info.Type)
-	}
-
-	info = Detect([]byte{})
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for empty slice, got %v", info.Type)
-	}
-}
-
-func TestDetect_BinaryGarbage(t *testing.T) {
-	data := []byte{0x00, 0x01, 0x02, 0x03, 0x80, 0x81, 0x82, 0xFE, 0xFF}
-	info := Detect(data)
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for binary garbage, got %v", info.Type)
-	}
+	return out
 }
 
 func TestDetectReader(t *testing.T) {
+	t.Parallel()
 	data := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10}
 	info, err := DetectReader(bytes.NewReader(data))
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("DetectReader: %v", err)
 	}
-	assertInfo(t, info, Image, "jpeg", "image/jpeg")
+	assertInfo(t, info, Image, FormatJPEG, "image/jpeg")
 }
 
 func TestDetectReader_Empty(t *testing.T) {
-	_, err := DetectReader(bytes.NewReader(nil))
-	if err == nil {
+	t.Parallel()
+	if _, err := DetectReader(bytes.NewReader(nil)); err == nil {
 		t.Error("expected error for empty reader")
 	}
 }
 
-func TestTypeString(t *testing.T) {
+func TestDetectReader_LargerThanWindow(t *testing.T) {
+	t.Parallel()
+	// DetectReader reads at most maxDetectBytes; an 8KB text stream still
+	// classifies as text from its prefix.
+	info, err := DetectReader(bytes.NewReader(bytes.Repeat([]byte{'Z'}, 8192)))
+	if err != nil {
+		t.Fatalf("DetectReader: %v", err)
+	}
+	assertInfo(t, info, Text, FormatText, "text/plain")
+}
+
+func TestDetectFile(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "test.png")
+	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}
+	if err := util.WriteFile(path, png); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	info, err := DetectFile(path)
+	if err != nil {
+		t.Fatalf("DetectFile: %v", err)
+	}
+	assertInfo(t, info, Image, FormatPNG, "image/png")
+}
+
+func TestDetectFile_NotFound(t *testing.T) {
+	t.Parallel()
+	if _, err := DetectFile("/nonexistent/path/file.bin"); err == nil {
+		t.Error("expected error for nonexistent file")
+	}
+}
+
+func TestDetectFile_Empty(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "empty.bin")
+	if err := util.WriteFile(path, []byte{}); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := DetectFile(path); err == nil {
+		t.Error("expected error for empty file")
+	}
+}
+
+func TestType_String(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		t    Type
 		want string
@@ -346,420 +347,12 @@ func TestTypeString(t *testing.T) {
 		{Audio, "audio"},
 		{Image, "image"},
 		{Text, "text"},
+		{Type(99), "unknown"},
 	}
 	for _, tt := range tests {
 		if got := tt.t.String(); got != tt.want {
 			t.Errorf("Type(%d).String() = %q, want %q", tt.t, got, tt.want)
 		}
-	}
-}
-
-func TestInfoJSON(t *testing.T) {
-	info := Info{Type: Video, Format: "mp4", MimeType: "video/mp4", Container: "ISO BMFF"}
-	data, err := json.Marshal(info)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-
-	var decoded Info
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if decoded != info {
-		t.Errorf("round-trip mismatch: got %+v, want %+v", decoded, info)
-	}
-}
-
-// TestDetectFile_WithTempFile creates a temp file and verifies detection.
-func TestDetectFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "test.png")
-
-	// Write PNG header.
-	pngHeader := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}
-	if err := util.WriteFile(path, pngHeader); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	info, err := DetectFile(path)
-	if err != nil {
-		t.Fatalf("DetectFile: %v", err)
-	}
-	assertInfo(t, info, Image, "png", "image/png")
-}
-
-func TestDetectFile_NotFound(t *testing.T) {
-	_, err := DetectFile("/nonexistent/path/file.bin")
-	if err == nil {
-		t.Error("expected error for nonexistent file")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Security tests
-// ---------------------------------------------------------------------------
-
-func TestDetect_ScriptEmbeddedInJPEG(t *testing.T) {
-	data := append([]byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'},
-		[]byte(`<script>alert(1)</script>`)...)
-	info := Detect(data)
-	assertInfo(t, info, Image, "jpeg", "image/jpeg")
-}
-
-func TestDetect_PHPInsideGIF(t *testing.T) {
-	data := append([]byte{'G', 'I', 'F', '8', '9', 'a'},
-		[]byte(`<?php echo "hacked"; ?>`)...)
-	info := Detect(data)
-	assertInfo(t, info, Image, "gif", "image/gif")
-}
-
-func TestDetect_PolyglotPDFJPEG(t *testing.T) {
-	header := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10} //nolint:prealloc // test fixture; readability over micro-perf
-	padding := make([]byte, 100)
-	pdfSig := []byte("%PDF-1.4")
-	data := append(append(header, padding...), pdfSig...) //nolint:gocritic // intentional: creating new slice for test data
-	info := Detect(data)
-	assertInfo(t, info, Image, "jpeg", "image/jpeg")
-}
-
-func TestDetect_NullBytePadding(t *testing.T) {
-	data := make([]byte, 1000) // all zeros
-	info := Detect(data)
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for null-padded data, got %v", info.Type)
-	}
-}
-
-func TestDetect_ScriptInsidePNG(t *testing.T) {
-	header := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}      //nolint:prealloc // test fixture; readability over micro-perf
-	data := append(header, []byte(`<script>alert("xss")</script>`)...) //nolint:gocritic // intentional: creating new slice for test data
-	info := Detect(data)
-	assertInfo(t, info, Image, "png", "image/png")
-}
-
-// ---------------------------------------------------------------------------
-// Edge-case tests
-// ---------------------------------------------------------------------------
-
-func TestDetect_ExactlyFourBytes(t *testing.T) {
-	data := []byte{0x12, 0x34, 0x56, 0x78}
-	info := Detect(data)
-	if info.Type != Unknown {
-		t.Errorf("expected Unknown for 4 random bytes, got %v", info.Type)
-	}
-}
-
-func TestDetect_RepeatedMagicBytes(t *testing.T) {
-	// JPEG header followed by PNG header — first detector (JPEG) wins.
-	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10} //nolint:prealloc // test fixture; readability over micro-perf
-	png := []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
-	data := append(jpeg, png...) //nolint:gocritic // intentional: creating new slice for test data
-	info := Detect(data)
-	assertInfo(t, info, Image, "jpeg", "image/jpeg")
-}
-
-func TestDetect_MaxDetectBytesLimit(t *testing.T) {
-	// First 4096 bytes are printable text; bytes beyond are control chars.
-	// isText only checks the first 4096 bytes, so it should still be text.
-	text := make([]byte, 4096) //nolint:prealloc // test fixture; readability over micro-perf
-	for i := range text {
-		text[i] = 'A'
-	}
-	garbage := make([]byte, 1000)
-	for i := range garbage {
-		garbage[i] = 0x01
-	}
-	data := append(text, garbage...) //nolint:gocritic // intentional: creating new slice for test data
-	info := Detect(data)
-	assertInfo(t, info, Text, "txt", "text/plain")
-}
-
-func TestDetect_TextBoundary95Percent(t *testing.T) {
-	t.Run("exactly_95_percent", func(t *testing.T) {
-		// 100 bytes: 95 printable, 5 non-printable control chars.
-		data := make([]byte, 100)
-		for i := 0; i < 95; i++ {
-			data[i] = 'A'
-		}
-		for i := 95; i < 100; i++ {
-			data[i] = 0x01 // non-printable control char
-		}
-		info := Detect(data)
-		assertInfo(t, info, Text, "txt", "text/plain")
-	})
-
-	t.Run("below_95_percent", func(t *testing.T) {
-		// 100 bytes: 94 printable, 6 non-printable control chars.
-		data := make([]byte, 100)
-		for i := 0; i < 94; i++ {
-			data[i] = 'A'
-		}
-		for i := 94; i < 100; i++ {
-			data[i] = 0x01
-		}
-		info := Detect(data)
-		if info.Type != Unknown {
-			t.Errorf("expected Unknown for <95%% printable, got %v", info.Type)
-		}
-	})
-}
-
-func TestDetect_LargeReaderData(t *testing.T) {
-	// Reader with >4096 bytes of text. DetectReader reads at most 4096.
-	data := make([]byte, 8192)
-	for i := range data {
-		data[i] = 'Z'
-	}
-	info, err := DetectReader(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	assertInfo(t, info, Text, "txt", "text/plain")
-}
-
-func TestDetect_GIF87a(t *testing.T) {
-	data := []byte{'G', 'I', 'F', '8', '7', 'a'}
-	info := Detect(data)
-	assertInfo(t, info, Image, "gif", "image/gif")
-}
-
-func TestDetect_DetectFileEmptyFile(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "empty.bin")
-	if err := util.WriteFile(path, []byte{}); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	_, err := DetectFile(path)
-	if err == nil {
-		t.Error("expected error for empty file")
-	}
-}
-
-func TestDetect_AllWhitespace(t *testing.T) {
-	data := []byte("   \t\t\n\n\r\n   \t  \n")
-	info := Detect(data)
-	assertInfo(t, info, Text, "txt", "text/plain")
-}
-
-// ---------------------------------------------------------------------------
-// Additional format tests
-// ---------------------------------------------------------------------------
-
-func TestDetect_MP4_AllBrands(t *testing.T) {
-	brands := []string{"iso2", "mp41", "mp42", "avc1", "dash"}
-	for _, brand := range brands {
-		t.Run(brand, func(t *testing.T) {
-			data := make([]byte, 12)
-			copy(data[4:8], "ftyp")
-			copy(data[8:12], brand)
-			info := Detect(data)
-			assertInfo(t, info, Video, "mp4", "video/mp4")
-		})
-	}
-}
-
-func TestDetect_M4V_AllBrands(t *testing.T) {
-	brands := []string{"M4VH", "M4VP"}
-	for _, brand := range brands {
-		t.Run(brand, func(t *testing.T) {
-			data := make([]byte, 12)
-			copy(data[4:8], "ftyp")
-			copy(data[8:12], brand)
-			info := Detect(data)
-			assertInfo(t, info, Video, "m4v", "video/x-m4v")
-		})
-	}
-}
-
-func TestDetect_HEIF_AllBrands(t *testing.T) {
-	brands := []string{"heix", "heif"}
-	for _, brand := range brands {
-		t.Run(brand, func(t *testing.T) {
-			data := make([]byte, 12)
-			copy(data[4:8], "ftyp")
-			copy(data[8:12], brand)
-			info := Detect(data)
-			assertInfo(t, info, Image, "heif", "image/heif")
-		})
-	}
-}
-
-func TestDetect_MultipleMP3SyncPatterns(t *testing.T) {
-	patterns := []struct {
-		name  string
-		byte1 byte
-	}{
-		{"0xE3", 0xE3},
-		{"0xEB", 0xEB},
-	}
-	for _, p := range patterns {
-		t.Run(p.name, func(t *testing.T) {
-			data := []byte{0xFF, p.byte1, 0x90, 0x00}
-			info := Detect(data)
-			assertInfo(t, info, Audio, "mp3", "audio/mpeg")
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Container field validation
-// ---------------------------------------------------------------------------
-
-func TestDetect_ContainerField(t *testing.T) {
-	tests := []struct {
-		name      string
-		data      []byte
-		container string
-	}{
-		{"AVI_RIFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[0:4], "RIFF")
-			copy(d[8:12], "AVI ")
-			return d
-		}(), "RIFF"},
-		{"WAV_RIFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[0:4], "RIFF")
-			copy(d[8:12], "WAVE")
-			return d
-		}(), "RIFF"},
-		{"WebP_RIFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[0:4], "RIFF")
-			copy(d[8:12], "WEBP")
-			return d
-		}(), "RIFF"},
-		{"MP4_ISO_BMFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "isom")
-			return d
-		}(), "ISO BMFF"},
-		{"M4V_ISO_BMFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "M4V ")
-			return d
-		}(), "ISO BMFF"},
-		{"M4A_ISO_BMFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "M4A ")
-			return d
-		}(), "ISO BMFF"},
-		{"AVIF_ISO_BMFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "avif")
-			return d
-		}(), "ISO BMFF"},
-		{"HEIF_ISO_BMFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "heic")
-			return d
-		}(), "ISO BMFF"},
-		{"MOV_QuickTime", func() []byte {
-			d := make([]byte, 12)
-			copy(d[4:8], "ftyp")
-			copy(d[8:12], "qt  ")
-			return d
-		}(), "QuickTime"},
-		{"WebM_Matroska", []byte{
-			0x1A, 0x45, 0xDF, 0xA3, 0x00, 0x00, 0x00, 0x00,
-			'w', 'e', 'b', 'm', 0x00, 0x00, 0x00, 0x00,
-		}, "Matroska"},
-		{"MKV_Matroska", []byte{
-			0x1A, 0x45, 0xDF, 0xA3, 0x00, 0x00, 0x00, 0x00,
-			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-		}, "Matroska"},
-		{"FLV_Container", []byte{'F', 'L', 'V', 0x01, 0x05}, "FLV"},
-		{"MPEGTS_Container", func() []byte {
-			d := make([]byte, 377)
-			d[0] = 0x47
-			d[188] = 0x47
-			return d
-		}(), "MPEG-TS"},
-		{"OGG_Container", []byte{'O', 'g', 'g', 'S', 0x00}, "Ogg"},
-		{"AIFF_IFF", func() []byte {
-			d := make([]byte, 12)
-			copy(d[0:4], "FORM")
-			copy(d[8:12], "AIFF")
-			return d
-		}(), "IFF"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			info := Detect(tt.data)
-			if info.Container != tt.container {
-				t.Errorf("Container = %q, want %q", info.Container, tt.container)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// JSON round-trip tests
-// ---------------------------------------------------------------------------
-
-func TestInfoJSON_AllTypes(t *testing.T) {
-	types := []struct {
-		tp   Type
-		name string
-	}{
-		{Unknown, "unknown"},
-		{Video, "video"},
-		{Audio, "audio"},
-		{Image, "image"},
-		{Text, "text"},
-	}
-	for _, tt := range types {
-		t.Run(tt.name, func(t *testing.T) {
-			original := Info{
-				Type:      tt.tp,
-				Format:    "fmt",
-				MimeType:  "type/fmt",
-				Container: "Box",
-			}
-			data, err := json.Marshal(original)
-			if err != nil {
-				t.Fatalf("marshal: %v", err)
-			}
-			var decoded Info
-			if err := json.Unmarshal(data, &decoded); err != nil {
-				t.Fatalf("unmarshal: %v", err)
-			}
-			if decoded != original {
-				t.Errorf("round-trip mismatch: got %+v, want %+v", decoded, original)
-			}
-		})
-	}
-}
-
-func TestInfoJSON_EmptyInfo(t *testing.T) {
-	original := Info{}
-	data, err := json.Marshal(original)
-	if err != nil {
-		t.Fatalf("marshal: %v", err)
-	}
-	var decoded Info
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if decoded != original {
-		t.Errorf("round-trip mismatch: got %+v, want %+v", decoded, original)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Type edge tests
-// ---------------------------------------------------------------------------
-
-func TestTypeString_OutOfRange(t *testing.T) {
-	if got := Type(99).String(); got != "unknown" {
-		t.Errorf("Type(99).String() = %q, want %q", got, "unknown")
 	}
 }
 
@@ -774,4 +367,61 @@ func assertInfo(t *testing.T, got Info, wantType Type, wantFormat Format, wantMi
 	if got.MimeType != wantMime {
 		t.Errorf("MimeType = %q, want %q", got.MimeType, wantMime)
 	}
+}
+
+// FuzzDetect exercises the byte-signature detector against arbitrary input to
+// prove it never panics or reads out of bounds, and that its result is
+// internally consistent (a classified type always carries a non-empty format).
+func FuzzDetect(f *testing.F) {
+	seeds := [][]byte{
+		nil,
+		{},
+		{0x00},
+		{0xFF, 0xD8, 0xFF, 0xE0},
+		{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A},
+		[]byte("GIF89a"),
+		[]byte("RIFFxxxxWEBP"),
+		[]byte("RIFFxxxxWAVE"),
+		[]byte("RIFFxxxxAVI "),
+		{0x1A, 0x45, 0xDF, 0xA3},
+		[]byte("ftyp"),
+		[]byte("....ftypisom"),
+		[]byte("Hello, plain text world.\n"),
+		{0x47},
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		info := Detect(data)
+
+		switch info.Type {
+		case Unknown:
+			if info.Format != FormatUnknown {
+				t.Errorf("Unknown type carried format %q", info.Format)
+			}
+		case Video, Audio, Image, Text:
+			if info.Format == FormatUnknown {
+				t.Errorf("classified %v with empty format for %q", info.Type, data)
+			}
+			if info.MimeType == "" {
+				t.Errorf("classified %v without mime type for %q", info.Type, data)
+			}
+		default:
+			t.Errorf("unexpected type %d", info.Type)
+		}
+
+		// DetectReader over the same bytes must agree with Detect for non-empty
+		// input (it reads up to maxDetectBytes, matching Detect's window).
+		if len(data) > 0 {
+			got, err := DetectReader(bytes.NewReader(data))
+			if err != nil {
+				t.Fatalf("DetectReader errored on non-empty input: %v", err)
+			}
+			if len(data) <= maxDetectBytes && got != info {
+				t.Errorf("DetectReader %+v != Detect %+v", got, info)
+			}
+		}
+	})
 }

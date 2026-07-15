@@ -2,6 +2,7 @@ package media
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -103,6 +104,56 @@ func TestParseCueTime_MalformedVariants(t *testing.T) {
 	}
 }
 
+func TestParseCueTime_RejectsOverflowingField(t *testing.T) {
+	t.Parallel()
+	// A field large enough to overflow the int64-microsecond Timestamp must be
+	// rejected rather than wrapping to a negative time (regression for a
+	// fuzzer-found SRT round-trip break).
+	if _, err := ParseSRT("1\n0:0 --> 1100000000000:0\n0"); !errors.Is(err, ErrInvalidSubtitle) {
+		t.Errorf("overflowing cue time err = %v, want ErrInvalidSubtitle", err)
+	}
+}
+
+func TestParseCues_NormalizesBlankAndTagOnlyLines(t *testing.T) {
+	t.Parallel()
+	// A tag-only first text line leaves a leading blank line that must not
+	// re-serialize into a cue boundary (regression for a fuzzer-found round-trip
+	// break). The cue text is normalized to its non-empty lines.
+	track, err := ParseSRT("1\n00:00:00,000 --> 00:00:00,000\n<>\nkeep")
+	if err != nil {
+		t.Fatalf("ParseSRT: %v", err)
+	}
+	if len(track.Entries) != 1 || track.Entries[0].Text != "keep" {
+		t.Fatalf("entries = %+v, want single 'keep'", track.Entries)
+	}
+	reparsed, err := ParseSRT(track.SRT())
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	if len(reparsed.Entries) != len(track.Entries) {
+		t.Errorf("round-trip cue count %d -> %d", len(track.Entries), len(reparsed.Entries))
+	}
+}
+
+func TestVTT_EscapesSpecialCharsForRoundTrip(t *testing.T) {
+	t.Parallel()
+	// A literal '<' (e.g. from a decoded &#60; entity) must be re-escaped on
+	// serialization so it survives a parse round-trip instead of being read as
+	// tag markup (regression for a fuzzer-found VTT round-trip break).
+	track := SubtitleTrack{}.Add(TimeRangeFromMillis(0, 1000), "a < b & c")
+	vtt := track.VTT()
+	if !strings.Contains(vtt, "&lt;") || !strings.Contains(vtt, "&amp;") {
+		t.Errorf("VTT did not escape special chars: %q", vtt)
+	}
+	reparsed, err := ParseVTT(vtt)
+	if err != nil {
+		t.Fatalf("re-parse VTT: %v", err)
+	}
+	if len(reparsed.Entries) != 1 || reparsed.Entries[0].Text != "a < b & c" {
+		t.Errorf("VTT round-trip = %+v, want unchanged text", reparsed.Entries)
+	}
+}
+
 func TestSubtitleTrack_RoundTrip(t *testing.T) {
 	t.Parallel()
 	track := SubtitleTrack{}.
@@ -163,4 +214,53 @@ func TestSubtitleTrack_ShiftAndInRange(t *testing.T) {
 	if sub.Language != track.Language {
 		t.Error("InRange should preserve language")
 	}
+}
+
+// FuzzParseSRT asserts the SRT parser never panics and that any track it
+// produces round-trips: re-parsing its serialization yields the same cue count.
+func FuzzParseSRT(f *testing.F) {
+	f.Add("1\n00:00:01,000 --> 00:00:02,000\nhello")
+	f.Add("\ufeff1\r\n00:00:01,000 --> 00:00:02,500\r\n<b>hi</b>\r\n\r\n")
+	f.Add("garbage\nno arrow here\n\n")
+	f.Add("1\n00:00:01,000 --> bad\nx")
+
+	f.Fuzz(func(t *testing.T, content string) {
+		track, err := ParseSRT(content)
+		if err != nil {
+			return
+		}
+		out := track.SRT()
+		reparsed, err := ParseSRT(out)
+		if err != nil {
+			t.Fatalf("serialized SRT failed to re-parse: %v\ninput=%q\nout=%q", err, content, out)
+		}
+		if len(reparsed.Entries) != len(track.Entries) {
+			t.Fatalf("cue count changed on round-trip: %d -> %d", len(track.Entries), len(reparsed.Entries))
+		}
+	})
+}
+
+// FuzzParseVTT asserts the WebVTT parser never panics and that any track it
+// produces round-trips: re-parsing its serialization yields the same cue count.
+// Entity-decoded angle brackets are legitimate cue text, so the invariant is
+// round-trip stability (which requires the serializer to re-escape), not the
+// absence of angle brackets.
+func FuzzParseVTT(f *testing.F) {
+	f.Add("WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nhello")
+	f.Add("WEBVTT\n\n01:02.500 --> 01:03.000 align:start\n<c>&amp; hi</c>")
+	f.Add("WEBVTT\n\nNOTE x\n\nbad --> 00:00:02.000\nx")
+
+	f.Fuzz(func(t *testing.T, content string) {
+		track, err := ParseVTT(content)
+		if err != nil {
+			return
+		}
+		reparsed, err := ParseVTT(track.VTT())
+		if err != nil {
+			t.Fatalf("serialized VTT failed to re-parse: %v\ninput=%q", err, content)
+		}
+		if len(reparsed.Entries) != len(track.Entries) {
+			t.Fatalf("cue count changed on round-trip: %d -> %d", len(track.Entries), len(reparsed.Entries))
+		}
+	})
 }

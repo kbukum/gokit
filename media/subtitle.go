@@ -12,6 +12,12 @@ import (
 // timestamp on an otherwise well-formed cue line.
 var ErrInvalidSubtitle = errors.New("media: invalid subtitle timestamp")
 
+// maxCueField bounds any single parsed timestamp field (hours, minutes,
+// seconds, or fractional milliseconds). It keeps the millisecond→microsecond
+// conversion within int64 range so an absurdly large cue time fails closed as
+// [ErrInvalidSubtitle] instead of wrapping to a negative [Timestamp].
+const maxCueField = 1_000_000_000
+
 // SubtitleEntry is a single timed subtitle cue.
 type SubtitleEntry struct {
 	Range TimeRange `json:"range"`
@@ -83,14 +89,8 @@ func parseCues(content string, vtt bool) (SubtitleTrack, error) {
 			return SubtitleTrack{}, fmt.Errorf("%w: %q", ErrInvalidSubtitle, parts[1])
 		}
 		textLines := lines[idx+1:]
-		if len(textLines) == 0 {
-			continue
-		}
-		text := stripTags(strings.Join(textLines, "\n"))
-		if vtt {
-			text = html.UnescapeString(text)
-		}
-		if strings.TrimSpace(text) == "" {
+		text := cleanCueText(strings.Join(textLines, "\n"), vtt)
+		if text == "" {
 			continue
 		}
 		track.Entries = append(track.Entries, SubtitleEntry{
@@ -117,7 +117,7 @@ func (t SubtitleTrack) VTT() string {
 	b.WriteString("WEBVTT\n\n")
 	for _, e := range t.Entries {
 		fmt.Fprintf(&b, "%s --> %s\n%s\n\n",
-			formatClock(e.Range.Start, '.'), formatClock(e.Range.End, '.'), e.Text)
+			formatClock(e.Range.Start, '.'), formatClock(e.Range.End, '.'), vttEscaper.Replace(e.Text))
 	}
 	return b.String()
 }
@@ -198,6 +198,11 @@ func atoi(s string) (int64, bool) {
 			return 0, false
 		}
 		n = n*10 + int64(c-'0')
+		// Bound each field so the millisecond→microsecond conversion in
+		// TimestampFromMillis cannot overflow int64 and wrap negative.
+		if n > maxCueField {
+			return 0, false
+		}
 	}
 	return n, true
 }
@@ -221,6 +226,29 @@ func formatClock(ts Timestamp, sep byte) string {
 	mins := totalMins % 60
 	hours := totalMins / 60
 	return fmt.Sprintf("%02d:%02d:%02d%c%03d", hours, mins, secs, sep, millis)
+}
+
+// vttEscaper escapes the WebVTT-significant characters so serialized cue text
+// is valid WebVTT and survives a parse round-trip (a literal '<' would otherwise
+// be re-read as tag markup and stripped).
+var vttEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
+
+// cleanCueText normalizes cue body text into a round-trippable form: tags are
+// stripped, WebVTT entities decoded (vtt), and each line is trimmed with empty
+// lines dropped so the result never contains a blank line that would re-parse
+// as a cue boundary. It returns "" when no text survives.
+func cleanCueText(raw string, vtt bool) string {
+	raw = stripTags(raw)
+	if vtt {
+		raw = html.UnescapeString(raw)
+	}
+	var kept []string
+	for _, ln := range strings.Split(raw, "\n") {
+		if ln = strings.TrimSpace(ln); ln != "" {
+			kept = append(kept, ln)
+		}
+	}
+	return strings.Join(kept, "\n")
 }
 
 // stripTags removes angle-bracket markup (e.g. <b>, <i>, <c>, <v Bob>).
