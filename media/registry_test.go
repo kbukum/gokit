@@ -52,7 +52,8 @@ func TestWithFormat_OverridesEntry(t *testing.T) {
 
 func TestWithProber_NilIsIgnored(t *testing.T) {
 	t.Parallel()
-	reg := NewRegistry(WithProber(nil))
+	var typedNil *imageProber // typed-nil interface value
+	reg := NewRegistry(WithProber(nil), WithProber(typedNil))
 	// No panic and probe still works with signature-only detection.
 	meta := reg.Probe(encodePNG(t, 4, 4))
 	if meta.Type != Image {

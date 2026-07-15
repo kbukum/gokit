@@ -2,6 +2,7 @@ package media
 
 import (
 	"cmp"
+	"reflect"
 	"slices"
 )
 
@@ -25,12 +26,28 @@ func WithFormat(fi FormatInfo) Option {
 }
 
 // WithProber appends a [Prober] backend. Probers are tried in registration
-// order; the first that succeeds wins.
+// order; the first that succeeds wins. A nil prober (including a typed-nil
+// interface) is ignored so it cannot panic later during probing.
 func WithProber(p Prober) Option {
 	return func(r *Registry) {
-		if p != nil {
+		if !isNilProber(p) {
 			r.probers = append(r.probers, p)
 		}
+	}
+}
+
+// isNilProber reports whether p is nil, including a typed-nil interface value
+// (e.g. a nil *T stored in the interface) that a plain p == nil check misses.
+func isNilProber(p Prober) bool {
+	if p == nil {
+		return true
+	}
+	v := reflect.ValueOf(p)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan, reflect.Interface:
+		return v.IsNil()
+	default:
+		return false
 	}
 }
 

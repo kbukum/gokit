@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"slices"
 	"strings"
 	"time"
 )
@@ -35,7 +36,7 @@ type SubtitleTrack struct {
 // Add returns a copy of the track with the cue appended; the receiver is
 // unchanged, so callers must use the returned value (supports chaining).
 func (t SubtitleTrack) Add(r TimeRange, text string) SubtitleTrack {
-	t.Entries = append(t.Entries, SubtitleEntry{Range: r, Text: text})
+	t.Entries = append(slices.Clip(t.Entries), SubtitleEntry{Range: r, Text: text})
 	return t
 }
 

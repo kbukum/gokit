@@ -216,6 +216,21 @@ func TestSubtitleTrack_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestSubtitleTrack_AddDoesNotMutateReceiver(t *testing.T) {
+	t.Parallel()
+	base := SubtitleTrack{}.Add(TimeRangeFromMillis(0, 1000), "a")
+	// Two independent appends off the same base must not clobber each other via
+	// a shared backing array.
+	b := base.Add(TimeRangeFromMillis(1000, 2000), "b")
+	c := base.Add(TimeRangeFromMillis(2000, 3000), "c")
+	if len(base.Entries) != 1 {
+		t.Fatalf("base mutated: len = %d, want 1", len(base.Entries))
+	}
+	if b.Entries[1].Text != "b" || c.Entries[1].Text != "c" {
+		t.Errorf("appends shared backing array: b=%q c=%q", b.Entries[1].Text, c.Entries[1].Text)
+	}
+}
+
 func TestSubtitleTrack_SerializeFormats(t *testing.T) {
 	t.Parallel()
 	track := SubtitleTrack{}.Add(TimeRangeFromMillis(1000, 2500), "hi")
