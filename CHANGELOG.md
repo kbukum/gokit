@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`, a
     deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
   - **signal**: graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context`
-    cancelation via `signal.NotifyContext`.
+    cancellation via `signal.NotifyContext`.
   - **live**: a bounded multi-region console for concurrent streaming output.
 - Raw-mode rich TUI widgets are intentionally rskit-only.
 

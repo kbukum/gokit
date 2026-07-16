@@ -3,12 +3,23 @@ package signal_test
 import (
 	"context"
 	"errors"
-	"syscall"
+	"os"
 	"testing"
 	"time"
 
 	clisignal "github.com/kbukum/gokit/cli/signal"
 )
+
+func signalSelf(t *testing.T) {
+	t.Helper()
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("find process: %v", err)
+	}
+	if err := proc.Signal(os.Interrupt); err != nil {
+		t.Fatalf("signal self: %v", err)
+	}
+}
 
 func TestOnInterruptCancelsOnSignal(t *testing.T) {
 	ctx, stop := clisignal.OnInterrupt(context.Background())
@@ -18,9 +29,7 @@ func TestOnInterruptCancelsOnSignal(t *testing.T) {
 		t.Fatalf("context must start live, got %v", err)
 	}
 
-	if err := syscall.Kill(syscall.Getpid(), syscall.SIGTERM); err != nil {
-		t.Fatalf("kill: %v", err)
-	}
+	signalSelf(t)
 
 	select {
 	case <-ctx.Done():
@@ -28,12 +37,12 @@ func TestOnInterruptCancelsOnSignal(t *testing.T) {
 			t.Errorf("err = %v, want Canceled", ctx.Err())
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("context was not canceled after SIGTERM")
+		t.Fatal("context was not canceled after interrupt")
 	}
 }
 
 func TestNotifyContextStopReleasesHandler(t *testing.T) {
-	ctx, stop := clisignal.NotifyContext(context.Background(), syscall.SIGUSR1)
+	ctx, stop := clisignal.NotifyContext(context.Background(), os.Interrupt)
 	stop()
 	// After stop, canceling the parent still propagates; the handler is gone.
 	select {
@@ -49,7 +58,7 @@ func TestNotifyContextStopReleasesHandler(t *testing.T) {
 func TestNotifyContextFollowsParentCancellation(t *testing.T) {
 	t.Parallel()
 	parent, cancelParent := context.WithCancel(context.Background())
-	ctx, stop := clisignal.NotifyContext(parent, syscall.SIGUSR2)
+	ctx, stop := clisignal.NotifyContext(parent, os.Interrupt)
 	defer stop()
 
 	cancelParent()
@@ -60,15 +69,17 @@ func TestNotifyContextFollowsParentCancellation(t *testing.T) {
 	}
 }
 
-func TestInterruptSignalsIncludeSIGINTAndSIGTERM(t *testing.T) {
+func TestInterruptSignalsIncludeInterrupt(t *testing.T) {
 	t.Parallel()
 	sigs := clisignal.InterruptSignals()
-	has := map[string]bool{}
+	found := false
 	for _, s := range sigs {
-		has[s.String()] = true
+		if s == os.Interrupt {
+			found = true
+		}
 	}
-	if !has[syscall.SIGINT.String()] || !has[syscall.SIGTERM.String()] {
-		t.Errorf("InterruptSignals = %v, want SIGINT and SIGTERM", sigs)
+	if !found {
+		t.Errorf("InterruptSignals = %v, want os.Interrupt", sigs)
 	}
 }
 

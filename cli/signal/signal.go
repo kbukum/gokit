@@ -4,15 +4,18 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"syscall"
 )
 
 // InterruptSignals returns the OS signals treated as a graceful-shutdown
-// request: SIGINT (Ctrl+C) and SIGTERM.
+// request: [os.Interrupt] (Ctrl+C) everywhere, plus SIGTERM on platforms that
+// deliver it (Windows has no SIGTERM analog).
 //
 // It returns a fresh slice on each call so callers cannot mutate shared state.
 func InterruptSignals() []os.Signal {
-	return []os.Signal{os.Interrupt, syscall.SIGTERM}
+	extra := terminationSignals()
+	sigs := make([]os.Signal, 0, 1+len(extra))
+	sigs = append(sigs, os.Interrupt)
+	return append(sigs, extra...)
 }
 
 // NotifyContext returns a copy of parent that is canceled when one of sigs is
