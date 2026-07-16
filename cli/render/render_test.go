@@ -92,7 +92,7 @@ func TestExitCodeForErrorMapsCodes(t *testing.T) {
 		errors.Conflict("dup"):             render.ExitConflict,
 		errors.RateLimited():               render.ExitRateLimited,
 		errors.Timeout("op"):               render.ExitTimeout,
-		errors.Canceled("op"):              render.ExitCancelled,
+		errors.Canceled("op"):              render.ExitCanceled,
 		errors.ServiceUnavailable("svc"):   render.ExitUnavailable,
 		errors.Internal(nil):               render.ExitFailure,
 	}

@@ -31,8 +31,8 @@ const (
 	ExitRateLimited ExitCode = 75
 	// ExitTimeout is a command that timed out.
 	ExitTimeout ExitCode = 124
-	// ExitCancelled is a command that was canceled.
-	ExitCancelled ExitCode = 130
+	// ExitCanceled is a command that was canceled.
+	ExitCanceled ExitCode = 130
 )
 
 // Int returns the exit code as an integer suitable for os.Exit.
@@ -73,7 +73,7 @@ func exitCodeForCode(code errors.ErrorCode) ExitCode {
 	case errors.ErrCodeTimeout:
 		return ExitTimeout
 	case errors.ErrCodeCanceled:
-		return ExitCancelled
+		return ExitCanceled
 	default:
 		return ExitFailure
 	}

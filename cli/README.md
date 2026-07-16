@@ -39,8 +39,10 @@ import (
 )
 
 func main() {
-	// Resolve styling once against the output stream's capability.
-	palette := theme.PaletteForStream(theme.ColorAuto, isTTY(os.Stderr))
+	// Resolve styling once against the output stream's capability. TTY
+	// detection is the caller's concern; wire it to your terminal check.
+	stderrIsTTY := false
+	palette := theme.PaletteForStream(theme.ColorAuto, stderrIsTTY)
 	status := render.NewStatusReporter(os.Stderr, palette, theme.GlyphsFromEnv())
 
 	_ = status.Heading("Building")
