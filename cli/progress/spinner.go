@@ -7,7 +7,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 )
 
-// asciiSpinnerFrames is the pipe-clean fallback frame sequence.
+// asciiSpinnerFrames is the ASCII fallback frame sequence.
 var asciiSpinnerFrames = []string{"|", "/", "-", "\\"}
 
 // unicodeSpinnerFrames is the braille spinner used on UTF-8 terminals.

@@ -23,10 +23,11 @@ func InterruptSignals() []os.Signal {
 //
 // It wraps [signal.NotifyContext]: the first matching signal cancels the
 // returned context, and the returned stop function both releases the signal
-// handler (restoring the default disposition, so a second signal terminates the
-// process) and cancels the context. Callers must invoke stop, typically via
-// defer, to avoid leaking the handler. With no sigs the context is canceled only
-// by stop or when parent is.
+// handler and cancels the context. Until stop runs the handler stays installed,
+// so a second signal is absorbed rather than terminating; call stop once
+// shutdown begins to let a later interrupt force-exit, and always call it to
+// avoid leaking the handler. With no sigs the context is canceled only by stop
+// or when parent is.
 func NotifyContext(parent context.Context, sigs ...os.Signal) (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(parent, sigs...)
 }

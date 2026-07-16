@@ -44,7 +44,7 @@ func TestOnInterruptCancelsOnSignal(t *testing.T) {
 func TestNotifyContextStopReleasesHandler(t *testing.T) {
 	ctx, stop := clisignal.NotifyContext(context.Background(), os.Interrupt)
 	stop()
-	// After stop, canceling the parent still propagates; the handler is gone.
+	// stop cancels the returned context and releases the signal handler.
 	select {
 	case <-ctx.Done():
 		if !errors.Is(ctx.Err(), context.Canceled) {

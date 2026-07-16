@@ -10,5 +10,7 @@
 //
 // Rendering is deterministic and clock-free: the console redraws only when the
 // caller calls [Console.Render], writing to an injected [io.Writer], so it is
-// fully testable without a real terminal.
+// fully testable without a real terminal. Redrawing emits ANSI cursor-movement
+// and clear sequences, so bind it to a terminal writer — a non-TTY sink (log or
+// pipe) receives raw escape codes.
 package live

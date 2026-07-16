@@ -682,7 +682,7 @@ func (t *gateTerminal) Flush() error {
 	return failAt(t.flushAt, t.flushes)
 }
 
-// failAt fails once the call count reaches a non-zero target.
+// failAt fails once the call count reaches a non-zero target, and on every call after.
 func failAt(target, count int) error {
 	if target != 0 && count >= target {
 		return errString("gated")
