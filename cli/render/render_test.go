@@ -9,6 +9,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/kbukum/gokit/cli/render"
+	"github.com/kbukum/gokit/cli/theme"
 	"github.com/kbukum/gokit/errors"
 )
 
@@ -20,6 +21,20 @@ func TestOutputTableRenders(t *testing.T) {
 	out := table.String()
 	if !strings.Contains(out, "Name") || !strings.Contains(out, "500") {
 		t.Errorf("table missing content:\n%s", out)
+	}
+}
+
+func TestOutputTableASCIIBorders(t *testing.T) {
+	t.Parallel()
+	out := render.NewOutputTable("A", "B").
+		WithGlyphs(theme.NewGlyphs(false)).
+		AddRow("x", "y").
+		String()
+	if strings.ContainsAny(out, "─│┌┬┐├┼┤└┴┘") {
+		t.Errorf("ASCII table must not contain box-drawing runes:\n%s", out)
+	}
+	if !strings.Contains(out, "+") || !strings.Contains(out, "|") {
+		t.Errorf("ASCII table must use +/| borders:\n%s", out)
 	}
 }
 

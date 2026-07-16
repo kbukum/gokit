@@ -11,7 +11,7 @@ import (
 )
 
 func newConsole(buf *bytes.Buffer, cfg live.Config) *live.Console {
-	return live.NewConsole(buf, cfg, theme.NewPalette(false))
+	return live.NewConsole(buf, cfg, theme.NewPalette(false), theme.NewGlyphs(true))
 }
 
 func TestConsoleRendersRegionTilesAndLatestLines(t *testing.T) {
@@ -89,7 +89,7 @@ func TestAddRegionEnforcesMaxRegionsBound(t *testing.T) {
 func TestFinishWritesDurableVerdicts(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	console := live.NewConsole(&buf, live.Config{MaxRegions: 3, RegionHeight: 2}, theme.NewPalette(false))
+	console := live.NewConsole(&buf, live.Config{MaxRegions: 3, RegionHeight: 2}, theme.NewPalette(false), theme.NewGlyphs(true))
 	ok, _ := console.AddRegion("build")
 	ok.Println("...")
 	ok.Done("passed")
@@ -108,6 +108,26 @@ func TestFinishWritesDurableVerdicts(t *testing.T) {
 	}
 	if !strings.Contains(out, "✗ test: 2 failures") {
 		t.Errorf("failed verdict missing:\n%s", out)
+	}
+}
+
+func TestFinishUsesASCIIVerdictsWhenGlyphsDisabled(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	console := live.NewConsole(&buf, live.Config{MaxRegions: 2, RegionHeight: 1}, theme.NewPalette(false), theme.NewGlyphs(false))
+	ok, _ := console.AddRegion("build")
+	ok.Done("passed")
+	bad, _ := console.AddRegion("test")
+	bad.Fail("2 failures")
+	if err := console.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "v build: passed") || !strings.Contains(out, "x test: 2 failures") {
+		t.Errorf("ASCII verdicts missing:\n%s", out)
+	}
+	if strings.ContainsAny(out, "✓✗") {
+		t.Errorf("unicode glyphs leaked into ASCII output:\n%s", out)
 	}
 }
 

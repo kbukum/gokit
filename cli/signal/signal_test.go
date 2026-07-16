@@ -56,7 +56,7 @@ func TestNotifyContextFollowsParentCancellation(t *testing.T) {
 	select {
 	case <-ctx.Done():
 	case <-time.After(2 * time.Second):
-		t.Fatal("child context must follow parent cancelation")
+		t.Fatal("child context must follow parent cancellation")
 	}
 }
 

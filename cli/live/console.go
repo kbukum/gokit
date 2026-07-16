@@ -42,11 +42,12 @@ func (c Config) withDefaults() Config {
 //
 // It is safe for concurrent use: regions may be appended to from separate
 // goroutines while the owner periodically calls [Console.Render]. Ownership,
-// cancelation, and render cadence belong to the caller — the console itself
+// cancellation, and render cadence belong to the caller — the console itself
 // spawns no goroutines.
 type Console struct {
 	writer  io.Writer
 	palette theme.Palette
+	glyphs  theme.Glyphs
 	config  Config
 
 	mu        sync.Mutex
@@ -54,9 +55,11 @@ type Console struct {
 	lastFrame int
 }
 
-// NewConsole creates a live console writing to w, bounded by config.
-func NewConsole(w io.Writer, config Config, palette theme.Palette) *Console {
-	return &Console{writer: w, palette: palette, config: config.withDefaults()}
+// NewConsole creates a live console writing to w, bounded by config. The glyph
+// set selects the verdict symbols so [Console.Finish] stays byte-clean on
+// non-UTF-8 terminals.
+func NewConsole(w io.Writer, config Config, palette theme.Palette, glyphs theme.Glyphs) *Console {
+	return &Console{writer: w, palette: palette, glyphs: glyphs, config: config.withDefaults()}
 }
 
 // AddRegion appends a new tile titled title.
@@ -115,7 +118,7 @@ func (c *Console) Finish() error {
 	}
 	c.lastFrame = 0
 	for _, region := range c.regions {
-		b.WriteString(region.verdictLine(c.palette))
+		b.WriteString(region.verdictLine(c.palette, c.glyphs))
 		b.WriteByte('\n')
 	}
 	if _, err := io.WriteString(c.writer, b.String()); err != nil {

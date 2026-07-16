@@ -5,18 +5,18 @@ import (
 	"strings"
 )
 
-// UTF8LocaleEnvs are the locale environment variables consulted, in precedence
+// utf8LocaleEnvs are the locale environment variables consulted, in precedence
 // order, to decide whether the terminal encoding is UTF-8.
-var UTF8LocaleEnvs = [...]string{"LC_ALL", "LC_CTYPE", "LANG"}
+var utf8LocaleEnvs = [...]string{"LC_ALL", "LC_CTYPE", "LANG"}
 
 // UnicodeEnvEnabled reports whether the process locale advertises a UTF-8
 // encoding.
 //
-// It consults [UTF8LocaleEnvs] in order and reports true when any is set to a
-// value naming UTF-8 (case-insensitive, "utf-8" or "utf8"). When none is set the
-// result is false, so the ASCII fallback is the safe default.
+// It consults LC_ALL, LC_CTYPE, then LANG in order and reports true when any is
+// set to a value naming UTF-8 (case-insensitive, "utf-8" or "utf8"). When none
+// is set the result is false, so the ASCII fallback is the safe default.
 func UnicodeEnvEnabled() bool {
-	for _, key := range UTF8LocaleEnvs {
+	for _, key := range utf8LocaleEnvs {
 		value, ok := os.LookupEnv(key)
 		if !ok {
 			continue

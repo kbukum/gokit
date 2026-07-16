@@ -14,7 +14,7 @@ type PromptMode int
 const (
 	// ModeInteractive reads live, typed answers (both stdin and stderr are
 	// terminals). It is the zero value only nominally; callers resolve the mode
-	// explicitly via [ModeFromStdio] or [ModeFromEnv].
+	// explicitly via [ModeFromStdio].
 	ModeInteractive PromptMode = iota
 	// ModeNonInteractive never blocks (CI, piped, or a redirected prompt sink):
 	// each question resolves to its declared default.

@@ -68,7 +68,7 @@ func (r *Region) snapshot() []string {
 }
 
 // verdictLine renders the region's durable one-line verdict for scrollback.
-func (r *Region) verdictLine(palette theme.Palette) string {
+func (r *Region) verdictLine(palette theme.Palette, glyphs theme.Glyphs) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	label := r.title
@@ -77,10 +77,10 @@ func (r *Region) verdictLine(palette theme.Palette) string {
 	}
 	switch r.status {
 	case statusDone:
-		return palette.Success("✓ " + label)
+		return palette.Success(glyphs.Success() + " " + label)
 	case statusFailed:
-		return palette.Error("✗ " + label)
+		return palette.Error(glyphs.Error() + " " + label)
 	default:
-		return palette.Dim("… " + label)
+		return palette.Dim(glyphs.Ellipsis() + " " + label)
 	}
 }

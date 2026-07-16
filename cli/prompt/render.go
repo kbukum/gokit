@@ -70,7 +70,7 @@ func writeAnswer(term Terminal, style Style, hint string) error {
 	return term.Flush()
 }
 
-// notice writes a dimmed warning notice line beneath a line prompt.
+// notice writes a warning notice line beneath a line prompt.
 func notice(term Terminal, style Style, text string) error {
 	return term.WriteLine("  " + style.palette.Warn(text))
 }
