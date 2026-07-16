@@ -50,6 +50,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context
   cancellation and terminal error events.
 
+### Added — Terminal-UX cli kit
+- **cli** (NEW package, light mirror of rskit-cli): a parser-agnostic terminal-UX toolkit that
+  writes to injected `io.Writer`s and confines `fmt.Print*`/stdout to this package.
+  - **theme**: semantic `Palette` colors and `Glyphs`, resolving `NO_COLOR`, TTY, and UTF-8
+    locale capability with byte-clean ASCII fallbacks.
+  - **render**: `OutputTable`, `OutputKV`, `StatusReporter`, `OutputFormat`, and an
+    `ErrorRenderer`/`ExitCode` mapping RFC 9457 `AppError`s onto a CLI exit-code convention.
+  - **progress**: determinate `Bar` and indeterminate `Spinner`, caller-driven (no background
+    timer) so they render deterministically without a clock.
+  - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`, a
+    deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
+  - **signal**: graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context`
+    cancellation via `signal.NotifyContext`.
+  - **live**: a bounded multi-region console for concurrent streaming output.
+- Raw-mode rich TUI widgets are intentionally rskit-only.
+
 ### Added — Foundational Parity (codec, fs)
 - **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a
   documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`,
