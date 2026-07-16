@@ -29,7 +29,7 @@ git diff --cached           # the exact change going in
 A single compact subject line, imperative mood, describing the change **as it now stands**:
 
 ```
-Add evaluate-reviews skill
+Add fix-reviews skill
 Fix typos across skill docs
 Rename Resolve to MustResolve in di container
 ```
@@ -50,7 +50,7 @@ Rename Resolve to MustResolve in di container
 ## 3. Commit
 
 ```bash
-git commit -m "Add evaluate-reviews skill"
+git commit -m "Add fix-reviews skill"
 ```
 
 Use a message file for a subject + body:

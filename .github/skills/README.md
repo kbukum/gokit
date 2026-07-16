@@ -20,7 +20,7 @@ drive tasks through [`toven`](../../toven.toml), the repo's argv-first task plan
 | [`apply-step`](apply-step/SKILL.md) | Apply one plan step in context (README + prior steps), test-first against the baseline, then mark it done. |
 | [`commit`](commit/SKILL.md) | Commit staged work with one compact, developer-friendly message — no co-author trailer or plan/batch/tool narration. |
 | [`create-pr`](create-pr/SKILL.md) | Open a reviewer-friendly PR — high-level summary, honest template sections, bound to the baseline. |
-| [`evaluate-reviews`](evaluate-reviews/SKILL.md) | Act on PR review comments by pattern — fix every instance across the change set, then commit and resolve the threads. |
+| [`fix-reviews`](fix-reviews/SKILL.md) | Act on PR review comments by pattern — fix every instance across the change set, then commit and resolve the threads. |
 | [`validate`](validate/SKILL.md) | Build/test/lint/tidy/vuln a change through toven, scoped to the affected modules. |
 | [`review`](review/SKILL.md) | Run the eight-pass engineering-baseline review over a diff, module, or the tree. |
 | [`new-module`](new-module/SKILL.md) | Scaffold a new package/module — placement, go.mod, doc.go, domains.toml, go.work. |
