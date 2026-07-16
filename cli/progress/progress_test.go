@@ -2,6 +2,7 @@ package progress_test
 
 import (
 	"bytes"
+	"math"
 	"strings"
 	"testing"
 
@@ -219,6 +220,25 @@ func TestBarNegativeTotalRendersComplete(t *testing.T) {
 	}
 	if bar.Percent() != 100 {
 		t.Errorf("negative-total bar percent = %d, want 100", bar.Percent())
+	}
+}
+
+func TestBarPercentHandlesHugeTotalsWithoutOverflow(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	const huge = math.MaxInt64
+	bar := progress.NewBar(&buf, huge)
+	if err := bar.SetPosition(huge / 2); err != nil {
+		t.Fatal(err)
+	}
+	if got := bar.Percent(); got < 49 || got > 51 {
+		t.Errorf("percent at half of MaxInt64 = %d, want ~50 (no overflow)", got)
+	}
+	if err := bar.SetPosition(huge); err != nil {
+		t.Fatal(err)
+	}
+	if got := bar.Percent(); got != 100 {
+		t.Errorf("percent at full MaxInt64 = %d, want 100", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package progress
 import (
 	"fmt"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/kbukum/gokit/cli/theme"
@@ -88,10 +89,15 @@ func (b *Bar) Finish() error {
 
 // Percent returns the completion percentage in [0, 100].
 func (b *Bar) Percent() int {
-	if b.total <= 0 {
+	if b.total <= 0 || b.pos >= b.total {
 		return 100
 	}
-	return int(b.pos * 100 / b.total)
+	// Integer math is exact for realistic totals; fall back to float64 (percent
+	// is coarse) only when pos*100 would overflow int64.
+	if b.pos <= math.MaxInt64/100 {
+		return int(b.pos * 100 / b.total)
+	}
+	return int(float64(b.pos) / float64(b.total) * 100)
 }
 
 func (b *Bar) render() error {
