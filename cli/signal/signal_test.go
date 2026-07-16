@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -12,6 +13,9 @@ import (
 
 func signalSelf(t *testing.T) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("os.Interrupt cannot be sent to a process on Windows")
+	}
 	proc, err := os.FindProcess(os.Getpid())
 	if err != nil {
 		t.Fatalf("find process: %v", err)
