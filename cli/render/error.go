@@ -107,6 +107,9 @@ type errorEnvelope struct {
 // any format and still exit consistently. A non-AppError is first wrapped as an
 // internal AppError so every error renders through the same envelope.
 func (r ErrorRenderer) Render(err error) (string, ExitCode) {
+	if err == nil {
+		return "", ExitSuccess
+	}
 	appErr := errors.Wrap(err)
 	exit := exitCodeForCode(appErr.Code)
 	switch r.format {

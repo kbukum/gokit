@@ -4,8 +4,9 @@ A parser-agnostic terminal-UX toolkit for gokit command-line programs. It is not
 a flag parser; it owns the presentation, input, and cancellation concerns a CLI
 shares, so every gokit CLI renders and behaves consistently.
 
-`cli` lives in the root module (`github.com/kbukum/gokit/cli`) and is
-dependency-free (standard library only). It is the **light** Go mirror of rskit's
+`cli` lives in the root module (`github.com/kbukum/gokit/cli`) and leans on the
+standard library, with `go.yaml.in/yaml/v3` (for `render`'s YAML output) as its
+only external dependency. It is the **light** Go mirror of rskit's
 `rskit-cli`: theming, structured output, progress, prompts, signals, and a
 bounded live console. Heavy raw-mode rich widgets (arrow-key radio/checkbox
 lists) stay rskit-only by design.
@@ -18,7 +19,7 @@ lists) stay rskit-only by design.
 
 | Package | What it owns |
 |---|---|
-| [`theme`](theme) | Semantic color `Palette` and status `Glyphs`, honouring `NO_COLOR`, TTY, and UTF-8 capability |
+| [`theme`](theme) | Semantic color `Palette` and status `Glyphs`, honoring `NO_COLOR`, TTY, and UTF-8 capability |
 | [`render`](render) | `OutputTable`, `OutputKV`, `StatusReporter`, and `ErrorRenderer`/`ExitCode`/`OutputFormat` |
 | [`progress`](progress) | Deterministic `Bar` and `Spinner` over an injected writer |
 | [`prompt`](prompt) | `Prompter` with line + scripted terminals, non-interactive fallback, and validators |

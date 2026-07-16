@@ -6,7 +6,7 @@
 // its most recent lines (a documented per-region bound), and the number of
 // regions is capped (a documented backpressure bound), so a flood of transient
 // progress never grows without limit. Durable signal — a region's final verdict
-// — is written to scrollback above the live area on [Region.Finish].
+// — is written to scrollback above the live area on [Console.Finish].
 //
 // Rendering is deterministic and clock-free: the console redraws only when the
 // caller calls [Console.Render], writing to an injected [io.Writer], so it is

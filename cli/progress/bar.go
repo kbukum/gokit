@@ -53,6 +53,9 @@ func WithBarPalette(palette theme.Palette) BarOption {
 // NewBar creates a bar for total units of work writing to w. A non-positive
 // total renders as an immediately complete bar.
 func NewBar(w io.Writer, total int64, opts ...BarOption) *Bar {
+	if total < 0 {
+		total = 0
+	}
 	b := &Bar{writer: w, palette: theme.NewPalette(false), width: defaultBarWidth, total: total}
 	for _, opt := range opts {
 		opt(b)
