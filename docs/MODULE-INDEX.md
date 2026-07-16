@@ -30,7 +30,7 @@ ai · llm · llm/providers · embedding · inference · inference/tgi · inferen
 media
 
 ## ⚙️ Infra  (`make check-infra`)
-workload · workload/testutil · bench · bench/storage · testutil
+workload · workload/testutil · cli · bench · bench/storage · testutil
 
 ## 📦 Devtools  (`make check-devtools`)
 git · git/testutil
