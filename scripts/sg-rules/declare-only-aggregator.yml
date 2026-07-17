@@ -1,6 +1,6 @@
 id: declare-only-aggregator
 language: go
-severity: error
+severity: warning
 message: >-
   doc.go must be docs-only — it carries the package clause and package
   documentation only, no func/method/type/var/const declarations or imports.

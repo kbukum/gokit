@@ -27,6 +27,11 @@ attempt() {
 }
 
 if command -v npm >/dev/null 2>&1; then
+  # Global installs often fail without write access to the default npm prefix
+  # (e.g. /usr/local); target a user-writable prefix and expose it on PATH.
+  npm_prefix="${NPM_CONFIG_PREFIX:-$HOME/.local}"
+  export NPM_CONFIG_PREFIX="$npm_prefix"
+  export PATH="$npm_prefix/bin:$PATH"
   attempt "npm" npm install -g "@ast-grep/cli@${version}" && exit 0
 fi
 if command -v cargo >/dev/null 2>&1; then
