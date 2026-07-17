@@ -49,9 +49,9 @@ be run standalone when you need only one lens.
 2. [`references/01-canonical-reuse.md`](references/01-canonical-reuse.md) — did the code
    reimplement a concern an existing package (or the stdlib) already owns? *(blocker class)*
 3. [`references/02-principles.md`](references/02-principles.md) — typed/minimal APIs, errors &
-   resilience, concurrency, composition, currency, AI/model features.
+   resilience, concurrency, composition, up-to-date idioms, AI/model features.
 4. [`references/03-security-privacy.md`](references/03-security-privacy.md) — trust-boundary
-   validation, injection safety, token hygiene, crypto, data minimization.
+   validation, injection safety, token handling, crypto, data minimization.
 5. [`references/04-quality.md`](references/04-quality.md) — root-cause over patches, dead code,
    file/package organization, maintainability, style gates.
 6. [`references/05-tests-tdd.md`](references/05-tests-tdd.md) — TDD, determinism under

@@ -1,4 +1,4 @@
-# Pass 02 — Principle conformance
+# Pass 02 — Principles
 
 Each item here is a hard principle from
 [`.github/copilot-instructions.md`](../../../copilot-instructions.md), not a preference. This is
@@ -49,11 +49,11 @@ incidental exported identifiers; unexport what callers don't need.
   `init()` that dials network / reads env / registers into a global, is a **blocker**.
 - Constructors take `...Option`; dependencies passed in, not resolved from a global.
 
-## Currency
+## Up-to-date
 
 Current Go idioms, not folklore (also enforced in pass `01`). `log/slog` not `logrus`/`zap`;
 `errors.Is/As/Join`; `slices`/`maps`/`cmp`; `any` over `interface{}`; loop-var capture is fixed
-in 1.22+ (no `v := v` workarounds). Flag superseded patterns.
+in 1.22+ (no `v := v` workarounds). Flag outdated patterns.
 
 ## AI / model features (only if the change touches them)
 

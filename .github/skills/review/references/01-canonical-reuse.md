@@ -11,7 +11,7 @@ otherwise. Treat findings here as a blocker class.
 > excuses a baseline violation.
 
 **Scope note.** *Changes mode:* for each new type/helper in the diff, name the concern and find
-its owner. *Project mode:* sweep the tree for the patterns below and reconcile each against the
+its owner. *Project mode:* sweep the tree for the patterns below and check each against the
 owning package — long-lived internal forks are exactly what this pass exists to surface.
 
 ## The rule
@@ -22,10 +22,10 @@ validation, process, di**. If the owner is inadequate, enhance it *generically* 
 forking a copy in another package. gokit must stay foundational and multi-purpose: a fix
 belongs in the owner so every consumer benefits.
 
-## How to check — build the owner map, then reconcile
+## How to check — build the owner map, then compare
 
 The canonical owner set is documented in
-[`docs/concern-owners.md`](../../../../docs/concern-owners.md) — start there, then reconcile each
+[`docs/concern-owners.md`](../../../../docs/concern-owners.md) — start there, then check each
 low-level operation against it. Do not eyeball it and do not rely on a fixed concern list — that
 is how a fork slips through. Work it as a method, in order:
 
@@ -37,7 +37,7 @@ ls -d */ | tr -d /                                       # all gokit modules = t
 grep -E '^\s+github.com/kbukum/gokit' <module>/go.mod    # owners it already imports (reuse adds no new edge)
 ```
 
-**2. Scan the module for every low-level operation and reconcile each against that map.** The
+**2. Scan the module for every low-level operation and check each against that map.** The
 class most often missed is a **drop to the standard library for a capability a gokit module
 already wraps** (safe file/path handling, subprocess, HTTP, atomic writes) — not just a
 reimplemented named concern. Sweep the in-scope code, not the tree:
@@ -51,12 +51,12 @@ For each hit and each new local helper, name the concern, find its owner in the 
 - **Filesystem / paths / file IO** → `fs` (path confinement, symlink-escape rejection, atomic
   writes, permissions) and `util` (copy, ensure-dir, read/write helpers). Raw
   `os.Open`+`filepath.EvalSymlinks`+`Rel` escape checks, `os.WriteFile` where atomicity matters,
-  or a hand-rolled dir walk are candidate forks — reconcile against `fs`/`util`.
+  or a hand-rolled dir walk are candidate forks — check against `fs`/`util`.
 - **Errors** → `errors` (`AppError`, RFC 9457, typed codes, cause via `%w`, `errors.Is/As/Join`).
-  A fresh sentinel or bespoke error struct for a shared concern is a fork.
+  A fresh sentinel or custom error struct for a shared concern is a fork.
 - **Resilience** → `resilience` (retry / timeout / circuit-break), not hand-rolled loops or
-  scattered `context.WithTimeout` + bespoke backoff.
-- **HTTP** → `httpclient` / `server`, not a raw `http.Client{}` with bespoke retry/timeout.
+  scattered `context.WithTimeout` + custom backoff.
+- **HTTP** → `httpclient` / `server`, not a raw `http.Client{}` with custom retry/timeout.
 - **Subprocess** → `process` (argv-only), not a bare `exec.Command`.
 - **Config / logging / di / observability** → the owning package; logging is `log/slog` via
   `logger`, never a fresh `log` or `fmt.Print`.

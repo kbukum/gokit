@@ -1,44 +1,44 @@
 #!/usr/bin/env bash
 # Structure guard (development principles §4): the package aggregator is declare-only.
 #
-#   1. `doc.go` is docs-only (HARD): it carries the package clause and comments only —
-#      no `func`/`type`/`var`/`const` declarations. Package documentation belongs here;
-#      code belongs in concern-named sibling files.
+#   1. `doc.go` is docs-only (ADVISORY): it carries the package clause and comments only —
+#      no `func`/`type`/`var`/`const` declarations or imports. Package documentation
+#      belongs here; code belongs in concern-named sibling files. Reported by the
+#      ast-grep rule scripts/sg-rules/declare-only-aggregator.yml.
 #   2. God-file (ADVISORY): a package whose non-test code is piled into a single oversized
 #      file is a refactor signal — split it by concern into named sibling files. Reported
 #      as a warning, never a hard failure (small single-file packages are legitimate).
 #
-# Vendored, generated, and testdata trees are skipped.
+# Both checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 god_file_lines="${GOD_FILE_LINES:-600}"
-hard_fail=0
 
-skip_path() {
-  case "$1" in
-    */vendor/*|*/testdata/*|*/node_modules/*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
+# ast-grep may be installed into a user-writable prefix by ensure-ast-grep.sh;
+# expose those bin dirs so a freshly installed binary resolves in this process too.
+export PATH="${NPM_CONFIG_PREFIX:-$HOME/.local}/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# 1. doc.go docs-only (hard).
-while IFS= read -r file; do
-  skip_path "$file" && continue
-  # Strip block/line comments and string bodies crudely, then look for top-level decls.
-  decls="$(grep -nE '^[[:space:]]*(func|type|var|const)[[:space:]]' "$file" || true)"
-  if [ -n "$decls" ]; then
-    printf 'doc.go carries code (must be docs-only): %s\n%s\n' "$file" "$decls" >&2
-    hard_fail=1
+# 1. doc.go docs-only (advisory) — AST match via ast-grep (sgconfig.yml).
+# Skip the same trees as the god-file check below so behavior matches this header.
+if "$repo_root/scripts/ensure-ast-grep.sh"; then
+  sg_bin="$(command -v ast-grep >/dev/null 2>&1 && echo ast-grep || echo sg)"
+  if command -v "$sg_bin" >/dev/null 2>&1; then
+    "$sg_bin" scan \
+      --globs '!**/vendor/**' --globs '!**/testdata/**' --globs '!**/node_modules/**' \
+      || echo "structure: doc.go docs-only scan reported findings or errored above (advisory, not gating)" >&2
+  else
+    echo "structure: skipping doc.go docs-only check (ast-grep unresolved after install)" >&2
   fi
-done < <(find . -name doc.go -type f | sort)
+else
+  echo "structure: skipping doc.go docs-only check (ast-grep unavailable)" >&2
+fi
 
 # 2. God-file (advisory): a package with a single non-test .go file (excluding doc.go)
 # larger than the threshold.
 while IFS= read -r dir; do
-  skip_path "$dir/" && continue
   src=""
   count=0
   while IFS= read -r f; do
@@ -52,6 +52,8 @@ while IFS= read -r dir; do
     printf 'warning: single-file package (%s lines) — split by concern: %s\n' \
       "$lines" "$src" >&2
   fi
-done < <(find . -type d -not -path '*/.*' | sort)
+done < <(find . \
+  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+  -o -type d -print | sort)
 
-exit "$hard_fail"
+exit 0

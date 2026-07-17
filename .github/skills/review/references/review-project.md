@@ -53,9 +53,9 @@ to sweep the tree for that lens.
 2. [`01-canonical-reuse.md`](./01-canonical-reuse.md) — sweep for local forks of an owned
    concern. *(blocker class)*
 3. [`02-principles.md`](./02-principles.md) — typed/minimal, errors & resilience, concurrency,
-   composition, currency, AI features across the full surface.
+   composition, up-to-date idioms, AI features across the full surface.
 4. [`03-security-privacy.md`](./03-security-privacy.md) — trust-boundary validation, injection
-   safety, token hygiene, crypto, data minimization.
+   safety, token handling, crypto, data minimization.
 5. [`04-quality.md`](./04-quality.md) — root-cause over patches, dead code, file/package
    organization, outdated patterns, style gates.
 6. [`05-tests-tdd.md`](./05-tests-tdd.md) — coverage of behavior and failure paths,

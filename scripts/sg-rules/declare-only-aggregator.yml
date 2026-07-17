@@ -1,0 +1,17 @@
+id: declare-only-aggregator
+language: go
+severity: warning
+message: >-
+  doc.go must be docs-only — it carries the package clause and package
+  documentation only, no func/method/type/var/const declarations or imports.
+  Move code into concern-named sibling files (development principles §4).
+files:
+  - "**/doc.go"
+rule:
+  any:
+    - kind: function_declaration
+    - kind: method_declaration
+    - kind: type_declaration
+    - kind: var_declaration
+    - kind: const_declaration
+    - kind: import_declaration
