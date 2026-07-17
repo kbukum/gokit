@@ -9,6 +9,11 @@ set -euo pipefail
 
 version="${AST_GREP_VERSION:-0.44.1}"
 
+# Installers drop binaries into user-writable bin dirs that may not be on PATH
+# (cargo → ~/.cargo/bin, pipx/npm user prefix → ~/.local/bin); expose them so a
+# successful install is detectable within this same process.
+export PATH="${NPM_CONFIG_PREFIX:-$HOME/.local}/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 # ast-grep exposes its CLI as `ast-grep` (recommended) or, on some installs, `sg`.
 have_astgrep() { command -v ast-grep >/dev/null 2>&1 || command -v sg >/dev/null 2>&1; }
 astgrep_bin() { command -v ast-grep >/dev/null 2>&1 && echo ast-grep || echo sg; }
