@@ -18,6 +18,7 @@ use (
 	./database
 	./database/sqlite
 	./database/testutil
+	./dataset
 	./discovery
 	./discovery/testutil
 	./embedding
