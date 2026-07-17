@@ -54,6 +54,10 @@ gokit is a multi-module monorepo split by dependency weight and role:
   `domains.toml` + the matching `make check-<domain>` set. Missing any is a should-fix.
 - **doc.go present.** Every package has a `doc.go` with a package doc comment. Missing is a
   should-fix.
+- **Declare-only aggregator.** `doc.go` carries package documentation only — no
+  `func`/`type`/`var`/`const`. Code in a `doc.go`, or a package whose logic is piled into one
+  oversized file instead of concern-named siblings, is a should-fix. Run
+  `scripts/check-structure.sh` (`make structure`).
 - **No misplaced concerns.** Each cross-cutting concern stays in its canonical package — e.g.
   gRPC status mapping belongs in `grpc`, not `errors`. (Reuse of those owners is pass `01`.)
 - **Backend opt-in.** A nested adapter registers via an explicit `Register(registry)` call, not
@@ -71,6 +75,8 @@ for d in $(find . -name '*.go' -not -name '*_test.go' | xargs -n1 dirname | sort
   ls "$d"/doc.go >/dev/null 2>&1 || echo "no doc.go: $d"; done
 # init() functions (import-time side effects — should be explicit Register)
 grep -rn --include=*.go '^func init()' . | grep -v _test.go
+# declare-only aggregator guard (doc.go docs-only + god-file advisory)
+scripts/check-structure.sh
 ```
 
 Then run `make lint` (depguard enforces the layer direction) and `make check-<domain>` for the

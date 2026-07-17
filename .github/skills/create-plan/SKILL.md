@@ -79,12 +79,14 @@ these load-bearing (not decorative):
 - **Structure & placement.** Correct module (root vs sub-module vs nested adapter); acyclic
   layering (lower layers never import higher); every new package has `doc.go`.
 - **Canonical reuse.** Reuse or enhance the owning package / stdlib before writing new code; never
-  duplicate a shared concern.
+  duplicate a shared concern. Consult [`docs/concern-owners.md`](../../../docs/concern-owners.md)
+  for the canonical owner (formats → `codec`, helpers → `util`, paths → `fs`, …).
 - **Typed & minimal APIs.** Generics-first; no public `interface{}`/`any` (documented opaque
   exceptions only); typed errors that preserve cause; timeouts + cancellation on remote calls.
 - **Root-cause, no shims.** Pre-stable: redesign cleanly and remove the old path; no compat
   shims or half-migrations.
-- **Readable files.** Split by concern into focused files — never pile into one file.
+- **Readable files.** Split by concern into focused files — never pile into one file. The
+  aggregator is declare-only: `doc.go` carries package docs only, never code.
 - **Composition.** Injected registries/config; no `init()` side effects, no mutable
   package-global registries; inject logger/tracer/policies.
 

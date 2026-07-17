@@ -49,8 +49,10 @@ package foo
 Conventions: package names are lowercase, single-word, no plurals. Exported interfaces (1–3
 methods) + factory functions; concrete implementations unexported. Constructors take `...Option`
 (functional options). No `interface{}`/`any` in public APIs except a documented opaque value.
-Organize by focused files (types, options, registry, middleware, adapter) — never pile unrelated
-logic into one large file.
+Organize by focused, concern-named files (types, options, registry, middleware, adapter) from the
+start — the `doc.go` aggregator stays docs-only, never a monolithic starter file. Before adding a
+shared helper, check [`docs/concern-owners.md`](../../../docs/concern-owners.md) so the new module
+does not re-own an existing concern.
 
 ## Step 4 — Sub-module wiring (only if you created a new go.mod)
 
@@ -100,7 +102,7 @@ toven tidy  --module go:<newmodule>
 
 - [ ] Placement decided (root vs sub-module) and justified by real deps
 - [ ] Layer confirmed; imports only go downward (depguard clean)
-- [ ] `doc.go` present; files split by concern
+- [ ] `doc.go` present (docs-only); files split by concern; `make structure` green
 - [ ] Public API typed/generic, options-based, no `any`
 - [ ] (sub-module) `go.mod` + `replace`, added to the right `*.go.work`
 - [ ] `domains.toml` updated

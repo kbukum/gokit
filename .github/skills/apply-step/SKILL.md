@@ -41,8 +41,10 @@ does not override it, and the authority is [`../../copilot-instructions.md`](../
   included. Never write the production code first and add tests after.
 - **Placement & layering.** Right module (root vs sub-module vs nested adapter); acyclic imports
   (lower layers never import higher); new packages get `doc.go`.
-- **Canonical reuse.** Reuse or extend the owning package / stdlib before adding new code; never
-  duplicate a shared concern (errors, config, logging, path safety, retries, HTTP, registries).
+- **Canonical reuse.** Before writing a new type/helper, open
+  [`docs/concern-owners.md`](../../../docs/concern-owners.md), find the concern's owner, and reuse
+  or extend it — never duplicate a shared concern (errors, config, logging, path safety, retries,
+  HTTP, registries). Put new logic in concern-named files; never in `doc.go`.
 - **Typed & minimal.** Generics-first; no public `interface{}`/`any` (documented opaque
   exceptions only); typed errors preserving cause; timeout + cancellation on remote calls.
 - **Root-cause, no shims.** Redesign cleanly; remove the old path completely (pre-stable, no
@@ -56,7 +58,8 @@ report it rather than silently expanding.
 ## 3. Validate, review, and mark done
 
 - **Validate** the affected modules with the `validate` skill (toven, scoped), green under
-  `-race -shuffle`. A step does not land red.
+  `-race -shuffle`. A step does not land red. Run `make structure` (declare-only aggregator
+  guard) before marking the step done.
 - **Review** the step's diff with the relevant `review` passes (structure/placement, canonical
   reuse, principles, security, quality, tests, docs, comments) — ideally in a fresh agent.
 - Only when acceptance criteria are genuinely met, flip the step's progress signal so `apply-plan`

@@ -24,8 +24,10 @@ belongs in the owner so every consumer benefits.
 
 ## How to check — build the owner map, then reconcile
 
-Do not eyeball it and do not rely on a fixed concern list — that is how a fork slips through.
-Work it as a method, in order:
+The canonical owner set is documented in
+[`docs/concern-owners.md`](../../../../docs/concern-owners.md) — start there, then reconcile each
+low-level operation against it. Do not eyeball it and do not rely on a fixed concern list — that
+is how a fork slips through. Work it as a method, in order:
 
 **1. Build the owner map.** Every gokit module is a potential owner. Establish what this module
 *could* reuse before judging what it *does*:

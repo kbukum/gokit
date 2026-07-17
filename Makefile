@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected \
+.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
        check-media check-infra clean help tag tag-push tag-force list-tags ci ci-test ci-lint ensure-act
 
@@ -150,7 +150,11 @@ test-affected:
 	fi
 
 ## Run all checks (build + vet + test) — supports M=<module>
-check: build vet test
+check: build vet test structure
+
+## Verify declare-only aggregators (doc.go docs-only) + god-file advisory
+structure:
+	@./scripts/check-structure.sh
 
 ## Check only core domain modules
 check-core:

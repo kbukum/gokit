@@ -10,7 +10,7 @@ quality; gokit is kept at parity with it.
 Shared engineering baseline — apply to all work here:
 
 - **Phases:** discover → decide (Redesign / Align / Enhance / Drop / Leave) → implement completely → validate. Prefer root-cause redesign over symptom patches; no compatibility shims in pre-stable code.
-- **Layering & reuse:** explicit, acyclic dependency direction — lower layers never import higher (enforced by `depguard`). Reuse or enhance the canonical owner before writing new code; never duplicate shared concerns (errors, config, logging, auth, retries, observability, HTTP, registries).
+- **Layering & reuse:** explicit, acyclic dependency direction — lower layers never import higher (enforced by `depguard`). Reuse or enhance the canonical owner before writing new code; never duplicate shared concerns (errors, config, logging, auth, retries, observability, HTTP, registries). Consult [`docs/concern-owners.md`](../docs/concern-owners.md) for the canonical owner of each shared concern (formats → `codec`, helpers → `util`, paths → `fs`, …) before writing new code.
 - **APIs:** typed and minimal; generics-first, no `interface{}`/`any` in public surfaces (except genuinely opaque values, documented); actionable typed errors that preserve cause.
 - **Errors & resilience:** no `panic()` / `log.Fatal` / ignored errors (`_ =`) / unchecked type assertions on runtime paths; no success-shaped fallbacks; timeout every remote call via `context.Context`; bounded jittered retries for idempotent ops only; circuit-break and degrade gracefully.
 - **Concurrency:** every goroutine has ownership, cancellation (context), timeout, and shutdown; bound channels / buffers / concurrency with documented backpressure; drain on shutdown; no goroutine leaks.
@@ -78,6 +78,10 @@ When adding a new module:
   (types, options, registry, middleware, adapter) into separate files so the next reader can
   navigate by filename. A file that has grown to cover several responsibilities is a refactor
   signal, not a normal state.
+- **Declare-only aggregator.** `doc.go` holds package documentation only; a package's parent
+  file never accumulates code — split by concern into named sibling files (as in
+  `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`). Enforced by
+  `scripts/check-structure.sh` (`make structure`).
 
 ## Validation scope
 

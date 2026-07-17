@@ -44,6 +44,7 @@ toven test --base origin/main --merge-base    # run just those
 | Tidy (check) | `toven tidy` | `go mod tidy -diff` |
 | Tidy (write) | `toven tidy-fix` | `go mod tidy` |
 | Vuln scan | `toven vuln` | `govulncheck` per module |
+| Structure | `make structure` | declare-only aggregator guard (`doc.go` docs-only + god-file advisory) |
 
 ## Scoping to modules
 
