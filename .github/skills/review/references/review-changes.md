@@ -26,11 +26,11 @@ produced the change.
 ## Pass 0 — Scope and context
 
 - Get the actual diff: `git diff <base>...HEAD --stat`, then per file. Review only what changed
-  plus its blast radius; do not audit the whole repo (that is
+  plus its affected area; do not audit the whole repo (that is
   [`review-project.md`](./review-project.md)).
 - gokit is a foundation toolkit: a change to a core package's public surface fans out to every
   sub-module, nested adapter, and downstream repo (rskit/pykit parity, consuming services).
-  List that blast radius before reviewing.
+  List that affected area before reviewing.
 - Note whether the change belongs in the **root module**, a **sub-module** (own `go.mod`), or a
   **nested adapter** (e.g. `storage/s3`), and whether it belongs in *this* package at all.
 
@@ -44,9 +44,9 @@ Work the focused files top to bottom. **Stop and reject as soon as a change fail
 2. [`01-canonical-reuse.md`](./01-canonical-reuse.md) — reuse vs. reimplementation of a
    package/stdlib-owned concern. *(blocker class)*
 3. [`02-principles.md`](./02-principles.md) — typed/minimal APIs, errors & resilience,
-   concurrency, composition, currency, AI features.
+   concurrency, composition, up-to-date idioms, AI features.
 4. [`03-security-privacy.md`](./03-security-privacy.md) — trust-boundary validation, injection
-   safety, token hygiene, crypto, data minimization.
+   safety, token handling, crypto, data minimization.
 5. [`04-quality.md`](./04-quality.md) — root-cause over patches, dead code, file/package
    organization, style gates.
 6. [`05-tests-tdd.md`](./05-tests-tdd.md) — TDD, `-race -shuffle` determinism, clock/env/cwd

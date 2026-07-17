@@ -9,7 +9,7 @@ misplaced code makes every later pass moot, so reject on failure here before goi
 > trusting prior reasoning. A plan/spec may be passed in as a scope checklist only; it never
 > excuses a baseline violation.
 
-**Scope note.** *Changes mode:* check the packages the diff touches plus the blast radius — a
+**Scope note.** *Changes mode:* check the packages the diff touches plus the affected area — a
 change to a core package's public surface fans out to every sub-module, nested adapter, and
 downstream consumer. *Project mode:* sweep each module's packages and dependency edges; the
 placement and acyclicity rules below are invariants for the whole toolkit.

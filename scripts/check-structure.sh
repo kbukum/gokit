@@ -26,7 +26,8 @@ skip_path() {
 
 # 1. doc.go docs-only (advisory) — AST match via ast-grep (sgconfig.yml).
 if "$repo_root/scripts/ensure-ast-grep.sh"; then
-  ast-grep scan || echo "structure: doc.go offenders above are advisory (not gating yet)" >&2
+  sg_bin="$(command -v ast-grep >/dev/null 2>&1 && echo ast-grep || echo sg)"
+  "$sg_bin" scan || echo "structure: doc.go offenders above are advisory (not gating yet)" >&2
 else
   echo "structure: skipping doc.go docs-only check (ast-grep unavailable)" >&2
 fi

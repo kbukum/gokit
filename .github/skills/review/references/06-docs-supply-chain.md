@@ -38,7 +38,7 @@ wiring for the invariants below.
 - **Tidy modules.** `go.mod`/`go.sum` reflect exactly what is used (`go mod tidy` run per
   affected module); no leftover or phantom requires; `go.work` / `core.go.work` /
   `contrib.go.work` include any new module.
-- **CI/release hygiene** (if touched). GitHub Actions pinned by commit SHA (never a moving
+- **CI/release safety** (if touched). GitHub Actions pinned by commit SHA (never a moving
   tag); minimum job permissions; release artifacts signed (cosign) and SBOM (CycloneDX)
   produced. A workflow pinned to a tag or granting broad permissions is a should-fix.
 

@@ -27,6 +27,7 @@ drive tasks through [`toven`](../../toven.toml), the repo's argv-first task plan
 | [`new-backend`](new-backend/SKILL.md) | Add a storage/vectorstore/messaging/cache/llm adapter as a typed-registry contrib sub-module. |
 | [`parity`](parity/SKILL.md) | Mirror an rskit capability by capability and keep the parity matrix accurate. |
 | [`release`](release/SKILL.md) | Cut a release — semver bump, CHANGELOG, full gates, per-module tags. |
+| [`docs`](docs/SKILL.md) | Review/update docs to the repo's standards (one line per paragraph) and up-to-date accuracy (commands, module structure, examples match the code). |
 
 ## Conventions
 

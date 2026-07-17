@@ -230,7 +230,7 @@ func main() {
 
 **Problem**: Publish domain events from your application with automatic envelope (UUID, timestamp, source) construction without manual envelope handling.
 
-**Solution**: Wrap a `Producer` with `EventPublisher` from the `messaging` package. The facade handles Event envelope creation automatically—you only provide the topic, event type, and payload.
+**Solution**: Wrap a `Producer` with `EventPublisher` from the `messaging` package. The wrapper handles Event envelope creation automatically—you only provide the topic, event type, and payload.
 
 **Code example**:
 

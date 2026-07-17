@@ -4,7 +4,7 @@ description: >-
     Build, vet, test, lint, tidy, and vuln-scan gokit changes through toven — the repo's
     argv-first task planner — scoped to the modules that actually changed. Use whenever you
     need to validate a gokit change, run tests for a package, reproduce CI locally, or check
-    the blast radius of an edit before committing.
+    which modules an edit affects before committing.
 user-invocable: true
 ---
 

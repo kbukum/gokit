@@ -9,7 +9,11 @@ set -euo pipefail
 
 version="${AST_GREP_VERSION:-0.44.1}"
 
-if command -v ast-grep >/dev/null 2>&1; then
+# ast-grep exposes its CLI as `ast-grep` (recommended) or, on some installs, `sg`.
+have_astgrep() { command -v ast-grep >/dev/null 2>&1 || command -v sg >/dev/null 2>&1; }
+astgrep_bin() { command -v ast-grep >/dev/null 2>&1 && echo ast-grep || echo sg; }
+
+if have_astgrep; then
   exit 0
 fi
 
@@ -19,8 +23,8 @@ attempt() {
   local label="$1"
   shift
   echo "ensure-ast-grep: trying ${label}..." >&2
-  if "$@" && command -v ast-grep >/dev/null 2>&1; then
-    echo "ensure-ast-grep: installed via ${label} ($(ast-grep --version))" >&2
+  if "$@" && have_astgrep; then
+    echo "ensure-ast-grep: installed via ${label} ($("$(astgrep_bin)" --version))" >&2
     return 0
   fi
   return 1

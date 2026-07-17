@@ -19,7 +19,7 @@ Shared engineering baseline — apply to all work here:
 - **Tests:** behavioral and deterministic; green under `-race -shuffle=on -count=1`; cover failure paths; injected clocks (never `time.Sleep`); fixtures over embedded config; regression-test every fix.
 - **AI / model features:** treat model output and retrieved context as untrusted; enforce structured outputs; least-privilege tool calls with a human gate on destructive actions; version prompts / models and gate changes on evals.
 - **Supply chain:** pin CI actions by SHA; scan dependencies (`govulncheck` + licenses); sign release artifacts; attach SBOM and provenance.
-- **Currency:** use current Go idioms and standards, not folklore — `log/slog`, `errors.Is/As/Join`, `slices`/`maps`/`cmp`, `any` over `interface{}`; verify the dependency is maintained, the stdlib doesn't already cover it, and no open CVE applies.
+- **Up-to-date:** use current Go idioms and standards, not folklore — `log/slog`, `errors.Is/As/Join`, `slices`/`maps`/`cmp`, `any` over `interface{}`; verify the dependency is maintained, the stdlib doesn't already cover it, and no open CVE applies.
 
 Standing, re-runnable development skills encoding this baseline live in
 [`.github/skills/`](skills/README.md) — the `review` skill runs the review passes in a
@@ -102,3 +102,8 @@ make check                           # full canonical gate (build + vet + test) 
 - **Pipeline pattern**: Lazy pull-based `Iterator[T]` with composable operators.
 - **Component lifecycle**: `Start/Stop/Health` with deterministic ordering via Registry.
 - **Middleware composition**: `Middleware[I, O]` chains for cross-cutting concerns.
+
+## Documentation
+
+- Prose is never hard-wrapped. Write **one line per paragraph** — in Markdown, `doc.go`/godoc comments, and `//` code comments — and never insert a line break in the middle of a sentence to hit a column width; let the editor soft-wrap. Line-length limits are for *code*, not prose. Preserve code blocks, tables, and lists as-is. (YAML folded scalars like a skill's frontmatter `description` are exempt — they already collapse to one logical line.)
+- Comments and godoc describe the code as it is now — not history, plans, or the process that produced it.

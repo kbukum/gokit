@@ -22,7 +22,7 @@ adapters, auth, crypto) for the invariants below.
 - **Injection-safe data access.** Parameterized queries only — never string-built SQL
   (`fmt.Sprintf`/concatenation into a query). Argv-only subprocess execution via `process` — no
   `sh -c` / shell interpolation of untrusted input.
-- **Token hygiene.** Tokens/credentials go in headers, never query strings; never logged.
+- **Safe token handling.** Tokens/credentials go in headers, never query strings; never logged.
   Redact sensitive fields in errors and logs. Auth is header-only; reject query-string tokens.
 - **Current crypto.** No deprecated/weak algorithms (MD5, SHA-1 for security, DES, ECB, static
   IVs, hard-coded keys); use current primitives (AES-GCM, ChaCha20-Poly1305, Argon2id, Ed25519,

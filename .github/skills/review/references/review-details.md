@@ -127,7 +127,7 @@ Check: new exported items intentional (unexport what callers don't need — no s
 `cache.New` not `cache.NewCache`); no `interface{}`/`any` escape hatch on a public surface
 except documented genuinely-opaque values; generics over `interface{}` for typed containers;
 `...Option` constructor shape; new deps justified (maintained, no open CVE, not duplicating an
-owning package or the stdlib — currency, pass [`01`](./01-canonical-reuse.md)); `go.mod`/`go.sum`
+owning package or the stdlib — up-to-date check, pass [`01`](./01-canonical-reuse.md)); `go.mod`/`go.sum`
 tidy per affected module (`go mod tidy`); MSRV/`go` directive correct; a new module wired into
 `go.work` / `core.go.work` / `contrib.go.work`, `domains.toml`, and the matching
 `make check-<domain>`, with a `doc.go` package overview.
@@ -149,7 +149,7 @@ parsers/validators/auth/codecs/schema carry `Fuzz` targets; fixtures over large 
 operation does what its name implies; every exported identifier has godoc that **matches
 implemented behavior**, each package has a `doc.go`, examples compile; comments describe the code
 as it is, not plans/history. *(Full rules: passes [`05`](./05-tests-tdd.md) and
-[`06`](./06-docs-supply-chain.md); comment hygiene: pass [`07`](./07-comments-godoc.md).)*
+[`06`](./06-docs-supply-chain.md); comment quality: pass [`07`](./07-comments-godoc.md).)*
 
 Always runs.
 
