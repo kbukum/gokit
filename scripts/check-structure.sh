@@ -24,10 +24,21 @@ skip_path() {
   esac
 }
 
+# ast-grep may be installed into a user-writable prefix by ensure-ast-grep.sh;
+# expose those bin dirs so a freshly installed binary resolves in this process too.
+export PATH="${NPM_CONFIG_PREFIX:-$HOME/.local}/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 # 1. doc.go docs-only (advisory) — AST match via ast-grep (sgconfig.yml).
+# Skip the same trees as the god-file check below so behavior matches this header.
 if "$repo_root/scripts/ensure-ast-grep.sh"; then
   sg_bin="$(command -v ast-grep >/dev/null 2>&1 && echo ast-grep || echo sg)"
-  "$sg_bin" scan || echo "structure: doc.go offenders above are advisory (not gating yet)" >&2
+  if command -v "$sg_bin" >/dev/null 2>&1; then
+    "$sg_bin" scan \
+      --globs '!**/vendor/**' --globs '!**/testdata/**' --globs '!**/node_modules/**' \
+      || echo "structure: doc.go offenders above are advisory (not gating yet)" >&2
+  else
+    echo "structure: skipping doc.go docs-only check (ast-grep unresolved after install)" >&2
+  fi
 else
   echo "structure: skipping doc.go docs-only check (ast-grep unavailable)" >&2
 fi
