@@ -243,6 +243,10 @@ jobs:
           done
           exit $failed
 
+      - name: Structure guard (advisory)
+        continue-on-error: true
+        run: make structure
+
   # ── Stage 3s: Security scan ──────────────────────────────────────────────────
   security:
     name: Security

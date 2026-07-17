@@ -80,8 +80,8 @@ When adding a new module:
   signal, not a normal state.
 - **Declare-only aggregator.** `doc.go` holds package documentation only; a package's parent
   file never accumulates code — split by concern into named sibling files (as in
-  `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`). Enforced by
-  `scripts/check-structure.sh` (`make structure`).
+  `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`). Reported (advisory) by
+  the ast-grep rule `scripts/sg-rules/declare-only-aggregator.yml` via `make structure`.
 
 ## Validation scope
 

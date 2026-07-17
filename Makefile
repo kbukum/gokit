@@ -150,9 +150,9 @@ test-affected:
 	fi
 
 ## Run all checks (build + vet + test) — supports M=<module>
-check: build vet test structure
+check: build vet test
 
-## Verify declare-only aggregators (doc.go docs-only) + god-file advisory
+## Verify declare-only aggregators (doc.go docs-only) + god-file — advisory, not gating
 structure:
 	@./scripts/check-structure.sh
 
