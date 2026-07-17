@@ -72,11 +72,3 @@ func (p Payload) WriteTo(w io.Writer) (int64, error) {
 	}
 	return int64(n), nil
 }
-
-// Item is a named payload flowing through the collection pipeline.
-type Item struct {
-	// Name identifies the item (for example a file name).
-	Name string
-	// Payload carries the item's bytes.
-	Payload Payload
-}

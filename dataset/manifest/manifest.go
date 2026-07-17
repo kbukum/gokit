@@ -119,22 +119,6 @@ func (m *Manifest) MarkPartial(name, cacheKey string, stats SourceStats) {
 	m.Sources[name] = SourceEntry{CacheKey: cacheKey, Stats: stats, Status: statusPartial}
 }
 
-// IsCached reports the cached stats for a completed source whose cache key
-// matches, or false when there is no usable complete entry.
-func (m *Manifest) IsCached(name, cacheKey string) (SourceStats, bool) {
-	entry, ok := m.Sources[name]
-	if !ok || entry.CacheKey != cacheKey {
-		return SourceStats{}, false
-	}
-	if entry.Status == statusDone {
-		return entry.Stats, true
-	}
-	if entry.Status == statusPartial && entry.Stats.Total > 0 {
-		return entry.Stats, true
-	}
-	return SourceStats{}, false
-}
-
 // CacheStatusFor resolves a source's cache state. A partial entry is promoted
 // to done when it is within five items or 99% of a known ceiling.
 func (m *Manifest) CacheStatusFor(name, cacheKey string, ceiling int, hasCeiling bool) CacheStatus {

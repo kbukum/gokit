@@ -5,51 +5,53 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/kbukum/gokit/dataset/record"
 	"github.com/kbukum/gokit/stream"
 )
 
-func tagTransform(drop string) Transform[record.Record, record.Record] {
-	return TransformFunc[record.Record, record.Record]{
+func tagTransform(drop string) Transform[row, row] {
+	return TransformFunc[row, row]{
 		FuncName: "tag",
-		Fn: func(_ context.Context, in record.Record) (record.Record, bool, error) {
-			if v, _ := in.Get("name"); v == drop {
-				return record.Record{}, false, nil
+		Fn: func(_ context.Context, in row) (row, bool, error) {
+			if in["name"] == drop {
+				return nil, false, nil
 			}
-			fields := in.Fields()
-			fields["tagged"] = true
-			return record.New(fields), true, nil
+			out := row{}
+			for k, v := range in {
+				out[k] = v
+			}
+			out["tagged"] = true
+			return out, true, nil
 		},
 	}
 }
 
 func TestApplyTransformMapsAndDrops(t *testing.T) {
 	t.Parallel()
-	p := recordPipeline(
-		map[string]record.Value{"name": "alice"},
-		map[string]record.Value{"name": "bob"},
+	p := rowPipeline(
+		row{"name": "alice"},
+		row{"name": "bob"},
 	)
 	out := ApplyTransform(p, tagTransform("bob"))
-	records, err := stream.Collect(context.Background(), out)
+	rows, err := stream.Collect(context.Background(), out)
 	if err != nil {
 		t.Fatalf("Collect error: %v", err)
 	}
-	if len(records) != 1 {
-		t.Fatalf("got %d records; want 1 (bob dropped)", len(records))
+	if len(rows) != 1 {
+		t.Fatalf("got %d rows; want 1 (bob dropped)", len(rows))
 	}
-	if v, _ := records[0].Get("tagged"); v != true {
-		t.Fatalf("record not tagged: %+v", records[0])
+	if rows[0]["tagged"] != true {
+		t.Fatalf("row not tagged: %+v", rows[0])
 	}
 }
 
 func TestApplyTransformPropagatesError(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("boom")
-	p := recordPipeline(map[string]record.Value{"name": "x"})
-	out := ApplyTransform(p, TransformFunc[record.Record, record.Record]{
+	p := rowPipeline(row{"name": "x"})
+	out := ApplyTransform(p, TransformFunc[row, row]{
 		FuncName: "err",
-		Fn: func(_ context.Context, _ record.Record) (record.Record, bool, error) {
-			return record.Record{}, false, sentinel
+		Fn: func(_ context.Context, _ row) (row, bool, error) {
+			return nil, false, sentinel
 		},
 	})
 	_, err := stream.Collect(context.Background(), out)
@@ -60,7 +62,7 @@ func TestApplyTransformPropagatesError(t *testing.T) {
 
 func TestTransformFuncName(t *testing.T) {
 	t.Parallel()
-	tf := TransformFunc[record.Record, record.Record]{FuncName: "n"}
+	tf := TransformFunc[row, row]{FuncName: "n"}
 	if tf.Name() != "n" {
 		t.Fatalf("Name = %q; want n", tf.Name())
 	}

@@ -30,6 +30,15 @@ type Bounded interface {
 	MaxItems() (int, bool)
 }
 
+// Resumable is an optional capability a [Source] may implement to continue a
+// partial run instead of restarting: the collector passes the offset a prior
+// partial run reached and how many items it already fetched.
+type Resumable interface {
+	// SetResumeState positions the source to resume past offset, having already
+	// fetched alreadyFetched items.
+	SetResumeState(offset, alreadyFetched int)
+}
+
 // sliceSource is an in-memory [Source] over a fixed slice, used for composition
 // and tests.
 type sliceSource[T any] struct {
@@ -65,4 +74,12 @@ func MaxItems[T any](s Source[T]) (int, bool) {
 		return b.MaxItems()
 	}
 	return 0, false
+}
+
+// Resume positions a source to continue a partial run when it implements
+// [Resumable], and no-ops otherwise.
+func Resume[T any](s Source[T], offset, fetched int) {
+	if r, ok := s.(Resumable); ok {
+		r.SetResumeState(offset, fetched)
+	}
 }

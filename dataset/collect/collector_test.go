@@ -17,14 +17,11 @@ func TestCollectorRunBasic(t *testing.T) {
 	target := stage.NewSliceTarget[record.Record]("mem")
 	prog := &recordingProgress{}
 	c := New(
-		WithSources(stage.NewSliceSource("s", []record.Record{
-			record.New(map[string]record.Value{"name": "a"}),
-			record.New(map[string]record.Value{"name": "b"}),
-		})),
-		WithTargets(target),
-		WithProgress(prog),
-		WithClock(newTestClock()),
-		WithConfig(Config{OutputDir: dir}),
+		WithSources(stage.NewSliceSource("s", recordsOf("a", "b"))),
+		WithTargets[record.Record](target),
+		WithProgress[record.Record](prog),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	res, err := c.Run(context.Background())
 	if err != nil {
@@ -41,7 +38,7 @@ func TestCollectorRunBasic(t *testing.T) {
 	}
 }
 
-func TestCollectorAppliesTransformAndSchema(t *testing.T) {
+func TestCollectorAppliesTransformAndValidator(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	s, err := schema.Compile(schema.JSON{
@@ -56,15 +53,12 @@ func TestCollectorAppliesTransformAndSchema(t *testing.T) {
 	}
 	target := stage.NewSliceTarget[record.Record]("mem")
 	c := New(
-		WithSources(stage.NewSliceSource("s", []record.Record{
-			record.New(map[string]record.Value{"name": "keep"}),
-			record.New(map[string]record.Value{"name": "drop"}),
-		})),
+		WithSources(stage.NewSliceSource("s", recordsOf("keep", "drop"))),
 		WithTransforms(tagTransform("drop")),
-		WithSchema(s),
-		WithTargets(target),
-		WithClock(newTestClock()),
-		WithConfig(Config{OutputDir: dir}),
+		WithValidator(s.Validator()),
+		WithTargets[record.Record](target),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	res, err := c.Run(context.Background())
 	if err != nil {
@@ -75,7 +69,7 @@ func TestCollectorAppliesTransformAndSchema(t *testing.T) {
 	}
 }
 
-func TestCollectorSchemaFailsClosed(t *testing.T) {
+func TestCollectorValidatorFailsClosed(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	s, err := schema.Compile(schema.JSON{
@@ -87,24 +81,41 @@ func TestCollectorSchemaFailsClosed(t *testing.T) {
 	}
 	c := New(
 		WithSources(stage.NewSliceSource("s", []record.Record{record.New(map[string]record.Value{"other": 1})})),
-		WithSchema(s),
-		WithClock(newTestClock()),
-		WithConfig(Config{OutputDir: dir}),
+		WithValidator(s.Validator()),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	if _, err := c.Run(context.Background()); err == nil {
-		t.Fatal("expected fail-closed schema error")
+		t.Fatal("expected fail-closed validation error")
+	}
+}
+
+func TestCollectorNilValidatorAcceptsAll(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	c := New(
+		WithSources(stage.NewSliceSource("s", recordsOf("a"))),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
+	)
+	res, err := c.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if res.TotalItems != 1 {
+		t.Fatalf("TotalItems = %d; want 1", res.TotalItems)
 	}
 }
 
 func TestCollectorUsesCacheOnSecondRun(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	newRun := func(prog Progress) *Collector {
+	newRun := func(prog Progress) *Collector[record.Record] {
 		return New(
-			WithSources(stage.NewSliceSource("s", []record.Record{record.New(map[string]record.Value{"name": "a"})})),
-			WithProgress(prog),
-			WithClock(newTestClock()),
-			WithConfig(Config{OutputDir: dir}),
+			WithSources(stage.NewSliceSource("s", recordsOf("a"))),
+			WithProgress[record.Record](prog),
+			WithClock[record.Record](newTestClock()),
+			WithConfig[record.Record](Config{OutputDir: dir}),
 		)
 	}
 	if _, err := newRun(NullProgress{}).Run(context.Background()); err != nil {
@@ -126,12 +137,12 @@ func TestCollectorUsesCacheOnSecondRun(t *testing.T) {
 func TestCollectorForceBypassesCache(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	build := func(force bool, prog Progress) *Collector {
+	build := func(force bool, prog Progress) *Collector[record.Record] {
 		return New(
-			WithSources(stage.NewSliceSource("s", []record.Record{record.New(map[string]record.Value{"name": "a"})})),
-			WithProgress(prog),
-			WithClock(newTestClock()),
-			WithConfig(Config{OutputDir: dir, Force: force}),
+			WithSources(stage.NewSliceSource("s", recordsOf("a"))),
+			WithProgress[record.Record](prog),
+			WithClock[record.Record](newTestClock()),
+			WithConfig[record.Record](Config{OutputDir: dir, Force: force}),
 		)
 	}
 	if _, err := build(false, NullProgress{}).Run(context.Background()); err != nil {
@@ -153,10 +164,10 @@ func TestCollectorSourceErrorFailsClosed(t *testing.T) {
 	failing := &funcSource{name: "bad", err: sentinel}
 	prog := &recordingProgress{}
 	c := New(
-		WithSources(failing),
-		WithProgress(prog),
-		WithClock(newTestClock()),
-		WithConfig(Config{OutputDir: dir}),
+		WithSources[record.Record](failing),
+		WithProgress[record.Record](prog),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	_, err := c.Run(context.Background())
 	if !errors.Is(err, sentinel) {
@@ -173,9 +184,9 @@ func TestCollectorContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	c := New(
-		WithSources(stage.NewSliceSource("s", []record.Record{record.New(map[string]record.Value{"name": "a"})})),
-		WithClock(newTestClock()),
-		WithConfig(Config{OutputDir: dir}),
+		WithSources(stage.NewSliceSource("s", recordsOf("a"))),
+		WithClock[record.Record](newTestClock()),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	if _, err := c.Run(ctx); err == nil {
 		t.Fatal("expected context cancellation error")
@@ -187,9 +198,9 @@ func TestCollectorRecordsDuration(t *testing.T) {
 	dir := t.TempDir()
 	clock := newTestClock()
 	c := New(
-		WithSources(stage.NewSliceSource("s", []record.Record{record.New(map[string]record.Value{"name": "a"})})),
-		WithClock(&advancingClock{clock: clock, step: 2 * time.Second}),
-		WithConfig(Config{OutputDir: dir}),
+		WithSources(stage.NewSliceSource("s", recordsOf("a"))),
+		WithClock[record.Record](&advancingClock{clock: clock, step: 2 * time.Second}),
+		WithConfig[record.Record](Config{OutputDir: dir}),
 	)
 	res, err := c.Run(context.Background())
 	if err != nil {
@@ -200,10 +211,104 @@ func TestCollectorRecordsDuration(t *testing.T) {
 	}
 }
 
-func TestDefaultConfig(t *testing.T) {
+func TestCollectorAggregatesRealAIStats(t *testing.T) {
 	t.Parallel()
-	cfg := DefaultConfig()
-	if cfg.OutputDir != DefaultOutputDir || cfg.SourceTimeout != DefaultSourceTimeout {
-		t.Fatalf("unexpected default config: %+v", cfg)
+	dir := t.TempDir()
+	src := &rangeSource{name: "s", total: 10, failAt: -1, ai: func(off int) bool { return off%2 == 1 }}
+	c := New(
+		WithSources[item](src),
+		WithClock[item](newTestClock()),
+		WithConfig[item](Config{OutputDir: dir}),
+	)
+	res, err := c.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if res.TotalItems != 10 || res.RealItems != 5 || res.AIItems != 5 {
+		t.Fatalf("stats = total %d real %d ai %d; want 10/5/5", res.TotalItems, res.RealItems, res.AIItems)
+	}
+}
+
+func TestCollectorResumesFromPartial(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	first := &rangeSource{name: "s", total: 50, failAt: 30}
+	c1 := New(
+		WithSources[item](first),
+		WithClock[item](newTestClock()),
+		WithConfig[item](Config{OutputDir: dir}),
+	)
+	if _, err := c1.Run(context.Background()); !errors.Is(err, errRangeFail) {
+		t.Fatalf("first run err = %v; want errRangeFail", err)
+	}
+
+	second := &rangeSource{name: "s", total: 50, failAt: -1}
+	target := stage.NewSliceTarget[item]("mem")
+	c2 := New(
+		WithSources[item](second),
+		WithTargets[item](target),
+		WithClock[item](newTestClock()),
+		WithConfig[item](Config{OutputDir: dir}),
+	)
+	res, err := c2.Run(context.Background())
+	if err != nil {
+		t.Fatalf("resume run error: %v", err)
+	}
+	if second.start != 30 {
+		t.Fatalf("resumed source start = %d; want 30", second.start)
+	}
+	if res.SourceStats["s"].Total != 50 {
+		t.Fatalf("resumed Total = %d; want 50", res.SourceStats["s"].Total)
+	}
+	if len(target.Records()) != 20 {
+		t.Fatalf("resume published %d items; want 20 new", len(target.Records()))
+	}
+}
+
+func TestCollectorPerSourceTimeout(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	c := New(
+		WithSources[item](&blockingSource{name: "slow"}),
+		WithClock[item](newTestClock()),
+		WithConfig[item](Config{OutputDir: dir, SourceTimeout: 20 * time.Millisecond}),
+	)
+	_, err := c.Run(context.Background())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got %v", err)
+	}
+}
+
+func TestCollectorBoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	const n = 3
+	bar := newBarrier(n)
+	sources := make([]stage.Source[item], n)
+	for i := range sources {
+		sources[i] = &barrierSource{name: "s", barrier: bar}
+	}
+	c := New(
+		WithSources[item](sources...),
+		WithClock[item](newTestClock()),
+		WithConfig[item](Config{OutputDir: dir, Concurrency: n}),
+	)
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.Run(context.Background())
+		done <- err
+	}()
+
+	select {
+	case <-bar.full:
+		close(bar.release)
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected all sources to stream concurrently")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("Run error: %v", err)
 	}
 }

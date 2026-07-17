@@ -10,7 +10,7 @@ func TestManifestSaveLoadRoundTrip(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	m := New()
-	m.MarkDone("src", "key1", SourceStats{Total: 5, Real: 5})
+	m.MarkDone("src", "key1", SourceStats{Total: 5, Real: 3, AI: 2, FetchedOffset: 5})
 	if err := m.Save(dir); err != nil {
 		t.Fatalf("Save error: %v", err)
 	}
@@ -18,9 +18,33 @@ func TestManifestSaveLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
 	}
-	stats, ok := loaded.IsCached("src", "key1")
-	if !ok || stats.Total != 5 {
-		t.Fatalf("IsCached = %+v, %v; want total 5", stats, ok)
+	status := loaded.CacheStatusFor("src", "key1", 0, false)
+	if status.Kind != CacheDone {
+		t.Fatalf("CacheStatusFor = %v; want CacheDone", status.Kind)
+	}
+	if got, want := status.Stats, (SourceStats{Total: 5, Real: 3, AI: 2, FetchedOffset: 5}); got != want {
+		t.Fatalf("stats = %+v; want %+v", got, want)
+	}
+}
+
+func TestPartialOffsetRoundTrip(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	m := New()
+	m.MarkPartial("src", "key1", SourceStats{Total: 40, Real: 40, FetchedOffset: 40})
+	if err := m.Save(dir); err != nil {
+		t.Fatalf("Save error: %v", err)
+	}
+	loaded, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	status := loaded.CacheStatusFor("src", "key1", 100, true)
+	if status.Kind != CachePartial {
+		t.Fatalf("CacheStatusFor = %v; want CachePartial", status.Kind)
+	}
+	if status.Stats.FetchedOffset != 40 {
+		t.Fatalf("FetchedOffset = %d; want 40", status.Stats.FetchedOffset)
 	}
 }
 
@@ -43,18 +67,6 @@ func TestLoadMalformedFailsClosed(t *testing.T) {
 	}
 	if _, err := Load(dir); err == nil {
 		t.Fatal("expected error for malformed manifest")
-	}
-}
-
-func TestIsCachedRejectsKeyMismatch(t *testing.T) {
-	t.Parallel()
-	m := New()
-	m.MarkDone("src", "key1", SourceStats{Total: 1})
-	if _, ok := m.IsCached("src", "different"); ok {
-		t.Fatal("cache key mismatch should not be cached")
-	}
-	if _, ok := m.IsCached("absent", "key1"); ok {
-		t.Fatal("absent source should not be cached")
 	}
 }
 
@@ -95,5 +107,8 @@ func TestCacheStatusKeyMismatchNotCached(t *testing.T) {
 	m.MarkDone("s", "old", SourceStats{Total: 1})
 	if s := m.CacheStatusFor("s", "new", 0, false); s.Kind != CacheNotCached {
 		t.Fatalf("key mismatch -> %v; want CacheNotCached", s.Kind)
+	}
+	if s := m.CacheStatusFor("absent", "old", 0, false); s.Kind != CacheNotCached {
+		t.Fatalf("absent source -> %v; want CacheNotCached", s.Kind)
 	}
 }

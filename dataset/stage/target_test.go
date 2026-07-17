@@ -3,14 +3,12 @@ package stage
 import (
 	"context"
 	"testing"
-
-	"github.com/kbukum/gokit/dataset/record"
 )
 
 func TestSliceTargetPublish(t *testing.T) {
 	t.Parallel()
-	target := NewSliceTarget[record.Record]("mem")
-	p := recordPipeline(map[string]record.Value{"a": 1}, map[string]record.Value{"a": 2})
+	target := NewSliceTarget[row]("mem")
+	p := rowPipeline(row{"a": 1}, row{"a": 2})
 	res, err := target.Publish(context.Background(), p)
 	if err != nil {
 		t.Fatalf("Publish error: %v", err)
@@ -22,13 +20,13 @@ func TestSliceTargetPublish(t *testing.T) {
 		t.Fatalf("TargetName = %q; want mem", res.TargetName)
 	}
 	if len(target.Records()) != 2 {
-		t.Fatalf("target holds %d records; want 2", len(target.Records()))
+		t.Fatalf("target holds %d rows; want 2", len(target.Records()))
 	}
 }
 
 func TestSliceTargetName(t *testing.T) {
 	t.Parallel()
-	if NewSliceTarget[record.Record]("x").Name() != "x" {
+	if NewSliceTarget[row]("x").Name() != "x" {
 		t.Fatal("Name mismatch")
 	}
 }
