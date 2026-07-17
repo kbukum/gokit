@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Generic dataset collection kit
+- **dataset** (NEW module, light mirror of rskit-dataset): a streaming, generics-first
+  dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
+  - **collect**: the generic engine — a bounded worker pool with `StreamBuffer` backpressure,
+    per-source timeout/cancellation, and a single-owner main loop that folds worker events into
+    the manifest, result, and progress without shared mutexes. Fails closed (a source, validation,
+    or target error aborts the run and publishes no failed source), records real/AI stats, and
+    always saves the manifest for resume.
+  - **stage**: the generic streaming stages (`Source`/`Transform`/`Target`) over `stream`
+    pipelines, plus opt-in item capabilities (`Labeled`, `Offsetted`) and source capabilities
+    (`Keyed`, `Bounded`, `Resumable`) and a pluggable `Validator[T]`.
+  - **record**: the tabular `record.Record` family — CSV/JSON-array/JSON-lines readers and
+    writers, stream filters, and a file source/target that accumulates records across publishes.
+  - **sample**: the blob item family — a labeled, offset-carrying `sample.Item` over a bounded
+    payload, with slice/directory sources and a real/AI-splitting local target confined through
+    `fs` path safety.
+  - **schema**: fail-closed JSON Schema validation adapted into a `stage.Validator[record.Record]`.
+  - **manifest**: a bounded, atomically persisted cache with one canonical `CacheStatusFor` that
+    lets a run skip or resume sources.
+  - **payload**: bounded in-memory or file-backed byte payloads with resource `Limits`.
+
 ### Changed (Breaking API Changes) — Typed AI/LLM/tool APIs
 - **ai / llm**: `ai.ToolUseBlock.Input` and `llm.CompletionRequest.Extra` no longer expose
   `map[string]any`; they now carry raw JSON (`llm.RawJSON`) as an opaque, untrusted-by-default
