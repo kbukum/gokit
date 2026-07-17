@@ -17,13 +17,6 @@ cd "$repo_root"
 
 god_file_lines="${GOD_FILE_LINES:-600}"
 
-skip_path() {
-  case "$1" in
-    */vendor/*|*/testdata/*|*/node_modules/*) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
 # ast-grep may be installed into a user-writable prefix by ensure-ast-grep.sh;
 # expose those bin dirs so a freshly installed binary resolves in this process too.
 export PATH="${NPM_CONFIG_PREFIX:-$HOME/.local}/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -35,7 +28,7 @@ if "$repo_root/scripts/ensure-ast-grep.sh"; then
   if command -v "$sg_bin" >/dev/null 2>&1; then
     "$sg_bin" scan \
       --globs '!**/vendor/**' --globs '!**/testdata/**' --globs '!**/node_modules/**' \
-      || echo "structure: doc.go offenders above are advisory (not gating yet)" >&2
+      || echo "structure: doc.go docs-only scan reported findings or errored above (advisory, not gating)" >&2
   else
     echo "structure: skipping doc.go docs-only check (ast-grep unresolved after install)" >&2
   fi
@@ -46,7 +39,6 @@ fi
 # 2. God-file (advisory): a package with a single non-test .go file (excluding doc.go)
 # larger than the threshold.
 while IFS= read -r dir; do
-  skip_path "$dir/" && continue
   src=""
   count=0
   while IFS= read -r f; do
@@ -60,6 +52,8 @@ while IFS= read -r dir; do
     printf 'warning: single-file package (%s lines) — split by concern: %s\n' \
       "$lines" "$src" >&2
   fi
-done < <(find . -type d -not -path '*/.*' | sort)
+done < <(find . \
+  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+  -o -type d -print | sort)
 
 exit 0
