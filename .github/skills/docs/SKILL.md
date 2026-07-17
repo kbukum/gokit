@@ -49,7 +49,7 @@ Verify each doc against the code it describes; a doc that lies is worse than no 
 Fix every instance of a pattern across the whole surface in scope (a single reflow fix implies sweeping every hard-wrapped file), not just the first hit. Then validate what you touched:
 
 ```bash
-git grep -nP '.{101,}' -- 'docs/**/*.md' '*.md'   # candidates: over-long lines to inspect (code blocks/tables are fine)
+git grep -nE '.{101,}' -- 'docs/**/*.md' '*.md'   # candidates: over-long lines to inspect (code blocks/tables are fine)
 go vet ./...                                        # validates the packages whose doc.go / comments changed compile
 ```
 
