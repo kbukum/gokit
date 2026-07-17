@@ -4,8 +4,9 @@
 
 - **Go 1.26+**
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
-- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs a
-  pinned version (via brew/npm/cargo/pipx) if it is missing
+- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if
+  missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned
+  Homebrew install last
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
 ## Getting Started

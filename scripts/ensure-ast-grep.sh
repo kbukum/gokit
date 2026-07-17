@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Ensure ast-grep is available, installing it if missing (local dev + CI).
 #
-# ast-grep powers the advisory `make structure` guard. This installs a pinned
-# version via the first available package manager that places the binary on PATH.
+# ast-grep powers the advisory `make structure` guard. Version-pinned managers
+# (npm/cargo/pipx) are tried first so the pinned AST_GREP_VERSION is honored;
+# Homebrew is a last-resort fallback that installs its current (unpinned) formula.
 # Override the version with AST_GREP_VERSION.
 set -euo pipefail
 
@@ -25,9 +26,6 @@ attempt() {
   return 1
 }
 
-if command -v brew >/dev/null 2>&1; then
-  attempt "brew" brew install ast-grep && exit 0
-fi
 if command -v npm >/dev/null 2>&1; then
   attempt "npm" npm install -g "@ast-grep/cli@${version}" && exit 0
 fi
@@ -36,6 +34,11 @@ if command -v cargo >/dev/null 2>&1; then
 fi
 if command -v pipx >/dev/null 2>&1; then
   attempt "pipx" pipx install "ast-grep-cli==${version}" && exit 0
+fi
+# Homebrew last: its formula is unpinned, so it may install a version other than
+# ${version} when no version-pinned manager is available.
+if command -v brew >/dev/null 2>&1; then
+  attempt "brew (unpinned)" brew install ast-grep && exit 0
 fi
 
 cat >&2 <<'EOF'

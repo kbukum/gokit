@@ -9,7 +9,7 @@
 #      file is a refactor signal — split it by concern into named sibling files. Reported
 #      as a warning, never a hard failure (small single-file packages are legitimate).
 #
-# Both checks are advisory (never gating). Vendored, generated, and testdata trees are skipped.
+# Both checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
