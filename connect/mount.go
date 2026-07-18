@@ -2,8 +2,7 @@ package connect
 
 import "net/http"
 
-// HandlerMounter is implemented by any server that can mount HTTP handlers.
-// This matches gokit/server.Server.Handle without importing the server package.
+// HandlerMounter is implemented by any server that can mount HTTP handlers. This matches gokit/server.Server.Handle without importing the server package.
 type HandlerMounter interface {
 	Handle(pattern string, handler http.Handler)
 }

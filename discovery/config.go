@@ -15,8 +15,7 @@ type Config struct {
 	// Provider selects the discovery backend: "consul", "static", or "k8s".
 	Provider string `yaml:"provider" mapstructure:"provider"`
 
-	// Addr is the discovery provider address (e.g. "localhost:8500").
-	// Generic — every remote provider needs an address.
+	// Addr is the discovery provider address (e.g. "localhost:8500"). Generic — every remote provider needs an address.
 	Addr string `yaml:"addr" mapstructure:"addr"`
 
 	// Scheme is the URI scheme for the provider connection (e.g. "http", "https").
@@ -40,9 +39,7 @@ type Config struct {
 	// StaticEndpoints provides endpoints for the static provider or as fallback.
 	StaticEndpoints []StaticEndpoint `yaml:"static_endpoints" mapstructure:"static_endpoints"`
 
-	// ProviderOptions holds exotic backend-specific settings (e.g., datacenter,
-	// TLS, connection pool for Consul). Generic fields like addr/scheme/token
-	// are on Config directly.
+	// ProviderOptions holds exotic backend-specific settings (e.g., datacenter, TLS, connection pool for Consul). Generic fields like addr/scheme/token are on Config directly.
 	ProviderOptions map[string]any `yaml:"provider_options" mapstructure:"provider_options"`
 }
 
@@ -51,21 +48,13 @@ type RegistrationConfig struct {
 	// Enabled toggles self-registration.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// Required controls startup behavior when registration fails.
-	// When true (the default), the service will retry with backoff and
-	// ultimately fail to start if registration cannot be completed —
-	// appropriate for staging/production where an undiscoverable service
-	// is a silent outage. When false, the service logs a warning and
-	// continues in degraded mode — convenient for local development.
+	// Required controls startup behavior when registration fails. When true (the default), the service will retry with backoff and ultimately fail to start if registration cannot be completed — appropriate for staging/production where an undiscoverable service is a silent outage. When false, the service logs a warning and continues in degraded mode — convenient for local development.
 	Required bool `yaml:"required" mapstructure:"required"`
 
-	// MaxRetries is the maximum number of registration attempts.
-	// Defaults to 3. Only meaningful when Required is true.
+	// MaxRetries is the maximum number of registration attempts. Defaults to 3. Only meaningful when Required is true.
 	MaxRetries int `yaml:"max_retries" mapstructure:"max_retries"`
 
-	// RetryInterval is the initial resilience backoff interval (e.g. "2s").
-	// The shared resilience policy applies exponential backoff from this base.
-	// Defaults to "2s".
+	// RetryInterval is the initial resilience backoff interval (e.g. "2s"). The shared resilience policy applies exponential backoff from this base. Defaults to "2s".
 	RetryInterval string `yaml:"retry_interval" mapstructure:"retry_interval"`
 
 	// ServiceName is the name used when registering this service.
@@ -92,8 +81,7 @@ type HealthCheckConfig struct {
 	// Enabled toggles health checks.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// Type is the health check type: "http", "grpc", "tcp", or "ttl".
-	// Defaults to "http".
+	// Type is the health check type: "http", "grpc", "tcp", or "ttl". Defaults to "http".
 	Type string `yaml:"type" mapstructure:"type"`
 
 	// Path is the HTTP path for health checks (e.g. "/healthz").

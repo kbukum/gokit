@@ -13,8 +13,7 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-// Component is a test database component that uses SQLite in-memory.
-// It implements both component.Component and testutil.TestComponent interfaces.
+// Component is a test database component that uses SQLite in-memory. It implements both component.Component and testutil.TestComponent interfaces.
 type Component struct {
 	db      *gorm.DB
 	models  []any
@@ -28,15 +27,12 @@ var (
 	_ testutil.TestComponent = (*Component)(nil)
 )
 
-// NewComponent creates a new test database component.
-// By default, it uses SQLite in-memory database.
+// NewComponent creates a new test database component. By default, it uses SQLite in-memory database.
 func NewComponent() *Component {
 	return &Component{}
 }
 
-// WithModels registers models for auto-migration on Start.
-// This is useful when you want the component to automatically create
-// tables for your models during component startup.
+// WithModels registers models for auto-migration on Start. This is useful when you want the component to automatically create tables for your models during component startup.
 func (c *Component) WithModels(models ...any) *Component {
 	c.models = append(c.models, models...)
 	return c
@@ -136,8 +132,7 @@ func (c *Component) Health(ctx context.Context) component.Health {
 	}
 }
 
-// Reset clears all data from all tables while preserving the schema.
-// This is useful for resetting state between test cases.
+// Reset clears all data from all tables while preserving the schema. This is useful for resetting state between test cases.
 func (c *Component) Reset(ctx context.Context) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -163,8 +158,7 @@ func (c *Component) Reset(ctx context.Context) error {
 	return nil
 }
 
-// Snapshot captures the current state of the database.
-// Returns a snapshot that can be used with Restore to return to this state.
+// Snapshot captures the current state of the database. Returns a snapshot that can be used with Restore to return to this state.
 func (c *Component) Snapshot(ctx context.Context) (any, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -195,8 +189,7 @@ func (c *Component) Snapshot(ctx context.Context) (any, error) {
 	return snapshot, nil
 }
 
-// Restore returns the database to a previously captured snapshot state.
-// The snapshot must have been created by the Snapshot method.
+// Restore returns the database to a previously captured snapshot state. The snapshot must have been created by the Snapshot method.
 func (c *Component) Restore(ctx context.Context, snap any) error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

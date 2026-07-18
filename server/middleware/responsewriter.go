@@ -2,8 +2,7 @@ package middleware
 
 import "net/http"
 
-// statusWriter wraps http.ResponseWriter to capture the status code.
-// It delegates Flush and Unwrap so HTTP/2 streaming and gRPC work correctly.
+// statusWriter wraps http.ResponseWriter to capture the status code. It delegates Flush and Unwrap so HTTP/2 streaming and gRPC work correctly.
 type statusWriter struct {
 	http.ResponseWriter
 	status      int
@@ -36,8 +35,7 @@ func (sw *statusWriter) Flush() {
 	}
 }
 
-// Unwrap returns the underlying ResponseWriter so http.ResponseController
-// (Go 1.20+) can discover optional interfaces on the original writer.
+// Unwrap returns the underlying ResponseWriter so http.ResponseController (Go 1.20+) can discover optional interfaces on the original writer.
 func (sw *statusWriter) Unwrap() http.ResponseWriter {
 	return sw.ResponseWriter
 }

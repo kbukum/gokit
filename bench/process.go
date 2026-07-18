@@ -14,9 +14,7 @@ type processEvaluator[L comparable] struct {
 	parseOutput func(*process.Result) (Prediction[L], error)
 }
 
-// FromProcess creates an Evaluator that calls a subprocess.
-// buildCmd creates the process command from a sample's raw input.
-// parseOutput extracts a prediction from the process result.
+// FromProcess creates an Evaluator that calls a subprocess. buildCmd creates the process command from a sample's raw input. parseOutput extracts a prediction from the process result.
 func FromProcess[L comparable](
 	name string,
 	buildCmd func(Sample[L]) process.Command,

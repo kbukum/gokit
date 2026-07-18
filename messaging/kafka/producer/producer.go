@@ -43,8 +43,7 @@ func NewProducer(common messaging.Config, cfg kafka.Config, log *logging.Logger)
 	return p, nil
 }
 
-// NewLazyProducer creates a Producer that initializes the underlying writer
-// on first use (thread-safe). Useful when Kafka may not be available at startup.
+// NewLazyProducer creates a Producer that initializes the underlying writer on first use (thread-safe). Useful when Kafka may not be available at startup.
 func NewLazyProducer(common messaging.Config, cfg kafka.Config, log *logging.Logger) (*Producer, error) {
 	return newProducer(common, cfg, log)
 }
@@ -211,9 +210,7 @@ func (p *Producer) Stats() kafkago.WriterStats {
 	return kafkago.WriterStats{}
 }
 
-// Flush is a no-op because kafka-go Writer writes synchronously when BatchSize
-// and BatchTimeout are used without Async. It still reports cancellation and
-// closed-producer state so callers can rely on the Producer contract.
+// Flush is a no-op because kafka-go Writer writes synchronously when BatchSize and BatchTimeout are used without Async. It still reports cancellation and closed-producer state so callers can rely on the Producer contract.
 func (p *Producer) Flush(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err

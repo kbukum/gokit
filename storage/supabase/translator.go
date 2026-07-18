@@ -7,8 +7,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// FromSupabase converts a Supabase error to an AppError.
-// It parses Supabase error strings and translates them to user-friendly messages.
+// FromSupabase converts a Supabase error to an AppError. It parses Supabase error strings and translates them to user-friendly messages.
 func FromSupabase(err error) *apperrors.AppError {
 	if err == nil {
 		return nil

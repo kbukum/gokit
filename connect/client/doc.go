@@ -1,11 +1,8 @@
 // Package client provides HTTP clients configured for ConnectRPC services.
 //
-// ConnectRPC clients are built on standard net/http. Unlike gRPC, there is no
-// special dial/connection step — you just need an *http.Client configured for
-// HTTP/2 and a base URL.
+// ConnectRPC clients are built on standard net/http. Unlike gRPC, there is no special dial/connection step — you just need an *http.Client configured for HTTP/2 and a base URL.
 //
-// When TLS is not configured (the default), the client uses h2c (cleartext
-// HTTP/2). When TLS is configured via security.TLSConfig, standard HTTPS is used.
+// When TLS is not configured (the default), the client uses h2c (cleartext HTTP/2). When TLS is configured via security.TLSConfig, standard HTTPS is used.
 //
 // # Basic Usage (static address)
 //

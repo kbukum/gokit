@@ -21,8 +21,7 @@ func (e *Engine) ExecuteBatch(ctx context.Context, g *Graph, state *State) (*Res
 	return e.execute(ctx, g, state, nil)
 }
 
-// ExecuteStreaming runs only nodes that pass the filter.
-// Nodes that don't pass are marked as "skipped".
+// ExecuteStreaming runs only nodes that pass the filter. Nodes that don't pass are marked as "skipped".
 func (e *Engine) ExecuteStreaming(ctx context.Context, g *Graph, state *State, filter NodeFilter) (*Result, error) {
 	return e.execute(ctx, g, state, filter)
 }
@@ -102,9 +101,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 	return result, nil
 }
 
-// checkUpstreams examines this cycle's results for all upstream dependencies.
-// Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed.
-// For skipped dependencies, also checks if state has cached output from a previous cycle.
+// checkUpstreams examines this cycle's results for all upstream dependencies. Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed. For skipped dependencies, also checks if state has cached output from a previous cycle.
 func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, result *Result, g *Graph, state *State) (string, bool) {
 	for _, upstream := range upstreams[name] {
 		ur, exists := result.NodeResults[upstream]
@@ -193,8 +190,7 @@ func (e *Engine) concurrency(levelSize int) int {
 	return maxParallel
 }
 
-// AsTool wraps a DAG pipeline execution as a provider.RequestResponse.
-// Input is written to state via InputFn, output is read via OutputFn.
+// AsTool wraps a DAG pipeline execution as a provider.RequestResponse. Input is written to state via InputFn, output is read via OutputFn.
 func AsTool[I, O any](engine *Engine, graph *Graph, cfg ToolConfig[I, O]) *Tool[I, O] {
 	return &Tool[I, O]{
 		engine: engine,

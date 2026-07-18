@@ -10,8 +10,7 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-// MockNode is a configurable test node for DAG testing.
-// It records calls and returns a preset output or error.
+// MockNode is a configurable test node for DAG testing. It records calls and returns a preset output or error.
 type MockNode struct {
 	name   string
 	output any
@@ -24,8 +23,7 @@ type MockNode struct {
 
 var _ dag.Node = (*MockNode)(nil)
 
-// NewMockNode creates a mock node that returns the given output.
-// If err is non-nil, the node will fail with that error.
+// NewMockNode creates a mock node that returns the given output. If err is non-nil, the node will fail with that error.
 func NewMockNode(name string, output any, err error) *MockNode {
 	return &MockNode{name: name, output: output, err: err}
 }
@@ -90,8 +88,7 @@ func (b *GraphBuilder) Build() *dag.Graph {
 	return &dag.Graph{Nodes: b.nodes, Edges: b.edges}
 }
 
-// Component is a test DAG component that implements testutil.TestComponent.
-// It wraps a graph + engine for integration testing with gokit's test lifecycle.
+// Component is a test DAG component that implements testutil.TestComponent. It wraps a graph + engine for integration testing with gokit's test lifecycle.
 type Component struct {
 	engine *dag.Engine
 	graph  *dag.Graph

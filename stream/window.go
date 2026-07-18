@@ -5,9 +5,7 @@ import (
 	"time"
 )
 
-// TumblingWindow groups values into non-overlapping fixed-duration windows.
-// Each window is emitted as a slice when its duration expires.
-// The final partial window is emitted when the source is exhausted.
+// TumblingWindow groups values into non-overlapping fixed-duration windows. Each window is emitted as a slice when its duration expires. The final partial window is emitted when the source is exhausted.
 func TumblingWindow[T any](p *Pipeline[T], duration time.Duration) *Pipeline[[]T] {
 	return &Pipeline[[]T]{
 		create: func(ctx context.Context) Iterator[[]T] {
@@ -97,11 +95,9 @@ func (it *tumblingWindowIter[T]) Close() error {
 	return it.closer()
 }
 
-// SlidingWindow emits overlapping windows based on a time extraction function.
-// windowSize is the duration of each window. slideBy is how far each window advances.
+// SlidingWindow emits overlapping windows based on a time extraction function. windowSize is the duration of each window. slideBy is how far each window advances.
 //
-// Values must arrive in time order. Each emitted slice contains all values
-// whose timestamp falls within [windowStart, windowStart+windowSize).
+// Values must arrive in time order. Each emitted slice contains all values whose timestamp falls within [windowStart, windowStart+windowSize).
 func SlidingWindow[T any](p *Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) *Pipeline[[]T] {
 	return &Pipeline[[]T]{
 		create: func(ctx context.Context) Iterator[[]T] {

@@ -23,9 +23,7 @@ type TokenResult struct {
 	Scopes []string
 }
 
-// UserInfo represents the standard OIDC UserInfo claims.
-// Only standard fields are included — projects extract provider-specific
-// claims by parsing the ID token or calling provider-specific APIs.
+// UserInfo represents the standard OIDC UserInfo claims. Only standard fields are included — projects extract provider-specific claims by parsing the ID token or calling provider-specific APIs.
 type UserInfo struct {
 	// Subject is the provider's unique identifier for the user.
 	Subject string `json:"sub"`

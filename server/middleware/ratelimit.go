@@ -17,20 +17,16 @@ type RateLimitConfig struct {
 	// RequestsPerMinute is the default RPM when LimitFunc is not set.
 	RequestsPerMinute int
 
-	// KeyFunc extracts the rate limit key from a request. Defaults to client IP.
-	// Ignored when LimitFunc is set.
+	// KeyFunc extracts the rate limit key from a request. Defaults to client IP. Ignored when LimitFunc is set.
 	KeyFunc func(*gin.Context) string
 
-	// LimitFunc resolves both the bucket key and RPM for a request.
-	// When set, KeyFunc and RequestsPerMinute are ignored.
+	// LimitFunc resolves both the bucket key and RPM for a request. When set, KeyFunc and RequestsPerMinute are ignored.
 	LimitFunc func(*gin.Context) (key string, rpm int)
 
-	// CleanupInterval controls how often stale buckets are evicted.
-	// Default: 5 minutes.
+	// CleanupInterval controls how often stale buckets are evicted. Default: 5 minutes.
 	CleanupInterval time.Duration
 
-	// BucketTTL is how long an unused bucket survives before eviction.
-	// Default: 10 minutes.
+	// BucketTTL is how long an unused bucket survives before eviction. Default: 10 minutes.
 	BucketTTL time.Duration
 }
 
@@ -67,8 +63,7 @@ func NewRateLimiter(cfg RateLimitConfig) *RateLimiterInstance {
 	}
 }
 
-// Stop releases background cleanup resources. Existing buckets remain usable so
-// in-flight shutdown paths do not race with decision making.
+// Stop releases background cleanup resources. Existing buckets remain usable so in-flight shutdown paths do not race with decision making.
 func (rl *RateLimiterInstance) Stop() {
 	if rl == nil || rl.limiter == nil {
 		return
@@ -76,15 +71,13 @@ func (rl *RateLimiterInstance) Stop() {
 	rl.limiter.Stop()
 }
 
-// Allow checks whether the given key is permitted another request at the given RPM.
-// Returns (allowed, limit, remaining, retryAfterSecs, resetUnix).
+// Allow checks whether the given key is permitted another request at the given RPM. Returns (allowed, limit, remaining, retryAfterSecs, resetUnix).
 func (rl *RateLimiterInstance) Allow(key string, rpm int) (allowed bool, limit, remaining int, retryAfterSecs float64, resetUnix int64) {
 	decision := rl.limiter.Allow(key, rpm, time.Minute)
 	return decision.Allowed, decision.Limit, decision.Remaining, decision.RetryAfter.Seconds(), decision.ResetAt.Unix()
 }
 
-// RateLimit returns a Gin middleware that applies per-key rate limiting with
-// standard rate limit response headers.
+// RateLimit returns a Gin middleware that applies per-key rate limiting with standard rate limit response headers.
 func RateLimit(limiter *RateLimiterInstance) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key, rpm := resolveKeyAndRPM(c, limiter.cfg)

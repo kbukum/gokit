@@ -19,9 +19,7 @@ type Component struct {
 	driverName string
 }
 
-// NewComponent creates a database component for use with the component registry.
-// Drivers are opt-in: call WithDriver or WithDriverFromRegistry before Start.
-// The Config.Enabled flag can be used to skip initialization at runtime.
+// NewComponent creates a database component for use with the component registry. Drivers are opt-in: call WithDriver or WithDriverFromRegistry before Start. The Config.Enabled flag can be used to skip initialization at runtime.
 func NewComponent(cfg Config, log *logging.Logger) *Component {
 	return &Component{
 		cfg: cfg,
@@ -29,8 +27,7 @@ func NewComponent(cfg Config, log *logging.Logger) *Component {
 	}
 }
 
-// WithDriver sets the database driver function.
-// Pass the Open function from your chosen driver (not the result of calling it).
+// WithDriver sets the database driver function. Pass the Open function from your chosen driver (not the result of calling it).
 //
 // Example:
 //
@@ -58,8 +55,7 @@ func (c *Component) WithDriverFromRegistry(reg *DriverRegistry, name string) *Co
 	return c
 }
 
-// WithAutoMigrate registers models for auto-migration on Start.
-// Models are only migrated if Config.AutoMigrate is true and the component is enabled.
+// WithAutoMigrate registers models for auto-migration on Start. Models are only migrated if Config.AutoMigrate is true and the component is enabled.
 func (c *Component) WithAutoMigrate(models ...any) *Component {
 	c.models = append(c.models, models...)
 	return c
@@ -76,9 +72,7 @@ var _ component.Component = (*Component)(nil)
 // Name returns the component name.
 func (c *Component) Name() string { return "database" }
 
-// Start connects to the database and optionally runs auto-migration.
-// If Config.Enabled is false, this method returns immediately without error.
-// The context is used for connection retries and can be canceled to abort startup.
+// Start connects to the database and optionally runs auto-migration. If Config.Enabled is false, this method returns immediately without error. The context is used for connection retries and can be canceled to abort startup.
 func (c *Component) Start(ctx context.Context) error {
 	if !c.cfg.Enabled {
 		c.log.InfoCtx(ctx, "Database component is disabled")
@@ -118,9 +112,7 @@ func (c *Component) Stop(_ context.Context) error {
 	return c.db.Close() //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 }
 
-// Health returns the current health status of the database.
-// If Config.Enabled is false, returns StatusHealthy with "disabled" message.
-// The context is used for the ping operation and honors cancellation.
+// Health returns the current health status of the database. If Config.Enabled is false, returns StatusHealthy with "disabled" message. The context is used for the ping operation and honors cancellation.
 func (c *Component) Health(ctx context.Context) component.Health {
 	if !c.cfg.Enabled {
 		return component.Health{

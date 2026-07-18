@@ -1,7 +1,6 @@
 package client
 
-// Resolver resolves a service name to a base URL (e.g., "http://host:port").
-// Implement this interface to integrate with service discovery.
+// Resolver resolves a service name to a base URL (e.g., "http://host:port"). Implement this interface to integrate with service discovery.
 type Resolver interface {
 	Resolve(serviceName string) (string, error)
 }
@@ -18,8 +17,7 @@ func (f ResolveFunc) Resolve(serviceName string) (string, error) {
 	return f(serviceName)
 }
 
-// StaticResolver returns a fixed base URL regardless of service name.
-// Useful for testing or direct connections without service discovery.
+// StaticResolver returns a fixed base URL regardless of service name. Useful for testing or direct connections without service discovery.
 func StaticResolver(baseURL string) Resolver {
 	return ResolveFunc(func(_ string) (string, error) {
 		return baseURL, nil

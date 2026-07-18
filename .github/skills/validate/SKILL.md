@@ -10,16 +10,11 @@ user-invocable: true
 
 # Validating gokit changes with toven
 
-gokit is a multi-module Go monorepo. **`toven` is the canonical task runner** (config in
-`toven.toml`, sibling repo `../toven`). It discovers every `go.mod`, orders work by the
-dependency graph, caches results, and can scope to just the modules a diff touched. Prefer it
-over calling `go`/`make`/`gomod.sh` by hand — the Makefile targets are thin wrappers and toven
-gives you affected-set detection and per-module caching for free.
+gokit is a multi-module Go monorepo. **`toven` is the canonical task runner** (config in `toven.toml`, sibling repo `../toven`). It discovers every `go.mod`, orders work by the dependency graph, caches results, and can scope to just the modules a diff touched. Prefer it over calling `go`/`make`/`gomod.sh` by hand — the Makefile targets are thin wrappers and toven gives you affected-set detection and per-module caching for free.
 
 ## Golden rule: scope to what changed
 
-Never run the whole tree for a small change. Let toven compute the affected set, or name the
-module explicitly. Full-tree gates are for audits and CI sign-off (see `review`).
+Never run the whole tree for a small change. Let toven compute the affected set, or name the module explicitly. Full-tree gates are for audits and CI sign-off (see `review`).
 
 ```bash
 # What would this task run, and where? (no execution — reviewable argv)
@@ -48,8 +43,7 @@ toven test --base origin/main --merge-base    # run just those
 
 ## Scoping to modules
 
-Module selectors are `go:<name>` (run `toven modules` for the list; sub-modules use `-`, e.g.
-`go:media`, `go:auth`, `go:messaging-kafka`, `go:database-sqlite`). Flags are repeatable.
+Module selectors are `go:<name>` (run `toven modules` for the list; sub-modules use `-`, e.g. `go:media`, `go:auth`, `go:messaging-kafka`, `go:database-sqlite`). Flags are repeatable.
 
 ```bash
 toven test --module go:media                       # one module
@@ -60,8 +54,7 @@ toven build --module go:server --dependencies      # + everything server needs
 
 ## Race, determinism, and passthrough
 
-The `test` task's default selector does **not** include `-race`; pass test flags verbatim after
-`--`. gokit's baseline requires green under race + shuffle:
+The `test` task's default selector does **not** include `-race`; pass test flags verbatim after `--`. gokit's baseline requires green under race + shuffle:
 
 ```bash
 toven test --module go:<name> -- -race -count=1 -shuffle=on
@@ -71,8 +64,7 @@ toven test --watch                                        # rerun affected tests
 
 ## gofumpt before lint (important)
 
-golangci-lint enforces **gofumpt** (stricter than gofmt), but `toven format` runs plain
-`gofmt -w`. After editing, run gofumpt on the changed dirs, then lint:
+golangci-lint enforces **gofumpt** (stricter than gofmt), but `toven format` runs plain `gofmt -w`. After editing, run gofumpt on the changed dirs, then lint:
 
 ```bash
 gofumpt -w <changed-dir>...
@@ -89,13 +81,10 @@ toven --output jsonl test --base origin/main --merge-base
 
 ## Cache
 
-toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` to bypass a run,
-`--refresh` to re-run but rewrite the cache.
+toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` to bypass a run, `--refresh` to re-run but rewrite the cache.
 
 ## Before you hand work off
 
-For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`, `check`
-(vet), and `test -- -race -count=1 -shuffle=on` on the affected modules. Escalate to a full-tree
-run only when the affected set is genuinely tree-wide or you are preparing a release.
+For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`, `check` (vet), and `test -- -race -count=1 -shuffle=on` on the affected modules. Escalate to a full-tree run only when the affected set is genuinely tree-wide or you are preparing a release.
 
 Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.

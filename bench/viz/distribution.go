@@ -6,8 +6,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// RenderDistribution generates an SVG histogram of score distributions.
-// Each ScoreDistribution represents one label's score histogram.
+// RenderDistribution generates an SVG histogram of score distributions. Each ScoreDistribution represents one label's score histogram.
 func RenderDistribution(dists []bench.ScoreDistribution, opts ...RenderOption) string {
 	cfg := defaultConfig()
 	for _, o := range opts {

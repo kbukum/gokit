@@ -1,8 +1,6 @@
-// Package sse provides Server-Sent Events (SSE) infrastructure for
-// real-time event delivery in gokit applications.
+// Package sse provides Server-Sent Events (SSE) infrastructure for real-time event delivery in gokit applications.
 //
-// It includes client connection management, event broadcasting to
-// multiple subscribers, and a hub for managing event channels.
+// It includes client connection management, event broadcasting to multiple subscribers, and a hub for managing event channels.
 //
 // # Architecture
 //
@@ -12,9 +10,7 @@
 //
 // # Backpressure
 //
-// The hub uses bounded queues for both inbound broadcasts and per-client
-// delivery. Slow clients never block the hub: once a client's queue is full,
-// new frames are dropped and the sender receives false from SendFrame.
+// The hub uses bounded queues for both inbound broadcasts and per-client delivery. Slow clients never block the hub: once a client's queue is full, new frames are dropped and the sender receives false from SendFrame.
 //
 // # Usage
 //

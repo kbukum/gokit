@@ -10,8 +10,7 @@ import (
 
 // --- ProducerAsSink ---
 
-// ProducerAsSink wraps a messaging.Producer as a provider.Sink[messaging.Message].
-// The configured topic is applied when the message has no topic.
+// ProducerAsSink wraps a messaging.Producer as a provider.Sink[messaging.Message]. The configured topic is applied when the message has no topic.
 func ProducerAsSink(name string, p messaging.Producer, topic string) provider.Sink[messaging.Message] {
 	return &producerSink{name: name, producer: p, topic: topic}
 }
@@ -34,8 +33,7 @@ func (s *producerSink) Send(ctx context.Context, msg messaging.Message) error {
 
 // --- EventProducerAsSink ---
 
-// EventProducerAsSink wraps a messaging.Producer as a provider.Sink[messaging.Event].
-// Events are published to the given topic using Publish.
+// EventProducerAsSink wraps a messaging.Producer as a provider.Sink[messaging.Event]. Events are published to the given topic using Publish.
 func EventProducerAsSink(name string, p messaging.Producer, topic string) provider.Sink[messaging.Event] {
 	return &eventSink{name: name, producer: p, topic: topic}
 }
@@ -55,10 +53,7 @@ func (s *eventSink) Send(ctx context.Context, event messaging.Event) error {
 
 // --- ConsumerAsStream ---
 
-// ConsumerAsStream wraps a messaging.Consumer as a provider.Stream[struct{}, messaging.Message].
-// The input parameter is ignored; calling Execute starts the consume loop in a
-// background goroutine and returns an iterator that yields each received message.
-// Close the iterator to stop the consume loop.
+// ConsumerAsStream wraps a messaging.Consumer as a provider.Stream[struct{}, messaging.Message]. The input parameter is ignored; calling Execute starts the consume loop in a background goroutine and returns an iterator that yields each received message. Close the iterator to stop the consume loop.
 func ConsumerAsStream(name string, c messaging.Consumer) provider.Stream[struct{}, messaging.Message] {
 	return &consumerStream{name: name, consumer: c}
 }

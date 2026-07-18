@@ -42,8 +42,7 @@ type ServiceStatus struct {
 	Error      string        `json:"error,omitempty"`
 }
 
-// DegradationManager tracks service health and feature flags for graceful
-// degradation. It is safe for concurrent use.
+// DegradationManager tracks service health and feature flags for graceful degradation. It is safe for concurrent use.
 type DegradationManager struct {
 	mu       sync.RWMutex
 	services map[string]ServiceStatus
@@ -58,8 +57,7 @@ func NewDegradationManager() *DegradationManager {
 	}
 }
 
-// UpdateService sets the health status for a named service. An optional
-// error can be provided to record the failure reason.
+// UpdateService sets the health status for a named service. An optional error can be provided to record the failure reason.
 func (dm *DegradationManager) UpdateService(name string, health ServiceHealth, err ...error) {
 	dm.mu.Lock()
 	defer dm.mu.Unlock()
@@ -85,8 +83,7 @@ func (dm *DegradationManager) UpdateService(name string, health ServiceHealth, e
 	dm.services[name] = status
 }
 
-// ServiceStatus returns the status of a named service.
-// Returns a zero-value ServiceStatus if the service is not tracked.
+// ServiceStatus returns the status of a named service. Returns a zero-value ServiceStatus if the service is not tracked.
 func (dm *DegradationManager) ServiceStatus(name string) ServiceStatus {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
@@ -112,8 +109,7 @@ func (dm *DegradationManager) SetFeature(name string, enabled bool) {
 	dm.features[name] = enabled
 }
 
-// FeatureEnabled returns whether a feature flag is enabled.
-// Returns false for unknown features.
+// FeatureEnabled returns whether a feature flag is enabled. Returns false for unknown features.
 func (dm *DegradationManager) FeatureEnabled(name string) bool {
 	dm.mu.RLock()
 	defer dm.mu.RUnlock()
@@ -133,9 +129,7 @@ func (dm *DegradationManager) IsHealthy() bool {
 	return true
 }
 
-// OnCircuitBreakerStateChange returns a callback compatible with
-// CircuitBreakerConfig.OnStateChange. It automatically updates the service
-// health when the circuit breaker changes state:
+// OnCircuitBreakerStateChange returns a callback compatible with CircuitBreakerConfig.OnStateChange. It automatically updates the service health when the circuit breaker changes state:
 //   - StateClosed  → Healthy
 //   - StateHalfOpen → Degraded
 //   - StateOpen    → Unhealthy
@@ -158,8 +152,7 @@ type healthResponse struct {
 	Services map[string]ServiceStatus `json:"services"`
 }
 
-// HealthEndpoint returns an http.HandlerFunc that reports aggregate health.
-// Returns 200 when all services are healthy, 503 otherwise.
+// HealthEndpoint returns an http.HandlerFunc that reports aggregate health. Returns 200 when all services are healthy, 503 otherwise.
 func (dm *DegradationManager) HealthEndpoint() http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		statuses := dm.AllStatuses()

@@ -18,8 +18,7 @@ type Request struct {
 	Headers map[string]string
 	// Query are URL query parameters.
 	Query map[string]string
-	// Body is the request body. Accepts io.Reader, []byte, string, or any value
-	// that will be JSON-encoded.
+	// Body is the request body. Accepts io.Reader, []byte, string, or any value that will be JSON-encoded.
 	Body any
 	// Auth overrides the client-level auth for this request.
 	Auth *AuthConfig

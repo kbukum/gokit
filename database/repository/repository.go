@@ -9,8 +9,7 @@ import (
 	dberrors "github.com/kbukum/gokit/database/errors"
 )
 
-// Repository provides full CRUD operations for any GORM model.
-// It embeds WriteRepository, adding Delete.
+// Repository provides full CRUD operations for any GORM model. It embeds WriteRepository, adding Delete.
 //
 //	type UserRepository struct {
 //	    *repository.Repository[models.User, string]
@@ -25,8 +24,7 @@ type Repository[T any, ID comparable] struct {
 	*WriteRepository[T, ID]
 }
 
-// NewRepository creates a generic Repository for model T with ID type ID.
-// The resource name is used in error messages (e.g. "user", "bot").
+// NewRepository creates a generic Repository for model T with ID type ID. The resource name is used in error messages (e.g. "user", "bot").
 func NewRepository[T any, ID comparable](db *gorm.DB, resource string, opts ...Option) *Repository[T, ID] {
 	return &Repository[T, ID]{
 		WriteRepository: NewWriteRepository[T, ID](db, resource, opts...),

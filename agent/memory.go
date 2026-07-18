@@ -56,8 +56,7 @@ func (s *InMemoryStore) Clear(_ context.Context, sessionID string) error {
 	return nil
 }
 
-// SlidingWindowMemory wraps any Memory and keeps only the last N messages.
-// If the first message is a SystemMessage, it is preserved outside the window.
+// SlidingWindowMemory wraps any Memory and keeps only the last N messages. If the first message is a SystemMessage, it is preserved outside the window.
 type SlidingWindowMemory struct {
 	store       Memory
 	maxMessages int

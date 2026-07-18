@@ -57,9 +57,7 @@ type Config struct {
 
 // Agent orchestrates LLM turns, tool calls, and memory.
 //
-// Per locked decision D12 (NATIVE COMPONENT), Agent implements
-// component.Component (Start/Stop/Health) so bootstrap auto-wires it as
-// infrastructure and surfaces it in the startup summary.
+// Per locked decision D12 (NATIVE COMPONENT), Agent implements component.Component (Start/Stop/Health) so bootstrap auto-wires it as infrastructure and surfaces it in the startup summary.
 type Agent struct {
 	config    Config
 	lifecycle ai.Lifecycle
@@ -120,8 +118,7 @@ func (a *Agent) IsAvailable(ctx context.Context) bool {
 	return a.config.Provider.IsAvailable(ctx)
 }
 
-// Start marks the agent ready. The underlying provider is started
-// independently by bootstrap; the agent itself only flips its lifecycle flag.
+// Start marks the agent ready. The underlying provider is started independently by bootstrap; the agent itself only flips its lifecycle flag.
 func (a *Agent) Start(_ context.Context) error { a.lifecycle.MarkReady(); return nil }
 
 // Stop marks the agent as stopped. Inflight Run calls observe ctx cancellation.

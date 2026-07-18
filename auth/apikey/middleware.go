@@ -5,8 +5,7 @@ import (
 	"net/http"
 )
 
-// Validator is the interface used by the middleware to validate API keys.
-// Implementations typically hash the key, look it up in the store, and check expiry.
+// Validator is the interface used by the middleware to validate API keys. Implementations typically hash the key, look it up in the store, and check expiry.
 type Validator interface {
 	ValidateKey(ctx context.Context, plainKey string, requiredScopes ...string) (*Key, error)
 }
@@ -27,8 +26,7 @@ type middlewareOptions struct {
 	skipPaths  []string
 }
 
-// WithHeader sets the header name to read the API key from.
-// Default: "X-API-Key".
+// WithHeader sets the header name to read the API key from. Default: "X-API-Key".
 func WithHeader(name string) MiddlewareOption {
 	return func(o *middlewareOptions) { o.headerName = name }
 }
@@ -38,12 +36,9 @@ func WithSkipPaths(paths ...string) MiddlewareOption {
 	return func(o *middlewareOptions) { o.skipPaths = paths }
 }
 
-// Middleware returns standard net/http middleware that validates API keys.
-// If the configured header is absent, the request passes through (allowing
-// other auth methods to handle it). If present but invalid, returns 401.
+// Middleware returns standard net/http middleware that validates API keys. If the configured header is absent, the request passes through (allowing other auth methods to handle it). If present but invalid, returns 401.
 //
-// On success, the validated Key is stored in the request context and can be
-// retrieved with FromContext.
+// On success, the validated Key is stored in the request context and can be retrieved with FromContext.
 func Middleware(v Validator, opts ...MiddlewareOption) func(http.Handler) http.Handler {
 	o := &middlewareOptions{headerName: "X-API-Key"}
 	for _, opt := range opts {
@@ -83,8 +78,7 @@ type contextKey struct{}
 
 var apikeyContextKey = contextKey{}
 
-// FromContext retrieves the validated API Key from the request context.
-// Returns nil if no key was validated (e.g., request used a different auth method).
+// FromContext retrieves the validated API Key from the request context. Returns nil if no key was validated (e.g., request used a different auth method).
 func FromContext(ctx context.Context) *Key {
 	key, _ := ctx.Value(apikeyContextKey).(*Key)
 	return key

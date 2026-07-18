@@ -17,8 +17,7 @@ const (
 	testUserEmail = "test@example.com"
 )
 
-// Component is a test git component backed by a temporary repository.
-// It implements both component.Component and testutil.TestComponent interfaces.
+// Component is a test git component backed by a temporary repository. It implements both component.Component and testutil.TestComponent interfaces.
 type Component struct {
 	root      string
 	repo      *git.Repo

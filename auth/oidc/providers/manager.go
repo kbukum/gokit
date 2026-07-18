@@ -9,8 +9,7 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// ProviderInfo holds display metadata about a registered provider.
-// Used by ListProviders() for building UI provider lists.
+// ProviderInfo holds display metadata about a registered provider. Used by ListProviders() for building UI provider lists.
 type ProviderInfo struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`
@@ -65,9 +64,7 @@ func (m *Manager) List() []string {
 	return names
 }
 
-// ListProviders returns metadata for all registered providers.
-// If a provider implements oidc.ProviderMeta, its Label and Type are included.
-// Otherwise, defaults are used (name as label, "identity" as type).
+// ListProviders returns metadata for all registered providers. If a provider implements oidc.ProviderMeta, its Label and Type are included. Otherwise, defaults are used (name as label, "identity" as type).
 func (m *Manager) ListProviders() []ProviderInfo {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -120,10 +117,7 @@ func (m *Manager) Refresh(ctx context.Context, providerName string, token oidc.R
 	return p.Refresh(ctx, token)
 }
 
-// ExchangeAndUserInfo performs token exchange followed by user info fetch.
-// For providers that don't support a UserInfo endpoint (e.g., Apple with
-// IDTokenAsUserInfo=true), it automatically falls back to parsing the ID token
-// using the general oidc.ParseIDTokenClaims utility.
+// ExchangeAndUserInfo performs token exchange followed by user info fetch. For providers that don't support a UserInfo endpoint (e.g., Apple with IDTokenAsUserInfo=true), it automatically falls back to parsing the ID token using the general oidc.ParseIDTokenClaims utility.
 func (m *Manager) ExchangeAndUserInfo(ctx context.Context, providerName, code string, opts ...oidc.ExchangeOption) (*oidc.TokenResult, *oidc.UserInfo, error) {
 	p, err := m.Get(providerName)
 	if err != nil {

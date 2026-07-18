@@ -5,8 +5,7 @@ import (
 	"math"
 )
 
-// Resolution is a width × height in pixels. It is the light-kit parallel of
-// rskit's media Resolution and is used to enrich probe [Metadata].
+// Resolution is a width × height in pixels. It is the light-kit parallel of rskit's media Resolution and is used to enrich probe [Metadata].
 type Resolution struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
@@ -23,8 +22,7 @@ func Resolution1080p() Resolution { return Resolution{1920, 1080} }
 func Resolution1440p() Resolution { return Resolution{2560, 1440} }
 func Resolution4K() Resolution    { return Resolution{3840, 2160} }
 
-// AspectRatio returns the aspect ratio as a simplified integer fraction (e.g.
-// 16, 9). It returns (0, 0) when either dimension is zero.
+// AspectRatio returns the aspect ratio as a simplified integer fraction (e.g. 16, 9). It returns (0, 0) when either dimension is zero.
 func (r Resolution) AspectRatio() (w, h int) {
 	g := gcd(r.Width, r.Height)
 	if g == 0 {
@@ -56,14 +54,12 @@ func (r Resolution) IsZero() bool { return r.Width == 0 || r.Height == 0 }
 // PixelCount returns the total number of pixels.
 func (r Resolution) PixelCount() int64 { return int64(r.Width) * int64(r.Height) }
 
-// ScaleToFit scales the resolution to fit within maxW × maxH while preserving
-// aspect ratio (the result never exceeds either bound).
+// ScaleToFit scales the resolution to fit within maxW × maxH while preserving aspect ratio (the result never exceeds either bound).
 func (r Resolution) ScaleToFit(maxW, maxH int) Resolution {
 	return r.scale(min(ratio(maxW, r.Width), ratio(maxH, r.Height)))
 }
 
-// ScaleToFill scales the resolution to fill w × h while preserving aspect ratio
-// (the result covers the bounds and may exceed one of them).
+// ScaleToFill scales the resolution to fill w × h while preserving aspect ratio (the result covers the bounds and may exceed one of them).
 func (r Resolution) ScaleToFill(w, h int) Resolution {
 	return r.scale(max(ratio(w, r.Width), ratio(h, r.Height)))
 }
@@ -78,9 +74,7 @@ func (r Resolution) scale(factor float64) Resolution {
 	return Resolution{Width: scaleDim(r.Width, factor), Height: scaleDim(r.Height, factor)}
 }
 
-// scaleDim multiplies a dimension by factor, rounds to nearest, and clamps the
-// result to a valid non-negative int: NaN and negative results become zero and
-// overflow saturates, so scaling never yields a negative or wrapped dimension.
+// scaleDim multiplies a dimension by factor, rounds to nearest, and clamps the result to a valid non-negative int: NaN and negative results become zero and overflow saturates, so scaling never yields a negative or wrapped dimension.
 func scaleDim(d int, factor float64) int {
 	v := math.Round(float64(d) * factor)
 	if !(v > 0) { // negative, zero, or NaN
@@ -106,8 +100,7 @@ func gcd(a, b int) int {
 	return a
 }
 
-// FrameRate is a rational frame rate (numerator / denominator) for exact
-// representation of rates such as NTSC 29.97 fps.
+// FrameRate is a rational frame rate (numerator / denominator) for exact representation of rates such as NTSC 29.97 fps.
 type FrameRate struct {
 	Num int `json:"num"`
 	Den int `json:"den"`
@@ -129,8 +122,7 @@ func NTSC24() FrameRate { return FrameRate{24000, 1001} } // 23.976 fps
 func NTSC30() FrameRate { return FrameRate{30000, 1001} } // 29.97 fps
 func NTSC60() FrameRate { return FrameRate{60000, 1001} } // 59.94 fps
 
-// Float returns the frame rate as a floating-point fps value, or zero when the
-// denominator is zero.
+// Float returns the frame rate as a floating-point fps value, or zero when the denominator is zero.
 func (f FrameRate) Float() float64 {
 	if f.Den == 0 {
 		return 0

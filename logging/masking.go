@@ -26,8 +26,7 @@ type valuePattern struct {
 	replace func(match string) string
 }
 
-// DefaultMasker provides field-name and value-pattern based sensitive data masking.
-// It is safe for concurrent use after construction (all fields are read-only).
+// DefaultMasker provides field-name and value-pattern based sensitive data masking. It is safe for concurrent use after construction (all fields are read-only).
 type DefaultMasker struct {
 	fieldNames    map[string]struct{}
 	valuePatterns []valuePattern
@@ -42,8 +41,7 @@ var defaultFieldNames = []string{
 	"private_key", "ssn", "credit_card", "card_number", "cvv", "pin",
 }
 
-// NewDefaultMasker creates a DefaultMasker from the given MaskingConfig.
-// All regexps are compiled at construction time via regexp.MustCompile.
+// NewDefaultMasker creates a DefaultMasker from the given MaskingConfig. All regexps are compiled at construction time via regexp.MustCompile.
 func NewDefaultMasker(cfg MaskingConfig) *DefaultMasker {
 	replacement := cfg.Replacement
 	if replacement == "" {
@@ -130,9 +128,7 @@ func buildDefaultValuePatterns() []valuePattern {
 	}
 }
 
-// MaskValue masks a single value based on its field key and content.
-// If the key matches a sensitive field name, the full replacement is returned.
-// Otherwise each value pattern is tested and the first match wins.
+// MaskValue masks a single value based on its field key and content. If the key matches a sensitive field name, the full replacement is returned. Otherwise each value pattern is tested and the first match wins.
 func (m *DefaultMasker) MaskValue(key, value string) string {
 	// 1. Field-name match (case-insensitive).
 	if _, ok := m.fieldNames[strings.ToLower(key)]; ok {
@@ -153,10 +149,7 @@ func (m *DefaultMasker) MaskValue(key, value string) string {
 	return value
 }
 
-// MaskFields masks all values in a map, returning a new map.
-// String values are masked directly. Non-string values are converted to a
-// string representation, checked for sensitive patterns, and replaced with
-// the masked string if a pattern matches.
+// MaskFields masks all values in a map, returning a new map. String values are masked directly. Non-string values are converted to a string representation, checked for sensitive patterns, and replaced with the masked string if a pattern matches.
 func (m *DefaultMasker) MaskFields(fields map[string]any) map[string]any {
 	if fields == nil {
 		return nil

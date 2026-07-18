@@ -16,8 +16,7 @@ func (KafkaErrorTranslator) Translate(err error, topic string) *apperrors.AppErr
 	return FromKafka(err, topic)
 }
 
-// FromKafka converts a Kafka error to an AppError.
-// It keeps Kafka-specific classification in the adapter while returning core error shapes.
+// FromKafka converts a Kafka error to an AppError. It keeps Kafka-specific classification in the adapter while returning core error shapes.
 func FromKafka(err error, topic string) *apperrors.AppError {
 	if err == nil {
 		return nil

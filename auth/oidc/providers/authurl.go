@@ -7,9 +7,7 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// BuildAuthURL constructs a standard OAuth2 authorization URL.
-// clientIDParam overrides the query param name for client_id (pass "" for default "client_id").
-// scopeSeparator overrides the scope join character (pass "" for default " ").
+// BuildAuthURL constructs a standard OAuth2 authorization URL. clientIDParam overrides the query param name for client_id (pass "" for default "client_id"). scopeSeparator overrides the scope join character (pass "" for default " ").
 func BuildAuthURL(authEndpoint string, cfg ProviderConfig, state string, opts oidc.AuthURLOptions, extraParams map[string]string, clientIDParam, scopeSeparator string) string {
 	if clientIDParam == "" {
 		clientIDParam = "client_id"

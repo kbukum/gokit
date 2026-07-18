@@ -5,12 +5,9 @@ import (
 	"time"
 )
 
-// Debounce waits for silence of the given duration after the last value
-// before emitting. If a new value arrives during the quiet period, the
-// timer resets and only the latest value is emitted.
+// Debounce waits for silence of the given duration after the last value before emitting. If a new value arrives during the quiet period, the timer resets and only the latest value is emitted.
 //
-// Useful for "wait until input stops" patterns (e.g., search-as-you-type,
-// batching rapid events).
+// Useful for "wait until input stops" patterns (e.g., search-as-you-type, batching rapid events).
 func Debounce[T any](p *Pipeline[T], duration time.Duration) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {

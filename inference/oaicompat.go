@@ -10,15 +10,10 @@ import (
 	"github.com/kbukum/gokit/ai"
 )
 
-// OAICompatExecuteFunc is the minimal signature for the HTTP layer the
-// OAI-compat helpers use. It returns the response body and a non-nil
-// error on transport / status failures.
+// OAICompatExecuteFunc is the minimal signature for the HTTP layer the OAI-compat helpers use. It returns the response body and a non-nil error on transport / status failures.
 type OAICompatExecuteFunc func(ctx context.Context, method, path string, body any) ([]byte, error)
 
-// OAICompatPredict is a shared implementation of [Inference.Predict] for
-// adapters that wrap an OpenAI-compatible /v1/completions endpoint
-// (vllm, tgi, etc.). Per locked decision D4, both expose OpenAI-compat
-// endpoints; each thin adapter is ~50 LOC of glue around this helper.
+// OAICompatPredict is a shared implementation of [Inference.Predict] for adapters that wrap an OpenAI-compatible /v1/completions endpoint (vllm, tgi, etc.). Per locked decision D4, both expose OpenAI-compat endpoints; each thin adapter is ~50 LOC of glue around this helper.
 //
 // It expects a "prompt" Text input and returns a "text" Text output.
 //

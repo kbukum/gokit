@@ -1,8 +1,6 @@
 // Package metric provides pluggable evaluation metrics for the bench framework.
 //
-// Metrics consume slices of [bench.ScoredSample] (ground-truth / prediction
-// pairs) and return a [Result] containing scalar values and optional structured
-// detail (confusion matrices, ROC curves, calibration data, etc.).
+// Metrics consume slices of [bench.ScoredSample] (ground-truth / prediction pairs) and return a [Result] containing scalar values and optional structured detail (confusion matrices, ROC curves, calibration data, etc.).
 //
 // # Metric Interface
 //
@@ -50,8 +48,7 @@
 //
 // # Adapter
 //
-// [AsRunMetric] and [AsRunMetrics] convert metric.Metric[L] values into
-// bench.RunMetric[L] for use with [bench.BenchRunner]:
+// [AsRunMetric] and [AsRunMetrics] convert metric.Metric[L] values into bench.RunMetric[L] for use with [bench.BenchRunner]:
 //
 //	runner := bench.NewBenchRunner(
 //	    bench.WithMetrics(metric.AsRunMetrics(

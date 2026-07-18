@@ -7,8 +7,7 @@ const (
 
 // Config holds Gemini-specific configuration.
 type Config struct {
-	// BaseURL is the API base URL. Defaults to Google's Generative AI endpoint.
-	// Override for Vertex AI or proxies.
+	// BaseURL is the API base URL. Defaults to Google's Generative AI endpoint. Override for Vertex AI or proxies.
 	BaseURL string `json:"base_url,omitempty" yaml:"base_url"`
 
 	// APIKey is the Google AI API key.

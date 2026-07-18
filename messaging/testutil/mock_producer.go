@@ -1,8 +1,6 @@
 package testutil
 
-// SetError configures MockProducer to return err on all publish operations.
-// Pass nil to clear the injected error. The error takes effect on the next
-// Publish/PublishJSON/PublishBinary/Send call.
+// SetError configures MockProducer to return err on all publish operations. Pass nil to clear the injected error. The error takes effect on the next Publish/PublishJSON/PublishBinary/Send call.
 func (p *MockProducer) SetError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -16,8 +14,7 @@ func (p *MockProducer) HasMessages() bool {
 	return len(p.messages) > 0
 }
 
-// LastMessage returns the most recently recorded message.
-// It panics if no messages have been recorded.
+// LastMessage returns the most recently recorded message. It panics if no messages have been recorded.
 func (p *MockProducer) LastMessage() Message {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -14,8 +14,7 @@ import (
 
 // RefreshConfig holds the parameters for a token refresh request.
 type RefreshConfig struct {
-	// TokenEndpoint is the OAuth2 token endpoint URL
-	// (e.g., "https://oauth2.googleapis.com/token").
+	// TokenEndpoint is the OAuth2 token endpoint URL (e.g., "https://oauth2.googleapis.com/token").
 	TokenEndpoint string
 
 	// ClientID is the OAuth2 client identifier.
@@ -33,16 +32,14 @@ type RefreshConfig struct {
 	// ExtraParams holds optional platform-specific parameters.
 	ExtraParams map[string]string
 
-	// HTTPClient is an optional HTTP client for the refresh request.
-	// Default: &http.Client{Timeout: 10 * time.Second}.
+	// HTTPClient is an optional HTTP client for the refresh request. Default: &http.Client{Timeout: 10 * time.Second}.
 	HTTPClient *http.Client
 }
 
 // defaultRefreshClient is used when RefreshConfig.HTTPClient is nil.
 var defaultRefreshClient = &http.Client{Timeout: 10 * time.Second}
 
-// RefreshToken exchanges a refresh token for new access + refresh tokens.
-// It supports both JSON and form-encoded response formats from the provider.
+// RefreshToken exchanges a refresh token for new access + refresh tokens. It supports both JSON and form-encoded response formats from the provider.
 func RefreshToken(ctx context.Context, cfg RefreshConfig) (*TokenResult, error) {
 	if cfg.TokenEndpoint == "" {
 		return nil, fmt.Errorf("oidc: token endpoint is required")
@@ -105,8 +102,7 @@ type refreshResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// parseTokenResponse parses a token response body, trying JSON first then
-// falling back to form-encoded for compatibility with older providers.
+// parseTokenResponse parses a token response body, trying JSON first then falling back to form-encoded for compatibility with older providers.
 func parseTokenResponse(body []byte) (*TokenResult, error) {
 	// Try JSON first — most OAuth2 providers return JSON.
 	var rr refreshResponse

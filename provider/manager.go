@@ -7,8 +7,7 @@ import (
 	"sync"
 )
 
-// Manager provides the main API for working with providers,
-// combining a Registry for storage and a Selector for choosing providers.
+// Manager provides the main API for working with providers, combining a Registry for storage and a Selector for choosing providers.
 type Manager[T Provider] struct {
 	mu          sync.RWMutex
 	registry    *Registry[T]
@@ -21,8 +20,7 @@ type Manager[T Provider] struct {
 // ManagerOption configures a Manager.
 type ManagerOption[T Provider] func(*Manager[T])
 
-// WithLogger sets the logger for the Manager. If not provided, a default
-// no-op logger is used.
+// WithLogger sets the logger for the Manager. If not provided, a default no-op logger is used.
 func WithLogger[T Provider](l *slog.Logger) ManagerOption[T] {
 	return func(m *Manager[T]) {
 		if l != nil {
@@ -51,16 +49,12 @@ func (m *Manager[T]) Register(name string, factory Factory[T]) {
 	m.log.Info("factory registered", "provider", name)
 }
 
-// Initialize creates a provider from its factory, calls Init() if the
-// provider implements Initializable, and stores it for use.
+// Initialize creates a provider from its factory, calls Init() if the provider implements Initializable, and stores it for use.
 func (m *Manager[T]) Initialize(name string, cfg map[string]any) error {
 	return m.InitializeWithContext(context.Background(), name, cfg)
 }
 
-// InitializeWithResilience creates a provider from its factory, wraps it with
-// the given middleware function, calls Init(), and stores it for use.
-// The wrap function applies resilience (or any other middleware) to the provider.
-// Example:
+// InitializeWithResilience creates a provider from its factory, wraps it with the given middleware function, calls Init(), and stores it for use. The wrap function applies resilience (or any other middleware) to the provider. Example:
 //
 //	mgr.InitializeWithResilience(ctx, "http", nil, func(p MyProvider) MyProvider {
 //	    return provider.WithResilience(p, resilienceCfg).(MyProvider)
@@ -91,8 +85,7 @@ func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, 
 	return nil
 }
 
-// InitializeWithContext creates a provider from its factory, calls Init() if the
-// provider implements Initializable, and stores it for use.
+// InitializeWithContext creates a provider from its factory, calls Init() if the provider implements Initializable, and stores it for use.
 func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg map[string]any) error {
 	instance, err := m.registry.Create(name, cfg)
 	if err != nil {
@@ -165,8 +158,7 @@ func (m *Manager[T]) Available() []string {
 	return names
 }
 
-// snapshotLocked returns a shallow copy of the providers map.
-// Must be called while holding at least a read lock.
+// snapshotLocked returns a shallow copy of the providers map. Must be called while holding at least a read lock.
 func (m *Manager[T]) snapshotLocked() map[string]T {
 	cp := make(map[string]T, len(m.providers))
 	for k, v := range m.providers {

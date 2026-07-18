@@ -11,8 +11,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// HTML creates a reporter that outputs a self-contained HTML report.
-// The report embeds Vega-Lite specs and loads Vega-Embed from CDN.
+// HTML creates a reporter that outputs a self-contained HTML report. The report embeds Vega-Lite specs and loads Vega-Embed from CDN.
 func HTML() Reporter {
 	return &htmlReporter{}
 }

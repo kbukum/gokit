@@ -2,8 +2,7 @@ package media
 
 // Type is the broad media category a piece of content belongs to.
 //
-// It mirrors rskit's media type vocabulary (video/audio/image) and adds the
-// light-kit-specific [Text] category used by the byte-signature detector.
+// It mirrors rskit's media type vocabulary (video/audio/image) and adds the light-kit-specific [Text] category used by the byte-signature detector.
 type Type int
 
 const (
@@ -35,8 +34,7 @@ func (t Type) String() string {
 	}
 }
 
-// Info is the result of classifying content, describing the detected category
-// and container format without decoding the payload.
+// Info is the result of classifying content, describing the detected category and container format without decoding the payload.
 type Info struct {
 	Type      Type   `json:"type"`
 	Format    Format `json:"format"`    // e.g. "mp4", "jpeg", "wav"

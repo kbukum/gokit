@@ -19,8 +19,7 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-// Component is a test server component backed by httptest.Server.
-// It implements both component.Component and testutil.TestComponent.
+// Component is a test server component backed by httptest.Server. It implements both component.Component and testutil.TestComponent.
 type Component struct {
 	srv     *server.Server
 	ts      *httptest.Server
@@ -65,8 +64,7 @@ func (c *Component) Server() *server.Server {
 	return c.srv
 }
 
-// BaseURL returns the test server's base URL (e.g. "http://127.0.0.1:PORT").
-// Returns empty string if not started.
+// BaseURL returns the test server's base URL (e.g. "http://127.0.0.1:PORT"). Returns empty string if not started.
 func (c *Component) BaseURL() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

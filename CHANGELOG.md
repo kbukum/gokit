@@ -2,121 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added — Generic dataset collection kit
-- **dataset** (NEW module, light mirror of rskit-dataset): a streaming, generics-first
-  dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
-  - **collect**: the generic engine — a bounded worker pool with `StreamBuffer` backpressure,
-    per-source timeout/cancellation, and a single-owner main loop that folds worker events into
-    the manifest, result, and progress without shared mutexes. Fails closed (a source, validation,
-    or target error aborts the run and publishes no failed source), records real/AI stats, and
-    always saves the manifest for resume.
-  - **stage**: the generic streaming stages (`Source`/`Transform`/`Target`) over `stream`
-    pipelines, plus opt-in item capabilities (`Labeled`, `Offsetted`) and source capabilities
-    (`Keyed`, `Bounded`, `Resumable`) and a pluggable `Validator[T]`.
-  - **record**: the tabular `record.Record` family — CSV/JSON-array/JSON-lines readers and
-    writers, stream filters, and a file source/target that accumulates records across publishes.
-  - **sample**: the blob item family — a labeled, offset-carrying `sample.Item` over a bounded
-    payload, with slice/directory sources and a real/AI-splitting local target confined through
-    `fs` path safety.
+- **dataset** (NEW module, light mirror of rskit-dataset): a streaming, generics-first dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
+  - **collect**: the generic engine — a bounded worker pool with `StreamBuffer` backpressure, per-source timeout/cancellation, and a single-owner main loop that folds worker events into the manifest, result, and progress without shared mutexes. Fails closed (a source, validation, or target error aborts the run and publishes no failed source), records real/AI stats, and always saves the manifest for resume.
+  - **stage**: the generic streaming stages (`Source`/`Transform`/`Target`) over `stream` pipelines, plus opt-in item capabilities (`Labeled`, `Offsetted`) and source capabilities (`Keyed`, `Bounded`, `Resumable`) and a pluggable `Validator[T]`.
+  - **record**: the tabular `record.Record` family — CSV/JSON-array/JSON-lines readers and writers, stream filters, and a file source/target that accumulates records across publishes.
+  - **sample**: the blob item family — a labeled, offset-carrying `sample.Item` over a bounded payload, with slice/directory sources and a real/AI-splitting local target confined through `fs` path safety.
   - **schema**: fail-closed JSON Schema validation adapted into a `stage.Validator[record.Record]`.
-  - **manifest**: a bounded, atomically persisted cache with one canonical `CacheStatusFor` that
-    lets a run skip or resume sources.
+  - **manifest**: a bounded, atomically persisted cache with one canonical `CacheStatusFor` that lets a run skip or resume sources.
   - **payload**: bounded in-memory or file-backed byte payloads with resource `Limits`.
 
 ### Changed (Breaking API Changes) — Typed AI/LLM/tool APIs
-- **ai / llm**: `ai.ToolUseBlock.Input` and `llm.CompletionRequest.Extra` no longer expose
-  `map[string]any`; they now carry raw JSON (`llm.RawJSON`) as an opaque, untrusted-by-default
-  trust boundary that is validated at the edge instead of eagerly decoded.
-- **tool**: tool-input schema is the documented opaque `schema.JSON` exception and per-tool
-  resilience policy is a typed `*resilience.Policy` (via `Registry.WithToolPolicy` /
-  `Registry.PolicyFor`); `Registry.Call` fails closed — raw input is JSON-Schema validated
-  (`ErrInvalidToolInput`) before authorization or any side effect, and destructive tools
-  (`SafetyDestructive`) are always human-gated and default to deny until an approver is wired.
-- **llm**: `CompleteStructured[T]` is now generic, decoding model output into a concrete `T`
-  and returning the zero value (never a partial one) on decode failure.
+- **ai / llm**: `ai.ToolUseBlock.Input` and `llm.CompletionRequest.Extra` no longer expose `map[string]any`; they now carry raw JSON (`llm.RawJSON`) as an opaque, untrusted-by-default trust boundary that is validated at the edge instead of eagerly decoded.
+- **tool**: tool-input schema is the documented opaque `schema.JSON` exception and per-tool resilience policy is a typed `*resilience.Policy` (via `Registry.WithToolPolicy` / `Registry.PolicyFor`); `Registry.Call` fails closed — raw input is JSON-Schema validated (`ErrInvalidToolInput`) before authorization or any side effect, and destructive tools (`SafetyDestructive`) are always human-gated and default to deny until an approver is wired.
+- **llm**: `CompleteStructured[T]` is now generic, decoding model output into a concrete `T` and returning the zero value (never a partial one) on decode failure.
 
 ### Changed (Breaking API Changes) — Hardened MCP protocol server
-- **mcp**: reshaped from a flat tool-bridge into a protocol-shaped, hardened server split by
-  concern (`security`, `convert`, `handlers`, thin composition root). `NewServer` now returns
-  a typed `*mcp.Server` (was the raw SDK server); transports are exposed as `Server.ServeStdio`
-  and `Server.StreamableHTTPHandler`, and only `stdio` + Streamable HTTP are supported (the
-  obsolete standalone SSE transport is dropped).
-- **mcp**: every `tools/call` runs a fail-closed hardening chain — capability allow-list →
-  input-size limit → JSON-Schema validation → authorization (`authz`) → registry human-in-the-
-  loop destructive gate → result-size limit → output-schema validation → audit
-  (`observability`). Untrusted client/model payloads stay typed as `json.RawMessage`; documented
-  JSON-Schema is `schema.JSON`.
+- **mcp**: reshaped from a flat tool-bridge into a protocol-shaped, hardened server split by concern (`security`, `convert`, `handlers`, thin composition root). `NewServer` now returns a typed `*mcp.Server` (was the raw SDK server); transports are exposed as `Server.ServeStdio` and `Server.StreamableHTTPHandler`, and only `stdio` + Streamable HTTP are supported (the obsolete standalone SSE transport is dropped).
+- **mcp**: every `tools/call` runs a fail-closed hardening chain — capability allow-list → input-size limit → JSON-Schema validation → authorization (`authz`) → registry human-in-the- loop destructive gate → result-size limit → output-schema validation → audit (`observability`). Untrusted client/model payloads stay typed as `json.RawMessage`; documented JSON-Schema is `schema.JSON`.
 
 ### Added — MCP protocol surface & hardening
-- **mcp**: protocol coverage for prompts, resources + templates (with subscribe), roots,
-  sampling, elicitation, progress, and logging; server→client sampling/elicitation size-limit
-  untrusted model/elicited content and fail closed.
-- **mcp**: Streamable HTTP hardening — Origin validation/normalization preloaded into
-  `http.CrossOriginProtection` (rejects paths/queries/fragments/credentials/opaque/non-http),
-  localhost protection on by default, and optional constant-time bearer-token auth (header only).
+- **mcp**: protocol coverage for prompts, resources + templates (with subscribe), roots, sampling, elicitation, progress, and logging; server→client sampling/elicitation size-limit untrusted model/elicited content and fail closed.
+- **mcp**: Streamable HTTP hardening — Origin validation/normalization preloaded into `http.CrossOriginProtection` (rejects paths/queries/fragments/credentials/opaque/non-http), localhost protection on by default, and optional constant-time bearer-token auth (header only).
 
 ### Added — Typed AI/LLM/tool APIs & Inference Streaming
-- **ai**: `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy
-  coercion.
-- **llm**: `RawJSON` request-extension carrier round-trips through both JSON and YAML and merges
-  fail closed (a non-object extension is rejected rather than silently corrupting the request).
-- **llm**: streamed tool-call arguments (untrusted) are bounded at `streamwire.MaxToolArgsBytes`
-  (1 MiB) so a server cannot exhaust memory with unbounded deltas.
-- **inference**: TGI and vLLM adapters implement `PredictStream` over a shared
-  OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context
-  cancellation and terminal error events.
+- **ai**: `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy coercion.
+- **llm**: `RawJSON` request-extension carrier round-trips through both JSON and YAML and merges fail closed (a non-object extension is rejected rather than silently corrupting the request).
+- **llm**: streamed tool-call arguments (untrusted) are bounded at `streamwire.MaxToolArgsBytes` (1 MiB) so a server cannot exhaust memory with unbounded deltas.
+- **inference**: TGI and vLLM adapters implement `PredictStream` over a shared OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context cancellation and terminal error events.
 
 ### Added — Terminal-UX cli kit
-- **cli** (NEW package, light mirror of rskit-cli): a parser-agnostic terminal-UX toolkit that
-  writes to injected `io.Writer`s and confines `fmt.Print*`/stdout to this package.
-  - **theme**: semantic `Palette` colors and `Glyphs`, resolving `NO_COLOR`, TTY, and UTF-8
-    locale capability with byte-clean ASCII fallbacks.
-  - **render**: `OutputTable`, `OutputKV`, `StatusReporter`, `OutputFormat`, and an
-    `ErrorRenderer`/`ExitCode` mapping RFC 9457 `AppError`s onto a CLI exit-code convention.
-  - **progress**: determinate `Bar` and indeterminate `Spinner`, caller-driven (no background
-    timer) so they render deterministically without a clock.
-  - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`, a
-    deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
-  - **signal**: graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context`
-    cancellation via `signal.NotifyContext`.
+- **cli** (NEW package, light mirror of rskit-cli): a parser-agnostic terminal-UX toolkit that writes to injected `io.Writer`s and confines `fmt.Print*`/stdout to this package.
+  - **theme**: semantic `Palette` colors and `Glyphs`, resolving `NO_COLOR`, TTY, and UTF-8 locale capability with byte-clean ASCII fallbacks.
+  - **render**: `OutputTable`, `OutputKV`, `StatusReporter`, `OutputFormat`, and an `ErrorRenderer`/`ExitCode` mapping RFC 9457 `AppError`s onto a CLI exit-code convention.
+  - **progress**: determinate `Bar` and indeterminate `Spinner`, caller-driven (no background timer) so they render deterministically without a clock.
+  - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`, a deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
+  - **signal**: graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context` cancellation via `signal.NotifyContext`.
   - **live**: a bounded multi-region console for concurrent streaming output.
 - Raw-mode rich TUI widgets are intentionally rskit-only.
 
 ### Added — Foundational Parity (codec, fs)
-- **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a
-  documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`,
-  extension-based `CodecForName`/`CodecForPath`, `value` deep-merge with per-key array
-  strategies, and bounded length-delimited `framing` (`WriteFrame`/`ReadFrame`, generic
-  `WriteValue`/`ReadValue`). Promotes `pelletier/go-toml/v2` to a direct dependency.
-- **fs** (NEW module, light mirror of rskit-fs): safe path helpers
-  (`ValidateRelativePath`, `SafeJoin`, `NormalizeRelativePath`, `Canonicalize`,
-  `ConfinePath`/`ConfineExistingPath` with symlink-escape rejection), temp files/dirs,
-  atomic writes (`WriteAtomic`/`WriteAtomicReplace`), permissions, and metadata.
-  `watch` is intentionally rskit-only.
+- **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`, extension-based `CodecForName`/`CodecForPath`, `value` deep-merge with per-key array strategies, and bounded length-delimited `framing` (`WriteFrame`/`ReadFrame`, generic `WriteValue`/`ReadValue`). Promotes `pelletier/go-toml/v2` to a direct dependency.
+- **fs** (NEW module, light mirror of rskit-fs): safe path helpers (`ValidateRelativePath`, `SafeJoin`, `NormalizeRelativePath`, `Canonicalize`, `ConfinePath`/`ConfineExistingPath` with symlink-escape rejection), temp files/dirs, atomic writes (`WriteAtomic`/`WriteAtomicReplace`), permissions, and metadata. `watch` is intentionally rskit-only.
 - Fuzz tests for the codecs, frame reader, and path-safety validation.
 
 ### Changed (Breaking API Changes) — Foundational Parity
-- Renamed package `github.com/kbukum/gokit/logger` → `.../logging` and
-  `github.com/kbukum/gokit/pipeline` → `.../stream` (canonical cross-kit names); all
-  imports, `doc.go`, `domains.toml`, `MODULE-INDEX.md`, and `parity-matrix.md` updated.
-- **logging**: dropped the mutable package-level registry, reassignable global singleton,
-  and `init()` side effects in favor of an injected `Registry` and an install-once
-  `Default()` backed by `sync.OnceValue`.
-- **version**: immutable build-info via `sync.OnceValue`/`compute(source)`; no mutable
-  exported vars.
-- **errors**: `FormatResourceError[T]` is now generic; `Details map[string]any` is kept as
-  a documented RFC 9457 extension-member opaque exception.
-- **schema**: added `limits.go` (`ValidationLimits`/`DefaultLimits`/`LimitError`) and
-  `validate.go` (`CompiledSchema`/`Compile`/`CompileWithLimits`).
+- Renamed package `github.com/kbukum/gokit/logger` → `.../logging` and `github.com/kbukum/gokit/pipeline` → `.../stream` (canonical cross-kit names); all imports, `doc.go`, `domains.toml`, `MODULE-INDEX.md`, and `parity-matrix.md` updated.
+- **logging**: dropped the mutable package-level registry, reassignable global singleton, and `init()` side effects in favor of an injected `Registry` and an install-once `Default()` backed by `sync.OnceValue`.
+- **version**: immutable build-info via `sync.OnceValue`/`compute(source)`; no mutable exported vars.
+- **errors**: `FormatResourceError[T]` is now generic; `Details map[string]any` is kept as a documented RFC 9457 extension-member opaque exception.
+- **schema**: added `limits.go` (`ValidationLimits`/`DefaultLimits`/`LimitError`) and `validate.go` (`CompiledSchema`/`Compile`/`CompileWithLimits`).
 
 ### Added — Documentation & Project Hygiene
-- README: sibling-projects callout and `Project Documentation` index linking
-  every governance doc.
+- README: sibling-projects callout and `Project Documentation` index linking every governance doc.
 
 ### Added
 - **bench**: per-package `Benchmark*` coverage for the hot paths flagged by the OSS-review perf gap (#50, F-020). Package count grew from 5 → 15; benchmark count from 5 → 42. New benchmarks live in:
@@ -161,14 +103,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - 2026-04-25
 
-> Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
-> This entry back-fills the previous `[Unreleased]` section verbatim. From
-> this release on, every tag MUST be accompanied by a corresponding CHANGELOG
-> entry — enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
+> Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry. This entry back-fills the previous `[Unreleased]` section verbatim. From this release on, every tag MUST be accompanied by a corresponding CHANGELOG entry — enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
 >
-> The `kafka/v0.2.0` and `kafka/testutil/v0.2.0` tags are orphans from when
-> the kafka provider lived at `/kafka`; the package now lives at
-> `/messaging/kafka` and is versioned in lock-step with `messaging`.
+> The `kafka/v0.2.0` and `kafka/testutil/v0.2.0` tags are orphans from when the kafka provider lived at `/kafka`; the package now lives at `/messaging/kafka` and is versioned in lock-step with `messaging`.
 
 ### Changed (Breaking API Changes)
 - **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`docker`, `kubernetes`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root. `NewComponent` likewise now takes the registry as its first argument.

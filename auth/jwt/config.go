@@ -36,22 +36,18 @@ const (
 	minHMACSecretLength    = 32
 )
 
-// Config configures the JWT token service.
-// Loadable from YAML/env via mapstructure tags.
+// Config configures the JWT token service. Loadable from YAML/env via mapstructure tags.
 type Config struct {
 	// Secret is the HMAC signing key (required for HS256).
 	Secret string `mapstructure:"secret"`
 
-	// RefreshSecret is an optional separate secret for refresh tokens.
-	// If empty, Secret is used for both access and refresh tokens.
+	// RefreshSecret is an optional separate secret for refresh tokens. If empty, Secret is used for both access and refresh tokens.
 	RefreshSecret string `mapstructure:"refresh_secret"`
 
-	// PrivateKeyPath is the path to an RSA, ECDSA, or Ed25519 private key PEM file.
-	// Used for RS256/ES256/EdDSA methods.
+	// PrivateKeyPath is the path to an RSA, ECDSA, or Ed25519 private key PEM file. Used for RS256/ES256/EdDSA methods.
 	PrivateKeyPath string `mapstructure:"private_key_path"`
 
-	// PublicKeyPath is the path to the corresponding public key PEM file.
-	// If empty, the public key is derived from the private key where possible.
+	// PublicKeyPath is the path to the corresponding public key PEM file. If empty, the public key is derived from the private key where possible.
 	PublicKeyPath string `mapstructure:"public_key_path"`
 
 	// Method is the signing algorithm (default: "RS256").
@@ -72,8 +68,7 @@ type Config struct {
 	// RefreshTokenTTL is the lifetime of refresh tokens (default: "168h" / 7 days).
 	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
 
-	// ClockSkew is the accepted validation leeway for time-based claims.
-	// Secure default: 30s. Maximum allowed: 60s.
+	// ClockSkew is the accepted validation leeway for time-based claims. Secure default: 30s. Maximum allowed: 60s.
 	ClockSkew time.Duration `mapstructure:"clock_skew"`
 
 	// --- Runtime fields (not from config files) ---

@@ -22,8 +22,7 @@ type memFile struct {
 	modTime     time.Time
 }
 
-// Component is a test storage component backed by an in-memory map.
-// It implements component.Component, testutil.TestComponent, and storage.Storage.
+// Component is a test storage component backed by an in-memory map. It implements component.Component, testutil.TestComponent, and storage.Storage.
 type Component struct {
 	files   map[string]*memFile
 	started bool

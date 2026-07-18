@@ -46,8 +46,6 @@ type Maintainer interface {
 	Prune() error
 	// Fsck verifies repository object integrity.
 	Fsck() error
-	// Clean lists or removes untracked files and returns their paths.
-	// By default it performs a dry-run (equivalent to git clean -n); no files
-	// are deleted unless WithCleanForce(true) is passed.
+	// Clean lists or removes untracked files and returns their paths. By default it performs a dry-run (equivalent to git clean -n); no files are deleted unless WithCleanForce(true) is passed.
 	Clean(opts ...CleanOption) ([]string, error)
 }

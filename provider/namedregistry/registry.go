@@ -10,9 +10,7 @@ import (
 
 // Registry is a thread-safe map of named values.
 //
-// Use it for explicit provider, adapter, dialect, or callable registration when
-// the registered value is not itself a Provider. Provider implementations should
-// use provider.Registry instead.
+// Use it for explicit provider, adapter, dialect, or callable registration when the registered value is not itself a Provider. Provider implementations should use provider.Registry instead.
 type Registry[T any] struct {
 	domain string
 	mu     sync.RWMutex

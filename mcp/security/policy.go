@@ -8,35 +8,25 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// Policy is the injected, fail-closed hardening configuration applied to every
-// gated MCP access. A zero Policy exposes everything and enforces no limits,
-// authorization, or audit; each field opts a concern in. It is assembled by the
-// parent mcp package from its ServerOptions and consulted by the tool, prompt,
-// and resource handlers.
+// Policy is the injected, fail-closed hardening configuration applied to every gated MCP access. A zero Policy exposes everything and enforces no limits, authorization, or audit; each field opts a concern in. It is assembled by the parent mcp package from its ServerOptions and consulted by the tool, prompt, and resource handlers.
 type Policy struct {
-	// AllowedTools, AllowedPrompts, and AllowedResources are capability
-	// allow-lists. An empty set exposes everything of that kind; a populated
-	// set fails closed, exposing only the named members.
+	// AllowedTools, AllowedPrompts, and AllowedResources are capability allow-lists. An empty set exposes everything of that kind; a populated set fails closed, exposing only the named members.
 	AllowedTools     map[string]struct{}
 	AllowedPrompts   map[string]struct{}
 	AllowedResources map[string]struct{}
 
-	// Decider authorizes every tools/call before execution. A nil Decider
-	// allows all calls.
+	// Decider authorizes every tools/call before execution. A nil Decider allows all calls.
 	Decider authz.Decider
 	// Auditor records every gated access outcome. A nil Auditor disables audit.
 	Auditor observability.Auditor
 
-	// MaxInputBytes rejects tool-call arguments larger than the limit. Zero
-	// means unlimited.
+	// MaxInputBytes rejects tool-call arguments larger than the limit. Zero means unlimited.
 	MaxInputBytes int
-	// MaxResultBytes rejects tool results (and sampled/elicited content) larger
-	// than the limit. Zero means unlimited.
+	// MaxResultBytes rejects tool results (and sampled/elicited content) larger than the limit. Zero means unlimited.
 	MaxResultBytes int
 }
 
-// ToSet builds a membership set from names, the canonical representation for
-// the Policy allow-lists.
+// ToSet builds a membership set from names, the canonical representation for the Policy allow-lists.
 func ToSet(names []string) map[string]struct{} {
 	set := make(map[string]struct{}, len(names))
 	for _, n := range names {
@@ -67,14 +57,12 @@ func (p *Policy) InputTooLarge(input json.RawMessage) bool {
 	return p.MaxInputBytes > 0 && len(input) > p.MaxInputBytes
 }
 
-// ResultTooLarge reports whether a serialized result of size bytes exceeds the
-// configured result size limit.
+// ResultTooLarge reports whether a serialized result of size bytes exceeds the configured result size limit.
 func (p *Policy) ResultTooLarge(size int) bool {
 	return p.MaxResultBytes > 0 && size > p.MaxResultBytes
 }
 
-// Authorize consults the configured Decider for a tools/call. A nil Decider
-// allows the call.
+// Authorize consults the configured Decider for a tools/call. A nil Decider allows the call.
 func (p *Policy) Authorize(ctx context.Context, req ToolAuthorizationRequest) (authz.Decision, error) {
 	if p.Decider == nil {
 		return authz.Decision{Allowed: true, Reason: "no_decider"}, nil
@@ -94,8 +82,7 @@ func authzRequest(req ToolAuthorizationRequest) authz.Request {
 	}
 }
 
-// DeniedMessage formats the client-facing message for a denied tool call,
-// appending reason when present.
+// DeniedMessage formats the client-facing message for a denied tool call, appending reason when present.
 func DeniedMessage(reason string) string {
 	if reason == "" {
 		return "tool call denied"

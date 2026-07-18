@@ -8,8 +8,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// BaseLazyComponent provides thread-safe lazy initialization for components
-// that defer expensive setup until first use.
+// BaseLazyComponent provides thread-safe lazy initialization for components that defer expensive setup until first use.
 type BaseLazyComponent struct {
 	name        string
 	mu          sync.RWMutex

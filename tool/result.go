@@ -7,14 +7,11 @@ import (
 	"github.com/kbukum/gokit/ai"
 )
 
-// Result is the structured output of a tool execution.
-// It separates structured output (for programmatic use) from
-// human-readable content (for LLM consumption).
+// Result is the structured output of a tool execution. It separates structured output (for programmatic use) from human-readable content (for LLM consumption).
 type Result struct {
 	// Output is the structured JSON output for programmatic use.
 	Output json.RawMessage `json:"output,omitempty"`
-	// Content is a human-readable string for LLM consumption.
-	// If empty, Output is used as the content string.
+	// Content is a human-readable string for LLM consumption. If empty, Output is used as the content string.
 	Content string `json:"content,omitempty"`
 	// IsError indicates the tool encountered an error.
 	IsError bool `json:"is_error,omitempty"`
@@ -41,9 +38,7 @@ func (r *Result) ToolResultBlock(id string) ai.ToolResultBlock {
 	return ai.ToolResultBlock{ID: id, Content: r.Text(), IsError: r.IsError}
 }
 
-// ResultBlock builds a GenAI tool-result block from an optional result and error.
-// If err is non-nil it takes priority and produces an error block.
-// If r is nil and err is nil, an empty success block is returned.
+// ResultBlock builds a GenAI tool-result block from an optional result and error. If err is non-nil it takes priority and produces an error block. If r is nil and err is nil, an empty success block is returned.
 func ResultBlock(id string, r *Result, err error) ai.ToolResultBlock {
 	if err != nil {
 		return ai.ToolResultBlock{ID: id, Content: err.Error(), IsError: true}
@@ -69,8 +64,7 @@ func ErrorResult(content string) *Result {
 	return &Result{Content: content, IsError: true}
 }
 
-// JSONResult creates a Result from a JSON-serializable value.
-// Both Output (raw JSON) and Content (JSON string) are set.
+// JSONResult creates a Result from a JSON-serializable value. Both Output (raw JSON) and Content (JSON string) are set.
 func JSONResult(v any) (*Result, error) {
 	data, err := json.Marshal(v)
 	if err != nil {

@@ -8,9 +8,7 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// WithResilience wraps a RequestResponse provider with resilience middleware.
-// Execution chain: RateLimiter → Bulkhead → CircuitBreaker → Retry → Execute.
-// Nil config fields are skipped. Empty config returns the provider unchanged.
+// WithResilience wraps a RequestResponse provider with resilience middleware. Execution chain: RateLimiter → Bulkhead → CircuitBreaker → Retry → Execute. Nil config fields are skipped. Empty config returns the provider unchanged.
 func WithResilience[I, O any](p RequestResponse[I, O], cfg ResilienceConfig) RequestResponse[I, O] {
 	if cfg.IsEmpty() {
 		return p
@@ -21,9 +19,7 @@ func WithResilience[I, O any](p RequestResponse[I, O], cfg ResilienceConfig) Req
 	}
 }
 
-// WithStreamResilience wraps a Stream provider with resilience middleware.
-// Resilience is applied to the Execute call that opens the stream.
-// Individual Next() calls on the returned Iterator are NOT wrapped.
+// WithStreamResilience wraps a Stream provider with resilience middleware. Resilience is applied to the Execute call that opens the stream. Individual Next() calls on the returned Iterator are NOT wrapped.
 func WithStreamResilience[I, O any](p Stream[I, O], cfg ResilienceConfig) Stream[I, O] {
 	if cfg.IsEmpty() {
 		return p
@@ -34,8 +30,7 @@ func WithStreamResilience[I, O any](p Stream[I, O], cfg ResilienceConfig) Stream
 	}
 }
 
-// WithSinkResilience wraps a Sink provider with resilience middleware.
-// Execution chain: RateLimiter → Bulkhead → CircuitBreaker → Retry → Send.
+// WithSinkResilience wraps a Sink provider with resilience middleware. Execution chain: RateLimiter → Bulkhead → CircuitBreaker → Retry → Send.
 func WithSinkResilience[I any](p Sink[I], cfg ResilienceConfig) Sink[I] {
 	if cfg.IsEmpty() {
 		return p
@@ -46,9 +41,7 @@ func WithSinkResilience[I any](p Sink[I], cfg ResilienceConfig) Sink[I] {
 	}
 }
 
-// WithDuplexResilience wraps a Duplex provider with resilience middleware.
-// Only CircuitBreaker and RateLimiter are applied to the Open call.
-// Retry is not applied — persistent connections should reconnect at a higher level.
+// WithDuplexResilience wraps a Duplex provider with resilience middleware. Only CircuitBreaker and RateLimiter are applied to the Open call. Retry is not applied — persistent connections should reconnect at a higher level.
 func WithDuplexResilience[I, O any](p Duplex[I, O], cfg ResilienceConfig) Duplex[I, O] {
 	if cfg.IsEmpty() {
 		return p
@@ -136,10 +129,7 @@ func (r *resilientDuplex[I, O]) Open(ctx context.Context) (DuplexStream[I, O], e
 
 // --- Core execution chain ---
 
-// ExecuteWithResilience runs fn through the resilience chain:
-// RateLimiter.Wait → Bulkhead → CircuitBreaker → Retry → fn.
-// Exported so other packages (e.g., process) can reuse the chain.
-// Resilience errors are wrapped as gokit AppError for consistency.
+// ExecuteWithResilience runs fn through the resilience chain: RateLimiter.Wait → Bulkhead → CircuitBreaker → Retry → fn. Exported so other packages (e.g., process) can reuse the chain. Resilience errors are wrapped as gokit AppError for consistency.
 func ExecuteWithResilience[T any](ctx context.Context, s *ResilienceState, fn func() (T, error)) (T, error) {
 	if s == nil {
 		return fn()

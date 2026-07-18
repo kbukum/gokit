@@ -6,10 +6,7 @@ import (
 	"time"
 )
 
-// Build metadata seam. These are unexported and may be overridden at link time
-// via -ldflags "-X github.com/kbukum/gokit/version.buildVersion=..."; consumers
-// cannot mutate version state at runtime. When left empty, values are derived
-// from the module's embedded build information (debug.ReadBuildInfo).
+// Build metadata seam. These are unexported and may be overridden at link time via -ldflags "-X github.com/kbukum/gokit/version.buildVersion=..."; consumers cannot mutate version state at runtime. When left empty, values are derived from the module's embedded build information (debug.ReadBuildInfo).
 var (
 	buildVersion   = "dev"
 	buildGitCommit = ""
@@ -30,9 +27,7 @@ type VersionInfo struct {
 	IsDirty   bool      `json:"is_dirty"`
 }
 
-// source is the raw, injectable input from which a VersionInfo is computed.
-// It isolates the pure derivation logic from process-global build state so the
-// behavior can be tested deterministically.
+// source is the raw, injectable input from which a VersionInfo is computed. It isolates the pure derivation logic from process-global build state so the behavior can be tested deterministically.
 type source struct {
 	version   string
 	gitCommit string
@@ -42,9 +37,7 @@ type source struct {
 	buildInfo *debug.BuildInfo
 }
 
-// GetVersionInfo returns immutable version information for the running binary,
-// derived from link-time overrides when present and otherwise from the embedded
-// build information (VCS revision, modification state, and build time).
+// GetVersionInfo returns immutable version information for the running binary, derived from link-time overrides when present and otherwise from the embedded build information (VCS revision, modification state, and build time).
 func GetVersionInfo() *VersionInfo {
 	return compute(readSource())
 }
@@ -64,8 +57,7 @@ func readSource() source {
 	return s
 }
 
-// compute derives an immutable VersionInfo from the given source. It is pure:
-// identical input always yields identical output.
+// compute derives an immutable VersionInfo from the given source. It is pure: identical input always yields identical output.
 func compute(s source) *VersionInfo {
 	info := &VersionInfo{
 		Version:   s.version,

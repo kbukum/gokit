@@ -1,5 +1,4 @@
-// Package component defines the core interfaces for lifecycle-managed
-// infrastructure services in gokit.
+// Package component defines the core interfaces for lifecycle-managed infrastructure services in gokit.
 //
 // Components represent services that require initialization, startup,
 // shutdown, and health monitoring. They are registered with the bootstrap

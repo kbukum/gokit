@@ -2,56 +2,38 @@ package oidc
 
 import "context"
 
-// Provider defines the contract for an OAuth2/OIDC authentication provider.
-// All built-in providers use GenericProvider from the providers package.
-// Custom providers can implement this interface directly if GenericConfig
-// doesn't cover their needs.
+// Provider defines the contract for an OAuth2/OIDC authentication provider. All built-in providers use GenericProvider from the providers package. Custom providers can implement this interface directly if GenericConfig doesn't cover their needs.
 //
-// This interface covers the full OAuth2 token lifecycle: authorization,
-// exchange, user info, and token refresh.
+// This interface covers the full OAuth2 token lifecycle: authorization, exchange, user info, and token refresh.
 type Provider interface {
 	// Name returns the provider identifier (e.g., "google", "github").
 	Name() string
 
-	// AuthURL returns the authorization URL for initiating the OAuth2 flow.
-	// The state parameter should be a cryptographically random value for CSRF protection.
-	// Options allow passing additional parameters (PKCE, nonce, login_hint, etc.).
+	// AuthURL returns the authorization URL for initiating the OAuth2 flow. The state parameter should be a cryptographically random value for CSRF protection. Options allow passing additional parameters (PKCE, nonce, login_hint, etc.).
 	AuthURL(state string, opts ...AuthURLOption) string
 
-	// Exchange trades an authorization code for tokens.
-	// Returns the token set (access, refresh, ID token if OIDC) and user information.
+	// Exchange trades an authorization code for tokens. Returns the token set (access, refresh, ID token if OIDC) and user information.
 	Exchange(ctx context.Context, code string, opts ...ExchangeOption) (*TokenResult, error)
 
-	// UserInfo fetches the user's profile from the provider using an access token.
-	// Providers that don't support a UserInfo endpoint (e.g., Apple) should return
-	// an error here; the Manager will automatically fall back to parsing the ID token.
+	// UserInfo fetches the user's profile from the provider using an access token. Providers that don't support a UserInfo endpoint (e.g., Apple) should return an error here; the Manager will automatically fall back to parsing the ID token.
 	UserInfo(ctx context.Context, accessToken string) (*UserInfo, error)
 
-	// Refresh exchanges current tokens for a new token set.
-	// Standard OAuth2 providers use RefreshToken; platforms like Facebook/Instagram
-	// that don't issue refresh tokens use AccessToken instead.
-	// The provider implementation knows which field to use.
+	// Refresh exchanges current tokens for a new token set. Standard OAuth2 providers use RefreshToken; platforms like Facebook/Instagram that don't issue refresh tokens use AccessToken instead. The provider implementation knows which field to use.
 	Refresh(ctx context.Context, token RefreshInput) (*TokenResult, error)
 }
 
-// RefreshInput holds the tokens available for a refresh operation.
-// Standard OAuth2 providers use RefreshToken; platforms that don't issue
-// refresh tokens (Facebook, Instagram) use AccessToken instead.
+// RefreshInput holds the tokens available for a refresh operation. Standard OAuth2 providers use RefreshToken; platforms that don't issue refresh tokens (Facebook, Instagram) use AccessToken instead.
 type RefreshInput struct {
 	RefreshToken string
 	AccessToken  string
 }
 
-// ProviderMeta is an optional interface that providers can implement to expose
-// display metadata. The Manager uses this to build rich provider listings for UIs.
-// GenericProvider implements this automatically from its config.
+// ProviderMeta is an optional interface that providers can implement to expose display metadata. The Manager uses this to build rich provider listings for UIs. GenericProvider implements this automatically from its config.
 type ProviderMeta interface {
 	// Label returns the human-readable display name (e.g., "Google", "Sign in with Apple").
 	Label() string
 
-	// ProviderType returns a category string for UI grouping.
-	// Convention: "identity" for login-only providers (Google, GitHub, Apple),
-	// "social" for platform-connected providers (YouTube, TikTok, Instagram).
+	// ProviderType returns a category string for UI grouping. Convention: "identity" for login-only providers (Google, GitHub, Apple), "social" for platform-connected providers (YouTube, TikTok, Instagram).
 	ProviderType() string
 }
 
@@ -97,8 +79,7 @@ func WithExtraParam(key, value string) AuthURLOption {
 	}
 }
 
-// ApplyAuthURLOptions applies options and returns the resolved configuration.
-// This is a helper for Provider implementations to process AuthURLOption parameters.
+// ApplyAuthURLOptions applies options and returns the resolved configuration. This is a helper for Provider implementations to process AuthURLOption parameters.
 func ApplyAuthURLOptions(opts []AuthURLOption) AuthURLOptions {
 	var o AuthURLOptions
 	for _, opt := range opts {
@@ -126,8 +107,7 @@ func WithCodeVerifier(verifier string) ExchangeOption {
 	return func(o *ExchangeOptions) { o.CodeVerifier = verifier }
 }
 
-// ApplyExchangeOptions applies options and returns the resolved configuration.
-// This is a helper for Provider implementations to process ExchangeOption parameters.
+// ApplyExchangeOptions applies options and returns the resolved configuration. This is a helper for Provider implementations to process ExchangeOption parameters.
 func ApplyExchangeOptions(opts []ExchangeOption) ExchangeOptions {
 	var o ExchangeOptions
 	for _, opt := range opts {

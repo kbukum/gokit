@@ -10,11 +10,7 @@ import (
 	"github.com/kbukum/gokit/llm"
 )
 
-// StopReason indicates why the agent loop terminated.
-// It is a type alias for chat.FinishReason so LLM-sourced stops require
-// no conversion — the LLM's finish reason IS the stop reason.
-// Agent-policy stops (max turns, wall clock, etc.) extend the value set
-// with strings that have no chat equivalent.
+// StopReason indicates why the agent loop terminated. It is a type alias for chat.FinishReason so LLM-sourced stops require no conversion — the LLM's finish reason IS the stop reason. Agent-policy stops (max turns, wall clock, etc.) extend the value set with strings that have no chat equivalent.
 type StopReason = chat.FinishReason
 
 const (

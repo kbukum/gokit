@@ -100,15 +100,12 @@ type Signature struct {
 	KeyID     string `yaml:"key_id" json:"key_id"`
 }
 
-// IsPresent reports whether the signature carries the fields required to
-// identify a signature scheme and payload. An empty or placeholder object
-// (e.g. `signature: {}` or a blank value) is not present.
+// IsPresent reports whether the signature carries the fields required to identify a signature scheme and payload. An empty or placeholder object (e.g. `signature: {}` or a blank value) is not present.
 func (s *Signature) IsPresent() bool {
 	return s != nil && s.Algorithm != "" && s.Value != ""
 }
 
-// LoadManifest reads and parses a manifest file, enforcing MaxManifestBytes and
-// rejecting symlinks before reading.
+// LoadManifest reads and parses a manifest file, enforcing MaxManifestBytes and rejecting symlinks before reading.
 func LoadManifest(path string) (*Manifest, error) {
 	return loadManifest(path, MaxManifestBytes)
 }
@@ -125,9 +122,7 @@ func loadManifest(path string, maxBytes int64) (*Manifest, error) {
 	return m, nil
 }
 
-// ParseManifest decodes and validates a manifest from raw YAML bytes. Unknown
-// fields are rejected and the result is validated, so it fails closed on
-// malformed or untrusted input.
+// ParseManifest decodes and validates a manifest from raw YAML bytes. Unknown fields are rejected and the result is validated, so it fails closed on malformed or untrusted input.
 func ParseManifest(data []byte) (*Manifest, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
@@ -141,8 +136,7 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	return &m, nil
 }
 
-// Validate checks a manifest's required fields and structural invariants.
-// Every failure wraps ErrManifestInvalid.
+// Validate checks a manifest's required fields and structural invariants. Every failure wraps ErrManifestInvalid.
 func Validate(m *Manifest) error {
 	if err := validateManifest(m); err != nil {
 		return fmt.Errorf("%w: %w", ErrManifestInvalid, err)

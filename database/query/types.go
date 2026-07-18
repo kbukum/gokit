@@ -1,5 +1,4 @@
-// Package query provides a PostgREST-style query builder for GORM with
-// pagination, sorting, filtering, facets, and eager-loading support.
+// Package query provides a PostgREST-style query builder for GORM with pagination, sorting, filtering, facets, and eager-loading support.
 package query
 
 import (

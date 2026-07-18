@@ -5,8 +5,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ErrorMapper maps gRPC status codes to user-friendly messages.
-// It returns the message and whether the caller should retry.
+// ErrorMapper maps gRPC status codes to user-friendly messages. It returns the message and whether the caller should retry.
 func ErrorMapper(err error) (message string, retryable bool) {
 	if err == nil {
 		return "", false

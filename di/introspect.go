@@ -28,15 +28,13 @@ func (m Mode) String() string {
 
 // RegistrationInfo describes a single registration for introspection.
 type RegistrationInfo struct {
-	// Key is the display key: the registration name if one was given via
-	// [WithName], otherwise the concrete type name.
+	// Key is the display key: the registration name if one was given via [WithName], otherwise the concrete type name.
 	Key string
 	// Type is the concrete Go type name of the registration.
 	Type string
 	// Mode is the registration mode.
 	Mode Mode
-	// Initialized reports whether a resolved value is currently cached. It is
-	// always true for [Eager] registrations and always false for [Transient].
+	// Initialized reports whether a resolved value is currently cached. It is always true for [Eager] registrations and always false for [Transient].
 	Initialized bool
 }
 

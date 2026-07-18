@@ -7,15 +7,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ModuleLevelManager manages per-module log level overrides.
-// It is safe for concurrent use.
+// ModuleLevelManager manages per-module log level overrides. It is safe for concurrent use.
 type ModuleLevelManager struct {
 	levels map[string]zerolog.Level
 	mu     sync.RWMutex
 }
 
-// NewModuleLevelManager creates a manager from a map of module names to level strings.
-// Unrecognized level strings are silently ignored.
+// NewModuleLevelManager creates a manager from a map of module names to level strings. Unrecognized level strings are silently ignored.
 func NewModuleLevelManager(levels map[string]string) *ModuleLevelManager {
 	m := &ModuleLevelManager{
 		levels: make(map[string]zerolog.Level, len(levels)),
@@ -29,8 +27,7 @@ func NewModuleLevelManager(levels map[string]string) *ModuleLevelManager {
 	return m
 }
 
-// Level returns the override level for a module.
-// The second return value is false if no override exists.
+// Level returns the override level for a module. The second return value is false if no override exists.
 func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -38,8 +35,7 @@ func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 	return lvl, ok
 }
 
-// SetLevel dynamically sets a module's log level.
-// An unrecognized level string is silently ignored.
+// SetLevel dynamically sets a module's log level. An unrecognized level string is silently ignored.
 func (m *ModuleLevelManager) SetLevel(module, level string) {
 	parsed, err := zerolog.ParseLevel(strings.ToLower(level))
 	if err != nil {

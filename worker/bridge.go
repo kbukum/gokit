@@ -7,9 +7,7 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// FromProvider wraps a provider.RequestResponse as a Handler.
-// The handler checks IsAvailable before executing; returns an error if unavailable.
-// Emits a single EventResult on success. No progress events.
+// FromProvider wraps a provider.RequestResponse as a Handler. The handler checks IsAvailable before executing; returns an error if unavailable. Emits a single EventResult on success. No progress events.
 func FromProvider[I, O any](p provider.RequestResponse[I, O]) Handler[I, O] {
 	return HandlerFunc[I, O](func(ctx context.Context, task I, emit func(Event[O])) error {
 		if !p.IsAvailable(ctx) {
@@ -30,9 +28,7 @@ type AsProviderConfig struct {
 	ProviderName string `yaml:"provider_name" mapstructure:"provider_name"`
 }
 
-// AsProvider wraps a Handler as a provider.RequestResponse.
-// Runs the handler, waits for completion, returns the final EventResult data.
-// Progress and partial events are discarded.
+// AsProvider wraps a Handler as a provider.RequestResponse. Runs the handler, waits for completion, returns the final EventResult data. Progress and partial events are discarded.
 func AsProvider[I, O any](h Handler[I, O], cfg AsProviderConfig) provider.RequestResponse[I, O] {
 	return &handlerProvider[I, O]{handler: h, name: cfg.ProviderName}
 }

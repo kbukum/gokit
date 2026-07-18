@@ -5,8 +5,7 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// ResultSizeBytes reports the serialized size of a tool result, preferring the
-// structured Output payload and falling back to the text content.
+// ResultSizeBytes reports the serialized size of a tool result, preferring the structured Output payload and falling back to the text content.
 func ResultSizeBytes(result *tool.Result) int {
 	switch {
 	case result == nil:
@@ -18,8 +17,7 @@ func ResultSizeBytes(result *tool.Result) int {
 	}
 }
 
-// ValidateOutput validates a tool result against its declared output schema.
-// Missing schemas and error results are treated as valid (nothing to check).
+// ValidateOutput validates a tool result against its declared output schema. Missing schemas and error results are treated as valid (nothing to check).
 func ValidateOutput(def tool.Definition, result *tool.Result) schema.ValidationResult {
 	if def.OutputSchema == nil || result == nil || result.IsError {
 		return schema.ValidationResult{Valid: true}
@@ -30,9 +28,7 @@ func ValidateOutput(def tool.Definition, result *tool.Result) schema.ValidationR
 	return schema.Validate(def.OutputSchema, result.Text())
 }
 
-// FirstValidationError returns the first validation error message, or a generic
-// fallback when the slice is empty (a validator that reports Valid=false must
-// populate Errors, but the guard avoids out-of-bounds access).
+// FirstValidationError returns the first validation error message, or a generic fallback when the slice is empty (a validator that reports Valid=false must populate Errors, but the guard avoids out-of-bounds access).
 func FirstValidationError(errs []schema.ValidationError) string {
 	if len(errs) == 0 {
 		return "validation failed"

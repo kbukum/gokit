@@ -17,15 +17,13 @@ type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `yaml:"name" mapstructure:"name"`
 
-	// BaseURL is the root URL for the target service (e.g., "https://api.example.com/v1").
-	// Set statically via YAML or dynamically via discovery.
+	// BaseURL is the root URL for the target service (e.g., "https://api.example.com/v1"). Set statically via YAML or dynamically via discovery.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout is the default request timeout. Defaults to 30s.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
 
-	// Auth configures default authentication applied to all requests.
-	// Individual requests can override this.
+	// Auth configures default authentication applied to all requests. Individual requests can override this.
 	Auth *AuthConfig `yaml:"-" mapstructure:"-"`
 
 	// TLS configures TLS settings for the HTTP transport.

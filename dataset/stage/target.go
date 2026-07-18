@@ -18,8 +18,7 @@ type PublishResult struct {
 	Message string `json:"message,omitempty"`
 }
 
-// Target consumes a stream of values of type T and publishes them, returning a
-// [PublishResult]. Publishing must honor context cancellation.
+// Target consumes a stream of values of type T and publishes them, returning a [PublishResult]. Publishing must honor context cancellation.
 type Target[T any] interface {
 	// Name returns a stable identifier for diagnostics and results.
 	Name() string
@@ -27,8 +26,7 @@ type Target[T any] interface {
 	Publish(ctx context.Context, items *stream.Pipeline[T]) (PublishResult, error)
 }
 
-// SliceTarget collects published values into a slice, for composition and
-// tests.
+// SliceTarget collects published values into a slice, for composition and tests.
 type SliceTarget[T any] struct {
 	name    string
 	records []T

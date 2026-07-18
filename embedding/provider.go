@@ -9,11 +9,7 @@ import (
 
 // Provider generates vector embeddings for text and multimodal inputs.
 //
-// Per locked decision D7 (NATIVE EMBED), Provider natively embeds
-// [provider.RequestResponse] so any embedding provider drops into dag /
-// pipeline / chain / worker consumers without a bridge. The single-request
-// method IS Execute (the canonical RR method); EmbedBatch is the batched
-// extension.
+// Per locked decision D7 (NATIVE EMBED), Provider natively embeds [provider.RequestResponse] so any embedding provider drops into dag / pipeline / chain / worker consumers without a bridge. The single-request method IS Execute (the canonical RR method); EmbedBatch is the batched extension.
 //
 // Required methods (by transitive embedding):
 //   - Name() string                                                  // provider.Provider

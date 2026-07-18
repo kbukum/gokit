@@ -20,8 +20,7 @@ const (
 	DefaultPresignedTTL = time.Hour
 )
 
-// Config holds provider-agnostic storage configuration.
-// Provider-specific settings are supplied by typed provider Register functions.
+// Config holds provider-agnostic storage configuration. Provider-specific settings are supplied by typed provider Register functions.
 type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `mapstructure:"name" json:"name"`
@@ -58,8 +57,7 @@ func (c *Config) ApplyDefaults() {
 	}
 }
 
-// Validate checks that the core configuration is valid.
-// Provider-specific validation is handled by each provider's own config.
+// Validate checks that the core configuration is valid. Provider-specific validation is handled by each provider's own config.
 func (c *Config) Validate() error {
 	if c.Provider == "" {
 		return fmt.Errorf("storage: provider is required")

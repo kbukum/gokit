@@ -1,11 +1,8 @@
-// Package database provides a GORM-based database component with connection pooling,
-// health checks, transactions, and migration support.
+// Package database provides a GORM-based database component with connection pooling, health checks, transactions, and migration support.
 //
 // # Architecture
 //
-// The database module follows gokit's component pattern with a driver-agnostic design.
-// Users provide the database driver (postgres, mysql, sqlite, etc.) via WithDriver()
-// or an explicit DriverRegistry, keeping runtime backend selection adapter-driven.
+// The database module follows gokit's component pattern with a driver-agnostic design. Users provide the database driver (postgres, mysql, sqlite, etc.) via WithDriver() or an explicit DriverRegistry, keeping runtime backend selection adapter-driven.
 //
 // # Quick Start
 //
@@ -38,9 +35,7 @@
 //
 // # Optional Component
 //
-// The database component respects the Enabled flag in configuration.
-// When disabled, Start() returns immediately without initializing the connection,
-// and Health() reports "disabled" status.
+// The database component respects the Enabled flag in configuration. When disabled, Start() returns immediately without initializing the connection, and Health() reports "disabled" status.
 //
 //	cfg := database.Config{Enabled: false}  // Component will be disabled
 //

@@ -15,8 +15,7 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// registerTool adds a single registry tool to the SDK server behind the
-// hardened call handler.
+// registerTool adds a single registry tool to the SDK server behind the hardened call handler.
 func (h *Handler) registerTool(callable tool.Callable) {
 	def := callable.Definition()
 	mcpTool := convert.ToMCPTool(def)
@@ -26,10 +25,7 @@ func (h *Handler) registerTool(callable tool.Callable) {
 	h.sdk.AddTool(mcpTool, h.makeToolHandler(def.Name, mcpTool.Name))
 }
 
-// makeToolHandler builds the fail-closed tools/call handler: allow-list ->
-// input size limit -> schema validation -> authorization -> registry dispatch
-// (which applies the sensitivity/human-approval gate) -> output size limit ->
-// output schema validation -> audit.
+// makeToolHandler builds the fail-closed tools/call handler: allow-list -> input size limit -> schema validation -> authorization -> registry dispatch (which applies the sensitivity/human-approval gate) -> output size limit -> output schema validation -> audit.
 func (h *Handler) makeToolHandler(toolName, mcpName string) sdkmcp.ToolHandler {
 	return func(ctx context.Context, req *sdkmcp.CallToolRequest) (*sdkmcp.CallToolResult, error) {
 		ctx, span := observability.StartNamedSpan(ctx, "github.com/kbukum/gokit/mcp", "mcp.request",
@@ -104,8 +100,7 @@ func (h *Handler) makeToolHandler(toolName, mcpName string) sdkmcp.ToolHandler {
 				return errorResult(security.DeniedMessage(err.Error())), nil
 			}
 			event.Outcome, event.Error = security.OutcomeToolError, err.Error()
-			// MCP convention: tool execution errors surface as IsError content,
-			// not as transport-level errors.
+			// MCP convention: tool execution errors surface as IsError content, not as transport-level errors.
 			return errorResult(err.Error()), nil //nolint:nilerr // fail-closed MCP error envelope
 		}
 
@@ -134,8 +129,7 @@ func (h *Handler) makeToolHandler(toolName, mcpName string) sdkmcp.ToolHandler {
 	}
 }
 
-// errorResult builds an MCP CallToolResult carrying a single text error, the
-// canonical way to surface a gated or failed call to the client.
+// errorResult builds an MCP CallToolResult carrying a single text error, the canonical way to surface a gated or failed call to the client.
 func errorResult(text string) *sdkmcp.CallToolResult {
 	return &sdkmcp.CallToolResult{
 		IsError: true,

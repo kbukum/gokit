@@ -12,13 +12,9 @@ import (
 
 // Terminal is the interactive medium a [Prompter] reads from and renders to.
 //
-// It abstracts how a prompt reads a line of input and writes output — decoupled
-// from what a prompt asks — so one set of prompt-kind logic drives both real
-// cooked stdio ([LineTerminal]) and a deterministic test double
-// ([ScriptedTerminal]).
+// It abstracts how a prompt reads a line of input and writes output — decoupled from what a prompt asks — so one set of prompt-kind logic drives both real cooked stdio ([LineTerminal]) and a deterministic test double ([ScriptedTerminal]).
 type Terminal interface {
-	// ReadLine reads one whole line. The second return value is false at end of
-	// input, so callers surface a typed "input closed" error instead of hanging.
+	// ReadLine reads one whole line. The second return value is false at end of input, so callers surface a typed "input closed" error instead of hanging.
 	ReadLine() (line string, ok bool, err error)
 	// Write writes text verbatim (no trailing newline).
 	Write(text string) error
@@ -30,10 +26,7 @@ type Terminal interface {
 
 // LineTerminal is a cooked-stdio [Terminal] over an injected reader and writer.
 //
-// The user types a whole line and presses Enter; it never enters raw mode, works
-// over pipes, and needs no extra dependencies, so it is the default terminal.
-// Bind it to real streams with [NewStdioTerminal], or to in-memory buffers with
-// [NewLineTerminal].
+// The user types a whole line and presses Enter; it never enters raw mode, works over pipes, and needs no extra dependencies, so it is the default terminal. Bind it to real streams with [NewStdioTerminal], or to in-memory buffers with [NewLineTerminal].
 type LineTerminal struct {
 	reader *bufio.Reader
 	writer io.Writer
@@ -44,8 +37,7 @@ func NewLineTerminal(r io.Reader, w io.Writer) *LineTerminal {
 	return &LineTerminal{reader: bufio.NewReader(r), writer: w}
 }
 
-// NewStdioTerminal builds a line terminal bound to process stdin and stderr,
-// following the "prompts to stderr" convention so piped stdout stays clean.
+// NewStdioTerminal builds a line terminal bound to process stdin and stderr, following the "prompts to stderr" convention so piped stdout stays clean.
 func NewStdioTerminal() *LineTerminal {
 	return NewLineTerminal(os.Stdin, os.Stderr)
 }

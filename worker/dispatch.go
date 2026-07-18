@@ -10,8 +10,7 @@ const (
 	LeastLoaded DispatchStrategy = "least_loaded" // pick the worker with fewest active tasks
 )
 
-// dispatcher selects a worker index for the next task.
-// Implementations must be safe for concurrent use.
+// dispatcher selects a worker index for the next task. Implementations must be safe for concurrent use.
 type dispatcher interface {
 	next(stats []workerStats) int
 }
@@ -30,8 +29,7 @@ func newDispatcher(strategy DispatchStrategy) dispatcher {
 	}
 }
 
-// roundRobinDispatcher cycles through workers in order.
-// Uses atomic counter for lock-free concurrent access.
+// roundRobinDispatcher cycles through workers in order. Uses atomic counter for lock-free concurrent access.
 type roundRobinDispatcher struct {
 	counter atomic.Uint64
 }
@@ -41,8 +39,7 @@ func (d *roundRobinDispatcher) next(stats []workerStats) int {
 	return int(n % uint64(len(stats)))
 }
 
-// leastLoadedDispatcher picks the worker with the fewest active tasks.
-// Caller must ensure stats is a consistent snapshot (e.g., copied under lock).
+// leastLoadedDispatcher picks the worker with the fewest active tasks. Caller must ensure stats is a consistent snapshot (e.g., copied under lock).
 type leastLoadedDispatcher struct{}
 
 func (d *leastLoadedDispatcher) next(stats []workerStats) int {

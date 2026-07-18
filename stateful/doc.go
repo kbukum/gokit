@@ -1,18 +1,12 @@
-// Package stateful provides push-based stateful accumulation with configurable triggers,
-// bounded buffers, and pluggable storage backends.
+// Package stateful provides push-based stateful accumulation with configurable triggers, bounded buffers, and pluggable storage backends.
 //
 // # Core Concepts
 //
-// Accumulator - Collects values of type V and flushes them based on configurable triggers
-// (time, size, custom). Supports bounded FIFO buffers, keep-alive TTL, rate limiting,
-// and type-aware measurement.
+// Accumulator - Collects values of type V and flushes them based on configurable triggers (time, size, custom). Supports bounded FIFO buffers, keep-alive TTL, rate limiting, and type-aware measurement.
 //
-// Manager - Manages multiple named accumulators for multi-tenant use cases (per session,
-// per user, per stream, etc.).
+// Manager - Manages multiple named accumulators for multi-tenant use cases (per session, per user, per stream, etc.).
 //
-// Store - Pluggable storage backend interface. Built-in implementations: memory (fast, local)
-// and Redis (durable, distributed). Users can implement custom stores for any backend
-// (Postgres, DynamoDB, filesystem, etc.).
+// Store - Pluggable storage backend interface. Built-in implementations: memory (fast, local) and Redis (durable, distributed). Users can implement custom stores for any backend (Postgres, DynamoDB, filesystem, etc.).
 //
 // # Use Cases
 //
@@ -24,8 +18,7 @@
 //
 // # Pattern: Push-Based Accumulation
 //
-// Unlike pipeline (pull-based Iterator), stateful uses push-based Append pattern.
-// The producer pushes values, and the accumulator decides when to flush based on triggers.
+// Unlike pipeline (pull-based Iterator), stateful uses push-based Append pattern. The producer pushes values, and the accumulator decides when to flush based on triggers.
 //
 // # Basic Example
 //

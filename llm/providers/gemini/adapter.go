@@ -5,9 +5,7 @@ import (
 	"github.com/kbukum/gokit/llm"
 )
 
-// NewAdapter creates an LLM adapter configured for the Google Gemini API.
-// It bridges the simple gemini.Config to gokit's httpclient with proper
-// API key auth via x-goog-api-key header.
+// NewAdapter creates an LLM adapter configured for the Google Gemini API. It bridges the simple gemini.Config to gokit's httpclient with proper API key auth via x-goog-api-key header.
 //
 //	adapter, err := gemini.NewAdapter(gemini.Config{
 //	    APIKey: "AIza...",

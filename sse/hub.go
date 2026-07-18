@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	// DefaultClientBufferSize bounds each client's pending frame queue. When the
-	// queue is full, the newest frame is dropped instead of blocking the hub.
+	// DefaultClientBufferSize bounds each client's pending frame queue. When the queue is full, the newest frame is dropped instead of blocking the hub.
 	DefaultClientBufferSize = 256
 	// DefaultBroadcastBufferSize bounds the hub's inbound broadcast queue.
 	DefaultBroadcastBufferSize = 256
@@ -98,17 +97,12 @@ func (c *Client) Events() <-chan Frame {
 	return c.events
 }
 
-// Send sends raw data to the client as a generic SSE `message` event
-// (no named event line). Returns false if the channel is full.
+// Send sends raw data to the client as a generic SSE `message` event (no named event line). Returns false if the channel is full.
 func (c *Client) Send(data []byte) bool {
 	return c.SendFrame(Frame{Data: data})
 }
 
-// SendFrame sends a typed SSE frame. When frame.Event is non-empty, the
-// browser's named-event listener for that event fires; otherwise the
-// default `message` listener fires. The client queue is bounded; when it is
-// full, the new frame is dropped and false is returned so a slow client never
-// blocks the hub or other subscribers.
+// SendFrame sends a typed SSE frame. When frame.Event is non-empty, the browser's named-event listener for that event fires; otherwise the default `message` listener fires. The client queue is bounded; when it is full, the new frame is dropped and false is returned so a slow client never blocks the hub or other subscribers.
 func (c *Client) SendFrame(frame Frame) bool {
 	select {
 	case c.events <- frame:
@@ -140,13 +134,9 @@ type Hub struct {
 
 // Message represents a message to broadcast.
 //
-// Pattern selects which clients receive the message — glob-matched against
-// each client's ID (e.g. "execution:*" or "execution:abc123"). Use "*" to
-// reach every connected client.
+// Pattern selects which clients receive the message — glob-matched against each client's ID (e.g. "execution:*" or "execution:abc123"). Use "*" to reach every connected client.
 //
-// Event, when non-empty, becomes the SSE `event:` line so browser
-// EventSource named-event listeners (`source.addEventListener("X", ...)`)
-// fire. Leave empty for a generic `message` event.
+// Event, when non-empty, becomes the SSE `event:` line so browser EventSource named-event listeners (`source.addEventListener("X", ...)`) fire. Leave empty for a generic `message` event.
 type Message struct {
 	Pattern string
 	Event   string
@@ -164,9 +154,7 @@ func NewHub() *Hub {
 	}
 }
 
-// Run starts the hub's main event loop.
-// It blocks until Stop is called or the context is canceled.
-// This should be run in a goroutine.
+// Run starts the hub's main event loop. It blocks until Stop is called or the context is canceled. This should be run in a goroutine.
 func (h *Hub) Run() {
 	for {
 		select {
@@ -201,8 +189,7 @@ func (h *Hub) Run() {
 	}
 }
 
-// Stop signals the hub to shut down. It closes all client connections
-// and causes Run to return. Safe to call multiple times.
+// Stop signals the hub to shut down. It closes all client connections and causes Run to return. Safe to call multiple times.
 func (h *Hub) Stop() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -223,8 +210,7 @@ func (h *Hub) closeAllClients() {
 	logging.Debug("[SSE_HUB] All clients closed during shutdown")
 }
 
-// Register adds a client to the hub.
-// Returns immediately if the hub has been stopped.
+// Register adds a client to the hub. Returns immediately if the hub has been stopped.
 func (h *Hub) Register(client *Client) {
 	select {
 	case h.register <- client:
@@ -232,8 +218,7 @@ func (h *Hub) Register(client *Client) {
 	}
 }
 
-// Unregister removes a client from the hub.
-// Returns immediately if the hub has been stopped.
+// Unregister removes a client from the hub. Returns immediately if the hub has been stopped.
 func (h *Hub) Unregister(client *Client) {
 	select {
 	case h.unregister <- client:
@@ -241,18 +226,11 @@ func (h *Hub) Unregister(client *Client) {
 	}
 }
 
-// Broadcast sends a typed event to ALL connected clients. The event name
-// becomes the SSE `event:` line so browser EventSource named-event
-// listeners (`source.addEventListener(event, ...)`) fire.
+// Broadcast sends a typed event to ALL connected clients. The event name becomes the SSE `event:` line so browser EventSource named-event listeners (`source.addEventListener(event, ...)`) fire.
 //
-// This is the primary API for global notifications (e.g. "notifications.new",
-// "catalog.pull.completed"). For per-resource fan-out where only some
-// subscribers should receive the message, use BroadcastToPattern with a
-// caller-defined client ID convention.
+// This is the primary API for global notifications (e.g. "notifications.new", "catalog.pull.completed"). For per-resource fan-out where only some subscribers should receive the message, use BroadcastToPattern with a caller-defined client ID convention.
 //
-// Returns immediately if the hub has been stopped (drops the message). Delivery
-// is best-effort: slow clients can still drop frames when their bounded queue is
-// full.
+// Returns immediately if the hub has been stopped (drops the message). Delivery is best-effort: slow clients can still drop frames when their bounded queue is full.
 func (h *Hub) Broadcast(event string, data []byte) {
 	select {
 	case h.broadcast <- &Message{Pattern: "*", Event: event, Data: data}:
@@ -260,13 +238,9 @@ func (h *Hub) Broadcast(event string, data []byte) {
 	}
 }
 
-// BroadcastToPattern sends data to all clients whose ID matches pattern.
-// Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123").
-// Use Broadcast for global, event-typed notifications.
+// BroadcastToPattern sends data to all clients whose ID matches pattern. Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123"). Use Broadcast for global, event-typed notifications.
 //
-// Returns immediately if the hub has been stopped (drops the message). Delivery
-// is best-effort: slow clients can still drop frames when their bounded queue is
-// full.
+// Returns immediately if the hub has been stopped (drops the message). Delivery is best-effort: slow clients can still drop frames when their bounded queue is full.
 func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	select {
 	case h.broadcast <- &Message{Pattern: pattern, Data: data}:
@@ -274,12 +248,9 @@ func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	}
 }
 
-// BroadcastFrame sends a typed frame to all clients whose ID matches
-// pattern. Use Broadcast for the common "deliver to everyone" case.
+// BroadcastFrame sends a typed frame to all clients whose ID matches pattern. Use Broadcast for the common "deliver to everyone" case.
 //
-// Returns immediately if the hub has been stopped (drops the message). Delivery
-// is best-effort: slow clients can still drop frames when their bounded queue is
-// full.
+// Returns immediately if the hub has been stopped (drops the message). Delivery is best-effort: slow clients can still drop frames when their bounded queue is full.
 func (h *Hub) BroadcastFrame(pattern string, frame Frame) {
 	select {
 	case h.broadcast <- &Message{Pattern: pattern, Event: frame.Event, Data: frame.Data}:
@@ -287,8 +258,7 @@ func (h *Hub) BroadcastFrame(pattern string, frame Frame) {
 	}
 }
 
-// dispatch routes a Message to matching clients. Called from the hub's
-// main goroutine.
+// dispatch routes a Message to matching clients. Called from the hub's main goroutine.
 func (h *Hub) dispatch(msg *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

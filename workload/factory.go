@@ -7,18 +7,12 @@ import (
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
-// ManagerFactory creates a Manager implementation from core config and
-// provider-specific config. Each provider type-asserts providerCfg to its
-// own config type.
+// ManagerFactory creates a Manager implementation from core config and provider-specific config. Each provider type-asserts providerCfg to its own config type.
 type ManagerFactory func(cfg Config, providerCfg any, log *logging.Logger) (Manager, error)
 
 // FactoryRegistry stores workload manager factories by provider name.
 //
-// Registries are explicit, isolated, and thread-safe. Use
-// [NewFactoryRegistry] to create one, then call provider-specific
-// Register functions (for example
-// [github.com/kbukum/gokit/workload/docker.Register]) to populate it
-// before passing it to [New].
+// Registries are explicit, isolated, and thread-safe. Use [NewFactoryRegistry] to create one, then call provider-specific Register functions (for example [github.com/kbukum/gokit/workload/docker.Register]) to populate it before passing it to [New].
 type FactoryRegistry struct {
 	inner *namedregistry.Registry[ManagerFactory]
 }
@@ -28,9 +22,7 @@ func NewFactoryRegistry() *FactoryRegistry {
 	return &FactoryRegistry{inner: namedregistry.New[ManagerFactory]("workload")}
 }
 
-// Register stores a workload backend factory for the given provider name.
-// It returns an error if name or factory are invalid, or if a duplicate
-// name is registered.
+// Register stores a workload backend factory for the given provider name. It returns an error if name or factory are invalid, or if a duplicate name is registered.
 func (r *FactoryRegistry) Register(name string, f ManagerFactory) error {
 	return r.inner.Register(name, f)
 }
@@ -45,9 +37,7 @@ func (r *FactoryRegistry) Names() []string {
 	return r.inner.Names()
 }
 
-// New creates a workload Manager using the provided registry. The registry
-// is mandatory: pass an explicit *FactoryRegistry with the desired
-// providers registered (for example via docker.Register, kubernetes.Register).
+// New creates a workload Manager using the provided registry. The registry is mandatory: pass an explicit *FactoryRegistry with the desired providers registered (for example via docker.Register, kubernetes.Register).
 func New(reg *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) (Manager, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {

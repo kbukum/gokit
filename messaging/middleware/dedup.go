@@ -11,17 +11,13 @@ import (
 
 // DedupConfig configures the deduplication middleware.
 type DedupConfig struct {
-	// KeyFunc extracts the dedup key from a message.
-	// Default: message "message-id" header.
+	// KeyFunc extracts the dedup key from a message. Default: message "message-id" header.
 	KeyFunc func(messaging.Message) string
 
-	// WindowSize is the maximum number of entries in the dedup cache.
-	// Oldest entries are evicted when the limit is reached.
-	// Default: 10000.
+	// WindowSize is the maximum number of entries in the dedup cache. Oldest entries are evicted when the limit is reached. Default: 10000.
 	WindowSize int
 
-	// TTL is how long an entry is retained before it is considered expired.
-	// Default: 5 minutes.
+	// TTL is how long an entry is retained before it is considered expired. Default: 5 minutes.
 	TTL time.Duration
 }
 
@@ -64,8 +60,7 @@ func newDedupCache(maxSize int, ttl time.Duration) *dedupCache {
 	}
 }
 
-// seen returns true if key is already in the cache (and not expired).
-// If absent or expired, it adds/refreshes the entry and returns false.
+// seen returns true if key is already in the cache (and not expired). If absent or expired, it adds/refreshes the entry and returns false.
 func (c *dedupCache) seen(key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -100,9 +95,7 @@ func (c *dedupCache) seen(key string) bool {
 	return false
 }
 
-// DedupHandler wraps a MessageHandler with deduplication logic.
-// Messages with a previously seen key (within the TTL window) are silently
-// skipped. This follows the existing middleware convention in gokit.
+// DedupHandler wraps a MessageHandler with deduplication logic. Messages with a previously seen key (within the TTL window) are silently skipped. This follows the existing middleware convention in gokit.
 func DedupHandler(handler messaging.MessageHandler, cfg DedupConfig) messaging.MessageHandler {
 	cfg.applyDefaults()
 	cache := newDedupCache(cfg.WindowSize, cfg.TTL)

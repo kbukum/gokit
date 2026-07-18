@@ -11,9 +11,7 @@ const (
 	MaxPageSize     = 100
 )
 
-// ParseFromRequest extracts query params from an HTTP request.
-// Supports PostgREST/Supabase filter format: field=op.value
-// Accepts page size from: pageSize, page_size, per_page, or limit (in priority order).
+// ParseFromRequest extracts query params from an HTTP request. Supports PostgREST/Supabase filter format: field=op.value Accepts page size from: pageSize, page_size, per_page, or limit (in priority order).
 func ParseFromRequest(r *http.Request, config Config) Params {
 	q := r.URL.Query()
 
@@ -178,9 +176,7 @@ func intOrDefault(s string, def int) int {
 	return def
 }
 
-// clamp confines v to the inclusive range [lower, upper]. The lower bound is
-// passed even when callers currently always supply 1 so the helper stays
-// generic for future call sites that need a different minimum.
+// clamp confines v to the inclusive range [lower, upper]. The lower bound is passed even when callers currently always supply 1 so the helper stays generic for future call sites that need a different minimum.
 //
 //nolint:unparam // see godoc — lower kept for API generality
 func clamp(v, lower, upper int) int {

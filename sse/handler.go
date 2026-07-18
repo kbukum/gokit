@@ -19,8 +19,7 @@ type ConnectedEvent struct {
 	Metadata  map[string]string `json:"metadata,omitempty"`
 }
 
-// ServeSSE handles an SSE connection for a specific client.
-// This is the main entry point called from HTTP handlers.
+// ServeSSE handles an SSE connection for a specific client. This is the main entry point called from HTTP handlers.
 func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ClientOption) {
 	// Check SSE support (requires http.Flusher interface)
 	flusher, ok := w.(http.Flusher)
@@ -32,9 +31,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		return
 	}
 
-	// Disable write deadline for SSE connections using ResponseController.
-	// This is essential because SSE connections are long-lived and shouldn't be
-	// terminated by the server's WriteTimeout setting.
+	// Disable write deadline for SSE connections using ResponseController. This is essential because SSE connections are long-lived and shouldn't be terminated by the server's WriteTimeout setting.
 	rc := http.NewResponseController(w)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
 		logging.WarnCtx(r.Context(), "[SSE] Could not disable write deadline", map[string]any{
@@ -76,8 +73,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		"remote_addr": r.RemoteAddr,
 	})
 
-	// Event loop - stream events to client
-	// Keep-alive interval should be less than proxy timeouts (typically 60s).
+	// Event loop - stream events to client Keep-alive interval should be less than proxy timeouts (typically 60s).
 	keepAlive := time.NewTicker(DefaultKeepAliveInterval)
 	defer keepAlive.Stop()
 
@@ -100,9 +96,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 				})
 				return
 			}
-			// Send SSE frame: optional `event:` line + `data:` payload.
-			// Browser EventSource named-event listeners only fire when the
-			// frame includes an `event:` line matching the listener name.
+			// Send SSE frame: optional `event:` line + `data:` payload. Browser EventSource named-event listeners only fire when the frame includes an `event:` line matching the listener name.
 			if frame.Event != "" {
 				_, _ = fmt.Fprintf(w, "event: %s\n", frame.Event)
 			}
@@ -115,8 +109,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			})
 
 		case <-keepAlive.C:
-			// Send keep-alive comment (SSE spec: lines starting with : are comments)
-			// This keeps the connection alive through proxies and load balancers
+			// Send keep-alive comment (SSE spec: lines starting with : are comments) This keeps the connection alive through proxies and load balancers
 			_, _ = fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
 			flusher.Flush()
 			logging.DebugCtx(ctx, "[SSE] Keep-alive sent", map[string]any{

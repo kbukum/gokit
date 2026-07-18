@@ -22,8 +22,7 @@ const (
 	statusPartial = "partial"
 )
 
-// SourceStats records how many items a source produced and where a partial run
-// left off so it can resume.
+// SourceStats records how many items a source produced and where a partial run left off so it can resume.
 type SourceStats struct {
 	// Total is the number of items collected.
 	Total int `json:"total"`
@@ -35,8 +34,7 @@ type SourceStats struct {
 	FetchedOffset int `json:"fetched_offset"`
 }
 
-// SourceEntry is a manifest record for one source: its cache key, stats, and
-// completion status.
+// SourceEntry is a manifest record for one source: its cache key, stats, and completion status.
 type SourceEntry struct {
 	// CacheKey fingerprints the source configuration this entry was built with.
 	CacheKey string `json:"cache_key"`
@@ -58,8 +56,7 @@ const (
 	CacheDone
 )
 
-// CacheStatus is the resolved cache state for a source, with the cached stats
-// when present.
+// CacheStatus is the resolved cache state for a source, with the cached stats when present.
 type CacheStatus struct {
 	// Kind is the resolved cache classification.
 	Kind CacheKind
@@ -78,8 +75,7 @@ func New() *Manifest {
 	return &Manifest{Sources: map[string]SourceEntry{}}
 }
 
-// Load reads the manifest from dir, returning an empty manifest when none
-// exists. The read is bounded to 1 MiB and malformed content fails closed.
+// Load reads the manifest from dir, returning an empty manifest when none exists. The read is bounded to 1 MiB and malformed content fails closed.
 func Load(dir string) (*Manifest, error) {
 	path := filepath.Join(dir, fileName)
 	data, err := fs.ReadFileLimit(path, maxBytes)
@@ -119,8 +115,7 @@ func (m *Manifest) MarkPartial(name, cacheKey string, stats SourceStats) {
 	m.Sources[name] = SourceEntry{CacheKey: cacheKey, Stats: stats, Status: statusPartial}
 }
 
-// CacheStatusFor resolves a source's cache state. A partial entry is promoted
-// to done when it is within five items or 99% of a known ceiling.
+// CacheStatusFor resolves a source's cache state. A partial entry is promoted to done when it is within five items or 99% of a known ceiling.
 func (m *Manifest) CacheStatusFor(name, cacheKey string, ceiling int, hasCeiling bool) CacheStatus {
 	entry, ok := m.Sources[name]
 	if !ok || entry.CacheKey != cacheKey {

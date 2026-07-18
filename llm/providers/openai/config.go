@@ -2,8 +2,7 @@ package openai
 
 // Config holds settings for connecting to an OpenAI-compatible API.
 type Config struct {
-	// BaseURL is the API root (e.g., "https://api.openai.com/v1").
-	// Defaults to "https://api.openai.com/v1" if empty.
+	// BaseURL is the API root (e.g., "https://api.openai.com/v1"). Defaults to "https://api.openai.com/v1" if empty.
 	BaseURL string `json:"base_url,omitempty" yaml:"base_url"`
 	// APIKey is the bearer token. Empty disables authentication.
 	APIKey string `json:"api_key,omitempty" yaml:"api_key"`

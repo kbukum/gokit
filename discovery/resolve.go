@@ -6,12 +6,9 @@ import (
 	"time"
 )
 
-// ServiceResolver resolves service names to base URLs using service discovery.
-// It wraps a DiscoveryClient with optional service allow-list validation
-// and configurable URL scheme.
+// ServiceResolver resolves service names to base URLs using service discovery. It wraps a DiscoveryClient with optional service allow-list validation and configurable URL scheme.
 //
-// ServiceResolver structurally satisfies connect/client.Resolver, so it can
-// be used directly with ConnectRPC clients without importing the connect module:
+// ServiceResolver structurally satisfies connect/client.Resolver, so it can be used directly with ConnectRPC clients without importing the connect module:
 //
 //	resolver := discovery.NewServiceResolver(discClient, "svc-a", "svc-b")
 //	url, err := resolver.Resolve("svc-a") // "http://host:port"
@@ -47,9 +44,7 @@ func WithResolveTimeout(d time.Duration) ResolverOption {
 	}
 }
 
-// NewServiceResolver creates a resolver that discovers services and returns base URLs.
-// If services are provided, only those service names are allowed (acts as an allow-list).
-// An empty services list allows any service name.
+// NewServiceResolver creates a resolver that discovers services and returns base URLs. If services are provided, only those service names are allowed (acts as an allow-list). An empty services list allows any service name.
 func NewServiceResolver(client DiscoveryClient, services []string, opts ...ResolverOption) *ServiceResolver {
 	allowed := make(map[string]struct{}, len(services))
 	for _, s := range services {
@@ -69,9 +64,7 @@ func NewServiceResolver(client DiscoveryClient, services []string, opts ...Resol
 	return r
 }
 
-// Resolve discovers a service and returns its base URL (e.g., "http://host:port").
-// Returns an error if the service is not in the allow-list (when configured)
-// or if discovery fails.
+// Resolve discovers a service and returns its base URL (e.g., "http://host:port"). Returns an error if the service is not in the allow-list (when configured) or if discovery fails.
 func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 	if len(r.services) > 0 {
 		if _, ok := r.services[serviceName]; !ok {
@@ -94,10 +87,7 @@ func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 	return fmt.Sprintf("%s://%s", r.scheme, endpoint.HostPort()), nil
 }
 
-// ResolveAddr resolves a service name to a host:port pair using the Discovery
-// interface. This is a bootstrap-time utility for resolving infrastructure
-// addresses (database, redis, kafka, etc.) before connection pools are created.
-// Returns the first healthy instance's address and port.
+// ResolveAddr resolves a service name to a host:port pair using the Discovery interface. This is a bootstrap-time utility for resolving infrastructure addresses (database, redis, kafka, etc.) before connection pools are created. Returns the first healthy instance's address and port.
 func ResolveAddr(disc Discovery, serviceName string) (host string, port int, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

@@ -11,8 +11,7 @@ import (
 
 const vegaLiteSchema = "https://vega.github.io/schema/vega-lite/v5.json"
 
-// VegaLite creates a reporter that outputs Vega-Lite visualization specs.
-// It generates multiple spec files as a JSON object { "filename": spec, ... }.
+// VegaLite creates a reporter that outputs Vega-Lite visualization specs. It generates multiple spec files as a JSON object { "filename": spec, ... }.
 func VegaLite() Reporter {
 	return &vegaLiteReporter{}
 }
@@ -33,8 +32,7 @@ func (r *vegaLiteReporter) Generate(w io.Writer, result *bench.RunResult) error 
 	return enc.Encode(specs)
 }
 
-// VegaLiteSpecs generates individual Vega-Lite specs from run results.
-// Returns a map of filename → JSON spec.
+// VegaLiteSpecs generates individual Vega-Lite specs from run results. Returns a map of filename → JSON spec.
 func VegaLiteSpecs(result *bench.RunResult) map[string]any {
 	specs := make(map[string]any)
 

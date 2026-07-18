@@ -23,10 +23,7 @@ const (
 
 // AuthConfig configures request authentication.
 //
-// Credentials are always transmitted in request headers, never in the URL
-// query string, so tokens do not leak into server logs, proxies, or browser
-// history. AuthConfig redacts its secret fields in String, GoString, and any
-// fmt verb, so logging a Config that embeds it never exposes credentials.
+// Credentials are always transmitted in request headers, never in the URL query string, so tokens do not leak into server logs, proxies, or browser history. AuthConfig redacts its secret fields in String, GoString, and any fmt verb, so logging a Config that embeds it never exposes credentials.
 type AuthConfig struct {
 	// Type is the authentication method.
 	Type AuthType
@@ -69,8 +66,7 @@ func CustomAuth(fn func(*http.Request)) *AuthConfig {
 	return &AuthConfig{Type: AuthCustom, Apply: fn}
 }
 
-// apply applies authentication to an HTTP request. Credentials are always set
-// as request headers — never in the query string.
+// apply applies authentication to an HTTP request. Credentials are always set as request headers — never in the query string.
 func (a *AuthConfig) apply(req *http.Request) {
 	if a == nil {
 		return
@@ -95,8 +91,7 @@ func (a *AuthConfig) apply(req *http.Request) {
 	}
 }
 
-// String returns a redacted, log-safe description of the auth config. Secret
-// values (token, password, API key) are never included.
+// String returns a redacted, log-safe description of the auth config. Secret values (token, password, API key) are never included.
 func (a *AuthConfig) String() string {
 	if a == nil {
 		return "AuthConfig(none)"

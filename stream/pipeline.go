@@ -2,8 +2,7 @@ package stream
 
 import "context"
 
-// Iterator provides pull-based sequential access to a stream of values.
-// Structurally compatible with provider.Iterator[T].
+// Iterator provides pull-based sequential access to a stream of values. Structurally compatible with provider.Iterator[T].
 type Iterator[T any] interface {
 	// Next returns the next value. Returns (zero, false, nil) when exhausted.
 	Next(ctx context.Context) (T, bool, error)
@@ -11,8 +10,7 @@ type Iterator[T any] interface {
 	Close() error
 }
 
-// Pipeline represents a lazy, pull-based data pipeline.
-// No work happens until values are pulled via Collect, Drain, or ForEach.
+// Pipeline represents a lazy, pull-based data pipeline. No work happens until values are pulled via Collect, Drain, or ForEach.
 type Pipeline[T any] struct {
 	create func(ctx context.Context) Iterator[T]
 }

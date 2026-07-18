@@ -9,11 +9,9 @@ import (
 	"sync"
 )
 
-// MockOAuthServer simulates an OAuth2 provider's endpoints for testing.
-// It handles token exchange, userinfo, and optionally JSON token exchange.
+// MockOAuthServer simulates an OAuth2 provider's endpoints for testing. It handles token exchange, userinfo, and optionally JSON token exchange.
 //
-// The server is fully configurable: set custom response data, simulate errors,
-// and inspect received requests.
+// The server is fully configurable: set custom response data, simulate errors, and inspect received requests.
 type MockOAuthServer struct {
 	server *httptest.Server
 
@@ -26,8 +24,7 @@ type MockOAuthServer struct {
 	idTokenClaims map[string]any
 }
 
-// NewMockOAuthServer creates and starts a mock OAuth server with sensible defaults.
-// Call Close() when done.
+// NewMockOAuthServer creates and starts a mock OAuth server with sensible defaults. Call Close() when done.
 func NewMockOAuthServer() *MockOAuthServer {
 	m := &MockOAuthServer{
 		tokenResponse: map[string]any{
@@ -93,9 +90,7 @@ func (m *MockOAuthServer) SetUserResponse(resp map[string]any) {
 	m.userResponse = resp
 }
 
-// SetIDTokenClaims sets claims that will be encoded as an ID token in the token response.
-// When set, the token response will include an "id_token" field containing a JWT
-// with these claims (unsigned, for testing only).
+// SetIDTokenClaims sets claims that will be encoded as an ID token in the token response. When set, the token response will include an "id_token" field containing a JWT with these claims (unsigned, for testing only).
 func (m *MockOAuthServer) SetIDTokenClaims(claims map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -118,8 +113,7 @@ func (m *MockOAuthServer) FailUserInfo(fail bool) {
 
 // --- Inspection ---
 
-// TokenRequests returns all token exchange requests received.
-// Each entry is a map of form field name → value.
+// TokenRequests returns all token exchange requests received. Each entry is a map of form field name → value.
 func (m *MockOAuthServer) TokenRequests() []map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -218,8 +212,7 @@ func (m *MockOAuthServer) handleUserInfo(w http.ResponseWriter, r *http.Request)
 	_ = json.NewEncoder(w).Encode(m.userResponse)
 }
 
-// BuildTestIDToken creates an unsigned JWT with the given claims.
-// Exported for use in tests that need to construct ID tokens directly.
+// BuildTestIDToken creates an unsigned JWT with the given claims. Exported for use in tests that need to construct ID tokens directly.
 func BuildTestIDToken(claims map[string]any) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
 	payload, _ := json.Marshal(claims)

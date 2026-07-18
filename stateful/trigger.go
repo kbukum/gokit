@@ -6,8 +6,7 @@ import (
 	"time"
 )
 
-// Trigger defines when an accumulator should flush.
-// Multiple triggers can be combined using TriggerMode (ANY or ALL).
+// Trigger defines when an accumulator should flush. Multiple triggers can be combined using TriggerMode (ANY or ALL).
 type Trigger[V any] interface {
 	// ShouldFlush returns true if this trigger condition is met.
 	ShouldFlush(ctx context.Context, acc *Accumulator[V]) bool
@@ -38,8 +37,7 @@ func (t *timeTrigger[V]) ShouldFlush(ctx context.Context, acc *Accumulator[V]) b
 	return time.Since(acc.lastFlush) >= t.duration
 }
 
-// SizeTrigger creates a trigger that fires when measured size >= threshold.
-// Uses the accumulator's configured Measurer.
+// SizeTrigger creates a trigger that fires when measured size >= threshold. Uses the accumulator's configured Measurer.
 func SizeTrigger[V any](threshold int) Trigger[V] {
 	return &sizeTrigger[V]{threshold: threshold}
 }

@@ -9,15 +9,10 @@ import (
 
 // JSON is a standard JSON Schema document represented as a map.
 //
-// The map[string]any representation is a deliberate, documented opaque-value
-// exception to the no-any rule: a JSON Schema document is arbitrary JSON and
-// must stay format-agnostic so it serializes cleanly to any wire format
-// (OpenAI, Anthropic, MCP, etc.).
+// The map[string]any representation is a deliberate, documented opaque-value exception to the no-any rule: a JSON Schema document is arbitrary JSON and must stay format-agnostic so it serializes cleanly to any wire format (OpenAI, Anthropic, MCP, etc.).
 type JSON = map[string]any
 
-// Generate creates a JSON Schema from a Go type using struct tags.
-// The type parameter T should be a struct with json and optional
-// jsonschema tags.
+// Generate creates a JSON Schema from a Go type using struct tags. The type parameter T should be a struct with json and optional jsonschema tags.
 //
 //	schema.Generate[SearchInput]()
 //	schema.Generate[SearchInput](schema.WithTitle("Search"), schema.WithDescription("..."))
@@ -39,8 +34,7 @@ func From(t reflect.Type, opts ...Option) JSON {
 	return toJSON(s)
 }
 
-// newReflector creates a configured jsonschema.Reflector for tool-oriented
-// schema generation.
+// newReflector creates a configured jsonschema.Reflector for tool-oriented schema generation.
 func newReflector(cfg *config) *jsonschema.Reflector {
 	return &jsonschema.Reflector{
 		Anonymous:                  true,

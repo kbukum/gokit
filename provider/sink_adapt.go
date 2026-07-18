@@ -2,13 +2,11 @@ package provider
 
 import "context"
 
-// AdaptSink wraps a Sink with input type transformation.
-// This bridges a domain type I to a backend type BI before sending.
+// AdaptSink wraps a Sink with input type transformation. This bridges a domain type I to a backend type BI before sending.
 //
 // mapIn converts the domain input to the backend input.
 //
-// AdaptSink composes naturally with FanOutSink, WithSinkResilience,
-// and other sink combinators.
+// AdaptSink composes naturally with FanOutSink, WithSinkResilience, and other sink combinators.
 func AdaptSink[I, BI any](
 	inner Sink[BI],
 	name string,

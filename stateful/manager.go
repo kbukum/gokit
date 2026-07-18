@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-// Manager manages multiple named accumulators for multi-tenant use cases.
-// Typical key types: string (user ID, session ID), int64 (entity ID), etc.
+// Manager manages multiple named accumulators for multi-tenant use cases. Typical key types: string (user ID, session ID), int64 (entity ID), etc.
 type Manager[K comparable, V any] struct {
 	accumulators sync.Map // K -> *Accumulator[V]
 	factory      func(K) *Accumulator[V]
@@ -18,12 +17,9 @@ type Manager[K comparable, V any] struct {
 	once         sync.Once
 }
 
-// NewManager creates a manager that uses the factory function to create
-// accumulators on demand. The TTL is used for automatic cleanup of expired
-// accumulators (runs every TTL/4).
+// NewManager creates a manager that uses the factory function to create accumulators on demand. The TTL is used for automatic cleanup of expired accumulators (runs every TTL/4).
 //
-// The factory function is called once per key when GetOrCreate is called
-// or when Append is called for a new key.
+// The factory function is called once per key when GetOrCreate is called or when Append is called for a new key.
 func NewManager[K comparable, V any](
 	factory func(K) *Accumulator[V],
 	ttl time.Duration,
@@ -80,15 +76,13 @@ func (m *Manager[K, V]) GetOrCreate(key K) *Accumulator[V] {
 	return acc
 }
 
-// Append appends a value to the accumulator for the given key.
-// Creates the accumulator if it doesn't exist.
+// Append appends a value to the accumulator for the given key. Creates the accumulator if it doesn't exist.
 func (m *Manager[K, V]) Append(ctx context.Context, key K, value V) error {
 	acc := m.GetOrCreate(key)
 	return acc.Append(ctx, value)
 }
 
-// Flush manually flushes the accumulator for the given key.
-// Returns nil values if the key doesn't exist.
+// Flush manually flushes the accumulator for the given key. Returns nil values if the key doesn't exist.
 func (m *Manager[K, V]) Flush(ctx context.Context, key K) ([]V, error) {
 	acc := m.Get(key)
 	if acc == nil {
@@ -97,8 +91,7 @@ func (m *Manager[K, V]) Flush(ctx context.Context, key K) ([]V, error) {
 	return acc.Flush(ctx)
 }
 
-// Delete removes an accumulator by key. Closes the accumulator's resources.
-// Returns false if the key didn't exist.
+// Delete removes an accumulator by key. Closes the accumulator's resources. Returns false if the key didn't exist.
 func (m *Manager[K, V]) Delete(key K) bool {
 	val, loaded := m.accumulators.LoadAndDelete(key)
 	if !loaded {
@@ -119,8 +112,7 @@ func (m *Manager[K, V]) List() []K {
 	return keys
 }
 
-// Size returns the current size of the accumulator for the given key.
-// Returns 0 if the key doesn't exist.
+// Size returns the current size of the accumulator for the given key. Returns 0 if the key doesn't exist.
 func (m *Manager[K, V]) Size(ctx context.Context, key K) (int, error) {
 	acc := m.Get(key)
 	if acc == nil {
@@ -129,8 +121,7 @@ func (m *Manager[K, V]) Size(ctx context.Context, key K) (int, error) {
 	return acc.Size(ctx)
 }
 
-// Measure returns the current measurement of the accumulator for the given key.
-// Returns 0 if the key doesn't exist.
+// Measure returns the current measurement of the accumulator for the given key. Returns 0 if the key doesn't exist.
 func (m *Manager[K, V]) Measure(ctx context.Context, key K) (int, error) {
 	acc := m.Get(key)
 	if acc == nil {
@@ -139,8 +130,7 @@ func (m *Manager[K, V]) Measure(ctx context.Context, key K) (int, error) {
 	return acc.Measure(ctx)
 }
 
-// Cleanup removes expired accumulators. Returns the number of accumulators removed.
-// This is called automatically if TTL is set, but can also be called manually.
+// Cleanup removes expired accumulators. Returns the number of accumulators removed. This is called automatically if TTL is set, but can also be called manually.
 func (m *Manager[K, V]) Cleanup() int {
 	ctx := context.Background()
 	count := 0
@@ -163,8 +153,7 @@ func (m *Manager[K, V]) Cleanup() int {
 	return count
 }
 
-// Close stops the cleanup ticker and closes all accumulators.
-// The manager should not be used after calling Close.
+// Close stops the cleanup ticker and closes all accumulators. The manager should not be used after calling Close.
 func (m *Manager[K, V]) Close() error {
 	m.once.Do(func() {
 		// Stop cleanup loop

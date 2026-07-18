@@ -1,7 +1,6 @@
 package record
 
-// Format identifies a tabular record serialization understood by the readers
-// and writers in this package.
+// Format identifies a tabular record serialization understood by the readers and writers in this package.
 type Format int
 
 const (

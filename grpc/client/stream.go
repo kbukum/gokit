@@ -17,9 +17,7 @@ type StreamOpener[T any] func(ctx context.Context) (T, error)
 
 // OpenStreamWithTimeout opens a gRPC stream with a connection establishment timeout.
 //
-// Unlike context.WithTimeout, this function only applies the timeout to the
-// stream establishment phase. Once the stream is successfully opened, it runs
-// with the original context (no timeout affecting the stream lifetime).
+// Unlike context.WithTimeout, this function only applies the timeout to the stream establishment phase. Once the stream is successfully opened, it runs with the original context (no timeout affecting the stream lifetime).
 //
 // This solves the fundamental problem with gRPC stream timeouts:
 //   - If you pass a timeout context to the stream, the timeout kills the stream
@@ -51,8 +49,7 @@ func OpenStreamWithTimeout[T any](
 	return opener(ctx)
 }
 
-// TryOpenStream attempts to open a stream with a short timeout.
-// If it fails, it returns the zero value of T and the error without blocking the caller.
+// TryOpenStream attempts to open a stream with a short timeout. If it fails, it returns the zero value of T and the error without blocking the caller.
 func TryOpenStream[T any](
 	ctx context.Context,
 	conn *grpc.ClientConn,

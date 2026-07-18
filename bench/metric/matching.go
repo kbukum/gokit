@@ -29,8 +29,7 @@ func (m *exactMatch[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 }
 
-// FuzzyMatch computes string similarity using a Levenshtein distance ratio.
-// threshold is the minimum similarity (0-1) to count as a match.
+// FuzzyMatch computes string similarity using a Levenshtein distance ratio. threshold is the minimum similarity (0-1) to count as a match.
 func FuzzyMatch(threshold float64) Metric[string] {
 	return &fuzzyMatch{threshold: threshold}
 }
@@ -66,8 +65,7 @@ func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 	}
 }
 
-// levenshteinSimilarity returns a similarity ratio in [0, 1] based on
-// the Levenshtein edit distance between two strings.
+// levenshteinSimilarity returns a similarity ratio in [0, 1] based on the Levenshtein edit distance between two strings.
 func levenshteinSimilarity(a, b string) float64 {
 	if a == b {
 		return 1

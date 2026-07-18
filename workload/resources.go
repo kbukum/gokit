@@ -6,9 +6,7 @@ import (
 	"strings"
 )
 
-// ParseMemory converts human-readable memory strings to bytes.
-// Supported suffixes: k/ki (KiB), m/mi (MiB), g/gi (GiB), t/ti (TiB).
-// Without suffix, the value is treated as bytes.
+// ParseMemory converts human-readable memory strings to bytes. Supported suffixes: k/ki (KiB), m/mi (MiB), g/gi (GiB), t/ti (TiB). Without suffix, the value is treated as bytes.
 func ParseMemory(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" {
@@ -53,8 +51,7 @@ func ParseMemory(s string) (int64, error) {
 	return val * multiplier, nil
 }
 
-// ParseCPU converts human-readable CPU strings to nanocores.
-// Supported formats: "0.5" (cores), "500m" (millicores), "1" (1 core).
+// ParseCPU converts human-readable CPU strings to nanocores. Supported formats: "0.5" (cores), "500m" (millicores), "1" (1 core).
 func ParseCPU(s string) (int64, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" {

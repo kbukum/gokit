@@ -32,8 +32,7 @@ func Filter[T any](p *Pipeline[T], fn func(T) bool) *Pipeline[T] {
 	}
 }
 
-// Tap calls fn as a side-effect for each value, then passes the value through unchanged.
-// Use for logging, metrics, or mid-pipeline publishing.
+// Tap calls fn as a side-effect for each value, then passes the value through unchanged. Use for logging, metrics, or mid-pipeline publishing.
 func Tap[T any](p *Pipeline[T], fn func(context.Context, T) error) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {
@@ -42,8 +41,7 @@ func Tap[T any](p *Pipeline[T], fn func(context.Context, T) error) *Pipeline[T] 
 	}
 }
 
-// TapEach applies fn[i] to each element of a []T slice as a side-effect,
-// then passes the slice through unchanged. Useful after FanOut.
+// TapEach applies fn[i] to each element of a []T slice as a side-effect, then passes the slice through unchanged. Useful after FanOut.
 func TapEach[T any](p *Pipeline[[]T], fns ...func(context.Context, T) error) *Pipeline[[]T] {
 	return &Pipeline[[]T]{
 		create: func(ctx context.Context) Iterator[[]T] {
@@ -52,8 +50,7 @@ func TapEach[T any](p *Pipeline[[]T], fns ...func(context.Context, T) error) *Pi
 	}
 }
 
-// FanOut applies multiple functions to each input value in parallel
-// and collects all results as a slice.
+// FanOut applies multiple functions to each input value in parallel and collects all results as a slice.
 func FanOut[I, O any](p *Pipeline[I], fns ...func(context.Context, I) (O, error)) *Pipeline[[]O] {
 	return &Pipeline[[]O]{
 		create: func(ctx context.Context) Iterator[[]O] {
@@ -62,8 +59,7 @@ func FanOut[I, O any](p *Pipeline[I], fns ...func(context.Context, I) (O, error)
 	}
 }
 
-// Reduce accumulates all values into a single result.
-// The pipeline yields exactly one value: the final accumulator.
+// Reduce accumulates all values into a single result. The pipeline yields exactly one value: the final accumulator.
 func Reduce[T, R any](p *Pipeline[T], init R, fn func(R, T) R) *Pipeline[R] {
 	return &Pipeline[R]{
 		create: func(ctx context.Context) Iterator[R] {
@@ -72,8 +68,7 @@ func Reduce[T, R any](p *Pipeline[T], init R, fn func(R, T) R) *Pipeline[R] {
 	}
 }
 
-// Concat joins multiple pipelines sequentially.
-// All values from the first pipeline are yielded before the second, etc.
+// Concat joins multiple pipelines sequentially. All values from the first pipeline are yielded before the second, etc.
 func Concat[T any](pipelines ...*Pipeline[T]) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {

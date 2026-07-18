@@ -1,8 +1,6 @@
 // Package connect provides Connect-Go RPC integration for gokit services.
 //
-// It includes JWT authentication interceptors, service mounting helpers,
-// error mapping, logging interceptors, and configuration for Connect-Go
-// handlers.
+// It includes JWT authentication interceptors, service mounting helpers, error mapping, logging interceptors, and configuration for Connect-Go handlers.
 //
 // # Server-side (Handlers)
 //

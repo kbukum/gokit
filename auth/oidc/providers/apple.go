@@ -37,8 +37,7 @@ type AppleConfig struct {
 	PrivateKey string
 }
 
-// NewApple creates a Sign in with Apple provider.
-// Default scopes: name, email.
+// NewApple creates a Sign in with Apple provider. Default scopes: name, email.
 //
 // Apple is OIDC-based but with unique requirements:
 //   - Client secret is a JWT signed with your private key (ES256)
@@ -58,8 +57,7 @@ func NewApple(cfg AppleConfig) *GenericProvider {
 		},
 	}
 
-	// If private key is provided, use JWT-based dynamic secret generation.
-	// Otherwise fall back to static client secret (for testing/simple setups).
+	// If private key is provided, use JWT-based dynamic secret generation. Otherwise fall back to static client secret (for testing/simple setups).
 	if cfg.PrivateKey != "" {
 		gcfg.ClientSecretFunc = newAppleSecretFunc(cfg)
 	}

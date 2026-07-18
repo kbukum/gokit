@@ -10,8 +10,7 @@ import (
 
 const defaultMaxBodySize = 10 * 1024 * 1024 // 10MB
 
-// BodySizeLimit returns middleware that restricts the request body to the given
-// size string (e.g. "10MB", "512KB", "1GB").
+// BodySizeLimit returns middleware that restricts the request body to the given size string (e.g. "10MB", "512KB", "1GB").
 func BodySizeLimit(maxSize string) Middleware {
 	size := util.ParseSize(maxSize, defaultMaxBodySize)
 	return func(next http.Handler) http.Handler {
@@ -22,9 +21,7 @@ func BodySizeLimit(maxSize string) Middleware {
 	}
 }
 
-// GinBodySizeLimit returns a Gin middleware for body size limiting.
-// Prefer using BodySizeLimit() at the server level via ApplyMiddleware() which
-// covers all routes. Use this only when you need it on the Gin engine directly.
+// GinBodySizeLimit returns a Gin middleware for body size limiting. Prefer using BodySizeLimit() at the server level via ApplyMiddleware() which covers all routes. Use this only when you need it on the Gin engine directly.
 func GinBodySizeLimit(maxSize string) gin.HandlerFunc {
 	return GinWrap(BodySizeLimit(maxSize))
 }

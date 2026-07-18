@@ -21,8 +21,7 @@ func detectAudio(data []byte) (Info, bool) {
 		return Info{Type: Audio, Format: FormatOGG, MimeType: "audio/ogg", Container: "Ogg"}, true
 	}
 
-	// AAC — ADTS frame sync: 0xFF 0xF0 (12-bit sync word, protection absent bit = 0).
-	// Must check before MP3 since ADTS overlaps with MP3 frame sync.
+	// AAC — ADTS frame sync: 0xFF 0xF0 (12-bit sync word, protection absent bit = 0). Must check before MP3 since ADTS overlaps with MP3 frame sync.
 	if data[0] == 0xFF && (data[1]&0xF0) == 0xF0 && (data[1]&0x06) == 0x00 {
 		return Info{Type: Audio, Format: FormatAAC, MimeType: "audio/aac"}, true
 	}
@@ -31,8 +30,7 @@ func detectAudio(data []byte) (Info, bool) {
 	if data[0] == 'I' && data[1] == 'D' && data[2] == '3' {
 		return Info{Type: Audio, Format: FormatMP3, MimeType: "audio/mpeg"}, true
 	}
-	// MP3 frame sync: 0xFF followed by byte with top 3 bits set (0xE0 mask).
-	// Excludes the AAC range already caught above.
+	// MP3 frame sync: 0xFF followed by byte with top 3 bits set (0xE0 mask). Excludes the AAC range already caught above.
 	if data[0] == 0xFF && (data[1]&0xE0) == 0xE0 {
 		return Info{Type: Audio, Format: FormatMP3, MimeType: "audio/mpeg"}, true
 	}

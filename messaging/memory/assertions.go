@@ -26,8 +26,7 @@ func AssertPublishedN(t testing.TB, b *InMemoryBroker, topic string, n int) {
 	}
 }
 
-// WaitForMessage blocks until at least one message appears on topic or the
-// timeout expires. It returns the first message on the topic.
+// WaitForMessage blocks until at least one message appears on topic or the timeout expires. It returns the first message on the topic.
 func WaitForMessage(t testing.TB, b *InMemoryBroker, topic string, timeout time.Duration) messaging.Message {
 	t.Helper()
 

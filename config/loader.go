@@ -46,8 +46,7 @@ type ResolvedFiles struct {
 	EnvFile        string
 }
 
-// ResolveFiles finds config and env files for a service.
-// Returns explicit paths if provided, otherwise searches for them.
+// ResolveFiles finds config and env files for a service. Returns explicit paths if provided, otherwise searches for them.
 func (cr *Resolver) ResolveFiles(serviceName string, opts LoaderConfig) ResolvedFiles {
 	resolved := ResolvedFiles{
 		ConfigFile: opts.ConfigFile,
@@ -164,16 +163,13 @@ type LoaderConfig struct {
 // LoaderOption is a functional option for LoadConfig.
 type LoaderOption func(*LoaderConfig)
 
-// WarningFunc logs non-fatal configuration loading warnings using
-// structured key/value attributes. The signature is compatible with the
-// pattern used by [log/slog]:
+// WarningFunc logs non-fatal configuration loading warnings using structured key/value attributes. The signature is compatible with the pattern used by [log/slog]:
 //
 //	cfg.WarningLogger = func(msg string, attrs ...slog.Attr) {
 //	    logger.LogAttrs(context.Background(), slog.LevelWarn, msg, attrs...)
 //	}
 //
-// Callers should keep msg constant and pass dynamic data via attrs so that
-// log aggregators can group warnings by their message template.
+// Callers should keep msg constant and pass dynamic data via attrs so that log aggregators can group warnings by their message template.
 type WarningFunc func(msg string, attrs ...slog.Attr)
 
 // WithFileSystem sets a custom filesystem for the loader.
@@ -191,9 +187,7 @@ func WithEnvFile(path string) LoaderOption {
 	return func(lc *LoaderConfig) { lc.EnvFile = path }
 }
 
-// WithProfile sets the configuration profile to load.
-// Searches for config/profiles/{profile}.env in standard paths.
-// If profile is empty, reads from the ENVIRONMENT env var.
+// WithProfile sets the configuration profile to load. Searches for config/profiles/{profile}.env in standard paths. If profile is empty, reads from the ENVIRONMENT env var.
 func WithProfile(profile string) LoaderOption {
 	return func(lc *LoaderConfig) {
 		lc.Profile = profile
@@ -206,9 +200,7 @@ func WithWarningLogger(fn WarningFunc) LoaderOption {
 	return func(lc *LoaderConfig) { lc.WarningLogger = fn }
 }
 
-// LoadConfig loads configuration for a service into the provided cfg struct.
-// It searches for config.yml and .env files in standard locations, binds
-// environment variables, and unmarshals the result into cfg.
+// LoadConfig loads configuration for a service into the provided cfg struct. It searches for config.yml and .env files in standard locations, binds environment variables, and unmarshals the result into cfg.
 func LoadConfig(serviceName string, cfg any, opts ...LoaderOption) error {
 	var lc LoaderConfig
 	for _, opt := range opts {
@@ -350,9 +342,7 @@ func pathsByPrefix(path, fileName string) []string {
 	}
 }
 
-// autoBindEnvVars binds environment variables to Viper using BindEnv so config
-// file values still take precedence over environment variables when expected.
-// Only binds variables that match known config key patterns.
+// autoBindEnvVars binds environment variables to Viper using BindEnv so config file values still take precedence over environment variables when expected. Only binds variables that match known config key patterns.
 func autoBindEnvVars(v *viper.Viper) {
 	for _, env := range os.Environ() {
 		pair := strings.SplitN(env, "=", 2)
@@ -369,8 +359,7 @@ func autoBindEnvVars(v *viper.Viper) {
 	}
 }
 
-// generateEnvKeyVariants creates all possible key variants for environment variable binding.
-// Examples:
+// generateEnvKeyVariants creates all possible key variants for environment variable binding. Examples:
 //
 //	AUTH_JWT_SECRET -> [auth_jwt_secret, auth.jwt.secret, auth.jwt_secret]
 //	HTTP_CORS_ALLOWED_ORIGINS -> [http_cors_allowed_origins, http.cors.allowed.origins, http.cors_allowed_origins, ...]

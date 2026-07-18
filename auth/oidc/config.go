@@ -7,14 +7,12 @@ import (
 	"time"
 )
 
-// Config configures OIDC provider verification.
-// Loadable from YAML/env via mapstructure tags.
+// Config configures OIDC provider verification. Loadable from YAML/env via mapstructure tags.
 type Config struct {
 	// Enabled controls whether OIDC verification is active.
 	Enabled bool `mapstructure:"enabled"`
 
-	// Issuer is the OIDC provider's issuer URL (e.g., "https://accounts.google.com").
-	// Used for auto-discovery of JWKS endpoint, authorization endpoint, etc.
+	// Issuer is the OIDC provider's issuer URL (e.g., "https://accounts.google.com"). Used for auto-discovery of JWKS endpoint, authorization endpoint, etc.
 	Issuer string `mapstructure:"issuer"`
 
 	// ClientID is the OAuth2 client ID (also used as expected "aud" claim).
@@ -35,8 +33,7 @@ type Config struct {
 	// Scopes are the OAuth2 scopes to request (default: ["openid", "email", "profile"]).
 	Scopes []string `mapstructure:"scopes"`
 
-	// SupportedSigningAlgs restricts allowed ID token signing algorithms
-	// (default: ["RS256", "ES256", "EdDSA"]).
+	// SupportedSigningAlgs restricts allowed ID token signing algorithms (default: ["RS256", "ES256", "EdDSA"]).
 	SupportedSigningAlgs []string `mapstructure:"supported_signing_algs"`
 
 	// JWKSCacheDuration controls how long JWKS keys are cached (default: "1h").

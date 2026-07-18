@@ -5,12 +5,9 @@ import (
 	"github.com/kbukum/gokit/llm"
 )
 
-// NewAdapter creates an LLM adapter configured for an OpenAI-compatible API.
-// It bridges the simple openai.Config to gokit's httpclient with proper
-// Bearer token auth, timeouts, and resilience.
+// NewAdapter creates an LLM adapter configured for an OpenAI-compatible API. It bridges the simple openai.Config to gokit's httpclient with proper Bearer token auth, timeouts, and resilience.
 //
-// Works with OpenAI, Ollama, vLLM, llama.cpp, LM Studio, Together, Groq —
-// any server exposing /v1/chat/completions.
+// Works with OpenAI, Ollama, vLLM, llama.cpp, LM Studio, Together, Groq — any server exposing /v1/chat/completions.
 //
 //	adapter, err := openai.NewAdapter(openai.Config{
 //	    APIKey: "sk-...",

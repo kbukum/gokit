@@ -7,8 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// LoadFixture loads test data into a table.
-// Data should be a slice of maps where each map represents a row.
+// LoadFixture loads test data into a table. Data should be a slice of maps where each map represents a row.
 func LoadFixture(db *gorm.DB, table string, data []map[string]any) error {
 	if len(data) == 0 {
 		return nil

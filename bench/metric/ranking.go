@@ -8,8 +8,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// NDCG computes Normalized Discounted Cumulative Gain at k.
-// k=0 means use all results. Relevance is 1 if predicted label matches actual.
+// NDCG computes Normalized Discounted Cumulative Gain at k. k=0 means use all results. Relevance is 1 if predicted label matches actual.
 func NDCG[L comparable](k int) Metric[L] {
 	return &ndcg[L]{k: k}
 }
@@ -82,8 +81,7 @@ func (m *ndcg[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 }
 
-// MAP computes Mean Average Precision.
-// positiveLabel identifies relevant items.
+// MAP computes Mean Average Precision. positiveLabel identifies relevant items.
 func MAP[L comparable](positiveLabel L) Metric[L] {
 	return &meanAveragePrecision[L]{positive: positiveLabel}
 }

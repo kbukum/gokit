@@ -16,8 +16,7 @@ import (
 	"github.com/kbukum/gokit/schema"
 )
 
-// Registry manages a collection of callable tools.
-// It is concurrent-safe for reads and writes.
+// Registry manages a collection of callable tools. It is concurrent-safe for reads and writes.
 type Registry struct {
 	inner      *namedregistry.Registry[Callable]
 	mu         sync.RWMutex
@@ -28,17 +27,12 @@ type Registry struct {
 	lifecycle  ai.Lifecycle
 }
 
-// Authorizer optionally gates tool calls before sensitivity evaluation. It is
-// transport-neutral; mcp.Server has its own authorizer adapter that maps to
-// authz.Decider — Registry-level authz applies to direct programmatic calls.
+// Authorizer optionally gates tool calls before sensitivity evaluation. It is transport-neutral; mcp.Server has its own authorizer adapter that maps to authz.Decider — Registry-level authz applies to direct programmatic calls.
 type Authorizer interface {
 	Authorize(ctx context.Context, call ToolCall) (allowed bool, reason string, err error)
 }
 
-// NewRegistry creates an empty tool registry. Sensitivity evaluation defaults
-// to DenyOnSensitive and human approval defaults to DenyHumanApproval, so
-// any envelope-declared sensitive invocation fails closed unless the operator
-// explicitly opts into a richer evaluator/approval flow.
+// NewRegistry creates an empty tool registry. Sensitivity evaluation defaults to DenyOnSensitive and human approval defaults to DenyHumanApproval, so any envelope-declared sensitive invocation fails closed unless the operator explicitly opts into a richer evaluator/approval flow.
 func NewRegistry() *Registry {
 	return &Registry{
 		inner:      namedregistry.New[Callable]("tool"),
@@ -48,8 +42,7 @@ func NewRegistry() *Registry {
 	}
 }
 
-// WithAuthorizer wires a programmatic-call authorizer that runs before
-// sensitivity evaluation.
+// WithAuthorizer wires a programmatic-call authorizer that runs before sensitivity evaluation.
 func (r *Registry) WithAuthorizer(a Authorizer) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -77,10 +70,7 @@ func (r *Registry) WithHumanApproval(h HumanApproval) *Registry {
 	return r
 }
 
-// WithToolPolicy attaches a per-tool resilience policy. The policy is stored,
-// not enforced: orchestrators that own the dispatch loop look it up via
-// PolicyFor and wrap their invocation. Storing it here keeps the registry as
-// the single source of truth for "what governs this tool".
+// WithToolPolicy attaches a per-tool resilience policy. The policy is stored, not enforced: orchestrators that own the dispatch loop look it up via PolicyFor and wrap their invocation. Storing it here keeps the registry as the single source of truth for "what governs this tool".
 func (r *Registry) WithToolPolicy(name string, policy *resilience.Policy) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -124,8 +114,7 @@ func (r *Registry) Health(_ context.Context) component.Health {
 	return component.Health{Name: r.Name(), Status: component.StatusHealthy, Message: fmt.Sprintf("tools=%d", count)}
 }
 
-// Register adds a tool to the registry.
-// Returns an error if a tool with the same name already exists.
+// Register adds a tool to the registry. Returns an error if a tool with the same name already exists.
 func (r *Registry) Register(t Callable) error {
 	if t == nil {
 		return fmt.Errorf("tool: callable must not be nil")
@@ -147,10 +136,7 @@ func (r *Registry) List() []Definition {
 	return defs
 }
 
-// ToolSpecs returns the lean ai.ToolSpec view of every registered tool. Use
-// this when sending the tool catalog to LLM providers; it lets agent and llm
-// layers describe tools without coupling those layers to package tool's
-// richer permission envelope (D13: llm must not import tool).
+// ToolSpecs returns the lean ai.ToolSpec view of every registered tool. Use this when sending the tool catalog to LLM providers; it lets agent and llm layers describe tools without coupling those layers to package tool's richer permission envelope (D13: llm must not import tool).
 func (r *Registry) ToolSpecs() []ai.ToolSpec {
 	specs := make([]ai.ToolSpec, 0, r.inner.Len())
 	r.inner.Each(func(_ string, t Callable) {
@@ -164,11 +150,7 @@ func (r *Registry) Len() int { return r.inner.Len() }
 
 // Call invokes a tool by name with raw JSON input.
 //
-// Dispatch order: schema validation → authz → sensitivity / destructive gate →
-// (if RequireApproval) human approval → invoke (D10). Invalid input fails closed
-// with ErrInvalidToolInput before any side effect; any deny short-circuits with
-// ErrToolDenied wrapped with the reason. Per-tool resilience policy is applied
-// by callers via PolicyFor.
+// Dispatch order: schema validation → authz → sensitivity / destructive gate → (if RequireApproval) human approval → invoke (D10). Invalid input fails closed with ErrInvalidToolInput before any side effect; any deny short-circuits with ErrToolDenied wrapped with the reason. Per-tool resilience policy is applied by callers via PolicyFor.
 func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Result, error) {
 	spanCtx, span := observability.StartNamedSpan(ctx.Context, "github.com/kbukum/gokit/tool", "tool.call",
 		observability.WithSpanKind(observability.SpanKindInternal),
@@ -249,11 +231,7 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 		}
 	}
 
-	// Destructive tools are always human-gated: an irreversible mutation must
-	// be approved out of band. With the default DenyHumanApproval this fails
-	// closed until an operator wires a real approver. A prior sensitivity
-	// predicate may already have obtained approval for this dispatch; approve
-	// only once per call.
+	// Destructive tools are always human-gated: an irreversible mutation must be approved out of band. With the default DenyHumanApproval this fails closed until an operator wires a real approver. A prior sensitivity predicate may already have obtained approval for this dispatch; approve only once per call.
 	if def.Envelope.Safety == SafetyDestructive && !approved {
 		if err := r.requireApproval(ctx.Context, approval, call, "destructive tool requires human approval"); err != nil {
 			span.RecordError(err)
@@ -270,8 +248,7 @@ func (r *Registry) Call(ctx *Context, name string, input json.RawMessage) (*Resu
 	return res, err
 }
 
-// requireApproval routes a call through the human approver, failing closed when
-// no approver is configured or approval is rejected.
+// requireApproval routes a call through the human approver, failing closed when no approver is configured or approval is rejected.
 func (r *Registry) requireApproval(ctx context.Context, approval HumanApproval, call ToolCall, reason string) error {
 	if approval == nil {
 		return fmt.Errorf("%w: %s (no approver configured)", ErrToolDenied, reason)
@@ -286,8 +263,7 @@ func (r *Registry) requireApproval(ctx context.Context, approval HumanApproval, 
 	return nil
 }
 
-// validationMessage renders a compact, human-readable summary of schema
-// validation failures for error text.
+// validationMessage renders a compact, human-readable summary of schema validation failures for error text.
 func validationMessage(result schema.ValidationResult) string {
 	if len(result.Errors) == 0 {
 		return "input does not satisfy schema"
@@ -313,15 +289,13 @@ type BatchResult struct {
 	Err    error   `json:"error,omitempty"`
 }
 
-// BatchOptions controls passive batch execution. The caller owns policy: agent supplies
-// tool concurrency and fail-fast behavior; Registry does not infer concurrency from ReadOnly.
+// BatchOptions controls passive batch execution. The caller owns policy: agent supplies tool concurrency and fail-fast behavior; Registry does not infer concurrency from ReadOnly.
 type BatchOptions struct {
 	Concurrency int
 	FailFast    bool
 }
 
-// CallBatch executes multiple tool calls with a caller-supplied concurrency cap.
-// Results are returned in the same order as calls.
+// CallBatch executes multiple tool calls with a caller-supplied concurrency cap. Results are returned in the same order as calls.
 func (r *Registry) CallBatch(ctx *Context, calls []BatchCall, opts BatchOptions) []BatchResult {
 	results := make([]BatchResult, len(calls))
 	if len(calls) == 0 {

@@ -29,10 +29,7 @@ func ids(choices []Choice, indices []int) []ChoiceID {
 
 // runMultiSelect asks for zero or more choices.
 //
-// In non-interactive mode it resolves to the set of recommended choices (which
-// may be empty). Interactively it prints a numbered list and reads a
-// comma-separated list of one-based numbers; a blank answer accepts the
-// recommended defaults.
+// In non-interactive mode it resolves to the set of recommended choices (which may be empty). Interactively it prints a numbered list and reads a comma-separated list of one-based numbers; a blank answer accepts the recommended defaults.
 func runMultiSelect(term Terminal, style Style, mode PromptMode, prompt string, choices []Choice) ([]ChoiceID, error) {
 	if len(choices) == 0 {
 		return nil, errors.InvalidInput("prompt", fmt.Sprintf("multi-select requires at least one choice: %s", prompt))

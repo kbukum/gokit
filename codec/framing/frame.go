@@ -1,15 +1,8 @@
-// Package framing provides bounded length-delimited framing for streaming
-// structured-text payloads.
+// Package framing provides bounded length-delimited framing for streaming structured-text payloads.
 //
-// A frame is a 4-byte big-endian unsigned length prefix followed by exactly that
-// many payload bytes. Every read is bounded by an explicit maximum so a
-// malformed or hostile peer can never make a reader allocate without limit. Use
-// it to carry one codec-encoded value per frame over any blocking
-// io.Reader/io.Writer transport (a pipe, a socket, a subprocess's stdio).
+// A frame is a 4-byte big-endian unsigned length prefix followed by exactly that many payload bytes. Every read is bounded by an explicit maximum so a malformed or hostile peer can never make a reader allocate without limit. Use it to carry one codec-encoded value per frame over any blocking io.Reader/io.Writer transport (a pipe, a socket, a subprocess's stdio).
 //
-// [WriteValue] / [ReadValue] encode and decode typed values through an injected
-// codec; [WriteFrame] / [ReadFrame] move raw payload bytes when the caller owns
-// serialization.
+// [WriteValue] / [ReadValue] encode and decode typed values through an injected codec; [WriteFrame] / [ReadFrame] move raw payload bytes when the caller owns serialization.
 package framing
 
 import (
@@ -22,19 +15,15 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// DefaultMaxFrameBytes is the default maximum accepted payload size for a single
-// frame (16 MiB). It is generous enough for large structured payloads yet
-// bounded so a corrupt length prefix cannot trigger an unbounded allocation.
+// DefaultMaxFrameBytes is the default maximum accepted payload size for a single frame (16 MiB). It is generous enough for large structured payloads yet bounded so a corrupt length prefix cannot trigger an unbounded allocation.
 const DefaultMaxFrameBytes = 16 * 1024 * 1024
 
 // lenPrefixBytes is the width of the big-endian length prefix on every payload.
 const lenPrefixBytes = 4
 
-// WriteFrame writes one length-delimited frame carrying payload. A plain
-// io.Writer suffices; flushing any buffered transport is the caller's concern.
+// WriteFrame writes one length-delimited frame carrying payload. A plain io.Writer suffices; flushing any buffered transport is the caller's concern.
 //
-// It returns a typed error if payload exceeds maxBytes or the underlying writer
-// fails (cause preserved).
+// It returns a typed error if payload exceeds maxBytes or the underlying writer fails (cause preserved).
 func WriteFrame(w io.Writer, payload []byte, maxBytes int) error {
 	if len(payload) > maxBytes {
 		return apperrors.InvalidInput("frame", fmt.Sprintf(
@@ -56,10 +45,7 @@ func WriteFrame(w io.Writer, payload []byte, maxBytes int) error {
 
 // ReadFrame reads one length-delimited frame, bounded by maxBytes.
 //
-// It returns io.EOF (with a nil payload) on a clean end-of-stream observed
-// before any length byte — the peer closed the connection between frames. A
-// partial prefix or payload is a hard transport error, and a length above
-// maxBytes is rejected before any allocation.
+// It returns io.EOF (with a nil payload) on a clean end-of-stream observed before any length byte — the peer closed the connection between frames. A partial prefix or payload is a hard transport error, and a length above maxBytes is rejected before any allocation.
 func ReadFrame(r io.Reader, maxBytes int) ([]byte, error) {
 	var prefix [lenPrefixBytes]byte
 	if err := readFull(r, prefix[:]); err != nil {
@@ -82,8 +68,7 @@ func ReadFrame(r io.Reader, maxBytes int) ([]byte, error) {
 	return payload, nil
 }
 
-// readFull fills buf exactly, returning io.EOF only for a clean leading EOF and a
-// typed transport error for a truncated prefix.
+// readFull fills buf exactly, returning io.EOF only for a clean leading EOF and a typed transport error for a truncated prefix.
 func readFull(r io.Reader, buf []byte) error {
 	_, err := io.ReadFull(r, buf)
 	switch {

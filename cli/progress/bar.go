@@ -15,10 +15,7 @@ const defaultBarWidth = 20
 
 // Bar is a determinate progress bar over an injected writer.
 //
-// Each render overwrites the current terminal line (a leading carriage return),
-// so successive updates animate in place; [Bar.Finish] moves to a fresh line.
-// The bar only advances when the caller moves its position, so it is fully
-// deterministic without a clock.
+// Each render overwrites the current terminal line (a leading carriage return), so successive updates animate in place; [Bar.Finish] moves to a fresh line. The bar only advances when the caller moves its position, so it is fully deterministic without a clock.
 type Bar struct {
 	writer  io.Writer
 	palette theme.Palette
@@ -36,8 +33,7 @@ func WithBarPrefix(prefix string) BarOption {
 	return func(b *Bar) { b.prefix = prefix }
 }
 
-// WithBarWidth sets the character width of the gauge (values below 1 are
-// ignored).
+// WithBarWidth sets the character width of the gauge (values below 1 are ignored).
 func WithBarWidth(width int) BarOption {
 	return func(b *Bar) {
 		if width > 0 {
@@ -51,8 +47,7 @@ func WithBarPalette(palette theme.Palette) BarOption {
 	return func(b *Bar) { b.palette = palette }
 }
 
-// NewBar creates a bar for total units of work writing to w. A non-positive
-// total renders as an immediately complete bar.
+// NewBar creates a bar for total units of work writing to w. A non-positive total renders as an immediately complete bar.
 func NewBar(w io.Writer, total int64, opts ...BarOption) *Bar {
 	if total < 0 {
 		total = 0
@@ -92,8 +87,7 @@ func (b *Bar) Percent() int {
 	if b.total <= 0 || b.pos >= b.total {
 		return 100
 	}
-	// Integer math is exact for realistic totals; fall back to float64 (percent
-	// is coarse) only when pos*100 would overflow int64.
+	// Integer math is exact for realistic totals; fall back to float64 (percent is coarse) only when pos*100 would overflow int64.
 	if b.pos <= math.MaxInt64/100 {
 		return int(b.pos * 100 / b.total)
 	}

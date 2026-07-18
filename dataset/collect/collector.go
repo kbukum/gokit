@@ -11,12 +11,7 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// Collector orchestrates item collection generically over the item type T: it
-// streams each [stage.Source] through the configured transforms and pluggable
-// [stage.Validator], classifies items real/AI, records stats in a
-// [manifest.Manifest] cache, and publishes to the configured targets. Sources
-// are streamed by a bounded worker pool; a single main loop owns the manifest,
-// result, and progress, so no target or counter is shared across goroutines.
+// Collector orchestrates item collection generically over the item type T: it streams each [stage.Source] through the configured transforms and pluggable [stage.Validator], classifies items real/AI, records stats in a [manifest.Manifest] cache, and publishes to the configured targets. Sources are streamed by a bounded worker pool; a single main loop owns the manifest, result, and progress, so no target or counter is shared across goroutines.
 type Collector[T any] struct {
 	sources    []stage.Source[T]
 	transforms []stage.Transform[T, T]
@@ -45,8 +40,7 @@ func WithTargets[T any](targets ...stage.Target[T]) Option[T] {
 	return func(c *Collector[T]) { c.targets = append(c.targets, targets...) }
 }
 
-// WithValidator sets the per-item validator every item must satisfy
-// (fail-closed). A nil validator accepts every item.
+// WithValidator sets the per-item validator every item must satisfy (fail-closed). A nil validator accepts every item.
 func WithValidator[T any](v stage.Validator[T]) Option[T] {
 	return func(c *Collector[T]) { c.validator = v }
 }
@@ -86,12 +80,7 @@ func New[T any](opts ...Option[T]) *Collector[T] {
 	return c
 }
 
-// Run collects every source through the worker pool, publishing each source's
-// items to the targets as they complete, and persists the manifest cache. It
-// fails closed: a source, validation, or target error aborts the run (the
-// remaining sources are canceled) and no failed source's items are published.
-// A resumable source that made partial progress is recorded as partial so a
-// later run continues it.
+// Run collects every source through the worker pool, publishing each source's items to the targets as they complete, and persists the manifest cache. It fails closed: a source, validation, or target error aborts the run (the remaining sources are canceled) and no failed source's items are published. A resumable source that made partial progress is recorded as partial so a later run continues it.
 func (c *Collector[T]) Run(ctx context.Context) (Result, error) {
 	start := c.clock.Now()
 	result := Result{
@@ -122,8 +111,7 @@ func (c *Collector[T]) Run(ctx context.Context) (Result, error) {
 	return result, runErr
 }
 
-// plan resolves each source's cache state, folding cache hits straight into the
-// result and returning the work items the pool must stream (fresh or resumed).
+// plan resolves each source's cache state, folding cache hits straight into the result and returning the work items the pool must stream (fresh or resumed).
 func (c *Collector[T]) plan(man *manifest.Manifest, result *Result) []workItem[T] {
 	work := make([]workItem[T], 0, len(c.sources))
 	for i, src := range c.sources {
@@ -152,10 +140,7 @@ func (c *Collector[T]) plan(man *manifest.Manifest, result *Result) []workItem[T
 	return work
 }
 
-// dispatch runs the worker pool over work, folding each source event into the
-// manifest, result, and targets from this single goroutine. It cancels the
-// remaining work on the first error but always drains events and joins every
-// worker before returning.
+// dispatch runs the worker pool over work, folding each source event into the manifest, result, and targets from this single goroutine. It cancels the remaining work on the first error but always drains events and joins every worker before returning.
 func (c *Collector[T]) dispatch(ctx context.Context, man *manifest.Manifest, result *Result, work []workItem[T]) error {
 	if len(work) == 0 {
 		return nil
@@ -203,9 +188,7 @@ func (c *Collector[T]) dispatch(ctx context.Context, man *manifest.Manifest, res
 	return runErr
 }
 
-// handleEvent folds one worker result into the manifest, result, and targets.
-// A failed source aborts the run; a resumable failed source with progress is
-// recorded partial. A successful source is published and marked done.
+// handleEvent folds one worker result into the manifest, result, and targets. A failed source aborts the run; a resumable failed source with progress is recorded partial. A successful source is published and marked done.
 func (c *Collector[T]) handleEvent(ctx context.Context, man *manifest.Manifest, result *Result, ev sourceEvent[T]) error {
 	if ev.outcome == outcomeFailed {
 		c.progress.OnSourceError(ev.index, ev.name, ev.err)
@@ -226,9 +209,7 @@ func (c *Collector[T]) handleEvent(ctx context.Context, man *manifest.Manifest, 
 	return nil
 }
 
-// publish streams one source's items to every target in order, recording each
-// target's result. Targets are touched only from the main loop, so no target or
-// result is accessed concurrently.
+// publish streams one source's items to every target in order, recording each target's result. Targets are touched only from the main loop, so no target or result is accessed concurrently.
 func (c *Collector[T]) publish(ctx context.Context, result *Result, items []T) error {
 	if len(items) == 0 {
 		return nil

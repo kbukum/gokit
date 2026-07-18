@@ -1,8 +1,6 @@
 // Package validation provides input validation utilities for gokit handlers.
 //
-// It supports both struct tag validation (using the validator library) and
-// programmatic validation with error collection. Struct tag validation is
-// recommended for command/query handlers.
+// It supports both struct tag validation (using the validator library) and programmatic validation with error collection. Struct tag validation is recommended for command/query handlers.
 //
 // # Struct Tag Validation
 //

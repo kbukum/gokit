@@ -28,9 +28,7 @@ func WithSize(w, h int) RenderOption {
 	}
 }
 
-// RenderAll generates SVG visualizations from run results.
-// Returns a map of filename → SVG content. Only charts whose
-// prerequisite data exists in the result are included.
+// RenderAll generates SVG visualizations from run results. Returns a map of filename → SVG content. Only charts whose prerequisite data exists in the result are included.
 func RenderAll(result *bench.RunResult, opts ...RenderOption) map[string]string {
 	cfg := defaultConfig()
 	for _, o := range opts {
@@ -163,9 +161,7 @@ func buildDistributions(samples []bench.SampleResult) []bench.ScoreDistribution 
 	return dists
 }
 
-// decodeAs attempts to convert v into type T.
-// It handles the case where v is already T, *T, or a JSON-serialized
-// map/slice that can be marshaled then unmarshaled into T.
+// decodeAs attempts to convert v into type T. It handles the case where v is already T, *T, or a JSON-serialized map/slice that can be marshaled then unmarshaled into T.
 func decodeAs[T any](v any) *T {
 	if v == nil {
 		return nil

@@ -24,8 +24,7 @@ type FakeClock struct {
 	now time.Time
 }
 
-// NewFakeClock creates a FakeClock starting at the given time.
-// If zero, defaults to 2024-01-01T00:00:00Z.
+// NewFakeClock creates a FakeClock starting at the given time. If zero, defaults to 2024-01-01T00:00:00Z.
 func NewFakeClock(initial time.Time) *FakeClock {
 	if initial.IsZero() {
 		initial = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)

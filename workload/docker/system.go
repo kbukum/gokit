@@ -31,8 +31,7 @@ func (m *Manager) SystemInfo(ctx context.Context) (*workload.SystemInfo, error) 
 		OperatingSystem: info.OperatingSystem,
 	}
 
-	// Detect GPUs via Docker runtime info.
-	// nvidia-container-runtime registers itself; presence indicates GPU support.
+	// Detect GPUs via Docker runtime info. nvidia-container-runtime registers itself; presence indicates GPU support.
 	for name := range info.Runtimes {
 		if name == "nvidia" {
 			si.GPUs = append(si.GPUs, workload.GPUInfo{
@@ -113,8 +112,7 @@ func isLocal(host string) bool {
 		host == "fd://"
 }
 
-// statfs returns total and free bytes for the filesystem containing path.
-// Returns false on platforms or errors where this is unavailable.
+// statfs returns total and free bytes for the filesystem containing path. Returns false on platforms or errors where this is unavailable.
 func statfs(path string) (total, free int64, ok bool) {
 	if runtime.GOOS == "windows" {
 		return 0, 0, false
@@ -123,9 +121,7 @@ func statfs(path string) (total, free int64, ok bool) {
 	if err := syscall.Statfs(path, &stat); err != nil {
 		return 0, 0, false
 	}
-	// Bsize is platform-dependent: int64 on linux, int32 on darwin.
-	// The conversions are required for the darwin build but unconvert
-	// flags them as unnecessary on linux. Keep them, suppress the lint.
+	// Bsize is platform-dependent: int64 on linux, int32 on darwin. The conversions are required for the darwin build but unconvert flags them as unnecessary on linux. Keep them, suppress the lint.
 	total = int64(stat.Blocks) * int64(stat.Bsize) //nolint:unconvert // see comment above
 	free = int64(stat.Bavail) * int64(stat.Bsize)  //nolint:unconvert // see comment above
 	return total, free, true

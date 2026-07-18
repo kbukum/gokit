@@ -5,11 +5,7 @@ import (
 	"fmt"
 )
 
-// Resolve resolves the value registered for type T (optionally qualified by
-// [WithName]). The context threads cycle detection and cancellation through the
-// resolution chain; pass the caller's request context, or [context.Background]
-// at startup. It returns an error if nothing is registered for the key, if a
-// factory fails, if ctx is canceled, or if a circular dependency is detected.
+// Resolve resolves the value registered for type T (optionally qualified by [WithName]). The context threads cycle detection and cancellation through the resolution chain; pass the caller's request context, or [context.Background] at startup. It returns an error if nothing is registered for the key, if a factory fails, if ctx is canceled, or if a circular dependency is detected.
 func Resolve[T any](ctx context.Context, c *Container, opts ...Option) (T, error) {
 	var zero T
 	if c == nil {
@@ -29,9 +25,7 @@ func Resolve[T any](ctx context.Context, c *Container, opts ...Option) (T, error
 	return typed, nil
 }
 
-// MustResolve is the panic-on-error twin of [Resolve]. It is reserved for
-// application startup, tests, and CLI wiring where a missing dependency is a
-// programming error; never call it on a request-scoped path.
+// MustResolve is the panic-on-error twin of [Resolve]. It is reserved for application startup, tests, and CLI wiring where a missing dependency is a programming error; never call it on a request-scoped path.
 func MustResolve[T any](ctx context.Context, c *Container, opts ...Option) T {
 	v, err := Resolve[T](ctx, c, opts...)
 	if err != nil {

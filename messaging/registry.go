@@ -15,9 +15,7 @@ type ProducerFactory func(context.Context, Config, *logging.Logger) (Producer, e
 // ConsumerFactory constructs a consumer for a registered, typed adapter configuration and topic.
 type ConsumerFactory func(context.Context, Config, *logging.Logger, string) (Consumer, error)
 
-// Registry stores explicitly registered messaging adapter factories.
-// Registries are application-owned and injected; packages never register
-// adapters through init side effects.
+// Registry stores explicitly registered messaging adapter factories. Registries are application-owned and injected; packages never register adapters through init side effects.
 type Registry struct {
 	mu        sync.RWMutex
 	producers map[string]ProducerFactory
@@ -106,8 +104,7 @@ func (r *Registry) NewConsumer(ctx context.Context, cfg Config, log *logging.Log
 	if err := ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	// Use Subscriptions if configured, fall back to Topics for backward compatibility.
-	// This allows distinct producer topics vs consumer subscriptions.
+	// Use Subscriptions if configured, fall back to Topics for backward compatibility. This allows distinct producer topics vs consumer subscriptions.
 	allowedTopics := cfg.Subscriptions
 	if len(allowedTopics) == 0 {
 		allowedTopics = cfg.Topics

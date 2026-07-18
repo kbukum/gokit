@@ -1,16 +1,13 @@
 # Releasing
 
-The mechanical steps to cut a release of `gokit`. For *what* counts as a
-breaking change vs a feature vs a fix, see `policy/SEMVER.md` and
-`policy/DEPRECATION.md`.
+The mechanical steps to cut a release of `gokit`. For *what* counts as a breaking change vs a feature vs a fix, see `policy/SEMVER.md` and `policy/DEPRECATION.md`.
 
 ## Prerequisites
 
 - You are listed in `MAINTAINERS.md` and have push access to `kbukum/gokit`.
 - Your local clone is on `main` with no uncommitted changes.
 - `git`, `gh`, and `go` are on your `$PATH`.
-- Your commits are GPG-signed (`git config commit.gpgsign true`) — release
-  tags must be signed.
+- Your commits are GPG-signed (`git config commit.gpgsign true`) — release tags must be signed.
 
 ## 1. Decide the version
 
@@ -22,9 +19,7 @@ git tag --sort=-v:refname | head -1
 git log --oneline $(git describe --tags --abbrev=0)..HEAD
 ```
 
-Use the [SEMVER policy](./policy/SEMVER.md) to pick the next version. While
-in `0.x`, every release with a breaking change in the `[Unreleased]`
-CHANGELOG section bumps MINOR; otherwise PATCH.
+Use the [SEMVER policy](./policy/SEMVER.md) to pick the next version. While in `0.x`, every release with a breaking change in the `[Unreleased]` CHANGELOG section bumps MINOR; otherwise PATCH.
 
 ## 2. Update the CHANGELOG
 
@@ -34,9 +29,7 @@ CHANGELOG section bumps MINOR; otherwise PATCH.
 4. If `[Unreleased]` is empty, refuse to release — there is nothing to ship.
 5. Update the link reference at the bottom of the file (if present).
 
-The `tag-modules.sh` script will refuse to tag if `[Unreleased]` is the only
-populated section, or if `[vX.Y.Z]` for the version you're cutting doesn't
-exist in the file.
+The `tag-modules.sh` script will refuse to tag if `[Unreleased]` is the only populated section, or if `[vX.Y.Z]` for the version you're cutting doesn't exist in the file.
 
 ## 3. Tag every module
 
@@ -49,25 +42,21 @@ The script will:
 - Refuse to run with a dirty working tree (`git status --porcelain` non-empty).
 - Refuse to overwrite existing tags unless `--force` is passed.
 - Refuse if `CHANGELOG.md` lacks a `## [vX.Y.Z]` section.
-- Create signed annotated tags (`git tag -s -a vX.Y.Z -m "..."`) using your
-  configured GPG key.
+- Create signed annotated tags (`git tag -s -a vX.Y.Z -m "..."`) using your configured GPG key.
 - Tag the root and every sub-module in lock-step.
 
 ## 4. Cut the GitHub Release
 
-Once the tag is on `origin`, generate release notes from the CHANGELOG and
-create the GitHub Release via `gh`:
+Once the tag is on `origin`, generate release notes from the CHANGELOG and create the GitHub Release via `gh`:
 
 ```sh
 ./scripts/release-notes.sh vX.Y.Z > /tmp/notes.md
 gh release create vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/notes.md
 ```
 
-The release-notes script extracts the matching CHANGELOG section verbatim
-and prepends a generated summary line and a link to the full diff.
+The release-notes script extracts the matching CHANGELOG section verbatim and prepends a generated summary line and a link to the full diff.
 
-GitHub Releases are mandatory; downstream tooling (`go install`, `dependabot`,
-`pkg.go.dev`) only surface signal when both the tag *and* the Release exist.
+GitHub Releases are mandatory; downstream tooling (`go install`, `dependabot`, `pkg.go.dev`) only surface signal when both the tag *and* the Release exist.
 
 ## 5. Verify on `pkg.go.dev`
 
@@ -90,8 +79,7 @@ GOPROXY=https://proxy.golang.org go list -m github.com/kbukum/gokit@vX.Y.Z
 
 ## Hotfix releases
 
-Hotfixes follow the same flow but skip the `[Unreleased]` rotation if the
-fix is targeted at an older line:
+Hotfixes follow the same flow but skip the `[Unreleased]` rotation if the fix is targeted at an older line:
 
 ```sh
 git checkout v0.2.0
@@ -109,8 +97,7 @@ gh release create v0.3.0-rc.1 --prerelease --title "v0.3.0-rc.1" \
   --notes-file /tmp/notes.md
 ```
 
-Pre-releases bypass the CHANGELOG check (the `-rc.N` / `-beta.N` suffix is
-detected by `tag-modules.sh`).
+Pre-releases bypass the CHANGELOG check (the `-rc.N` / `-beta.N` suffix is detected by `tag-modules.sh`).
 
 ## Supply-chain artifacts (automated)
 

@@ -8,8 +8,7 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// HTTPDoer is the lower-layer HTTP seam adapters consume. Implementations
-// should normally be *httpclient.Adapter configured by constructors.
+// HTTPDoer is the lower-layer HTTP seam adapters consume. Implementations should normally be *httpclient.Adapter configured by constructors.
 type HTTPDoer interface {
 	Do(context.Context, httpclient.Request) (*httpclient.Response, error)
 }

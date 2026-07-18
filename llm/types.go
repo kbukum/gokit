@@ -27,11 +27,7 @@ type CompletionRequest struct {
 	Tools         []ai.ToolSpec     `json:"tools,omitempty" yaml:"tools,omitempty"`
 	ToolChoice    *ToolChoice       `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
 	Metadata      map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
-	// Extra carries provider-specific request extensions as a raw JSON value
-	// that is merged into the outgoing request body. It is [RawJSON] rather than
-	// a decoded map so the public API stays free of any: each provider dialect
-	// decodes it at its own wire boundary. Like the rest of CompletionRequest it
-	// may be authored in JSON or YAML.
+	// Extra carries provider-specific request extensions as a raw JSON value that is merged into the outgoing request body. It is [RawJSON] rather than a decoded map so the public API stays free of any: each provider dialect decodes it at its own wire boundary. Like the rest of CompletionRequest it may be authored in JSON or YAML.
 	Extra RawJSON `json:"extra,omitempty" yaml:"extra,omitempty"`
 }
 
@@ -46,13 +42,10 @@ func (r *CompletionResponse) Text() string { return r.Message.Text() }
 
 func (r *CompletionResponse) HasToolCalls() bool { return r.Message.HasToolCalls() }
 
-// streamChunk is an llm-internal streaming accumulation type.
-// Provider dialects emit these chunks; the public streaming API exposes
-// StreamEvent values assembled from them.
+// streamChunk is an llm-internal streaming accumulation type. Provider dialects emit these chunks; the public streaming API exposes StreamEvent values assembled from them.
 type streamChunk = streamwire.Chunk
 
-// streamToolCall carries tool call deltas during streaming; the final
-// canonical ai.ToolUseBlock is built after all deltas arrive.
+// streamToolCall carries tool call deltas during streaming; the final canonical ai.ToolUseBlock is built after all deltas arrive.
 type streamToolCall = streamwire.ToolCall
 
 type ToolResult struct {

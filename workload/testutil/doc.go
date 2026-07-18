@@ -1,7 +1,6 @@
 // Package testutil provides testing utilities for the workload module.
 //
-// It includes a mock workload manager that implements workload.Manager
-// backed by in-memory state, along with a component wrapper.
+// It includes a mock workload manager that implements workload.Manager backed by in-memory state, along with a component wrapper.
 //
 // # Quick Start
 //

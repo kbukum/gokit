@@ -1,9 +1,4 @@
-// Package tgi provides an OpenAI-compatible inference adapter for
-// Hugging Face Text Generation Inference
-// (https://github.com/huggingface/text-generation-inference). TGI exposes
-// an OpenAI-compatible /v1/completions endpoint at http://localhost:3000
-// by default. Per locked decision D4, this is a thin adapter that
-// pass-throughs to the shared OAI-compat helper in package inference.
+// Package tgi provides an OpenAI-compatible inference adapter for Hugging Face Text Generation Inference (https://github.com/huggingface/text-generation-inference). TGI exposes an OpenAI-compatible /v1/completions endpoint at http://localhost:3000 by default. Per locked decision D4, this is a thin adapter that pass-throughs to the shared OAI-compat helper in package inference.
 package tgi
 
 import (

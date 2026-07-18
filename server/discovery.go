@@ -9,8 +9,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// DiscoveryServerComponent wraps a Server with service discovery integration.
-// It automatically registers the server on Start and deregisters on Stop.
+// DiscoveryServerComponent wraps a Server with service discovery integration. It automatically registers the server on Start and deregisters on Stop.
 type DiscoveryServerComponent struct {
 	inner     *Component
 	registry  discovery.Registry
@@ -53,9 +52,7 @@ func NewDiscoveryServerComponent(
 
 	// Resolve local IP if not provided
 	if address == "" {
-		// Use discovery's getLocalIP utility (it's package-internal but we can use similar logic)
-		// For now, we'll accept that the caller should provide an address
-		// or leave it to be resolved at the discovery component level
+		// Use discovery's getLocalIP utility (it's package-internal but we can use similar logic) For now, we'll accept that the caller should provide an address or leave it to be resolved at the discovery component level
 		return nil, fmt.Errorf("address must be provided (auto-resolution not yet implemented)")
 	}
 

@@ -1,12 +1,8 @@
 // Package memory provides an in-memory messaging broker for testing.
 //
-// The InMemoryBroker creates producers and consumers that communicate via
-// buffered channels, enabling fast and deterministic integration tests
-// without a running message broker.
+// The InMemoryBroker creates producers and consumers that communicate via buffered channels, enabling fast and deterministic integration tests without a running message broker.
 //
-// Message history is always tracked so that test assertion helpers
-// ([AssertPublished], [AssertPublishedN], [WaitForMessage], [AssertNoMessages])
-// can inspect what was published without consuming from channels.
+// Message history is always tracked so that test assertion helpers ([AssertPublished], [AssertPublishedN], [WaitForMessage], [AssertNoMessages]) can inspect what was published without consuming from channels.
 package memory
 
 import (
@@ -33,8 +29,7 @@ type InMemoryBroker struct {
 	bufSize int
 	closed  bool
 
-	// msgCh is signaled (non-blocking) after every publish so that
-	// WaitForMessage can wake up without polling.
+	// msgCh is signaled (non-blocking) after every publish so that WaitForMessage can wake up without polling.
 	msgCh   chan struct{}
 	closeCh chan struct{}
 }
@@ -70,8 +65,7 @@ func (b *InMemoryBroker) Messages(topic string) []messaging.Message {
 	return out
 }
 
-// AllMessages returns all published messages across every topic, ordered by
-// topic name then by publish order.
+// AllMessages returns all published messages across every topic, ordered by topic name then by publish order.
 func (b *InMemoryBroker) AllMessages() []messaging.Message {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -100,16 +94,14 @@ func (b *InMemoryBroker) MessageCount(topic string) int {
 	return len(b.history[topic])
 }
 
-// Reset clears all recorded message history (channels and subscriptions are
-// not affected).
+// Reset clears all recorded message history (channels and subscriptions are not affected).
 func (b *InMemoryBroker) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.history = make(map[string][]messaging.Message)
 }
 
-// CreateTopic pre-creates a topic so that it appears in [Topics] even before
-// any subscriber or publisher uses it.
+// CreateTopic pre-creates a topic so that it appears in [Topics] even before any subscriber or publisher uses it.
 func (b *InMemoryBroker) CreateTopic(topic string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -121,8 +113,7 @@ func (b *InMemoryBroker) CreateTopic(topic string) {
 	}
 }
 
-// Topics returns the sorted list of topics that have been created,
-// subscribed to, or published to.
+// Topics returns the sorted list of topics that have been created, subscribed to, or published to.
 func (b *InMemoryBroker) Topics() []string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -223,9 +214,7 @@ func (b *InMemoryBroker) Close() {
 	}
 	b.closed = true
 	close(b.closeCh)
-	// Don't close individual subscriber channels; closeCh signals no more messages will come.
-	// Subscribers detect closure via closeCh select case. This avoids a race where requeue
-	// might be sending on a channel as Close closes it.
+	// Don't close individual subscriber channels; closeCh signals no more messages will come. Subscribers detect closure via closeCh select case. This avoids a race where requeue might be sending on a channel as Close closes it.
 	b.topics = make(map[string][]chan messaging.Message)
 }
 

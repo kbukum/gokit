@@ -4,9 +4,7 @@
 
 - **Go 1.26+**
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
-- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if
-  missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned
-  Homebrew install last
+- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned Homebrew install last
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
 ## Getting Started
@@ -55,8 +53,7 @@ gokit/
 └── .golangci.yml           # Shared linter configuration
 ```
 
-**Core packages** live under the root `go.mod` and must stay lightweight.
-**Sub-modules** each have their own `go.mod` and may pull in heavy dependencies.
+**Core packages** live under the root `go.mod` and must stay lightweight. **Sub-modules** each have their own `go.mod` and may pull in heavy dependencies.
 
 ## Development Workflow
 
@@ -122,8 +119,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 - **Config pattern**: Each module that needs configuration uses a `Config` struct with `ApplyDefaults()` and `Validate()` methods
 - **Validation**: Plain Go validation — no external validator library
 - **Naming**: Follow Go conventions; avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
-- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any
-  test that exercises >1 input/expected pair. Pattern:
+- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any test that exercises >1 input/expected pair. Pattern:
 
   ```go
   func TestThing(t *testing.T) {
@@ -152,9 +148,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
   }
   ```
 
-  Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted
-  to a `[]struct` slice when adjacent cases share setup, assertions, or
-  inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
+Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to a `[]struct` slice when adjacent cases share setup, assertions, or inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
 
 ## Versioning & Releases
 
@@ -193,9 +187,4 @@ make ci-lint   # lint jobs only
 
 ### Sibling-parity reminder
 
-Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle
-hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
-[rskit](https://github.com/kbukum/rskit), and
-[pykit](https://github.com/kbukum/pykit). When you change one of these
-surfaces here, please open tracking issues in the sibling repos so the change
-can be evaluated for parity.
+Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit), [rskit](https://github.com/kbukum/rskit), and [pykit](https://github.com/kbukum/pykit). When you change one of these surfaces here, please open tracking issues in the sibling repos so the change can be evaluated for parity.

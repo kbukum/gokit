@@ -15,8 +15,7 @@ const (
 	outcomeFailed
 )
 
-// workItem is one unit of work dispatched to a worker: a source to stream, its
-// cache key, and the stats a prior partial run left to resume from.
+// workItem is one unit of work dispatched to a worker: a source to stream, its cache key, and the stats a prior partial run left to resume from.
 type workItem[T any] struct {
 	index    int
 	src      stage.Source[T]
@@ -24,9 +23,7 @@ type workItem[T any] struct {
 	resume   manifest.SourceStats
 }
 
-// sourceEvent is the result a worker publishes on the bounded event channel for
-// the main loop to fold into the manifest, result, and progress. It carries the
-// source's collected items so publishing stays single-owner in the main loop.
+// sourceEvent is the result a worker publishes on the bounded event channel for the main loop to fold into the manifest, result, and progress. It carries the source's collected items so publishing stays single-owner in the main loop.
 type sourceEvent[T any] struct {
 	index    int
 	name     string
@@ -34,8 +31,7 @@ type sourceEvent[T any] struct {
 	items    []T
 	stats    manifest.SourceStats
 	outcome  sourceOutcome
-	// resumable reports whether a failed source can resume from its partial
-	// stats (it implements stage.Resumable).
+	// resumable reports whether a failed source can resume from its partial stats (it implements stage.Resumable).
 	resumable bool
 	err       error
 }

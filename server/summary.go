@@ -11,8 +11,7 @@ var systemPaths = map[string]bool{
 	"/metrics": true,
 }
 
-// formatHandlerName extracts a clean handler name from Gin's full handler path.
-// Gin stores handlers like:
+// formatHandlerName extracts a clean handler name from Gin's full handler path. Gin stores handlers like:
 //
 //	"github.com/yourorg/yourservice/internal/api/port.(*UserPort).List-fm"
 //
@@ -30,8 +29,7 @@ func formatHandlerName(fullPath string) string {
 	name = strings.ReplaceAll(name, "(*", "")
 	name = strings.ReplaceAll(name, ")", "")
 
-	// Handle closure names like "Server.RegisterDefaultEndpoints.Health.func1"
-	// Simplify to just the meaningful part
+	// Handle closure names like "Server.RegisterDefaultEndpoints.Health.func1" Simplify to just the meaningful part
 	if strings.Contains(name, ".func") {
 		parts := strings.Split(name, ".")
 		// Find the last meaningful name before funcN
@@ -80,8 +78,7 @@ func methodOrder(method string) int {
 	}
 }
 
-// extractServiceNames extracts unique service names from mounted handler patterns.
-// Pattern "/bot_service.BotService/" → "BotService".
+// extractServiceNames extracts unique service names from mounted handler patterns. Pattern "/bot_service.BotService/" → "BotService".
 func extractServiceNames(mounts []MountedHandler) []string {
 	seen := make(map[string]bool)
 	var names []string

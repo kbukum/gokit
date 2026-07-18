@@ -2,10 +2,7 @@ package chain
 
 import "context"
 
-// Builder incrementally composes a typed chain. It threads two type
-// parameters: I is the chain input type and O is the output type produced so
-// far. Add steps with the package-level Then function (Go methods cannot
-// introduce new type parameters), then call Build.
+// Builder incrementally composes a typed chain. It threads two type parameters: I is the chain input type and O is the output type produced so far. Add steps with the package-level Then function (Go methods cannot introduce new type parameters), then call Build.
 type Builder[I, O any] struct {
 	stepCount int
 	runner    runner[I, O]
@@ -20,8 +17,7 @@ func New[T any]() *Builder[T, T] {
 	}
 }
 
-// Then appends step to the builder, transforming the current output type from
-// M to N. It returns a new builder; the input builder is left unchanged.
+// Then appends step to the builder, transforming the current output type from M to N. It returns a new builder; the input builder is left unchanged.
 func Then[I, M, N any](b *Builder[I, M], step Step[M, N]) *Builder[I, N] {
 	previous := b.runner
 	stepIndex := b.stepCount
@@ -78,8 +74,7 @@ func emitProgress(cctx chainContext, index int, stepID string, status StepStatus
 	})
 }
 
-// stepProgressReporter adapts a chain-level callback into the (percent,
-// message) reporter handed to a step's StepContext.
+// stepProgressReporter adapts a chain-level callback into the (percent, message) reporter handed to a step's StepContext.
 func stepProgressReporter(cctx chainContext, index int, stepID string) func(uint8, string) {
 	if cctx.progress == nil {
 		return nil

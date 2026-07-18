@@ -85,8 +85,7 @@ func (rl *KeyedRateLimiter) Allow(key string, limit int, interval time.Duration)
 	return decision
 }
 
-// Stop releases the background cleanup loop. Existing buckets remain usable for
-// direct Allow calls. It is safe to call multiple times.
+// Stop releases the background cleanup loop. Existing buckets remain usable for direct Allow calls. It is safe to call multiple times.
 func (rl *KeyedRateLimiter) Stop() {
 	rl.stopOnce.Do(func() {
 		close(rl.stopCh)

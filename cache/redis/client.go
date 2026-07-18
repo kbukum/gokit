@@ -128,8 +128,7 @@ func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
 	return n > 0, err
 }
 
-// GetJSON retrieves and unmarshals a JSON value from Redis.
-// Returns an error if the key doesn't exist or the value can't be unmarshalled.
+// GetJSON retrieves and unmarshals a JSON value from Redis. Returns an error if the key doesn't exist or the value can't be unmarshalled.
 func (c *Client) GetJSON(ctx context.Context, key string, dest any) error {
 	raw, err := c.rdb.Get(ctx, key).Result()
 	if err != nil {

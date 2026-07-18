@@ -7,11 +7,9 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// ConnectionFactory defines the interface for creating gRPC connections.
-// This abstraction allows for different connection strategies (direct, discovery-based, etc.)
+// ConnectionFactory defines the interface for creating gRPC connections. This abstraction allows for different connection strategies (direct, discovery-based, etc.)
 type ConnectionFactory interface {
-	// NewConn creates a new gRPC client connection to the specified service.
-	// The connection is created lazily by grpc.NewClient and connects on first RPC.
+	// NewConn creates a new gRPC client connection to the specified service. The connection is created lazily by grpc.NewClient and connects on first RPC.
 	NewConn(serviceName string) (*grpc.ClientConn, error)
 }
 
@@ -26,8 +24,7 @@ func NewDefaultConnectionFactory(cfg grpccfg.Config, log *logging.Logger) *Defau
 	return &DefaultConnectionFactory{cfg: cfg, log: log}
 }
 
-// NewConn creates a new gRPC client connection.
-// The serviceName is used for logging; the target address comes from the factory's Config.
+// NewConn creates a new gRPC client connection. The serviceName is used for logging; the target address comes from the factory's Config.
 func (f *DefaultConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	f.log.Debug("Creating gRPC connection via factory", map[string]any{
 		"service": serviceName,

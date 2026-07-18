@@ -5,9 +5,7 @@ import (
 	"sync"
 )
 
-// FanOutStream sends the same input to multiple Stream providers in parallel
-// and returns a merged iterator that yields results from all of them.
-// Results are emitted in the order they arrive (non-deterministic).
+// FanOutStream sends the same input to multiple Stream providers in parallel and returns a merged iterator that yields results from all of them. Results are emitted in the order they arrive (non-deterministic).
 func FanOutStream[I, O any](name string, streams ...Stream[I, O]) Stream[I, O] {
 	return &fanOutStream[I, O]{name: name, streams: streams}
 }
@@ -113,8 +111,7 @@ func (m *mergedIterator[T]) Next(ctx context.Context) (val T, ok bool, err error
 func (m *mergedIterator[T]) Close() error {
 	m.once.Do(func() {
 		m.cancel()
-		// Drain the channel to wait for all producer goroutines to finish.
-		// The channel is closed after wg.Wait() completes in the background goroutine.
+		// Drain the channel to wait for all producer goroutines to finish. The channel is closed after wg.Wait() completes in the background goroutine.
 		for range m.ch {
 		}
 	})
@@ -127,8 +124,7 @@ func (m *mergedIterator[T]) Close() error {
 	return firstErr
 }
 
-// WindowedStream buffers items from a stream into fixed-size windows and
-// processes each window as a batch through a RequestResponse provider.
+// WindowedStream buffers items from a stream into fixed-size windows and processes each window as a batch through a RequestResponse provider.
 func WindowedStream[I, O, R any](
 	name string,
 	inner Stream[I, O],
@@ -210,10 +206,7 @@ func (w *windowedIterator[O, R]) Close() error {
 	return w.inner.Close()
 }
 
-// DrainIterator wraps an iterator so that when Close is called, it drains
-// up to maxDrain remaining items before closing the underlying iterator.
-// This supports graceful shutdown — processing in-flight items rather than
-// dropping them.
+// DrainIterator wraps an iterator so that when Close is called, it drains up to maxDrain remaining items before closing the underlying iterator. This supports graceful shutdown — processing in-flight items rather than dropping them.
 func DrainIterator[T any](iter Iterator[T], maxDrain int) Iterator[T] {
 	return &drainIterator[T]{inner: iter, maxDrain: maxDrain}
 }
@@ -241,8 +234,7 @@ func (d *drainIterator[T]) Close() error {
 	return d.inner.Close()
 }
 
-// Drained returns items that were drained during Close.
-// Only valid after Close has been called.
+// Drained returns items that were drained during Close. Only valid after Close has been called.
 func (d *drainIterator[T]) Drained() []T {
 	return d.drained
 }

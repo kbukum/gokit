@@ -12,8 +12,7 @@ import (
 // ConnectRPC, and any other http.Handler mounted on the ServeMux.
 type Middleware func(http.Handler) http.Handler
 
-// Chain composes multiple middleware. The first in the list is the outermost
-// (runs first on a request, last on a response).
+// Chain composes multiple middleware. The first in the list is the outermost (runs first on a request, last on a response).
 func Chain(middlewares ...Middleware) Middleware {
 	return func(final http.Handler) http.Handler {
 		for i := len(middlewares) - 1; i >= 0; i-- {
@@ -23,13 +22,9 @@ func Chain(middlewares ...Middleware) Middleware {
 	}
 }
 
-// GinWrap adapts a standard Middleware for use in a Gin middleware chain.
-// Use this when you need to apply a Middleware directly on the Gin engine
-// instead of at the server handler level.
+// GinWrap adapts a standard Middleware for use in a Gin middleware chain. Use this when you need to apply a Middleware directly on the Gin engine instead of at the server handler level.
 //
-// Note: middleware that wraps http.ResponseWriter (e.g. RequestLogger) may not
-// fully integrate with gin.Context.Writer. Prefer applying such middleware at
-// the server level via ApplyMiddleware().
+// Note: middleware that wraps http.ResponseWriter (e.g. RequestLogger) may not fully integrate with gin.Context.Writer. Prefer applying such middleware at the server level via ApplyMiddleware().
 func GinWrap(mw Middleware) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {

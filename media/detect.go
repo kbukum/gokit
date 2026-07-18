@@ -14,9 +14,7 @@ const maxDetectBytes = 4096
 // ftypMarker is the ISO BMFF box type ("ftyp") located at bytes 4..8.
 var ftypMarker = []byte("ftyp")
 
-// ftypBrand returns the 4-character major brand (bytes 8..12) of an ISO BMFF
-// "ftyp" header when data begins with a well-formed ftyp box. The single length
-// guard keeps every slice access provably in bounds.
+// ftypBrand returns the 4-character major brand (bytes 8..12) of an ISO BMFF "ftyp" header when data begins with a well-formed ftyp box. The single length guard keeps every slice access provably in bounds.
 func ftypBrand(data []byte) (string, bool) {
 	if len(data) < 12 || !bytes.Equal(data[4:8], ftypMarker) {
 		return "", false
@@ -24,8 +22,7 @@ func ftypBrand(data []byte) (string, bool) {
 	return string(data[8:12]), true
 }
 
-// Detect identifies the media type from raw bytes.
-// It inspects at most the first [maxDetectBytes] bytes.
+// Detect identifies the media type from raw bytes. It inspects at most the first [maxDetectBytes] bytes.
 func Detect(data []byte) Info {
 	if len(data) == 0 {
 		return Info{Type: Unknown}
@@ -50,11 +47,7 @@ func Detect(data []byte) Info {
 	return Info{Type: Unknown}
 }
 
-// DetectReader reads up to [maxDetectBytes] from r and detects the media type.
-// It fills the detection window even when r yields the data in small chunks, so
-// multi-byte signatures (RIFF, ISO BMFF ftyp, MPEG-TS) are not missed by a
-// partial read. A stream shorter than the window is detected on what it holds;
-// an empty stream returns an error.
+// DetectReader reads up to [maxDetectBytes] from r and detects the media type. It fills the detection window even when r yields the data in small chunks, so multi-byte signatures (RIFF, ISO BMFF ftyp, MPEG-TS) are not missed by a partial read. A stream shorter than the window is detected on what it holds; an empty stream returns an error.
 func DetectReader(r io.Reader) (Info, error) {
 	buf := make([]byte, maxDetectBytes)
 	n, err := io.ReadFull(r, buf)
@@ -78,9 +71,7 @@ func DetectFile(path string) (info Info, err error) {
 	return DetectReader(f)
 }
 
-// isText returns true if data appears to be UTF-8 text.
-// It checks that the data is valid UTF-8 and has a high ratio of printable
-// characters (letters, digits, punctuation, whitespace).
+// isText returns true if data appears to be UTF-8 text. It checks that the data is valid UTF-8 and has a high ratio of printable characters (letters, digits, punctuation, whitespace).
 func isText(data []byte) bool {
 	if len(data) == 0 {
 		return false

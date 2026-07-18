@@ -10,10 +10,7 @@ type pkceEntry struct {
 	expiresAt time.Time
 }
 
-// PKCEStore holds PKCE code verifiers keyed by OAuth state parameter.
-// Used between AuthURL generation (where code_challenge is sent) and the
-// callback (where code_verifier is needed for token exchange).
-// Thread-safe with automatic expiration.
+// PKCEStore holds PKCE code verifiers keyed by OAuth state parameter. Used between AuthURL generation (where code_challenge is sent) and the callback (where code_verifier is needed for token exchange). Thread-safe with automatic expiration.
 type PKCEStore struct {
 	mu      sync.Mutex
 	entries map[string]pkceEntry
@@ -38,8 +35,7 @@ func (s *PKCEStore) Save(state, codeVerifier string) {
 	}
 }
 
-// Pop retrieves and removes the code verifier for a state.
-// Returns empty string if not found or expired.
+// Pop retrieves and removes the code verifier for a state. Returns empty string if not found or expired.
 func (s *PKCEStore) Pop(state string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

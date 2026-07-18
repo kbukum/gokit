@@ -7,8 +7,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// Weighted creates a composite metric that combines multiple metrics with weights.
-// The composite Value is the weighted sum of individual metric Values.
+// Weighted creates a composite metric that combines multiple metrics with weights. The composite Value is the weighted sum of individual metric Values.
 func Weighted[L comparable](weights map[Metric[L]]float64) Metric[L] {
 	entries := make([]weightedEntry[L], 0, len(weights))
 	for m, w := range weights {

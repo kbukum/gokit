@@ -7,8 +7,7 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// Audit outcome labels recorded for every gated MCP access. They form a small
-// closed vocabulary so downstream sinks can aggregate deterministically.
+// Audit outcome labels recorded for every gated MCP access. They form a small closed vocabulary so downstream sinks can aggregate deterministically.
 const (
 	OutcomeSuccess            = "success"
 	OutcomeDenied             = "denied"
@@ -21,19 +20,14 @@ const (
 	OutcomeToolError          = "tool_error"
 )
 
-// Access kinds distinguish audit records emitted for different protocol
-// surfaces sharing the capability allow-list.
+// Access kinds distinguish audit records emitted for different protocol surfaces sharing the capability allow-list.
 const (
 	AccessKindTool     = "tool"
 	AccessKindPrompt   = "prompt"
 	AccessKindResource = "resource"
 )
 
-// ToolAuthorizationRequest is the input to a per-call tool authorization
-// decision. Arguments are the validated, untrusted client payload, carried as
-// raw JSON (never an opaque any). Policy.Authorize forwards the tool identity
-// and, when present, this raw argument payload to the injected authz.Decider
-// under the "mcp_name" and "arguments" context attributes.
+// ToolAuthorizationRequest is the input to a per-call tool authorization decision. Arguments are the validated, untrusted client payload, carried as raw JSON (never an opaque any). Policy.Authorize forwards the tool identity and, when present, this raw argument payload to the injected authz.Decider under the "mcp_name" and "arguments" context attributes.
 type ToolAuthorizationRequest struct {
 	// ToolName is the registry tool name (prefix stripped).
 	ToolName string
@@ -57,8 +51,7 @@ type ToolAuditEvent struct {
 	Error string
 }
 
-// AuditToolCall records the final outcome of a tool invocation. It is a no-op
-// when no Auditor is configured.
+// AuditToolCall records the final outcome of a tool invocation. It is a no-op when no Auditor is configured.
 func (p *Policy) AuditToolCall(ctx context.Context, event ToolAuditEvent) {
 	if p.Auditor == nil {
 		return
@@ -76,8 +69,7 @@ func (p *Policy) AuditToolCall(ctx context.Context, event ToolAuditEvent) {
 	})
 }
 
-// AuditAccess records a gated prompt, resource, or server-to-client access
-// outcome. It is a no-op when no Auditor is configured.
+// AuditAccess records a gated prompt, resource, or server-to-client access outcome. It is a no-op when no Auditor is configured.
 func (p *Policy) AuditAccess(ctx context.Context, kind, target, outcome, reason string) {
 	if p.Auditor == nil {
 		return

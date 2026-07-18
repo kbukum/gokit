@@ -1,7 +1,6 @@
 // Package bootstrap orchestrates application lifecycle for gokit services.
 //
-// It provides typed configuration loading, component registration, dependency
-// injection, and startup/shutdown hooks for rapid service initialization.
+// It provides typed configuration loading, component registration, dependency injection, and startup/shutdown hooks for rapid service initialization.
 //
 // Two execution modes are supported:
 //

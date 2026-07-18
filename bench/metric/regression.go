@@ -6,8 +6,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// MAE computes Mean Absolute Error.
-// Uses Sample.Label as actual and Prediction.Score as predicted.
+// MAE computes Mean Absolute Error. Uses Sample.Label as actual and Prediction.Score as predicted.
 func MAE() Metric[float64] {
 	return &mae{}
 }
@@ -105,8 +104,7 @@ func (m *rSquared) Compute(scored []bench.ScoredSample[float64]) Result {
 	}
 	meanActual /= float64(len(scored))
 
-	// Residual sum of squares and total sum of squares.
-	// SSres = Σ(actual - predicted)², SStot = Σ(actual - mean)²
+	// Residual sum of squares and total sum of squares. SSres = Σ(actual - predicted)², SStot = Σ(actual - mean)²
 	ssRes := 0.0
 	ssTot := 0.0
 	for _, s := range scored {

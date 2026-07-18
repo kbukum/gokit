@@ -34,8 +34,7 @@ func (e Environment) IsDevelopment() bool {
 	return e == Development
 }
 
-// ServiceConfig contains the essential configuration fields every service needs.
-// Projects extend this by embedding it in their own config structs.
+// ServiceConfig contains the essential configuration fields every service needs. Projects extend this by embedding it in their own config structs.
 //
 // Example:
 //
@@ -58,15 +57,12 @@ func (c *ServiceConfig) GetEnvironment() Environment {
 	return Environment(c.Environment)
 }
 
-// GetServiceConfig returns the base ServiceConfig.
-// When embedded in a larger config struct, this method is promoted
-// so the embedding struct automatically satisfies the Config interface.
+// GetServiceConfig returns the base ServiceConfig. When embedded in a larger config struct, this method is promoted so the embedding struct automatically satisfies the Config interface.
 func (c *ServiceConfig) GetServiceConfig() *ServiceConfig {
 	return c
 }
 
-// ApplyDefaults applies default values to the base configuration.
-// Override this in embedding structs and call c.ServiceConfig.ApplyDefaults() first.
+// ApplyDefaults applies default values to the base configuration. Override this in embedding structs and call c.ServiceConfig.ApplyDefaults() first.
 func (c *ServiceConfig) ApplyDefaults() {
 	if c.Environment == "" {
 		c.Environment = "development"
@@ -94,8 +90,7 @@ func (c *ServiceConfig) ApplyDefaults() {
 	c.Logging.ApplyDefaults()
 }
 
-// Validate validates the base configuration fields.
-// Override this in embedding structs and call c.ServiceConfig.Validate() first.
+// Validate validates the base configuration fields. Override this in embedding structs and call c.ServiceConfig.Validate() first.
 func (c *ServiceConfig) Validate() error {
 	if c.Name == "" {
 		return errors.Validation("config.name is required")

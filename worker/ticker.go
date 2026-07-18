@@ -15,24 +15,19 @@ type TickerFunc func(ctx context.Context) error
 // TickerOption configures optional TickerWorker behavior.
 type TickerOption func(*TickerWorker)
 
-// WithRunOnStart causes the worker to execute fn once immediately when
-// the background goroutine starts, before entering the periodic loop.
-// The initial run does NOT block app startup — it runs inside the
-// goroutine launched by Start.
+// WithRunOnStart causes the worker to execute fn once immediately when the background goroutine starts, before entering the periodic loop. The initial run does NOT block app startup — it runs inside the goroutine launched by Start.
 func WithRunOnStart() TickerOption {
 	return func(w *TickerWorker) { w.runOnStart = true }
 }
 
-// WithOnError registers a callback that is invoked after every tick
-// that returns a non-nil error. Useful for logging or alerting.
+// WithOnError registers a callback that is invoked after every tick that returns a non-nil error. Useful for logging or alerting.
 func WithOnError(fn func(error)) TickerOption {
 	return func(w *TickerWorker) { w.onError = fn }
 }
 
 // TickerWorker is a Component that runs a function on a fixed interval.
 //
-// Start launches a background goroutine; Stop signals it and waits for
-// a clean exit. Health reports the last-run time and any recent errors.
+// Start launches a background goroutine; Stop signals it and waits for a clean exit. Health reports the last-run time and any recent errors.
 //
 // Example:
 //

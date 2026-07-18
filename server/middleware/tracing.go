@@ -7,10 +7,7 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// Tracing returns middleware that creates spans for HTTP requests.
-// It extracts W3C TraceContext from incoming headers, creates a server span
-// with HTTP method/path/status attributes, and injects trace context into
-// the response headers for downstream propagation.
+// Tracing returns middleware that creates spans for HTTP requests. It extracts W3C TraceContext from incoming headers, creates a server span with HTTP method/path/status attributes, and injects trace context into the response headers for downstream propagation.
 func Tracing(serviceName string) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

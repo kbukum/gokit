@@ -6,9 +6,7 @@ import (
 	"time"
 )
 
-// MemoryStore is an in-memory implementation of Store[V].
-// Fast and simple, but not durable. Data is lost on restart.
-// Thread-safe for concurrent operations.
+// MemoryStore is an in-memory implementation of Store[V]. Fast and simple, but not durable. Data is lost on restart. Thread-safe for concurrent operations.
 type MemoryStore[V any] struct {
 	values       []V
 	lastActivity time.Time

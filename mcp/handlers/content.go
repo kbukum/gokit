@@ -5,11 +5,7 @@ import (
 	"fmt"
 )
 
-// contentTooLarge reports whether the untrusted content v exceeds the configured
-// result size limit. It measures v's serialized JSON size; a marshal failure is
-// treated as oversized whenever a limit is configured, so content that cannot be
-// measured fails closed rather than bypassing the size gate. reason is a
-// human-readable rejection cause when tooLarge is true.
+// contentTooLarge reports whether the untrusted content v exceeds the configured result size limit. It measures v's serialized JSON size; a marshal failure is treated as oversized whenever a limit is configured, so content that cannot be measured fails closed rather than bypassing the size gate. reason is a human-readable rejection cause when tooLarge is true.
 func (h *Handler) contentTooLarge(v any) (reason string, tooLarge bool) {
 	if h.policy.MaxResultBytes <= 0 {
 		return "", false

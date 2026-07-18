@@ -14,9 +14,7 @@ type OperationBinding struct {
 	Priority     int      // lower = preferred
 }
 
-// OperationRegistry resolves providers for operations based on tier and priority.
-// It wraps an existing Registry and adds operation-level routing with tier-based
-// access control and priority ordering.
+// OperationRegistry resolves providers for operations based on tier and priority. It wraps an existing Registry and adds operation-level routing with tier-based access control and priority ordering.
 type OperationRegistry[T Provider] struct {
 	mu       sync.RWMutex
 	registry *Registry[T]
@@ -31,18 +29,14 @@ func NewOperationRegistry[T Provider](registry *Registry[T]) *OperationRegistry[
 	}
 }
 
-// Bind adds an operation binding. Multiple bindings for the same operation ID
-// are allowed; they are resolved by tier match and priority order.
+// Bind adds an operation binding. Multiple bindings for the same operation ID are allowed; they are resolved by tier match and priority order.
 func (r *OperationRegistry[T]) Bind(binding OperationBinding) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.bindings[binding.OperationID] = append(r.bindings[binding.OperationID], binding)
 }
 
-// Resolve finds the best provider for an operation given a user tier.
-// It filters by operation ID, then by tier (empty Tiers = all tiers),
-// sorts by priority (lower first), and returns the first provider that
-// can be created via the underlying Registry.
+// Resolve finds the best provider for an operation given a user tier. It filters by operation ID, then by tier (empty Tiers = all tiers), sorts by priority (lower first), and returns the first provider that can be created via the underlying Registry.
 func (r *OperationRegistry[T]) Resolve(operationID, tier string) (T, error) {
 	r.mu.RLock()
 	bindings, ok := r.bindings[operationID]
@@ -102,8 +96,7 @@ func (r *OperationRegistry[T]) ListBindings(operationID string) []OperationBindi
 	return out
 }
 
-// tierAllowed returns true if the tier is permitted by the binding's tier list.
-// An empty tier list means all tiers are allowed.
+// tierAllowed returns true if the tier is permitted by the binding's tier list. An empty tier list means all tiers are allowed.
 func tierAllowed(tiers []string, tier string) bool {
 	if len(tiers) == 0 {
 		return true

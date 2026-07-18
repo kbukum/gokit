@@ -2,14 +2,9 @@ package prompt
 
 import "strings"
 
-// ScriptedTerminal is a deterministic in-memory [Terminal] for tests and
-// examples.
+// ScriptedTerminal is a deterministic in-memory [Terminal] for tests and examples.
 //
-// It is a first-class injectable double, not a test-only escape hatch: it
-// replays a canned sequence of input lines and records everything written, so
-// the line-driven prompt path can be exercised without a real terminal. Queue
-// input with [ScriptedTerminal.WithLine] / [ScriptedTerminal.WithLines], then
-// read back rendered output via [ScriptedTerminal.Output].
+// It is a first-class injectable double, not a test-only escape hatch: it replays a canned sequence of input lines and records everything written, so the line-driven prompt path can be exercised without a real terminal. Queue input with [ScriptedTerminal.WithLine] / [ScriptedTerminal.WithLines], then read back rendered output via [ScriptedTerminal.Output].
 type ScriptedTerminal struct {
 	inputs []string
 	cursor int
@@ -38,8 +33,7 @@ func (t *ScriptedTerminal) Output() string {
 	return t.output.String()
 }
 
-// ReadLine returns the next queued line; ok is false once the script is
-// exhausted (end of input).
+// ReadLine returns the next queued line; ok is false once the script is exhausted (end of input).
 func (t *ScriptedTerminal) ReadLine() (line string, ok bool, err error) {
 	if t.cursor >= len(t.inputs) {
 		return "", false, nil

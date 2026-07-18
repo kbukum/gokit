@@ -9,12 +9,9 @@ import (
 	"strings"
 )
 
-// FetchJSON performs a bearer-authenticated GET request and decodes the JSON
-// response body into result.
+// FetchJSON performs a bearer-authenticated GET request and decodes the JSON response body into result.
 //
-// result is a deliberate opaque value: it is a JSON unmarshal target whose
-// concrete shape is provider-specific, so it cannot be given a closed type
-// here (same contract as [json.Unmarshal]).
+// result is a deliberate opaque value: it is a JSON unmarshal target whose concrete shape is provider-specific, so it cannot be given a closed type here (same contract as [json.Unmarshal]).
 func FetchJSON(ctx context.Context, client *http.Client, endpoint, accessToken string, result any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
@@ -38,23 +35,19 @@ func FetchJSON(ctx context.Context, client *http.Client, endpoint, accessToken s
 	return json.Unmarshal(body, result)
 }
 
-// StrVal extracts a string value from a JSON-decoded map.
-// Returns "" if the key is missing or not a string.
+// StrVal extracts a string value from a JSON-decoded map. Returns "" if the key is missing or not a string.
 func StrVal(m map[string]any, key string) string {
 	v, _ := m[key].(string)
 	return v
 }
 
-// BoolVal extracts a bool value from a JSON-decoded map.
-// Returns false if the key is missing or not a bool.
+// BoolVal extracts a bool value from a JSON-decoded map. Returns false if the key is missing or not a bool.
 func BoolVal(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v
 }
 
-// NestedMap traverses a dot-separated path in a JSON-decoded map.
-// For example, NestedMap(m, "data.user") returns m["data"]["user"].
-// Returns nil if any segment is missing or not a map.
+// NestedMap traverses a dot-separated path in a JSON-decoded map. For example, NestedMap(m, "data.user") returns m["data"]["user"]. Returns nil if any segment is missing or not a map.
 func NestedMap(m map[string]any, path string) map[string]any {
 	if path == "" {
 		return m

@@ -55,8 +55,7 @@ func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEve
 	return out, nil
 }
 
-// imageRefFromEvent extracts the best image reference from a Docker event,
-// falling back through available fields.
+// imageRefFromEvent extracts the best image reference from a Docker event, falling back through available fields.
 func imageRefFromEvent(evt events.Message) string {
 	if name := evt.Actor.Attributes["name"]; name != "" {
 		return name
@@ -67,8 +66,7 @@ func imageRefFromEvent(evt events.Message) string {
 	return evt.Actor.ID
 }
 
-// eventTimestamp converts a Docker event to a Go time, preferring nanosecond
-// precision when available.
+// eventTimestamp converts a Docker event to a Go time, preferring nanosecond precision when available.
 func eventTimestamp(evt events.Message) time.Time {
 	if evt.TimeNano > 0 {
 		return time.Unix(0, evt.TimeNano)

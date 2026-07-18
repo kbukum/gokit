@@ -8,8 +8,7 @@ import (
 // CleanupFunc is a function that performs cleanup, typically stopping a component.
 type CleanupFunc func() error
 
-// Setup starts a test component and returns a cleanup function.
-// The cleanup function should be called (typically with defer) to stop the component.
+// Setup starts a test component and returns a cleanup function. The cleanup function should be called (typically with defer) to stop the component.
 //
 // Example:
 //
@@ -35,8 +34,7 @@ func SetupWithContext(ctx context.Context, component TestComponent) (CleanupFunc
 	return cleanup, nil
 }
 
-// Teardown stops a test component.
-// This is the inverse of Setup and is provided for symmetry.
+// Teardown stops a test component. This is the inverse of Setup and is provided for symmetry.
 func Teardown(component TestComponent) error {
 	return TeardownWithContext(context.Background(), component)
 }
@@ -62,8 +60,7 @@ type THelper struct {
 	ctx context.Context
 }
 
-// T wraps a testing.T to provide helper methods.
-// This integrates testutil with Go's testing package for automatic cleanup.
+// T wraps a testing.T to provide helper methods. This integrates testutil with Go's testing package for automatic cleanup.
 //
 // Example:
 //
@@ -84,8 +81,7 @@ func (h *THelper) WithContext(ctx context.Context) *THelper {
 	return h
 }
 
-// Setup starts a component and registers cleanup with testing.T.
-// The component will be automatically stopped when the test ends.
+// Setup starts a component and registers cleanup with testing.T. The component will be automatically stopped when the test ends.
 func (h *THelper) Setup(component TestComponent) {
 	if err := component.Start(h.ctx); err != nil {
 		h.t.Fatalf("failed to start component %s: %v", component.Name(), err)

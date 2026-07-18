@@ -149,12 +149,7 @@ func (m *Manager) ImageExists(ctx context.Context, ref string) (bool, error) {
 	return true, nil
 }
 
-// encodeAuth base64-encodes a registry AuthConfig for the Docker API.
-// G117 (gosec) flags the marshaled "Password" field as a secret-shaped JSON
-// key. That is intentional here — the Docker daemon expects an
-// X-Registry-Auth header containing exactly this payload (registry password
-// included). The encoded blob is sent only over the local Docker socket /
-// authenticated daemon connection, never logged.
+// encodeAuth base64-encodes a registry AuthConfig for the Docker API. G117 (gosec) flags the marshaled "Password" field as a secret-shaped JSON key. That is intentional here — the Docker daemon expects an X-Registry-Auth header containing exactly this payload (registry password included). The encoded blob is sent only over the local Docker socket / authenticated daemon connection, never logged.
 func encodeAuth(auth *registry.AuthConfig) (string, error) {
 	buf, err := json.Marshal(auth) //nolint:gosec // G117: documented above; required by Docker registry-auth contract
 	if err != nil {

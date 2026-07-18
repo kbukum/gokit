@@ -65,15 +65,10 @@ func MergeToolDelta(calls []ToolCall, delta ToolCall) []ToolCall {
 	return append(calls, delta)
 }
 
-// MaxToolArgsBytes bounds the total accumulated tool-call argument bytes for a
-// single streamed message. Streamed tool arguments are untrusted model output;
-// without a bound a server could stream unbounded deltas and exhaust memory.
-// Stream assemblers abort the message with an error once the running total of
-// [ToolArgsSize] exceeds this cap.
+// MaxToolArgsBytes bounds the total accumulated tool-call argument bytes for a single streamed message. Streamed tool arguments are untrusted model output; without a bound a server could stream unbounded deltas and exhaust memory. Stream assemblers abort the message with an error once the running total of [ToolArgsSize] exceeds this cap.
 const MaxToolArgsBytes = 1 << 20 // 1 MiB
 
-// ToolArgsSize returns the total accumulated InputDelta bytes across calls. It
-// lets a stream assembler enforce [MaxToolArgsBytes] as deltas arrive.
+// ToolArgsSize returns the total accumulated InputDelta bytes across calls. It lets a stream assembler enforce [MaxToolArgsBytes] as deltas arrive.
 func ToolArgsSize(calls []ToolCall) int {
 	n := 0
 	for i := range calls {

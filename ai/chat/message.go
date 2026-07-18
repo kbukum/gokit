@@ -23,8 +23,7 @@ type UserMessage struct {
 func (UserMessage) Role() string   { return string(RoleUser) }
 func (UserMessage) messageMarker() {}
 
-// AssistantMessage carries model-turn content and tool invocations.
-// Usage is preserved for per-turn spend tracking in conversation history.
+// AssistantMessage carries model-turn content and tool invocations. Usage is preserved for per-turn spend tracking in conversation history.
 type AssistantMessage struct {
 	Content   []ai.ContentPart  `json:"content,omitempty"`
 	ToolCalls []ai.ToolUseBlock `json:"tool_calls,omitempty"`
@@ -75,8 +74,7 @@ func ToolResultMsg(toolUseID, content string, isError bool) ToolResultMessage {
 func (m AssistantMessage) Text() string       { return ai.TextOf(m.Content) }
 func (m AssistantMessage) HasToolCalls() bool { return len(m.ToolCalls) > 0 }
 
-// MarshalMessage serializes a Message to JSON with a "role" discriminator.
-// This is a generic marshaler for logging and history storage — not for provider wire format.
+// MarshalMessage serializes a Message to JSON with a "role" discriminator. This is a generic marshaler for logging and history storage — not for provider wire format.
 func MarshalMessage(m Message) ([]byte, error) {
 	switch msg := m.(type) {
 	case UserMessage:

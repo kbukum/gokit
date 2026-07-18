@@ -10,10 +10,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// DefaultStopTimeout is applied to a component's Stop call only when the
-// caller-supplied context has no deadline. A bounded fallback prevents a
-// stuck Stop from blocking shutdown forever, while still letting callers
-// pass a tighter deadline by attaching one to ctx.
+// DefaultStopTimeout is applied to a component's Stop call only when the caller-supplied context has no deadline. A bounded fallback prevents a stuck Stop from blocking shutdown forever, while still letting callers pass a tighter deadline by attaching one to ctx.
 const DefaultStopTimeout = 10 * time.Second
 
 // componentEntry holds a component and its lifecycle state.
@@ -22,18 +19,12 @@ type componentEntry struct {
 	state     State
 }
 
-// Registry manages component lifecycle with deterministic ordering.
-// Components are started in registration order and stopped in reverse order.
-// Each component tracks a formal lifecycle state (Created → Starting →
-// Running → Stopping → Stopped | Failed).
+// Registry manages component lifecycle with deterministic ordering. Components are started in registration order and stopped in reverse order. Each component tracks a formal lifecycle state (Created → Starting → Running → Stopping → Stopped | Failed).
 type Registry struct {
 	entries []*componentEntry
 	lookup  map[string]*componentEntry
 	mu      sync.RWMutex
-	// lifecycleMu serializes StartAll / StopAll against each other and
-	// against themselves so callers cannot interleave a boot and a shutdown.
-	// It is held for the duration of those operations, but does NOT block
-	// concurrent reads (Get/All/HealthAll) or new Register calls.
+	// lifecycleMu serializes StartAll / StopAll against each other and against themselves so callers cannot interleave a boot and a shutdown. It is held for the duration of those operations, but does NOT block concurrent reads (Get/All/HealthAll) or new Register calls.
 	lifecycleMu sync.Mutex
 }
 
@@ -45,8 +36,7 @@ func NewRegistry() *Registry {
 	}
 }
 
-// Register adds a component to the registry. Components are started in
-// the order they are registered, so register dependencies first.
+// Register adds a component to the registry. Components are started in the order they are registered, so register dependencies first.
 func (r *Registry) Register(c Component) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -66,8 +56,7 @@ func (r *Registry) Register(c Component) error {
 	return nil
 }
 
-// State returns the lifecycle state of a named component.
-// Returns StateCreated and false if the component is not registered.
+// State returns the lifecycle state of a named component. Returns StateCreated and false if the component is not registered.
 func (r *Registry) State(name string) (State, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -79,18 +68,11 @@ func (r *Registry) State(name string) (State, bool) {
 
 // StartAll starts all not-yet-started components in registration order.
 //
-// It is safe to call multiple times — already-running components are
-// skipped. This supports two-phase startup where infrastructure
-// components are started first and application-layer components
-// (registered during configure) are started in a second pass.
+// It is safe to call multiple times — already-running components are skipped. This supports two-phase startup where infrastructure components are started first and application-layer components (registered during configure) are started in a second pass.
 //
-// If a component fails to start, all components that were successfully
-// started during this call are rolled back (stopped in reverse order).
-// Components started by a previous call are NOT rolled back.
+// If a component fails to start, all components that were successfully started during this call are rolled back (stopped in reverse order). Components started by a previous call are NOT rolled back.
 //
-// The Component.Start call runs without holding any registry lock so
-// readers (Get / All / HealthAll) and concurrent Register calls are not
-// blocked for the duration of the boot sequence.
+// The Component.Start call runs without holding any registry lock so readers (Get / All / HealthAll) and concurrent Register calls are not blocked for the duration of the boot sequence.
 func (r *Registry) StartAll(ctx context.Context) error {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -151,8 +133,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 	return nil
 }
 
-// rollback stops the given entries in reverse order. lifecycleMu is already
-// held by the caller (StartAll); no other Start/Stop can interleave.
+// rollback stops the given entries in reverse order. lifecycleMu is already held by the caller (StartAll); no other Start/Stop can interleave.
 func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
@@ -179,10 +160,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 
 // StopAll gracefully stops all running components in reverse registration order.
 //
-// Each Component.Stop runs with the caller's ctx; if ctx has no deadline,
-// DefaultStopTimeout is applied per-component as a safety net.
-// Errors are aggregated via errors.Join so callers can inspect individual
-// failures with errors.Is/errors.As.
+// Each Component.Stop runs with the caller's ctx; if ctx has no deadline, DefaultStopTimeout is applied per-component as a safety net. Errors are aggregated via errors.Join so callers can inspect individual failures with errors.Is/errors.As.
 func (r *Registry) StopAll(ctx context.Context) error {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -234,9 +212,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	return nil
 }
 
-// StopAllDetailed gracefully stops all running components and returns
-// per-component results. This provides structured error information for
-// callers that need to know which specific components failed.
+// StopAllDetailed gracefully stops all running components and returns per-component results. This provides structured error information for callers that need to know which specific components failed.
 func (r *Registry) StopAllDetailed(ctx context.Context) []StopResult {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -271,9 +247,7 @@ func (r *Registry) StopAllDetailed(ctx context.Context) []StopResult {
 	return results
 }
 
-// stopContext returns a context for an individual Component.Stop call. If
-// the parent already has a deadline, it is used as-is. Otherwise a
-// DefaultStopTimeout is applied as a bounded safety net.
+// stopContext returns a context for an individual Component.Stop call. If the parent already has a deadline, it is used as-is. Otherwise a DefaultStopTimeout is applied as a bounded safety net.
 func stopContext(parent context.Context) (context.Context, context.CancelFunc) {
 	if _, ok := parent.Deadline(); ok {
 		return context.WithCancel(parent)
@@ -281,9 +255,7 @@ func stopContext(parent context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(parent, DefaultStopTimeout)
 }
 
-// HealthAll returns health status for all registered components.
-// The snapshot is taken under the read lock, but Health() calls are made
-// without holding the lock to avoid blocking registration or lifecycle ops.
+// HealthAll returns health status for all registered components. The snapshot is taken under the read lock, but Health() calls are made without holding the lock to avoid blocking registration or lifecycle ops.
 func (r *Registry) HealthAll(ctx context.Context) []Health {
 	r.mu.RLock()
 	snapshot := make([]Component, len(r.entries))

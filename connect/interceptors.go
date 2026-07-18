@@ -16,8 +16,7 @@ import (
 // Logging
 // ---------------------------------------------------------------------------
 
-// LoggingInterceptor returns a Connect interceptor that logs every RPC call
-// with procedure name, duration, and outcome.
+// LoggingInterceptor returns a Connect interceptor that logs every RPC call with procedure name, duration, and outcome.
 func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -57,8 +56,7 @@ func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 // Error mapping  (AppError ↔ Connect)
 // ---------------------------------------------------------------------------
 
-// ErrorInterceptor returns a Connect interceptor that converts AppError
-// instances returned by handlers into properly coded Connect errors.
+// ErrorInterceptor returns a Connect interceptor that converts AppError instances returned by handlers into properly coded Connect errors.
 func ErrorInterceptor() connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -84,10 +82,7 @@ func ErrorInterceptor() connect.UnaryInterceptorFunc {
 	}
 }
 
-// ToConnectError converts an AppError to a *connect.Error with the
-// appropriate Connect status code. The ProblemDetail JSON is embedded in the
-// error's metadata under the "Problem-Detail" key so callers can reconstruct
-// the full RFC 9457 response.
+// ToConnectError converts an AppError to a *connect.Error with the appropriate Connect status code. The ProblemDetail JSON is embedded in the error's metadata under the "Problem-Detail" key so callers can reconstruct the full RFC 9457 response.
 func ToConnectError(appErr *apperrors.AppError) *connect.Error {
 	if appErr == nil {
 		return nil

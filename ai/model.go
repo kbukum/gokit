@@ -1,7 +1,6 @@
 package ai
 
-// Provider identifies a model provider. It is string-backed so callers can use
-// well-known constants or provider-specific values.
+// Provider identifies a model provider. It is string-backed so callers can use well-known constants or provider-specific values.
 type Provider string
 
 const (

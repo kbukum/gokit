@@ -6,10 +6,7 @@ import (
 	"time"
 )
 
-// Meta holds open-ended metadata annotations for a provider.
-// Keys are strings, values are any type. Common dimensions include
-// "cost", "latency_ms", "reliability", "requires", but any project
-// can define whatever dimensions matter to it.
+// Meta holds open-ended metadata annotations for a provider. Keys are strings, values are any type. Common dimensions include "cost", "latency_ms", "reliability", "requires", but any project can define whatever dimensions matter to it.
 type Meta map[string]any
 
 // Float returns the value for key as a float64.
@@ -42,8 +39,7 @@ func (m Meta) String(key string) (string, bool) {
 	return s, ok
 }
 
-// Duration returns the value for key as a time.Duration.
-// Accepts time.Duration directly or numeric values interpreted as milliseconds.
+// Duration returns the value for key as a time.Duration. Accepts time.Duration directly or numeric values interpreted as milliseconds.
 func (m Meta) Duration(key string) (time.Duration, bool) {
 	v, ok := m[key]
 	if !ok {
@@ -96,9 +92,7 @@ type MetaProvider interface {
 	Meta() Meta
 }
 
-// WithMeta wraps a RequestResponse provider with metadata annotations.
-// The metadata does not affect execution behavior — it is informational,
-// consumed by DAG ordering strategies and observability.
+// WithMeta wraps a RequestResponse provider with metadata annotations. The metadata does not affect execution behavior — it is informational, consumed by DAG ordering strategies and observability.
 func WithMeta[I, O any](p RequestResponse[I, O], m Meta) RequestResponse[I, O] {
 	return &metaRR[I, O]{
 		inner: p,
@@ -106,8 +100,7 @@ func WithMeta[I, O any](p RequestResponse[I, O], m Meta) RequestResponse[I, O] {
 	}
 }
 
-// GetMeta retrieves metadata from a wrapped provider.
-// Returns an empty Meta if the provider has no metadata.
+// GetMeta retrieves metadata from a wrapped provider. Returns an empty Meta if the provider has no metadata.
 func GetMeta[I, O any](p RequestResponse[I, O]) Meta {
 	if mp, ok := p.(MetaProvider); ok {
 		return mp.Meta()

@@ -7,15 +7,12 @@ import (
 	"unicode"
 )
 
-// typeBaseURI holds the configurable base URI for problem type URIs.
-// Callers that need a different base must call SetTypeBaseURI before
-// any error response is rendered.
+// typeBaseURI holds the configurable base URI for problem type URIs. Callers that need a different base must call SetTypeBaseURI before any error response is rendered.
 const defaultTypeBaseURI = "https://gokit.dev/errors/"
 
 var typeBaseURI atomic.Value
 
-// SetTypeBaseURI sets the base URI used when constructing ProblemDetail.Type.
-// The uri is normalised to always end with "/".
+// SetTypeBaseURI sets the base URI used when constructing ProblemDetail.Type. The uri is normalised to always end with "/".
 func SetTypeBaseURI(uri string) {
 	if !strings.HasSuffix(uri, "/") {
 		uri += "/"
@@ -23,8 +20,7 @@ func SetTypeBaseURI(uri string) {
 	typeBaseURI.Store(uri)
 }
 
-// GetTypeBaseURI returns the current base URI, materializing the default on
-// first call.
+// GetTypeBaseURI returns the current base URI, materializing the default on first call.
 func GetTypeBaseURI() string {
 	if v := typeBaseURI.Load(); v != nil {
 		return v.(string)
@@ -50,14 +46,11 @@ type ProblemDetail struct {
 	Code ErrorCode `json:"code"`
 	// Retryable indicates whether the client may retry the request.
 	Retryable bool `json:"retryable"`
-	// Details carries RFC 9457 problem-detail extension members (arbitrary
-	// JSON). This is a deliberate, documented opaque-value exception to the
-	// no-any rule; see AppError.Details.
+	// Details carries RFC 9457 problem-detail extension members (arbitrary JSON). This is a deliberate, documented opaque-value exception to the no-any rule; see AppError.Details.
 	Details map[string]any `json:"details,omitempty"`
 }
 
-// ToProblemDetail converts an AppError to a ProblemDetail following RFC 9457.
-// Instance is left empty and should be populated by the HTTP middleware.
+// ToProblemDetail converts an AppError to a ProblemDetail following RFC 9457. Instance is left empty and should be populated by the HTTP middleware.
 func (e *AppError) ToProblemDetail() ProblemDetail {
 	kebab := strings.ToLower(strings.ReplaceAll(string(e.Code), "_", "-"))
 	return ProblemDetail{
@@ -71,8 +64,7 @@ func (e *AppError) ToProblemDetail() ProblemDetail {
 	}
 }
 
-// codeToTitle converts a SCREAMING_SNAKE_CASE error code to a title-cased string.
-// e.g. NOT_FOUND → "Not Found", INTERNAL_ERROR → "Internal Error".
+// codeToTitle converts a SCREAMING_SNAKE_CASE error code to a title-cased string. e.g. NOT_FOUND → "Not Found", INTERNAL_ERROR → "Internal Error".
 func codeToTitle(code ErrorCode) string {
 	parts := strings.Split(string(code), "_")
 	for i, p := range parts {

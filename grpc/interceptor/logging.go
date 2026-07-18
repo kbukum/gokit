@@ -11,8 +11,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// UnaryClientLoggingInterceptor returns a unary client interceptor that logs
-// each RPC call with method, duration, and status.
+// UnaryClientLoggingInterceptor returns a unary client interceptor that logs each RPC call with method, duration, and status.
 func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,
@@ -56,8 +55,7 @@ func UnaryClientLoggingInterceptor(log *logging.Logger) grpc.UnaryClientIntercep
 	}
 }
 
-// StreamClientLoggingInterceptor returns a stream client interceptor that logs
-// stream establishment with method, duration, and status.
+// StreamClientLoggingInterceptor returns a stream client interceptor that logs stream establishment with method, duration, and status.
 func StreamClientLoggingInterceptor(log *logging.Logger) grpc.StreamClientInterceptor {
 	return func(
 		ctx context.Context,

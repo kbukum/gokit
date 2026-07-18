@@ -13,16 +13,12 @@ import (
 	"github.com/kbukum/gokit/stream"
 )
 
-// NewSliceSource returns a [stage.Source] over a fixed slice of items, for
-// composition and tests.
+// NewSliceSource returns a [stage.Source] over a fixed slice of items, for composition and tests.
 func NewSliceSource(name string, items []Item) stage.Source[Item] {
 	return stage.NewSliceSource(name, items)
 }
 
-// DirSource is a [stage.Source] over the regular files in a directory: each
-// file becomes a file-backed [Item] tagged with the source's label, offset by
-// its sorted position. File bytes are not read until a target consumes them;
-// a file larger than the payload limit fails the source closed.
+// DirSource is a [stage.Source] over the regular files in a directory: each file becomes a file-backed [Item] tagged with the source's label, offset by its sorted position. File bytes are not read until a target consumes them; a file larger than the payload limit fails the source closed.
 type DirSource struct {
 	name   string
 	dir    string
@@ -30,9 +26,7 @@ type DirSource struct {
 	limits payload.Limits
 }
 
-// NewDirSource returns a directory-backed item source. Every produced item is
-// tagged with label; the payloads are file-backed and confined to dir, and a
-// file exceeding limits fails the source closed.
+// NewDirSource returns a directory-backed item source. Every produced item is tagged with label; the payloads are file-backed and confined to dir, and a file exceeding limits fails the source closed.
 func NewDirSource(name, dir string, label stage.Label, limits payload.Limits) *DirSource {
 	return &DirSource{name: name, dir: dir, label: label, limits: limits.WithDefaults()}
 }
@@ -43,8 +37,7 @@ func (s *DirSource) Name() string { return s.name }
 // CacheKey fingerprints the source by directory.
 func (s *DirSource) CacheKey() string { return "dir:" + s.dir }
 
-// Stream lists the directory lazily, surfacing any listing or path-safety error
-// on the first pull.
+// Stream lists the directory lazily, surfacing any listing or path-safety error on the first pull.
 func (s *DirSource) Stream(context.Context) *stream.Pipeline[Item] {
 	return stream.FromFunc(func(ctx context.Context) stream.Iterator[Item] {
 		items, err := s.list()
@@ -55,8 +48,7 @@ func (s *DirSource) Stream(context.Context) *stream.Pipeline[Item] {
 	})
 }
 
-// list builds the items for the directory's regular files in sorted order,
-// failing closed on a file larger than the payload limit.
+// list builds the items for the directory's regular files in sorted order, failing closed on a file larger than the payload limit.
 func (s *DirSource) list() ([]Item, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {

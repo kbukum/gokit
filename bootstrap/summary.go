@@ -65,11 +65,7 @@ type ClientInfo struct {
 
 // Summary tracks and displays the application bootstrap process.
 //
-// Output is written to the configured io.Writer (default: os.Stdout). Use
-// SetWriter (or the [WithWriter] option on NewSummaryWithOptions) to redirect
-// output — for example to a structured log line, an in-memory buffer for
-// tests, or a file. Library code MUST NOT write directly to stdout; the
-// configurable writer is the supported integration point.
+// Output is written to the configured io.Writer (default: os.Stdout). Use SetWriter (or the [WithWriter] option on NewSummaryWithOptions) to redirect output — for example to a structured log line, an in-memory buffer for tests, or a file. Library code MUST NOT write directly to stdout; the configurable writer is the supported integration point.
 type Summary struct {
 	serviceName     string
 	version         string
@@ -86,8 +82,7 @@ type Summary struct {
 // SummaryOption configures a Summary at construction time.
 type SummaryOption func(*Summary)
 
-// WithWriter sets the output writer for the summary. The default is os.Stdout.
-// Pass io.Discard to silence the summary entirely.
+// WithWriter sets the output writer for the summary. The default is os.Stdout. Pass io.Discard to silence the summary entirely.
 func WithWriter(w io.Writer) SummaryOption {
 	return func(s *Summary) {
 		if w != nil {
@@ -96,8 +91,7 @@ func WithWriter(w io.Writer) SummaryOption {
 	}
 }
 
-// NewSummary creates a new bootstrap summary tracker that writes to os.Stdout.
-// Use [NewSummaryWithOptions] to inject a custom writer.
+// NewSummary creates a new bootstrap summary tracker that writes to os.Stdout. Use [NewSummaryWithOptions] to inject a custom writer.
 func NewSummary(serviceName, version string) *Summary {
 	return NewSummaryWithOptions(serviceName, version)
 }
@@ -121,8 +115,7 @@ func NewSummaryWithOptions(serviceName, version string, opts ...SummaryOption) *
 	return s
 }
 
-// SetWriter overrides the output writer used by [Summary.DisplaySummary].
-// A nil writer is ignored.
+// SetWriter overrides the output writer used by [Summary.DisplaySummary]. A nil writer is ignored.
 func (s *Summary) SetWriter(w io.Writer) {
 	if w != nil {
 		s.writer = w
@@ -143,8 +136,7 @@ func (s *Summary) TrackComponent(name, status string, healthy bool) {
 	})
 }
 
-// TrackInfrastructure adds an infrastructure component with detailed metadata.
-// For non-component infrastructure (e.g., auth config), componentName can be empty.
+// TrackInfrastructure adds an infrastructure component with detailed metadata. For non-component infrastructure (e.g., auth config), componentName can be empty.
 func (s *Summary) TrackInfrastructure(name, componentType, status, details string, port int, healthy bool) {
 	s.infrastructure = append(s.infrastructure, InfrastructureInfo{
 		Name:    name,
@@ -156,9 +148,7 @@ func (s *Summary) TrackInfrastructure(name, componentType, status, details strin
 	})
 }
 
-// trackInfrastructureWithComponent is like TrackInfrastructure but also records
-// the internal component name for deduplication with the Components section.
-// TrackBusinessComponent records a business-layer component.
+// trackInfrastructureWithComponent is like TrackInfrastructure but also records the internal component name for deduplication with the Components section. TrackBusinessComponent records a business-layer component.
 func (s *Summary) TrackBusinessComponent(name, componentType, status string, dependencies []string) {
 	s.business = append(s.business, BusinessComponentInfo{
 		Name:         name,
@@ -197,10 +187,7 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 	})
 }
 
-// DisplaySummary prints the bootstrap summary.
-// It auto-collects infrastructure, routes, and health from the component
-// registry and DI registrations from the container. Manual Track* calls
-// are only needed for non-component items (e.g., auth config).
+// DisplaySummary prints the bootstrap summary. It auto-collects infrastructure, routes, and health from the component registry and DI registrations from the container. Manual Track* calls are only needed for non-component items (e.g., auth config).
 func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Container, log *logging.Logger) {
 	ctx := context.Background()
 
@@ -325,8 +312,7 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Con
 	fmt.Fprintf(s.writer, "\n")
 }
 
-// collectFromRegistry auto-discovers infrastructure, routes, and health
-// from registered components. Called at the start of DisplaySummary.
+// collectFromRegistry auto-discovers infrastructure, routes, and health from registered components. Called at the start of DisplaySummary.
 func (s *Summary) collectFromRegistry(ctx context.Context, registry *component.Registry) {
 	if registry == nil {
 		return
@@ -487,10 +473,7 @@ func (s *Summary) displayDIRegistrations(container *di.Container) {
 	}
 }
 
-// registrationStatus returns the tree marker for a DI registration. Transient
-// registrations are resolved fresh on every request and are never cached, so
-// they get their own marker rather than being shown as an uninitialized
-// singleton. 💤 is reserved for singletons that have not been resolved yet.
+// registrationStatus returns the tree marker for a DI registration. Transient registrations are resolved fresh on every request and are never cached, so they get their own marker rather than being shown as an uninitialized singleton. 💤 is reserved for singletons that have not been resolved yet.
 func registrationStatus(item di.RegistrationInfo) string {
 	switch {
 	case item.Mode == di.Transient:

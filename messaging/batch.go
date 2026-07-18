@@ -22,8 +22,7 @@ func (c *BatchConfig) applyDefaults() {
 	}
 }
 
-// BatchProducer buffers messages and flushes them in batches via an
-// underlying Producer. It is safe for concurrent use.
+// BatchProducer buffers messages and flushes them in batches via an underlying Producer. It is safe for concurrent use.
 type BatchProducer struct {
 	producer Producer
 	topic    string
@@ -51,8 +50,7 @@ func NewBatchProducer(p Producer, topic string, cfg BatchConfig) *BatchProducer 
 	return b
 }
 
-// Send buffers a message. A flush is triggered automatically when MaxSize
-// or MaxBytes limits are reached.
+// Send buffers a message. A flush is triggered automatically when MaxSize or MaxBytes limits are reached.
 func (b *BatchProducer) Send(ctx context.Context, msg Message) error {
 	b.mu.Lock()
 	if b.closed {

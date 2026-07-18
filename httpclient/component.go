@@ -6,9 +6,7 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
-// Component wraps an Adapter with lifecycle management.
-// Use this when the HTTP adapter is part of a managed application
-// (e.g., with bootstrap.Start/Stop).
+// Component wraps an Adapter with lifecycle management. Use this when the HTTP adapter is part of a managed application (e.g., with bootstrap.Start/Stop).
 type Component struct {
 	adapter *Adapter
 	config  Config
@@ -21,8 +19,7 @@ var (
 	_ component.Describable = (*Component)(nil)
 )
 
-// NewComponent creates a new HTTP adapter component.
-// The adapter is created lazily in Start().
+// NewComponent creates a new HTTP adapter component. The adapter is created lazily in Start().
 func NewComponent(cfg Config, opts ...Option) *Component {
 	return &Component{config: cfg, opts: opts}
 }

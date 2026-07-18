@@ -1,7 +1,6 @@
 // Package testutil provides testing utilities for the server module.
 //
-// It includes a test server component backed by httptest.Server that
-// implements both component.Component and testutil.TestComponent interfaces.
+// It includes a test server component backed by httptest.Server that implements both component.Component and testutil.TestComponent interfaces.
 //
 // # Quick Start
 //

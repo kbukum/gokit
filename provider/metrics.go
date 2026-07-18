@@ -7,9 +7,7 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// WithMetrics returns a Middleware that records execution metrics
-// using the gokit observability.Metrics instruments.
-// Records: operation count, duration histogram, and errors.
+// WithMetrics returns a Middleware that records execution metrics using the gokit observability.Metrics instruments. Records: operation count, duration histogram, and errors.
 func WithMetrics[I, O any](metrics *observability.Metrics) Middleware[I, O] {
 	return func(inner RequestResponse[I, O]) RequestResponse[I, O] {
 		return &metricsRR[I, O]{inner: inner, metrics: metrics}

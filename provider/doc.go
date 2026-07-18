@@ -1,8 +1,7 @@
 // Package provider implements a generic provider framework using Go generics
 // for swappable backends with runtime switching capabilities.
 //
-// It provides a registry for managing multiple provider implementations with
-// factory-based instantiation, availability checking, and runtime selection.
+// It provides a registry for managing multiple provider implementations with factory-based instantiation, availability checking, and runtime selection.
 //
 // The package defines four interaction patterns:
 //   - RequestResponse[I, O]: one input → one output (HTTP, gRPC, subprocess)
@@ -28,14 +27,11 @@
 //	    TTL:     5 * time.Minute,
 //	})
 //
-// ContextStore[C] is the state persistence interface; MemoryStore is the
-// built-in in-memory implementation for testing. Production implementations
-// (e.g., redis.TypedStore) live in sub-modules to avoid dependency coupling.
+// ContextStore[C] is the state persistence interface; MemoryStore is the built-in in-memory implementation for testing. Production implementations (e.g., redis.TypedStore) live in sub-modules to avoid dependency coupling.
 //
 // # Middleware
 //
-// Middleware[I, O] is a function that wraps a RequestResponse provider.
-// Use Chain to compose multiple middlewares:
+// Middleware[I, O] is a function that wraps a RequestResponse provider. Use Chain to compose multiple middlewares:
 //
 //	wrapped := provider.Chain(
 //	    provider.WithLogging[In, Out](log),

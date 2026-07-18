@@ -13,9 +13,7 @@ import (
 
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
-// When TLS is configured, a standard HTTPS transport is used.
-// When TLS is nil (the default), an h2c (cleartext HTTP/2) transport is used,
-// which is required for ConnectRPC and gRPC communication without TLS.
+// When TLS is configured, a standard HTTPS transport is used. When TLS is nil (the default), an h2c (cleartext HTTP/2) transport is used, which is required for ConnectRPC and gRPC communication without TLS.
 //
 // The returned client can be passed directly to any generated Connect client constructor.
 func NewHTTPClient(cfg Config) (*http.Client, error) {
@@ -73,8 +71,7 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 	}, nil
 }
 
-// ProtocolOption returns the connect.ClientOption for the configured wire protocol.
-// Returns nil for the default Connect protocol (no option needed).
+// ProtocolOption returns the connect.ClientOption for the configured wire protocol. Returns nil for the default Connect protocol (no option needed).
 func ProtocolOption(cfg Config) connect.ClientOption {
 	switch cfg.Protocol {
 	case ProtocolGRPC:
@@ -86,8 +83,7 @@ func ProtocolOption(cfg Config) connect.ClientOption {
 	}
 }
 
-// ClientOptions returns connect.ClientOption slice based on config.
-// Includes protocol option if non-default protocol is configured.
+// ClientOptions returns connect.ClientOption slice based on config. Includes protocol option if non-default protocol is configured.
 func ClientOptions(cfg Config) []connect.ClientOption {
 	var opts []connect.ClientOption
 	if opt := ProtocolOption(cfg); opt != nil {

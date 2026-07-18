@@ -71,11 +71,7 @@ type ToolUseBlock struct {
 	Name string `json:"name"`
 	// Input holds the model-produced tool arguments as a raw JSON object.
 	//
-	// It is deliberately json.RawMessage rather than a decoded map: the
-	// arguments are untrusted model output and must be schema-validated
-	// (package schema / tool) before being decoded into a typed input. Keeping
-	// the bytes opaque avoids a lossy any round-trip and lets each tool decode
-	// into its own concrete type at the trust boundary.
+	// It is deliberately json.RawMessage rather than a decoded map: the arguments are untrusted model output and must be schema-validated (package schema / tool) before being decoded into a typed input. Keeping the bytes opaque avoids a lossy any round-trip and lets each tool decode into its own concrete type at the trust boundary.
 	Input json.RawMessage `json:"input"`
 }
 
@@ -83,12 +79,7 @@ func (ToolUseBlock) PartType() string   { return "tool_use" }
 func (ToolUseBlock) BlockType() string  { return "tool_use" }
 func (ToolUseBlock) contentPartMarker() {}
 
-// NormalizeToolInput returns non-empty, non-null raw JSON for tool arguments,
-// substituting an empty object for nil, empty, or JSON null input. Any other
-// value is returned trimmed and unchanged — coercion to an object is not
-// attempted, since a non-object payload is rejected later by schema validation
-// at the tool trust boundary. Providers and stream assemblers use it so
-// downstream consumers never have to special-case absent arguments.
+// NormalizeToolInput returns non-empty, non-null raw JSON for tool arguments, substituting an empty object for nil, empty, or JSON null input. Any other value is returned trimmed and unchanged — coercion to an object is not attempted, since a non-object payload is rejected later by schema validation at the tool trust boundary. Providers and stream assemblers use it so downstream consumers never have to special-case absent arguments.
 func NormalizeToolInput(in json.RawMessage) json.RawMessage {
 	trimmed := bytes.TrimSpace(in)
 	if len(trimmed) == 0 || string(trimmed) == "null" {

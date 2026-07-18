@@ -23,10 +23,7 @@ type collection struct {
 	Points     []*storedPoint
 }
 
-// InMemoryStore is an in-memory vector store implementation backed by a simple slice.
-// It performs linear scan search using the configured similarity metric.
-// Intended for unit tests and prototyping — not suitable for production workloads.
-// Thread-safe via sync.RWMutex.
+// InMemoryStore is an in-memory vector store implementation backed by a simple slice. It performs linear scan search using the configured similarity metric. Intended for unit tests and prototyping — not suitable for production workloads. Thread-safe via sync.RWMutex.
 type InMemoryStore struct {
 	mu          sync.RWMutex
 	collections map[string]*collection
@@ -236,8 +233,7 @@ func matchesFilter(payload *PointPayload, filter *SearchFilter) bool {
 	return true
 }
 
-// valueEquals compares two payload values, falling back to JSON for values
-// whose dynamic type is not directly comparable (slices, maps).
+// valueEquals compares two payload values, falling back to JSON for values whose dynamic type is not directly comparable (slices, maps).
 func valueEquals(a, b any) bool {
 	if isComparable(a) && isComparable(b) && a == b {
 		return true

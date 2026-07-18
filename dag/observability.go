@@ -8,8 +8,7 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// WithTracing wraps a Node with OpenTelemetry span creation.
-// Each execution creates a span named "{prefix}.{nodeName}".
+// WithTracing wraps a Node with OpenTelemetry span creation. Each execution creates a span named "{prefix}.{nodeName}".
 func WithTracing(node Node, prefix string) Node {
 	return &tracingNode{inner: node, prefix: prefix}
 }
@@ -36,8 +35,7 @@ func (n *tracingNode) Run(ctx context.Context, state *State) (any, error) {
 	return result, err
 }
 
-// WithMetrics wraps a Node with metric recording.
-// Records operation count, duration, and errors.
+// WithMetrics wraps a Node with metric recording. Records operation count, duration, and errors.
 func WithMetrics(node Node, metrics *observability.Metrics) Node {
 	return &metricsNode{inner: node, metrics: metrics}
 }
@@ -64,8 +62,7 @@ func (n *metricsNode) Run(ctx context.Context, state *State) (any, error) {
 	return result, err
 }
 
-// WithLogging wraps a Node with execution logging.
-// Logs: node name, duration, and success/error status.
+// WithLogging wraps a Node with execution logging. Logs: node name, duration, and success/error status.
 func WithLogging(node Node, log *logging.Logger) Node {
 	return &loggingNode{inner: node, log: log}
 }

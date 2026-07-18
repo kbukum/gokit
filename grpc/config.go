@@ -21,8 +21,7 @@ type KeepaliveConfig struct {
 type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `mapstructure:"name"`
-	// Addr is the gRPC server target (e.g., "localhost:50051").
-	// Set statically via config or dynamically via discovery (endpoint.HostPort()).
+	// Addr is the gRPC server target (e.g., "localhost:50051"). Set statically via config or dynamically via discovery (endpoint.HostPort()).
 	Addr string `mapstructure:"addr"`
 	// MaxRecvMsgSize is the maximum message size the client can receive (bytes).
 	MaxRecvMsgSize int `mapstructure:"max_recv_msg_size"`
@@ -30,8 +29,7 @@ type Config struct {
 	MaxSendMsgSize int `mapstructure:"max_send_msg_size"`
 	// Keepalive holds keepalive configuration.
 	Keepalive KeepaliveConfig `mapstructure:"keepalive"`
-	// TLS holds TLS configuration. The shared security policy enforces a TLS 1.2
-	// floor while default negotiation still prefers TLS 1.3.
+	// TLS holds TLS configuration. The shared security policy enforces a TLS 1.2 floor while default negotiation still prefers TLS 1.3.
 	TLS *security.TLSConfig `mapstructure:"tls"`
 	// Enabled controls whether gRPC is active.
 	Enabled bool `mapstructure:"enabled"`

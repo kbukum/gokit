@@ -13,8 +13,7 @@ import (
 	"github.com/kbukum/gokit/llm/providers/internal/dialect"
 )
 
-// Register installs the OpenAI dialect in the supplied registry.
-// Call once at application startup before invoking [llm.New].
+// Register installs the OpenAI dialect in the supplied registry. Call once at application startup before invoking [llm.New].
 func Register(registry *llm.DialectRegistry) error {
 	return registry.Register("openai", &Dialect{})
 }
@@ -107,8 +106,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	if choice.Message.Content != nil && *choice.Message.Content != "" {
 		msg.Content = ai.TextContent(*choice.Message.Content)
 	} else if choice.Message.ReasoningContent != nil && *choice.Message.ReasoningContent != "" {
-		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1)
-		// emit text under reasoning_content when content is empty.
+		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1) emit text under reasoning_content when content is empty.
 		msg.Content = ai.TextContent(*choice.Message.ReasoningContent)
 	}
 

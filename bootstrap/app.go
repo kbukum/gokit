@@ -15,9 +15,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// App represents a generic application with uniform lifecycle management.
-// The type parameter C is the config type, which must satisfy the Config interface.
-// Any struct embedding config.ServiceConfig automatically satisfies Config.
+// App represents a generic application with uniform lifecycle management. The type parameter C is the config type, which must satisfy the Config interface. Any struct embedding config.ServiceConfig automatically satisfies Config.
 //
 // Example:
 //
@@ -41,8 +39,7 @@ type App[C Config] struct {
 	hooks           *hook.Registry
 }
 
-// NewApp creates a new application instance from a typed config.
-// It applies defaults, validates the config, and initializes the logging.
+// NewApp creates a new application instance from a typed config. It applies defaults, validates the config, and initializes the logging.
 func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -86,8 +83,7 @@ func (a *App[C]) RegisterComponent(c component.Component) error {
 	return a.Components.Register(c)
 }
 
-// OnConfigure registers a callback to run during the configure phase.
-// Use this to set up business-layer dependencies after infrastructure is started.
+// OnConfigure registers a callback to run during the configure phase. Use this to set up business-layer dependencies after infrastructure is started.
 func (a *App[C]) OnConfigure(fn func(ctx context.Context, app *App[C]) error) {
 	a.onConfigure = append(a.onConfigure, fn)
 }
@@ -111,9 +107,7 @@ func (a *App[C]) ReadyCheck(ctx context.Context) error {
 	return nil
 }
 
-// Run executes the full application lifecycle for long-running services:
-// Initialize → OnStart hooks → Configure → ReadyCheck → OnReady hooks →
-// Block on signal → OnStop hooks → Graceful Shutdown.
+// Run executes the full application lifecycle for long-running services: Initialize → OnStart hooks → Configure → ReadyCheck → OnReady hooks → Block on signal → OnStop hooks → Graceful Shutdown.
 func (a *App[C]) Run(ctx context.Context) error {
 	if err := a.startup(ctx); err != nil {
 		return err
@@ -127,14 +121,9 @@ func (a *App[C]) Run(ctx context.Context) error {
 	return a.stop()
 }
 
-// RunTask executes a finite task with the full bootstrap lifecycle.
-// Unlike Run(), it does not block on shutdown signals — it runs the task
-// function and gracefully shuts down when the task completes or the context
-// is canceled (e.g., via SIGINT/SIGTERM).
+// RunTask executes a finite task with the full bootstrap lifecycle. Unlike Run(), it does not block on shutdown signals — it runs the task function and gracefully shuts down when the task completes or the context is canceled (e.g., via SIGINT/SIGTERM).
 //
-// Use RunTask for CLI tools, batch jobs, and one-shot processes that need
-// the same bootstrap infrastructure (config, logger, components, hooks)
-// but have a finite workflow instead of running forever.
+// Use RunTask for CLI tools, batch jobs, and one-shot processes that need the same bootstrap infrastructure (config, logger, components, hooks) but have a finite workflow instead of running forever.
 //
 // Example:
 //
@@ -189,17 +178,14 @@ func (a *App[C]) startup(ctx context.Context) error {
 		"version": a.Version,
 	})
 
-	// Phase 1: Configure — run business-layer setup callbacks that may register
-	// additional components. This happens before StartAll so that all components
-	// (infrastructure + application) start in a single pass.
+	// Phase 1: Configure — run business-layer setup callbacks that may register additional components. This happens before StartAll so that all components (infrastructure + application) start in a single pass.
 	if err := a.configure(ctx); err != nil {
 		return fmt.Errorf("configuration failed: %w", err)
 	}
 
 	// Phase 2: Start — single-pass StartAll for all registered components.
 	if err := a.Components.StartAll(ctx); err != nil {
-		// Partial rollback: run OnStop hooks for cleanup of any resources
-		// that configure callbacks may have set up.
+		// Partial rollback: run OnStop hooks for cleanup of any resources that configure callbacks may have set up.
 		if stopErr := a.emitLifecycleHooks(ctx, EventStop); stopErr != nil {
 			a.Logger.ErrorCtx(ctx, "OnStop hook error during startup rollback", map[string]any{
 				"error": stopErr.Error(),
@@ -232,8 +218,7 @@ func (a *App[C]) startup(ctx context.Context) error {
 	return nil
 }
 
-// DisplaySummary prints the startup summary. It auto-collects infrastructure,
-// routes, and health from the component registry and DI container.
+// DisplaySummary prints the startup summary. It auto-collects infrastructure, routes, and health from the component registry and DI container.
 func (a *App[C]) DisplaySummary() {
 	a.Summary.DisplaySummary(a.Components, a.Container, a.Logger)
 }
@@ -276,34 +261,26 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 	}
 }
 
-// Startup performs the full bootstrap lifecycle (initialize, start hooks,
-// configure, start components, ready check, ready hooks) without blocking
-// on shutdown signals. Pair with Shutdown for test and CLI scenarios.
+// Startup performs the full bootstrap lifecycle (initialize, start hooks, configure, start components, ready check, ready hooks) without blocking on shutdown signals. Pair with Shutdown for test and CLI scenarios.
 func (a *App[C]) Startup(ctx context.Context) error {
 	return a.startup(ctx)
 }
 
-// Shutdown performs graceful shutdown using the supplied ctx. If ctx has no
-// deadline, the configured gracefulTimeout is applied. If ctx has a deadline
-// shorter than gracefulTimeout, ctx wins.
+// Shutdown performs graceful shutdown using the supplied ctx. If ctx has no deadline, the configured gracefulTimeout is applied. If ctx has a deadline shorter than gracefulTimeout, ctx wins.
 //
-// Use when managing your own lifecycle (e.g. when not relying on signal
-// handling via Run).
+// Use when managing your own lifecycle (e.g. when not relying on signal handling via Run).
 func (a *App[C]) Shutdown(ctx context.Context) error {
 	return a.shutdownWith(ctx)
 }
 
-// stop is invoked by the internal signal handler. It seeds shutdown with a
-// fresh context bounded by gracefulTimeout because the original Run ctx is
-// already canceled by the time we get here.
+// stop is invoked by the internal signal handler. It seeds shutdown with a fresh context bounded by gracefulTimeout because the original Run ctx is already canceled by the time we get here.
 func (a *App[C]) stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
 	defer cancel()
 	return a.shutdownWith(ctx)
 }
 
-// shutdownWith runs the actual shutdown sequence. If ctx has no deadline,
-// gracefulTimeout is applied so a misbehaving Stop cannot block forever.
+// shutdownWith runs the actual shutdown sequence. If ctx has no deadline, gracefulTimeout is applied so a misbehaving Stop cannot block forever.
 func (a *App[C]) shutdownWith(parent context.Context) error {
 	a.Logger.InfoCtx(parent, "Shutting down application", map[string]any{
 		"timeout": a.gracefulTimeout.String(),
@@ -334,8 +311,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 		shutdownErrs = append(shutdownErrs, err)
 	}
 
-	// Close DI container: runs disposers for container-owned resources
-	// (RegisterCloseable / RegisterSingletonCloseable) in reverse order.
+	// Close DI container: runs disposers for container-owned resources (RegisterCloseable / RegisterSingletonCloseable) in reverse order.
 	if err := a.Container.Close(ctx); err != nil {
 		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]any{
 			"error": err.Error(),

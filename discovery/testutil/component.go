@@ -11,9 +11,7 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-// Component is a test discovery component backed by in-memory maps.
-// It implements component.Component, testutil.TestComponent,
-// discovery.Registry, and discovery.Discovery.
+// Component is a test discovery component backed by in-memory maps. It implements component.Component, testutil.TestComponent, discovery.Registry, and discovery.Discovery.
 type Component struct {
 	services  map[string]*discovery.ServiceInfo
 	instances map[string][]discovery.ServiceInstance
@@ -33,8 +31,7 @@ func NewComponent() *Component {
 	return &Component{}
 }
 
-// AddInstance pre-populates a service instance for discovery.
-// Call before or after Start.
+// AddInstance pre-populates a service instance for discovery. Call before or after Start.
 func (c *Component) AddInstance(serviceName string, inst discovery.ServiceInstance) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

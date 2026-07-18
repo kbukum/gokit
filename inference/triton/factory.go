@@ -21,8 +21,7 @@ func Factory(config json.RawMessage) (inference.Inference, error) {
 	return NewProvider(cfg)
 }
 
-// Register adds the Triton adapter factory to reg. It performs no side effects
-// beyond the supplied registry.
+// Register adds the Triton adapter factory to reg. It performs no side effects beyond the supplied registry.
 func Register(reg *inference.Registry) error {
 	return reg.Register(Kind, Factory)
 }

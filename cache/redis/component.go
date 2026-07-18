@@ -34,8 +34,7 @@ var _ component.Component = (*Component)(nil)
 // Name returns the component name.
 func (c *Component) Name() string { return "redis" }
 
-// Start initializes the Redis client and verifies connectivity.
-// If Addr is empty, the component starts in a no-op state (useful when Redis is optional).
+// Start initializes the Redis client and verifies connectivity. If Addr is empty, the component starts in a no-op state (useful when Redis is optional).
 func (c *Component) Start(ctx context.Context) error {
 	if c.cfg.Addr == "" {
 		c.log.InfoCtx(ctx, "Redis address not configured, skipping")

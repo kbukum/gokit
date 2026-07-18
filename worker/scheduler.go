@@ -15,16 +15,13 @@ type Job struct {
 	Name string
 	// Interval between consecutive runs.
 	Interval time.Duration
-	// RunOnStart causes the job to execute once immediately when the
-	// scheduler starts, before entering its periodic loop.
+	// RunOnStart causes the job to execute once immediately when the scheduler starts, before entering its periodic loop.
 	RunOnStart bool
 	// Fn is the work to perform on each tick.
 	Fn TickerFunc
 }
 
-// Scheduler is a Component that manages multiple periodic jobs. Each
-// job runs in its own goroutine via an internal TickerWorker, giving
-// independent intervals, health, and non-overlap guarantees.
+// Scheduler is a Component that manages multiple periodic jobs. Each job runs in its own goroutine via an internal TickerWorker, giving independent intervals, health, and non-overlap guarantees.
 //
 // Scheduler implements component.Component and component.Describable.
 //
@@ -56,8 +53,7 @@ func NewScheduler(name string, jobs ...Job) *Scheduler {
 // Name returns the scheduler's component name.
 func (s *Scheduler) Name() string { return s.name }
 
-// Start launches all jobs. If any job fails to start, previously
-// started jobs are stopped and the first error is returned.
+// Start launches all jobs. If any job fails to start, previously started jobs are stopped and the first error is returned.
 func (s *Scheduler) Start(ctx context.Context) error {
 	for i, w := range s.workers {
 		if err := w.Start(ctx); err != nil {

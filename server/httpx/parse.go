@@ -9,8 +9,7 @@ import (
 	goerrors "github.com/kbukum/gokit/errors"
 )
 
-// ParsePathUUID parses a UUID from a gin path parameter.
-// Returns a validation AppError on failure.
+// ParsePathUUID parses a UUID from a gin path parameter. Returns a validation AppError on failure.
 func ParsePathUUID(c *gin.Context, name string) (uuid.UUID, error) {
 	raw := c.Param(name)
 	id, err := uuid.Parse(raw)
