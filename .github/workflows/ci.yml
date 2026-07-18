@@ -117,10 +117,16 @@ jobs:
 
   # ── Stage 2: Build + Vet + Test (single job for all modules on Linux) ────
   check:
-    name: Check
+    name: Check (Go ${{ matrix.go }})
     needs: changes
     if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Floor pinned to the go.mod directive; `stable` tracks the latest
+        # release so a newer toolchain cannot silently break the build.
+        go: ['1.26.0', 'stable']
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
@@ -129,7 +135,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.0.0
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go }}
 
       - name: Build, vet, and test all modules
         run: |
@@ -149,7 +155,7 @@ jobs:
           exit $failed
 
       - name: Merge and upload coverage
-        if: env.CODECOV_TOKEN != ''
+        if: env.CODECOV_TOKEN != '' && matrix.go == '1.26.0'
         run: |
           set -euo pipefail
           modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
@@ -165,7 +171,7 @@ jobs:
           echo "files=$covfiles" >> "$GITHUB_ENV"
 
       - name: Upload coverage
-        if: env.CODECOV_TOKEN != ''
+        if: env.CODECOV_TOKEN != '' && matrix.go == '1.26.0'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
         with:
           files: ${{ env.files }}
@@ -351,6 +357,30 @@ jobs:
           done
           exit $fail
 
+  # ── Stage 3l: License allow-list ─────────────────────────────────────────
+  # Fails if any dependency ships a license outside the permissive allow-list
+  # (see scripts/check-licenses.sh). Runs alongside the other supply-chain gates.
+  licenses:
+    name: Licenses
+    needs: changes
+    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v6.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@v1.6.0
+
+      - name: Check dependency licenses (all modules)
+        run: ./scripts/check-licenses.sh
+
   # ── Stage 3g: Integration suite (gated by //go:build integration) ─────────
   # Slow / dependency-heavy cross-package tests live under the `integration`
   # build tag (F-019 #49). They are NOT part of the default `check` job so
@@ -378,7 +408,7 @@ jobs:
   ci-status:
     name: CI Status
     if: always()
-    needs: [changes, preflight, check, check-cross, lint, security, fuzz, integration]
+    needs: [changes, preflight, check, check-cross, lint, security, fuzz, licenses, integration]
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate results
@@ -390,6 +420,7 @@ jobs:
                    "${{ needs.lint.result }}" \
                    "${{ needs.security.result }}" \
                    "${{ needs.fuzz.result }}" \
+                   "${{ needs.licenses.result }}" \
                    "${{ needs.integration.result }}")
           for r in "${results[@]}"; do
             if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then

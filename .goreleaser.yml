@@ -25,23 +25,30 @@ checksum:
   algorithm: sha256
 
 # SBOM generation (CycloneDX) — closes F-037 SBOM gap when paired with CI.
+# goreleaser runs the sbom cmd from the dist/ directory, so the module root is
+# one level up; cyclonedx-gomod catalogs the root module and its dependencies.
 sboms:
   - artifacts: source
     documents:
       - "{{ .ProjectName }}-{{ .Version }}.cdx.json"
     cmd: cyclonedx-gomod
-    args: ["mod", "-licenses", "-json", "-output", "$document", "."]
+    args: ["mod", "-licenses", "-json", "-output", "$document", ".."]
 
 # Cosign keyless signing of source + checksums + SBOM. Requires the
-# release workflow to run with id-token:write so OIDC is available.
+# release workflow to run with id-token:write so OIDC is available. The
+# certificate is emitted alongside the signature so the release job can
+# `cosign verify-blob` the artifacts without a static key.
 signs:
   - cmd: cosign
+    certificate: "${artifact}.pem"
     args:
       - "sign-blob"
       - "--yes"
+      - "--output-certificate=${certificate}"
       - "--output-signature=${signature}"
       - "${artifact}"
     artifacts: all
+    output: true
 
 changelog:
   use: github

@@ -26,7 +26,7 @@ Modules are organized into domains for scoped development. See [Module Index](do
 | data | Database, cache, storage, messaging | `make check-data` |
 | ai | LLM, inference, agents, tools | `make check-ai` |
 | media | Light detection, metadata, image ops | `make check-media` |
-| infra | Workload, CLI, benchmarks, testing | `make check-infra` |
+| infra | Workload, CLI, dataset, benchmarks, testing | `make check-infra` |
 
 CI still runs full-workspace validation; on pull requests the `changes` job also publishes an `affected` domain list from `./scripts/affected-domains.sh` so later workflow steps can consume the same domain mapping developers use locally with `make check-<domain>`.
 

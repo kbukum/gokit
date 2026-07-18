@@ -17,6 +17,7 @@ permissions:
   contents: write   # publish release assets
   packages: write   # in case we publish OCI artifacts later
   id-token: write   # cosign keyless signing via OIDC
+  attestations: write   # SLSA build provenance attestation
 
 jobs:
   goreleaser:
@@ -51,3 +52,22 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify cosign signature (keyless)
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --certificate dist/checksums.txt.pem \
+            --signature dist/checksums.txt.sig \
+            --certificate-identity-regexp '^https://github.com/kbukum/gokit/\.github/workflows/release\.yml@.*' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            dist/checksums.txt
+          echo "cosign verify-blob succeeded ✓"
+
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-path: |
+            dist/*-source.tar.gz
+            dist/checksums.txt
+            dist/*.cdx.json
