@@ -86,8 +86,8 @@ list-tags:
 ## publishing (usage: make release-dry [VERSION=v0.1.0-alpha.1]). Requires
 ## goreleaser + cyclonedx-gomod on PATH.
 release-dry:
-	@command -v goreleaser >/dev/null 2>&1 || { echo "Error: goreleaser not found — install github.com/goreleaser/goreleaser/v2"; exit 1; }
-	@command -v cyclonedx-gomod >/dev/null 2>&1 || { echo "Error: cyclonedx-gomod not found — install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod"; exit 1; }
+	@command -v goreleaser >/dev/null 2>&1 || { echo "Error: goreleaser not found — install with: go install github.com/goreleaser/goreleaser/v2@latest"; exit 1; }
+	@command -v cyclonedx-gomod >/dev/null 2>&1 || { echo "Error: cyclonedx-gomod not found — install with: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest"; exit 1; }
 	@GORELEASER_CURRENT_TAG=$(if $(VERSION),$(VERSION),v0.0.0-dev) goreleaser release --snapshot --clean --skip=sign,publish
 
 ## Fast check: build + vet + lint only (no tests) — for rapid iteration
