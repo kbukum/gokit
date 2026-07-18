@@ -159,6 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI hardening**: dual Go matrix (`1.26.0` floor + `stable`); Conventional-Commits PR-title check; a dependency **license allow-list** gate (`scripts/check-licenses.sh`) across all modules; all actions SHA-pinned with per-job least-privilege permissions.
 - **Release pipeline**: GoReleaser produces a source archive, `checksums.txt`, and a CycloneDX SBOM (fixed the SBOM working-directory bug); cosign keyless **sign + verify**; SLSA build provenance via `actions/attest-build-provenance`. Added `make release-dry`. New third-party deps are justified in [`docs/dependencies.md`](docs/dependencies.md).
 
+## [0.2.0] - 2026-04-25
+
 > Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
 > This entry back-fills the previous `[Unreleased]` section verbatim. From
 > this release on, every tag MUST be accompanied by a corresponding CHANGELOG
