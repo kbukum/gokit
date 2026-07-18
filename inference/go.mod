@@ -22,8 +22,8 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/kbukum/gokit/schema v0.2.0 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
