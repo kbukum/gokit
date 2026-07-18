@@ -26,15 +26,15 @@ type ResourceTemplateEntry struct {
 func (h *Handler) wrapResourceHandler(uri string, handler sdkmcp.ResourceHandler) sdkmcp.ResourceHandler {
 	return func(ctx context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
 		if !h.policy.AllowsResource(uri) {
-			h.policy.AuditAccess(ctx, security.AccessKindResource, uri, security.OutcomeDenied, "not in allow-list")
+			h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindResource, Target: uri, Outcome: security.OutcomeDenied, Reason: "not in allow-list"})
 			return nil, fmt.Errorf("resource not allowed: %s", uri)
 		}
 		res, err := handler(ctx, req)
 		if err != nil {
-			h.policy.AuditAccess(ctx, security.AccessKindResource, uri, security.OutcomeToolError, err.Error())
+			h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindResource, Target: uri, Outcome: security.OutcomeToolError, Reason: err.Error()})
 			return nil, err
 		}
-		h.policy.AuditAccess(ctx, security.AccessKindResource, uri, security.OutcomeSuccess, "")
+		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindResource, Target: uri, Outcome: security.OutcomeSuccess, Reason: ""})
 		return res, nil
 	}
 }

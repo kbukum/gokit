@@ -69,7 +69,7 @@ func (s *InMemoryStore) EnsureCollection(ctx context.Context, collectionName str
 }
 
 // Upsert inserts or updates a vector point.
-func (s *InMemoryStore) Upsert(ctx context.Context, collectionName, id string, vector []float32, payload *PointPayload) error {
+func (s *InMemoryStore) Upsert(ctx context.Context, collectionName string, point Point) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -78,30 +78,30 @@ func (s *InMemoryStore) Upsert(ctx context.Context, collectionName, id string, v
 		return fmt.Errorf("collection %q does not exist", collectionName)
 	}
 
-	if len(vector) != col.Dimensions {
-		return fmt.Errorf("vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(vector))
+	if len(point.Vector) != col.Dimensions {
+		return fmt.Errorf("vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(point.Vector))
 	}
 
 	// Update existing or insert new
-	for _, point := range col.Points {
-		if point.ID == id {
-			point.Vector = vector
-			point.Payload = payload
+	for _, existing := range col.Points {
+		if existing.ID == point.ID {
+			existing.Vector = point.Vector
+			existing.Payload = point.Payload
 			return nil
 		}
 	}
 
 	col.Points = append(col.Points, &storedPoint{
-		ID:      id,
-		Vector:  vector,
-		Payload: payload,
+		ID:      point.ID,
+		Vector:  point.Vector,
+		Payload: point.Payload,
 	})
 
 	return nil
 }
 
 // Search searches for similar vectors using the collection's similarity metric.
-func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vector []float32, limit int, filter *SearchFilter) ([]SearchResult, error) {
+func (s *InMemoryStore) Search(ctx context.Context, collectionName string, query SearchQuery) ([]SearchResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -109,19 +109,19 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 	if !exists {
 		return nil, fmt.Errorf("collection %q does not exist", collectionName)
 	}
-	if len(vector) != col.Dimensions {
-		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(vector))
+	if len(query.Vector) != col.Dimensions {
+		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(query.Vector))
 	}
 
 	var results []SearchResult
 
 	for _, point := range col.Points {
 		// Apply filter if provided
-		if filter != nil && !matchesFilter(point.Payload, filter) {
+		if query.Filter != nil && !matchesFilter(point.Payload, query.Filter) {
 			continue
 		}
 
-		score, err := similarity(col.Metric, vector, point.Vector)
+		score, err := similarity(col.Metric, query.Vector, point.Vector)
 		if err != nil {
 			return nil, err
 		}
@@ -139,8 +139,8 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, vecto
 	})
 
 	// Truncate to limit
-	if limit < len(results) {
-		results = results[:limit]
+	if query.Limit < len(results) {
+		results = results[:query.Limit]
 	}
 
 	return results, nil

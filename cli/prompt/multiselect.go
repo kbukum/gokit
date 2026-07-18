@@ -32,29 +32,29 @@ func ids(choices []Choice, indices []int) []ChoiceID {
 // In non-interactive mode it resolves to the set of recommended choices (which may be empty).
 // Interactively it prints a numbered list and reads a comma-separated list of one-based numbers;
 // a blank answer accepts the recommended defaults.
-func runMultiSelect(term Terminal, style Style, mode PromptMode, prompt string, choices []Choice) ([]ChoiceID, error) {
+func (s session) runMultiSelect(prompt string, choices []Choice) ([]ChoiceID, error) {
 	if len(choices) == 0 {
 		return nil, errors.InvalidInput("prompt", fmt.Sprintf("multi-select requires at least one choice: %s", prompt))
 	}
 	defaults := recommendedIndices(choices)
 
-	if !mode.IsInteractive() {
+	if !s.mode.IsInteractive() {
 		return ids(choices, defaults), nil
 	}
 
-	if err := term.WriteLine(heading(style, prompt)); err != nil {
+	if err := s.term.WriteLine(heading(s.style, prompt)); err != nil {
 		return nil, err
 	}
-	for _, row := range numberedRows(style, choices) {
-		if err := term.WriteLine(row); err != nil {
+	for _, row := range numberedRows(s.style, choices) {
+		if err := s.term.WriteLine(row); err != nil {
 			return nil, err
 		}
 	}
 	for {
-		if err := writeAnswer(term, style, multiHint(defaults)); err != nil {
+		if err := writeAnswer(s.term, s.style, multiHint(defaults)); err != nil {
 			return nil, err
 		}
-		line, ok, err := term.ReadLine()
+		line, ok, err := s.term.ReadLine()
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +68,7 @@ func runMultiSelect(term Terminal, style Style, mode PromptMode, prompt string, 
 		if indices, valid := parseIndices(answer, len(choices)); valid {
 			return ids(choices, indices), nil
 		}
-		if err := notice(term, style, fmt.Sprintf("enter comma-separated numbers between 1 and %d", len(choices))); err != nil {
+		if err := notice(s.term, s.style, fmt.Sprintf("enter comma-separated numbers between 1 and %d", len(choices))); err != nil {
 			return nil, err
 		}
 	}

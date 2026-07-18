@@ -75,19 +75,31 @@ func (p *Policy) AuditToolCall(ctx context.Context, event ToolAuditEvent) {
 	})
 }
 
+// AccessAuditEvent is the audit record for a gated prompt, resource, or server-to-client access.
+type AccessAuditEvent struct {
+	// Kind is one of the AccessKind* labels.
+	Kind string
+	// Target is the accessed prompt name, resource URI, or method.
+	Target string
+	// Outcome is one of the Outcome* labels.
+	Outcome string
+	// Reason is the decision or policy reason, when present.
+	Reason string
+}
+
 // AuditAccess records a gated prompt, resource, or server-to-client access outcome.
 // It is a no-op when no Auditor is configured.
-func (p *Policy) AuditAccess(ctx context.Context, kind, target, outcome, reason string) {
+func (p *Policy) AuditAccess(ctx context.Context, event AccessAuditEvent) {
 	if p.Auditor == nil {
 		return
 	}
 	p.Auditor.Audit(ctx, observability.AuditEvent{
-		Name: "mcp." + kind + "_access",
+		Name: "mcp." + event.Kind + "_access",
 		Attributes: map[string]string{
-			"kind":    kind,
-			"target":  target,
-			"outcome": outcome,
-			"reason":  reason,
+			"kind":    event.Kind,
+			"target":  event.Target,
+			"outcome": event.Outcome,
+			"reason":  event.Reason,
 		},
 	})
 }

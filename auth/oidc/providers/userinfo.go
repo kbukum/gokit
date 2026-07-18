@@ -15,14 +15,14 @@ import (
 // result is a deliberate opaque value:
 // it is a JSON unmarshal target whose concrete shape is provider-specific,
 // so it cannot be given a closed type here (same contract as [json.Unmarshal]).
-func FetchJSON(ctx context.Context, client *http.Client, endpoint, accessToken string, result any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
+func FetchJSON(ctx context.Context, req FetchRequest, result any) error {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, req.Endpoint, http.NoBody)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
+	httpReq.Header.Set("Authorization", "Bearer "+req.AccessToken)
 
-	resp, err := resolveClient(client).Do(req)
+	resp, err := resolveClient(req.Client).Do(httpReq)
 	if err != nil {
 		return err
 	}

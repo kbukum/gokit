@@ -172,7 +172,7 @@ func TestExchangeCodeDirect(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
+	tok, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestExchangeCodeWithCodeVerifier(t *testing.T) {
 
 	cfg := mockProviderConfig()
 	opts := oidc.ExchangeOptions{CodeVerifier: "my-verifier"}
-	_, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", opts, nil)
+	_, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code", Options: opts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestExchangeCodeRedirectOverride(t *testing.T) {
 
 	cfg := mockProviderConfig()
 	opts := oidc.ExchangeOptions{RedirectURI: "http://overridden/callback"}
-	_, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", opts, nil)
+	_, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code", Options: opts})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestExchangeJSONDirect(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeJSON(context.Background(), nil, srv.TokenURL(), cfg, "json-code", oidc.ExchangeOptions{}, "", nil)
+	tok, err := ExchangeJSON(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "json-code"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestExchangeJSONCustomClientIDParam(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	_, err := ExchangeJSON(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, "client_key", nil)
+	_, err := ExchangeJSON(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code", ClientIDParam: "client_key"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestResolveClient_NonNil(t *testing.T) {
 }
 
 func TestExchangeCode_BadURL(t *testing.T) {
-	_, err := ExchangeCode(context.Background(), nil, "http://\x7f/bad", mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	_, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: "http://\x7f/bad", Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected request-construction error")
 	}
@@ -266,7 +266,7 @@ func TestExchangeCode_ConnError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	url := srv.URL
 	srv.Close()
-	_, err := ExchangeCode(context.Background(), nil, url, mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	_, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: url, Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected connection error")
 	}
@@ -277,14 +277,14 @@ func TestExchangeCode_BadJSON(t *testing.T) {
 		_, _ = w.Write([]byte("not json"))
 	}))
 	defer srv.Close()
-	_, err := ExchangeCode(context.Background(), nil, srv.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, nil)
+	_, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.URL, Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected decode error")
 	}
 }
 
 func TestExchangeJSON_Errors(t *testing.T) {
-	_, err := ExchangeJSON(context.Background(), nil, "http://\x7f/bad", mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	_, err := ExchangeJSON(context.Background(), ExchangeRequest{TokenURL: "http://\x7f/bad", Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected request-construction error")
 	}
@@ -293,7 +293,7 @@ func TestExchangeJSON_Errors(t *testing.T) {
 		http.Error(w, "no", http.StatusBadRequest)
 	}))
 	defer fail.Close()
-	_, err = ExchangeJSON(context.Background(), nil, fail.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	_, err = ExchangeJSON(context.Background(), ExchangeRequest{TokenURL: fail.URL, Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected HTTP error")
 	}
@@ -302,7 +302,7 @@ func TestExchangeJSON_Errors(t *testing.T) {
 		_, _ = w.Write([]byte("not json"))
 	}))
 	defer bad.Close()
-	_, err = ExchangeJSON(context.Background(), nil, bad.URL, mockProviderConfig(), "code", oidc.ExchangeOptions{}, "", nil)
+	_, err = ExchangeJSON(context.Background(), ExchangeRequest{TokenURL: bad.URL, Config: mockProviderConfig(), Code: "code"})
 	if err == nil {
 		t.Fatal("expected parse error")
 	}

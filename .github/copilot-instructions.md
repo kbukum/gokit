@@ -95,6 +95,13 @@ When adding a new module:
   No `interface{}`/`any` in public APIs (except genuinely opaque values — JSON body, `ctx.Value`, DB scan — documented).
 - Interfaces have 1–3 methods. Components opt-in to capabilities via separate interfaces.
 - Constructors accept `...Option` for extensibility (functional options pattern).
+- **Signatures, not columns.** Go has no line-length cap and `gofmt` does not wrap signatures,
+  so an over-long signature is a design signal, not a wrap target —
+  reduce parameters with a typed request/options struct
+  or functional options (prefer the owning package's existing `Config`/`...Option` pattern) rather than hand-wrapping.
+  `context.Context` stays the first parameter and is never folded into a struct.
+  When a multi-line signature is genuinely warranted,
+  use the gofmt-stable one-param-per-line form with a trailing comma and `)` closing at column 0.
 - Package names: lowercase, single-word, no plurals.
 - Every package has a `doc.go`.
 - Exported interfaces + factory functions; concrete implementations unexported.

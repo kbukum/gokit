@@ -1,7 +1,7 @@
 // Package migration runs schema migrations against a database.
 //
-// [MigrateUp], [MigrateDown], [MigrateSteps], [MigrateVersion],
-// and [MigrateReset] drive a migration source through a [DriverFunc],
+// [Config] carries the GORM database, embedded source, path, and [DriverFunc]; its Up, Down, Steps,
+// Version, and Reset methods drive a migration source through the driver,
 // giving composition roots explicit,
 // ordered control over schema evolution instead of implicit auto-migration.
 package migration

@@ -183,7 +183,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 			turnSpan.RecordError(err)
 			turnSpan.End()
 			a.saveMemory(turnCtx, msgs)
-			return a.resultForError(msgs, totalUsage, turn-1, err), err
+			return a.resultForError(runState{msgs: msgs, usage: totalUsage, turns: turn - 1}, err), err
 		}
 		if err := a.emitHookErr(turnCtx, StartEvent{Turn: turn}); err != nil {
 			turnSpan.RecordError(err)
@@ -200,7 +200,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 		if err != nil {
 			turnSpan.RecordError(err)
 			turnSpan.End()
-			return a.handleRunError(turnCtx, msgs, totalUsage, turn-1, fmt.Errorf("agent: llm call failed on turn %d: %w", turn, err))
+			return a.handleRunError(turnCtx, runState{msgs: msgs, usage: totalUsage, turns: turn - 1}, fmt.Errorf("agent: llm call failed on turn %d: %w", turn, err))
 		}
 		_ = a.emitHookErr(turnCtx, LLMResponseEvent{Request: req, Response: &resp})
 		totalUsage = addUsage(totalUsage, resp.Usage)
@@ -213,7 +213,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 			turnSpan.RecordError(err)
 			turnSpan.End()
 			a.saveMemory(turnCtx, msgs)
-			return a.resultForError(msgs, totalUsage, turn, err), err
+			return a.resultForError(runState{msgs: msgs, usage: totalUsage, turns: turn}, err), err
 		}
 		if !resp.HasToolCalls() {
 			_ = a.emitHookErr(turnCtx, StepCompleteEvent{Turn: turn, Message: resp.Message, Usage: resp.Usage})
@@ -224,12 +224,12 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 				reason = StopEndTurn
 			}
 			_ = a.emitHook(turnCtx, StopEvent{Reason: reason})
-			return a.buildResult(msgs, resp.Message, totalUsage, turn, reason), nil
+			return a.buildResult(runState{msgs: msgs, usage: totalUsage, turns: turn}, resp.Message, reason), nil
 		}
 		if toolCalls+len(resp.Message.ToolCalls) > a.config.MaxToolCalls {
 			turnSpan.End()
 			a.saveMemory(turnCtx, msgs)
-			return a.resultForError(msgs, totalUsage, turn, ErrMaxToolCallsExceeded), ErrMaxToolCallsExceeded
+			return a.resultForError(runState{msgs: msgs, usage: totalUsage, turns: turn}, ErrMaxToolCallsExceeded), ErrMaxToolCallsExceeded
 		}
 		toolCalls += len(resp.Message.ToolCalls)
 		for _, msg := range a.executeTools(turnCtx, resp.Message.ToolCalls) {
@@ -251,7 +251,7 @@ func (a *Agent) Run(ctx context.Context, messages []chat.Message) (*Result, erro
 	}
 	a.saveMemory(ctx, msgs)
 	_ = a.emitHook(ctx, StopEvent{Reason: StopMaxTurns, Err: ErrMaxTurnsExceeded})
-	return a.resultForError(msgs, totalUsage, a.config.MaxTurns, ErrMaxTurnsExceeded), ErrMaxTurnsExceeded
+	return a.resultForError(runState{msgs: msgs, usage: totalUsage, turns: a.config.MaxTurns}, ErrMaxTurnsExceeded), ErrMaxTurnsExceeded
 }
 
 func (a *Agent) Stream(ctx context.Context, messages []chat.Message) (<-chan llm.StreamEvent, error) {
@@ -409,8 +409,16 @@ func (a *Agent) saveMemory(ctx context.Context, msgs []chat.Message) {
 	}
 }
 
-func (a *Agent) buildResult(msgs []chat.Message, finalMsg chat.AssistantMessage, usage llm.Usage, turns int, reason StopReason) *Result {
-	return &Result{Messages: msgs, FinalMessage: finalMsg, TotalUsage: usage, TurnCount: turns, StopReason: reason}
+// runState is the evolving progress of a Run loop: accumulated messages, token usage,
+// and completed turn count.
+type runState struct {
+	msgs  []chat.Message
+	usage llm.Usage
+	turns int
+}
+
+func (a *Agent) buildResult(st runState, finalMsg chat.AssistantMessage, reason StopReason) *Result {
+	return &Result{Messages: st.msgs, FinalMessage: finalMsg, TotalUsage: st.usage, TurnCount: st.turns, StopReason: reason}
 }
 
 func (a *Agent) budgetError(ctx context.Context, usage llm.Usage, turn, toolCalls int) error {
@@ -439,10 +447,10 @@ func mapContextErr(ctx context.Context) error {
 	return ctx.Err()
 }
 
-func (a *Agent) resultForError(msgs []chat.Message, usage llm.Usage, turns int, err error) *Result {
+func (a *Agent) resultForError(st runState, err error) *Result {
 	var final chat.AssistantMessage
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if am, ok := msgs[i].(chat.AssistantMessage); ok {
+	for i := len(st.msgs) - 1; i >= 0; i-- {
+		if am, ok := st.msgs[i].(chat.AssistantMessage); ok {
 			final = am
 			break
 		}
@@ -460,12 +468,12 @@ func (a *Agent) resultForError(msgs []chat.Message, usage llm.Usage, turns int, 
 	case errors.Is(err, ErrMaxTurnsExceeded):
 		reason = StopMaxTurns
 	}
-	return a.buildResult(msgs, final, usage, turns, reason)
+	return a.buildResult(st, final, reason)
 }
 
-func (a *Agent) handleRunError(ctx context.Context, msgs []chat.Message, usage llm.Usage, turns int, err error) (*Result, error) {
+func (a *Agent) handleRunError(ctx context.Context, st runState, err error) (*Result, error) {
 	_ = a.emitHook(ctx, ErrorEvent{Err: err, Source: "agent"})
-	return a.resultForError(msgs, usage, turns, err), err
+	return a.resultForError(st, err), err
 }
 
 func addUsage(a, b llm.Usage) llm.Usage {

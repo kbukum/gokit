@@ -143,20 +143,12 @@ func (s *Summary) TrackComponent(name, status string, healthy bool) {
 }
 
 // TrackInfrastructure adds an infrastructure component with detailed metadata.
-// For non-component infrastructure (e.g., auth config), componentName can be empty.
-func (s *Summary) TrackInfrastructure(name, componentType, status, details string, port int, healthy bool) {
-	s.infrastructure = append(s.infrastructure, InfrastructureInfo{
-		Name:    name,
-		Type:    componentType,
-		Status:  status,
-		Details: details,
-		Port:    port,
-		Healthy: healthy,
-	})
+// For non-component infrastructure (e.g., auth config),
+// InfrastructureInfo.ComponentName can be empty.
+func (s *Summary) TrackInfrastructure(info InfrastructureInfo) {
+	s.infrastructure = append(s.infrastructure, info)
 }
 
-// trackInfrastructureWithComponent is like TrackInfrastructure
-// but also records the internal component name for deduplication with the Components section.
 // TrackBusinessComponent records a business-layer component.
 func (s *Summary) TrackBusinessComponent(name, componentType, status string, dependencies []string) {
 	s.business = append(s.business, BusinessComponentInfo{

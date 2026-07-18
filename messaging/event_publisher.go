@@ -34,6 +34,8 @@ func (p *EventPublisher) Publish(ctx context.Context, topic, eventType string, d
 // PublishKeyed sends a typed payload with an explicit partition key.
 //
 // The key is set both as the Event.Subject and the Kafka partition key.
+// This is a deliberate five-parameter convenience variant of the idiomatic four-parameter Publish:
+// the explicit key reads better as a positional argument than folded behind an opaque payload struct.
 func (p *EventPublisher) PublishKeyed(ctx context.Context, topic, eventType string, data any, key string) error {
 	event, err := NewEvent[any](eventType, p.source, data, key)
 	if err != nil {

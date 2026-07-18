@@ -12,14 +12,14 @@ func TestAuditIsNilSafe(t *testing.T) {
 	p := &Policy{}
 	// Must not panic without an auditor configured.
 	p.AuditToolCall(context.Background(), ToolAuditEvent{ToolName: "x"})
-	p.AuditAccess(context.Background(), AccessKindPrompt, "p", OutcomeDenied, "r")
+	p.AuditAccess(context.Background(), AccessAuditEvent{Kind: AccessKindPrompt, Target: "p", Outcome: OutcomeDenied, Reason: "r"})
 
 	var events []observability.AuditEvent
 	p.Auditor = observability.AuditorFunc(func(_ context.Context, e observability.AuditEvent) {
 		events = append(events, e)
 	})
 	p.AuditToolCall(context.Background(), ToolAuditEvent{ToolName: "add", MCPName: "svc_add", Outcome: OutcomeSuccess})
-	p.AuditAccess(context.Background(), AccessKindResource, "file:///a", OutcomeDenied, "not allowed")
+	p.AuditAccess(context.Background(), AccessAuditEvent{Kind: AccessKindResource, Target: "file:///a", Outcome: OutcomeDenied, Reason: "not allowed"})
 	if len(events) != 2 {
 		t.Fatalf("expected 2 audit events, got %d", len(events))
 	}

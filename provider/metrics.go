@@ -33,7 +33,12 @@ func (m *metricsRR[I, O]) Execute(ctx context.Context, input I) (O, error) {
 		status = "error"
 		m.metrics.RecordError(ctx, "execute", m.inner.Name())
 	}
-	m.metrics.RecordOperation(ctx, m.inner.Name(), "execute", status, duration)
+	m.metrics.RecordOperation(ctx, observability.OperationMetric{
+		Service:   m.inner.Name(),
+		Operation: "execute",
+		Status:    status,
+		Duration:  duration,
+	})
 
 	return output, err
 }

@@ -15,7 +15,7 @@
 //	defer mp.Shutdown(ctx)
 //
 //	metrics, err := observability.NewMetrics(observability.Meter("my-service"))
-//	metrics.RecordRequestEnd(ctx, "my-service", "GET /users", "ok", duration)
+//	metrics.RecordRequestEnd(ctx, observability.RequestMetric{Service: "my-service", Method: "GET /users", Status: "ok", Duration: duration})
 //
 // Health Checks:
 //

@@ -18,5 +18,5 @@
 // Alternatively, use the generic functions directly on the HTTP adapter:
 //
 //	adapter, _ := httpclient.New(cfg)
-//	user, err := httpclient.Get[User](adapter, ctx, "/users/123")
+//	user, err := httpclient.Get[User](ctx, adapter, "/users/123")
 package rest

@@ -401,7 +401,7 @@ func TestComponentRegistry(t *testing.T) {
 		t.Error("expected SetHandlers to replace handler list")
 	}
 
-	cr.RegisterConsumer("order-consumer", "group-1", "orders", 3, "active")
+	cr.RegisterConsumer(ConsumerComponent{Name: "order-consumer", Group: "group-1", Topic: "orders", Partitions: 3, Status: "active"})
 	if len(cr.Consumers()) != 1 {
 		t.Errorf("expected 1 consumer, got %d", len(cr.Consumers()))
 	}

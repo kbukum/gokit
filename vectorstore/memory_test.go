@@ -34,18 +34,18 @@ func TestInMemoryStoreUpsertAndSearch(t *testing.T) {
 	}
 
 	payload1 := NewPointPayload().WithField("name", "doc1")
-	err = store.Upsert(ctx, "test", "1", []float32{1.0, 0.0, 0.0}, payload1)
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0, 0.0, 0.0}, Payload: payload1})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
 	payload2 := NewPointPayload().WithField("name", "doc2")
-	err = store.Upsert(ctx, "test", "2", []float32{0.0, 1.0, 0.0}, payload2)
+	err = store.Upsert(ctx, "test", Point{ID: "2", Vector: []float32{0.0, 1.0, 0.0}, Payload: payload2})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	results, err := store.Search(ctx, "test", []float32{1.0, 0.0, 0.0}, 10, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0, 0.0, 0.0}, Limit: 10, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -73,18 +73,18 @@ func TestInMemoryStoreUpsertUpdatesExisting(t *testing.T) {
 	}
 
 	payload1 := NewPointPayload().WithField("v", "old")
-	err = store.Upsert(ctx, "test", "1", []float32{1.0, 0.0}, payload1)
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0, 0.0}, Payload: payload1})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
 	payload2 := NewPointPayload().WithField("v", "new")
-	err = store.Upsert(ctx, "test", "1", []float32{0.0, 1.0}, payload2)
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{0.0, 1.0}, Payload: payload2})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	results, err := store.Search(ctx, "test", []float32{0.0, 1.0}, 10, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{0.0, 1.0}, Limit: 10, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -111,30 +111,18 @@ func TestInMemoryStoreSearchWithFilter(t *testing.T) {
 		t.Fatalf("EnsureCollection() error = %v", err)
 	}
 
-	err = store.Upsert(
-		ctx,
-		"test",
-		"1",
-		[]float32{1.0, 0.0},
-		NewPointPayload().WithField("type", "a"),
-	)
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0, 0.0}, Payload: NewPointPayload().WithField("type", "a")})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	err = store.Upsert(
-		ctx,
-		"test",
-		"2",
-		[]float32{1.0, 0.0},
-		NewPointPayload().WithField("type", "b"),
-	)
+	err = store.Upsert(ctx, "test", Point{ID: "2", Vector: []float32{1.0, 0.0}, Payload: NewPointPayload().WithField("type", "b")})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
 	filter := NewSearchFilter().MustMatch("type", "a")
-	results, err := store.Search(ctx, "test", []float32{1.0, 0.0}, 10, filter)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0, 0.0}, Limit: 10, Filter: filter})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -157,7 +145,7 @@ func TestInMemoryStoreDelete(t *testing.T) {
 		t.Fatalf("EnsureCollection() error = %v", err)
 	}
 
-	err = store.Upsert(ctx, "test", "1", []float32{1.0, 0.0}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0, 0.0}, Payload: NewPointPayload()})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
@@ -167,7 +155,7 @@ func TestInMemoryStoreDelete(t *testing.T) {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
-	results, err := store.Search(ctx, "test", []float32{1.0, 0.0}, 10, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0, 0.0}, Limit: 10, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -186,7 +174,7 @@ func TestInMemoryStoreUpsertWrongDimensions(t *testing.T) {
 		t.Fatalf("EnsureCollection() error = %v", err)
 	}
 
-	err = store.Upsert(ctx, "test", "1", []float32{1.0, 0.0}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0, 0.0}, Payload: NewPointPayload()})
 	if err == nil {
 		t.Error("Upsert() expected error for dimension mismatch")
 	}
@@ -196,7 +184,7 @@ func TestInMemoryStoreUpsertMissingCollection(t *testing.T) {
 	store := NewInMemoryStore()
 	ctx := context.Background()
 
-	err := store.Upsert(ctx, "nonexistent", "1", []float32{1.0}, NewPointPayload())
+	err := store.Upsert(ctx, "nonexistent", Point{ID: "1", Vector: []float32{1.0}, Payload: NewPointPayload()})
 	if err == nil {
 		t.Error("Upsert() expected error for missing collection")
 	}
@@ -206,7 +194,7 @@ func TestInMemoryStoreSearchMissingCollection(t *testing.T) {
 	store := NewInMemoryStore()
 	ctx := context.Background()
 
-	_, err := store.Search(ctx, "nonexistent", []float32{1.0}, 10, nil)
+	_, err := store.Search(ctx, "nonexistent", SearchQuery{Vector: []float32{1.0}, Limit: 10, Filter: nil})
 	if err == nil {
 		t.Error("Search() expected error for missing collection")
 	}
@@ -234,14 +222,14 @@ func TestInMemoryStoreSearchLimit(t *testing.T) {
 	// Insert 5 points
 	for i := 0; i < 5; i++ {
 		payload := NewPointPayload().WithField("index", i)
-		err = store.Upsert(ctx, "test", string(rune('1'+i)), []float32{float32(i)}, payload)
+		err = store.Upsert(ctx, "test", Point{ID: string(rune('1' + i)), Vector: []float32{float32(i)}, Payload: payload})
 		if err != nil {
 			t.Fatalf("Upsert() error = %v", err)
 		}
 	}
 
 	// Search with limit
-	results, err := store.Search(ctx, "test", []float32{4.0}, 2, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{4.0}, Limit: 2, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -261,16 +249,16 @@ func TestInMemoryStoreSearchDotMetric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureCollection() error = %v", err)
 	}
-	err = store.Upsert(ctx, "test", "strong", []float32{2, 0}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "strong", Vector: []float32{2, 0}, Payload: NewPointPayload()})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
-	err = store.Upsert(ctx, "test", "weak", []float32{0, 1}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "weak", Vector: []float32{0, 1}, Payload: NewPointPayload()})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	results, err := store.Search(ctx, "test", []float32{1, 1}, 2, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1, 1}, Limit: 2, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -289,16 +277,16 @@ func TestInMemoryStoreSearchL2Metric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureCollection() error = %v", err)
 	}
-	err = store.Upsert(ctx, "test", "near", []float32{1}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "near", Vector: []float32{1}, Payload: NewPointPayload()})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
-	err = store.Upsert(ctx, "test", "far", []float32{3}, NewPointPayload())
+	err = store.Upsert(ctx, "test", Point{ID: "far", Vector: []float32{3}, Payload: NewPointPayload()})
 	if err != nil {
 		t.Fatalf("Upsert() error = %v", err)
 	}
 
-	results, err := store.Search(ctx, "test", []float32{0}, 2, nil)
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{0}, Limit: 2, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
@@ -356,7 +344,7 @@ func TestInMemoryStoreSearchWrongDimensions(t *testing.T) {
 	if err := store.EnsureCollection(ctx, "c", 3); err != nil {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
-	if _, err := store.Search(ctx, "c", []float32{1, 2}, 5, nil); err == nil {
+	if _, err := store.Search(ctx, "c", SearchQuery{Vector: []float32{1, 2}, Limit: 5, Filter: nil}); err == nil {
 		t.Fatal("expected dimension mismatch error")
 	}
 }
@@ -369,16 +357,16 @@ func TestInMemoryStoreDeleteKeepsOtherPoints(t *testing.T) {
 	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
-	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, nil); err != nil {
+	if err := store.Upsert(ctx, "c", Point{ID: "a", Vector: []float32{1, 0}, Payload: nil}); err != nil {
 		t.Fatalf("Upsert a: %v", err)
 	}
-	if err := store.Upsert(ctx, "c", "b", []float32{0, 1}, nil); err != nil {
+	if err := store.Upsert(ctx, "c", Point{ID: "b", Vector: []float32{0, 1}, Payload: nil}); err != nil {
 		t.Fatalf("Upsert b: %v", err)
 	}
 	if err := store.Delete(ctx, "c", "a"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	results, err := store.Search(ctx, "c", []float32{0, 1}, 5, nil)
+	results, err := store.Search(ctx, "c", SearchQuery{Vector: []float32{0, 1}, Limit: 5, Filter: nil})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -395,11 +383,11 @@ func TestInMemoryStoreFilterSkipsNilPayload(t *testing.T) {
 	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
-	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, nil); err != nil {
+	if err := store.Upsert(ctx, "c", Point{ID: "a", Vector: []float32{1, 0}, Payload: nil}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 	filter := NewSearchFilter().MustMatch("kind", "doc")
-	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, filter)
+	results, err := store.Search(ctx, "c", SearchQuery{Vector: []float32{1, 0}, Limit: 5, Filter: filter})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -417,11 +405,11 @@ func TestInMemoryStoreFilterMatchesStructuredValue(t *testing.T) {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
 	payload := NewPointPayload().WithField("tags", []string{"x", "y"})
-	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, payload); err != nil {
+	if err := store.Upsert(ctx, "c", Point{ID: "a", Vector: []float32{1, 0}, Payload: payload}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 	match := NewSearchFilter().MustMatch("tags", []string{"x", "y"})
-	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, match)
+	results, err := store.Search(ctx, "c", SearchQuery{Vector: []float32{1, 0}, Limit: 5, Filter: match})
 	if err != nil {
 		t.Fatalf("Search match: %v", err)
 	}
@@ -429,7 +417,7 @@ func TestInMemoryStoreFilterMatchesStructuredValue(t *testing.T) {
 		t.Fatalf("expected structured value to match via deep compare, got %+v", results)
 	}
 	miss := NewSearchFilter().MustMatch("tags", []string{"z"})
-	results, err = store.Search(ctx, "c", []float32{1, 0}, 5, miss)
+	results, err = store.Search(ctx, "c", SearchQuery{Vector: []float32{1, 0}, Limit: 5, Filter: miss})
 	if err != nil {
 		t.Fatalf("Search miss: %v", err)
 	}
@@ -456,11 +444,11 @@ func TestInMemoryStoreFilterMatchesNilValue(t *testing.T) {
 	if err := store.EnsureCollection(ctx, "c", 2); err != nil {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
-	if err := store.Upsert(ctx, "c", "a", []float32{1, 0}, NewPointPayload().WithField("owner", nil)); err != nil {
+	if err := store.Upsert(ctx, "c", Point{ID: "a", Vector: []float32{1, 0}, Payload: NewPointPayload().WithField("owner", nil)}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 	filter := NewSearchFilter().MustMatch("owner", nil)
-	results, err := store.Search(ctx, "c", []float32{1, 0}, 5, filter)
+	results, err := store.Search(ctx, "c", SearchQuery{Vector: []float32{1, 0}, Limit: 5, Filter: filter})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

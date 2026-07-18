@@ -55,9 +55,15 @@ func WithCacheTTL(ttl time.Duration) ManagerPoolOption {
 	return func(p *ManagerPool) { p.cacheTTL = ttl }
 }
 
-// NewManagerPool creates a pool that resolves Docker hosts dynamically. When resolver is nil,
-// it behaves like a single-host manager.
-func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string]string, log *logging.Logger, opts ...ManagerPoolOption) (*ManagerPool, error) {
+// WithHostResolver sets the resolver used to pick a Docker host per request. Without it,
+// the pool behaves like a single-host manager.
+func WithHostResolver(resolver HostResolver) ManagerPoolOption {
+	return func(p *ManagerPool) { p.resolver = resolver }
+}
+
+// NewManagerPool creates a pool that resolves Docker hosts dynamically.
+// Without a [WithHostResolver] option it behaves like a single-host manager.
+func NewManagerPool(cfg *Config, defaultLabels map[string]string, log *logging.Logger, opts ...ManagerPoolOption) (*ManagerPool, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -69,7 +75,6 @@ func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string
 	}
 
 	pool := &ManagerPool{
-		resolver:      resolver,
 		defaultMgr:    defaultMgr,
 		cache:         make(map[string]*cachedManager),
 		cacheTTL:      5 * time.Minute,

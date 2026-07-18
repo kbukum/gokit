@@ -626,7 +626,7 @@ func TestSummaryTrackComponent(t *testing.T) {
 
 func TestSummaryTrackInfrastructure(t *testing.T) {
 	s := NewSummary("svc", "1.0")
-	s.TrackInfrastructure("PostgreSQL", "database", "active", "localhost:5432", 5432, true)
+	s.TrackInfrastructure(InfrastructureInfo{Name: "PostgreSQL", Type: "database", Status: "active", Details: "localhost:5432", Port: 5432, Healthy: true})
 
 	if len(s.infrastructure) != 1 {
 		t.Fatalf("expected 1 infrastructure, got %d", len(s.infrastructure))
@@ -698,7 +698,7 @@ func TestSummarySetStartupDuration(t *testing.T) {
 func TestSummaryDisplaySummary(t *testing.T) {
 	s := NewSummary("test-svc", "1.0.0")
 	s.SetStartupDuration(100 * time.Millisecond)
-	s.TrackInfrastructure("DB", "database", "active", "localhost:5432", 5432, true)
+	s.TrackInfrastructure(InfrastructureInfo{Name: "DB", Type: "database", Status: "active", Details: "localhost:5432", Port: 5432, Healthy: true})
 	s.TrackRoute("GET", "/health", "HealthHandler")
 	s.TrackBusinessComponent("user-svc", "service", "active", []string{"db"})
 	s.TrackConsumer("events", "g1", "events-topic", "active")

@@ -78,19 +78,19 @@ func (s *Store) EnsureCollection(ctx context.Context, collection string, dimensi
 }
 
 // Upsert inserts or updates a vector point.
-func (s *Store) Upsert(ctx context.Context, collection, id string, vector []float32, payload *vectorstore.PointPayload) error {
+func (s *Store) Upsert(ctx context.Context, collection string, point vectorstore.Point) error {
 	if err := validateCollection(collection); err != nil {
 		return err
 	}
-	pid, err := pointIDFromString(id)
+	pid, err := pointIDFromString(point.ID)
 	if err != nil {
 		return err
 	}
-	payloadJSON, err := payloadToJSON(payload)
+	payloadJSON, err := payloadToJSON(point.Payload)
 	if err != nil {
 		return err
 	}
-	body := map[string]any{"points": []map[string]any{{"id": pid, "vector": vector, "payload": payloadJSON}}}
+	body := map[string]any{"points": []map[string]any{{"id": pid, "vector": point.Vector, "payload": payloadJSON}}}
 	resp, err := s.doJSON(ctx, http.MethodPut, "/collections/"+collection+"/points?wait=true", body)
 	if err != nil {
 		return err
@@ -100,12 +100,12 @@ func (s *Store) Upsert(ctx context.Context, collection, id string, vector []floa
 }
 
 // Search searches for similar vectors.
-func (s *Store) Search(ctx context.Context, collection string, vector []float32, limit int, filter *vectorstore.SearchFilter) ([]vectorstore.SearchResult, error) {
+func (s *Store) Search(ctx context.Context, collection string, query vectorstore.SearchQuery) ([]vectorstore.SearchResult, error) {
 	if err := validateCollection(collection); err != nil {
 		return nil, err
 	}
-	body := map[string]any{"vector": vector, "limit": limit, "with_payload": true}
-	filterJSON, err := filterToJSON(filter)
+	body := map[string]any{"vector": query.Vector, "limit": query.Limit, "with_payload": true}
+	filterJSON, err := filterToJSON(query.Filter)
 	if err != nil {
 		return nil, err
 	}

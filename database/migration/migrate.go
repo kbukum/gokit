@@ -19,7 +19,7 @@
 //	    return migratepg.WithInstance(db, &migratepg.Config{})
 //	}
 //
-//	err := migration.MigrateUp(gormDB, migrationsFS, "migrations", driverFunc)
+//	err := (migration.Config{DB: gormDB, FS: migrationsFS, Path: "migrations", Driver: driverFunc}).Up()
 package migration
 
 import (
@@ -52,11 +52,20 @@ import (
 //	}
 type DriverFunc func(*sql.DB) (database.Driver, error)
 
-// MigrateUp runs all pending versioned migrations from the embedded FS.
+// Config describes a migration run: the GORM-managed database, the embedded migration source,
+// the source path within it, and the driver factory.
+type Config struct {
+	DB     *gorm.DB
+	FS     embed.FS
+	Path   string
+	Driver DriverFunc
+}
+
+// Up runs all pending versioned migrations from the embedded FS.
 // Migration files should follow the pattern: VERSION_name.up.sql and VERSION_name.down.sql.
 // Returns nil if there are no new migrations to apply (migrate.ErrNoChange is suppressed).
-func MigrateUp(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) error {
-	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
+func (c Config) Up() error {
+	m, err := c.newMigrator()
 	if err != nil {
 		return err
 	}
@@ -66,11 +75,11 @@ func MigrateUp(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc D
 	return nil
 }
 
-// MigrateDown rolls back all versioned migrations. This will undo all applied migrations.
-// Use MigrateSteps for partial rollback.
+// Down rolls back all versioned migrations. This will undo all applied migrations.
+// Use Steps for partial rollback.
 // Returns nil if there are no migrations to roll back (migrate.ErrNoChange is suppressed).
-func MigrateDown(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) error {
-	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
+func (c Config) Down() error {
+	m, err := c.newMigrator()
 	if err != nil {
 		return err
 	}
@@ -80,20 +89,20 @@ func MigrateDown(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc
 	return nil
 }
 
-// MigrateVersion returns the current migration version and dirty flag.
-func MigrateVersion(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) (version uint, dirty bool, err error) {
-	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
+// Version returns the current migration version and dirty flag.
+func (c Config) Version() (version uint, dirty bool, err error) {
+	m, err := c.newMigrator()
 	if err != nil {
 		return 0, false, err
 	}
 	return m.Version()
 }
 
-// MigrateSteps runs n migrations (positive = up, negative = down).
+// Steps runs n migrations (positive = up, negative = down).
 // Use positive n to apply n forward migrations, negative n to roll back n migrations.
 // Returns nil if the requested number of migrations cannot be applied (migrate.ErrNoChange is suppressed).
-func MigrateSteps(gormDB *gorm.DB, migrationsFS embed.FS, path string, n int, driverFunc DriverFunc) error {
-	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
+func (c Config) Steps(n int) error {
+	m, err := c.newMigrator()
 	if err != nil {
 		return err
 	}
@@ -103,11 +112,11 @@ func MigrateSteps(gormDB *gorm.DB, migrationsFS embed.FS, path string, n int, dr
 	return nil
 }
 
-// MigrateReset drops everything and re-applies all migrations. WARNING:
+// Reset drops everything and re-applies all migrations. WARNING:
 // This will destroy all data in the database. Use with caution.
 // Typically used in development/testing environments only.
-func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) error {
-	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
+func (c Config) Reset() error {
+	m, err := c.newMigrator()
 	if err != nil {
 		return err
 	}
@@ -116,7 +125,7 @@ func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFun
 	}
 
 	// Re-create migrator after drop (schema_migrations was dropped)
-	m, err = newMigrator(gormDB, migrationsFS, path, driverFunc)
+	m, err = c.newMigrator()
 	if err != nil {
 		return err
 	}
@@ -128,18 +137,18 @@ func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFun
 
 // newMigrator creates a golang-migrate instance backed by the embedded FS.
 // Callers must NOT call m.Close() — it would close the shared sql.DB.
-func newMigrator(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) (*migrate.Migrate, error) {
-	sqlDB, err := gormDB.DB()
+func (c Config) newMigrator() (*migrate.Migrate, error) {
+	sqlDB, err := c.DB.DB()
 	if err != nil {
 		return nil, fmt.Errorf("get sql.DB: %w", err)
 	}
 
-	driver, err := driverFunc(sqlDB)
+	driver, err := c.Driver(sqlDB)
 	if err != nil {
 		return nil, fmt.Errorf("create database driver: %w", err)
 	}
 
-	source, err := iofs.New(migrationsFS, path)
+	source, err := iofs.New(c.FS, c.Path)
 	if err != nil {
 		return nil, fmt.Errorf("create iofs source: %w", err)
 	}

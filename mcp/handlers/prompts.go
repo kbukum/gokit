@@ -21,15 +21,15 @@ func (h *Handler) wrapPromptHandler(entry PromptEntry) sdkmcp.PromptHandler {
 	name := entry.Prompt.Name
 	return func(ctx context.Context, req *sdkmcp.GetPromptRequest) (*sdkmcp.GetPromptResult, error) {
 		if !h.policy.AllowsPrompt(name) {
-			h.policy.AuditAccess(ctx, security.AccessKindPrompt, name, security.OutcomeDenied, "not in allow-list")
+			h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindPrompt, Target: name, Outcome: security.OutcomeDenied, Reason: "not in allow-list"})
 			return nil, fmt.Errorf("prompt not allowed: %s", name)
 		}
 		res, err := entry.Handler(ctx, req)
 		if err != nil {
-			h.policy.AuditAccess(ctx, security.AccessKindPrompt, name, security.OutcomeToolError, err.Error())
+			h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindPrompt, Target: name, Outcome: security.OutcomeToolError, Reason: err.Error()})
 			return nil, err
 		}
-		h.policy.AuditAccess(ctx, security.AccessKindPrompt, name, security.OutcomeSuccess, "")
+		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindPrompt, Target: name, Outcome: security.OutcomeSuccess, Reason: ""})
 		return res, nil
 	}
 }

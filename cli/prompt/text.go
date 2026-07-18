@@ -13,8 +13,8 @@ import (
 // Interactively it prints the prompt and reads a line; a blank answer accepts the default,
 // and a validator rejection is shown before re-asking.
 // hasDefault distinguishes "" (a real empty default) from no default at all.
-func runText(term Terminal, style Style, mode PromptMode, prompt, def string, hasDefault bool, validator Validator) (string, error) {
-	if !mode.IsInteractive() {
+func (s session) runText(prompt, def string, hasDefault bool, validator Validator) (string, error) {
+	if !s.mode.IsInteractive() {
 		if !hasDefault {
 			return "", nonInteractiveError(prompt)
 		}
@@ -26,7 +26,7 @@ func runText(term Terminal, style Style, mode PromptMode, prompt, def string, ha
 		return def, nil
 	}
 
-	if err := term.WriteLine(heading(style, prompt)); err != nil {
+	if err := s.term.WriteLine(heading(s.style, prompt)); err != nil {
 		return "", err
 	}
 	for {
@@ -34,10 +34,10 @@ func runText(term Terminal, style Style, mode PromptMode, prompt, def string, ha
 		if hasDefault && def != "" {
 			hint = "[" + def + "]"
 		}
-		if err := writeAnswer(term, style, hint); err != nil {
+		if err := writeAnswer(s.term, s.style, hint); err != nil {
 			return "", err
 		}
-		line, ok, err := term.ReadLine()
+		line, ok, err := s.term.ReadLine()
 		if err != nil {
 			return "", err
 		}
@@ -48,7 +48,7 @@ func runText(term Terminal, style Style, mode PromptMode, prompt, def string, ha
 		if accepted {
 			return value, nil
 		}
-		if err := notice(term, style, reason); err != nil {
+		if err := notice(s.term, s.style, reason); err != nil {
 			return "", err
 		}
 	}

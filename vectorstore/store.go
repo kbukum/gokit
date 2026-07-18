@@ -74,6 +74,20 @@ func (p *PointPayload) WithField(key string, value any) *PointPayload {
 	return p
 }
 
+// Point is a vector point to insert or update in a collection.
+type Point struct {
+	ID      string
+	Vector  []float32
+	Payload *PointPayload
+}
+
+// SearchQuery describes a vector similarity search.
+type SearchQuery struct {
+	Vector []float32
+	Limit  int
+	Filter *SearchFilter
+}
+
 // SearchResult represents a single result from a vector search.
 type SearchResult struct {
 	ID      string        `json:"id"`
@@ -114,10 +128,10 @@ type Store interface {
 	EnsureCollection(ctx context.Context, collection string, dimensions int) error
 
 	// Upsert inserts or updates a vector point.
-	Upsert(ctx context.Context, collection, id string, vector []float32, payload *PointPayload) error
+	Upsert(ctx context.Context, collection string, point Point) error
 
 	// Search searches for similar vectors.
-	Search(ctx context.Context, collection string, vector []float32, limit int, filter *SearchFilter) ([]SearchResult, error)
+	Search(ctx context.Context, collection string, query SearchQuery) ([]SearchResult, error)
 
 	// Delete deletes a point by ID.
 	Delete(ctx context.Context, collection, id string) error

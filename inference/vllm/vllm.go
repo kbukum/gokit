@@ -150,7 +150,7 @@ func (p *Provider) exec(ctx context.Context, method, path string, body any) ([]b
 	if method != http.MethodPost {
 		return nil, fmt.Errorf("vllm: unsupported method %s", method)
 	}
-	resp, err := httpclient.Post[json.RawMessage](p.client, ctx, path, body)
+	resp, err := httpclient.Post[json.RawMessage](ctx, p.client, path, body)
 	if err != nil {
 		return nil, err
 	}

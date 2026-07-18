@@ -171,8 +171,8 @@ func TestMockServerReset(t *testing.T) {
 	defer srv.Close()
 
 	cfg := mockProviderConfig()
-	ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code1", oidc.ExchangeOptions{}, nil)
-	ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code2", oidc.ExchangeOptions{}, nil)
+	ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code1"})
+	ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code2"})
 
 	if len(srv.TokenRequests()) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(srv.TokenRequests()))
@@ -194,7 +194,7 @@ func TestMockServerCustomResponses(t *testing.T) {
 	})
 
 	cfg := mockProviderConfig()
-	tok, err := ExchangeCode(context.Background(), nil, srv.TokenURL(), cfg, "code", oidc.ExchangeOptions{}, nil)
+	tok, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code"})
 	if err != nil {
 		t.Fatal(err)
 	}

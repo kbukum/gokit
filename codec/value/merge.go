@@ -30,10 +30,15 @@ func Merge(base, overlay any) any {
 // arrayStrategy is consulted with that key to decide [Replace] vs [Concat].
 // Type mismatches (for example object vs scalar) resolve to the overlay. Neither input is mutated.
 func MergeWith(base, overlay any, arrayStrategy func(key string) ArrayStrategy) any {
-	return mergeInner(base, overlay, "", false, arrayStrategy)
+	return merger{arrayStrategy: arrayStrategy}.merge(base, overlay, "", false)
 }
 
-func mergeInner(base, overlay any, key string, keyed bool, arrayStrategy func(string) ArrayStrategy) any {
+// merger carries the array-merge strategy across the recursive merge.
+type merger struct {
+	arrayStrategy func(string) ArrayStrategy
+}
+
+func (m merger) merge(base, overlay any, key string, keyed bool) any {
 	baseObj, baseIsObj := base.(map[string]any)
 	overlayObj, overlayIsObj := overlay.(map[string]any)
 	if baseIsObj && overlayIsObj {
@@ -43,7 +48,7 @@ func mergeInner(base, overlay any, key string, keyed bool, arrayStrategy func(st
 		}
 		for k, ov := range overlayObj {
 			if bv, ok := merged[k]; ok {
-				merged[k] = mergeInner(bv, ov, k, true, arrayStrategy)
+				merged[k] = m.merge(bv, ov, k, true)
 			} else {
 				merged[k] = ov
 			}
@@ -56,7 +61,7 @@ func mergeInner(base, overlay any, key string, keyed bool, arrayStrategy func(st
 	if baseIsArr && overlayIsArr {
 		strategy := Replace
 		if keyed {
-			strategy = arrayStrategy(key)
+			strategy = m.arrayStrategy(key)
 		}
 		if strategy == Concat {
 			out := make([]any, 0, len(baseArr)+len(overlayArr))

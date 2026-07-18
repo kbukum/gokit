@@ -220,7 +220,12 @@ func LoadConfig(serviceName string, cfg any, opts ...LoaderOption) error {
 	resolver := &Resolver{FileSystem: lc.FileSystem}
 	files := resolver.ResolveFiles(serviceName, lc)
 
-	return loadFromResolvedFiles(serviceName, cfg, files, lc.FileSystem, lc.WarningLogger)
+	return loadFromResolvedFiles(cfg, loadPlan{
+		serviceName: serviceName,
+		files:       files,
+		fs:          lc.FileSystem,
+		warn:        lc.WarningLogger,
+	})
 }
 
 // Defaultable is implemented by config structs that have default values.
@@ -233,8 +238,17 @@ type Validatable interface {
 	Validate() error
 }
 
+// loadPlan bundles the resolved inputs for loadFromResolvedFiles.
+type loadPlan struct {
+	serviceName string
+	files       ResolvedFiles
+	fs          FileSystem
+	warn        WarningFunc
+}
+
 // loadFromResolvedFiles loads configuration from specific files.
-func loadFromResolvedFiles(serviceName string, cfg any, files ResolvedFiles, fs FileSystem, warn WarningFunc) error {
+func loadFromResolvedFiles(cfg any, plan loadPlan) error {
+	serviceName, files, fs, warn := plan.serviceName, plan.files, plan.fs, plan.warn
 	v := viper.New()
 
 	// 1. Load YAML config first (base configuration)

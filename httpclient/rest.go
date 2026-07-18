@@ -48,32 +48,32 @@ func WithRequestAuth(auth *AuthConfig) RequestOption {
 }
 
 // Get performs a GET request and decodes the JSON response into type T.
-func Get[T any](a *Adapter, ctx context.Context, path string, opts ...RequestOption) (*TypedResponse[T], error) {
-	return doTyped[T](a, ctx, http.MethodGet, path, nil, opts...)
+func Get[T any](ctx context.Context, a *Adapter, path string, opts ...RequestOption) (*TypedResponse[T], error) {
+	return doTyped[T](ctx, a, http.MethodGet, path, nil, opts...)
 }
 
 // Post performs a POST request with a JSON body and decodes the response into type T.
-func Post[T any](a *Adapter, ctx context.Context, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
-	return doTyped[T](a, ctx, http.MethodPost, path, body, opts...)
+func Post[T any](ctx context.Context, a *Adapter, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
+	return doTyped[T](ctx, a, http.MethodPost, path, body, opts...)
 }
 
 // Put performs a PUT request with a JSON body and decodes the response into type T.
-func Put[T any](a *Adapter, ctx context.Context, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
-	return doTyped[T](a, ctx, http.MethodPut, path, body, opts...)
+func Put[T any](ctx context.Context, a *Adapter, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
+	return doTyped[T](ctx, a, http.MethodPut, path, body, opts...)
 }
 
 // Patch performs a PATCH request with a JSON body and decodes the response into type T.
-func Patch[T any](a *Adapter, ctx context.Context, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
-	return doTyped[T](a, ctx, http.MethodPatch, path, body, opts...)
+func Patch[T any](ctx context.Context, a *Adapter, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
+	return doTyped[T](ctx, a, http.MethodPatch, path, body, opts...)
 }
 
 // Delete performs a DELETE request and decodes the JSON response into type T.
-func Delete[T any](a *Adapter, ctx context.Context, path string, opts ...RequestOption) (*TypedResponse[T], error) {
-	return doTyped[T](a, ctx, http.MethodDelete, path, nil, opts...)
+func Delete[T any](ctx context.Context, a *Adapter, path string, opts ...RequestOption) (*TypedResponse[T], error) {
+	return doTyped[T](ctx, a, http.MethodDelete, path, nil, opts...)
 }
 
 // doTyped executes a typed REST request and decodes the JSON response.
-func doTyped[T any](a *Adapter, ctx context.Context, method, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
+func doTyped[T any](ctx context.Context, a *Adapter, method, path string, body any, opts ...RequestOption) (*TypedResponse[T], error) {
 	req := Request{
 		Method: method,
 		Path:   path,

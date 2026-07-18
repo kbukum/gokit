@@ -18,16 +18,26 @@ type OperationContext struct {
 	Metrics       *Metrics
 }
 
-// NewOperationContext creates a new operation context. If metrics is nil,
+// OperationSpec identifies a tracked operation for [NewOperationContext].
+// Metrics may be nil to silently skip metric recording.
+type OperationSpec struct {
+	ServiceName   string
+	OperationName string
+	RequestID     string
+	UserID        string
+	Metrics       *Metrics
+}
+
+// NewOperationContext creates a new operation context from spec. If spec.Metrics is nil,
 // metric recording is silently skipped.
-func NewOperationContext(serviceName, operationName, requestID, userID string, metrics *Metrics) *OperationContext {
+func NewOperationContext(spec OperationSpec) *OperationContext {
 	return &OperationContext{
-		ServiceName:   serviceName,
-		OperationName: operationName,
-		RequestID:     requestID,
-		UserID:        userID,
+		ServiceName:   spec.ServiceName,
+		OperationName: spec.OperationName,
+		RequestID:     spec.RequestID,
+		UserID:        spec.UserID,
 		StartTime:     time.Now(),
-		Metrics:       metrics,
+		Metrics:       spec.Metrics,
 	}
 }
 
@@ -81,7 +91,12 @@ func (oc *OperationContext) EndOperation(ctx context.Context, span trace.Span, s
 	span.End()
 
 	if oc.Metrics != nil {
-		oc.Metrics.RecordRequestEnd(ctx, oc.ServiceName, oc.OperationName, status, duration)
+		oc.Metrics.RecordRequestEnd(ctx, RequestMetric{
+			Service:  oc.ServiceName,
+			Method:   oc.OperationName,
+			Status:   status,
+			Duration: duration,
+		})
 	}
 }
 

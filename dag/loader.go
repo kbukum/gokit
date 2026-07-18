@@ -73,17 +73,29 @@ func LoadPipeline(name string, paths ...string) (*Pipeline, error) {
 // It resolves includes recursively and looks up node implementations from the registry.
 // Optional nodes not found in the registry get a placeholder that returns ErrUnavailable.
 func ResolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader) (*Graph, error) {
-	stack := make(map[string]bool)    // current recursion path (cycle detection)
-	resolved := make(map[string]bool) // already fully resolved (dedup)
-	return resolvePipeline(p, registry, loader, stack, resolved)
+	rs := &resolver{
+		registry: registry,
+		loader:   loader,
+		stack:    make(map[string]bool), // current recursion path (cycle detection)
+		resolved: make(map[string]bool), // already fully resolved (dedup)
+	}
+	return rs.resolve(p)
 }
 
-func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, stack, resolved map[string]bool) (*Graph, error) {
-	if stack[p.Name] {
+// resolver carries the include-resolution state across the recursive graph build.
+type resolver struct {
+	registry *Registry
+	loader   PipelineLoader
+	stack    map[string]bool
+	resolved map[string]bool
+}
+
+func (rs *resolver) resolve(p *Pipeline) (*Graph, error) {
+	if rs.stack[p.Name] {
 		return nil, fmt.Errorf("dag: circular include detected for pipeline %q", p.Name)
 	}
-	stack[p.Name] = true
-	defer delete(stack, p.Name)
+	rs.stack[p.Name] = true
+	defer delete(rs.stack, p.Name)
 
 	g := &Graph{
 		Nodes:    make(map[string]Node),
@@ -92,16 +104,16 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 
 	// Resolve includes first
 	for _, includeName := range p.Includes {
-		if resolved[includeName] {
+		if rs.resolved[includeName] {
 			continue // already resolved in a different branch (diamond)
 		}
 
-		sub, err := loader.Load(includeName)
+		sub, err := rs.loader.Load(includeName)
 		if err != nil {
 			return nil, fmt.Errorf("dag: loading include %q: %w", includeName, err)
 		}
 
-		subGraph, err := resolvePipeline(sub, registry, loader, stack, resolved)
+		subGraph, err := rs.resolve(sub)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +139,7 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 			continue // already added via include
 		}
 
-		node, ok := registry.Get(def.Component)
+		node, ok := rs.registry.Get(def.Component)
 		if !ok {
 			if def.Optional {
 				// Insert placeholder — node stays in graph, returns ErrUnavailable at runtime
@@ -146,6 +158,6 @@ func resolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader, sta
 		}
 	}
 
-	resolved[p.Name] = true
+	rs.resolved[p.Name] = true
 	return g, nil
 }
