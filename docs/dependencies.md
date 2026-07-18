@@ -5,7 +5,7 @@ gokit keeps its third-party surface small and permissively licensed. Every non-s
 ## Policy
 
 - **Least surface.** Core packages (root `go.mod`) stay dependency-light; heavy dependencies live behind their own sub-module `go.mod` so consumers only pull what they use.
-- **Permissive licenses only.** The license gate accepts Apache-2.0, MIT, BSD-2/3-Clause, ISC, MPL-2.0, and similarly permissive terms. Copyleft (GPL/LGPL/AGPL) and unknown licenses fail CI. Adding an SPDX id to the allow-list in `scripts/check-licenses.sh` requires a maintainer sign-off recorded here.
+- **Permissive and weak-copyleft licenses only.** The license gate accepts Apache-2.0, MIT, BSD-2/3-Clause, ISC, and similarly permissive terms, plus MPL-2.0 (weak, file-level copyleft). Strong copyleft (GPL/LGPL/AGPL) and unknown licenses fail CI. Adding an SPDX id to the allow-list in `scripts/check-licenses.sh` requires a maintainer sign-off recorded here.
 - **Maintained.** A direct dependency with no upstream release in over a year must carry a written rationale in this file or be replaced. Deprecated-by-design modules that we do not import are documented as suppressions rather than kept as live dependencies.
 - **Audited on entry.** Every new direct dependency is justified in the table below when it is added.
 

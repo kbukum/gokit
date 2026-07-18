@@ -33,42 +33,42 @@ component_management:
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
     - component_id: auth
       name: auth
       paths: [auth/**]
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
     - component_id: authz
       name: authz
       paths: [authz/**]
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
     - component_id: security
       name: security
       paths: [security/**]
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
     - component_id: resilience
       name: resilience
       paths: [resilience/**]
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
     - component_id: encryption
       name: encryption
       paths: [encryption/**]
       statuses:
         - type: project
           target: 85%
-          threshold: 1%
+          threshold: 0%
 
 comment:
   layout: "reach,diff,flags,components,files"
