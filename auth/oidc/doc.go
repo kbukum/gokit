@@ -4,10 +4,9 @@
 // an OIDC token Verifier backed by auto-discovery and JWKS key rotation,
 // and utilities for OAuth2 state management and PKCE.
 //
-// This package provides a standardized, reusable layer without enforcing
-// specific providers, callback patterns, or account linking logic.
-// It uses only the standard library and golang.org/x/crypto for
-// JWKS key parsing and signature verification.
+// This package provides a standardized, reusable layer without enforcing specific providers,
+// callback patterns, or account linking logic. It uses only the standard library
+// and golang.org/x/crypto for JWKS key parsing and signature verification.
 //
 // Usage:
 //

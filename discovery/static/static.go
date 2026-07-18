@@ -10,8 +10,9 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// Provider implements discovery.Registry and discovery.Discovery using an in-memory list of
-// endpoints. Useful for local development and testing.
+// Provider implements discovery.Registry
+// and discovery.Discovery using an in-memory list of endpoints. Useful for local development
+// and testing.
 type Provider struct {
 	mu        sync.RWMutex
 	instances map[string][]discovery.ServiceInstance // keyed by service name
@@ -59,9 +60,8 @@ func NewProvider(endpoints []discovery.StaticEndpoint) *Provider {
 		if !ep.Healthy && ep.Address != "" {
 			inst.Health = discovery.HealthUnhealthy
 		}
-		// Mirror the protocol into Tags/Metadata when not already provided so
-		// downstream filters (e.g., resolver tag-match) can select instances
-		// by protocol without callers having to populate both fields.
+		// Mirror the protocol into Tags/Metadata when not already provided
+		// so downstream filters (e.g., resolver tag-match) can select instances by protocol without callers having to populate both fields.
 		if ep.Protocol != "" {
 			if inst.Tags == nil {
 				inst.Tags = []string{ep.Protocol}

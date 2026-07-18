@@ -15,8 +15,8 @@ import (
 )
 
 // ResolverConnectionFactory creates gRPC connections using the native gRPC resolver.
-// Unlike DiscoveryConnectionFactory (which resolves once), this factory creates connections
-// that dynamically resolve addresses via Consul/discovery throughout their lifetime.
+// Unlike DiscoveryConnectionFactory (which resolves once),
+// this factory creates connections that dynamically resolve addresses via Consul/discovery throughout their lifetime.
 type ResolverConnectionFactory struct {
 	builder  *ResolverBuilder
 	gRPCCfg  grpccfg.Config
@@ -24,8 +24,7 @@ type ResolverConnectionFactory struct {
 	dialOpts []grpc.DialOption
 }
 
-// NewResolverConnectionFactory creates a factory that uses gRPC's native resolver for
-// dynamic service discovery.
+// NewResolverConnectionFactory creates a factory that uses gRPC's native resolver for dynamic service discovery.
 func NewResolverConnectionFactory(
 	discovery disc.Discovery,
 	gRPCCfg grpccfg.Config,

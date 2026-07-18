@@ -64,8 +64,8 @@ type Health struct {
 //	Created → Starting → Running → Stopping → Stopped
 //	                ↘ Failed
 //
-// Stop() is responsible for draining any inflight work before releasing
-// resources. The framework enforces a per-component timeout via the context.
+// Stop() is responsible for draining any inflight work before releasing resources.
+// The framework enforces a per-component timeout via the context.
 type Component interface {
 	// Name returns the unique name of the component for registration.
 	Name() string
@@ -90,32 +90,31 @@ type StopResult struct {
 }
 
 // Description holds summary information for the bootstrap display.
-// Components that implement Describable return this to self-report
-// what they are and how they're configured.
+// Components that implement Describable return this to self-report what they are
+// and how they're configured.
 type Description struct {
-	// Name is the human-readable display name (e.g., "HTTP Server", "PostgreSQL").
-	// If empty, the component's Name() is used.
+	// Name is the human-readable display name (e.g., "HTTP Server", "PostgreSQL"). If empty,
+	// the component's Name() is used.
 	Name string
 	// Type categorizes the component: "database", "server", "kafka", "redis", etc.
 	Type string
-	// Details is a human-readable one-liner shown in the startup summary.
-	// Examples: "localhost:5432 pool=25/5", "localhost:6379 db=0 pool=10"
+	// Details is a human-readable one-liner shown in the startup summary. Examples:
+	// "localhost:5432 pool=25/5", "localhost:6379 db=0 pool=10"
 	Details string
 	// Port is the primary port, 0 if not applicable.
 	Port int
 }
 
-// Describable is optionally implemented by Components to provide
-// startup summary information for the bootstrap display.
+// Describable is optionally implemented by Components to provide startup summary information for the bootstrap display.
 //
-// When a component implements this interface, the bootstrap system
-// automatically includes it in the infrastructure section of the
-// startup summary — no manual TrackInfrastructure calls needed.
+// When a component implements this interface,
+// the bootstrap system automatically includes it in the infrastructure section of the startup summary
+// — no manual TrackInfrastructure calls needed.
 //
-// IMPROVE-RSKIT: rskit's component trait is lifecycle-only; these optional
-// self-description capabilities (Describable/RouteProvider) are a gokit
-// enhancement. Consider adding equivalent optional metadata traits to
-// rskit-component so the two kits report startup summaries at parity.
+// IMPROVE-RSKIT: rskit's component trait is lifecycle-only;
+// these optional self-description capabilities (Describable/RouteProvider) are a gokit enhancement.
+// Consider adding equivalent optional metadata traits to rskit-component
+// so the two kits report startup summaries at parity.
 type Describable interface {
 	Describe() Description
 }
@@ -127,8 +126,7 @@ type Route struct {
 	Handler string
 }
 
-// RouteProvider is optionally implemented by server components to
-// auto-report registered HTTP routes for the startup summary.
+// RouteProvider is optionally implemented by server components to auto-report registered HTTP routes for the startup summary.
 type RouteProvider interface {
 	Routes() []Route
 }

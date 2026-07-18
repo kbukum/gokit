@@ -4,8 +4,8 @@
 
 ## Motivation
 
-<!-- Why is this change needed? What problem does it solve? -->
-<!-- Link to related issues: Fixes #123 or Closes #456 -->
+<!-- Why is this change needed? What problem does it solve? --> <!-- Link to related issues:
+Fixes #123 or Closes #456 -->
 
 ## Type of Change
 
@@ -29,9 +29,7 @@
 
 <!-- List key changes in bullet points -->
 
--
--
--
+- - -
 
 ## Testing
 
@@ -55,15 +53,15 @@ $ make test M=<module>
 
 ## Breaking Changes
 
-<!-- Pre-stable: breaking changes are allowed and preferred over compat shims.
-If this is breaking, describe the impact and the redesign (not a migration shim). -->
+<!-- Pre-stable: breaking changes are allowed and preferred over compat shims. If this is breaking,
+describe the impact and the redesign (not a migration shim). -->
 
 ## Sibling Parity
 
-<!-- gokit mirrors rskit (the reference kit) and pykit. If this change touches a
-public abstraction (error codes, Component lifecycle, Provider shapes, stream, etc.),
-confirm parity or link the corresponding sibling item as a full URL, e.g.
-https://github.com/kbukum/rskit/issues/123 -->
+<!-- gokit mirrors rskit (the reference kit) and pykit.
+If this change touches a public abstraction (error codes, Component lifecycle, Provider shapes, stream, etc.),
+confirm parity or link the corresponding sibling item as a full URL,
+e.g. https://github.com/kbukum/rskit/issues/123 -->
 
 - [ ] Sibling-parity not required (internal change)
 - [ ] Sibling-parity tracked: rskit <url>, pykit <url>
@@ -74,10 +72,13 @@ https://github.com/kbukum/rskit/issues/123 -->
 - [ ] Code follows the [coding standards](../CONTRIBUTING.md#coding-standards) in CONTRIBUTING.md
 - [ ] Behavior was developed test-first; new/changed behavior has tests (failure paths included)
 - [ ] Bug fixes include a regression test that fails without the fix
-- [ ] Suite is green under `-race -shuffle=on`; coverage meets the per-package floors (≥80% pkg, ≥85% security-load-bearing) and the CI codecov gate (project 80% / patch 85%)
+- [ ] Suite is green under `-race -shuffle=on`;
+  coverage meets the per-package floors (≥80% pkg, ≥85% security-load-bearing)
+  and the CI codecov gate (project 80% / patch 85%)
 - [ ] No public `interface{}`/`any` (generics/typed); documented exceptions only
 - [ ] No `panic`/`log.Fatal`/ignored errors/unchecked type assertions on runtime paths
-- [ ] Dependencies (logger/tracer/policies/registries) injected — no globals or `init()` side effects
+- [ ] Dependencies (logger/tracer/policies/registries) injected — no globals
+  or `init()` side effects
 - [ ] Code split by concern into focused files — not piled into one file
 - [ ] Exported items have godoc; each package has a `doc.go`; docs updated
 - [ ] `make tidy` run so go.mod/go.sum are clean for affected modules

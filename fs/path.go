@@ -10,24 +10,22 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// Sentinel errors returned by the pure path-validation helpers. They are plain
-// sentinel errors (not AppError) so callers can match with errors.Is; the
-// filesystem-touching helpers return typed AppError values instead.
+// Sentinel errors returned by the pure path-validation helpers.
+// They are plain sentinel errors (not AppError) so callers can match with errors.Is;
+// the filesystem-touching helpers return typed AppError values instead.
 var (
-	// ErrPathAbsolute means an absolute path was given where a root-relative one
-	// is required.
+	// ErrPathAbsolute means an absolute path was given where a root-relative one is required.
 	ErrPathAbsolute = errors.New("path must be relative, not absolute")
 	// ErrPathParentDir means the path contains a '..' traversal segment.
 	ErrPathParentDir = errors.New("path must not contain '..' segments")
-	// ErrPathVolumeName means the path carries a platform volume name (for
-	// example a Windows drive letter).
+	// ErrPathVolumeName means the path carries a platform volume name (for example a Windows drive letter).
 	ErrPathVolumeName = errors.New("path must not contain a volume name")
 	// ErrPathEmpty means the path has no components.
 	ErrPathEmpty = errors.New("path must not be empty")
 )
 
-// ValidateRelativePath reports whether path is safe to join under a caller-owned
-// root directory, rejecting absolute paths, '..' traversal, and volume names.
+// ValidateRelativePath reports whether path is safe to join under a caller-owned root directory,
+// rejecting absolute paths, '..' traversal, and volume names.
 func ValidateRelativePath(path string) error {
 	if filepath.IsAbs(path) {
 		return ErrPathAbsolute
@@ -51,9 +49,9 @@ func SafeJoin(root, relPath string) (string, error) {
 	return filepath.Join(root, relPath), nil
 }
 
-// NormalizeRelativePath strips '.' components so semantically equal inputs share
-// one canonical value, while rejecting empty, absolute, volume-prefixed, or '..'
-// paths. A path consisting solely of '.' components collapses to ".".
+// NormalizeRelativePath strips '.' components
+// so semantically equal inputs share one canonical value, while rejecting empty, absolute,
+// volume-prefixed, or '..' paths. A path consisting solely of '.' components collapses to ".".
 func NormalizeRelativePath(path string) (string, error) {
 	if path == "" {
 		return "", ErrPathEmpty
@@ -87,8 +85,7 @@ func Absolute(path string) (string, error) {
 	return abs, nil
 }
 
-// Canonicalize resolves symlinks and normalizes components, requiring the path
-// to exist.
+// Canonicalize resolves symlinks and normalizes components, requiring the path to exist.
 func Canonicalize(path string) (string, error) {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
@@ -97,9 +94,9 @@ func Canonicalize(path string) (string, error) {
 	return filepath.Abs(resolved)
 }
 
-// FindInAncestors searches start and each ancestor directory for a regular file
-// named fileName, returning the nearest match. A nested directory's file shadows
-// one higher up. The boolean is false when no ancestor contains the file.
+// FindInAncestors searches start and each ancestor directory for a regular file named fileName,
+// returning the nearest match. A nested directory's file shadows one higher up.
+// The boolean is false when no ancestor contains the file.
 func FindInAncestors(start, fileName string) (string, bool) {
 	dir := start
 	for {
@@ -115,8 +112,8 @@ func FindInAncestors(start, fileName string) (string, bool) {
 	}
 }
 
-// ParentDir returns the parent directory of path, or false when path has no
-// distinct parent (a filesystem root or ".").
+// ParentDir returns the parent directory of path,
+// or false when path has no distinct parent (a filesystem root or ".").
 func ParentDir(path string) (string, bool) {
 	parent := filepath.Dir(path)
 	if parent == path {

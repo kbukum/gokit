@@ -66,8 +66,7 @@ func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 	}
 }
 
-// levenshteinSimilarity returns a similarity ratio in [0, 1] based on
-// the Levenshtein edit distance between two strings.
+// levenshteinSimilarity returns a similarity ratio in [0, 1] based on the Levenshtein edit distance between two strings.
 func levenshteinSimilarity(a, b string) float64 {
 	if a == b {
 		return 1

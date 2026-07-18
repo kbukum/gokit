@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// ParseSize parses a human-readable size string (e.g. "10MB", "512KB", "2GB")
-// into bytes. Returns defaultBytes if the string cannot be parsed.
+// ParseSize parses a human-readable size string (e.g. "10MB", "512KB", "2GB") into bytes.
+// Returns defaultBytes if the string cannot be parsed.
 func ParseSize(s string, defaultBytes int64) int64 {
 	s = strings.ToUpper(strings.TrimSpace(s))
 	if s == "" {

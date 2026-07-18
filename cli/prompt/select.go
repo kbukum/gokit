@@ -19,9 +19,9 @@ func recommendedIndex(choices []Choice) int {
 
 // runSelect asks for exactly one choice.
 //
-// In non-interactive mode it resolves to the recommended choice (a typed error
-// when none is marked). Interactively it prints a numbered list and reads a
-// one-based number; a blank answer accepts the default when present.
+// In non-interactive mode it resolves to the recommended choice (a typed error when none is marked).
+// Interactively it prints a numbered list and reads a one-based number;
+// a blank answer accepts the default when present.
 func runSelect(term Terminal, style Style, mode PromptMode, prompt string, choices []Choice) (ChoiceID, error) {
 	if len(choices) == 0 {
 		return "", errors.InvalidInput("prompt", fmt.Sprintf("select requires at least one choice: %s", prompt))

@@ -58,8 +58,7 @@ func loadPipelineFile(path string) (*Pipeline, error) {
 	return &p, nil
 }
 
-// LoadPipeline loads a pipeline from explicit file paths.
-// It tries each path until one succeeds.
+// LoadPipeline loads a pipeline from explicit file paths. It tries each path until one succeeds.
 func LoadPipeline(name string, paths ...string) (*Pipeline, error) {
 	for _, path := range paths {
 		p, err := loadPipelineFile(path)

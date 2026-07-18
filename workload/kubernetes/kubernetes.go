@@ -16,10 +16,9 @@ import (
 	"github.com/kbukum/gokit/workload"
 )
 
-// Register installs the Kubernetes provider into the supplied workload
-// factory registry. Call this once at application startup before
-// invoking [workload.New]. Returns an error if the provider name is
-// already registered.
+// Register installs the Kubernetes provider into the supplied workload factory registry.
+// Call this once at application startup before invoking [workload.New].
+// Returns an error if the provider name is already registered.
 func Register(registry *workload.FactoryRegistry) error {
 	return registry.Register(workload.ProviderKubernetes, func(cfg workload.Config, providerCfg any, log *logging.Logger) (workload.Manager, error) {
 		c := &Config{}

@@ -30,8 +30,7 @@ type scheduleState struct {
 	firstSeen time.Time
 }
 
-// ReadyFilter returns a NodeFilter that checks schedule + conditions.
-// A node is ready if:
+// ReadyFilter returns a NodeFilter that checks schedule + conditions. A node is ready if:
 //   - It has no schedule (always ready), OR
 //   - Its schedule interval has elapsed AND its min_buffer period has passed
 //   - AND its condition function (if any) returns true

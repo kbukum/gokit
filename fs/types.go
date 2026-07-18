@@ -9,8 +9,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// FileMeta is metadata for a filesystem entry at a path, read without following
-// symlinks.
+// FileMeta is metadata for a filesystem entry at a path, read without following symlinks.
 type FileMeta struct {
 	// Path is the inspected path.
 	Path string

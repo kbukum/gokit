@@ -13,12 +13,11 @@ import (
 const defaultSubprocessLineBytes = 1024 * 1024
 
 // SubprocessConfig configures a subprocess-based handler.
-// Uses process.Command for the static command definition; per-task
-// arguments and stdin are supplied via SubprocessInput.
+// Uses process.Command for the static command definition; per-task arguments
+// and stdin are supplied via SubprocessInput.
 type SubprocessConfig struct {
-	// Command defines the binary, working directory, environment, and
-	// grace period. Args and Stdin in Command are ignored — use
-	// SubprocessInput for per-task values.
+	// Command defines the binary, working directory, environment, and grace period. Args
+	// and Stdin in Command are ignored — use SubprocessInput for per-task values.
 	Command process.Command `yaml:"command" mapstructure:"command"`
 }
 
@@ -41,8 +40,8 @@ type SubprocessOutput struct {
 	Line   string
 }
 
-// NewSubprocessHandler creates a Handler that runs a subprocess and
-// emits each stdout/stderr line as an EventPartial.
+// NewSubprocessHandler creates a Handler that runs a subprocess
+// and emits each stdout/stderr line as an EventPartial.
 // Uses the process package for argv-only execution, process group isolation,
 // and SIGTERM→SIGKILL graceful shutdown.
 func NewSubprocessHandler(cfg SubprocessConfig) Handler[SubprocessInput, SubprocessOutput] {

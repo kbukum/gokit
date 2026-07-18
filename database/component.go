@@ -76,9 +76,9 @@ var _ component.Component = (*Component)(nil)
 // Name returns the component name.
 func (c *Component) Name() string { return "database" }
 
-// Start connects to the database and optionally runs auto-migration.
-// If Config.Enabled is false, this method returns immediately without error.
-// The context is used for connection retries and can be canceled to abort startup.
+// Start connects to the database and optionally runs auto-migration. If Config.Enabled is false,
+// this method returns immediately without error. The context is used for connection retries
+// and can be canceled to abort startup.
 func (c *Component) Start(ctx context.Context) error {
 	if !c.cfg.Enabled {
 		c.log.InfoCtx(ctx, "Database component is disabled")
@@ -118,9 +118,9 @@ func (c *Component) Stop(_ context.Context) error {
 	return c.db.Close() //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 }
 
-// Health returns the current health status of the database.
-// If Config.Enabled is false, returns StatusHealthy with "disabled" message.
-// The context is used for the ping operation and honors cancellation.
+// Health returns the current health status of the database. If Config.Enabled is false,
+// returns StatusHealthy with "disabled" message. The context is used for the ping operation
+// and honors cancellation.
 func (c *Component) Health(ctx context.Context) component.Health {
 	if !c.cfg.Enabled {
 		return component.Health{

@@ -2,8 +2,8 @@ package media
 
 // Format is a container/codec format identifier (e.g. "mp4", "jpeg", "wav").
 //
-// It is the light-kit parallel of rskit's media Format enum: a typed handle
-// used across detection [Info], the [FormatInfo] catalog, and the [Registry].
+// It is the light-kit parallel of rskit's media Format enum:
+// a typed handle used across detection [Info], the [FormatInfo] catalog, and the [Registry].
 type Format string
 
 // Known formats recognized by the byte-signature detector.
@@ -45,11 +45,11 @@ const (
 	FormatText Format = "txt"
 )
 
-// FormatInfo is the static catalog entry describing a known [Format]: its media
-// category, canonical extension, MIME type, and container family.
+// FormatInfo is the static catalog entry describing a known [Format]: its media category,
+// canonical extension, MIME type, and container family.
 //
-// It parallels rskit's media FormatInfo; the light kit carries only the fields
-// derivable without decoding the payload.
+// It parallels rskit's media FormatInfo;
+// the light kit carries only the fields derivable without decoding the payload.
 type FormatInfo struct {
 	Format    Format `json:"format"`
 	Type      Type   `json:"type"`

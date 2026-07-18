@@ -2,9 +2,9 @@ package messaging
 
 import "context"
 
-// EventPublisher is a convenience facade that wraps a Producer with a
-// pre-configured source name. Every call to Publish or PublishKeyed
-// automatically constructs an Event envelope (UUID, timestamp, source)
+// EventPublisher is a convenience facade that wraps a Producer with a pre-configured source name.
+// Every call to Publish
+// or PublishKeyed automatically constructs an Event envelope (UUID, timestamp, source)
 // so callers only provide the topic, event type, and payload.
 type EventPublisher struct {
 	producer Producer
@@ -21,8 +21,8 @@ func NewEventPublisher(producer Producer, source string) *EventPublisher {
 
 // Publish sends a typed payload as a domain event.
 //
-// An Event envelope is built with a fresh UUID, UTC timestamp,
-// the configured source, and data marshaled from the generic payload.
+// An Event envelope is built with a fresh UUID, UTC timestamp, the configured source,
+// and data marshaled from the generic payload.
 func (p *EventPublisher) Publish(ctx context.Context, topic, eventType string, data any) error {
 	event, err := NewEvent[any](eventType, p.source, data)
 	if err != nil {

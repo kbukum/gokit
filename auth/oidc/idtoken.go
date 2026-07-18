@@ -7,15 +7,13 @@ import (
 	"strings"
 )
 
-// ParseIDTokenClaims extracts standard user info claims from a JWT ID token
-// without full signature verification. This is safe when the token was just
-// received directly from the provider's token endpoint over HTTPS.
+// ParseIDTokenClaims extracts standard user info claims from a JWT ID token without full signature verification.
+// This is safe when the token was just received directly from the provider's token endpoint over HTTPS.
 //
-// For tokens received from untrusted sources, use the Verifier to validate
-// the signature first.
+// For tokens received from untrusted sources, use the Verifier to validate the signature first.
 //
-// This is a general OIDC utility — any provider that returns an ID token
-// can use this to extract user information (Apple, Google, Azure AD, etc.).
+// This is a general OIDC utility —
+// any provider that returns an ID token can use this to extract user information (Apple, Google, Azure AD, etc.).
 func ParseIDTokenClaims(idToken string) (*UserInfo, error) {
 	parts := strings.Split(idToken, ".")
 	if len(parts) != 3 {

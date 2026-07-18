@@ -4,7 +4,9 @@ This document explains how versioning works in the gokit multi-module repository
 
 ## Problem: Pseudo-Versions
 
-Without proper Git tags, Go assigns pseudo-versions like `v0.0.0-00010101000000-000000000000` to modules. This happens because Go cannot determine the version from the repository history.
+Without proper Git tags,
+Go assigns pseudo-versions like `v0.0.0-00010101000000-000000000000` to modules.
+This happens because Go cannot determine the version from the repository history.
 
 ## Solution: Semantic Versioning with Git Tags
 
@@ -50,7 +52,8 @@ testutil/v0.1.0
 workload/v0.1.0
 ```
 
-> **Note:** The `tag-modules.sh` script automatically discovers all modules by finding `go.mod` files. You never need to maintain a hardcoded list.
+> **Note:** The `tag-modules.sh` script automatically discovers all modules by finding `go.mod` files.
+> You never need to maintain a hardcoded list.
 
 ## Tagging Modules
 

@@ -102,8 +102,8 @@ func ToDefinition(t *sdkmcp.Tool) tool.Definition {
 			// Explicitly not destructive + not read-only → mutating.
 			def.Envelope.Safety = tool.SafetyMutating
 		}
-		// Only set Mutating if we have explicit non-zero annotations indicating
-		// the tool is neither read-only nor destructive.
+		// Only set Mutating if we have explicit non-zero annotations indicating the tool is neither read-only
+		// nor destructive.
 		if t.Annotations.IdempotentHint {
 			def.Annotations.IdempotentHint = boolPtr(true)
 		}

@@ -1,7 +1,7 @@
 // Package testutil provides testing utilities for the git module.
 //
-// It includes a test git component that creates disposable repositories and
-// a fluent builder for constructing repositories with commits, branches, tags,
+// It includes a test git component that creates disposable repositories
+// and a fluent builder for constructing repositories with commits, branches, tags,
 // and remotes for use in tests.
 //
 // # Quick Start

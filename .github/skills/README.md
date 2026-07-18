@@ -1,14 +1,15 @@
 # gokit development skills
 
-[Agent Skills](https://docs.github.com/copilot/concepts/agents/about-agent-skills) for developing
-**gokit itself** — loaded on demand by GitHub Copilot (CLI, coding agent, code review, IDEs) when
-a task matches a skill's description. These are **project skills** for contributors; they do not
-affect anyone who consumes gokit as a library.
+[Agent Skills](https://docs.github.com/copilot/concepts/agents/about-agent-skills) for developing **gokit itself**
+—
+loaded on demand by GitHub Copilot (CLI, coding agent, code review, IDEs) when a task matches a skill's description.
+These are **project skills** for contributors;
+they do not affect anyone who consumes gokit as a library.
 
-Each skill is a folder with a `SKILL.md` (YAML frontmatter + workflow) and optional bundled
-reference files loaded only when the skill activates (progressive disclosure). They encode gokit's
-permanent engineering baseline (see [`../copilot-instructions.md`](../copilot-instructions.md)) and
-drive tasks through [`toven`](../../toven.toml), the repo's argv-first task planner.
+Each skill is a folder with a `SKILL.md` (YAML frontmatter + workflow)
+and optional bundled reference files loaded only when the skill activates (progressive disclosure).
+They encode gokit's permanent engineering baseline (see [`../copilot-instructions.md`](../copilot-instructions.md))
+and drive tasks through [`toven`](../../toven.toml), the repo's argv-first task planner.
 
 ## Skills
 
@@ -27,13 +28,14 @@ drive tasks through [`toven`](../../toven.toml), the repo's argv-first task plan
 | [`new-backend`](new-backend/SKILL.md) | Add a storage/vectorstore/messaging/cache/llm adapter as a typed-registry contrib sub-module. |
 | [`parity`](parity/SKILL.md) | Mirror an rskit capability by capability and keep the parity matrix accurate. |
 | [`release`](release/SKILL.md) | Cut a release — semver bump, CHANGELOG, full gates, per-module tags. |
-| [`docs`](docs/SKILL.md) | Review/update docs to the repo's standards (one line per paragraph) and up-to-date accuracy (commands, module structure, examples match the code). |
+| [`docs`](docs/SKILL.md) | Review/update docs to the repo's standards (semantic line breaks) and up-to-date accuracy (commands, module structure, examples match the code). |
 
 ## Conventions
 
-- Skills are discoverable in Copilot CLI via `/skills`; project skills live under `.github/skills/`
-  (also `.claude/skills` / `.agents/skills` are honored), personal skills under `~/.copilot/skills`.
-- Run reviews (`review`) in a **fresh, clean-context agent**, never inline in the session that
-  wrote the code.
-- Validation is toven-first: prefer `toven <task> --module go:<name>` /
-  `toven affected <task> --base origin/main --merge-base` over hand-rolled `go`/`make` commands.
+- Skills are discoverable in Copilot CLI via `/skills`;
+  project skills live under `.github/skills/` (also `.claude/skills` / `.agents/skills` are honored),
+  personal skills under `~/.copilot/skills`.
+- Run reviews (`review`) in a **fresh, clean-context agent**,
+  never inline in the session that wrote the code.
+- Validation is toven-first:
+  prefer `toven <task> --module go:<name>` / `toven affected <task> --base origin/main --merge-base` over hand-rolled `go`/`make` commands.

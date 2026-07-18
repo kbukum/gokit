@@ -1,7 +1,7 @@
 // Package testutil provides testing utilities for ConnectRPC services.
 //
-// It wraps net/http/httptest to create lightweight test servers that host
-// ConnectRPC handlers. No gokit/server dependency — just httptest + Connect.
+// It wraps net/http/httptest to create lightweight test servers that host ConnectRPC handlers.
+// No gokit/server dependency — just httptest + Connect.
 //
 // # Quick Start
 //

@@ -1,5 +1,4 @@
-// Package authz provides authorization building blocks with explicit default-deny
-// semantics.
+// Package authz provides authorization building blocks with explicit default-deny semantics.
 //
 // The canonical model is RBAC + ABAC:
 //   - RBAC roles contribute hierarchical resource/action permissions

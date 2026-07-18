@@ -5,8 +5,7 @@ import (
 )
 
 // Config is the interface constraint for application configuration types.
-// Any struct that embeds config.ServiceConfig (value embedding) automatically
-// satisfies this interface via promoted methods.
+// Any struct that embeds config.ServiceConfig (value embedding) automatically satisfies this interface via promoted methods.
 //
 // Example:
 //

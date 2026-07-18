@@ -1,5 +1,5 @@
-// Package apikey provides API key issuance, peppered digest storage, prefix-based
-// lookup, validation, and rotation with grace periods.
+// Package apikey provides API key issuance, peppered digest storage, prefix-based lookup,
+// validation, and rotation with grace periods.
 //
 // This package is framework-agnostic at its core (Hasher, Manager, Validate),
 // and provides optional net/http middleware for request authentication.

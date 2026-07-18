@@ -6,10 +6,10 @@ import (
 	"time"
 )
 
-// Build metadata seam. These are unexported and may be overridden at link time
-// via -ldflags "-X github.com/kbukum/gokit/version.buildVersion=..."; consumers
-// cannot mutate version state at runtime. When left empty, values are derived
-// from the module's embedded build information (debug.ReadBuildInfo).
+// Build metadata seam. These are unexported
+// and may be overridden at link time via -ldflags "-X github.com/kbukum/gokit/version.buildVersion=...";
+// consumers cannot mutate version state at runtime. When left empty,
+// values are derived from the module's embedded build information (debug.ReadBuildInfo).
 var (
 	buildVersion   = "dev"
 	buildGitCommit = ""
@@ -31,8 +31,8 @@ type VersionInfo struct {
 }
 
 // source is the raw, injectable input from which a VersionInfo is computed.
-// It isolates the pure derivation logic from process-global build state so the
-// behavior can be tested deterministically.
+// It isolates the pure derivation logic from process-global build state
+// so the behavior can be tested deterministically.
 type source struct {
 	version   string
 	gitCommit string
@@ -43,8 +43,8 @@ type source struct {
 }
 
 // GetVersionInfo returns immutable version information for the running binary,
-// derived from link-time overrides when present and otherwise from the embedded
-// build information (VCS revision, modification state, and build time).
+// derived from link-time overrides when present
+// and otherwise from the embedded build information (VCS revision, modification state, and build time).
 func GetVersionInfo() *VersionInfo {
 	return compute(readSource())
 }

@@ -10,11 +10,10 @@ import (
 type TimeoutMode int
 
 const (
-	// TimeoutOverrideExisting applies the timeout budget even when the incoming
-	// context already has a deadline, effectively choosing the earlier deadline.
+	// TimeoutOverrideExisting applies the timeout budget even when the incoming context already has a deadline,
+	// effectively choosing the earlier deadline.
 	TimeoutOverrideExisting TimeoutMode = iota
-	// TimeoutIfUnset applies the timeout budget only when the incoming context
-	// does not already carry a deadline.
+	// TimeoutIfUnset applies the timeout budget only when the incoming context does not already carry a deadline.
 	TimeoutIfUnset
 )
 
@@ -69,8 +68,7 @@ func (p *Policy) WithTimeout(d time.Duration) *Policy {
 	return p
 }
 
-// WithTimeoutIfUnset configures a timeout budget that is only applied when the
-// incoming context does not already carry a deadline.
+// WithTimeoutIfUnset configures a timeout budget that is only applied when the incoming context does not already carry a deadline.
 func (p *Policy) WithTimeoutIfUnset(d time.Duration) *Policy {
 	p.Timeout = d
 	p.timeoutMode = TimeoutIfUnset

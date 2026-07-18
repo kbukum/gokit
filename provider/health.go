@@ -38,8 +38,7 @@ type HealthStatus struct {
 	Details map[string]any
 }
 
-// HealthChecker is optionally implemented by providers that can report
-// detailed health beyond the simple IsAvailable() bool check.
+// HealthChecker is optionally implemented by providers that can report detailed health beyond the simple IsAvailable() bool check.
 type HealthChecker interface {
 	Health(ctx context.Context) HealthStatus
 }

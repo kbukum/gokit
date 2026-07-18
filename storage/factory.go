@@ -8,8 +8,8 @@ import (
 )
 
 // StorageFactory creates a Storage implementation from core configuration.
-// Provider-specific configuration is captured by the typed provider Register
-// function, keeping runtime selection free of untyped config blobs.
+// Provider-specific configuration is captured by the typed provider Register function,
+// keeping runtime selection free of untyped config blobs.
 type StorageFactory func(cfg Config, log *logging.Logger) (Storage, error)
 
 // FactoryRegistry stores storage factories by provider name.

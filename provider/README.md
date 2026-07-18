@@ -62,8 +62,7 @@ func main() {
 
 ## Provider Metadata
 
-Attach open-ended metadata to any provider for cost-aware ordering,
-scheduling, and observability:
+Attach open-ended metadata to any provider for cost-aware ordering, scheduling, and observability:
 
 ```go
 import "github.com/kbukum/gokit/provider"
@@ -82,9 +81,9 @@ cost, _ := meta.Float("cost")
 latency, _ := meta.Duration("latency_ms")
 ```
 
-Meta is consumed by `dag.OrderByCost()`, `dag.OrderByLatency()`, and
-`dag.WeightedScore()` for intelligent node scheduling. Also available
-for Sink and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
+Meta is consumed by `dag.OrderByCost()`, `dag.OrderByLatency()`,
+and `dag.WeightedScore()` for intelligent node scheduling. Also available for Sink
+and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
 
 ## Stream Composition
 

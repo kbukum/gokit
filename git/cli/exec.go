@@ -49,8 +49,8 @@ func commandError(args []string, result *process.Result) error {
 	return fmt.Errorf("git %v: %s", sanitized, msg)
 }
 
-// redactCredentials masks credentials in URLs to prevent leakage in
-// error messages and logs. Handles all http(s)://user:pass@host occurrences.
+// redactCredentials masks credentials in URLs to prevent leakage in error messages and logs.
+// Handles all http(s)://user:pass@host occurrences.
 func redactCredentials(s string) string {
 	result := s
 	for _, scheme := range []string{"https://", "http://"} {

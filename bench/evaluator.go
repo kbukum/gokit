@@ -35,8 +35,7 @@ type fromProvider[I, O any, L comparable] struct {
 	toPrediction func(O) Prediction[L]
 }
 
-// FromProvider adapts any RequestResponse provider into an Evaluator
-// using mapper functions for input/output transformation.
+// FromProvider adapts any RequestResponse provider into an Evaluator using mapper functions for input/output transformation.
 func FromProvider[I, O any, L comparable](
 	p provider.RequestResponse[I, O],
 	toInput func([]byte) I,

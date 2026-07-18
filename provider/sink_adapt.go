@@ -7,8 +7,7 @@ import "context"
 //
 // mapIn converts the domain input to the backend input.
 //
-// AdaptSink composes naturally with FanOutSink, WithSinkResilience,
-// and other sink combinators.
+// AdaptSink composes naturally with FanOutSink, WithSinkResilience, and other sink combinators.
 func AdaptSink[I, BI any](
 	inner Sink[BI],
 	name string,

@@ -9,11 +9,11 @@ import (
 	"github.com/kbukum/gokit/httpclient"
 )
 
-// Client is a JSON-focused REST client that wraps the HTTP adapter.
-// All requests use Content-Type: application/json and Accept: application/json.
+// Client is a JSON-focused REST client that wraps the HTTP adapter. All requests use Content-Type:
+// application/json and Accept: application/json.
 //
-// Client implements provider.Provider (Name, IsAvailable, Close) by delegating
-// to the underlying HTTP adapter, so it composes naturally with gokit middleware.
+// Client implements provider.Provider (Name, IsAvailable, Close) by delegating to the underlying HTTP adapter,
+// so it composes naturally with gokit middleware.
 type Client struct {
 	http *httpclient.Adapter
 }
@@ -31,8 +31,7 @@ func (c *Client) IsAvailable(ctx context.Context) bool { return c.http.IsAvailab
 // Close releases resources (implements provider.Closeable).
 func (c *Client) Close(ctx context.Context) error { return c.http.Close(ctx) }
 
-// New creates a new REST client from the given config.
-// JSON headers are applied automatically.
+// New creates a new REST client from the given config. JSON headers are applied automatically.
 func New(cfg httpclient.Config) (*Client, error) {
 	// Ensure JSON headers
 	if cfg.Headers == nil {

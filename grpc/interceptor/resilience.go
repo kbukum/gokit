@@ -8,8 +8,7 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// UnaryClientResilienceInterceptor applies the shared resilience policy to
-// unary client calls.
+// UnaryClientResilienceInterceptor applies the shared resilience policy to unary client calls.
 func UnaryClientResilienceInterceptor(policy *resilience.Policy) grpc.UnaryClientInterceptor {
 	return func(
 		ctx context.Context,

@@ -6,8 +6,7 @@ import (
 	"github.com/kbukum/gokit/errors"
 )
 
-// nonInteractiveError is returned when a non-interactive prompt has no usable
-// default.
+// nonInteractiveError is returned when a non-interactive prompt has no usable default.
 func nonInteractiveError(prompt string) *errors.AppError {
 	return errors.InvalidInput("prompt", fmt.Sprintf("non-interactive mode requires a default for: %s", prompt))
 }

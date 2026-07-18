@@ -20,8 +20,8 @@ func SanitizeString(s string) string {
 	}, s)
 }
 
-// SanitizeEnvValue cleans an environment variable value by removing surrounding
-// quotes and trimming whitespace.
+// SanitizeEnvValue cleans an environment variable value by removing surrounding quotes
+// and trimming whitespace.
 func SanitizeEnvValue(s string) string {
 	s = strings.TrimSpace(s)
 	// Strip matching surrounding quotes (single or double).
@@ -33,10 +33,10 @@ func SanitizeEnvValue(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// IsSafeString checks whether s passes basic input validation. It is NOT a security
-// boundary — use parameterized queries for SQL and proper encoding for HTML output.
-// This only catches the most obvious injection patterns and is intended as an
-// additional defense-in-depth signal, not a primary safeguard.
+// IsSafeString checks whether s passes basic input validation. It is NOT a security boundary —
+// use parameterized queries for SQL and proper encoding for HTML output.
+// This only catches the most obvious injection patterns
+// and is intended as an additional defense-in-depth signal, not a primary safeguard.
 func IsSafeString(s string) bool {
 	return !unsafePatternRegex.MatchString(s)
 }

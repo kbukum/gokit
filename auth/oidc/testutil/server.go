@@ -9,8 +9,8 @@ import (
 	"sync"
 )
 
-// MockOAuthServer simulates an OAuth2 provider's endpoints for testing.
-// It handles token exchange, userinfo, and optionally JSON token exchange.
+// MockOAuthServer simulates an OAuth2 provider's endpoints for testing. It handles token exchange,
+// userinfo, and optionally JSON token exchange.
 //
 // The server is fully configurable: set custom response data, simulate errors,
 // and inspect received requests.
@@ -93,9 +93,8 @@ func (m *MockOAuthServer) SetUserResponse(resp map[string]any) {
 	m.userResponse = resp
 }
 
-// SetIDTokenClaims sets claims that will be encoded as an ID token in the token response.
-// When set, the token response will include an "id_token" field containing a JWT
-// with these claims (unsigned, for testing only).
+// SetIDTokenClaims sets claims that will be encoded as an ID token in the token response. When set,
+// the token response will include an "id_token" field containing a JWT with these claims (unsigned, for testing only).
 func (m *MockOAuthServer) SetIDTokenClaims(claims map[string]any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -1,9 +1,7 @@
-// Package kafka provides Kafka producer and consumer lifecycle management
-// as a gokit component.
+// Package kafka provides Kafka producer and consumer lifecycle management as a gokit component.
 //
-// It wraps segmentio/kafka-go with gokit conventions including health checking,
-// graceful shutdown, metrics collection, and structured logging for event
-// streaming integration.
+// It wraps segmentio/kafka-go with gokit conventions including health checking, graceful shutdown,
+// metrics collection, and structured logging for event streaming integration.
 //
 // # Architecture
 //
@@ -13,11 +11,9 @@
 //
 // # Configuration
 //
-// Kafka-specific connection/protocol settings are provided via Config with
-// ApplyDefaults()/Validate(). Broker-neutral policy (name, enabled, retries,
-// request timeout, consumer group, topics, delivery guarantee, commit strategy,
-// DLQ, and max in-flight) belongs in messaging.Config and is mapped by the
-// registry/direct constructors.
+// Kafka-specific connection/protocol settings are provided via Config with ApplyDefaults()/Validate().
+// Broker-neutral policy (name, enabled, retries, request timeout, consumer group, topics, delivery guarantee, commit strategy, DLQ, and max in-flight) belongs in messaging.Config
+// and is mapped by the registry/direct constructors.
 //
 //	messaging:
 //	  adapter: kafka

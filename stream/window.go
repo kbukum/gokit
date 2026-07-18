@@ -100,8 +100,8 @@ func (it *tumblingWindowIter[T]) Close() error {
 // SlidingWindow emits overlapping windows based on a time extraction function.
 // windowSize is the duration of each window. slideBy is how far each window advances.
 //
-// Values must arrive in time order. Each emitted slice contains all values
-// whose timestamp falls within [windowStart, windowStart+windowSize).
+// Values must arrive in time order.
+// Each emitted slice contains all values whose timestamp falls within [windowStart, windowStart+windowSize).
 func SlidingWindow[T any](p *Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) *Pipeline[[]T] {
 	return &Pipeline[[]T]{
 		create: func(ctx context.Context) Iterator[[]T] {

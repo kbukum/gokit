@@ -19,8 +19,8 @@ const defaultDimensions = 8
 
 // Provider deterministically hashes text inputs into fixed-size vectors.
 //
-// Per locked decision D12 (NATIVE COMPONENT), Provider implements
-// component.Component (Start/Stop/Health) so bootstrap auto-wires it.
+// Per locked decision D12 (NATIVE COMPONENT),
+// Provider implements component.Component (Start/Stop/Health) so bootstrap auto-wires it.
 type Provider struct {
 	dimensions int
 	lifecycle  ai.Lifecycle

@@ -8,8 +8,7 @@ import (
 )
 
 // Readiness returns a handler for K8s readiness probes.
-// It checks component health via the HealthChecker to determine if the service
-// can accept traffic.
+// It checks component health via the HealthChecker to determine if the service can accept traffic.
 func Readiness(serviceName string, checker HealthChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		status := "ready"

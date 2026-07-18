@@ -21,8 +21,8 @@ type ResourceTemplateEntry struct {
 	Handler  sdkmcp.ResourceHandler
 }
 
-// wrapResourceHandler enforces the resource allow-list keyed on uri and audits
-// the outcome around the caller-supplied handler.
+// wrapResourceHandler enforces the resource allow-list keyed on uri
+// and audits the outcome around the caller-supplied handler.
 func (h *Handler) wrapResourceHandler(uri string, handler sdkmcp.ResourceHandler) sdkmcp.ResourceHandler {
 	return func(ctx context.Context, req *sdkmcp.ReadResourceRequest) (*sdkmcp.ReadResourceResult, error) {
 		if !h.policy.AllowsResource(uri) {

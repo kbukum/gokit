@@ -22,11 +22,10 @@ func Complete(ctx context.Context, p provider.RequestResponse[CompletionRequest,
 	return resp.Text(), nil
 }
 
-// CompleteStructured sends a prompt expecting JSON and decodes the response
-// into a value of type T. The model output is untrusted: it is decoded into the
-// concrete type T (a typed trust boundary that rejects shape-mismatched JSON)
-// rather than an opaque map, and a decode failure returns the zero T with an
-// error instead of a partially populated value.
+// CompleteStructured sends a prompt expecting JSON
+// and decodes the response into a value of type T. The model output is untrusted:
+// it is decoded into the concrete type T (a typed trust boundary that rejects shape-mismatched JSON) rather than an opaque map,
+// and a decode failure returns the zero T with an error instead of a partially populated value.
 func CompleteStructured[T any](ctx context.Context, p provider.RequestResponse[CompletionRequest, CompletionResponse], system, user string) (T, error) {
 	var result T
 	system += "\n\nIMPORTANT: Respond with ONLY the JSON object. " +

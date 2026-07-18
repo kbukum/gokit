@@ -28,8 +28,9 @@ type MeterConfig struct {
 	Insecure bool
 	// Interval is the metric export interval.
 	Interval time.Duration
-	// SkipGlobalRegistration, when true, prevents InitMeter from mutating the
-	// global otel.SetMeterProvider state. See TracerConfig.SkipGlobalRegistration.
+	// SkipGlobalRegistration, when true,
+	// prevents InitMeter from mutating the global otel.SetMeterProvider state.
+	// See TracerConfig.SkipGlobalRegistration.
 	SkipGlobalRegistration bool
 }
 

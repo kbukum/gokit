@@ -3,16 +3,15 @@
 //
 // # Core Concepts
 //
-// Accumulator - Collects values of type V and flushes them based on configurable triggers
-// (time, size, custom). Supports bounded FIFO buffers, keep-alive TTL, rate limiting,
-// and type-aware measurement.
+// Accumulator - Collects values of type V
+// and flushes them based on configurable triggers (time, size, custom).
+// Supports bounded FIFO buffers, keep-alive TTL, rate limiting, and type-aware measurement.
 //
-// Manager - Manages multiple named accumulators for multi-tenant use cases (per session,
-// per user, per stream, etc.).
+// Manager - Manages multiple named accumulators for multi-tenant use cases (per session, per user, per stream, etc.).
 //
 // Store - Pluggable storage backend interface. Built-in implementations: memory (fast, local)
-// and Redis (durable, distributed). Users can implement custom stores for any backend
-// (Postgres, DynamoDB, filesystem, etc.).
+// and Redis (durable, distributed).
+// Users can implement custom stores for any backend (Postgres, DynamoDB, filesystem, etc.).
 //
 // # Use Cases
 //

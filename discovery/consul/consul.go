@@ -47,8 +47,7 @@ func Register(reg *discovery.ProviderRegistry) error {
 	})
 }
 
-// mergeProviderOptions decodes exotic Consul-specific options from the
-// generic ProviderOptions map into the consul Config.
+// mergeProviderOptions decodes exotic Consul-specific options from the generic ProviderOptions map into the consul Config.
 func mergeProviderOptions(consulCfg *Config, opts map[string]any) error {
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		Result:           consulCfg,
@@ -171,8 +170,8 @@ func (c *Provider) Deregister(ctx context.Context, serviceID string) error {
 	return nil
 }
 
-// UpdateHealth updates the health status for a TTL-based check.
-// For HTTP/gRPC/TCP checks, this is a no-op since Consul polls them directly.
+// UpdateHealth updates the health status for a TTL-based check. For HTTP/gRPC/TCP checks,
+// this is a no-op since Consul polls them directly.
 func (c *Provider) UpdateHealth(_ context.Context, serviceID string, healthy bool, note string) error {
 	checkID := "service:" + serviceID
 	if healthy {

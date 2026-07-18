@@ -14,8 +14,8 @@ import (
 )
 
 // Adapter is a configurable HTTP adapter with built-in auth, TLS, and resilience.
-// It can be used as a simple HTTP client or as a provider.RequestResponse for
-// composition with the provider framework (WithResilience, Manager, Registry, etc.).
+// It can be used as a simple HTTP client
+// or as a provider.RequestResponse for composition with the provider framework (WithResilience, Manager, Registry, etc.).
 type Adapter struct {
 	httpClient *http.Client
 	baseURL    string
@@ -80,8 +80,8 @@ func (c *Adapter) Do(ctx context.Context, req Request) (*Response, error) {
 }
 
 // DoStream executes an HTTP request and returns a streaming response.
-// The caller must close the returned StreamResponse when done.
-// Note: Retry is not applied to streaming requests.
+// The caller must close the returned StreamResponse when done. Note:
+// Retry is not applied to streaming requests.
 func (c *Adapter) DoStream(ctx context.Context, req Request) (*StreamResponse, error) {
 	return c.doStream(ctx, req)
 }

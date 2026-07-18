@@ -2,9 +2,9 @@
 // All certificates are created using Go's crypto stdlib — no external tools needed.
 // Generated files auto-clean via t.TempDir().
 //
-// This package lives in the root gokit module so it can be imported by both
-// root module tests (e.g. security/tls_test.go) and sub-module tests
-// (e.g. httpclient, grpc) without circular dependencies.
+// This package lives in the root gokit module
+// so it can be imported by both root module tests (e.g. security/tls_test.go)
+// and sub-module tests (e.g. httpclient, grpc) without circular dependencies.
 //
 // Usage:
 //
@@ -50,8 +50,8 @@ type TLSCerts struct {
 }
 
 // GenerateTLSCerts creates a self-signed CA and a server certificate for testing.
-// The server cert is valid for localhost, 127.0.0.1, and [::1].
-// Files are written to t.TempDir() and auto-cleaned on test completion.
+// The server cert is valid for localhost, 127.0.0.1, and [::1]. Files are written to t.TempDir()
+// and auto-cleaned on test completion.
 func GenerateTLSCerts(t testing.TB) *TLSCerts {
 	t.Helper()
 	dir := t.TempDir()

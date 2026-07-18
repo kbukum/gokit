@@ -18,8 +18,8 @@ type OperationContext struct {
 	Metrics       *Metrics
 }
 
-// NewOperationContext creates a new operation context.
-// If metrics is nil, metric recording is silently skipped.
+// NewOperationContext creates a new operation context. If metrics is nil,
+// metric recording is silently skipped.
 func NewOperationContext(serviceName, operationName, requestID, userID string, metrics *Metrics) *OperationContext {
 	return &OperationContext{
 		ServiceName:   serviceName,

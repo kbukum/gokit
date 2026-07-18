@@ -1,5 +1,4 @@
-// Package storage provides byte-oriented convenience types that wrap the
-// streaming Storage interface with []byte operations.
+// Package storage provides byte-oriented convenience types that wrap the streaming Storage interface with []byte operations.
 package storage
 
 import (
@@ -9,8 +8,7 @@ import (
 )
 
 // ObjectInfo contains minimal metadata about a stored object.
-// This is a simplified alternative to FileInfo for callers that
-// only need key and size information.
+// This is a simplified alternative to FileInfo for callers that only need key and size information.
 type ObjectInfo struct {
 	Key  string // Object path/key
 	Size int64  // Size in bytes

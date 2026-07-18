@@ -4,9 +4,9 @@
 
 - **Go 1.26+**
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
-- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if
-  missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned
-  Homebrew install last
+- **ast-grep** — powers the advisory `make structure` guard;
+  `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx)
+  and falling back to an unpinned Homebrew install last
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
 ## Getting Started
@@ -78,7 +78,8 @@ make ci                      # run full CI pipeline locally (requires Docker)
 
 ### Cross-Module Script
 
-`gomod.sh` discovers all modules automatically by finding `go.mod` files. You never maintain a hardcoded module list:
+`gomod.sh` discovers all modules automatically by finding `go.mod` files.
+You never maintain a hardcoded module list:
 
 ```bash
 ./gomod.sh tidy              # go mod tidy all modules
@@ -112,18 +113,22 @@ make ci                      # run full CI pipeline locally (requires Docker)
    replace github.com/kbukum/gokit => ../
    ```
 2. Add a `doc.go` with package-level documentation
-3. If the module wraps an infrastructure component, implement `component.Component` for lifecycle management
+3. If the module wraps an infrastructure component,
+   implement `component.Component` for lifecycle management
 4. Add tests — the module is automatically discovered by `gomod.sh`, CI, and all `make` targets
 
 ## Coding Standards
 
 - **Formatting**: `gofmt` and `goimports` (enforced by CI via `.golangci.yml`)
 - **Imports**: Separate stdlib, third-party, and gokit imports with blank lines
-- **Config pattern**: Each module that needs configuration uses a `Config` struct with `ApplyDefaults()` and `Validate()` methods
+- **Config pattern**:
+  Each module that needs configuration uses a `Config` struct with `ApplyDefaults()`
+  and `Validate()` methods
 - **Validation**: Plain Go validation — no external validator library
-- **Naming**: Follow Go conventions; avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
-- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any
-  test that exercises >1 input/expected pair. Pattern:
+- **Naming**: Follow Go conventions;
+  avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
+- **Testing**: Use `-race -count=1`;
+  **prefer table-driven tests** for any test that exercises >1 input/expected pair. Pattern:
 
   ```go
   func TestThing(t *testing.T) {
@@ -152,9 +157,8 @@ make ci                      # run full CI pipeline locally (requires Docker)
   }
   ```
 
-  Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted
-  to a `[]struct` slice when adjacent cases share setup, assertions, or
-  inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
+Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to a `[]struct` slice when adjacent cases share setup,
+assertions, or inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
 
 ## Versioning & Releases
 
@@ -165,11 +169,13 @@ make tag-push VERSION=v0.2.0   # tag all modules and push
 make list-tags                  # view all tags
 ```
 
-Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`, which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`,
+which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
 
 ## CI
 
-CI runs on GitHub Actions and is fully dynamic — modules are discovered at runtime, not hardcoded. Each module gets its own parallel check and lint job. You can run it locally:
+CI runs on GitHub Actions and is fully dynamic — modules are discovered at runtime, not hardcoded.
+Each module gets its own parallel check and lint job. You can run it locally:
 
 ```bash
 make ci        # full pipeline (requires Docker + act)
@@ -193,9 +199,7 @@ make ci-lint   # lint jobs only
 
 ### Sibling-parity reminder
 
-Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle
-hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
-[rskit](https://github.com/kbukum/rskit), and
-[pykit](https://github.com/kbukum/pykit). When you change one of these
-surfaces here, please open tracking issues in the sibling repos so the change
-can be evaluated for parity.
+Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
+[rskit](https://github.com/kbukum/rskit), and [pykit](https://github.com/kbukum/pykit).
+When you change one of these surfaces here, please open tracking issues in the sibling repos
+so the change can be evaluated for parity.

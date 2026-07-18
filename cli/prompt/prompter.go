@@ -6,10 +6,10 @@ import (
 
 // Prompter is a terminal-agnostic prompt driver.
 //
-// It binds a [Terminal], a resolved [PromptMode], and a rendering [Style], and
-// exposes one method per question type. The same call works over cooked stdio or
-// a scripted test double. Build one from explicit parts with [New] (deterministic
-// tests) or from the environment with [FromEnv].
+// It binds a [Terminal], a resolved [PromptMode], and a rendering [Style],
+// and exposes one method per question type. The same call works over cooked stdio
+// or a scripted test double. Build one from explicit parts with [New] (deterministic tests)
+// or from the environment with [FromEnv].
 type Prompter struct {
 	terminal Terminal
 	mode     PromptMode
@@ -30,11 +30,10 @@ func New(terminal Terminal, mode PromptMode, palette theme.Palette) *Prompter {
 
 // FromEnv builds a prompter bound to process stdin/stderr.
 //
-// The [PromptMode] follows whether both stdin and stderr are terminals, and the
-// [theme.Palette] follows color against stderr, so interactivity and styling
-// both honor redirection and NO_COLOR. Prompts render to stderr, so a
-// redirected stderr forces [ModeNonInteractive] rather than blocking on input
-// behind an invisible prompt.
+// The [PromptMode] follows whether both stdin and stderr are terminals,
+// and the [theme.Palette] follows color against stderr, so interactivity
+// and styling both honor redirection and NO_COLOR. Prompts render to stderr,
+// so a redirected stderr forces [ModeNonInteractive] rather than blocking on input behind an invisible prompt.
 func FromEnv(color theme.ColorChoice, stdinIsTTY, stderrIsTTY bool) *Prompter {
 	mode := ModeFromStdio(stdinIsTTY, stderrIsTTY)
 	palette := theme.PaletteForStream(color, stderrIsTTY)
@@ -43,8 +42,7 @@ func FromEnv(color theme.ColorChoice, stdinIsTTY, stderrIsTTY bool) *Prompter {
 	return p
 }
 
-// WithGlyphs overrides the glyph set (Unicode symbols vs ASCII fallback) and
-// returns the receiver.
+// WithGlyphs overrides the glyph set (Unicode symbols vs ASCII fallback) and returns the receiver.
 func (p *Prompter) WithGlyphs(glyphs theme.Glyphs) *Prompter {
 	p.style = NewStyle(p.style.Palette(), glyphs)
 	return p
@@ -58,8 +56,8 @@ func (p *Prompter) Terminal() Terminal { return p.terminal }
 
 // Select asks for exactly one choice.
 //
-// In [ModeNonInteractive] it resolves to the recommended choice; with none it is
-// a typed error. Interactively it shows a numbered list.
+// In [ModeNonInteractive] it resolves to the recommended choice; with none it is a typed error.
+// Interactively it shows a numbered list.
 func (p *Prompter) Select(prompt string, choices []Choice) (ChoiceID, error) {
 	return runSelect(p.terminal, p.style, p.mode, prompt, choices)
 }
@@ -85,11 +83,9 @@ func (p *Prompter) Text(prompt string, def *string) (string, error) {
 	return runText(p.terminal, p.style, p.mode, prompt, value, has, nil)
 }
 
-// TextWith asks for freeform text validated by validator, re-asking on
-// rejection.
+// TextWith asks for freeform text validated by validator, re-asking on rejection.
 //
-// In [ModeNonInteractive] a rejected default is a typed error rather than a
-// silent bad value.
+// In [ModeNonInteractive] a rejected default is a typed error rather than a silent bad value.
 func (p *Prompter) TextWith(prompt string, def *string, validator Validator) (string, error) {
 	value, has := deref(def)
 	return runText(p.terminal, p.style, p.mode, prompt, value, has, validator)

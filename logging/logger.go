@@ -280,17 +280,16 @@ func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]
 
 // --- Process default logger ---
 
-// defaultLogger lazily constructs the process default logger exactly once. It
-// is immutable: there is no setter, so package-level convenience helpers and
-// registries derive from a stable, race-free instance instead of a mutable
-// global that can be reassigned at runtime.
+// defaultLogger lazily constructs the process default logger exactly once. It is immutable:
+// there is no setter, so package-level convenience helpers and registries derive from a stable,
+// race-free instance instead of a mutable global that can be reassigned at runtime.
 var defaultLogger = sync.OnceValue(func() *Logger {
 	return NewDefault("default")
 })
 
 // Default returns the process default logger, constructing it on first use.
-// Prefer injecting an explicit *Logger; use Default only for incidental logging
-// where threading a logger through the call site adds no value.
+// Prefer injecting an explicit *Logger;
+// use Default only for incidental logging where threading a logger through the call site adds no value.
 func Default() *Logger {
 	return defaultLogger()
 }

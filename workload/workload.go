@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// Manager manages workload lifecycle operations.
-// All providers must implement this core interface.
+// Manager manages workload lifecycle operations. All providers must implement this core interface.
 type Manager interface {
 	// Deploy creates and starts a workload.
 	Deploy(ctx context.Context, req DeployRequest) (*DeployResult, error)
@@ -39,26 +38,22 @@ type Manager interface {
 	HealthCheck(ctx context.Context) error
 }
 
-// ExecProvider is optionally implemented by providers that support
-// executing commands inside running workloads.
+// ExecProvider is optionally implemented by providers that support executing commands inside running workloads.
 type ExecProvider interface {
 	Exec(ctx context.Context, id string, cmd []string) (*ExecResult, error)
 }
 
-// StatsProvider is optionally implemented by providers that support
-// real-time resource usage statistics.
+// StatsProvider is optionally implemented by providers that support real-time resource usage statistics.
 type StatsProvider interface {
 	Stats(ctx context.Context, id string) (*WorkloadStats, error)
 }
 
-// LogStreamer is optionally implemented by providers that support
-// streaming logs in real-time.
+// LogStreamer is optionally implemented by providers that support streaming logs in real-time.
 type LogStreamer interface {
 	StreamLogs(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error)
 }
 
-// EventWatcher is optionally implemented by providers that support
-// watching workload lifecycle events.
+// EventWatcher is optionally implemented by providers that support watching workload lifecycle events.
 type EventWatcher interface {
 	WatchEvents(ctx context.Context, filter ListFilter) (<-chan WorkloadEvent, error)
 }

@@ -1,9 +1,8 @@
 // Package middleware provides composable middleware for message handlers.
 //
-// Middleware wraps [messaging.MessageHandler] functions to add cross-cutting concerns
-// such as retry logic, dead-letter routing, distributed tracing, metrics
-// collection, deduplication, and circuit breaking — all built on top of
-// existing gokit modules.
+// Middleware wraps [messaging.MessageHandler] functions to add cross-cutting concerns such as retry logic,
+// dead-letter routing, distributed tracing, metrics collection, deduplication, and circuit breaking
+// — all built on top of existing gokit modules.
 //
 // # Retry
 //

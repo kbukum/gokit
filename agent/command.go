@@ -231,8 +231,8 @@ func extractUserText(msgs []chat.Message) (string, bool) {
 	return "", false
 }
 
-// handleCommand checks if the last message is a slash command and executes it.
-// Returns the result and true if a command was handled.
+// handleCommand checks if the last message is a slash command and executes it. Returns the result
+// and true if a command was handled.
 func (a *Agent) handleCommand(ctx context.Context, msgs []chat.Message) (*Result, bool) {
 	if a.config.Commands == nil {
 		return nil, false

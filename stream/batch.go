@@ -8,11 +8,10 @@ import (
 // Batch collects up to size values or waits timeout (whichever comes first),
 // then emits them as a slice.
 //
-// size=0 means collect until timeout. timeout=0 means collect until size.
-// Both zero is invalid and defaults to size=1.
+// size=0 means collect until timeout. timeout=0 means collect until size. Both zero is invalid
+// and defaults to size=1.
 //
-// Named Batch (not Buffer) because pipeline.Buffer already exists for
-// channel-based decoupling between stages.
+// Named Batch (not Buffer) because pipeline.Buffer already exists for channel-based decoupling between stages.
 func Batch[T any](p *Pipeline[T], size int, timeout time.Duration) *Pipeline[[]T] {
 	if size <= 0 && timeout <= 0 {
 		size = 1

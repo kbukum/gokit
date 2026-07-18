@@ -53,11 +53,10 @@ func (h *TaskHandle[O]) Result() (O, error) {
 	return h.result, h.err
 }
 
-// emit sends an event to the task's event channel.
-// Safe to call concurrently; no-op after complete. The lock is held during
-// the channel send to prevent a TOCTOU race with complete() closing the
-// channel. The events channel is buffered, so this should not block under
-// normal usage. Handlers must not call emit after returning from Handle().
+// emit sends an event to the task's event channel. Safe to call concurrently; no-op after complete.
+// The lock is held during the channel send to prevent a TOCTOU race with complete() closing the channel.
+// The events channel is buffered, so this should not block under normal usage.
+// Handlers must not call emit after returning from Handle().
 func (h *TaskHandle[O]) emit(e Event[O]) {
 	e.TaskID = h.id
 

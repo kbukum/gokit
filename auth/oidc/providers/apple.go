@@ -37,8 +37,7 @@ type AppleConfig struct {
 	PrivateKey string
 }
 
-// NewApple creates a Sign in with Apple provider.
-// Default scopes: name, email.
+// NewApple creates a Sign in with Apple provider. Default scopes: name, email.
 //
 // Apple is OIDC-based but with unique requirements:
 //   - Client secret is a JWT signed with your private key (ES256)

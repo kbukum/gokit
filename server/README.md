@@ -1,6 +1,7 @@
 # server
 
-Gin-based HTTP server with h2c support, built-in middleware, health/info endpoints, and component lifecycle.
+Gin-based HTTP server with h2c support, built-in middleware, health/info endpoints,
+and component lifecycle.
 
 ## Install
 
@@ -45,7 +46,8 @@ defer comp.Stop(ctx)
 
 ### API Documentation
 
-`MountDocs` serves interactive API reference pages powered by Scalar. Each `APIDoc` registers two routes: a raw spec endpoint and a rendered docs page.
+`MountDocs` serves interactive API reference pages powered by Scalar.
+Each `APIDoc` registers two routes: a raw spec endpoint and a rendered docs page.
 
 ```go
 //go:embed swagger.json
@@ -120,7 +122,9 @@ Apply recovery outside that chain so panics from any layer are captured consiste
 
 ### TLS policy
 
-`server` itself is transport-focused and commonly runs behind TLS termination or alongside a gRPC listener. For TLS settings shared across gokit transports, use `security.TLSConfig` with the locked policy:
+`server` itself is transport-focused and commonly runs behind TLS termination
+or alongside a gRPC listener. For TLS settings shared across gokit transports,
+use `security.TLSConfig` with the locked policy:
 
 - minimum supported floor: TLS 1.2
 - default negotiation outcome: TLS 1.3 whenever peers support it

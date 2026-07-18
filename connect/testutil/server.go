@@ -19,8 +19,8 @@ var (
 // Server is a test server for ConnectRPC handlers backed by httptest.Server.
 // It implements both component.Component and testutil.TestComponent.
 //
-// Mount Connect handlers before starting the server, then use BaseURL()
-// to create real ConnectRPC clients for testing.
+// Mount Connect handlers before starting the server,
+// then use BaseURL() to create real ConnectRPC clients for testing.
 type Server struct {
 	mux     *http.ServeMux
 	ts      *httptest.Server
@@ -35,9 +35,8 @@ func NewServer() *Server {
 	}
 }
 
-// Mount registers a ConnectRPC handler on the test server.
-// Call this before Start() with the path and handler returned by
-// a generated New*Handler function.
+// Mount registers a ConnectRPC handler on the test server. Call this before Start() with the path
+// and handler returned by a generated New*Handler function.
 //
 // Example:
 //

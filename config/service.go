@@ -58,9 +58,8 @@ func (c *ServiceConfig) GetEnvironment() Environment {
 	return Environment(c.Environment)
 }
 
-// GetServiceConfig returns the base ServiceConfig.
-// When embedded in a larger config struct, this method is promoted
-// so the embedding struct automatically satisfies the Config interface.
+// GetServiceConfig returns the base ServiceConfig. When embedded in a larger config struct,
+// this method is promoted so the embedding struct automatically satisfies the Config interface.
 func (c *ServiceConfig) GetServiceConfig() *ServiceConfig {
 	return c
 }
@@ -94,8 +93,8 @@ func (c *ServiceConfig) ApplyDefaults() {
 	c.Logging.ApplyDefaults()
 }
 
-// Validate validates the base configuration fields.
-// Override this in embedding structs and call c.ServiceConfig.Validate() first.
+// Validate validates the base configuration fields. Override this in embedding structs
+// and call c.ServiceConfig.Validate() first.
 func (c *ServiceConfig) Validate() error {
 	if c.Name == "" {
 		return errors.Validation("config.name is required")

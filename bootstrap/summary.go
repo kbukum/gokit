@@ -65,11 +65,11 @@ type ClientInfo struct {
 
 // Summary tracks and displays the application bootstrap process.
 //
-// Output is written to the configured io.Writer (default: os.Stdout). Use
-// SetWriter (or the [WithWriter] option on NewSummaryWithOptions) to redirect
-// output — for example to a structured log line, an in-memory buffer for
-// tests, or a file. Library code MUST NOT write directly to stdout; the
-// configurable writer is the supported integration point.
+// Output is written to the configured io.Writer (default: os.Stdout).
+// Use SetWriter (or the [WithWriter] option on NewSummaryWithOptions) to redirect output —
+// for example to a structured log line, an in-memory buffer for tests, or a file.
+// Library code MUST NOT write directly to stdout;
+// the configurable writer is the supported integration point.
 type Summary struct {
 	serviceName     string
 	version         string
@@ -121,8 +121,7 @@ func NewSummaryWithOptions(serviceName, version string, opts ...SummaryOption) *
 	return s
 }
 
-// SetWriter overrides the output writer used by [Summary.DisplaySummary].
-// A nil writer is ignored.
+// SetWriter overrides the output writer used by [Summary.DisplaySummary]. A nil writer is ignored.
 func (s *Summary) SetWriter(w io.Writer) {
 	if w != nil {
 		s.writer = w
@@ -156,8 +155,8 @@ func (s *Summary) TrackInfrastructure(name, componentType, status, details strin
 	})
 }
 
-// trackInfrastructureWithComponent is like TrackInfrastructure but also records
-// the internal component name for deduplication with the Components section.
+// trackInfrastructureWithComponent is like TrackInfrastructure
+// but also records the internal component name for deduplication with the Components section.
 // TrackBusinessComponent records a business-layer component.
 func (s *Summary) TrackBusinessComponent(name, componentType, status string, dependencies []string) {
 	s.business = append(s.business, BusinessComponentInfo{
@@ -197,10 +196,9 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 	})
 }
 
-// DisplaySummary prints the bootstrap summary.
-// It auto-collects infrastructure, routes, and health from the component
-// registry and DI registrations from the container. Manual Track* calls
-// are only needed for non-component items (e.g., auth config).
+// DisplaySummary prints the bootstrap summary. It auto-collects infrastructure, routes,
+// and health from the component registry and DI registrations from the container.
+// Manual Track* calls are only needed for non-component items (e.g., auth config).
 func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Container, log *logging.Logger) {
 	ctx := context.Background()
 
@@ -325,8 +323,8 @@ func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Con
 	fmt.Fprintf(s.writer, "\n")
 }
 
-// collectFromRegistry auto-discovers infrastructure, routes, and health
-// from registered components. Called at the start of DisplaySummary.
+// collectFromRegistry auto-discovers infrastructure, routes, and health from registered components.
+// Called at the start of DisplaySummary.
 func (s *Summary) collectFromRegistry(ctx context.Context, registry *component.Registry) {
 	if registry == nil {
 		return
@@ -487,10 +485,10 @@ func (s *Summary) displayDIRegistrations(container *di.Container) {
 	}
 }
 
-// registrationStatus returns the tree marker for a DI registration. Transient
-// registrations are resolved fresh on every request and are never cached, so
-// they get their own marker rather than being shown as an uninitialized
-// singleton. 💤 is reserved for singletons that have not been resolved yet.
+// registrationStatus returns the tree marker for a DI registration.
+// Transient registrations are resolved fresh on every request and are never cached,
+// so they get their own marker rather than being shown as an uninitialized singleton.
+// 💤 is reserved for singletons that have not been resolved yet.
 func registrationStatus(item di.RegistrationInfo) string {
 	switch {
 	case item.Mode == di.Transient:

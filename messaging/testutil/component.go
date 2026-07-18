@@ -222,8 +222,8 @@ func (c *MockConsumer) Feed(msg Message) {
 	c.messages <- msg
 }
 
-// Consume blocks until context is canceled, processing fed messages.
-// After cancellation, any remaining buffered messages are still delivered.
+// Consume blocks until context is canceled, processing fed messages. After cancellation,
+// any remaining buffered messages are still delivered.
 func (c *MockConsumer) Consume(ctx context.Context) error {
 	for {
 		select {

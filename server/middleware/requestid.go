@@ -20,8 +20,8 @@ func RequestID() Middleware {
 }
 
 // GinRequestID returns a Gin middleware for request-ID injection.
-// Prefer using RequestID() at the server level via ApplyMiddleware() which
-// covers all routes. Use this only when you need it on the Gin engine directly.
+// Prefer using RequestID() at the server level via ApplyMiddleware() which covers all routes.
+// Use this only when you need it on the Gin engine directly.
 func GinRequestID() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := ensureRequestID(c.Request)
@@ -31,8 +31,8 @@ func GinRequestID() gin.HandlerFunc {
 	}
 }
 
-// ensureRequestID returns the existing X-Request-Id from the request or
-// generates a new UUID and sets it on the request header.
+// ensureRequestID returns the existing X-Request-Id from the request or generates a new UUID
+// and sets it on the request header.
 func ensureRequestID(r *http.Request) string {
 	id := r.Header.Get("X-Request-Id")
 	if id == "" {

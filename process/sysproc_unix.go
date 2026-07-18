@@ -7,16 +7,16 @@ import (
 	"syscall"
 )
 
-// ConfigureSysProcAttr places the child in its own process group so we
-// can signal the entire tree on cancellation. No-op on platforms (such
-// as Windows) that do not support process groups.
+// ConfigureSysProcAttr places the child in its own process group
+// so we can signal the entire tree on cancellation.
+// No-op on platforms (such as Windows) that do not support process groups.
 func ConfigureSysProcAttr(c *exec.Cmd) {
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
-// TerminateGracefully sends SIGTERM to the child's process group so any
-// grandchildren are also signaled. Callers should set cmd.WaitDelay so
-// the runtime escalates to SIGKILL if the child does not exit in time.
+// TerminateGracefully sends SIGTERM to the child's process group
+// so any grandchildren are also signaled. Callers should set cmd.WaitDelay
+// so the runtime escalates to SIGKILL if the child does not exit in time.
 // On Windows this falls back to os.Process.Kill.
 func TerminateGracefully(c *exec.Cmd) error {
 	if c.Process == nil {

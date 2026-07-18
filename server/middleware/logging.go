@@ -10,8 +10,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// RequestLogger returns middleware that logs every request with method,
-// path, status code, and duration. Health-check paths are silently skipped.
+// RequestLogger returns middleware that logs every request with method, path, status code,
+// and duration. Health-check paths are silently skipped.
 func RequestLogger(log *logging.Logger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -41,8 +41,8 @@ func RequestLogger(log *logging.Logger) Middleware {
 }
 
 // GinRequestLogger returns a Gin middleware for request logging.
-// Prefer using RequestLogger() at the server level via ApplyMiddleware() which
-// covers all routes. Use this only when you need logging on the Gin engine directly.
+// Prefer using RequestLogger() at the server level via ApplyMiddleware() which covers all routes.
+// Use this only when you need logging on the Gin engine directly.
 func GinRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if isHealthEndpoint(c.Request.URL.Path) {
@@ -99,8 +99,8 @@ func isHealthEndpoint(path string) bool {
 }
 
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
-// If log is nil, the global logger is used.
-// Shared by both Gin and net/http request logger middleware.
+// If log is nil, the global logger is used. Shared by both Gin
+// and net/http request logger middleware.
 func logByStatus(log *logging.Logger, fields map[string]any, status int) {
 	logErr := logging.Error
 	logWarn := logging.Warn

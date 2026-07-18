@@ -7,8 +7,7 @@ import (
 )
 
 // AsProvider converts a typed Tool into a provider.RequestResponse.
-// This bridges the tool system with the provider middleware stack
-// (resilience, caching, tracing, etc.).
+// This bridges the tool system with the provider middleware stack (resilience, caching, tracing, etc.).
 func (t *Tool[I, O]) AsProvider() provider.RequestResponse[I, O] {
 	return &toolProvider[I, O]{tool: t}
 }

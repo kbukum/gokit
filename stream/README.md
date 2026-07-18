@@ -2,9 +2,15 @@
 
 **Pull-based data pipeline with composable operators, plus a bounded push fan-out source**
 
-`stream` provides lazy, backpressure-aware data processing for Go. Pipelines pull values on demand — no work happens until you call `Collect`, `Drain`, or `ForEach`. This design naturally handles flow control without buffering or blocking. For the genuinely push-shaped "one source, many observers" case, `Broadcaster` fans events out to independent subscribers with bounded, drop-on-overflow buffers.
+`stream` provides lazy, backpressure-aware data processing for Go. Pipelines pull values on demand —
+no work happens until you call `Collect`, `Drain`, or `ForEach`.
+This design naturally handles flow control without buffering or blocking.
+For the genuinely push-shaped "one source, many observers" case,
+`Broadcaster` fans events out to independent subscribers with bounded, drop-on-overflow buffers.
 
-gokit converges on the [`rskit-stream`](https://github.com/kbukum/rskit/tree/main/core/rskit-stream) operator vocabulary (`map`/`filter`/`fan_out`/`window`/`batch`/`parallel`/`merge`/`partition`/…) and its `Broadcaster`, expressed idiomatically in Go: a pull iterator for transformation pipelines and a bounded channel bus for fan-out. No operator buffers without bound.
+gokit converges on the [`rskit-stream`](https://github.com/kbukum/rskit/tree/main/core/rskit-stream) operator vocabulary (`map`/`filter`/`fan_out`/`window`/`batch`/`parallel`/`merge`/`partition`/…)
+and its `Broadcaster`, expressed idiomatically in Go: a pull iterator for transformation pipelines
+and a bounded channel bus for fan-out. No operator buffers without bound.
 
 ## Features
 
@@ -106,10 +112,10 @@ func main() {
 
 ### Push Fan-Out (Broadcaster)
 
-For the "watch one source → fan a typed change stream out to many independent observers" shape
-(config reloads, service discovery, cache invalidation, secret rotation), use `Broadcaster[T]`.
-Each subscriber owns a private bounded channel: a subscriber lagging beyond its buffer drops the
-overflow (backpressure by drop) but never blocks the broadcaster or its peers.
+For the "watch one source → fan a typed change stream out to many independent observers" shape (config reloads, service discovery, cache invalidation, secret rotation),
+use `Broadcaster[T]`. Each subscriber owns a private bounded channel:
+a subscriber lagging beyond its buffer drops the overflow (backpressure by drop)
+but never blocks the broadcaster or its peers.
 
 | Operator | Description |
 |----------|-------------|
@@ -367,8 +373,10 @@ func TestPipeline(t *testing.T) {
 
 - **Lazy evaluation** means no work until terminal operator runs
 - **Synchronous operators** (Map, Filter) add negligible overhead
-- **Concurrent operators** (Parallel, Buffer, Merge) spawn goroutines — use when I/O or CPU-heavy work benefits from parallelism
-- **Throttle/Batch/Debounce** use timers — appropriate for real-time/streaming scenarios, not batch processing
+- **Concurrent operators** (Parallel, Buffer, Merge) spawn goroutines — use when I/O
+  or CPU-heavy work benefits from parallelism
+- **Throttle/Batch/Debounce** use timers — appropriate for real-time/streaming scenarios,
+  not batch processing
 - **Context cancellation** stops the pipeline immediately at the next operator
 
 ## Related Packages

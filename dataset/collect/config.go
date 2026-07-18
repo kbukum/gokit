@@ -11,12 +11,10 @@ import (
 // DefaultOutputDir is the default collector output directory.
 const DefaultOutputDir = "dataset_build"
 
-// DefaultSourceTimeout bounds a single source's collection when no override is
-// given.
+// DefaultSourceTimeout bounds a single source's collection when no override is given.
 const DefaultSourceTimeout = 10 * time.Minute
 
-// DefaultConcurrency is the number of sources collected in parallel when no
-// override is given.
+// DefaultConcurrency is the number of sources collected in parallel when no override is given.
 const DefaultConcurrency = 4
 
 // Config configures a [Collector] run.
@@ -25,13 +23,12 @@ type Config struct {
 	OutputDir string
 	// SourceTimeout bounds each source's streaming; zero disables the timeout.
 	SourceTimeout time.Duration
-	// Concurrency is the number of sources streamed in parallel; zero uses
-	// [DefaultConcurrency].
+	// Concurrency is the number of sources streamed in parallel; zero uses [DefaultConcurrency].
 	Concurrency int
 	// Force reprocesses sources even when the manifest reports them cached.
 	Force bool
-	// Limits bounds record and payload sizes and, via StreamBuffer, the work and
-	// event channels that apply backpressure.
+	// Limits bounds record and payload sizes and, via StreamBuffer, the work
+	// and event channels that apply backpressure.
 	Limits payload.Limits
 }
 

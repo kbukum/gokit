@@ -16,12 +16,12 @@ import (
 const tracerName = "github.com/kbukum/gokit/llm"
 
 // AdapterProvider wraps an *Adapter to implement the Provider interface.
-// It applies provider defaults/capabilities and emits canonical StreamEvent
-// values, including a final MessageComplete event.
+// It applies provider defaults/capabilities and emits canonical StreamEvent values,
+// including a final MessageComplete event.
 //
-// Per locked decision D12 (NATIVE COMPONENT), AdapterProvider implements
-// component.Component (Start/Stop/Health) so bootstrap auto-wires it as
-// infrastructure with no consumer code.
+// Per locked decision D12 (NATIVE COMPONENT),
+// AdapterProvider implements component.Component (Start/Stop/Health)
+// so bootstrap auto-wires it as infrastructure with no consumer code.
 type AdapterProvider struct {
 	adapter   *Adapter
 	model     string
@@ -45,8 +45,8 @@ func (p *AdapterProvider) WithDefaults(fn func(req *CompletionRequest)) *Adapter
 }
 
 // Execute is the canonical RequestResponse method. Per D7 NATIVE EMBED,
-// llm.Provider embeds provider.RequestResponse[CompletionRequest,
-// CompletionResponse], while streaming remains the named Stream extension.
+// llm.Provider embeds provider.RequestResponse[CompletionRequest, CompletionResponse],
+// while streaming remains the named Stream extension.
 func (p *AdapterProvider) Execute(ctx context.Context, req CompletionRequest) (CompletionResponse, error) {
 	p.applyDefaults(&req)
 	ctx, span := observability.StartNamedSpan(ctx, tracerName, "llm.complete",
@@ -80,9 +80,9 @@ func (p *AdapterProvider) IsAvailable(ctx context.Context) bool { return p.adapt
 
 // --- component.Component (D12) ---
 
-// Start performs a cheap warm-up (records ready). It deliberately does not
-// dial the upstream provider — readiness is verified via IsAvailable / Health
-// at first request.
+// Start performs a cheap warm-up (records ready).
+// It deliberately does not dial the upstream provider —
+// readiness is verified via IsAvailable / Health at first request.
 func (p *AdapterProvider) Start(_ context.Context) error {
 	p.lifecycle.MarkReady()
 	return nil
@@ -163,12 +163,13 @@ func mergeStreamToolDelta(calls []streamToolCall, delta streamToolCall) []stream
 	return streamwire.MergeToolDelta(calls, delta)
 }
 
-// streamEventsFromChunks transforms upstream chunks into canonical StreamEvent
-// values. Every send is guarded by ctx so a consumer that stops reading (after
-// canceling ctx) never wedges this goroutine. It always calls cancel when it
-// finishes — including on early return paths (upstream error, tool-arg size
-// cap, ctx cancellation) — so the producer goroutine is torn down and never
-// blocks on a send into the abandoned chunk channel.
+// streamEventsFromChunks transforms upstream chunks into canonical StreamEvent values.
+// Every send is guarded by ctx
+// so a consumer that stops reading (after canceling ctx) never wedges this goroutine.
+// It always calls cancel when it finishes —
+// including on early return paths (upstream error, tool-arg size cap, ctx cancellation) —
+// so the producer goroutine is torn down
+// and never blocks on a send into the abandoned chunk channel.
 func streamEventsFromChunks(ctx context.Context, chunkCh <-chan streamChunk, model string, cancel context.CancelFunc) <-chan StreamEvent {
 	eventCh := make(chan StreamEvent, 16)
 	go func() {

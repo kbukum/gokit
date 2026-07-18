@@ -1,10 +1,9 @@
-// Package stage defines the generic streaming stages of the dataset kit: a
-// [Source] that produces a bounded stream, a [Transform] that maps and filters
-// it, and a [Target] that publishes it. It also defines the optional
-// item-capability model the collector inspects — [Labeled] (real/AI
-// classification), [Offsetted] (resume offset), and [Resumable] sources — with
-// the free helpers [LabelOf], [OffsetOf], and [Resume], plus the pluggable
-// [Validator]. Stages are generics-first (no interface{}/any) and compose over
-// [github.com/kbukum/gokit/stream] pipelines rather than a parallel streaming
-// stack.
+// Package stage defines the generic streaming stages of the dataset kit:
+// a [Source] that produces a bounded stream, a [Transform] that maps and filters it,
+// and a [Target] that publishes it.
+// It also defines the optional item-capability model the collector inspects —
+// [Labeled] (real/AI classification), [Offsetted] (resume offset), and [Resumable] sources —
+// with the free helpers [LabelOf], [OffsetOf], and [Resume], plus the pluggable [Validator].
+// Stages are generics-first (no interface{}/any)
+// and compose over [github.com/kbukum/gokit/stream] pipelines rather than a parallel streaming stack.
 package stage

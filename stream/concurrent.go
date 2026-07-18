@@ -50,8 +50,8 @@ func Buffer[T any](p *Pipeline[T], size int) *Pipeline[T] {
 	}
 }
 
-// Parallel applies fn to each value concurrently with up to n workers.
-// Order is NOT preserved. Use Map for ordered processing.
+// Parallel applies fn to each value concurrently with up to n workers. Order is NOT preserved.
+// Use Map for ordered processing.
 func Parallel[I, O any](p *Pipeline[I], n int, fn func(context.Context, I) (O, error)) *Pipeline[O] {
 	if n <= 0 {
 		n = 1
@@ -129,8 +129,7 @@ func Parallel[I, O any](p *Pipeline[I], n int, fn func(context.Context, I) (O, e
 }
 
 // Merge combines multiple pipelines concurrently.
-// Values are yielded as they become available from any source.
-// Order is NOT preserved.
+// Values are yielded as they become available from any source. Order is NOT preserved.
 func Merge[T any](pipelines ...*Pipeline[T]) *Pipeline[T] {
 	return &Pipeline[T]{
 		create: func(ctx context.Context) Iterator[T] {

@@ -3,8 +3,8 @@ package provider
 import "context"
 
 // TapSink wraps a Sink with a side-effect function that runs before sending.
-// The tap function observes the input without modifying it. If the tap
-// returns an error, the input is still forwarded to the inner sink.
+// The tap function observes the input without modifying it. If the tap returns an error,
+// the input is still forwarded to the inner sink.
 //
 // Use for metrics, logging, or feeding derived processors inline.
 func TapSink[I any](inner Sink[I], tap func(context.Context, I)) Sink[I] {

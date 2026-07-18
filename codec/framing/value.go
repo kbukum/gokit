@@ -8,11 +8,10 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// WriteValue encodes value with codec and writes it as one length-delimited
-// frame.
+// WriteValue encodes value with codec and writes it as one length-delimited frame.
 //
-// It returns a typed error (cause preserved) if encoding or the frame write
-// fails, or the payload exceeds maxBytes.
+// It returns a typed error (cause preserved) if encoding or the frame write fails,
+// or the payload exceeds maxBytes.
 func WriteValue[T any](w io.Writer, c codec.Codec, value T, maxBytes int) error {
 	text, err := codec.Encode(c, value)
 	if err != nil {
@@ -23,9 +22,9 @@ func WriteValue[T any](w io.Writer, c codec.Codec, value T, maxBytes int) error 
 
 // ReadValue reads one frame and decodes it into T through codec.
 //
-// It returns io.EOF on a clean end-of-stream between frames, or a typed error
-// (cause preserved) on a transport failure or a payload that does not decode
-// into T.
+// It returns io.EOF on a clean end-of-stream between frames,
+// or a typed error (cause preserved) on a transport failure
+// or a payload that does not decode into T.
 func ReadValue[T any](r io.Reader, c codec.Codec, maxBytes int) (T, error) {
 	var out T
 	payload, err := ReadFrame(r, maxBytes)
@@ -37,10 +36,10 @@ func ReadValue[T any](r io.Reader, c codec.Codec, maxBytes int) (T, error) {
 
 // DecodeValue decodes an already-read frame payload into T through codec.
 //
-// It is split from [ReadValue] so a caller that must inspect one frame as more
-// than one shape can decode the same bytes without re-reading the stream. It
-// returns a typed error (cause preserved) if payload is not valid UTF-8 or does
-// not decode into T.
+// It is split from [ReadValue]
+// so a caller that must inspect one frame as more than one shape can decode the same bytes without re-reading the stream.
+// It returns a typed error (cause preserved) if payload is not valid UTF-8
+// or does not decode into T.
 func DecodeValue[T any](c codec.Codec, payload []byte) (T, error) {
 	var out T
 	if !utf8.Valid(payload) {

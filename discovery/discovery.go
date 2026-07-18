@@ -52,8 +52,8 @@ type Discovery interface {
 	// Discover returns all healthy instances of the named service.
 	Discover(ctx context.Context, serviceName string) ([]ServiceInstance, error)
 
-	// Watch returns a channel that emits the current set of instances
-	// whenever the service membership changes. Close the context to stop.
+	// Watch returns a channel that emits the current set of instances whenever the service membership changes.
+	// Close the context to stop.
 	Watch(ctx context.Context, serviceName string) (<-chan []ServiceInstance, error)
 
 	// Close releases any resources held by the discovery client.

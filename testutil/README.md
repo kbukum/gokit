@@ -1,10 +1,13 @@
 # TestUtil - Testing Infrastructure for gokit
 
-The `testutil` package provides a comprehensive testing infrastructure for gokit components, following the same lifecycle patterns as production components. It enables easy setup, teardown, and management of test components with support for state snapshots and resets.
+The `testutil` package provides a comprehensive testing infrastructure for gokit components,
+following the same lifecycle patterns as production components. It enables easy setup, teardown,
+and management of test components with support for state snapshots and resets.
 
 ## Features
 
-- **TestComponent Interface**: Extends `component.Component` with testing-specific methods (Reset, Snapshot, Restore)
+- **TestComponent Interface**:
+  Extends `component.Component` with testing-specific methods (Reset, Snapshot, Restore)
 - **TestManager**: Lifecycle manager for coordinating multiple test components
 - **Helper Functions**: Convenient wrappers for common testing patterns
 - **Testing.T Integration**: Automatic cleanup integration with Go's testing package
@@ -365,7 +368,8 @@ See the test files for comprehensive examples:
 
 ## Thread Safety
 
-All TestManager operations are thread-safe and can be called concurrently. Individual TestComponent implementations should also ensure thread-safety if they will be used in concurrent tests.
+All TestManager operations are thread-safe and can be called concurrently.
+Individual TestComponent implementations should also ensure thread-safety if they will be used in concurrent tests.
 
 ## Next Steps
 

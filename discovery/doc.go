@@ -1,8 +1,9 @@
 // Package discovery provides service discovery abstractions for gokit applications.
 //
-// It defines interfaces and types for dynamically discovering healthy service
-// instances from registries such as Consul or static configuration. The package
-// follows gokit's component pattern with lifecycle management and health checks.
+// It defines interfaces
+// and types for dynamically discovering healthy service instances from registries such as Consul
+// or static configuration. The package follows gokit's component pattern with lifecycle management
+// and health checks.
 //
 // # Architecture
 //

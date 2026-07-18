@@ -18,8 +18,8 @@ const (
 // Region is a single bounded tile within a [Console].
 //
 // It retains only its most recent lines (up to the console's configured height);
-// older lines scroll out of the live peek. A region is safe to append to from a
-// goroutine separate from the one rendering the console.
+// older lines scroll out of the live peek.
+// A region is safe to append to from a goroutine separate from the one rendering the console.
 type Region struct {
 	title  string
 	height int
@@ -30,8 +30,8 @@ type Region struct {
 	reason string
 }
 
-// Println appends a line to the region, dropping the oldest retained line once
-// the height bound is exceeded (the ephemeral-peek bound).
+// Println appends a line to the region,
+// dropping the oldest retained line once the height bound is exceeded (the ephemeral-peek bound).
 func (r *Region) Println(line string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -41,8 +41,7 @@ func (r *Region) Println(line string) {
 	}
 }
 
-// Done marks the region complete with a short summary shown on
-// [Console.Finish].
+// Done marks the region complete with a short summary shown on [Console.Finish].
 func (r *Region) Done(summary string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

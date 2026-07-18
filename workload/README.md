@@ -1,6 +1,7 @@
 # workload
 
-Provider-based workload manager for deploying and managing containerized workloads across Docker and Kubernetes runtimes.
+Provider-based workload manager for deploying and managing containerized workloads across Docker
+and Kubernetes runtimes.
 
 ## Install
 

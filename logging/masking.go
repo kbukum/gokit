@@ -153,10 +153,9 @@ func (m *DefaultMasker) MaskValue(key, value string) string {
 	return value
 }
 
-// MaskFields masks all values in a map, returning a new map.
-// String values are masked directly. Non-string values are converted to a
-// string representation, checked for sensitive patterns, and replaced with
-// the masked string if a pattern matches.
+// MaskFields masks all values in a map, returning a new map. String values are masked directly.
+// Non-string values are converted to a string representation, checked for sensitive patterns,
+// and replaced with the masked string if a pattern matches.
 func (m *DefaultMasker) MaskFields(fields map[string]any) map[string]any {
 	if fields == nil {
 		return nil

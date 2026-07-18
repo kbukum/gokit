@@ -1,8 +1,8 @@
 package auth
 
 // TokenValidator validates a token string and returns the parsed claims.
-// This is the core authentication contract — middleware and interceptors
-// depend on this interface rather than specific implementations (JWT, OIDC, etc.).
+// This is the core authentication contract — middleware
+// and interceptors depend on this interface rather than specific implementations (JWT, OIDC, etc.).
 //
 // The returned value can be any type (typically a project-specific claims struct).
 // It is stored in request context via authctx.Set and retrieved with authctx.Get[T].
@@ -28,9 +28,8 @@ func (f TokenValidatorFunc) ValidateToken(token string) (any, error) {
 	return f(token)
 }
 
-// TokenGenerator generates a signed token from claims.
-// This is the token creation contract — services use this to issue tokens
-// without depending on specific signing implementations.
+// TokenGenerator generates a signed token from claims. This is the token creation contract —
+// services use this to issue tokens without depending on specific signing implementations.
 type TokenGenerator interface {
 	GenerateToken(claims any) (string, error)
 }
@@ -44,8 +43,8 @@ func (f TokenGeneratorFunc) GenerateToken(claims any) (string, error) {
 }
 
 // NewValidator creates a TokenValidator from a validation function.
-// This is a convenience wrapper for TokenValidatorFunc, useful for bridging
-// typed services like jwt.Service[T]:
+// This is a convenience wrapper for TokenValidatorFunc,
+// useful for bridging typed services like jwt.Service[T]:
 //
 //	validator := auth.NewValidator(jwtSvc.ValidatorFunc())
 func NewValidator(fn func(string) (any, error)) TokenValidator {

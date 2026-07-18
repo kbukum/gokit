@@ -18,8 +18,8 @@ func CodecForName(name string) (Codec, bool) {
 	}
 }
 
-// CodecForPath returns a codec for path's file extension. The boolean is false
-// when the extension is missing or unrecognized.
+// CodecForPath returns a codec for path's file extension.
+// The boolean is false when the extension is missing or unrecognized.
 func CodecForPath(path string) (Codec, bool) {
 	ext := strings.TrimPrefix(filepath.Ext(path), ".")
 	if ext == "" {

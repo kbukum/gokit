@@ -2,9 +2,9 @@
 
 Amazon S3 and S3-compatible adapter for `github.com/kbukum/gokit/storage`.
 
-The core `storage` module owns the `Storage` contract, local backend, and
-`FactoryRegistry`. This adapter owns the AWS SDK dependency and registers itself
-only when the application explicitly calls `Register`.
+The core `storage` module owns the `Storage` contract, local backend, and `FactoryRegistry`.
+This adapter owns the AWS SDK dependency
+and registers itself only when the application explicitly calls `Register`.
 
 ## Usage
 
@@ -25,5 +25,5 @@ func configure() (*storage.FactoryRegistry, error) {
 }
 ```
 
-Importing this package has no side effects. Applications own the registry and
-choose the backend through configuration.
+Importing this package has no side effects. Applications own the registry
+and choose the backend through configuration.

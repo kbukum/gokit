@@ -1,12 +1,12 @@
 // Package hook provides a lightweight, generic observe-only event system.
 //
-// It allows registering handlers for arbitrary event types. Handlers run
-// sequentially in registration order. Non-fatal errors are aggregated and
-// observed through the canonical on_error event; only errors wrapping
-// ErrFatalHook abort dispatch.
+// It allows registering handlers for arbitrary event types.
+// Handlers run sequentially in registration order. Non-fatal errors are aggregated
+// and observed through the canonical on_error event;
+// only errors wrapping ErrFatalHook abort dispatch.
 //
-// The hook module is domain-agnostic — applications define their own event
-// types by implementing the Event interface.
+// The hook module is domain-agnostic —
+// applications define their own event types by implementing the Event interface.
 //
 // Usage:
 //

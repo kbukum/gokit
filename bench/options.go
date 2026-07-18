@@ -3,8 +3,8 @@ package bench
 import "time"
 
 // RunMetric computes evaluation scores from predictions vs ground truth.
-// This interface mirrors metric.Metric[L] but lives in bench to avoid
-// an import cycle (bench/metric already imports bench).
+// This interface mirrors metric.Metric[L]
+// but lives in bench to avoid an import cycle (bench/metric already imports bench).
 // Use metric.AsRunMetric to adapt metric.Metric[L] values.
 type RunMetric[L comparable] interface {
 	Name() string
@@ -76,8 +76,7 @@ func WithTargets[L comparable](targets map[string]float64) RunOption[L] {
 	}
 }
 
-// WithFailOnRegression configures whether the run should fail if a
-// regression is detected compared to the previous run.
+// WithFailOnRegression configures whether the run should fail if a regression is detected compared to the previous run.
 func WithFailOnRegression[L comparable](b bool) RunOption[L] {
 	return func(c *runConfig[L]) {
 		c.failOnRegression = b

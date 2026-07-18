@@ -7,15 +7,15 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// Runner wraps subprocess execution with persistent resilience state.
-// Use NewRunner to create one, then call Run repeatedly. The circuit breaker
-// state persists across calls — repeated crashes trip the breaker.
+// Runner wraps subprocess execution with persistent resilience state. Use NewRunner to create one,
+// then call Run repeatedly. The circuit breaker state persists across calls —
+// repeated crashes trip the breaker.
 type Runner struct {
 	state *provider.ResilienceState
 }
 
-// NewRunner creates a Runner with the given resilience config.
-// Nil config fields are skipped. Empty config means Run() calls process.Run directly.
+// NewRunner creates a Runner with the given resilience config. Nil config fields are skipped.
+// Empty config means Run() calls process.Run directly.
 func NewRunner(cfg provider.ResilienceConfig) *Runner {
 	return &Runner{state: provider.BuildResilience(cfg)}
 }
@@ -40,8 +40,8 @@ func RunWithResilience(ctx context.Context, cmd Command, runner *Runner) (*Resul
 }
 
 // SubprocessProvider wraps a Command as a provider.RequestResponse.
-// The input function builds a Command from the input, and the output function
-// parses the Result into the desired output type.
+// The input function builds a Command from the input,
+// and the output function parses the Result into the desired output type.
 type SubprocessProvider[I, O any] struct {
 	name      string
 	buildCmd  func(I) Command

@@ -7,8 +7,7 @@ import (
 )
 
 // ManagedConsumer wraps a Consumer with background lifecycle management.
-// It embeds the generic messaging.ManagedConsumer and adds Kafka-specific
-// metadata (GroupID).
+// It embeds the generic messaging.ManagedConsumer and adds Kafka-specific metadata (GroupID).
 type ManagedConsumer struct {
 	*messaging.ManagedConsumer
 	groupID string

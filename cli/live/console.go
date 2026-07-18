@@ -17,11 +17,11 @@ const (
 	defaultRegionHeight = 5
 )
 
-// Config bounds a [Console]'s live area. The zero value is completed by
-// [NewConsole] with the package defaults.
+// Config bounds a [Console]'s live area.
+// The zero value is completed by [NewConsole] with the package defaults.
 type Config struct {
-	// MaxRegions caps the number of concurrent regions; [Console.AddRegion]
-	// rejects further regions once reached (documented backpressure).
+	// MaxRegions caps the number of concurrent regions;
+	// [Console.AddRegion] rejects further regions once reached (documented backpressure).
 	MaxRegions int
 	// RegionHeight caps the recent lines each region retains in the live view;
 	// older lines scroll out of the ephemeral peek (documented per-region bound).
@@ -40,10 +40,10 @@ func (c Config) withDefaults() Config {
 
 // Console is a bounded multi-region live console over an injected writer.
 //
-// It is safe for concurrent use: regions may be appended to from separate
-// goroutines while the owner periodically calls [Console.Render]. Ownership,
-// cancellation, and render cadence belong to the caller — the console itself
-// spawns no goroutines.
+// It is safe for concurrent use:
+// regions may be appended to from separate goroutines while the owner periodically calls [Console.Render].
+// Ownership, cancellation, and render cadence belong to the caller —
+// the console itself spawns no goroutines.
 type Console struct {
 	writer  io.Writer
 	palette theme.Palette
@@ -55,9 +55,9 @@ type Console struct {
 	lastFrame int
 }
 
-// NewConsole creates a live console writing to w, bounded by config. The glyph
-// set selects the verdict symbols so [Console.Finish] stays byte-clean on
-// non-UTF-8 terminals.
+// NewConsole creates a live console writing to w, bounded by config.
+// The glyph set selects the verdict symbols
+// so [Console.Finish] stays byte-clean on non-UTF-8 terminals.
 func NewConsole(w io.Writer, config Config, palette theme.Palette, glyphs theme.Glyphs) *Console {
 	return &Console{writer: w, palette: palette, glyphs: glyphs, config: config.withDefaults()}
 }
@@ -77,8 +77,8 @@ func (c *Console) AddRegion(title string) (*Region, error) {
 	return region, nil
 }
 
-// Render redraws the whole live area in place: it moves the cursor up over the
-// previous frame, clears it, and writes the current tiles.
+// Render redraws the whole live area in place: it moves the cursor up over the previous frame,
+// clears it, and writes the current tiles.
 func (c *Console) Render() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -106,8 +106,8 @@ func (c *Console) Render() error {
 	return nil
 }
 
-// Finish clears the live area and writes each region's durable verdict to
-// scrollback, so the terminal retains signal rather than transient progress.
+// Finish clears the live area and writes each region's durable verdict to scrollback,
+// so the terminal retains signal rather than transient progress.
 func (c *Console) Finish() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

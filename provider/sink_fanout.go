@@ -7,8 +7,8 @@ import (
 )
 
 // FanOutSink creates a Sink that dispatches each input to multiple sinks in parallel.
-// All sinks receive the same input concurrently. Errors from individual sinks
-// are joined and returned together.
+// All sinks receive the same input concurrently. Errors from individual sinks are joined
+// and returned together.
 func FanOutSink[I any](name string, sinks ...Sink[I]) Sink[I] {
 	if len(sinks) == 1 {
 		return sinks[0]

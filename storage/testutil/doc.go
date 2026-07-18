@@ -1,7 +1,7 @@
 // Package testutil provides testing utilities for the storage module.
 //
-// It includes an in-memory storage component that implements both
-// component.Component and testutil.TestComponent interfaces.
+// It includes an in-memory storage component that implements both component.Component
+// and testutil.TestComponent interfaces.
 //
 // # Quick Start
 //

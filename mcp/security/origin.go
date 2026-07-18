@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// ValidateAllowedOrigin normalizes and rejects any Origin value that is not a
-// bare scheme://host[:port] over http or https, failing closed on paths,
-// queries, fragments, credentials, or opaque URLs.
+// ValidateAllowedOrigin normalizes
+// and rejects any Origin value that is not a bare scheme://host[:port] over http or https,
+// failing closed on paths, queries, fragments, credentials, or opaque URLs.
 func ValidateAllowedOrigin(origin string) (string, error) {
 	parsed, err := url.Parse(origin)
 	if err != nil {

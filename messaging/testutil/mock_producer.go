@@ -1,8 +1,8 @@
 package testutil
 
 // SetError configures MockProducer to return err on all publish operations.
-// Pass nil to clear the injected error. The error takes effect on the next
-// Publish/PublishJSON/PublishBinary/Send call.
+// Pass nil to clear the injected error.
+// The error takes effect on the next Publish/PublishJSON/PublishBinary/Send call.
 func (p *MockProducer) SetError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

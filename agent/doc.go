@@ -1,8 +1,8 @@
-// Package agent provides the orchestration loop that composes LLM providers,
-// tool registries, and hook registries into an agentic conversation loop.
+// Package agent provides the orchestration loop that composes LLM providers, tool registries,
+// and hook registries into an agentic conversation loop.
 //
-// The agent iteratively calls the LLM, executes tool calls from the response,
-// feeds results back, and repeats until the model stops requesting tools.
+// The agent iteratively calls the LLM, executes tool calls from the response, feeds results back,
+// and repeats until the model stops requesting tools.
 //
 // Usage:
 //

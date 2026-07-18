@@ -10,8 +10,8 @@ import "strings"
 //   - "*:read"       matches "article:read", "user:read", etc.
 //   - "article:read" matches only "article:read"
 //
-// Both pattern and required use ":" as the separator.
-// If either doesn't contain ":", they are compared as plain strings with wildcard support.
+// Both pattern and required use ":" as the separator. If either doesn't contain ":",
+// they are compared as plain strings with wildcard support.
 func MatchPattern(pattern, required string) bool {
 	// Exact match or universal wildcard
 	if pattern == required || pattern == "*" || pattern == "*:*" {

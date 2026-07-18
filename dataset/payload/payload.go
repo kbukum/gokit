@@ -9,16 +9,16 @@ import (
 	"github.com/kbukum/gokit/fs"
 )
 
-// Payload is a bounded byte payload that is either held in memory or backed by
-// a file on disk. Payloads over the in-memory cap must be file-backed so a
-// stage never materializes an oversized blob.
+// Payload is a bounded byte payload that is either held in memory or backed by a file on disk.
+// Payloads over the in-memory cap must be file-backed
+// so a stage never materializes an oversized blob.
 type Payload struct {
 	data []byte
 	path string
 }
 
-// FromBytes returns an in-memory payload, rejecting input larger than the
-// configured in-memory cap so callers spill to a file instead.
+// FromBytes returns an in-memory payload, rejecting input larger than the configured in-memory cap
+// so callers spill to a file instead.
 func FromBytes(data []byte, limits Limits) (Payload, error) {
 	limits = limits.WithDefaults()
 	if int64(len(data)) > limits.MaxInMemoryBytes {
@@ -28,8 +28,8 @@ func FromBytes(data []byte, limits Limits) (Payload, error) {
 	return Payload{data: data}, nil
 }
 
-// FromFile returns a file-backed payload referencing path. The file is not read
-// until [Payload.ReadBounded] or [Payload.WriteTo] is called.
+// FromFile returns a file-backed payload referencing path.
+// The file is not read until [Payload.ReadBounded] or [Payload.WriteTo] is called.
 func FromFile(path string) Payload {
 	return Payload{path: path}
 }
@@ -37,8 +37,8 @@ func FromFile(path string) Payload {
 // IsFile reports whether the payload is file-backed.
 func (p Payload) IsFile() bool { return p.path != "" }
 
-// ReadBounded returns the payload bytes, enforcing the in-memory cap. A
-// file-backed payload is read through [fs.ReadFileLimit].
+// ReadBounded returns the payload bytes, enforcing the in-memory cap.
+// A file-backed payload is read through [fs.ReadFileLimit].
 func (p Payload) ReadBounded(limits Limits) ([]byte, error) {
 	limits = limits.WithDefaults()
 	if p.IsFile() {
@@ -51,8 +51,8 @@ func (p Payload) ReadBounded(limits Limits) ([]byte, error) {
 	return p.data, nil
 }
 
-// WriteTo streams the payload to w without materializing a file-backed payload
-// in memory, returning the number of bytes written.
+// WriteTo streams the payload to w without materializing a file-backed payload in memory,
+// returning the number of bytes written.
 func (p Payload) WriteTo(w io.Writer) (int64, error) {
 	if p.IsFile() {
 		f, err := os.Open(p.path)

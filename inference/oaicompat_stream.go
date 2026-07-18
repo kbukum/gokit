@@ -12,22 +12,19 @@ import (
 	"github.com/kbukum/gokit/httpclient/sse"
 )
 
-// OAICompatStreamFunc opens a Server-Sent Events stream, POSTing the
-// pre-marshaled JSON body to path. The caller owns transport, auth, headers,
-// and retries; the returned reader is closed by [OAICompatPredictStream] when
-// the stream ends.
+// OAICompatStreamFunc opens a Server-Sent Events stream,
+// POSTing the pre-marshaled JSON body to path. The caller owns transport, auth, headers,
+// and retries; the returned reader is closed by [OAICompatPredictStream] when the stream ends.
 type OAICompatStreamFunc func(ctx context.Context, path string, body json.RawMessage) (sse.Reader, error)
 
-// OAICompatPredictStream is a shared implementation of
-// [StreamingInference.PredictStream] for adapters that wrap an
-// OpenAI-compatible /v1/completions endpoint (vllm, tgi, etc.).
+// OAICompatPredictStream is a shared implementation of [StreamingInference.PredictStream] for adapters that wrap an OpenAI-compatible /v1/completions endpoint (vllm, tgi, etc.).
 //
 // It validates the request up front (a "prompt" Text input and a model name)
-// and returns an error before opening the stream when either is missing, so a
-// bad request fails fast. Once the stream is open it emits canonical
-// [ai.TextDelta] events per chunk, a trailing [ai.UsageDelta] when the server
-// reports usage, and terminates on the "[DONE]" sentinel or reader EOF. Parse
-// and transport failures surface as a terminal [ai.Error] event.
+// and returns an error before opening the stream when either is missing,
+// so a bad request fails fast.
+// Once the stream is open it emits canonical [ai.TextDelta] events per chunk,
+// a trailing [ai.UsageDelta] when the server reports usage, and terminates on the "[DONE]" sentinel
+// or reader EOF. Parse and transport failures surface as a terminal [ai.Error] event.
 func OAICompatPredictStream(ctx context.Context, kind string, open OAICompatStreamFunc, req PredictRequest) (<-chan ai.StreamEvent, error) {
 	prompt, err := extractPrompt(kind, req)
 	if err != nil {

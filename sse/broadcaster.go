@@ -6,7 +6,6 @@ package sse
 type Broadcaster interface {
 	// BroadcastToPattern sends data to all clients matching the given pattern.
 	// Pattern uses glob-style matching (e.g., "resource:*" or "resource:abc123").
-	// Delivery is best-effort: slow clients may drop frames when their bounded
-	// queue is full.
+	// Delivery is best-effort: slow clients may drop frames when their bounded queue is full.
 	BroadcastToPattern(pattern string, data []byte)
 }

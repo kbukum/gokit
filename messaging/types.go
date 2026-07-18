@@ -33,8 +33,8 @@ func NewMessage(topic, key string, value []byte, headers map[string]string) Mess
 	}
 }
 
-// Event represents a structured event for domain messaging.
-// Data is json.RawMessage so events can be forwarded without re-marshaling.
+// Event represents a structured event for domain messaging. Data is json.RawMessage
+// so events can be forwarded without re-marshaling.
 type Event struct {
 	ID          string          `json:"id"`
 	Type        string          `json:"type"`

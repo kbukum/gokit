@@ -37,8 +37,8 @@ type Port[T any] struct {
 	Key string
 }
 
-// Read retrieves a typed value from state using a Port.
-// Returns an error if the key is missing or the type doesn't match.
+// Read retrieves a typed value from state using a Port. Returns an error if the key is missing
+// or the type doesn't match.
 func Read[T any](state *State, port Port[T]) (T, error) {
 	var zero T
 	raw, ok := state.Get(port.Key)

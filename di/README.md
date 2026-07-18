@@ -1,9 +1,9 @@
 # di
 
-Small, type-keyed dependency injection container with eager / singleton /
-transient registration modes, closeable lifecycle, and context-based cycle
-detection. The public API is generic and typed end-to-end — there is no untyped
-registration or lookup.
+Small,
+type-keyed dependency injection container with eager / singleton / transient registration modes,
+closeable lifecycle, and context-based cycle detection. The public API is generic
+and typed end-to-end — there is no untyped registration or lookup.
 
 ## Install
 
@@ -57,16 +57,16 @@ func main() {
 }
 ```
 
-Constructor injection is the only wiring pattern: a factory receives the
-resolution `context.Context` and calls `Resolve` with it for each dependency it
-needs. The active resolution chain travels in that context, so circular
-dependencies are detected and returned as an error, and a canceled context
-aborts resolution.
+Constructor injection is the only wiring pattern:
+a factory receives the resolution `context.Context`
+and calls `Resolve` with it for each dependency it needs.
+The active resolution chain travels in that context, so circular dependencies are detected
+and returned as an error, and a canceled context aborts resolution.
 
-Resource cleanup is opt-in: only values registered with `RegisterCloseable` or
-`RegisterSingletonCloseable` are released by `Container.Close`, which runs their
-disposers in reverse order of construction and joins any errors. Plain
-`Register` values and unresolved singletons are never closed by the container —
+Resource cleanup is opt-in: only values registered with `RegisterCloseable`
+or `RegisterSingletonCloseable` are released by `Container.Close`,
+which runs their disposers in reverse order of construction and joins any errors.
+Plain `Register` values and unresolved singletons are never closed by the container —
 the caller owns them.
 
 ## Key Types & Functions

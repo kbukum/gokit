@@ -12,9 +12,8 @@ type JSONStyle int
 const (
 	// JSONStylePretty emits human-readable, indented output. It is the default.
 	JSONStylePretty JSONStyle = iota
-	// JSONStyleCompact emits minimal single-line output for machine streams
-	// (newline-delimited JSON, length-framed payloads) where size and one
-	// value per line matter.
+	// JSONStyleCompact emits minimal single-line output for machine streams (newline-delimited JSON, length-framed payloads) where size
+	// and one value per line matter.
 	JSONStyleCompact
 )
 

@@ -27,8 +27,7 @@ func FromFunc[I, O any](name, description string, fn func(ctx context.Context, i
 }
 
 // FromFuncInputOnly creates a Tool that auto-generates only the input schema.
-// Use when the output type is dynamic or not useful for schema generation
-// (e.g., map[string]any).
+// Use when the output type is dynamic or not useful for schema generation (e.g., map[string]any).
 func FromFuncInputOnly[I, O any](name, description string, fn func(ctx context.Context, input I) (O, error)) *Tool[I, O] {
 	return &Tool[I, O]{
 		Def: Definition{

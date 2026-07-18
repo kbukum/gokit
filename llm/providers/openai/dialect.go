@@ -107,8 +107,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	if choice.Message.Content != nil && *choice.Message.Content != "" {
 		msg.Content = ai.TextContent(*choice.Message.Content)
 	} else if choice.Message.ReasoningContent != nil && *choice.Message.ReasoningContent != "" {
-		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1)
-		// emit text under reasoning_content when content is empty.
+		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1) emit text under reasoning_content when content is empty.
 		msg.Content = ai.TextContent(*choice.Message.ReasoningContent)
 	}
 

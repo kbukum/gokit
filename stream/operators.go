@@ -62,8 +62,8 @@ func FanOut[I, O any](p *Pipeline[I], fns ...func(context.Context, I) (O, error)
 	}
 }
 
-// Reduce accumulates all values into a single result.
-// The pipeline yields exactly one value: the final accumulator.
+// Reduce accumulates all values into a single result. The pipeline yields exactly one value:
+// the final accumulator.
 func Reduce[T, R any](p *Pipeline[T], init R, fn func(R, T) R) *Pipeline[R] {
 	return &Pipeline[R]{
 		create: func(ctx context.Context) Iterator[R] {

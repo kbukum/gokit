@@ -17,13 +17,11 @@ type Definition struct {
 	OutputSchema schema.JSON `json:"outputSchema,omitempty"`
 	// Annotations holds non-executable metadata hints.
 	Annotations Annotations `json:"annotations,omitzero"`
-	// Envelope is the executable permission envelope for this tool. It
-	// is the single source of truth for what the tool may do at runtime.
-	// The zero value adds no extra capabilities and follows Envelope's
-	// field-level defaults (for example, nil network/filesystem/subprocess
-	// policies deny those capabilities, while empty scopes require none).
-	// Safety, timeout, and result-size policy live here — not as separate
-	// Definition fields.
+	// Envelope is the executable permission envelope for this tool.
+	// It is the single source of truth for what the tool may do at runtime.
+	// The zero value adds no extra capabilities
+	// and follows Envelope's field-level defaults (for example, nil network/filesystem/subprocess policies deny those capabilities, while empty scopes require none).
+	// Safety, timeout, and result-size policy live here — not as separate Definition fields.
 	Envelope Envelope `json:"envelope,omitempty"`
 }
 

@@ -37,11 +37,10 @@ func asciiBorder() tableBorder {
 
 // OutputTable is a formatted table for terminal output.
 //
-// The zero value is not usable; construct one with [NewOutputTable]. Rendering
-// is pure — [OutputTable.String] builds the whole table as a string — so callers
-// choose where to write it. Borders default to Unicode box-drawing; pass an
-// ASCII-only [theme.Glyphs] via [OutputTable.WithGlyphs] to stay byte-clean on
-// non-UTF-8 terminals.
+// The zero value is not usable; construct one with [NewOutputTable]. Rendering is pure —
+// [OutputTable.String] builds the whole table as a string — so callers choose where to write it.
+// Borders default to Unicode box-drawing;
+// pass an ASCII-only [theme.Glyphs] via [OutputTable.WithGlyphs] to stay byte-clean on non-UTF-8 terminals.
 type OutputTable struct {
 	title   string
 	columns []string
@@ -75,9 +74,9 @@ func (t *OutputTable) WithTitle(title string) *OutputTable {
 
 // AddRow appends a row of cell values.
 //
-// The row is normalized to the column count: extra cells are dropped and
-// missing cells are padded with empty strings, so every rendered row lines up
-// with the header and borders regardless of the caller's cell count.
+// The row is normalized to the column count: extra cells are dropped
+// and missing cells are padded with empty strings, so every rendered row lines up with the header
+// and borders regardless of the caller's cell count.
 func (t *OutputTable) AddRow(cells ...string) *OutputTable {
 	row := make([]string, len(t.columns))
 	copy(row, cells)

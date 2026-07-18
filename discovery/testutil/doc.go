@@ -1,7 +1,7 @@
 // Package testutil provides testing utilities for the discovery module.
 //
-// It includes a static in-memory discovery/registry test component that
-// implements both component.Component and testutil.TestComponent interfaces.
+// It includes a static in-memory discovery/registry test component that implements both component.Component
+// and testutil.TestComponent interfaces.
 //
 // # Quick Start
 //

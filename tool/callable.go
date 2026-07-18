@@ -7,9 +7,8 @@ import (
 	"github.com/kbukum/gokit/schema"
 )
 
-// Callable is the type-erased interface for tools that can be stored
-// in heterogeneous collections (registries). It accepts raw JSON input
-// and returns a structured Result.
+// Callable is the type-erased interface for tools that can be stored in heterogeneous collections (registries).
+// It accepts raw JSON input and returns a structured Result.
 type Callable interface {
 	// Definition returns the tool's metadata.
 	Definition() Definition
@@ -19,8 +18,7 @@ type Callable interface {
 	Call(ctx *Context, input json.RawMessage) (*Result, error)
 }
 
-// AsCallable converts a typed Tool[I,O] into a Callable by adding
-// JSON marshaling/unmarshaling around the typed handler.
+// AsCallable converts a typed Tool[I,O] into a Callable by adding JSON marshaling/unmarshaling around the typed handler.
 func (t *Tool[I, O]) AsCallable() Callable {
 	return &wrappedCallable[I, O]{tool: t}
 }

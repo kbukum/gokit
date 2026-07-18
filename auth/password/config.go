@@ -13,8 +13,7 @@ const (
 	AlgorithmArgon2id Algorithm = "argon2id"
 )
 
-// Config configures password hashing behavior.
-// Loadable from YAML/env via mapstructure tags.
+// Config configures password hashing behavior. Loadable from YAML/env via mapstructure tags.
 type Config struct {
 	// Algorithm selects the hashing algorithm (default: "argon2id").
 	Algorithm Algorithm `mapstructure:"algorithm"`
@@ -85,8 +84,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// NewHasher creates a Hasher from configuration.
-// This is the config-driven factory — use it when loading from YAML/env.
+// NewHasher creates a Hasher from configuration. This is the config-driven factory —
+// use it when loading from YAML/env.
 func NewHasher(cfg Config) Hasher {
 	cfg.ApplyDefaults()
 	switch cfg.Algorithm {

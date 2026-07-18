@@ -8,8 +8,7 @@ import (
 )
 
 // ChaCha20Service handles encryption/decryption using ChaCha20-Poly1305.
-// This is a modern AEAD cipher that performs well on CPUs without AES hardware
-// acceleration (e.g., ARM devices, older processors).
+// This is a modern AEAD cipher that performs well on CPUs without AES hardware acceleration (e.g., ARM devices, older processors).
 type ChaCha20Service struct {
 	passphrase []byte
 }

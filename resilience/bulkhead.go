@@ -56,8 +56,8 @@ func NewBulkhead(config BulkheadConfig) *Bulkhead {
 	}
 }
 
-// Execute runs the given function within the bulkhead.
-// Returns ErrBulkheadFull or ErrBulkheadTimeout if no slot is available.
+// Execute runs the given function within the bulkhead. Returns ErrBulkheadFull
+// or ErrBulkheadTimeout if no slot is available.
 func (b *Bulkhead) Execute(ctx context.Context, fn func() error) error {
 	if err := b.acquire(ctx); err != nil {
 		if b.config.OnReject != nil {

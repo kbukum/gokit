@@ -22,8 +22,8 @@ func (c *BatchConfig) applyDefaults() {
 	}
 }
 
-// BatchProducer buffers messages and flushes them in batches via an
-// underlying Producer. It is safe for concurrent use.
+// BatchProducer buffers messages and flushes them in batches via an underlying Producer.
+// It is safe for concurrent use.
 type BatchProducer struct {
 	producer Producer
 	topic    string

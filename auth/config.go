@@ -10,8 +10,8 @@ import (
 
 // Config holds all authentication configuration.
 // It composes subpackage configs for loading from YAML/env via mapstructure.
-// Sub-configs are pointers so unused features are nil and don't force
-// unnecessary validation or defaults.
+// Sub-configs are pointers so unused features are nil and don't force unnecessary validation
+// or defaults.
 type Config struct {
 	// Enabled controls whether authentication is active.
 	Enabled bool `mapstructure:"enabled"`
@@ -62,8 +62,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Describe returns a human-readable one-liner for the startup summary.
-// Example: "JWT(EdDSA) TTL=15m0s password=argon2id OIDC(issuer.com)"
+// Describe returns a human-readable one-liner for the startup summary. Example:
+// "JWT(EdDSA) TTL=15m0s password=argon2id OIDC(issuer.com)"
 func (c *Config) Describe() string {
 	if !c.Enabled {
 		return "disabled"

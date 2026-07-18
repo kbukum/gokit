@@ -4,10 +4,9 @@ import (
 	msgtestutil "github.com/kbukum/gokit/messaging/testutil"
 )
 
-// Kafka-specific convenience re-exports. The underlying mock types live in
-// [github.com/kbukum/gokit/messaging/testutil] (transport-agnostic); these
-// aliases let Kafka tests import from a single kafka-flavored package without
-// pulling the generic testutil import in every test file.
+// Kafka-specific convenience re-exports.
+// The underlying mock types live in [github.com/kbukum/gokit/messaging/testutil] (transport-agnostic);
+// these aliases let Kafka tests import from a single kafka-flavored package without pulling the generic testutil import in every test file.
 type (
 	Message      = msgtestutil.Message
 	MockProducer = msgtestutil.MockProducer

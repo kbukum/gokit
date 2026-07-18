@@ -1,8 +1,8 @@
 // Package testutil provides testing utilities for the database module.
 //
-// It includes an in-memory SQLite test component that implements both
-// component.Component and testutil.TestComponent interfaces, along with
-// fixture helpers for loading test data and managing database state.
+// It includes an in-memory SQLite test component that implements both component.Component
+// and testutil.TestComponent interfaces, along with fixture helpers for loading test data
+// and managing database state.
 //
 // # Quick Start
 //

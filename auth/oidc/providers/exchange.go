@@ -36,8 +36,8 @@ type tokenResponse struct {
 }
 
 // ExchangeCode performs a standard OAuth2 authorization code exchange.
-// This is a low-level helper used by GenericProvider. Custom providers
-// that can't use GenericConfig can call this directly.
+// This is a low-level helper used by GenericProvider.
+// Custom providers that can't use GenericConfig can call this directly.
 func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, extraHeaders map[string]string) (*tokenResponse, error) {
 	redirectURI := opts.RedirectURI
 	if redirectURI == "" {

@@ -3,8 +3,8 @@
 //
 // # Client
 //
-// The grpc/client sub-package provides a factory for creating gRPC client
-// connections with configurable TLS, keepalive, and message size settings:
+// The grpc/client sub-package provides a factory for creating gRPC client connections with configurable TLS,
+// keepalive, and message size settings:
 //
 //	conn, err := client.New(ctx, target, opts...)
 //

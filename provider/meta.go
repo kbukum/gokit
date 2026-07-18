@@ -6,10 +6,9 @@ import (
 	"time"
 )
 
-// Meta holds open-ended metadata annotations for a provider.
-// Keys are strings, values are any type. Common dimensions include
-// "cost", "latency_ms", "reliability", "requires", but any project
-// can define whatever dimensions matter to it.
+// Meta holds open-ended metadata annotations for a provider. Keys are strings, values are any type.
+// Common dimensions include "cost", "latency_ms", "reliability", "requires",
+// but any project can define whatever dimensions matter to it.
 type Meta map[string]any
 
 // Float returns the value for key as a float64.
@@ -42,8 +41,8 @@ func (m Meta) String(key string) (string, bool) {
 	return s, ok
 }
 
-// Duration returns the value for key as a time.Duration.
-// Accepts time.Duration directly or numeric values interpreted as milliseconds.
+// Duration returns the value for key as a time.Duration. Accepts time.Duration directly
+// or numeric values interpreted as milliseconds.
 func (m Meta) Duration(key string) (time.Duration, bool) {
 	v, ok := m[key]
 	if !ok {

@@ -14,16 +14,16 @@ import (
 // writeAtomicAttempts bounds retries when a generated temp path collides.
 const writeAtomicAttempts = 8
 
-// WriteAtomic writes bytes to dest by writing a sibling temp file and renaming
-// it, so a reader never observes a partial file. Parent directories are created
-// as needed. On Unix, renaming replaces any existing destination atomically.
+// WriteAtomic writes bytes to dest by writing a sibling temp file and renaming it,
+// so a reader never observes a partial file. Parent directories are created as needed. On Unix,
+// renaming replaces any existing destination atomically.
 func WriteAtomic(dest string, bytes []byte, tempPrefix string) error {
 	return writeAtomic(dest, bytes, tempPrefix, false)
 }
 
 // WriteAtomicReplace writes bytes to dest and replaces an existing destination.
-// Replacement is atomic on Unix-like platforms; on Windows the existing file is
-// removed before the rename because the platform rename cannot replace it.
+// Replacement is atomic on Unix-like platforms;
+// on Windows the existing file is removed before the rename because the platform rename cannot replace it.
 func WriteAtomicReplace(dest string, bytes []byte, tempPrefix string) error {
 	return writeAtomic(dest, bytes, tempPrefix, true)
 }

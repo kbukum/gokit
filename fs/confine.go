@@ -11,12 +11,11 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// ConfineExistingPath canonicalizes an existing path and rejects it when it
-// resolves outside root. Use it for existing untrusted paths before handing them
-// to lower-level IO or subprocess APIs: both root and path are resolved through
-// the filesystem so symlink escapes are rejected. Relative paths are interpreted
-// under root; absolute paths are accepted only when their canonical destination
-// stays within root.
+// ConfineExistingPath canonicalizes an existing path and rejects it when it resolves outside root.
+// Use it for existing untrusted paths before handing them to lower-level IO or subprocess APIs:
+// both root and path are resolved through the filesystem so symlink escapes are rejected.
+// Relative paths are interpreted under root;
+// absolute paths are accepted only when their canonical destination stays within root.
 func ConfineExistingPath(root, path string) (string, error) {
 	croot, err := canonicalizeDirectoryRoot(root)
 	if err != nil {
@@ -36,10 +35,10 @@ func ConfineExistingPath(root, path string) (string, error) {
 	return resolved, nil
 }
 
-// ConfinePath resolves path under root and rejects escapes, allowing the final
-// path to be missing. It is intended for output paths: the nearest existing
-// ancestor is canonicalized to catch symlink escapes before new directories or
-// files are created.
+// ConfinePath resolves path under root and rejects escapes, allowing the final path to be missing.
+// It is intended for output paths:
+// the nearest existing ancestor is canonicalized to catch symlink escapes before new directories
+// or files are created.
 func ConfinePath(root, path string) (string, error) {
 	croot, err := canonicalizeDirectoryRoot(root)
 	if err != nil {
@@ -167,9 +166,7 @@ func appendSafeMissingSuffix(base string, missing []string) (string, error) {
 	return base, nil
 }
 
-// ensureConfined rejects a path that resolves outside root using a
-// component-aware relative check (not a string prefix, which would treat
-// "/rootx" as inside "/root").
+// ensureConfined rejects a path that resolves outside root using a component-aware relative check (not a string prefix, which would treat "/rootx" as inside "/root").
 func ensureConfined(root, path string) error {
 	rel, err := filepath.Rel(root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {

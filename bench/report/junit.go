@@ -11,8 +11,8 @@ import (
 // JUnitOption configures the JUnit reporter.
 type JUnitOption func(*junitReporter)
 
-// WithTargets sets metric targets. Each metric with a matching entry
-// becomes a test case that passes if the metric value >= the target.
+// WithTargets sets metric targets.
+// Each metric with a matching entry becomes a test case that passes if the metric value >= the target.
 func WithTargets(targets map[string]float64) JUnitOption {
 	return func(r *junitReporter) {
 		r.targets = targets

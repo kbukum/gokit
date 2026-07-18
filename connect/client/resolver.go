@@ -18,8 +18,8 @@ func (f ResolveFunc) Resolve(serviceName string) (string, error) {
 	return f(serviceName)
 }
 
-// StaticResolver returns a fixed base URL regardless of service name.
-// Useful for testing or direct connections without service discovery.
+// StaticResolver returns a fixed base URL regardless of service name. Useful for testing
+// or direct connections without service discovery.
 func StaticResolver(baseURL string) Resolver {
 	return ResolveFunc(func(_ string) (string, error) {
 		return baseURL, nil

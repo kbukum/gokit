@@ -19,8 +19,8 @@ type Config struct {
 	// Endpoint is a custom S3-compatible endpoint (e.g. MinIO).
 	Endpoint string `mapstructure:"endpoint" json:"endpoint"`
 
-	// Resolve is the discovery service name for the S3 endpoint.
-	// Empty = use static Endpoint. Set = resolve from discovery provider.
+	// Resolve is the discovery service name for the S3 endpoint. Empty = use static Endpoint.
+	// Set = resolve from discovery provider.
 	Resolve string `mapstructure:"resolve" json:"resolve"`
 
 	// AccessKey is the AWS access key ID.

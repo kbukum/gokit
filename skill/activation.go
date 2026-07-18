@@ -6,11 +6,11 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// Activate composes the effective safety and per-tool envelopes for a skill
-// into an ActivationDecision. The skill is Allowed only when every referenced
-// tool resolves to a present envelope whose required scopes survive
-// intersection with the principal grants and operator ceiling; otherwise the
-// decision fails closed and Reason names the first blocking tool.
+// Activate composes the effective safety
+// and per-tool envelopes for a skill into an ActivationDecision.
+// The skill is Allowed only when every referenced tool resolves to a present envelope whose required scopes survive intersection with the principal grants
+// and operator ceiling; otherwise the decision fails closed
+// and Reason names the first blocking tool.
 func Activate(m Manifest, principalGrants, operatorCeiling []string, toolEnvelopes map[string]tool.Envelope) ActivationDecision {
 	tools := EffectiveEnvelope(m, principalGrants, operatorCeiling, toolEnvelopes)
 	decision := ActivationDecision{
@@ -19,9 +19,8 @@ func Activate(m Manifest, principalGrants, operatorCeiling []string, toolEnvelop
 		EffectiveSafety: EffectiveSafety(m, func(name string) tool.Safety {
 			env, ok := toolEnvelopes[name]
 			if !ok {
-				// A missing envelope means the referenced tool is unknown;
-				// report it as maximally unsafe so EffectiveSafety never
-				// under-reports on a denied decision.
+				// A missing envelope means the referenced tool is unknown; report it as maximally unsafe
+				// so EffectiveSafety never under-reports on a denied decision.
 				return tool.SafetyDestructive
 			}
 			return env.Safety

@@ -7,8 +7,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// WithLogging returns a Middleware that logs each Execute call.
-// Logs: provider name, duration, and success/error status.
+// WithLogging returns a Middleware that logs each Execute call. Logs: provider name, duration,
+// and success/error status.
 func WithLogging[I, O any](log *logging.Logger) Middleware[I, O] {
 	return func(inner RequestResponse[I, O]) RequestResponse[I, O] {
 		return &loggingRR[I, O]{inner: inner, log: log}

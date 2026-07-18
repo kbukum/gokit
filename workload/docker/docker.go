@@ -14,10 +14,9 @@ import (
 	"github.com/kbukum/gokit/workload"
 )
 
-// Register installs the Docker provider into the supplied workload
-// factory registry. Call this once at application startup before
-// invoking [workload.New]. Returns an error if the provider name is
-// already registered.
+// Register installs the Docker provider into the supplied workload factory registry.
+// Call this once at application startup before invoking [workload.New].
+// Returns an error if the provider name is already registered.
 func Register(registry *workload.FactoryRegistry) error {
 	return registry.Register(workload.ProviderDocker, func(cfg workload.Config, providerCfg any, log *logging.Logger) (workload.Manager, error) {
 		c := &Config{}
@@ -44,8 +43,7 @@ type Manager struct {
 	log           *logging.Logger
 }
 
-// Client returns the underlying Docker SDK client for direct operations
-// not covered by the Manager's high-level API.
+// Client returns the underlying Docker SDK client for direct operations not covered by the Manager's high-level API.
 func (m *Manager) Client() *client.Client { return m.client }
 
 // NewManager creates a new Docker workload manager.
@@ -155,8 +153,8 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 		return nil, ctx.Err()
 	}
 	// Wait blocks until the container exits and returns the exit status.
-	// Returns (nil, nil) only on the unreachable post-select fall-through; the
-	// three real arms each return.
+	// Returns (nil, nil) only on the unreachable post-select fall-through;
+	// the three real arms each return.
 	//
 	//nolint:nilnil // unreachable defensive return; staticcheck flow analysis
 	// confirms select arms cover all paths.
@@ -197,9 +195,9 @@ func (m *Manager) Status(ctx context.Context, id string) (*workload.WorkloadStat
 	return ws, nil
 }
 
-// applyState copies fields from a Docker container State onto the workload
-// status. Extracted to keep [Manager.Status] within nestif's complexity
-// budget; State pointers are derived from a single ContainerInspect response
+// applyState copies fields from a Docker container State onto the workload status.
+// Extracted to keep [Manager.Status] within nestif's complexity budget;
+// State pointers are derived from a single ContainerInspect response
 // so the helper is intentionally narrow and not exported.
 func applyState(ws *workload.WorkloadStatus, state *container.State) {
 	ws.Running = state.Running

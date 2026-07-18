@@ -20,8 +20,7 @@ type ErrorClassifier interface {
 	IsRetryableError(err error) bool
 }
 
-// ConnectionPatterns contains generic connection error patterns common to
-// most message brokers (TCP-level failures, DNS errors, etc.).
+// ConnectionPatterns contains generic connection error patterns common to most message brokers (TCP-level failures, DNS errors, etc.).
 var ConnectionPatterns = []string{
 	"connection refused",
 	"connection reset",
@@ -33,16 +32,16 @@ var ConnectionPatterns = []string{
 	"dial tcp",
 }
 
-// RetryablePatterns contains generic retryable error patterns that are
-// not connection-specific but typically warrant a retry.
+// RetryablePatterns contains generic retryable error patterns that are not connection-specific
+// but typically warrant a retry.
 var RetryablePatterns = []string{
 	"temporary",
 	"request timed out",
 }
 
 // IsConnectionError checks if err matches any connection pattern.
-// Default ConnectionPatterns are always checked; additional broker-specific
-// patterns can be appended via the variadic argument.
+// Default ConnectionPatterns are always checked;
+// additional broker-specific patterns can be appended via the variadic argument.
 func IsConnectionError(err error, extra ...string) bool {
 	if err == nil {
 		return false
@@ -61,9 +60,8 @@ func IsConnectionError(err error, extra ...string) bool {
 	return false
 }
 
-// IsRetryableError checks if err should trigger a retry.
-// Connection errors are always retryable. Additional broker-specific
-// retryable patterns can be appended via the variadic argument.
+// IsRetryableError checks if err should trigger a retry. Connection errors are always retryable.
+// Additional broker-specific retryable patterns can be appended via the variadic argument.
 func IsRetryableError(err error, extra ...string) bool {
 	if err == nil {
 		return false

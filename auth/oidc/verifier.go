@@ -12,8 +12,8 @@ import (
 )
 
 // Verifier validates OIDC ID tokens using auto-discovery and JWKS key rotation.
-// It discovers the issuer's OpenID configuration and caches the JWKS for
-// efficient token verification.
+// It discovers the issuer's OpenID configuration
+// and caches the JWKS for efficient token verification.
 type Verifier struct {
 	issuer   string
 	clientID string
@@ -33,12 +33,11 @@ type VerifierConfig struct {
 	// SkipIssuerCheck skips the issuer validation.
 	SkipIssuerCheck bool
 
-	// SupportedSigningAlgs restricts allowed signing algorithms.
-	// Default: ["RS256"].
+	// SupportedSigningAlgs restricts allowed signing algorithms. Default: ["RS256"].
 	SupportedSigningAlgs []string
 
-	// HTTPClient is an optional HTTP client for discovery and JWKS requests.
-	// Useful for testing or custom TLS configurations.
+	// HTTPClient is an optional HTTP client for discovery and JWKS requests. Useful for testing
+	// or custom TLS configurations.
 	HTTPClient *http.Client
 
 	// JWKSCacheDuration controls how long JWKS keys are cached (default: 1h).
@@ -78,8 +77,8 @@ func NewVerifier(ctx context.Context, issuer string, cfg VerifierConfig) (*Verif
 	return v, nil
 }
 
-// Verify validates a raw ID token string and returns the parsed claims.
-// It checks the signature, issuer, audience, and expiry.
+// Verify validates a raw ID token string and returns the parsed claims. It checks the signature,
+// issuer, audience, and expiry.
 func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, error) {
 	parts := strings.Split(rawIDToken, ".")
 	if len(parts) != 3 {
@@ -107,9 +106,8 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, err
 	}
 
 	// Alg-confusion defense (F-002): if the JWK declares an algorithm,
-	// the token's header alg MUST match it. Prevents an attacker from
-	// presenting a token signed with a different algorithm than the key
-	// was issued for.
+	// the token's header alg MUST match it.
+	// Prevents an attacker from presenting a token signed with a different algorithm than the key was issued for.
 	if jwkEntry.Alg != "" && jwkEntry.Alg != alg {
 		return nil, fmt.Errorf("oidc: token alg %q does not match JWK alg %q (kid=%q)", alg, jwkEntry.Alg, kid)
 	}

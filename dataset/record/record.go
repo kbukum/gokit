@@ -7,20 +7,19 @@ import (
 
 // Value is a single decoded-JSON field value inside a [Record].
 //
-// The any element type is a deliberate, documented exception to the no-any
-// rule: a record field carries heterogeneous JSON leaf data (string, float64,
-// bool, nil, and nested map/slice) whose leaves cannot be given a closed type.
+// The any element type is a deliberate, documented exception to the no-any rule:
+// a record field carries heterogeneous JSON leaf data (string, float64, bool, nil, and nested map/slice) whose leaves cannot be given a closed type.
 // It matches [github.com/kbukum/gokit/codec] Value and schema.JSON.
 type Value = any
 
-// Record is one dataset row: an ordered set of named JSON field values. Keys
-// are compared in sorted order so serialization is deterministic.
+// Record is one dataset row: an ordered set of named JSON field values.
+// Keys are compared in sorted order so serialization is deterministic.
 type Record struct {
 	fields map[string]Value
 }
 
-// New returns a Record over a copy of fields, so later mutation of the caller's
-// map does not affect the record.
+// New returns a Record over a copy of fields,
+// so later mutation of the caller's map does not affect the record.
 func New(fields map[string]Value) Record {
 	return Record{fields: maps.Clone(fields)}
 }
@@ -44,14 +43,13 @@ func (r Record) Keys() []string {
 	return keys
 }
 
-// Fields returns a copy of the record's fields; mutating it does not affect the
-// record.
+// Fields returns a copy of the record's fields; mutating it does not affect the record.
 func (r Record) Fields() map[string]Value {
 	return maps.Clone(r.fields)
 }
 
-// Select returns a new record containing only the named columns that are
-// present, preserving their values.
+// Select returns a new record containing only the named columns that are present,
+// preserving their values.
 func (r Record) Select(columns []string) Record {
 	out := make(map[string]Value, len(columns))
 	for _, c := range columns {

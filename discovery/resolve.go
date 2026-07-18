@@ -10,8 +10,8 @@ import (
 // It wraps a DiscoveryClient with optional service allow-list validation
 // and configurable URL scheme.
 //
-// ServiceResolver structurally satisfies connect/client.Resolver, so it can
-// be used directly with ConnectRPC clients without importing the connect module:
+// ServiceResolver structurally satisfies connect/client.Resolver,
+// so it can be used directly with ConnectRPC clients without importing the connect module:
 //
 //	resolver := discovery.NewServiceResolver(discClient, "svc-a", "svc-b")
 //	url, err := resolver.Resolve("svc-a") // "http://host:port"
@@ -70,8 +70,7 @@ func NewServiceResolver(client DiscoveryClient, services []string, opts ...Resol
 }
 
 // Resolve discovers a service and returns its base URL (e.g., "http://host:port").
-// Returns an error if the service is not in the allow-list (when configured)
-// or if discovery fails.
+// Returns an error if the service is not in the allow-list (when configured) or if discovery fails.
 func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 	if len(r.services) > 0 {
 		if _, ok := r.services[serviceName]; !ok {
@@ -94,9 +93,8 @@ func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 	return fmt.Sprintf("%s://%s", r.scheme, endpoint.HostPort()), nil
 }
 
-// ResolveAddr resolves a service name to a host:port pair using the Discovery
-// interface. This is a bootstrap-time utility for resolving infrastructure
-// addresses (database, redis, kafka, etc.) before connection pools are created.
+// ResolveAddr resolves a service name to a host:port pair using the Discovery interface.
+// This is a bootstrap-time utility for resolving infrastructure addresses (database, redis, kafka, etc.) before connection pools are created.
 // Returns the first healthy instance's address and port.
 func ResolveAddr(disc Discovery, serviceName string) (host string, port int, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

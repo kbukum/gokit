@@ -56,9 +56,9 @@ func newHTTPMetrics(serviceName string) (*httpMetrics, error) {
 	}, nil
 }
 
-// PrometheusMetrics returns middleware that instruments HTTP requests with
-// counters and histograms for request count, duration, request size, and
-// response size. Labels: method, path, status_code.
+// PrometheusMetrics returns middleware that instruments HTTP requests with counters
+// and histograms for request count, duration, request size, and response size. Labels: method,
+// path, status_code.
 func PrometheusMetrics(serviceName string) Middleware {
 	metrics, err := newHTTPMetrics(serviceName)
 	if err != nil {
@@ -91,8 +91,7 @@ func PrometheusMetrics(serviceName string) Middleware {
 	}
 }
 
-// RegisterMetricsEndpoint registers a /metrics endpoint on the given mux
-// that exposes Prometheus metrics.
+// RegisterMetricsEndpoint registers a /metrics endpoint on the given mux that exposes Prometheus metrics.
 func RegisterMetricsEndpoint(mux *http.ServeMux) {
 	observability.RegisterPrometheusEndpoint(mux, "/metrics")
 }

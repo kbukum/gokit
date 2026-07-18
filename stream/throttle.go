@@ -6,8 +6,8 @@ import (
 )
 
 // Throttle drops values that arrive faster than the given interval.
-// Only the first value in each interval window is emitted; subsequent
-// values within the same window are dropped.
+// Only the first value in each interval window is emitted;
+// subsequent values within the same window are dropped.
 // Useful for rate-limiting downstream processing.
 func Throttle[T any](p *Pipeline[T], interval time.Duration) *Pipeline[T] {
 	return &Pipeline[T]{

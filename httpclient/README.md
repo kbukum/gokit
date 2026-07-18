@@ -1,6 +1,8 @@
 # httpclient
 
-Configurable HTTP client with built-in authentication, TLS, resilience (retry, circuit breaker, rate limiting), and streaming support. Includes a typed REST client for JSON APIs.
+Configurable HTTP client with built-in authentication, TLS,
+resilience (retry, circuit breaker, rate limiting), and streaming support.
+Includes a typed REST client for JSON APIs.
 
 ## Install
 

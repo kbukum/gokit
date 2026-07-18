@@ -5,15 +5,21 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Go 1.26+](https://img.shields.io/badge/Go-1.26+-00ADD8.svg)](go.mod)
 
-**A modular Go toolkit for building production services.** Config, logging, resilience, observability, dependency injection, and infrastructure adapters — so teams can focus on business logic instead of reinventing plumbing.
+**A modular Go toolkit for building production services.** Config, logging, resilience,
+observability, dependency injection, and infrastructure adapters —
+so teams can focus on business logic instead of reinventing plumbing.
 
-> **Status — pre-1.0.** Public surface is semver-stable per module; breaking changes are documented in [`CHANGELOG.md`](CHANGELOG.md). See [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md).
+> **Status — pre-1.0.** Public surface is semver-stable per module;
+> breaking changes are documented in [`CHANGELOG.md`](CHANGELOG.md).
+> See [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md).
 
-> **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python). Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are evaluated for parity across all three.
+> **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python).
+> Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are evaluated for parity across all three.
 
 ## Browse by Domain
 
-Modules are organized into domains for scoped development. See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
+Modules are organized into domains for scoped development.
+See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
 
 | Domain | Focus | Quick check |
 |--------|-------|-------------|
@@ -28,16 +34,25 @@ Modules are organized into domains for scoped development. See [Module Index](do
 | media | Light detection, metadata, image ops | `make check-media` |
 | infra | Workload, CLI, dataset, benchmarks, testing | `make check-infra` |
 
-CI still runs full-workspace validation; on pull requests the `changes` job also publishes an `affected` domain list from `./scripts/affected-domains.sh` so later workflow steps can consume the same domain mapping developers use locally with `make check-<domain>`.
+CI still runs full-workspace validation;
+on pull requests the `changes` job also publishes an `affected` domain list from `./scripts/affected-domains.sh`
+so later workflow steps can consume the same domain mapping developers use locally with `make check-<domain>`.
 
 ## Highlights
 
-- **Multi-module layout** — light core (`github.com/kbukum/gokit`) + sub-modules (`gokit/server`, `gokit/database`, …) you opt into individually. No transitive heavy deps unless you ask.
-- **Lifecycle-managed components** — uniform `Component` interface (start / stop / health) and `bootstrap.App` orchestrator with graceful shutdown.
-- **Production resilience** — circuit breakers, retries with backoff + jitter, bulkheads, rate limiting, OpenTelemetry tracing & metrics.
-- **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`, and `Duplex` traits with composable middleware and sink combinators.
-- **Per-module versioning** — `gokit/server` and `gokit/database` upgrade independently of core. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
-- **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust) and [pykit](https://github.com/kbukum/pykit) (Python).
+- **Multi-module layout** —
+  light core (`github.com/kbukum/gokit`) + sub-modules (`gokit/server`, `gokit/database`, …) you opt into individually.
+  No transitive heavy deps unless you ask.
+- **Lifecycle-managed components** — uniform `Component` interface (start / stop / health)
+  and `bootstrap.App` orchestrator with graceful shutdown.
+- **Production resilience** — circuit breakers, retries with backoff + jitter, bulkheads,
+  rate limiting, OpenTelemetry tracing & metrics.
+- **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`,
+  and `Duplex` traits with composable middleware and sink combinators.
+- **Per-module versioning** — `gokit/server` and `gokit/database` upgrade independently of core.
+  See [`docs/VERSIONING.md`](docs/VERSIONING.md).
+- **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust)
+  and [pykit](https://github.com/kbukum/pykit) (Python).
 
 ## Install
 
@@ -79,7 +94,8 @@ func main() {
 }
 ```
 
-More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → [`docs/PACKAGES.md`](docs/PACKAGES.md).
+More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md).
+Full package list → [`docs/PACKAGES.md`](docs/PACKAGES.md).
 
 ## Documentation
 
@@ -104,9 +120,11 @@ make tidy     # go mod tidy for core + sub-modules
 
 ## Contributing
 
-We welcome contributions. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, coding standards, and the PR process. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+We welcome contributions. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, coding standards,
+and the PR process. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Other community docs: [`SECURITY.md`](SECURITY.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`MAINTAINERS.md`](MAINTAINERS.md)
+Other community docs:
+[`SECURITY.md`](SECURITY.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`MAINTAINERS.md`](MAINTAINERS.md)
 
 ## License
 

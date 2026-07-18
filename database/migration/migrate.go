@@ -1,8 +1,8 @@
 // Package migration provides file-based database migration utilities for GORM.
 // It uses golang-migrate with embedded SQL files for version-controlled schema changes.
 //
-// This package is driver-agnostic. Users must provide a DriverFunc that creates
-// the appropriate database driver for their chosen database (PostgreSQL, MySQL, SQLite, etc.).
+// This package is driver-agnostic.
+// Users must provide a DriverFunc that creates the appropriate database driver for their chosen database (PostgreSQL, MySQL, SQLite, etc.).
 //
 // Example usage with PostgreSQL:
 //
@@ -66,8 +66,8 @@ func MigrateUp(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc D
 	return nil
 }
 
-// MigrateDown rolls back all versioned migrations.
-// This will undo all applied migrations. Use MigrateSteps for partial rollback.
+// MigrateDown rolls back all versioned migrations. This will undo all applied migrations.
+// Use MigrateSteps for partial rollback.
 // Returns nil if there are no migrations to roll back (migrate.ErrNoChange is suppressed).
 func MigrateDown(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) error {
 	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
@@ -103,8 +103,8 @@ func MigrateSteps(gormDB *gorm.DB, migrationsFS embed.FS, path string, n int, dr
 	return nil
 }
 
-// MigrateReset drops everything and re-applies all migrations.
-// WARNING: This will destroy all data in the database. Use with caution.
+// MigrateReset drops everything and re-applies all migrations. WARNING:
+// This will destroy all data in the database. Use with caution.
 // Typically used in development/testing environments only.
 func MigrateReset(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc DriverFunc) error {
 	m, err := newMigrator(gormDB, migrationsFS, path, driverFunc)
@@ -144,8 +144,7 @@ func newMigrator(gormDB *gorm.DB, migrationsFS embed.FS, path string, driverFunc
 		return nil, fmt.Errorf("create iofs source: %w", err)
 	}
 
-	// The database name is used for the source-database pair identification
-	// We use a generic name since the driver handles database-specific logic
+	// The database name is used for the source-database pair identification We use a generic name since the driver handles database-specific logic
 	m, err := migrate.NewWithInstance("iofs", source, "database", driver)
 	if err != nil {
 		return nil, fmt.Errorf("create migrator: %w", err)

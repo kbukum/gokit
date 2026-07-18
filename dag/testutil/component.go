@@ -10,8 +10,8 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-// MockNode is a configurable test node for DAG testing.
-// It records calls and returns a preset output or error.
+// MockNode is a configurable test node for DAG testing. It records calls
+// and returns a preset output or error.
 type MockNode struct {
 	name   string
 	output any
@@ -24,8 +24,8 @@ type MockNode struct {
 
 var _ dag.Node = (*MockNode)(nil)
 
-// NewMockNode creates a mock node that returns the given output.
-// If err is non-nil, the node will fail with that error.
+// NewMockNode creates a mock node that returns the given output. If err is non-nil,
+// the node will fail with that error.
 func NewMockNode(name string, output any, err error) *MockNode {
 	return &MockNode{name: name, output: output, err: err}
 }

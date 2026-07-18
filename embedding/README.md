@@ -42,4 +42,5 @@ func main() {
 
 ## When to use
 
-Use `embedding` for canonical vector generation contracts. Provider implementations live here or in the provider-specific module that naturally owns the backend.
+Use `embedding` for canonical vector generation contracts. Provider implementations live here
+or in the provider-specific module that naturally owns the backend.

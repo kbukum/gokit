@@ -1,6 +1,7 @@
 # resilience
 
-Resilience patterns: circuit breaker, retry with backoff, rate limiter, and bulkhead for concurrency control.
+Resilience patterns: circuit breaker, retry with backoff, rate limiter,
+and bulkhead for concurrency control.
 
 ## Install
 

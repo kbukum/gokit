@@ -53,8 +53,8 @@ func (r *ReadRepository[T, ID]) WithTx(tx *gorm.DB) *ReadRepository[T, ID] {
 }
 
 // GetByID retrieves a single entity by its primary key.
-// Returns (nil, nil) if the entity is not found — callers branch on the
-// pointer rather than on a typed error so the read hot-path stays cheap.
+// Returns (nil, nil) if the entity is not found —
+// callers branch on the pointer rather than on a typed error so the read hot-path stays cheap.
 //
 //nolint:nilnil // documented "not found" sentinel of ReadRepository contract.
 func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) {
@@ -68,8 +68,8 @@ func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) 
 	return &entity, nil
 }
 
-// List retrieves entities using the gokit query builder for pagination,
-// filtering, sorting, and facets.
+// List retrieves entities using the gokit query builder for pagination, filtering, sorting,
+// and facets.
 func (r *ReadRepository[T, ID]) List(ctx context.Context, params query.Params, config query.Config) (*query.Result[T], error) {
 	result, err := query.ApplyToGorm[T](r.db.WithContext(ctx).Model(new(T)), params, config)
 	if err != nil {

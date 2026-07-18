@@ -56,8 +56,8 @@ func (s *eventSink) Send(ctx context.Context, event messaging.Event) error {
 // --- ConsumerAsStream ---
 
 // ConsumerAsStream wraps a messaging.Consumer as a provider.Stream[struct{}, messaging.Message].
-// The input parameter is ignored; calling Execute starts the consume loop in a
-// background goroutine and returns an iterator that yields each received message.
+// The input parameter is ignored; calling Execute starts the consume loop in a background goroutine
+// and returns an iterator that yields each received message.
 // Close the iterator to stop the consume loop.
 func ConsumerAsStream(name string, c messaging.Consumer) provider.Stream[struct{}, messaging.Message] {
 	return &consumerStream{name: name, consumer: c}

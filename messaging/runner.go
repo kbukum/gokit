@@ -8,9 +8,8 @@ type runner struct {
 	handler  MessageHandler
 }
 
-// AsRunner wraps a Consumer with a MessageHandler to create a ConsumerRunner
-// suitable for use with BrokerComponent or any component that manages consumer
-// lifecycle via the ConsumerRunner interface.
+// AsRunner wraps a Consumer with a MessageHandler to create a ConsumerRunner suitable for use with BrokerComponent
+// or any component that manages consumer lifecycle via the ConsumerRunner interface.
 func AsRunner(c Consumer, h MessageHandler) ConsumerRunner {
 	return &runner{consumer: c, handler: h}
 }

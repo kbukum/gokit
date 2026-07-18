@@ -7,8 +7,7 @@ import (
 )
 
 // Formatter transforms a tool Result's content before it is sent to the LLM.
-// This allows tools to return structured data while presenting it to the
-// model in a more readable form (markdown tables, summaries, etc.).
+// This allows tools to return structured data while presenting it to the model in a more readable form (markdown tables, summaries, etc.).
 type Formatter interface {
 	// Format transforms the result content. The tool name is provided for context.
 	Format(toolName string, result *Result) (string, error)
@@ -73,9 +72,9 @@ func formatMarkdownTable(_ string, result *Result) (string, error) {
 		return content, nil
 	}
 
-	// Try parsing as JSON array of objects. A parse failure or empty array is
-	// not an error condition — it just means the result isn't a tabular JSON
-	// payload, so we return the original text content as-is for the caller.
+	// Try parsing as JSON array of objects. A parse failure or empty array is not an error condition —
+	// it just means the result isn't a tabular JSON payload,
+	// so we return the original text content as-is for the caller.
 	var rows []map[string]any
 	if err := json.Unmarshal([]byte(content), &rows); err != nil || len(rows) == 0 {
 		return content, nil //nolint:nilerr // intentional fallback to raw content

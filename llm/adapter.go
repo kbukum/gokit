@@ -20,8 +20,8 @@ var (
 
 // Adapter is a config-driven LLM client that works with any provider via the Dialect pattern.
 //
-// It composes gokit's REST client (which wraps the HTTP adapter) with a Dialect that
-// handles provider-specific request/response mapping. This gives you:
+// It composes gokit's REST client (which wraps the HTTP adapter) with a Dialect that handles provider-specific request/response mapping.
+// This gives you:
 //   - TLS, auth, resilience, timeout from the HTTP adapter
 //   - JSON encoding/decoding from the REST client
 //   - Provider-specific mapping from the Dialect
@@ -40,8 +40,8 @@ type Adapter struct {
 
 // New creates an LLM adapter from config using the supplied dialect registry.
 // The config's Dialect field must match a name registered in `registry`.
-// Pass an explicit registry built via [NewDialectRegistry] and populated via
-// the driver packages' Register functions.
+// Pass an explicit registry built via [NewDialectRegistry]
+// and populated via the driver packages' Register functions.
 func New(registry *DialectRegistry, cfg Config) (*Adapter, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("llm: dialect registry is nil")
@@ -150,12 +150,12 @@ func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan Str
 	return streamEventsFromChunks(streamCtx, chunkCh, model, cancel), nil
 }
 
-// streamChunks starts the upstream stream and returns the chunk channel, the
-// cancelable stream context, and a cancel func that tears down the producer
-// goroutine and underlying connection. To stop early, callers cancel the
-// context passed to Stream (or the returned streamCtx); every send in the
-// pipeline selects on that context so no goroutine blocks on an abandoned
-// channel.
+// streamChunks starts the upstream stream and returns the chunk channel,
+// the cancelable stream context, and a cancel func that tears down the producer goroutine
+// and underlying connection. To stop early,
+// callers cancel the context passed to Stream (or the returned streamCtx);
+// every send in the pipeline selects on that context
+// so no goroutine blocks on an abandoned channel.
 func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, streamCtx context.Context, cancel context.CancelFunc, err error) {
 	a.applyDefaults(&req)
 	req.Stream = true

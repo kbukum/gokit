@@ -80,8 +80,8 @@ func (m *aucroc[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 }
 
-// BrierScore computes the Brier score (mean squared difference between
-// predicted probability and actual outcome). Lower is better. Range: [0, 1].
+// BrierScore computes the Brier score (mean squared difference between predicted probability and actual outcome).
+// Lower is better. Range: [0, 1].
 func BrierScore[L comparable](positiveLabel L) Metric[L] {
 	return &brierScore[L]{positive: positiveLabel}
 }

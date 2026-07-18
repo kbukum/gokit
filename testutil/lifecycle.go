@@ -35,8 +35,7 @@ func SetupWithContext(ctx context.Context, component TestComponent) (CleanupFunc
 	return cleanup, nil
 }
 
-// Teardown stops a test component.
-// This is the inverse of Setup and is provided for symmetry.
+// Teardown stops a test component. This is the inverse of Setup and is provided for symmetry.
 func Teardown(component TestComponent) error {
 	return TeardownWithContext(context.Background(), component)
 }

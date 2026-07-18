@@ -1,6 +1,7 @@
 # connect
 
-Connect-Go integration for gokit — server-side interceptors, error mapping, service mounting, and client utilities.
+Connect-Go integration for gokit — server-side interceptors, error mapping, service mounting,
+and client utilities.
 
 ## Install
 

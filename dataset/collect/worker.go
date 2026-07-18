@@ -7,9 +7,9 @@ import (
 	"github.com/kbukum/gokit/stream"
 )
 
-// worker pulls sources from workCh, streams each to completion, and publishes a
-// [sourceEvent] on eventCh. It owns its cancellation: it stops when ctx is
-// canceled, so the pool joins cleanly on every exit path.
+// worker pulls sources from workCh, streams each to completion,
+// and publishes a [sourceEvent] on eventCh. It owns its cancellation:
+// it stops when ctx is canceled, so the pool joins cleanly on every exit path.
 func (c *Collector[T]) worker(ctx context.Context, workCh <-chan workItem[T], eventCh chan<- sourceEvent[T]) {
 	for {
 		select {
@@ -28,9 +28,9 @@ func (c *Collector[T]) worker(ctx context.Context, workCh <-chan workItem[T], ev
 	}
 }
 
-// collectSource streams one source through the transforms and validator,
-// accumulating its items and real/AI/offset stats onto any resume base. The
-// per-source context is bounded by Config.SourceTimeout when positive.
+// collectSource streams one source through the transforms and validator, accumulating its items
+// and real/AI/offset stats onto any resume base.
+// The per-source context is bounded by Config.SourceTimeout when positive.
 func (c *Collector[T]) collectSource(ctx context.Context, item workItem[T]) sourceEvent[T] {
 	srcCtx := ctx
 	if c.config.SourceTimeout > 0 {

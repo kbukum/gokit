@@ -19,8 +19,7 @@
 // All packages follow gokit conventions: Config structs with ApplyDefaults()/Validate(),
 // constructor functions, and mapstructure tags for config file loading.
 //
-// The top-level Config composes subpackage configs as pointers — only configure
-// what you need:
+// The top-level Config composes subpackage configs as pointers — only configure what you need:
 //
 //	auth:
 //	  enabled: true

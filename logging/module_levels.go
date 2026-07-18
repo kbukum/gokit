@@ -7,8 +7,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ModuleLevelManager manages per-module log level overrides.
-// It is safe for concurrent use.
+// ModuleLevelManager manages per-module log level overrides. It is safe for concurrent use.
 type ModuleLevelManager struct {
 	levels map[string]zerolog.Level
 	mu     sync.RWMutex
@@ -38,8 +37,7 @@ func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 	return lvl, ok
 }
 
-// SetLevel dynamically sets a module's log level.
-// An unrecognized level string is silently ignored.
+// SetLevel dynamically sets a module's log level. An unrecognized level string is silently ignored.
 func (m *ModuleLevelManager) SetLevel(module, level string) {
 	parsed, err := zerolog.ParseLevel(strings.ToLower(level))
 	if err != nil {

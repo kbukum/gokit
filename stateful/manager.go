@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Manager manages multiple named accumulators for multi-tenant use cases.
-// Typical key types: string (user ID, session ID), int64 (entity ID), etc.
+// Manager manages multiple named accumulators for multi-tenant use cases. Typical key types:
+// string (user ID, session ID), int64 (entity ID), etc.
 type Manager[K comparable, V any] struct {
 	accumulators sync.Map // K -> *Accumulator[V]
 	factory      func(K) *Accumulator[V]
@@ -18,9 +18,8 @@ type Manager[K comparable, V any] struct {
 	once         sync.Once
 }
 
-// NewManager creates a manager that uses the factory function to create
-// accumulators on demand. The TTL is used for automatic cleanup of expired
-// accumulators (runs every TTL/4).
+// NewManager creates a manager that uses the factory function to create accumulators on demand.
+// The TTL is used for automatic cleanup of expired accumulators (runs every TTL/4).
 //
 // The factory function is called once per key when GetOrCreate is called
 // or when Append is called for a new key.

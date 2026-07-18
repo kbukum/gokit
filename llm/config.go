@@ -8,8 +8,8 @@ import (
 	"github.com/kbukum/gokit/security"
 )
 
-// Config holds configuration for creating an LLM adapter.
-// It is provider-agnostic — the Dialect field selects the provider mapping.
+// Config holds configuration for creating an LLM adapter. It is provider-agnostic —
+// the Dialect field selects the provider mapping.
 type Config struct {
 	// Name identifies this adapter instance (e.g., "primary-llm", "fallback-llm").
 	Name string `yaml:"name" json:"name"`

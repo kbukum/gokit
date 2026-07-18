@@ -18,8 +18,7 @@ import (
 	"github.com/kbukum/gokit/server/middleware"
 )
 
-// Server is a unified HTTP server backed by Gin with optional support for
-// additional http.Handler mounts (e.g. Connect-Go / gRPC) on the same port.
+// Server is a unified HTTP server backed by Gin with optional support for additional http.Handler mounts (e.g. Connect-Go / gRPC) on the same port.
 type Server struct {
 	httpServer *http.Server
 	engine     *gin.Engine
@@ -37,8 +36,8 @@ type MountedHandler struct {
 	Label   string // optional human-readable label
 }
 
-// New creates a new Server. The Gin engine is created but no middleware is
-// applied yet — call ApplyDefaults on the config first if needed.
+// New creates a new Server. The Gin engine is created but no middleware is applied yet —
+// call ApplyDefaults on the config first if needed.
 func New(cfg *Config, log *logging.Logger) *Server {
 	// Set Gin mode based on global zerolog level.
 	if zerolog.GlobalLevel() <= zerolog.DebugLevel {
@@ -88,14 +87,14 @@ func New(cfg *Config, log *logging.Logger) *Server {
 
 	log = log.WithComponent("server")
 
-	// Build the security-headers middleware once. Config.Validate is the trust
-	// boundary that rejects an invalid SecurityHeaders config, so a validated
-	// config never reaches the error branch here. If an unvalidated invalid
-	// config does reach New, fall back to the secure defaults — which build from
-	// a nil config and therefore cannot fail — rather than serving responses
-	// without protective headers. New is an infallible constructor with no
-	// request context, so the fallback is silent by design; the invalid config
-	// is surfaced to callers through Config.Validate.
+	// Build the security-headers middleware once.
+	// Config.Validate is the trust boundary that rejects an invalid SecurityHeaders config,
+	// so a validated config never reaches the error branch here.
+	// If an unvalidated invalid config does reach New, fall back to the secure defaults —
+	// which build from a nil config and therefore cannot fail —
+	// rather than serving responses without protective headers.
+	// New is an infallible constructor with no request context, so the fallback is silent by design;
+	// the invalid config is surfaced to callers through Config.Validate.
 	secHeaders, err := middleware.SecurityHeaders(&cfg.SecurityHeaders)
 	if err != nil {
 		if secHeaders, err = middleware.SecurityHeaders(nil); err != nil {
@@ -141,8 +140,8 @@ func (s *Server) Handler() http.Handler {
 	return s.httpServer.Handler
 }
 
-// Start binds the port and begins serving. It returns once the listener is
-// bound so the caller knows the port is ready; serving continues in a goroutine.
+// Start binds the port and begins serving. It returns once the listener is bound
+// so the caller knows the port is ready; serving continues in a goroutine.
 func (s *Server) Start(ctx context.Context) error {
 	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]any{
 		"addr": s.httpServer.Addr,
@@ -219,8 +218,7 @@ func readSpecFile(path string) ([]byte, error) {
 }
 
 // ApplyMiddleware applies the standard middleware stack at the handler level
-// so it covers ALL routes — both Gin REST endpoints and ConnectRPC services
-// mounted via Handle().
+// so it covers ALL routes — both Gin REST endpoints and ConnectRPC services mounted via Handle().
 func (s *Server) ApplyMiddleware() {
 	stack := []middleware.Middleware{
 		middleware.Recovery(s.log),
@@ -248,8 +246,7 @@ func (s *Server) ApplyMiddleware() {
 //   - GET /info     — build/runtime info
 //   - GET /metrics  — Prometheus exposition
 //
-// Closes F-060 (no /healthz//readyz handler shipped despite full Health
-// taxonomy in observability/).
+// Closes F-060 (no /healthz//readyz handler shipped despite full Health taxonomy in observability/).
 func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.HealthChecker) {
 	healthHandler := endpoint.Health(serviceName, checker)
 	s.engine.GET("/health", healthHandler)
@@ -260,8 +257,8 @@ func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.H
 	s.engine.GET("/metrics", endpoint.Metrics())
 }
 
-// RegisterPprof mounts net/http/pprof handlers under /debug/pprof. Only
-// enable in non-public environments (the handlers expose runtime state).
+// RegisterPprof mounts net/http/pprof handlers under /debug/pprof.
+// Only enable in non-public environments (the handlers expose runtime state).
 //
 // Closes F-070 sub-finding: no net/http/pprof integration.
 func (s *Server) RegisterPprof() {
@@ -280,10 +277,10 @@ func (s *Server) RegisterPprof() {
 	pprofGroup.GET("/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
 }
 
-// MountDocsFromConfig mounts interactive API documentation using Scalar UI
-// based on the server's DocsConfig. If DocsConfig.Enabled is false, this is
-// a no-op. When SpecFile is set, the spec is loaded from disk; otherwise spec
-// must be provided via the optional specJSON parameter.
+// MountDocsFromConfig mounts interactive API documentation using Scalar UI based on the server's DocsConfig.
+// If DocsConfig.Enabled is false, this is a no-op. When SpecFile is set,
+// the spec is loaded from disk;
+// otherwise spec must be provided via the optional specJSON parameter.
 //
 // This is a convenience wrapper around [MountDocs] for config-driven setups.
 func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {

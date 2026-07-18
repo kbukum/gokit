@@ -40,14 +40,13 @@ type NodeDef struct {
 	Schedule *ScheduleConfig `yaml:"schedule,omitempty"`
 	// Condition is a named condition function key.
 	Condition string `yaml:"condition,omitempty"`
-	// Optional marks the node as optional. When true and the component is not
-	// in the registry, a placeholder node is inserted that returns ErrUnavailable.
-	// The node stays in the graph and is re-evaluated every execution cycle.
+	// Optional marks the node as optional. When true and the component is not in the registry,
+	// a placeholder node is inserted that returns ErrUnavailable. The node stays in the graph
+	// and is re-evaluated every execution cycle.
 	Optional bool `yaml:"optional,omitempty"`
-	// OnError controls how failures propagate to dependents.
-	// "skip" (default): dependents are skipped this cycle.
-	// "continue": dependents run regardless.
-	// "fail": halt the entire pipeline.
+	// OnError controls how failures propagate to dependents. "skip" (default):
+	// dependents are skipped this cycle. "continue": dependents run regardless. "fail":
+	// halt the entire pipeline.
 	OnError string `yaml:"on_error,omitempty"`
 }
 
@@ -59,8 +58,8 @@ func (d NodeDef) EffectiveOnError() string {
 	return d.OnError
 }
 
-// ScheduleConfig defines schedule-based execution parameters.
-// YAML format uses integer seconds: { interval_sec: 30, min_buffer_sec: 15 }
+// ScheduleConfig defines schedule-based execution parameters. YAML format uses integer seconds:
+// { interval_sec: 30, min_buffer_sec: 15 }
 type ScheduleConfig struct {
 	// Interval is the minimum time between runs.
 	Interval time.Duration
@@ -77,8 +76,8 @@ type scheduleYAML struct {
 	MinBuffer *time.Duration `yaml:"min_buffer"`
 }
 
-// UnmarshalYAML reads ScheduleConfig from YAML.
-// Supports both { interval_sec: 30 } and { interval: 30s } formats.
+// UnmarshalYAML reads ScheduleConfig from YAML. Supports both { interval_sec: 30 } and { interval:
+// 30s } formats.
 func (s *ScheduleConfig) UnmarshalYAML(value *yaml.Node) error {
 	var raw scheduleYAML
 	if err := value.Decode(&raw); err != nil {
@@ -113,7 +112,6 @@ func (s ScheduleConfig) MarshalYAML() (any, error) {
 	return out, nil
 }
 
-// ErrUnavailable is returned by placeholder nodes for optional components
-// that are not registered. The engine uses this to distinguish "node is not
-// available right now" from "node failed with an error".
+// ErrUnavailable is returned by placeholder nodes for optional components that are not registered.
+// The engine uses this to distinguish "node is not available right now" from "node failed with an error".
 var ErrUnavailable = errors.New("dag: node unavailable")

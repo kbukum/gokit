@@ -6,32 +6,32 @@ import (
 	"fmt"
 	"image"
 
-	// Register the stdlib image decoders so DecodeConfig/Decode recognize the
-	// pure-Go formats the light kit supports. Heavier formats (webp, tiff, heif)
-	// are detected but intentionally not decoded here — that stays rskit-only.
+	// Register the stdlib image decoders
+	// so DecodeConfig/Decode recognize the pure-Go formats the light kit supports.
+	// Heavier formats (webp, tiff, heif) are detected but intentionally not decoded here —
+	// that stays rskit-only.
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 )
 
-// MaxDecodePixels bounds the pixel count [Decode] will fully decode from
-// untrusted input, guarding against decompression bombs (a tiny compressed file
-// declaring enormous dimensions). It corresponds to roughly a 100-megapixel
-// image; callers needing larger inputs must decode via the stdlib directly.
+// MaxDecodePixels bounds the pixel count [Decode] will fully decode from untrusted input,
+// guarding against decompression bombs (a tiny compressed file declaring enormous dimensions).
+// It corresponds to roughly a 100-megapixel image;
+// callers needing larger inputs must decode via the stdlib directly.
 const MaxDecodePixels = 100_000_000
 
-// ErrImageTooLarge is returned by [Decode] when the declared pixel count
-// (width × height) exceeds [MaxDecodePixels].
+// ErrImageTooLarge is returned by [Decode] when the declared pixel count (width × height) exceeds [MaxDecodePixels].
 var ErrImageTooLarge = errors.New("media: image exceeds maximum decode pixel count")
 
 // DecodeConfig reads only the header of data and returns the image dimensions
 // and detected [Format] without decoding the full pixel buffer.
 //
-// It supports the pure-Go stdlib formats (JPEG, PNG, GIF); other detected image
-// formats wrap [ErrUnsupported]. Decode failures on a supported format (corrupt
-// or truncated data) preserve the underlying cause instead. On any error the
-// returned [Format] is a best-effort signature detection (via [Detect]), which
-// may be [FormatUnknown] when the bytes match no known signature.
+// It supports the pure-Go stdlib formats (JPEG, PNG, GIF);
+// other detected image formats wrap [ErrUnsupported].
+// Decode failures on a supported format (corrupt or truncated data) preserve the underlying cause instead.
+// On any error the returned [Format] is a best-effort signature detection (via [Detect]),
+// which may be [FormatUnknown] when the bytes match no known signature.
 func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 	cfg, name, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
@@ -45,14 +45,15 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 }
 
 // Decode fully decodes data into an [image.Image] using the stdlib decoders,
-// returning the detected [Format]. It first reads the header and rejects inputs
-// whose declared pixel count (width × height) is non-positive or exceeds
-// [MaxDecodePixels] (wrapping [ErrImageTooLarge]) to bound memory use on
-// untrusted content; the check divides rather than multiplies so a maliciously
-// huge header cannot overflow past the limit. Unrecognized formats wrap
-// [ErrUnsupported]; decode failures on a supported format preserve the cause.
-// On every error path the returned [Format] is the best-effort detected format
-// (which may be [FormatUnknown]), never silently discarded.
+// returning the detected [Format]. It first reads the header
+// and rejects inputs whose declared pixel count (width × height) is non-positive
+// or exceeds [MaxDecodePixels] (wrapping [ErrImageTooLarge]) to bound memory use on untrusted content;
+// the check divides rather than multiplies
+// so a maliciously huge header cannot overflow past the limit.
+// Unrecognized formats wrap [ErrUnsupported];
+// decode failures on a supported format preserve the cause.
+// On every error path the returned [Format] is the best-effort detected format (which may be [FormatUnknown]),
+// never silently discarded.
 func Decode(data []byte) (img image.Image, format Format, err error) {
 	cfg, format, err := DecodeConfig(data)
 	if err != nil {
@@ -71,11 +72,10 @@ func Decode(data []byte) (img image.Image, format Format, err error) {
 	return img, stdlibFormat(name), nil
 }
 
-// Crop returns the sub-image of src bounded by r. It is a cheap, allocation-free
-// view when src supports SubImage (all stdlib image types do); otherwise the
-// pixels are copied. r is intersected with the source bounds, and the result
-// preserves the source coordinate space (its Bounds equal the intersected r)
-// on both paths.
+// Crop returns the sub-image of src bounded by r. It is a cheap,
+// allocation-free view when src supports SubImage (all stdlib image types do);
+// otherwise the pixels are copied. r is intersected with the source bounds,
+// and the result preserves the source coordinate space (its Bounds equal the intersected r) on both paths.
 func Crop(src image.Image, r image.Rectangle) image.Image {
 	r = r.Intersect(src.Bounds())
 	type subImager interface {
@@ -93,10 +93,10 @@ func Crop(src image.Image, r image.Rectangle) image.Image {
 	return dst
 }
 
-// Thumbnail downscales src to fit within maxW×maxH while preserving aspect
-// ratio, using nearest-neighbor sampling. It never upscales: sources already
-// within the bounds are returned unchanged. It is a deliberately cheap pure-Go
-// operation; high-quality resampling belongs in rskit.
+// Thumbnail downscales src to fit within maxW×maxH while preserving aspect ratio,
+// using nearest-neighbor sampling. It never upscales:
+// sources already within the bounds are returned unchanged.
+// It is a deliberately cheap pure-Go operation; high-quality resampling belongs in rskit.
 func Thumbnail(src image.Image, maxW, maxH int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -136,15 +136,15 @@ func stdlibFormat(name string) Format {
 	}
 }
 
-// imageProber is the built-in [Prober] backend that reads image dimensions via
-// the stdlib decoders. It is injected into a [Registry] with [WithImageProber].
+// imageProber is the built-in [Prober] backend that reads image dimensions via the stdlib decoders.
+// It is injected into a [Registry] with [WithImageProber].
 type imageProber struct{}
 
-// Probe returns image [Metadata] (with Width/Height) for stdlib-decodable
-// images (JPEG, PNG, GIF). It returns an error for non-images and undecodable
-// content so a [Registry] can fall back to signature-only detection.
-// Classification comes from the signature detector, which is authoritative; the
-// decoder contributes only the pixel dimensions.
+// Probe returns image [Metadata] (with Width/Height) for stdlib-decodable images (JPEG, PNG, GIF).
+// It returns an error for non-images and undecodable content
+// so a [Registry] can fall back to signature-only detection.
+// Classification comes from the signature detector, which is authoritative;
+// the decoder contributes only the pixel dimensions.
 func (imageProber) Probe(data []byte) (Metadata, error) {
 	cfg, _, err := DecodeConfig(data)
 	if err != nil {

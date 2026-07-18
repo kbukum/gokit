@@ -41,8 +41,7 @@ type DeadLetterProducer struct {
 	suffix    string
 }
 
-// NewDeadLetterProducer creates a DeadLetterProducer that publishes to
-// "{original_topic}{suffix}" (default suffix is ".dlq").
+// NewDeadLetterProducer creates a DeadLetterProducer that publishes to "{original_topic}{suffix}" (default suffix is ".dlq").
 func NewDeadLetterProducer(publisher messaging.Producer, opts ...DLQOption) *DeadLetterProducer {
 	d := &DeadLetterProducer{
 		publisher: publisher,
@@ -55,8 +54,8 @@ func NewDeadLetterProducer(publisher messaging.Producer, opts ...DLQOption) *Dea
 }
 
 // Send publishes a DeadLetterEnvelope to the DLQ topic for the given message.
-// The envelope includes a redacted payload summary, redacted headers, sanitized
-// error summary, retry count (read from the "x-retry-count" header), and a UTC timestamp.
+// The envelope includes a redacted payload summary, redacted headers, sanitized error summary,
+// retry count (read from the "x-retry-count" header), and a UTC timestamp.
 func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, originalErr error) error {
 	retryCount := 0
 	if rc, ok := msg.Headers["x-retry-count"]; ok {

@@ -8,8 +8,8 @@ import (
 )
 
 // IsTransientError checks if a ConnectRPC error is transient and retryable.
-// Returns true for ConnectRPC status codes that indicate temporary failures
-// (Unavailable, ResourceExhausted, Aborted) and for common connection-level errors.
+// Returns true for ConnectRPC status codes that indicate temporary failures (Unavailable, ResourceExhausted, Aborted)
+// and for common connection-level errors.
 //
 // Use this as a retry predicate:
 //

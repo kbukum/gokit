@@ -10,11 +10,10 @@ import (
 
 // Container is a type-keyed dependency injection container.
 //
-// Every dependency is keyed by its concrete Go type — optionally qualified by
-// a name via [WithName] so that multiple values of the same type can coexist.
-// Registration and resolution go through the generic package functions
-// ([Register], [RegisterSingleton], [RegisterTransient], [Resolve]); the
-// container itself exposes no untyped surface.
+// Every dependency is keyed by its concrete Go type — optionally qualified by a name via [WithName]
+// so that multiple values of the same type can coexist. Registration
+// and resolution go through the generic package functions ([Register], [RegisterSingleton], [RegisterTransient], [Resolve]);
+// the container itself exposes no untyped surface.
 //
 // Three registration modes are supported:
 //
@@ -22,18 +21,18 @@ import (
 //   - Singleton — a factory invoked once; the result is cached.
 //   - Transient — a factory invoked fresh on every resolve.
 //
-// Constructor injection is the only supported wiring pattern: a factory
-// receives the resolution [context.Context] and calls [Resolve] with it for
-// each dependency it needs. Cyclic dependencies are detected by tracking the
-// active resolution chain in that context and reported as an error rather than
-// deadlocking.
+// Constructor injection is the only supported wiring pattern:
+// a factory receives the resolution [context.Context]
+// and calls [Resolve] with it for each dependency it needs.
+// Cyclic dependencies are detected by tracking the active resolution chain in that context
+// and reported as an error rather than deadlocking.
 //
-// A [RegisterSingleton] factory is run at most once: concurrent first resolves
-// are serialized, and the first result is cached for the rest. As with
-// [sync.Once], a singleton whose construction depends — directly or through
-// another singleton being built on a different goroutine — on its own not-yet-
-// cached value cannot make progress; model mutually dependent singletons as
-// transients or break the cycle.
+// A [RegisterSingleton] factory is run at most once: concurrent first resolves are serialized,
+// and the first result is cached for the rest. As with [sync.Once],
+// a singleton whose construction depends — directly
+// or through another singleton being built on a different goroutine —
+// on its own not-yet- cached value cannot make progress;
+// model mutually dependent singletons as transients or break the cycle.
 type Container struct {
 	mu      sync.RWMutex
 	entries map[typeKey]*entry
@@ -42,8 +41,8 @@ type Container struct {
 	closers   []closerEntry
 }
 
-// closerEntry is one recorded disposal thunk, tracked in registration/
-// construction order so [Container.Close] can run them in reverse.
+// closerEntry is one recorded disposal thunk, tracked in registration/ construction order
+// so [Container.Close] can run them in reverse.
 type closerEntry struct {
 	key typeKey
 	fn  func(context.Context) error
@@ -80,8 +79,8 @@ type entry struct {
 	mu          sync.Mutex
 	value       any
 	initialized bool
-	// disposer, when set, releases the constructed value; it is recorded in the
-	// container's ordered closer list on first resolve of a singleton.
+	// disposer, when set, releases the constructed value;
+	// it is recorded in the container's ordered closer list on first resolve of a singleton.
 	disposer func(context.Context, any) error
 }
 
@@ -117,9 +116,9 @@ func (c *Container) addCloser(k typeKey, fn func(context.Context) error) {
 // resKey is the context key under which the active resolution chain is stored.
 type resKey struct{}
 
-// resNode is one frame of the resolution chain. The chain is an immutable
-// singly linked list threaded through [context.Context], so it is safe to read
-// from any goroutine a factory may hand the context to.
+// resNode is one frame of the resolution chain.
+// The chain is an immutable singly linked list threaded through [context.Context],
+// so it is safe to read from any goroutine a factory may hand the context to.
 type resNode struct {
 	key    typeKey
 	parent *resNode
@@ -179,12 +178,12 @@ func (e *entry) resolve(ctx context.Context, c *Container, k typeKey) (any, erro
 	}
 }
 
-// Close runs every recorded disposer in reverse order of registration or
-// construction (LIFO), then clears the container so a second call is a no-op.
-// All disposers run even if some fail; their errors are joined. Only values
-// registered with [RegisterCloseable] or [RegisterSingletonCloseable] are
-// closed — a plain [Register]/[RegisterSingleton] value is the caller's to
-// release. The context bounds shutdown and is passed to each disposer.
+// Close runs every recorded disposer in reverse order of registration or construction (LIFO),
+// then clears the container so a second call is a no-op. All disposers run even if some fail;
+// their errors are joined. Only values registered with [RegisterCloseable]
+// or [RegisterSingletonCloseable] are closed —
+// a plain [Register]/[RegisterSingleton] value is the caller's to release.
+// The context bounds shutdown and is passed to each disposer.
 func (c *Container) Close(ctx context.Context) error {
 	c.closersMu.Lock()
 	closers := c.closers

@@ -9,20 +9,17 @@ import (
 	"time"
 )
 
-// ErrInvalidSubtitle is returned when subtitle content contains an unparseable
-// timestamp on an otherwise well-formed cue line.
+// ErrInvalidSubtitle is returned when subtitle content contains an unparseable timestamp on an otherwise well-formed cue line.
 var ErrInvalidSubtitle = errors.New("media: invalid subtitle timestamp")
 
-// maxCueField bounds any single parsed timestamp field (hours, minutes,
-// seconds, or fractional milliseconds). It keeps the millisecond→microsecond
-// conversion within int64 range so an absurdly large cue time fails closed as
-// [ErrInvalidSubtitle] instead of wrapping to a negative [Timestamp].
+// maxCueField bounds any single parsed timestamp field (hours, minutes, seconds, or fractional milliseconds).
+// It keeps the millisecond→microsecond conversion within int64 range
+// so an absurdly large cue time fails closed as [ErrInvalidSubtitle] instead of wrapping to a negative [Timestamp].
 const maxCueField = 1_000_000_000
 
-// maxCueFieldDigits bounds the digit-string length of a single field. maxCueField
-// is 10 digits, so any in-range value fits; the guard stops untrusted input from
-// forcing O(n) scanning via long zero-padding that stays numerically within
-// maxCueField (e.g. "000…0").
+// maxCueFieldDigits bounds the digit-string length of a single field. maxCueField is 10 digits,
+// so any in-range value fits;
+// the guard stops untrusted input from forcing O(n) scanning via long zero-padding that stays numerically within maxCueField (e.g. "000…0").
 const maxCueFieldDigits = 10
 
 // SubtitleEntry is a single timed subtitle cue.
@@ -31,16 +28,16 @@ type SubtitleEntry struct {
 	Text  string    `json:"text"`
 }
 
-// SubtitleTrack is an ordered collection of subtitle cues. It is the light-kit
-// parallel of rskit's SubtitleTrack, covering the pure-Go concerns — parsing,
+// SubtitleTrack is an ordered collection of subtitle cues.
+// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns — parsing,
 // serialization, and time math — without renderer-specific styling.
 type SubtitleTrack struct {
 	Entries  []SubtitleEntry `json:"entries"`
 	Language string          `json:"language,omitempty"` // BCP 47 tag, optional
 }
 
-// Add returns a copy of the track with the cue appended; the receiver is
-// unchanged, so callers must use the returned value (supports chaining).
+// Add returns a copy of the track with the cue appended; the receiver is unchanged,
+// so callers must use the returned value (supports chaining).
 func (t SubtitleTrack) Add(r TimeRange, text string) SubtitleTrack {
 	t.Entries = append(slices.Clip(t.Entries), SubtitleEntry{Range: r, Text: text})
 	return t
@@ -56,18 +53,17 @@ func (t SubtitleTrack) WithLanguage(lang string) SubtitleTrack {
 // ParseSRT parses SubRip (SRT) subtitle content.
 //
 // It tolerates common malformations: a UTF-8 BOM, Windows or Unix line endings,
-// extra blank lines between cues, missing or non-numeric sequence numbers, and
-// inline HTML tags (which are stripped). Blocks without a timestamp line are
-// skipped; a malformed timestamp on a cue line returns [ErrInvalidSubtitle].
+// extra blank lines between cues, missing or non-numeric sequence numbers,
+// and inline HTML tags (which are stripped). Blocks without a timestamp line are skipped;
+// a malformed timestamp on a cue line returns [ErrInvalidSubtitle].
 func ParseSRT(content string) (SubtitleTrack, error) {
 	return parseCues(content, false)
 }
 
 // ParseVTT parses WebVTT subtitle content.
 //
-// In addition to the tolerances of [ParseSRT], it drops the leading WEBVTT
-// header, ignores cue settings after the end timestamp, and decodes HTML
-// entities in cue text.
+// In addition to the tolerances of [ParseSRT], it drops the leading WEBVTT header,
+// ignores cue settings after the end timestamp, and decodes HTML entities in cue text.
 func ParseVTT(content string) (SubtitleTrack, error) {
 	return parseCues(content, true)
 }
@@ -175,8 +171,8 @@ func firstField(s string) string {
 	return ""
 }
 
-// parseCueTime parses "HH:MM:SS.mmm", "HH:MM:SS,mmm", or "MM:SS.mmm" into a
-// [Timestamp]. SRT uses a comma as the fractional separator; VTT uses a dot.
+// parseCueTime parses "HH:MM:SS.mmm", "HH:MM:SS,mmm", or "MM:SS.mmm" into a [Timestamp].
+// SRT uses a comma as the fractional separator; VTT uses a dot.
 func parseCueTime(s string) (Timestamp, bool) {
 	s = strings.Replace(s, ",", ".", 1)
 	main, frac := s, int64(0)
@@ -203,10 +199,9 @@ func parseCueTime(s string) (Timestamp, bool) {
 	return TimestampFromMillis(h*3_600_000 + m*60_000 + sec*1000 + frac), true
 }
 
-// parseFractionMillis interprets the fractional part after the seconds separator
-// as milliseconds, scaling by digit count so "5" is 500ms and "50" is 500ms
-// (not 5ms). Digits beyond millisecond precision are truncated. It fails on an
-// empty or non-numeric fraction.
+// parseFractionMillis interprets the fractional part after the seconds separator as milliseconds,
+// scaling by digit count so "5" is 500ms and "50" is 500ms (not 5ms).
+// Digits beyond millisecond precision are truncated. It fails on an empty or non-numeric fraction.
 func parseFractionMillis(s string) (int64, bool) {
 	n, ok := atoi(s)
 	if !ok {
@@ -235,8 +230,9 @@ func atoi(s string) (int64, bool) {
 			return 0, false
 		}
 		n = n*10 + int64(c-'0')
-		// Bound each field so the millisecond→microsecond conversion in
-		// TimestampFromMillis cannot overflow int64 and wrap negative.
+		// Bound each field
+		// so the millisecond→microsecond conversion in TimestampFromMillis cannot overflow int64
+		// and wrap negative.
 		if n > maxCueField {
 			return 0, false
 		}
@@ -265,15 +261,14 @@ func formatClock(ts Timestamp, sep byte) string {
 	return fmt.Sprintf("%02d:%02d:%02d%c%03d", hours, mins, secs, sep, millis)
 }
 
-// vttEscaper escapes the WebVTT-significant characters so serialized cue text
-// is valid WebVTT and survives a parse round-trip (a literal '<' would otherwise
-// be re-read as tag markup and stripped).
+// vttEscaper escapes the WebVTT-significant characters so serialized cue text is valid WebVTT
+// and survives a parse round-trip (a literal '<' would otherwise be re-read as tag markup and stripped).
 var vttEscaper = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;")
 
-// cleanCueText normalizes cue body text into a round-trippable form: tags are
-// stripped, WebVTT entities decoded (vtt), and each line is trimmed with empty
-// lines dropped so the result never contains a blank line that would re-parse
-// as a cue boundary. It returns "" when no text survives.
+// cleanCueText normalizes cue body text into a round-trippable form: tags are stripped,
+// WebVTT entities decoded (vtt), and each line is trimmed with empty lines dropped
+// so the result never contains a blank line that would re-parse as a cue boundary.
+// It returns "" when no text survives.
 func cleanCueText(raw string, vtt bool) string {
 	raw = stripTags(raw)
 	if vtt {

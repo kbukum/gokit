@@ -9,8 +9,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// DefaultStopTimeout bounds ManagedConsumer.Stop when the caller's ctx has
-// no deadline. Prevents a stuck consumer from blocking shutdown forever.
+// DefaultStopTimeout bounds ManagedConsumer.Stop when the caller's ctx has no deadline.
+// Prevents a stuck consumer from blocking shutdown forever.
 const DefaultStopTimeout = 10 * time.Second
 
 // ManagedConsumer wraps a Consumer with background lifecycle management.
@@ -86,9 +86,9 @@ func (m *ManagedConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully stops the consumer using the supplied ctx for the wait
-// budget. If ctx has no deadline, DefaultStopTimeout (10s) is applied as a
-// bounded fallback so a stuck consumer cannot block shutdown forever.
+// Stop gracefully stops the consumer using the supplied ctx for the wait budget.
+// If ctx has no deadline, DefaultStopTimeout (10s) is applied as a bounded fallback
+// so a stuck consumer cannot block shutdown forever.
 //
 // A nil ctx is treated as context.Background() with the default timeout.
 func (m *ManagedConsumer) Stop(ctx context.Context) error { //nolint:contextcheck // defensive nil-ctx handling intentionally seeds context.Background when caller passes nil

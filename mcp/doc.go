@@ -1,5 +1,5 @@
-// Package mcp is a hardened, protocol-shaped Model Context Protocol server and
-// client backed by gokit's tool system.
+// Package mcp is a hardened, protocol-shaped Model Context Protocol server
+// and client backed by gokit's tool system.
 //
 // It provides two integration points:
 //
@@ -13,12 +13,10 @@
 //   - Client: connect to a remote MCP server and import its tools as
 //     tool.Callable instances that can be registered in a local tool.Registry.
 //
-// The official MCP Go SDK owns the protocol wire (tools, prompts, resources and
-// templates, subscribe, roots, sampling, elicitation, logging, progress,
-// cancellation) over the stdio and Streamable HTTP transports. This package
-// adds the security and observability layers on top and keeps every surface
-// typed: untrusted client and model payloads are carried as json.RawMessage,
-// and documented JSON-Schema is schema.JSON.
+// The official MCP Go SDK owns the protocol wire (tools, prompts, resources and templates, subscribe, roots, sampling, elicitation, logging, progress, cancellation) over the stdio
+// and Streamable HTTP transports. This package adds the security and observability layers on top
+// and keeps every surface typed: untrusted client
+// and model payloads are carried as json.RawMessage, and documented JSON-Schema is schema.JSON.
 //
 // # Server Example
 //

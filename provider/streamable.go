@@ -8,8 +8,7 @@ import "context"
 //
 // Common examples: LLM chat completion (stream: true/false), SSE event feeds.
 //
-// I is the input/request type.
-// O is the single-response output type (from Execute).
+// I is the input/request type. O is the single-response output type (from Execute).
 // C is the streamed chunk type (from Stream).
 type Streamable[I, O, C any] interface {
 	RequestResponse[I, O]

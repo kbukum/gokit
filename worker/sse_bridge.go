@@ -23,29 +23,27 @@ type sseBridgeConfig struct {
 	envelopeFunc func(event Event[any]) any
 }
 
-// WithTopicFunc sets a custom function to derive the SSE broadcast pattern
-// from a worker event. Defaults to "task:{taskID}".
+// WithTopicFunc sets a custom function to derive the SSE broadcast pattern from a worker event.
+// Defaults to "task:{taskID}".
 func WithTopicFunc(fn func(event Event[any]) string) SSEBridgeOption {
 	return func(cfg *sseBridgeConfig) {
 		cfg.topicFunc = fn
 	}
 }
 
-// WithEnvelope replaces the default JSON event payload with one returned by
-// fn. Use this to project worker events into a domain-specific schema (e.g.
-// adding workspace_id, attempt_id, ts) without modifying the bridge.
+// WithEnvelope replaces the default JSON event payload with one returned by fn.
+// Use this to project worker events into a domain-specific schema (e.g. adding workspace_id, attempt_id, ts) without modifying the bridge.
 //
-// The function receives the event projected to Event[any] so it can be
-// shared across input/output type parameters. The returned value is JSON
-// marshaled directly — return any serializable type.
+// The function receives the event projected to Event[any]
+// so it can be shared across input/output type parameters.
+// The returned value is JSON marshaled directly — return any serializable type.
 func WithEnvelope(fn func(event Event[any]) any) SSEBridgeOption {
 	return func(cfg *sseBridgeConfig) {
 		cfg.envelopeFunc = fn
 	}
 }
 
-// SSEBridge connects a worker pool's events to an SSE broadcaster for
-// real-time progress streaming.
+// SSEBridge connects a worker pool's events to an SSE broadcaster for real-time progress streaming.
 type SSEBridge[I, O any] struct {
 	pool        *Pool[I, O]
 	broadcaster Broadcaster
@@ -144,8 +142,8 @@ func (b *SSEBridge[I, O]) topic(ev Event[O]) string {
 	return fmt.Sprintf("task:%s", ev.TaskID)
 }
 
-// toGenericEvent projects a typed worker event onto Event[any] so callbacks
-// can be type-erased without losing the data payload.
+// toGenericEvent projects a typed worker event onto Event[any]
+// so callbacks can be type-erased without losing the data payload.
 func toGenericEvent[O any](ev Event[O]) Event[any] {
 	return Event[any]{
 		Type:      ev.Type,

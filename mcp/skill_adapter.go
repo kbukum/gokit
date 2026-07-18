@@ -7,15 +7,14 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// SkillToServerAdapter builds a hardened MCP Server that exposes only the tools
-// referenced by a skill manifest.
+// SkillToServerAdapter builds a hardened MCP Server that exposes only the tools referenced by a skill manifest.
 type SkillToServerAdapter struct {
 	Manifest skill.Manifest
 	Registry *tool.Registry
 }
 
-// NewServer validates the manifest and constructs a Server whose tool allow-list
-// is pinned to the manifest's referenced tools.
+// NewServer validates the manifest
+// and constructs a Server whose tool allow-list is pinned to the manifest's referenced tools.
 func (a SkillToServerAdapter) NewServer(name, version string, opts ...ServerOption) (*Server, error) {
 	if err := skill.Validate(&a.Manifest); err != nil {
 		return nil, err

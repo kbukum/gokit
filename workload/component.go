@@ -18,9 +18,8 @@ type Component struct {
 }
 
 // NewComponent creates a workload component for use with the component registry.
-// registry is mandatory; construct one and register the desired provider(s)
-// (e.g. via [github.com/kbukum/gokit/workload/docker.Register]) before
-// passing it.
+// registry is mandatory; construct one
+// and register the desired provider(s) (e.g. via [github.com/kbukum/gokit/workload/docker.Register]) before passing it.
 func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) *Component {
 	return &Component{
 		registry:    registry,

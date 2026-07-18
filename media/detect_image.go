@@ -56,8 +56,8 @@ func detectImage(data []byte) (Info, bool) {
 		return Info{Type: Image, Format: FormatICO, MimeType: "image/x-icon"}, true
 	}
 
-	// AVIF / HEIF — ftyp box with an image-specific brand (video ftyp handling
-	// defers these to detectImage).
+	// AVIF / HEIF —
+	// ftyp box with an image-specific brand (video ftyp handling defers these to detectImage).
 	if brand, ok := ftypBrand(data); ok {
 		switch brand {
 		case "avif", "avis":

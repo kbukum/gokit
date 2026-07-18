@@ -1,7 +1,6 @@
-// Package discovery provides a gRPC name resolver backed by gokit's
-// Discovery interface.  It enables dynamic service resolution — addresses
-// are updated at runtime when Consul (or any other discovery backend)
-// reports changes.
+// Package discovery provides a gRPC name resolver backed by gokit's Discovery interface.
+// It enables dynamic service resolution —
+// addresses are updated at runtime when Consul (or any other discovery backend) reports changes.
 //
 // Usage:
 //

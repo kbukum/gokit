@@ -30,9 +30,8 @@ type AsProviderConfig struct {
 	ProviderName string `yaml:"provider_name" mapstructure:"provider_name"`
 }
 
-// AsProvider wraps a Handler as a provider.RequestResponse.
-// Runs the handler, waits for completion, returns the final EventResult data.
-// Progress and partial events are discarded.
+// AsProvider wraps a Handler as a provider.RequestResponse. Runs the handler, waits for completion,
+// returns the final EventResult data. Progress and partial events are discarded.
 func AsProvider[I, O any](h Handler[I, O], cfg AsProviderConfig) provider.RequestResponse[I, O] {
 	return &handlerProvider[I, O]{handler: h, name: cfg.ProviderName}
 }

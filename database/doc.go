@@ -1,5 +1,5 @@
-// Package database provides a GORM-based database component with connection pooling,
-// health checks, transactions, and migration support.
+// Package database provides a GORM-based database component with connection pooling, health checks,
+// transactions, and migration support.
 //
 // # Architecture
 //
@@ -38,8 +38,8 @@
 //
 // # Optional Component
 //
-// The database component respects the Enabled flag in configuration.
-// When disabled, Start() returns immediately without initializing the connection,
+// The database component respects the Enabled flag in configuration. When disabled,
+// Start() returns immediately without initializing the connection,
 // and Health() reports "disabled" status.
 //
 //	cfg := database.Config{Enabled: false}  // Component will be disabled

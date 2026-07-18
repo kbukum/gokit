@@ -10,8 +10,8 @@ const (
 // GoogleDefaultScopes are the standard OIDC scopes for Google login.
 var GoogleDefaultScopes = []string{"openid", "email", "profile"}
 
-// NewGoogle creates a Google OAuth2/OIDC provider.
-// All fields have sensible defaults; override any by setting them in cfg.
+// NewGoogle creates a Google OAuth2/OIDC provider. All fields have sensible defaults;
+// override any by setting them in cfg.
 func NewGoogle(cfg ProviderConfig) *GenericProvider {
 	return NewGeneric(GenericConfig{
 		ProviderConfig:   WithDefaultScopes(cfg, GoogleDefaultScopes...),

@@ -5,17 +5,15 @@ import (
 	"fmt"
 )
 
-// Disposer releases the resources held by a registered value of type T. It is
-// invoked by [Container.Close] with a context that bounds shutdown.
+// Disposer releases the resources held by a registered value of type T. It is invoked by [Container.Close] with a context that bounds shutdown.
 type Disposer[T any] func(ctx context.Context, value T) error
 
-// RegisterCloseable registers a pre-built value for type T together with a
-// disposer that [Container.Close] runs to release it. The value is returned
-// as-is on every [Resolve].
+// RegisterCloseable registers a pre-built value for type T together with a disposer that [Container.Close] runs to release it.
+// The value is returned as-is on every [Resolve].
 //
-// Unlike [Register], the container owns this value's cleanup. Re-registering the
-// same key records an additional disposer, so a value replaced by a later
-// registration is still closed.
+// Unlike [Register], the container owns this value's cleanup.
+// Re-registering the same key records an additional disposer,
+// so a value replaced by a later registration is still closed.
 func RegisterCloseable[T any](c *Container, value T, dispose Disposer[T], opts ...Option) error {
 	if c == nil {
 		return fmt.Errorf("di: container is nil")
@@ -36,11 +34,10 @@ func RegisterCloseable[T any](c *Container, value T, dispose Disposer[T], opts .
 	return nil
 }
 
-// RegisterSingletonCloseable registers a singleton factory for type T together
-// with a disposer. The factory is invoked once on first [Resolve]; at that point
-// the disposer is recorded and later run by [Container.Close] in reverse order
-// of construction. An unresolved singleton constructs nothing and records no
-// disposer, so nothing is closed for it.
+// RegisterSingletonCloseable registers a singleton factory for type T together with a disposer.
+// The factory is invoked once on first [Resolve]; at that point the disposer is recorded
+// and later run by [Container.Close] in reverse order of construction.
+// An unresolved singleton constructs nothing and records no disposer, so nothing is closed for it.
 func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) (T, error), dispose Disposer[T], opts ...Option) error {
 	if c == nil {
 		return fmt.Errorf("di: container is nil")

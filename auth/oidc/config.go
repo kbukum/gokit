@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-// Config configures OIDC provider verification.
-// Loadable from YAML/env via mapstructure tags.
+// Config configures OIDC provider verification. Loadable from YAML/env via mapstructure tags.
 type Config struct {
 	// Enabled controls whether OIDC verification is active.
 	Enabled bool `mapstructure:"enabled"`
@@ -35,8 +34,7 @@ type Config struct {
 	// Scopes are the OAuth2 scopes to request (default: ["openid", "email", "profile"]).
 	Scopes []string `mapstructure:"scopes"`
 
-	// SupportedSigningAlgs restricts allowed ID token signing algorithms
-	// (default: ["RS256", "ES256", "EdDSA"]).
+	// SupportedSigningAlgs restricts allowed ID token signing algorithms (default: ["RS256", "ES256", "EdDSA"]).
 	SupportedSigningAlgs []string `mapstructure:"supported_signing_algs"`
 
 	// JWKSCacheDuration controls how long JWKS keys are cached (default: "1h").

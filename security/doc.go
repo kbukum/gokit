@@ -1,7 +1,7 @@
 // Package security provides shared security primitives for gokit modules.
 //
-// It includes TLS configuration, certificate handling, and secure-by-default
-// HTTP response header policies that can be reused across transports.
+// It includes TLS configuration, certificate handling,
+// and secure-by-default HTTP response header policies that can be reused across transports.
 //
 // # TLS Configuration
 //

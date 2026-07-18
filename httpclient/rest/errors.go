@@ -3,8 +3,8 @@ package rest
 import "github.com/kbukum/gokit/httpclient"
 
 // REST error helpers delegate to httpclient's error classification.
-// These are convenience re-exports so REST client users don't need
-// to import httpclient directly for error checking.
+// These are convenience re-exports
+// so REST client users don't need to import httpclient directly for error checking.
 
 // IsNotFound checks if the error is a 404 Not Found.
 func IsNotFound(err error) bool { return httpclient.IsNotFound(err) }

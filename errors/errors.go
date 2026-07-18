@@ -18,11 +18,11 @@ type AppError struct {
 	Retryable bool `json:"retryable"`
 	// HTTPStatus is the recommended HTTP status code for this error.
 	HTTPStatus int `json:"-"`
-	// Details carries RFC 9457 problem-detail extension members. These are, by
-	// definition, arbitrary JSON and cannot be given a closed type without
-	// losing that openness, so map[string]any is a deliberate, documented
-	// opaque-value exception to the no-any rule (parity with rskit's
-	// HashMap<String, Value>). Values should be JSON-encodable.
+	// Details carries RFC 9457 problem-detail extension members. These are, by definition,
+	// arbitrary JSON and cannot be given a closed type without losing that openness,
+	// so map[string]any is a deliberate,
+	// documented opaque-value exception to the no-any rule (parity with rskit's HashMap<String, Value>).
+	// Values should be JSON-encodable.
 	Details map[string]any `json:"details,omitempty"`
 	// Cause is the underlying error that caused this error.
 	Cause error `json:"-"`
@@ -45,9 +45,10 @@ func (e *AppError) WithCause(cause error) *AppError {
 	return e
 }
 
-// WithDetails merges the provided RFC 9457 extension members into the error and
-// returns the receiver. The value type is a documented opaque-value exception
-// (see AppError.Details); values should be JSON-encodable.
+// WithDetails merges the provided RFC 9457 extension members into the error
+// and returns the receiver.
+// The value type is a documented opaque-value exception (see AppError.Details);
+// values should be JSON-encodable.
 func (e *AppError) WithDetails(details map[string]any) *AppError {
 	if e.Details == nil {
 		e.Details = make(map[string]any)
@@ -255,8 +256,8 @@ func Canceled(operation string) *AppError {
 	}
 }
 
-// Wrap converts a standard error to an AppError. If the error is already an
-// AppError it is returned as-is; otherwise it is wrapped as Internal.
+// Wrap converts a standard error to an AppError.
+// If the error is already an AppError it is returned as-is; otherwise it is wrapped as Internal.
 // Returns nil when err is nil.
 func Wrap(err error) *AppError {
 	if err == nil {
@@ -268,8 +269,8 @@ func Wrap(err error) *AppError {
 	return Internal(err)
 }
 
-// FormatResourceError creates a not-found error with a formatted identifier of
-// any type. The identifier is rendered with the default format verb.
+// FormatResourceError creates a not-found error with a formatted identifier of any type.
+// The identifier is rendered with the default format verb.
 func FormatResourceError[T any](resource string, id T) *AppError {
 	return NotFound(resource, fmt.Sprintf("%v", id))
 }

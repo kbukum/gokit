@@ -2,8 +2,8 @@ package media
 
 // Type is the broad media category a piece of content belongs to.
 //
-// It mirrors rskit's media type vocabulary (video/audio/image) and adds the
-// light-kit-specific [Text] category used by the byte-signature detector.
+// It mirrors rskit's media type vocabulary (video/audio/image)
+// and adds the light-kit-specific [Text] category used by the byte-signature detector.
 type Type int
 
 const (

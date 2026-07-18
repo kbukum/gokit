@@ -49,8 +49,8 @@ func NewExecutor[T any](steps []Step[T], opts ...ExecutorOption) *Executor[T] {
 	}
 }
 
-// Execute runs all steps sequentially, calling onProgress for each step's
-// lifecycle events. Returns the final output or the first error encountered.
+// Execute runs all steps sequentially, calling onProgress for each step's lifecycle events.
+// Returns the final output or the first error encountered.
 // Supports context cancellation between steps.
 func (e *Executor[T]) Execute(ctx context.Context, input T, onProgress func(StepProgress[T])) (T, error) {
 	current := input

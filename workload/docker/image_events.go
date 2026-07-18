@@ -67,8 +67,8 @@ func imageRefFromEvent(evt events.Message) string {
 	return evt.Actor.ID
 }
 
-// eventTimestamp converts a Docker event to a Go time, preferring nanosecond
-// precision when available.
+// eventTimestamp converts a Docker event to a Go time,
+// preferring nanosecond precision when available.
 func eventTimestamp(evt events.Message) time.Time {
 	if evt.TimeNano > 0 {
 		return time.Unix(0, evt.TimeNano)

@@ -30,8 +30,8 @@ func CORS(cfg *CORSConfig) Middleware {
 }
 
 // GinCORS returns a Gin middleware for CORS.
-// Prefer using CORS() at the server level via ApplyMiddleware() which covers
-// all routes. Use this only when you need CORS on the Gin engine directly.
+// Prefer using CORS() at the server level via ApplyMiddleware() which covers all routes.
+// Use this only when you need CORS on the Gin engine directly.
 func GinCORS(cfg *CORSConfig) gin.HandlerFunc {
 	return GinWrap(CORS(cfg))
 }

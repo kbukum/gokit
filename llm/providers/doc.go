@@ -1,7 +1,6 @@
 // Package providers is the root of the gokit LLM provider modules.
 //
-// This module consolidates all vendor-specific LLM integrations (OpenAI,
-// Anthropic, Gemini) into a single module with shared utilities.
+// This module consolidates all vendor-specific LLM integrations (OpenAI, Anthropic, Gemini) into a single module with shared utilities.
 //
 // Import vendor sub-packages to register their dialects:
 //

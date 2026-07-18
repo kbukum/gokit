@@ -11,17 +11,16 @@ import (
 	"github.com/kbukum/gokit/stream"
 )
 
-// realDir and aiDir are the subdirectories a [LocalTarget] writes items to by
-// label.
+// realDir and aiDir are the subdirectories a [LocalTarget] writes items to by label.
 const (
 	realDir = "real"
 	aiDir   = "ai"
 )
 
-// LocalTarget writes each item's payload to a real/ or ai/ subdirectory of an
-// output directory, chosen by the item's label. Every destination is confined
-// under the output directory through [fs] path safety, so a hostile item name
-// cannot escape it.
+// LocalTarget writes each item's payload to a real/ or ai/ subdirectory of an output directory,
+// chosen by the item's label.
+// Every destination is confined under the output directory through [fs] path safety,
+// so a hostile item name cannot escape it.
 type LocalTarget struct {
 	name      string
 	outputDir string
@@ -35,8 +34,7 @@ func NewLocalTarget(name, outputDir string) *LocalTarget {
 // Name returns the target's identifier.
 func (t *LocalTarget) Name() string { return t.name }
 
-// Publish writes every item to its label's subdirectory and reports the
-// real/AI split.
+// Publish writes every item to its label's subdirectory and reports the real/AI split.
 func (t *LocalTarget) Publish(ctx context.Context, items *stream.Pipeline[Item]) (stage.PublishResult, error) {
 	var realN, aiN int
 	err := stream.ForEach(ctx, items, func(cbCtx context.Context, it Item) error {
@@ -68,8 +66,8 @@ func (t *LocalTarget) Publish(ctx context.Context, items *stream.Pipeline[Item])
 	}, nil
 }
 
-// write streams one item's payload to a confined path under the label
-// subdirectory, failing closed on a name that would escape the output dir.
+// write streams one item's payload to a confined path under the label subdirectory,
+// failing closed on a name that would escape the output dir.
 func (t *LocalTarget) write(sub string, it Item) error {
 	subDir, err := fs.SafeJoin(t.outputDir, sub)
 	if err != nil {

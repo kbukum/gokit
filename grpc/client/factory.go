@@ -21,13 +21,14 @@ type DefaultConnectionFactory struct {
 	log *logging.Logger
 }
 
-// NewDefaultConnectionFactory creates a factory that builds connections using the provided config and logging.
+// NewDefaultConnectionFactory creates a factory that builds connections using the provided config
+// and logging.
 func NewDefaultConnectionFactory(cfg grpccfg.Config, log *logging.Logger) *DefaultConnectionFactory {
 	return &DefaultConnectionFactory{cfg: cfg, log: log}
 }
 
-// NewConn creates a new gRPC client connection.
-// The serviceName is used for logging; the target address comes from the factory's Config.
+// NewConn creates a new gRPC client connection. The serviceName is used for logging;
+// the target address comes from the factory's Config.
 func (f *DefaultConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	f.log.Debug("Creating gRPC connection via factory", map[string]any{
 		"service": serviceName,

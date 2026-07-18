@@ -2,9 +2,8 @@ package schema
 
 import "fmt"
 
-// ValidationLimits bounds the structural size of untrusted JSON documents
-// (schemas and values) before they are compiled or validated, guarding against
-// resource-exhaustion from adversarial input.
+// ValidationLimits bounds the structural size of untrusted JSON documents (schemas and values) before they are compiled
+// or validated, guarding against resource-exhaustion from adversarial input.
 type ValidationLimits struct {
 	// MaxDepth is the maximum structural nesting depth.
 	MaxDepth int
@@ -14,13 +13,13 @@ type ValidationLimits struct {
 	MaxStringBytes int
 	// MaxKeyBytes is the maximum UTF-8 byte length of a single object key.
 	MaxKeyBytes int
-	// MaxTotalStringBytes is the maximum cumulative UTF-8 byte length across all
-	// object keys and string values.
+	// MaxTotalStringBytes is the maximum cumulative UTF-8 byte length across all object keys
+	// and string values.
 	MaxTotalStringBytes int
 }
 
-// DefaultLimits returns the default structural limits applied when none are
-// specified. The values mirror the cross-kit defaults.
+// DefaultLimits returns the default structural limits applied when none are specified.
+// The values mirror the cross-kit defaults.
 func DefaultLimits() ValidationLimits {
 	return ValidationLimits{
 		MaxDepth:            128,
@@ -43,8 +42,8 @@ func (e *LimitError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Subject, e.Message)
 }
 
-// check enforces the limits against a decoded JSON document (as produced by
-// json.Unmarshal into any), returning a *LimitError on the first violation.
+// check enforces the limits against a decoded JSON document (as produced by json.Unmarshal into any),
+// returning a *LimitError on the first violation.
 func (l ValidationLimits) check(subject string, value any) error {
 	type frame struct {
 		node  any

@@ -28,15 +28,14 @@ var (
 	_ testutil.TestComponent = (*Component)(nil)
 )
 
-// NewComponent creates a new test database component.
-// By default, it uses SQLite in-memory database.
+// NewComponent creates a new test database component. By default,
+// it uses SQLite in-memory database.
 func NewComponent() *Component {
 	return &Component{}
 }
 
 // WithModels registers models for auto-migration on Start.
-// This is useful when you want the component to automatically create
-// tables for your models during component startup.
+// This is useful when you want the component to automatically create tables for your models during component startup.
 func (c *Component) WithModels(models ...any) *Component {
 	c.models = append(c.models, models...)
 	return c

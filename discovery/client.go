@@ -23,8 +23,8 @@ type ClientConfig struct {
 	// Required services cause errors on discovery failure; optional ones are skipped.
 	Criticality map[string]Criticality
 
-	// StaticEndpoints provides fallback endpoints when the primary backend
-	// fails or returns no results. This enables hybrid discovery patterns.
+	// StaticEndpoints provides fallback endpoints when the primary backend fails
+	// or returns no results. This enables hybrid discovery patterns.
 	StaticEndpoints []StaticEndpoint
 }
 
@@ -85,8 +85,8 @@ func NewClient(disc Discovery, cfg ClientConfig, log *logging.Logger) *Client {
 }
 
 // Discover returns all healthy instances of a service, using cache when fresh.
-// Optional protocol parameter filters results by protocol tag.
-// If the primary backend fails, static fallback endpoints are returned when configured.
+// Optional protocol parameter filters results by protocol tag. If the primary backend fails,
+// static fallback endpoints are returned when configured.
 func (c *Client) Discover(ctx context.Context, serviceName string, protocol ...string) ([]ServiceInstance, error) {
 	if instances := c.cache.get(serviceName); instances != nil {
 		if len(protocol) > 0 && protocol[0] != "" {

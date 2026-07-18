@@ -10,10 +10,11 @@ import (
 )
 
 // CopyFile copies a single file from src to dst, preserving permissions and modification times.
-// Both src and dst are resolved through symlinks (os.Stat / os.Open follow symlinks), so if
-// src is a symlink its target's content is copied; if dst is an existing symlink the link
-// target is overwritten. Use CopyDir to copy directory trees (symlinks inside are recreated
-// as symlinks, not followed). Parent directories of dst are created as needed.
+// Both src and dst are resolved through symlinks (os.Stat / os.Open follow symlinks),
+// so if src is a symlink its target's content is copied;
+// if dst is an existing symlink the link target is overwritten.
+// Use CopyDir to copy directory trees (symlinks inside are recreated as symlinks, not followed).
+// Parent directories of dst are created as needed.
 func CopyFile(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
@@ -55,9 +56,9 @@ type copiedDir struct {
 	info os.FileInfo
 }
 
-// CopyDir recursively copies a directory tree from src to dst.
-// It preserves file permissions, modification times, and symlinks.
-// dst must not be inside src; passing an overlapping dst returns an error.
+// CopyDir recursively copies a directory tree from src to dst. It preserves file permissions,
+// modification times, and symlinks. dst must not be inside src;
+// passing an overlapping dst returns an error.
 func CopyDir(src, dst string) error {
 	info, err := os.Lstat(src)
 	if err != nil {
@@ -147,9 +148,8 @@ func canonicalizeCopyPath(path string) (string, error) {
 	}
 
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		// Case-fold for the overlap check only. macOS HFS+/APFS is
-		// typically case-insensitive; Windows NTFS always is.
-		// Case-sensitive macOS volumes are rare; this is best-effort.
+		// Case-fold for the overlap check only. macOS HFS+/APFS is typically case-insensitive;
+		// Windows NTFS always is. Case-sensitive macOS volumes are rare; this is best-effort.
 		resolvedPath = strings.ToLower(resolvedPath)
 	}
 

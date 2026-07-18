@@ -12,8 +12,8 @@ import (
 )
 
 // ProviderFactory creates a Registry and Discovery pair from a Config.
-// The factory reads generic connection fields (Addr, Scheme, Token) directly
-// from Config, and exotic provider-specific settings from Config.ProviderOptions.
+// The factory reads generic connection fields (Addr, Scheme, Token) directly from Config,
+// and exotic provider-specific settings from Config.ProviderOptions.
 type ProviderFactory func(cfg Config, log *logging.Logger) (Registry, Discovery, error)
 
 // ProviderRegistry stores discovery provider factories by name.
@@ -39,8 +39,8 @@ func (r *ProviderRegistry) Get(name string) (ProviderFactory, bool) {
 	return r.inner.Get(name)
 }
 
-// Component wraps a Registry and Discovery pair and implements
-// component.Component for lifecycle management.
+// Component wraps a Registry and Discovery pair
+// and implements component.Component for lifecycle management.
 type Component struct {
 	registry      Registry
 	discovery     Discovery
@@ -56,8 +56,8 @@ type Component struct {
 type ComponentOption func(*Component)
 
 // WithIPProbeTarget configures fallback UDP probe target for local IP detection.
-// When not set (or empty), UDP probing is disabled and only interface enumeration
-// is used to determine the local IP address.
+// When not set (or empty), UDP probing is disabled
+// and only interface enumeration is used to determine the local IP address.
 func WithIPProbeTarget(addr string) ComponentOption {
 	return func(c *Component) {
 		if addr != "" {

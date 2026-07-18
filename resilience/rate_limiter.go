@@ -59,8 +59,8 @@ func NewRateLimiter(config RateLimiterConfig) *RateLimiter {
 	}
 }
 
-// Allow checks if a request is allowed without blocking.
-// Returns true if allowed, false if rate limited.
+// Allow checks if a request is allowed without blocking. Returns true if allowed,
+// false if rate limited.
 func (rl *RateLimiter) Allow() bool {
 	return rl.AllowN(1)
 }

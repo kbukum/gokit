@@ -30,23 +30,22 @@ func invalidResult(message string) ValidationResult {
 	return ValidationResult{Valid: false, Errors: []ValidationError{{Message: message}}}
 }
 
-// CompiledSchema is a JSON Schema document that has been checked against
-// structural limits and is ready to validate values repeatedly without
-// re-inspecting the schema itself.
+// CompiledSchema is a JSON Schema document that has been checked against structural limits
+// and is ready to validate values repeatedly without re-inspecting the schema itself.
 type CompiledSchema struct {
 	schema JSON
 	limits ValidationLimits
 }
 
-// Compile validates a schema document against the default structural limits and
-// returns a reusable CompiledSchema. A nil schema compiles to a validator that
-// accepts any value.
+// Compile validates a schema document against the default structural limits
+// and returns a reusable CompiledSchema.
+// A nil schema compiles to a validator that accepts any value.
 func Compile(s JSON) (*CompiledSchema, error) {
 	return CompileWithLimits(s, DefaultLimits())
 }
 
-// CompileWithLimits is like Compile but applies caller-supplied structural
-// limits to the schema document.
+// CompileWithLimits is like Compile
+// but applies caller-supplied structural limits to the schema document.
 func CompileWithLimits(s JSON, limits ValidationLimits) (*CompiledSchema, error) {
 	if s != nil {
 		if err := limits.check("schema", s); err != nil {
@@ -59,9 +58,8 @@ func CompileWithLimits(s JSON, limits ValidationLimits) (*CompiledSchema, error)
 // Validate checks a JSON-serializable value against the compiled schema,
 // enforcing the compiled structural limits on the value before inspection.
 //
-// The value parameter is a documented opaque-value exception to the no-any
-// rule: it accepts any JSON-serializable Go value (including json.RawMessage or
-// a []byte JSON payload).
+// The value parameter is a documented opaque-value exception to the no-any rule:
+// it accepts any JSON-serializable Go value (including json.RawMessage or a []byte JSON payload).
 func (c *CompiledSchema) Validate(value any) ValidationResult {
 	if c.schema == nil {
 		return ValidationResult{Valid: true}
@@ -85,8 +83,8 @@ func (c *CompiledSchema) Validate(value any) ValidationResult {
 }
 
 // Validate checks a value against a JSON Schema and returns validation results.
-// It compiles the schema with default limits on each call; prefer Compile plus
-// CompiledSchema.Validate when validating many values against one schema.
+// It compiles the schema with default limits on each call;
+// prefer Compile plus CompiledSchema.Validate when validating many values against one schema.
 //
 //	result := schema.Validate(mySchema, input)
 //	if !result.Valid {
@@ -102,9 +100,7 @@ func Validate(s JSON, value any) ValidationResult {
 	return compiled.Validate(value)
 }
 
-// normalize converts an arbitrary JSON-serializable value into the generic
-// representation (map[string]any, []any, string, float64, bool, nil) used by
-// the validator.
+// normalize converts an arbitrary JSON-serializable value into the generic representation (map[string]any, []any, string, float64, bool, nil) used by the validator.
 func normalize(value any) (any, error) {
 	var raw []byte
 	switch v := value.(type) {

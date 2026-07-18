@@ -1,8 +1,7 @@
-// Package cli is a parser-agnostic terminal-UX toolkit for building consistent
-// command-line experiences across gokit services.
+// Package cli is a parser-agnostic terminal-UX toolkit for building consistent command-line experiences across gokit services.
 //
-// It is not a flag parser; it owns the presentation, input, and cancellation
-// concerns a CLI shares, split into focused sub-packages:
+// It is not a flag parser; it owns the presentation, input, and cancellation concerns a CLI shares,
+// split into focused sub-packages:
 //
 //   - [github.com/kbukum/gokit/cli/theme] — semantic color palette and status
 //     glyphs honoring NO_COLOR, TTY detection, and UTF-8 capability.

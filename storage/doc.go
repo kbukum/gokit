@@ -1,8 +1,8 @@
 // Package storage provides object storage abstractions with pluggable backends
 // for gokit applications.
 //
-// It defines interfaces for common storage operations (upload, download, delete,
-// list) and follows gokit's component pattern with lifecycle management.
+// It defines interfaces for common storage operations (upload, download, delete, list)
+// and follows gokit's component pattern with lifecycle management.
 //
 // # Backends
 //

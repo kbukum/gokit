@@ -27,8 +27,7 @@ type middlewareOptions struct {
 	skipPaths  []string
 }
 
-// WithHeader sets the header name to read the API key from.
-// Default: "X-API-Key".
+// WithHeader sets the header name to read the API key from. Default: "X-API-Key".
 func WithHeader(name string) MiddlewareOption {
 	return func(o *middlewareOptions) { o.headerName = name }
 }
@@ -39,11 +38,12 @@ func WithSkipPaths(paths ...string) MiddlewareOption {
 }
 
 // Middleware returns standard net/http middleware that validates API keys.
-// If the configured header is absent, the request passes through (allowing
-// other auth methods to handle it). If present but invalid, returns 401.
+// If the configured header is absent,
+// the request passes through (allowing other auth methods to handle it). If present but invalid,
+// returns 401.
 //
-// On success, the validated Key is stored in the request context and can be
-// retrieved with FromContext.
+// On success, the validated Key is stored in the request context
+// and can be retrieved with FromContext.
 func Middleware(v Validator, opts ...MiddlewareOption) func(http.Handler) http.Handler {
 	o := &middlewareOptions{headerName: "X-API-Key"}
 	for _, opt := range opts {

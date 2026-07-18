@@ -12,8 +12,8 @@ import (
 	"github.com/kbukum/gokit/stream"
 )
 
-// WriteCSV drains p and writes its records as CSV to w, returning the number of
-// records written. The header is taken from the first record's sorted keys;
+// WriteCSV drains p and writes its records as CSV to w, returning the number of records written.
+// The header is taken from the first record's sorted keys;
 // every later record must have exactly the same keys or writing fails closed.
 func WriteCSV(ctx context.Context, w io.Writer, p *stream.Pipeline[Record]) (int, error) {
 	cw := csv.NewWriter(w)
@@ -75,8 +75,8 @@ func WriteJSONArray(ctx context.Context, w io.Writer, p *stream.Pipeline[Record]
 	return len(records), nil
 }
 
-// WriteJSONLines drains p and writes each record as one JSON object per line to
-// w, returning the number of records written.
+// WriteJSONLines drains p and writes each record as one JSON object per line to w,
+// returning the number of records written.
 func WriteJSONLines(ctx context.Context, w io.Writer, p *stream.Pipeline[Record]) (int, error) {
 	count := 0
 	err := stream.ForEach(ctx, p, func(_ context.Context, rec Record) error {
@@ -94,8 +94,8 @@ func WriteJSONLines(ctx context.Context, w io.Writer, p *stream.Pipeline[Record]
 	return count, err
 }
 
-// valueToCell renders a field value as a CSV cell: scalars use their natural
-// text form; composite values are JSON-encoded.
+// valueToCell renders a field value as a CSV cell: scalars use their natural text form;
+// composite values are JSON-encoded.
 func valueToCell(v Value) (string, error) {
 	switch t := v.(type) {
 	case nil:

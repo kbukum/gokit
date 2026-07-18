@@ -34,12 +34,12 @@ func (d *Dialect) Name() string                   { return "gemini" }
 func (d *Dialect) HealthPath() string             { return "" }
 func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
 
-// ChatPath returns a placeholder. The actual path is model-dependent and set
-// dynamically in BuildRequest via the model field. The adapter's base URL
-// combined with this path forms the full endpoint.
+// ChatPath returns a placeholder. The actual path is model-dependent
+// and set dynamically in BuildRequest via the model field.
+// The adapter's base URL combined with this path forms the full endpoint.
 //
-// Gemini endpoint: /v1beta/models/{model}:generateContent
-// The model name is injected by the adapter from CompletionRequest.Model.
+// Gemini endpoint:
+// /v1beta/models/{model}:generateContent The model name is injected by the adapter from CompletionRequest.Model.
 func (d *Dialect) ChatPath() string {
 	return "/v1beta/models"
 }

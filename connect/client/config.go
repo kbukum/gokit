@@ -13,9 +13,9 @@ type Config struct {
 	// Optional when using service discovery, which resolves addresses dynamically.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
-	// Timeout is the HTTP request timeout. Zero means no timeout.
-	// Note: for long-running streaming RPCs, callers should use per-request
-	// context deadlines instead of relying on this global timeout.
+	// Timeout is the HTTP request timeout. Zero means no timeout. Note:
+	// for long-running streaming RPCs,
+	// callers should use per-request context deadlines instead of relying on this global timeout.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
 
 	// DialTimeout is the timeout for establishing the TCP connection.
@@ -25,8 +25,8 @@ type Config struct {
 	// Use "grpc" when the server only speaks gRPC or when using bidi streaming.
 	Protocol string `yaml:"protocol" mapstructure:"protocol"`
 
-	// TLS configures TLS for the connection. When nil, h2c (cleartext HTTP/2) is used.
-	// When set, standard HTTPS/TLS transport is used instead.
+	// TLS configures TLS for the connection. When nil, h2c (cleartext HTTP/2) is used. When set,
+	// standard HTTPS/TLS transport is used instead.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 }
 

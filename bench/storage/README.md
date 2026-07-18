@@ -2,10 +2,8 @@
 
 **Cloud storage adapter for bench results — wraps gokit/storage**
 
-`bench/storage` implements the `bench.RunStorage` interface on top of any
-`gokit/storage.Storage` provider (S3, GCS, Azure Blob, local filesystem, etc.),
-so benchmark results can be persisted and queried without changing a line of
-benchmarking code.
+`bench/storage` implements the `bench.RunStorage` interface on top of any `gokit/storage.Storage` provider (S3, GCS, Azure Blob, local filesystem, etc.),
+so benchmark results can be persisted and queried without changing a line of benchmarking code.
 
 ## Install
 

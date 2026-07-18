@@ -20,8 +20,8 @@ type DB struct {
 	mu     sync.Mutex
 }
 
-// New opens a database connection with retry logic and connection pooling.
-// For most use cases, use Component instead which provides driver flexibility via WithDriver().
+// New opens a database connection with retry logic and connection pooling. For most use cases,
+// use Component instead which provides driver flexibility via WithDriver().
 func New(cfg Config, log *logging.Logger, dialector gorm.Dialector) (*DB, error) {
 	return NewWithContext(context.Background(), dialector, cfg, log)
 }

@@ -1,4 +1,4 @@
-.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
+.PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure prose prose-fix \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
        check-media check-infra clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act
 
@@ -163,6 +163,14 @@ check: build vet test
 ## Verify declare-only aggregators (doc.go docs-only) + god-file — advisory, not gating
 structure:
 	@./scripts/check-structure.sh
+
+## Check prose uses semantic line breaks across Markdown and Go comments
+prose:
+	@python3 scripts/check-prose.py
+
+## Reflow prose to semantic line breaks in Markdown and Go comments in place
+prose-fix:
+	@python3 scripts/check-prose.py --fix
 
 ## Check only core domain modules
 check-core:

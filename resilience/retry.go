@@ -39,10 +39,9 @@ type RetryConfig struct {
 	BackoffFactor float64
 	// Jitter adds randomness to backoff (0.0 to 1.0).
 	Jitter float64
-	// Rand supplies a uniform random float64 in [0.0, 1.0) used to compute
-	// jitter. Leave nil for the concurrency-safe, auto-seeded default; inject a
-	// seeded source (e.g. rand.New(rand.NewPCG(seed1, seed2)).Float64) to make
-	// backoff deterministic under test.
+	// Rand supplies a uniform random float64 in [0.0, 1.0) used to compute jitter.
+	// Leave nil for the concurrency-safe, auto-seeded default;
+	// inject a seeded source (e.g. rand.New(rand.NewPCG(seed1, seed2)).Float64) to make backoff deterministic under test.
 	Rand func() float64
 	// RetryIf determines if an error should be retried.
 	RetryIf func(error) bool
@@ -68,8 +67,8 @@ func DefaultRetryIf(err error) bool {
 	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
-// Retry executes a function with retry logic.
-// Returns the result of the function or the last error if all retries fail.
+// Retry executes a function with retry logic. Returns the result of the function
+// or the last error if all retries fail.
 func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T, error) {
 	var zero T
 	var lastErr error
@@ -128,9 +127,8 @@ func RetryFunc(ctx context.Context, cfg RetryConfig, fn func() error) error {
 	return err
 }
 
-// BackoffDelay returns the normalized retry delay for a failed attempt.
-// attempt is one-based and matches the attempt value passed to RetryConfig.OnRetry.
-// If attempt < 1, it is clamped to 1.
+// BackoffDelay returns the normalized retry delay for a failed attempt. attempt is one-based
+// and matches the attempt value passed to RetryConfig.OnRetry. If attempt < 1, it is clamped to 1.
 func BackoffDelay(attempt int, cfg RetryConfig) time.Duration {
 	if attempt < 1 {
 		attempt = 1

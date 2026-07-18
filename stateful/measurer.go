@@ -2,8 +2,8 @@ package stateful
 
 import "context"
 
-// Measurer defines how to measure accumulated values. The measurement is used
-// by size-based triggers and capacity checks (MinSize, MaxSize).
+// Measurer defines how to measure accumulated values.
+// The measurement is used by size-based triggers and capacity checks (MinSize, MaxSize).
 //
 // Examples:
 //   - CountMeasurer: measures by number of items

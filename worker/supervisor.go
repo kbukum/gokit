@@ -34,14 +34,14 @@ func (c SupervisorConfig) withDefaults() SupervisorConfig {
 	return c
 }
 
-// supervisor monitors worker health, tracks per-worker panic counts,
-// and enforces failure policies.
+// supervisor monitors worker health, tracks per-worker panic counts, and enforces failure policies.
 //
-// Design: worker goroutines catch panics per-task and survive — the goroutine
-// keeps processing the next task from its channel. The supervisor tracks failure
-// counts per worker and can mark a worker as unhealthy when it exceeds MaxRestarts.
-// This avoids the complexity of goroutine replacement while still providing
-// supervision visibility and policy enforcement.
+// Design: worker goroutines catch panics per-task and survive —
+// the goroutine keeps processing the next task from its channel.
+// The supervisor tracks failure counts per worker
+// and can mark a worker as unhealthy when it exceeds MaxRestarts.
+// This avoids the complexity of goroutine replacement while still providing supervision visibility
+// and policy enforcement.
 type supervisor[I, O any] struct {
 	pool *Pool[I, O]
 	cfg  SupervisorConfig
@@ -81,8 +81,7 @@ func (s *supervisor[I, O]) run(ctx context.Context) {
 
 // reportCrash is called by a worker goroutine when a task panics.
 // The worker goroutine itself survives (panic is caught per-task in executeTask).
-// The supervisor tracks the crash count and marks the worker unhealthy
-// when it exceeds MaxRestarts.
+// The supervisor tracks the crash count and marks the worker unhealthy when it exceeds MaxRestarts.
 func (s *supervisor[I, O]) reportCrash(workerIdx int, reason any) {
 	s.mu.Lock()
 	s.panics[workerIdx]++

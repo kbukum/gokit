@@ -59,8 +59,8 @@ type Pool[I, O any] struct {
 	cfg      PoolConfig
 	dispatch dispatcher
 
-	// Shared queue is the pool-wide bounded backlog. Affinity channels are
-	// size-1 supervisor steering hints for healthy workers.
+	// Shared queue is the pool-wide bounded backlog.
+	// Affinity channels are size-1 supervisor steering hints for healthy workers.
 	queue      chan taskEnvelope[I, O]
 	affinities []chan taskEnvelope[I, O]
 	stats      []workerStats
@@ -189,8 +189,8 @@ func (p *Pool[I, O]) Events() <-chan Event[O] {
 	return p.events
 }
 
-// Stop performs graceful shutdown: stops accepting tasks, waits for in-flight
-// work to finish within GracePeriod, then force-cancels remaining.
+// Stop performs graceful shutdown: stops accepting tasks,
+// waits for in-flight work to finish within GracePeriod, then force-cancels remaining.
 func (p *Pool[I, O]) Stop(ctx context.Context) error {
 	p.mu.Lock()
 	if !p.stopped.CompareAndSwap(false, true) {
@@ -219,8 +219,9 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 		<-tasksDone
 	}
 
-	// Input channels are intentionally never closed: Submit callers may already
-	// be past the fast stopped check, so shutdown is signaled only by poolCtx.
+	// Input channels are intentionally never closed:
+	// Submit callers may already be past the fast stopped check,
+	// so shutdown is signaled only by poolCtx.
 	p.cancel()
 	p.wg.Wait()
 	p.supWg.Wait()
@@ -268,8 +269,8 @@ func (p *Pool[I, O]) pickWorkerForRouting() int {
 	return -1
 }
 
-// runWorker is the goroutine loop for a single worker.
-// If a supervisor is configured, panics are caught per-task, the task is failed,
+// runWorker is the goroutine loop for a single worker. If a supervisor is configured,
+// panics are caught per-task, the task is failed,
 // and the supervisor is notified to decide whether to keep the worker alive.
 func (p *Pool[I, O]) runWorker(idx int) {
 	defer p.wg.Done()
@@ -370,9 +371,9 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 		}
 	}
 
-	// Catch panics so the worker goroutine survives and the task handle is
-	// always completed — callers waiting on handle.Result() or handle.Events()
-	// will never hang. Report crash to supervisor BEFORE completing the handle
+	// Catch panics so the worker goroutine survives and the task handle is always completed —
+	// callers waiting on handle.Result() or handle.Events() will never hang.
+	// Report crash to supervisor BEFORE completing the handle
 	// so supervisor state is consistent when callers observe task completion.
 	defer func() {
 		if r := recover(); r != nil {

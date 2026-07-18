@@ -7,8 +7,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// RenderComparison generates an SVG grouped bar chart comparing
-// branches across their key metrics.
+// RenderComparison generates an SVG grouped bar chart comparing branches across their key metrics.
 func RenderComparison(branches map[string]bench.BranchResult, opts ...RenderOption) string {
 	cfg := defaultConfig()
 	for _, o := range opts {

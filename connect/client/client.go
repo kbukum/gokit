@@ -13,9 +13,9 @@ import (
 
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
-// When TLS is configured, a standard HTTPS transport is used.
-// When TLS is nil (the default), an h2c (cleartext HTTP/2) transport is used,
-// which is required for ConnectRPC and gRPC communication without TLS.
+// When TLS is configured, a standard HTTPS transport is used. When TLS is nil (the default),
+// an h2c (cleartext HTTP/2) transport is used, which is required for ConnectRPC
+// and gRPC communication without TLS.
 //
 // The returned client can be passed directly to any generated Connect client constructor.
 func NewHTTPClient(cfg Config) (*http.Client, error) {

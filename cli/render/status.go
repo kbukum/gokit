@@ -8,23 +8,22 @@ import (
 	"github.com/kbukum/gokit/errors"
 )
 
-// StatusReporter emits one-off status feedback lines for guided, multi-step CLI
-// flows over an injected writer, palette, and glyph set.
+// StatusReporter emits one-off status feedback lines for guided,
+// multi-step CLI flows over an injected writer, palette, and glyph set.
 //
-// Where progress animates ongoing work and prompt reads input, this renders the
-// short, one-shot status lines a flow emits between steps: a green "✓ Detected
-// Go", a "[1/4]" step counter, a section heading, or a warn/error notice. It
-// composes a [theme.Palette] for color and a [theme.Glyphs] set for the leading
-// symbol, so every line honors NO_COLOR, TTY detection, and UTF-8 capability.
+// Where progress animates ongoing work and prompt reads input, this renders the short,
+// one-shot status lines a flow emits between steps: a green "✓ Detected Go",
+// a "[1/4]" step counter, a section heading, or a warn/error notice.
+// It composes a [theme.Palette] for color and a [theme.Glyphs] set for the leading symbol,
+// so every line honors NO_COLOR, TTY detection, and UTF-8 capability.
 type StatusReporter struct {
 	writer  io.Writer
 	palette theme.Palette
 	glyphs  theme.Glyphs
 }
 
-// NewStatusReporter builds a reporter from an explicit writer, palette, and
-// glyph set. Callers bind the writer to a real stream (typically stderr, the
-// "diagnostics to stderr" convention) while tests pass an in-memory buffer.
+// NewStatusReporter builds a reporter from an explicit writer, palette, and glyph set.
+// Callers bind the writer to a real stream (typically stderr, the "diagnostics to stderr" convention) while tests pass an in-memory buffer.
 func NewStatusReporter(w io.Writer, palette theme.Palette, glyphs theme.Glyphs) *StatusReporter {
 	return &StatusReporter{writer: w, palette: palette, glyphs: glyphs}
 }
@@ -49,8 +48,7 @@ func (r *StatusReporter) Info(message string) error {
 	return r.writeLine(r.palette.Info(r.glyphs.Info()), message)
 }
 
-// Bullet emits an indented bullet line: a dimmed bullet glyph followed by
-// message.
+// Bullet emits an indented bullet line: a dimmed bullet glyph followed by message.
 func (r *StatusReporter) Bullet(message string) error {
 	return r.writeLine("  "+r.palette.Dim(r.glyphs.Bullet()), message)
 }

@@ -5,20 +5,17 @@ import (
 	"strings"
 )
 
-// GetShortVersion returns a compact version string of the form
-// "<version>[-<commit>][-dirty]".
+// GetShortVersion returns a compact version string of the form "<version>[-<commit>][-dirty]".
 func GetShortVersion() string {
 	return GetVersionInfo().Short()
 }
 
-// GetFullVersion returns a detailed version string including branch and build
-// date when available.
+// GetFullVersion returns a detailed version string including branch and build date when available.
 func GetFullVersion() string {
 	return GetVersionInfo().Full()
 }
 
-// Short returns a compact version string of the form
-// "<version>[-<commit>][-dirty]".
+// Short returns a compact version string of the form "<version>[-<commit>][-dirty]".
 func (v *VersionInfo) Short() string {
 	if v.GitCommit == "" {
 		return v.Version
@@ -29,8 +26,8 @@ func (v *VersionInfo) Short() string {
 	return fmt.Sprintf("%s-%s", v.Version, v.GitCommit)
 }
 
-// Full returns a detailed version string including a non-default branch, dirty
-// state, and build date when available.
+// Full returns a detailed version string including a non-default branch, dirty state,
+// and build date when available.
 func (v *VersionInfo) Full() string {
 	parts := []string{v.Version}
 

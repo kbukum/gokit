@@ -8,10 +8,9 @@ import (
 
 // TOMLCodec is the built-in TOML codec.
 //
-// It decodes TOML into the canonical [Value] tree and encodes a value tree back
-// to TOML. The top-level value must be a table (TOML has no top-level scalar or
-// array document), and a nil value has no TOML representation — both surface as
-// typed errors rather than panics.
+// It decodes TOML into the canonical [Value] tree and encodes a value tree back to TOML.
+// The top-level value must be a table (TOML has no top-level scalar or array document),
+// and a nil value has no TOML representation — both surface as typed errors rather than panics.
 type TOMLCodec struct{}
 
 // NewTOMLCodec returns the built-in TOML codec.

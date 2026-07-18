@@ -47,8 +47,8 @@ func WithMeasurer[V any](m Measurer[V]) Option[V] {
 }
 
 // Append adds a value to the accumulator. If MaxSize is configured and exceeded,
-// oldest values are evicted (FIFO). After appending, triggers are checked and
-// the accumulator may flush automatically.
+// oldest values are evicted (FIFO). After appending, triggers are checked
+// and the accumulator may flush automatically.
 //
 // If KeepAlive is enabled, this resets the TTL.
 func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
@@ -78,8 +78,8 @@ func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
 	return a.checkAndFlush(ctx)
 }
 
-// Flush manually flushes the accumulator, returning all values.
-// This bypasses trigger checks and rate limiting.
+// Flush manually flushes the accumulator, returning all values. This bypasses trigger checks
+// and rate limiting.
 func (a *Accumulator[V]) Flush(ctx context.Context) ([]V, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -201,8 +201,7 @@ func (a *Accumulator[V]) checkAndFlush(ctx context.Context) error {
 	return nil
 }
 
-// evaluateTriggers evaluates all triggers according to TriggerMode.
-// Caller must hold mu.Lock.
+// evaluateTriggers evaluates all triggers according to TriggerMode. Caller must hold mu.Lock.
 func (a *Accumulator[V]) evaluateTriggers(ctx context.Context) bool {
 	if len(a.config.Triggers) == 0 {
 		return false

@@ -2,9 +2,9 @@
 
 SQLite driver adapter for `github.com/kbukum/gokit/database`.
 
-The core `database` module owns the database component, repository helpers, and
-`DriverRegistry`. This adapter owns the SQLite driver dependency and registers
-itself only when the application explicitly calls `Register`.
+The core `database` module owns the database component, repository helpers, and `DriverRegistry`.
+This adapter owns the SQLite driver dependency
+and registers itself only when the application explicitly calls `Register`.
 
 ## Usage
 
@@ -25,5 +25,5 @@ func configure() (*database.DriverRegistry, error) {
 }
 ```
 
-Importing this package has no side effects. Applications own the registry and
-choose the driver through configuration.
+Importing this package has no side effects. Applications own the registry
+and choose the driver through configuration.

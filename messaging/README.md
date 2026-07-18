@@ -1,12 +1,18 @@
 # gokit/messaging
 
-Transport-agnostic message producer/consumer abstraction with explicit adapter registration, in-memory broker for testing, and composable middleware.
+Transport-agnostic message producer/consumer abstraction with explicit adapter registration,
+in-memory broker for testing, and composable middleware.
 
 ## Overview
 
-The `messaging` module provides a unified interface for publishing and consuming messages across different transports. It defines core types (`Message`, `Event`), producer/consumer interfaces, and higher-level patterns like routing, batching, and managed consumers — all independent of any specific broker.
+The `messaging` module provides a unified interface for publishing
+and consuming messages across different transports. It defines core types (`Message`, `Event`),
+producer/consumer interfaces, and higher-level patterns like routing, batching,
+and managed consumers — all independent of any specific broker.
 
-Concrete implementations (Kafka, NATS, RabbitMQ, in-memory) plug into these interfaces, so application code stays transport-agnostic. A middleware system allows cross-cutting concerns (retry, dead-letter, tracing, deduplication, metrics) to be composed around any handler.
+Concrete implementations (Kafka, NATS, RabbitMQ, in-memory) plug into these interfaces,
+so application code stays transport-agnostic.
+A middleware system allows cross-cutting concerns (retry, dead-letter, tracing, deduplication, metrics) to be composed around any handler.
 
 ## Installation
 
@@ -81,28 +87,30 @@ func main() {
 
 ## Sub-Packages
 
-Broker SDKs live in opt-in nested modules (`messaging/kafka`, `messaging/nats`, and
-`messaging/rabbitmq`) so importing core `messaging` only pulls abstractions, registry,
-middleware, and the in-memory default into the module graph. Adapter packages register
-factories only through explicit config-free `Register(registry)` calls; runtime config is
-passed when creating producer/consumer instances. They do not use `init` registration side effects.
+Broker SDKs live in opt-in nested modules (`messaging/kafka`, `messaging/nats`, and `messaging/rabbitmq`)
+so importing core `messaging` only pulls abstractions, registry, middleware,
+and the in-memory default into the module graph.
+Adapter packages register factories only through explicit config-free `Register(registry)` calls;
+runtime config is passed when creating producer/consumer instances.
+They do not use `init` registration side effects.
 
-Core `messaging.Config` owns only broker-neutral policy: instance `Name`, `Enabled`,
-`Adapter`, delivery guarantee, commit strategy, DLQ policy, max in-flight,
-consumer group, allowed topics/subscriptions, request timeout, and retry attempts/
-backoff. Adapter configs contain only provider-specific connection/protocol knobs:
+Core `messaging.Config` owns only broker-neutral policy: instance `Name`, `Enabled`, `Adapter`,
+delivery guarantee, commit strategy, DLQ policy, max in-flight, consumer group,
+allowed topics/subscriptions, request timeout, and retry attempts/ backoff.
+Adapter configs contain only provider-specific connection/protocol knobs:
 Kafka keeps brokers/resolve, TLS/SASL, compression, required acks, batch settings,
-session/heartbeat/rebalance tuning, and dial/idle/metadata TTLs; NATS keeps URL,
-auth, TLS, reconnect, drain, queue-group, and subject-prefix settings; RabbitMQ keeps
-URL, username/password, TLS, exchange/queue/routing, heartbeat, prefetch, and AMQP
-timeouts. Factories explicitly map or reject common semantics before dialing; no
-adapter uses `init` registration side effects or package-level mutable registries.
-Kafka, NATS, and RabbitMQ SDKs stay isolated to their subpackages; importing core
-`messaging` or `messaging/memory` does not pull optional broker SDKs.
+session/heartbeat/rebalance tuning, and dial/idle/metadata TTLs; NATS keeps URL, auth, TLS,
+reconnect, drain, queue-group, and subject-prefix settings; RabbitMQ keeps URL, username/password,
+TLS, exchange/queue/routing, heartbeat, prefetch, and AMQP timeouts. Factories explicitly map
+or reject common semantics before dialing; no adapter uses `init` registration side effects
+or package-level mutable registries. Kafka, NATS,
+and RabbitMQ SDKs stay isolated to their subpackages; importing core `messaging`
+or `messaging/memory` does not pull optional broker SDKs.
 
 ### `kafka/` — Kafka Implementation
 
-Production-ready Kafka producer and consumer using `segmentio/kafka-go`. Supports TLS, SASL authentication, consumer groups, compression, and configurable batching.
+Production-ready Kafka producer and consumer using `segmentio/kafka-go`. Supports TLS,
+SASL authentication, consumer groups, compression, and configurable batching.
 
 ```go
 import (
@@ -134,7 +142,8 @@ _ = producer.Publish(ctx, "events", event)
 
 ### `nats/` — NATS Implementation
 
-Opt-in NATS adapter using `github.com/nats-io/nats.go`, with typed connection, auth, timeout, reconnect, and subject settings.
+Opt-in NATS adapter using `github.com/nats-io/nats.go`, with typed connection, auth, timeout,
+reconnect, and subject settings.
 
 ```go
 import natsadapter "github.com/kbukum/gokit/messaging/nats"
@@ -156,7 +165,8 @@ producer, _ := reg.NewProducer(ctx,
 
 ### `rabbitmq/` — RabbitMQ Implementation
 
-Opt-in RabbitMQ adapter using `github.com/rabbitmq/amqp091-go`, with typed connection, exchange, queue, acknowledgement, prefetch, timeout, and TLS settings.
+Opt-in RabbitMQ adapter using `github.com/rabbitmq/amqp091-go`, with typed connection, exchange,
+queue, acknowledgement, prefetch, timeout, and TLS settings.
 
 ```go
 import (
@@ -235,19 +245,19 @@ Broker-agnostic mocks for unit testing:
 ## Security and DLQ defaults
 
 Broker adapters are secure by default. Kafka requires TLS unless `AllowInsecureDev` is set;
-NATS requires `tls://` or `wss://`; RabbitMQ requires `amqps://`. Credentials are provided
-through typed config fields, not broker URLs or hardcoded examples. Topic, subject, queue,
-and consumer-group names are validated before construction or use.
+NATS requires `tls://` or `wss://`; RabbitMQ requires `amqps://`.
+Credentials are provided through typed config fields, not broker URLs or hardcoded examples. Topic,
+subject, queue, and consumer-group names are validated before construction or use.
 
 DLQ routing is disabled until explicitly configured. The shared config carries DLQ intent,
-but adapters that cannot provide broker-managed DLQ reject enabled adapter DLQ settings and
-expect callers to wire the broker-agnostic `DeadLetterProducer` middleware instead.
+but adapters that cannot provide broker-managed DLQ reject enabled adapter DLQ settings
+and expect callers to wire the broker-agnostic `DeadLetterProducer` middleware instead.
 
 ## Validation
 
-Focused docs checks verify that NATS/RabbitMQ are documented as real opt-in adapters, examples
-avoid hardcoded credentials, and core docs do not imply optional SDK imports. Final workspace
-validation counts should come from CI or the dedicated validation pass.
+Focused docs checks verify that NATS/RabbitMQ are documented as real opt-in adapters,
+examples avoid hardcoded credentials, and core docs do not imply optional SDK imports.
+Final workspace validation counts should come from CI or the dedicated validation pass.
 
 ## Testing
 

@@ -1,15 +1,15 @@
 # dataset
 
-A streaming dataset-collection framework: bounded sources feed typed transforms
-and targets, with fail-closed schema validation, a manifest/cache layer, and
-spill-to-file for oversized payloads. It is the cross-kit Go mirror of rskit's
-`rskit-dataset`, kept **light**: heavy image/media transforms stay rskit-only by
-design.
+A streaming dataset-collection framework: bounded sources feed typed transforms and targets,
+with fail-closed schema validation, a manifest/cache layer,
+and spill-to-file for oversized payloads. It is the cross-kit Go mirror of rskit's `rskit-dataset`,
+kept **light**: heavy image/media transforms stay rskit-only by design.
 
-`dataset` is a sub-module (`github.com/kbukum/gokit/dataset`) so it can reuse the
-`schema` sub-module. It builds on gokit's canonical owners rather than a parallel
-stack — record streams are [`stream`](../stream) pipelines, bounded file reads go
-through [`fs`](../fs), and validation reuses [`schema`](../schema).
+`dataset` is a sub-module (`github.com/kbukum/gokit/dataset`)
+so it can reuse the `schema` sub-module.
+It builds on gokit's canonical owners rather than a parallel stack —
+record streams are [`stream`](../stream) pipelines, bounded file reads go through [`fs`](../fs),
+and validation reuses [`schema`](../schema).
 
 It is split into focused sub-packages by concern:
 
@@ -25,16 +25,16 @@ It is split into focused sub-packages by concern:
 
 ## Bounds & safety
 
-- Every read and payload is bounded by `payload.Limits` (8 MiB in-memory cap,
-  64-record stream buffer by default); oversized payloads spill to a file rather
-  than being held in memory.
-- Untrusted CSV/JSON records and schema validation **fail closed**; `record`'s
-  readers and `Schema.Validate` have `Fuzz` targets.
-- The collector streams sources through a bounded worker pool: the work and event
-  channels are sized by `Limits.StreamBuffer` for backpressure, each source is
-  bounded by `Config.SourceTimeout` and `context.Context` cancellation, and a
-  resumable source that made partial progress is recorded as `partial` so a later
-  run continues it from its offset.
+- Every read
+  and payload is bounded by `payload.Limits` (8 MiB in-memory cap, 64-record stream buffer by default);
+  oversized payloads spill to a file rather than being held in memory.
+- Untrusted CSV/JSON records and schema validation **fail closed**; `record`'s readers
+  and `Schema.Validate` have `Fuzz` targets.
+- The collector streams sources through a bounded worker pool: the work
+  and event channels are sized by `Limits.StreamBuffer` for backpressure,
+  each source is bounded by `Config.SourceTimeout` and `context.Context` cancellation,
+  and a resumable source that made partial progress is recorded as `partial`
+  so a later run continues it from its offset.
 
 ## Quick start
 

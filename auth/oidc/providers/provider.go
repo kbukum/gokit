@@ -9,14 +9,13 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// GenericProvider implements oidc.Provider and oidc.ProviderMeta for any
-// OAuth2/OIDC provider using configuration only. This is THE single provider
-// implementation — all built-in providers (Google, GitHub, Apple) and custom
-// providers (YouTube, TikTok, Instagram) are constructed via NewGeneric.
+// GenericProvider implements oidc.Provider
+// and oidc.ProviderMeta for any OAuth2/OIDC provider using configuration only.
+// This is THE single provider implementation — all built-in providers (Google, GitHub, Apple)
+// and custom providers (YouTube, TikTok, Instagram) are constructed via NewGeneric.
 //
-// Adding a new provider is typically a single function that returns
-// NewGeneric(GenericConfig{...}) with the right endpoints, field mappings,
-// and optional hooks for provider-specific quirks.
+// Adding a new provider is typically a single function that returns NewGeneric(GenericConfig{...}) with the right endpoints,
+// field mappings, and optional hooks for provider-specific quirks.
 type GenericProvider struct {
 	cfg GenericConfig
 }
@@ -85,8 +84,8 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 	if p.cfg.PostExchangeHook != nil {
 		hooked, err := p.cfg.PostExchangeHook(ctx, resolveClient(p.cfg.HTTPClient), cfg, result)
 		if err != nil {
-			// Fall back to the original token if the hook fails — the hook is an
-			// optional enrichment step (e.g., Instagram long-lived token exchange).
+			// Fall back to the original token if the hook fails —
+			// the hook is an optional enrichment step (e.g., Instagram long-lived token exchange).
 			return result, nil //nolint:nilerr // intentional fallback
 		}
 		return hooked, nil
@@ -134,10 +133,11 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 		return nil, fmt.Errorf("%s: userinfo endpoint not configured", p.cfg.ProviderName)
 	}
 
-	// Build the request URL. The access token is sent only in the Authorization
-	// header (see FetchJSON); it is never placed in the query string. Any legacy
-	// "{access_token}" query parameter in the configured endpoint is dropped so
-	// it neither substitutes the token nor leaks as a literal query value.
+	// Build the request URL.
+	// The access token is sent only in the Authorization header (see FetchJSON);
+	// it is never placed in the query string.
+	// Any legacy "{access_token}" query parameter in the configured endpoint is dropped
+	// so it neither substitutes the token nor leaks as a literal query value.
 	reqURL := stripAccessTokenPlaceholder(p.cfg.UserInfoEndpoint)
 
 	var raw map[string]any
@@ -150,8 +150,8 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	// Run post-userinfo hook if configured (e.g., GitHub email fallback)
 	if p.cfg.PostUserInfoHook != nil {
 		if err := p.cfg.PostUserInfoHook(ctx, accessToken, info); err != nil {
-			// Return what we have if the hook fails — the hook is an optional
-			// enrichment step (e.g., GitHub email fallback).
+			// Return what we have if the hook fails —
+			// the hook is an optional enrichment step (e.g., GitHub email fallback).
 			return info, nil //nolint:nilerr // intentional fallback
 		}
 	}
@@ -159,9 +159,9 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	return info, nil
 }
 
-// stripAccessTokenPlaceholder removes any query parameter whose value carries a
-// legacy "{access_token}" placeholder. Bearer tokens are header-only; a stale
-// placeholder must not substitute the token or leak into the query string.
+// stripAccessTokenPlaceholder removes any query parameter whose value carries a legacy "{access_token}" placeholder.
+// Bearer tokens are header-only; a stale placeholder must not substitute the token
+// or leak into the query string.
 func stripAccessTokenPlaceholder(endpoint string) string {
 	if !strings.Contains(endpoint, "{access_token}") {
 		return endpoint

@@ -7,10 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// StartupGate blocks API requests with 503 Service Unavailable until
-// MarkReady is called. Infrastructure paths (/health, /ready, /alive,
-// /info, /version, /metrics) are always allowed through so orchestrators
-// can probe the service during startup.
+// StartupGate blocks API requests with 503 Service Unavailable until MarkReady is called.
+// Infrastructure paths (/health, /ready, /alive, /info, /version, /metrics) are always allowed through
+// so orchestrators can probe the service during startup.
 type StartupGate struct {
 	ready     atomic.Bool
 	skipPaths map[string]struct{}
@@ -28,9 +27,8 @@ func WithSkipStartupPaths(paths ...string) StartupGateOption {
 	}
 }
 
-// NewStartupGate creates a gate in the "not ready" state.
-// By default, /health, /ready, /alive, /info, /version, and /metrics
-// are always allowed through.
+// NewStartupGate creates a gate in the "not ready" state. By default, /health, /ready, /alive,
+// /info, /version, and /metrics are always allowed through.
 func NewStartupGate(opts ...StartupGateOption) *StartupGate {
 	g := &StartupGate{
 		skipPaths: map[string]struct{}{
@@ -48,15 +46,14 @@ func NewStartupGate(opts ...StartupGateOption) *StartupGate {
 	return g
 }
 
-// MarkReady signals that the service is fully initialized and API
-// traffic should be allowed through.
+// MarkReady signals that the service is fully initialized
+// and API traffic should be allowed through.
 func (g *StartupGate) MarkReady() { g.ready.Store(true) }
 
 // IsReady reports whether the gate has been opened.
 func (g *StartupGate) IsReady() bool { return g.ready.Load() }
 
-// Middleware returns a gin middleware that returns 503 for non-infrastructure
-// paths until the gate is marked ready.
+// Middleware returns a gin middleware that returns 503 for non-infrastructure paths until the gate is marked ready.
 func (g *StartupGate) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if g.ready.Load() {

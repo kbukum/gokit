@@ -8,8 +8,8 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// MockProvider implements oidc.Provider and oidc.ProviderMeta for testing code
-// that depends on OAuth providers without needing a real HTTP server.
+// MockProvider implements oidc.Provider
+// and oidc.ProviderMeta for testing code that depends on OAuth providers without needing a real HTTP server.
 //
 // Use it to inject known responses into code that calls Exchange/UserInfo:
 //

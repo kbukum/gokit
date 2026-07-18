@@ -17,8 +17,8 @@ var (
 	_ provider.Closeable = (*Adapter)(nil)
 )
 
-// Adapter manages a gRPC connection and implements the provider.Provider interface.
-// Unlike HTTP, gRPC adapters don't do request mapping — proto handles types.
+// Adapter manages a gRPC connection and implements the provider.Provider interface. Unlike HTTP,
+// gRPC adapters don't do request mapping — proto handles types.
 // The adapter manages connection lifecycle and provides the conn for proto stubs.
 type Adapter struct {
 	config grpccfg.Config
@@ -47,8 +47,7 @@ func NewAdapter(cfg grpccfg.Config, log *logging.Logger, opts ...AdapterOption) 
 	return a, nil
 }
 
-// Conn returns the managed gRPC connection.
-// Use with generated proto client stubs.
+// Conn returns the managed gRPC connection. Use with generated proto client stubs.
 func (a *Adapter) Conn() *grpc.ClientConn {
 	return a.conn
 }

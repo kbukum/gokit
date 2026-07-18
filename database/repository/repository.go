@@ -9,8 +9,8 @@ import (
 	dberrors "github.com/kbukum/gokit/database/errors"
 )
 
-// Repository provides full CRUD operations for any GORM model.
-// It embeds WriteRepository, adding Delete.
+// Repository provides full CRUD operations for any GORM model. It embeds WriteRepository,
+// adding Delete.
 //
 //	type UserRepository struct {
 //	    *repository.Repository[models.User, string]

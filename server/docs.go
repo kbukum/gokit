@@ -32,8 +32,8 @@ type APIDoc struct {
 	DarkMode *bool
 	// HideAI hides Scalar's built-in AI assistant button.
 	HideAI bool
-	// HideModels hides the "Models" section from the sidebar; schemas are still
-	// shown inline under each operation.
+	// HideModels hides the "Models" section from the sidebar;
+	// schemas are still shown inline under each operation.
 	HideModels bool
 	// CustomCSS allows injecting additional CSS into the docs page.
 	CustomCSS string
@@ -42,9 +42,9 @@ type APIDoc struct {
 }
 
 // MountDocs registers interactive API documentation routes powered by Scalar.
-// Each APIDoc produces two endpoints: a raw spec and a rendered reference page.
-// If Host or BasePath are set, the embedded spec is patched at startup so
-// documentation always reflects the running environment.
+// Each APIDoc produces two endpoints: a raw spec and a rendered reference page. If Host
+// or BasePath are set, the embedded spec is patched at startup
+// so documentation always reflects the running environment.
 //
 // Example:
 //

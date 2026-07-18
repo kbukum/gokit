@@ -9,8 +9,7 @@ import (
 )
 
 // kafkaHeaderCarrier adapts a map[string]string to propagation.TextMapCarrier
-// so OpenTelemetry propagators can inject/extract trace context via message
-// headers.
+// so OpenTelemetry propagators can inject/extract trace context via message headers.
 type kafkaHeaderCarrier map[string]string
 
 func (c kafkaHeaderCarrier) Get(key string) string { return c[key] }
@@ -23,14 +22,13 @@ func (c kafkaHeaderCarrier) Keys() []string {
 	return keys
 }
 
-// InjectTraceContext writes the current span's trace context into the
-// provided message headers using the globally registered propagator.
+// InjectTraceContext writes the current span's trace context into the provided message headers using the globally registered propagator.
 func InjectTraceContext(ctx context.Context, headers map[string]string) {
 	observability.InjectTraceContext(ctx, kafkaHeaderCarrier(headers))
 }
 
-// ExtractTraceContext reads trace context from message headers and
-// returns a new context carrying the extracted span context.
+// ExtractTraceContext reads trace context from message headers
+// and returns a new context carrying the extracted span context.
 func ExtractTraceContext(ctx context.Context, headers map[string]string) context.Context {
 	return observability.ExtractTraceContext(ctx, kafkaHeaderCarrier(headers))
 }
@@ -80,8 +78,8 @@ func WithMessagingSystem(system string) TracingOption {
 }
 
 // TracingHandler wraps a MessageHandler with OpenTelemetry distributed tracing.
-// It extracts trace context from incoming message headers, creates a consumer
-// span, and annotates it with messaging-specific attributes.
+// It extracts trace context from incoming message headers, creates a consumer span,
+// and annotates it with messaging-specific attributes.
 func TracingHandler(handler messaging.MessageHandler, opts ...TracingOption) messaging.MessageHandler {
 	cfg := defaultTracingConfig()
 	for _, opt := range opts {

@@ -8,118 +8,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added — Generic dataset collection kit
-- **dataset** (NEW module, light mirror of rskit-dataset): a streaming, generics-first
-  dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
+- **dataset** (NEW module, light mirror of rskit-dataset): a streaming,
+  generics-first dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
   - **collect**: the generic engine — a bounded worker pool with `StreamBuffer` backpressure,
-    per-source timeout/cancellation, and a single-owner main loop that folds worker events into
-    the manifest, result, and progress without shared mutexes. Fails closed (a source, validation,
-    or target error aborts the run and publishes no failed source), records real/AI stats, and
-    always saves the manifest for resume.
-  - **stage**: the generic streaming stages (`Source`/`Transform`/`Target`) over `stream`
-    pipelines, plus opt-in item capabilities (`Labeled`, `Offsetted`) and source capabilities
-    (`Keyed`, `Bounded`, `Resumable`) and a pluggable `Validator[T]`.
-  - **record**: the tabular `record.Record` family — CSV/JSON-array/JSON-lines readers and
-    writers, stream filters, and a file source/target that accumulates records across publishes.
-  - **sample**: the blob item family — a labeled, offset-carrying `sample.Item` over a bounded
-    payload, with slice/directory sources and a real/AI-splitting local target confined through
-    `fs` path safety.
+    per-source timeout/cancellation,
+    and a single-owner main loop that folds worker events into the manifest, result,
+    and progress without shared mutexes.
+    Fails closed (a source, validation, or target error aborts the run and publishes no failed source),
+    records real/AI stats, and always saves the manifest for resume.
+  - **stage**: the generic streaming stages (`Source`/`Transform`/`Target`) over `stream` pipelines,
+    plus opt-in item capabilities (`Labeled`, `Offsetted`)
+    and source capabilities (`Keyed`, `Bounded`, `Resumable`) and a pluggable `Validator[T]`.
+  - **record**: the tabular `record.Record` family — CSV/JSON-array/JSON-lines readers and writers,
+    stream filters, and a file source/target that accumulates records across publishes.
+  - **sample**: the blob item family — a labeled,
+    offset-carrying `sample.Item` over a bounded payload, with slice/directory sources
+    and a real/AI-splitting local target confined through `fs` path safety.
   - **schema**: fail-closed JSON Schema validation adapted into a `stage.Validator[record.Record]`.
-  - **manifest**: a bounded, atomically persisted cache with one canonical `CacheStatusFor` that
-    lets a run skip or resume sources.
+  - **manifest**: a bounded,
+    atomically persisted cache with one canonical `CacheStatusFor` that lets a run skip
+    or resume sources.
   - **payload**: bounded in-memory or file-backed byte payloads with resource `Limits`.
 
 ### Changed (Breaking API Changes) — Typed AI/LLM/tool APIs
-- **ai / llm**: `ai.ToolUseBlock.Input` and `llm.CompletionRequest.Extra` no longer expose
-  `map[string]any`; they now carry raw JSON (`llm.RawJSON`) as an opaque, untrusted-by-default
-  trust boundary that is validated at the edge instead of eagerly decoded.
-- **tool**: tool-input schema is the documented opaque `schema.JSON` exception and per-tool
-  resilience policy is a typed `*resilience.Policy` (via `Registry.WithToolPolicy` /
-  `Registry.PolicyFor`); `Registry.Call` fails closed — raw input is JSON-Schema validated
-  (`ErrInvalidToolInput`) before authorization or any side effect, and destructive tools
-  (`SafetyDestructive`) are always human-gated and default to deny until an approver is wired.
+- **ai / llm**: `ai.ToolUseBlock.Input`
+  and `llm.CompletionRequest.Extra` no longer expose `map[string]any`;
+  they now carry raw JSON (`llm.RawJSON`) as an opaque,
+  untrusted-by-default trust boundary that is validated at the edge instead of eagerly decoded.
+- **tool**: tool-input schema is the documented opaque `schema.JSON` exception
+  and per-tool resilience policy is a typed `*resilience.Policy` (via `Registry.WithToolPolicy` / `Registry.PolicyFor`);
+  `Registry.Call` fails closed —
+  raw input is JSON-Schema validated (`ErrInvalidToolInput`) before authorization
+  or any side effect, and destructive tools (`SafetyDestructive`) are always human-gated
+  and default to deny until an approver is wired.
 - **llm**: `CompleteStructured[T]` is now generic, decoding model output into a concrete `T`
   and returning the zero value (never a partial one) on decode failure.
 
 ### Changed (Breaking API Changes) — Hardened MCP protocol server
-- **mcp**: reshaped from a flat tool-bridge into a protocol-shaped, hardened server split by
-  concern (`security`, `convert`, `handlers`, thin composition root). `NewServer` now returns
-  a typed `*mcp.Server` (was the raw SDK server); transports are exposed as `Server.ServeStdio`
-  and `Server.StreamableHTTPHandler`, and only `stdio` + Streamable HTTP are supported (the
-  obsolete standalone SSE transport is dropped).
-- **mcp**: every `tools/call` runs a fail-closed hardening chain — capability allow-list →
-  input-size limit → JSON-Schema validation → authorization (`authz`) → registry human-in-the-
-  loop destructive gate → result-size limit → output-schema validation → audit
-  (`observability`). Untrusted client/model payloads stay typed as `json.RawMessage`; documented
-  JSON-Schema is `schema.JSON`.
+- **mcp**: reshaped from a flat tool-bridge into a protocol-shaped,
+  hardened server split by concern (`security`, `convert`, `handlers`, thin composition root).
+  `NewServer` now returns a typed `*mcp.Server` (was the raw SDK server);
+  transports are exposed as `Server.ServeStdio` and `Server.StreamableHTTPHandler`,
+  and only `stdio` + Streamable HTTP are supported (the obsolete standalone SSE transport is dropped).
+- **mcp**: every `tools/call` runs a fail-closed hardening chain —
+  capability allow-list → input-size limit → JSON-Schema validation → authorization (`authz`) → registry human-in-the- loop destructive gate → result-size limit → output-schema validation → audit (`observability`).
+  Untrusted client/model payloads stay typed as `json.RawMessage`;
+  documented JSON-Schema is `schema.JSON`.
 
 ### Added — MCP protocol surface & hardening
-- **mcp**: protocol coverage for prompts, resources + templates (with subscribe), roots,
-  sampling, elicitation, progress, and logging; server→client sampling/elicitation size-limit
-  untrusted model/elicited content and fail closed.
-- **mcp**: Streamable HTTP hardening — Origin validation/normalization preloaded into
-  `http.CrossOriginProtection` (rejects paths/queries/fragments/credentials/opaque/non-http),
+- **mcp**: protocol coverage for prompts, resources + templates (with subscribe), roots, sampling,
+  elicitation, progress, and logging;
+  server→client sampling/elicitation size-limit untrusted model/elicited content and fail closed.
+- **mcp**: Streamable HTTP hardening —
+  Origin validation/normalization preloaded into `http.CrossOriginProtection` (rejects paths/queries/fragments/credentials/opaque/non-http),
   localhost protection on by default, and optional constant-time bearer-token auth (header only).
 
 ### Added — Typed AI/LLM/tool APIs & Inference Streaming
-- **ai**: `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy
-  coercion.
-- **llm**: `RawJSON` request-extension carrier round-trips through both JSON and YAML and merges
-  fail closed (a non-object extension is rejected rather than silently corrupting the request).
-- **llm**: streamed tool-call arguments (untrusted) are bounded at `streamwire.MaxToolArgsBytes`
-  (1 MiB) so a server cannot exhaust memory with unbounded deltas.
-- **inference**: TGI and vLLM adapters implement `PredictStream` over a shared
-  OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context
-  cancellation and terminal error events.
+- **ai**:
+  `NormalizeToolInput` normalizes absent/empty tool arguments to `{}` without lossy coercion.
+- **llm**: `RawJSON` request-extension carrier round-trips through both JSON and YAML
+  and merges fail closed (a non-object extension is rejected rather than silently corrupting the request).
+- **llm**:
+  streamed tool-call arguments (untrusted) are bounded at `streamwire.MaxToolArgsBytes` (1 MiB)
+  so a server cannot exhaust memory with unbounded deltas.
+- **inference**: TGI
+  and vLLM adapters implement `PredictStream` over a shared OpenAI-compatible `/v1/completions` SSE helper (`OAICompatPredictStream`) with proper context cancellation
+  and terminal error events.
 
 ### Added — Terminal-UX cli kit
-- **cli** (NEW package, light mirror of rskit-cli): a parser-agnostic terminal-UX toolkit that
-  writes to injected `io.Writer`s and confines `fmt.Print*`/stdout to this package.
-  - **theme**: semantic `Palette` colors and `Glyphs`, resolving `NO_COLOR`, TTY, and UTF-8
-    locale capability with byte-clean ASCII fallbacks.
-  - **render**: `OutputTable`, `OutputKV`, `StatusReporter`, `OutputFormat`, and an
-    `ErrorRenderer`/`ExitCode` mapping RFC 9457 `AppError`s onto a CLI exit-code convention.
-  - **progress**: determinate `Bar` and indeterminate `Spinner`, caller-driven (no background
-    timer) so they render deterministically without a clock.
-  - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`, a
-    deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
-  - **signal**: graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context`
-    cancellation via `signal.NotifyContext`.
+- **cli** (NEW package, light mirror of rskit-cli):
+  a parser-agnostic terminal-UX toolkit that writes to injected `io.Writer`s
+  and confines `fmt.Print*`/stdout to this package.
+  - **theme**: semantic `Palette` colors and `Glyphs`, resolving `NO_COLOR`, TTY,
+    and UTF-8 locale capability with byte-clean ASCII fallbacks.
+  - **render**: `OutputTable`, `OutputKV`, `StatusReporter`, `OutputFormat`,
+    and an `ErrorRenderer`/`ExitCode` mapping RFC 9457 `AppError`s onto a CLI exit-code convention.
+  - **progress**: determinate `Bar` and indeterminate `Spinner`, caller-driven (no background timer)
+    so they render deterministically without a clock.
+  - **prompt**: a `Prompter` over a `Terminal` seam with a cooked-stdio `LineTerminal`,
+    a deterministic `ScriptedTerminal` test double, validators, and a non-interactive fallback.
+  - **signal**:
+    graceful-shutdown helper mapping SIGINT/SIGTERM onto `context.Context` cancellation via `signal.NotifyContext`.
   - **live**: a bounded multi-region console for concurrent streaming output.
 - Raw-mode rich TUI widgets are intentionally rskit-only.
 
 ### Added — Foundational Parity (codec, fs)
-- **codec** (NEW module): generics-first `Codec` with `Encode[T]`/`Decode[T]` over a
-  documented opaque `Value` tree; `JSONCodec` (pretty/compact), `TOMLCodec`,
-  extension-based `CodecForName`/`CodecForPath`, `value` deep-merge with per-key array
-  strategies, and bounded length-delimited `framing` (`WriteFrame`/`ReadFrame`, generic
-  `WriteValue`/`ReadValue`). Promotes `pelletier/go-toml/v2` to a direct dependency.
-- **fs** (NEW module, light mirror of rskit-fs): safe path helpers
-  (`ValidateRelativePath`, `SafeJoin`, `NormalizeRelativePath`, `Canonicalize`,
-  `ConfinePath`/`ConfineExistingPath` with symlink-escape rejection), temp files/dirs,
-  atomic writes (`WriteAtomic`/`WriteAtomicReplace`), permissions, and metadata.
+- **codec** (NEW module):
+  generics-first `Codec` with `Encode[T]`/`Decode[T]` over a documented opaque `Value` tree;
+  `JSONCodec` (pretty/compact), `TOMLCodec`, extension-based `CodecForName`/`CodecForPath`,
+  `value` deep-merge with per-key array strategies,
+  and bounded length-delimited `framing` (`WriteFrame`/`ReadFrame`, generic `WriteValue`/`ReadValue`).
+  Promotes `pelletier/go-toml/v2` to a direct dependency.
+- **fs** (NEW module, light mirror of rskit-fs):
+  safe path helpers (`ValidateRelativePath`, `SafeJoin`, `NormalizeRelativePath`, `Canonicalize`, `ConfinePath`/`ConfineExistingPath` with symlink-escape rejection),
+  temp files/dirs, atomic writes (`WriteAtomic`/`WriteAtomicReplace`), permissions, and metadata.
   `watch` is intentionally rskit-only.
 - Fuzz tests for the codecs, frame reader, and path-safety validation.
 
 ### Changed (Breaking API Changes) — Foundational Parity
-- Renamed package `github.com/kbukum/gokit/logger` → `.../logging` and
-  `github.com/kbukum/gokit/pipeline` → `.../stream` (canonical cross-kit names); all
-  imports, `doc.go`, `domains.toml`, `MODULE-INDEX.md`, and `parity-matrix.md` updated.
+- Renamed package `github.com/kbukum/gokit/logger` → `.../logging`
+  and `github.com/kbukum/gokit/pipeline` → `.../stream` (canonical cross-kit names); all imports,
+  `doc.go`, `domains.toml`, `MODULE-INDEX.md`, and `parity-matrix.md` updated.
 - **logging**: dropped the mutable package-level registry, reassignable global singleton,
-  and `init()` side effects in favor of an injected `Registry` and an install-once
-  `Default()` backed by `sync.OnceValue`.
-- **version**: immutable build-info via `sync.OnceValue`/`compute(source)`; no mutable
-  exported vars.
-- **errors**: `FormatResourceError[T]` is now generic; `Details map[string]any` is kept as
-  a documented RFC 9457 extension-member opaque exception.
-- **schema**: added `limits.go` (`ValidationLimits`/`DefaultLimits`/`LimitError`) and
-  `validate.go` (`CompiledSchema`/`Compile`/`CompileWithLimits`).
+  and `init()` side effects in favor of an injected `Registry`
+  and an install-once `Default()` backed by `sync.OnceValue`.
+- **version**: immutable build-info via `sync.OnceValue`/`compute(source)`;
+  no mutable exported vars.
+- **errors**: `FormatResourceError[T]` is now generic;
+  `Details map[string]any` is kept as a documented RFC 9457 extension-member opaque exception.
+- **schema**: added `limits.go` (`ValidationLimits`/`DefaultLimits`/`LimitError`)
+  and `validate.go` (`CompiledSchema`/`Compile`/`CompileWithLimits`).
 
 ### Added — Documentation & Project Hygiene
-- README: sibling-projects callout and `Project Documentation` index linking
-  every governance doc.
+- README: sibling-projects callout and `Project Documentation` index linking every governance doc.
 
 ### Added
-- **bench**: per-package `Benchmark*` coverage for the hot paths flagged by the OSS-review perf gap (#50, F-020). Package count grew from 5 → 15; benchmark count from 5 → 42. New benchmarks live in:
+- **bench**:
+  per-package `Benchmark*` coverage for the hot paths flagged by the OSS-review perf gap (#50, F-020).
+  Package count grew from 5 → 15; benchmark count from 5 → 42. New benchmarks live in:
   - `registry` — Register/Get/Lookup/Names/Each
   - `di` — Container Register, Resolve (interface + generic + Must variants), Provide, ResolveKey
   - `validation` — fluent validator chains, struct validator, UUID, pattern
@@ -128,75 +134,147 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tool` — Registry Register/Get/Call
   - `workload` / `storage` / `discovery` / `llm` — factory/dialect Register & Get
   - `auth/oidc` — JWKS getKey hit/miss, RSA publicKey decode, RS256 verifyRSA
-- **ci**: `.github/workflows/bench.yml` extended to iterate over every gokit module that has benchmarks (was root-only); benchstat still runs head-vs-base and remains advisory until the baseline stabilises.
+- **ci**:
+  `.github/workflows/bench.yml` extended to iterate over every gokit module that has benchmarks (was root-only);
+  benchstat still runs head-vs-base and remains advisory until the baseline stabilises.
 
 ### Added
-- **registry** (NEW package): generic `Registry[T any]` consolidating the previously ad-hoc registries in `auth`, `discovery`, `storage`, `tool`, `workload`, and `llm`. `Register` returns an error on empty name, nil value, or duplicate name; `Names()` returns sorted; `Each` iterates deterministically. (#45)
+- **registry** (NEW package):
+  generic `Registry[T any]` consolidating the previously ad-hoc registries in `auth`, `discovery`,
+  `storage`, `tool`, `workload`, and `llm`. `Register` returns an error on empty name, nil value,
+  or duplicate name; `Names()` returns sorted; `Each` iterates deterministically. (#45)
 - **di**: typed-key DI surface layered on top of `UnifiedContainer`:
-  - `Key[T any]`, `NameKey[T](name)` — opaque, type-parameterised keys. The full key embeds `reflect.Type` of `T`, so two `Key[T]` of different concrete types with the same `name` cannot collide.
-  - `Provide[T](c, key, ctor)` / `ProvideSingleton[T](c, key, value)` — generic registration; constructor signature is validated up front (must return `T` or `(T, error)`).
-  - `ResolveKey[T](c, key)` / `MustResolveKey[T](c, key)` — generic resolution, no type assertions in caller code. (#43)
+  - `Key[T any]`, `NameKey[T](name)` — opaque, type-parameterised keys.
+    The full key embeds `reflect.Type` of `T`,
+    so two `Key[T]` of different concrete types with the same `name` cannot collide.
+  - `Provide[T](c, key, ctor)` / `ProvideSingleton[T](c, key, value)` — generic registration;
+    constructor signature is validated up front (must return `T` or `(T, error)`).
+  - `ResolveKey[T](c, key)` / `MustResolveKey[T](c, key)` — generic resolution,
+    no type assertions in caller code. (#43)
 
 ### Changed (Breaking API Changes)
-- **auth**: `Registry.Register` now returns `error` on duplicate registration instead of silently overwriting. `Registry.MustGet` removed — use `Get`.
+- **auth**:
+  `Registry.Register` now returns `error` on duplicate registration instead of silently overwriting.
+  `Registry.MustGet` removed — use `Get`.
 - **tool**: `Registry.MustRegister` removed — use `Register` (which returns `error`). (#46)
 - **workload**: `FactoryRegistry.MustRegister` removed — use `Register`. (#46)
 - **llm**: `DialectRegistry.MustRegister` removed — use `Register`. (#46)
-- **storage**: `FactoryRegistry.Register` now returns `error` (was panic on duplicate). Provider `Register` functions (`local.Register`, `s3.Register`, `supabase.Register`) likewise return `error`.
-- **discovery**: `ProviderRegistry.Register` now returns `error` (was panic). `NewComponent(registry, cfg, log, opts...)` now returns `(*Component, error)` — previously panicked. Provider `Register` functions (`static.Register`, `consul.Register`) return `error`.
-- **di**: `UnifiedContainer.MustResolve` method removed. The free function `di.MustResolve[T](container, key)` is **kept** (issue #46 explicitly allows `Must*` for `init()` / test / CLI scope, where this helper is idiomatic).
+- **storage**: `FactoryRegistry.Register` now returns `error` (was panic on duplicate).
+  Provider `Register` functions (`local.Register`, `s3.Register`, `supabase.Register`) likewise return `error`.
+- **discovery**: `ProviderRegistry.Register` now returns `error` (was panic).
+  `NewComponent(registry, cfg, log, opts...)` now returns `(*Component, error)` —
+  previously panicked.
+  Provider `Register` functions (`static.Register`, `consul.Register`) return `error`.
+- **di**: `UnifiedContainer.MustResolve` method removed.
+  The free function `di.MustResolve[T](container, key)` is **kept** (issue #46 explicitly allows `Must*` for `init()` / test / CLI scope, where this helper is idiomatic).
 - **auth/authctx**: `MustGet[T]` removed — use `Get[T]`. (#46)
 - **server/middleware**: `MustTenantFromContext` removed — use `TenantFromContext`. (#46)
-- **agent**: `MustPromptTemplate` and `PromptBuilder.MustBuild` removed — use `NewPromptTemplate` / `Build`. (#46)
+- **agent**: `MustPromptTemplate` and `PromptBuilder.MustBuild` removed —
+  use `NewPromptTemplate` / `Build`. (#46)
 
 ### Internal
-- All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`. Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
-- **security**: documented, time-boxed govulncheck suppression for `GO-2026-5932` (deprecated, unfixable `golang.org/x/crypto/openpgp`; not imported or reachable in any module). Removed the two stale `moby/moby` suppressions now that `workload` links `moby/moby/client`.
+- All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`.
+  Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
+- **security**: documented,
+  time-boxed govulncheck suppression for `GO-2026-5932` (deprecated, unfixable `golang.org/x/crypto/openpgp`; not imported or reachable in any module).
+  Removed the two stale `moby/moby` suppressions now that `workload` links `moby/moby/client`.
 
 ### Release engineering & supply chain
-- **Coverage gates** (`codecov.yml`): security-load-bearing modules (`errors`, `auth`, `authz`, `security`, `resilience`, `encryption`) enforced at ≥85%; a project no-drop gate and an 85% patch gate fail CI on any regression; an advisory ≥80%-per-package floor tracks the remaining backfill.
-- **Fuzzing**: CI discovers and smoke-runs every `Fuzz*` target (`codec`, `schema`, `validation`, `auth/jwt`, …); each seeds valid + malformed input and fails closed.
-- **CI hardening**: dual Go matrix (`1.26.0` floor + `stable`); Conventional-Commits PR-title check; a dependency **license allow-list** gate (`scripts/check-licenses.sh`) across all modules; all actions SHA-pinned with per-job least-privilege permissions.
-- **Release pipeline**: GoReleaser produces a source archive, `checksums.txt`, and a CycloneDX SBOM (fixed the SBOM working-directory bug); cosign keyless **sign + verify**; SLSA build provenance via `actions/attest-build-provenance`. Added `make release-dry`. New third-party deps are justified in [`docs/dependencies.md`](docs/dependencies.md).
+- **Coverage gates** (`codecov.yml`):
+  security-load-bearing modules (`errors`, `auth`, `authz`, `security`, `resilience`, `encryption`) enforced at ≥85%;
+  a project no-drop gate and an 85% patch gate fail CI on any regression;
+  an advisory ≥80%-per-package floor tracks the remaining backfill.
+- **Fuzzing**: CI discovers
+  and smoke-runs every `Fuzz*` target (`codec`, `schema`, `validation`, `auth/jwt`, …);
+  each seeds valid + malformed input and fails closed.
+- **CI hardening**: dual Go matrix (`1.26.0` floor + `stable`); Conventional-Commits PR-title check;
+  a dependency **license allow-list** gate (`scripts/check-licenses.sh`) across all modules;
+  all actions SHA-pinned with per-job least-privilege permissions.
+- **Release pipeline**: GoReleaser produces a source archive, `checksums.txt`,
+  and a CycloneDX SBOM (fixed the SBOM working-directory bug); cosign keyless **sign + verify**;
+  SLSA build provenance via `actions/attest-build-provenance`. Added `make release-dry`.
+  New third-party deps are justified in [`docs/dependencies.md`](docs/dependencies.md).
 
 ## [0.2.0] - 2026-04-25
 
 > Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
-> This entry back-fills the previous `[Unreleased]` section verbatim. From
-> this release on, every tag MUST be accompanied by a corresponding CHANGELOG
-> entry — enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
+> This entry back-fills the previous `[Unreleased]` section verbatim. From this release on,
+> every tag MUST be accompanied by a corresponding CHANGELOG entry —
+> enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
 >
-> The `kafka/v0.2.0` and `kafka/testutil/v0.2.0` tags are orphans from when
-> the kafka provider lived at `/kafka`; the package now lives at
-> `/messaging/kafka` and is versioned in lock-step with `messaging`.
+> The `kafka/v0.2.0`
+> and `kafka/testutil/v0.2.0` tags are orphans from when the kafka provider lived at `/kafka`;
+> the package now lives at `/messaging/kafka` and is versioned in lock-step with `messaging`.
 
 ### Changed (Breaking API Changes)
-- **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`docker`, `kubernetes`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root. `NewComponent` likewise now takes the registry as its first argument.
-- **llm**: `RegisterDialect()`, `GetDialect()`, and `Dialects()` package-level functions removed. `New(cfg)` is replaced by `New(registry, cfg)` taking an explicit `*DialectRegistry`. Provider packages (`anthropic`, `gemini`, `openai`) no longer register via `init()`; call their `Register(registry)` function instead.
-- **di**: `MustResolve(name string) interface{}` removed from the `Container` interface. Use the generic free function `di.MustResolve[T](container, key)` instead — it provides type safety and works with any `Container` implementation.
-- **config**: `WarningFunc` signature changed from `func(msg string, args ...any)` (printf-style) to `func(msg string, attrs ...slog.Attr)` (structured). Update custom warning loggers to emit structured attributes instead of formatted strings; this aligns config warnings with the rest of gokit's structured logging.
-- **bootstrap**: `Summary.DisplaySummary` no longer writes directly to `os.Stdout`. Output now goes to the writer configured via `bootstrap.WithWriter(io.Writer)` (default still `os.Stdout`). `NewSummaryWithOptions` and `(*Summary).SetWriter` allow injecting a custom writer for testing or redirection.
-- **storage**: `DefaultFactoryRegistry` global and `RegisterFactory()` / `New(cfg, providerCfg, log)` shims removed. `New` now requires an explicit `*FactoryRegistry` as its first argument: `New(registry, cfg, providerCfg, log)`. Provider packages (`local`, `s3`, `supabase`) no longer register themselves via `init()`; call their `Register(registry)` function from your composition root.
-- **discovery**: `DefaultProviderRegistry` global, `RegisterProviderFactory()`, and `GetProviderFactory()` shims removed. `NewComponent` now requires an explicit `*ProviderRegistry` as its first argument: `NewComponent(registry, cfg, log, opts...)`. Provider packages (`static`, `consul`) no longer register via `init()`; call their `Register(registry)` function instead. `WithProviderRegistry` option removed.
-- **server/middleware**: `Auth()` and `OptionalAuth()` now return `(gin.HandlerFunc, error)` instead of panicking on misconfiguration. All call sites must handle the returned error.
-- **server/middleware**: `OptionalAuth` rejects invalid tokens by default (secure-by-default). Use `WithAllowInvalidTokens(true)` to opt in to the previous lax behavior. `WithRejectInvalidTokens` option removed.
+- **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed.
+  `New` now requires an explicit `*FactoryRegistry` as its first argument:
+  `New(registry, cfg, providerCfg, log)`.
+  Provider packages (`docker`, `kubernetes`) no longer register themselves via `init()`;
+  call their `Register(registry)` function from your composition root.
+  `NewComponent` likewise now takes the registry as its first argument.
+- **llm**: `RegisterDialect()`, `GetDialect()`, and `Dialects()` package-level functions removed.
+  `New(cfg)` is replaced by `New(registry, cfg)` taking an explicit `*DialectRegistry`.
+  Provider packages (`anthropic`, `gemini`, `openai`) no longer register via `init()`;
+  call their `Register(registry)` function instead.
+- **di**: `MustResolve(name string) interface{}` removed from the `Container` interface.
+  Use the generic free function `di.MustResolve[T](container, key)` instead —
+  it provides type safety and works with any `Container` implementation.
+- **config**:
+  `WarningFunc` signature changed from `func(msg string, args ...any)` (printf-style) to `func(msg string, attrs ...slog.Attr)` (structured).
+  Update custom warning loggers to emit structured attributes instead of formatted strings;
+  this aligns config warnings with the rest of gokit's structured logging.
+- **bootstrap**: `Summary.DisplaySummary` no longer writes directly to `os.Stdout`.
+  Output now goes to the writer configured via `bootstrap.WithWriter(io.Writer)` (default still `os.Stdout`).
+  `NewSummaryWithOptions` and `(*Summary).SetWriter` allow injecting a custom writer for testing
+  or redirection.
+- **storage**: `DefaultFactoryRegistry` global
+  and `RegisterFactory()` / `New(cfg, providerCfg, log)` shims removed.
+  `New` now requires an explicit `*FactoryRegistry` as its first argument:
+  `New(registry, cfg, providerCfg, log)`.
+  Provider packages (`local`, `s3`, `supabase`) no longer register themselves via `init()`;
+  call their `Register(registry)` function from your composition root.
+- **discovery**: `DefaultProviderRegistry` global, `RegisterProviderFactory()`,
+  and `GetProviderFactory()` shims removed.
+  `NewComponent` now requires an explicit `*ProviderRegistry` as its first argument:
+  `NewComponent(registry, cfg, log, opts...)`.
+  Provider packages (`static`, `consul`) no longer register via `init()`;
+  call their `Register(registry)` function instead. `WithProviderRegistry` option removed.
+- **server/middleware**: `Auth()`
+  and `OptionalAuth()` now return `(gin.HandlerFunc, error)` instead of panicking on misconfiguration.
+  All call sites must handle the returned error.
+- **server/middleware**: `OptionalAuth` rejects invalid tokens by default (secure-by-default).
+  Use `WithAllowInvalidTokens(true)` to opt in to the previous lax behavior.
+  `WithRejectInvalidTokens` option removed.
 - **di**: `ResolveOrError` removed (was an alias of `Resolve`). Use `Resolve` directly.
-- **server/middleware**: `TenantFromContextOrError` and `ErrNoTenantID` removed. Use `TenantFromContext` (returns `(string, bool)`) or `MustTenantFromContext`.
-- **config**: `Warning` struct and `[]Warning` return value removed from `loadFromResolvedFiles`. Non-fatal warnings are surfaced exclusively through the `WarningFunc` callback.
+- **server/middleware**: `TenantFromContextOrError` and `ErrNoTenantID` removed.
+  Use `TenantFromContext` (returns `(string, bool)`) or `MustTenantFromContext`.
+- **config**: `Warning` struct and `[]Warning` return value removed from `loadFromResolvedFiles`.
+  Non-fatal warnings are surfaced exclusively through the `WarningFunc` callback.
 
 ### Added
-- **bootstrap**: `WithWriter(io.Writer)` option and `(*Summary).SetWriter` method for redirecting summary output (testing, in-memory capture, file logging).
-- **workload**: `FactoryRegistry` type with `Register`, `MustRegister`, `Get`, and `Names`. Mirrors the `storage` package's explicit-registry pattern.
+- **bootstrap**: `WithWriter(io.Writer)` option
+  and `(*Summary).SetWriter` method for redirecting summary output (testing, in-memory capture, file logging).
+- **workload**: `FactoryRegistry` type with `Register`, `MustRegister`, `Get`, and `Names`.
+  Mirrors the `storage` package's explicit-registry pattern.
 - **llm**: `DialectRegistry` type with `Register`, `MustRegister`, `Get`, and `Names`.
-- **CI/governance**: `.editorconfig`, `.gitattributes`, `.github/dependabot.yml`, committed `go.work`, `GOVERNANCE.md`, `MAINTAINERS.md`. Expanded `SECURITY.md` with a private vulnerability reporting flow and a supply-chain section.
-- **CI**: pinned `golangci-lint` to a specific tag, added `govulncheck` per module, multi-OS test matrix on representative modules, `-shuffle=on` and race detection by default, fuzz smoke job, and Go-version-consistency check across all `go.mod` files.
-- **lint**: `errorlint`, `nilerr`, `copyloopvar`, `wastedassign`, `sqlclosecheck`, `rowserrcheck`, and govet `shadow` are now enforced.
-- **examples**: `Example*` tests added for `config`, `errors`, `logger`, `pipeline`, `provider`, and `di` for godoc discoverability.
-- **docs**: Added `doc.go` to packages that previously lacked package-level documentation (`database/repository`, `discovery/{consul,static}`, `grpc/{client,interceptor}`, `messaging/kafka/{consumer,producer}`, `server/{endpoint,middleware}`, `storage/{local,s3,supabase}`, `workload/{docker,kubernetes}`).
+- **CI/governance**: `.editorconfig`, `.gitattributes`, `.github/dependabot.yml`,
+  committed `go.work`, `GOVERNANCE.md`, `MAINTAINERS.md`.
+  Expanded `SECURITY.md` with a private vulnerability reporting flow and a supply-chain section.
+- **CI**: pinned `golangci-lint` to a specific tag, added `govulncheck` per module,
+  multi-OS test matrix on representative modules, `-shuffle=on` and race detection by default,
+  fuzz smoke job, and Go-version-consistency check across all `go.mod` files.
+- **lint**: `errorlint`, `nilerr`, `copyloopvar`, `wastedassign`, `sqlclosecheck`, `rowserrcheck`,
+  and govet `shadow` are now enforced.
+- **examples**: `Example*` tests added for `config`, `errors`, `logger`, `pipeline`, `provider`,
+  and `di` for godoc discoverability.
+- **docs**:
+  Added `doc.go` to packages that previously lacked package-level documentation (`database/repository`, `discovery/{consul,static}`, `grpc/{client,interceptor}`, `messaging/kafka/{consumer,producer}`, `server/{endpoint,middleware}`, `storage/{local,s3,supabase}`, `workload/{docker,kubernetes}`).
 - **benchmarks**: All benchmarks now call `b.ReportAllocs()` for allocation visibility.
 
 ### Security
-- **gosec**: Removed the global `G402` exclude. TLS configuration sites that intentionally allow `InsecureSkipVerify` now carry a per-site `//nolint:gosec` directive with a justifying comment.
+- **gosec**: Removed the global `G402` exclude.
+  TLS configuration sites that intentionally allow `InsecureSkipVerify` now carry a per-site `//nolint:gosec` directive with a justifying comment.
 
 ### Migration
 
@@ -277,34 +355,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — Messaging Enhancement
 
-- **messaging**: `ManagedConsumer` — wraps any `Consumer` with lifecycle (Start/Stop/IsRunning) and handler dispatch
+- **messaging**: `ManagedConsumer` — wraps any `Consumer` with lifecycle (Start/Stop/IsRunning)
+  and handler dispatch
 - **messaging**: `ConsumerRunner` interface and `AsRunner()` adapter for managed consumption loops
-- **messaging**: `MetricsCollector` interface with `RecordPublish()`/`RecordConsume()` for broker-agnostic metrics
+- **messaging**:
+  `MetricsCollector` interface with `RecordPublish()`/`RecordConsume()` for broker-agnostic metrics
 - **messaging**: `ErrorTranslator` interface for converting raw errors to `*AppError`
 - **messaging**: `ErrorClassifier` interface with `IsConnectionError()`/`IsRetryableError()` helpers
-- **messaging**: `BrokerComponent` interface extending `component.Component` with `Producer()`/`Consumer()` accessors
-- **messaging**: `MessageHandler` type + `HandlerMiddleware` + `ChainHandlers()` for composable handler pipelines
-- **messaging**: `MessageRouter` — topic-based message routing with exact match and wildcard (`*`) pattern support
-- **messaging**: `BatchProducer` — buffered producer with size, time (MaxWait), and byte (MaxBytes) flush triggers
+- **messaging**:
+  `BrokerComponent` interface extending `component.Component` with `Producer()`/`Consumer()` accessors
+- **messaging**:
+  `MessageHandler` type + `HandlerMiddleware` + `ChainHandlers()` for composable handler pipelines
+- **messaging**: `MessageRouter` — topic-based message routing with exact match
+  and wildcard (`*`) pattern support
+- **messaging**: `BatchProducer` — buffered producer with size, time (MaxWait),
+  and byte (MaxBytes) flush triggers
 - **messaging/bridge**: `ProducerAsSink()` — adapts `Producer` to `provider.Sink[Message]`
 - **messaging/bridge**: `EventProducerAsSink()` — adapts `EventProducer` to `provider.Sink[Event]`
-- **messaging/bridge**: `ConsumerAsStream()` — adapts `Consumer` to `provider.Stream[struct{}, Message]`
-- **messaging/middleware**: `DedupHandler` — deduplication middleware with LRU cache, TTL, and bounded window
-- **messaging/middleware**: `CircuitBreakerHandler` — fail-fast middleware wrapping `resilience.CircuitBreaker`
-- **messaging/memory**: Enhanced `InMemoryBroker` with message history, topic management, and reset capability
-- **messaging/memory**: Test assertions — `AssertPublished()`, `AssertPublishedN()`, `WaitForMessage()`, `AssertNoMessages()`
+- **messaging/bridge**: `ConsumerAsStream()` —
+  adapts `Consumer` to `provider.Stream[struct{}, Message]`
+- **messaging/middleware**: `DedupHandler` — deduplication middleware with LRU cache, TTL,
+  and bounded window
+- **messaging/middleware**: `CircuitBreakerHandler` —
+  fail-fast middleware wrapping `resilience.CircuitBreaker`
+- **messaging/memory**: Enhanced `InMemoryBroker` with message history, topic management,
+  and reset capability
+- **messaging/memory**: Test assertions — `AssertPublished()`, `AssertPublishedN()`,
+  `WaitForMessage()`, `AssertNoMessages()`
 
 ### Added
-- **bench**: New sub-module — pluggable evaluation framework for benchmarking providers against labeled datasets
+- **bench**: New sub-module —
+  pluggable evaluation framework for benchmarking providers against labeled datasets
   - Core types: `Sample[L]`, `Prediction[L]`, `ScoredSample[L]`, `LabelMapper[L]`
   - `DatasetLoader[L]`: manifest-based dataset loading with filtering and pipeline integration
   - `Evaluator[L]`: provider adapter interface with `EvaluatorFunc` and `FromProvider` helpers
   - `BenchRunner[L]`: orchestrates evaluation runs with multi-branch support and concurrency
   - `FileStorage`: JSON file-based run result persistence with listing, filtering, and Latest()
-  - `RunComparator`: compares two runs with metric diffs, regression detection, and sample-level tracking
+  - `RunComparator`: compares two runs with metric diffs, regression detection,
+    and sample-level tracking
   - Result types: `RunResult`, `MetricResult`, `BranchResult`, `SampleResult`, `RunSummary`
 - **bench/metric**: Pluggable metric implementations for evaluation scoring
-  - Classification: `BinaryClassification`, `MultiClassClassification`, `ConfusionMatrix`, `ThresholdSweep`
+  - Classification: `BinaryClassification`, `MultiClassClassification`, `ConfusionMatrix`,
+    `ThresholdSweep`
   - Probability: `AUCROC`, `BrierScore`, `LogLoss`, `Calibration`
   - Ranking: `NDCG`, `MAP`, `PrecisionAtK`, `RecallAtK`
   - Regression: `MAE`, `MSE`, `RMSE`, `RSquared`
@@ -312,20 +404,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Composite: `Weighted` for combining metrics with weights
   - `Suite[L]` for batch metric evaluation; `AsRunMetric`/`AsRunMetrics` adapters
 - **bench/report**: Formatted output generation from benchmark results
-  - `Reporter` interface with `JSON`, `Markdown`, `Table`, `CSV`, `JUnit`, `VegaLite`, `HTML` implementations
+  - `Reporter` interface with `JSON`, `Markdown`, `Table`, `CSV`, `JUnit`, `VegaLite`,
+    `HTML` implementations
 - **bench/viz**: SVG visualization generation from run results
-  - `RenderAll` generates applicable charts; individual renderers for ROC, calibration, confusion matrix, distribution, branch comparison
-- **bench/storage**: `ProviderStorage` adapter bridging `bench.RunStorage` with `gokit/storage.Storage` backends
-- **tests**: Comprehensive test suite for bench module — types, dataset loading, evaluator adapters, runner, file storage, comparator, classification metrics, probability metrics, regression metrics, matching metrics, JSON reporter
+  - `RenderAll` generates applicable charts; individual renderers for ROC, calibration,
+    confusion matrix, distribution, branch comparison
+- **bench/storage**:
+  `ProviderStorage` adapter bridging `bench.RunStorage` with `gokit/storage.Storage` backends
+- **tests**: Comprehensive test suite for bench module — types, dataset loading, evaluator adapters,
+  runner, file storage, comparator, classification metrics, probability metrics, regression metrics,
+  matching metrics, JSON reporter
 - **docs**: Package-level documentation for bench/metric, bench/report sub-packages
 
 - **provider**: Sink combinator primitives for composable push-based data flow
   - `NewSinkFunc[I]`: wraps a plain `func(ctx, I) error` as a `Sink[I]` (like `http.HandlerFunc`)
   - `FanOutSink[I]`: dispatches input to multiple sinks in parallel, joins errors
-  - `AdaptSink[I, BI]`: transforms input types before sending (mirrors `Adapt` for `RequestResponse`)
+  - `AdaptSink[I, BI]`:
+    transforms input types before sending (mirrors `Adapt` for `RequestResponse`)
   - `TapSink[I]`: adds a side-effect observer before forwarding to the inner sink
-  - `SinkMiddleware[I]` + `ChainSink[I]`: composable wrapping for sinks (mirrors `Middleware` + `Chain`)
-- **tests**: 11 sink combinator tests — SinkFunc, FanOutSink (parallel, errors, passthrough, availability), AdaptSink (mapping, errors), TapSink, ChainSink (ordering)
+  - `SinkMiddleware[I]` + `ChainSink[I]`:
+    composable wrapping for sinks (mirrors `Middleware` + `Chain`)
+- **tests**: 11 sink combinator tests — SinkFunc,
+  FanOutSink (parallel, errors, passthrough, availability), AdaptSink (mapping, errors), TapSink,
+  ChainSink (ordering)
 - **docs**: Updated `provider/doc.go` with Sink Combinators section and composition examples
 
 ## [0.1.5] - 2026-03-01
@@ -340,15 +441,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Convenience helpers: `Complete()`, `CompleteStructured()` with JSON extraction
   - Full config: auth, TLS, retry, circuit breaker, rate limiter — all inherited from httpclient
   - Ships with zero built-in dialects — implementations live in separate driver modules
-- **provider**: `Streamable[I, O, C]` interface for providers supporting both request-response and streaming modes
+- **provider**: `Streamable[I, O, C]` interface for providers supporting both request-response
+  and streaming modes
 - **httpclient**: `MultipartBody` and `FileField` types for multipart/form-data requests
   - `encodeBody()` auto-handles `*MultipartBody` — no more manual `mime/multipart` construction
   - Supports custom content-type per file, streaming upload via `io.Reader`
 - **httpclient/rest**: `Client` now implements `provider.Provider` (Name, IsAvailable, Close)
-- **httpclient/rest**: Error helper re-exports (`IsNotFound`, `IsAuth`, `IsRateLimit`, `IsServerError`, `IsRetryable`, `IsTimeout`)
-- **tests**: 27 LLM adapter tests (81.7% coverage) — adapter, dialect registry, streaming, helpers, types
-- **tests**: 5 multipart encoding tests — fields, files, custom content-type, reader, full adapter integration
-- **tests**: 3 REST provider interface tests — Name/IsAvailable/Close delegation, error classification
+- **httpclient/rest**:
+  Error helper re-exports (`IsNotFound`, `IsAuth`, `IsRateLimit`, `IsServerError`, `IsRetryable`, `IsTimeout`)
+- **tests**: 27 LLM adapter tests (81.7% coverage) — adapter, dialect registry, streaming, helpers,
+  types
+- **tests**: 5 multipart encoding tests — fields, files, custom content-type, reader,
+  full adapter integration
+- **tests**: 3 REST provider interface tests — Name/IsAvailable/Close delegation,
+  error classification
 - **docs**: layered adapter composition guide
 
 ## [0.1.4] - 2026-03-01
@@ -380,7 +486,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **database**: Adapter pattern implementation
 - **grpc/client**: Adapter pattern implementation
 - **security/tlstest**: Utility for generating TLS certificates in tests
-- **tests**: Comprehensive test suite for encryption (ChaCha20 encryption/decryption, error handling)
+- **tests**:
+  Comprehensive test suite for encryption (ChaCha20 encryption/decryption, error handling)
 - **tests**: Logger tests (metadata, context, component registration)
 - **tests**: Observability tests (tracing, metrics, health checks)
 - **tests**: Process tests (availability checks, command execution failures)
@@ -423,10 +530,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **pipeline**: `SlidingWindow` operator for overlapping windows with configurable slide.
 
 ### Removed
-- **redis/testutil**: Removed — exposed raw `*goredis.Client` instead of gokit's `*redis.Client`, making it unusable for testing gokit redis operations.
+- **redis/testutil**: Removed — exposed raw `*goredis.Client` instead of gokit's `*redis.Client`,
+  making it unusable for testing gokit redis operations.
 
 ### Changed
-- **ci**: Rewritten CI pipeline with dynamic module discovery — no hardcoded module list, per-module parallel jobs, tidy verification gate.
+- **ci**: Rewritten CI pipeline with dynamic module discovery — no hardcoded module list,
+  per-module parallel jobs, tidy verification gate.
 
 ## [0.1.1] - 2026-02-23
 
@@ -443,4 +552,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **config**: Renamed `ConfigResolver` to `Resolver` to avoid stuttering.
 - **server**: Renamed `ServerComponent` to `Component` to avoid stuttering.
 - **resilience**: Updated `ExecuteWithResult` to accept `context.Context` as the first parameter.
-- **various**: Updated multiple functions to accept configuration by pointer to improve performance and satisfy linters.
+- **various**: Updated multiple functions to accept configuration by pointer to improve performance
+  and satisfy linters.

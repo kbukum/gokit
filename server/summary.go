@@ -30,8 +30,7 @@ func formatHandlerName(fullPath string) string {
 	name = strings.ReplaceAll(name, "(*", "")
 	name = strings.ReplaceAll(name, ")", "")
 
-	// Handle closure names like "Server.RegisterDefaultEndpoints.Health.func1"
-	// Simplify to just the meaningful part
+	// Handle closure names like "Server.RegisterDefaultEndpoints.Health.func1" Simplify to just the meaningful part
 	if strings.Contains(name, ".func") {
 		parts := strings.Split(name, ".")
 		// Find the last meaningful name before funcN
