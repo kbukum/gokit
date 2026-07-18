@@ -68,4 +68,8 @@ When using gokit in production:
   (`.github/dependabot.yml`).
 - Module Go versions are kept consistent across all sub-modules; the CI
   `version-check` job enforces this invariant.
+- Every dependency's license is checked against an allow-list on
+  each push (`scripts/check-licenses.sh`); strong copyleft (GPL/LGPL/AGPL) and
+  unknown licenses fail CI. New direct dependencies are justified and audited in
+  [`docs/dependencies.md`](docs/dependencies.md).
 

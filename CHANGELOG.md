@@ -153,6 +153,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - All 6 first-party registries are now thin wrappers around `provider/namedregistry.Registry[T]`. Subsequent explicit adapter/provider registries should use the lightweight named registry package directly when the registered values are not provider implementations.
 - **security**: documented, time-boxed govulncheck suppression for `GO-2026-5932` (deprecated, unfixable `golang.org/x/crypto/openpgp`; not imported or reachable in any module). Removed the two stale `moby/moby` suppressions now that `workload` links `moby/moby/client`.
 
+### Release engineering & supply chain
+- **Coverage gates** (`codecov.yml`): security-load-bearing modules (`errors`, `auth`, `authz`, `security`, `resilience`, `encryption`) enforced at ≥85%; a project no-drop gate and an 85% patch gate fail CI on any regression; an advisory ≥80%-per-package floor tracks the remaining backfill.
+- **Fuzzing**: CI discovers and smoke-runs every `Fuzz*` target (`codec`, `schema`, `validation`, `auth/jwt`, …); each seeds valid + malformed input and fails closed.
+- **CI hardening**: dual Go matrix (`1.26.0` floor + `stable`); Conventional-Commits PR-title check; a dependency **license allow-list** gate (`scripts/check-licenses.sh`) across all modules; all actions SHA-pinned with per-job least-privilege permissions.
+- **Release pipeline**: GoReleaser produces a source archive, `checksums.txt`, and a CycloneDX SBOM (fixed the SBOM working-directory bug); cosign keyless **sign + verify**; SLSA build provenance via `actions/attest-build-provenance`. Added `make release-dry`. New third-party deps are justified in [`docs/dependencies.md`](docs/dependencies.md).
+
 ## [0.2.0] - 2026-04-25
 
 > Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
