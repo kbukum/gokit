@@ -5,7 +5,8 @@ import (
 	"time"
 )
 
-// ContextStore provides typed state persistence for stateful providers. Implementations live in sub-modules (redis, database, etc.) to avoid forcing dependencies on the core.
+// ContextStore provides typed state persistence for stateful providers.
+// Implementations live in sub-modules (redis, database, etc.) to avoid forcing dependencies on the core.
 //
 // The key is an opaque string — the consumer decides the key schema. TTL of 0 means no expiration.
 type ContextStore[C any] interface {

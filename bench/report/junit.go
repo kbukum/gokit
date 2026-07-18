@@ -11,14 +11,16 @@ import (
 // JUnitOption configures the JUnit reporter.
 type JUnitOption func(*junitReporter)
 
-// WithTargets sets metric targets. Each metric with a matching entry becomes a test case that passes if the metric value >= the target.
+// WithTargets sets metric targets.
+// Each metric with a matching entry becomes a test case that passes if the metric value >= the target.
 func WithTargets(targets map[string]float64) JUnitOption {
 	return func(r *junitReporter) {
 		r.targets = targets
 	}
 }
 
-// JUnit returns a reporter that outputs JUnit XML for CI/CD integration. Metrics with configured targets become test cases: pass if value >= target.
+// JUnit returns a reporter that outputs JUnit XML for CI/CD integration.
+// Metrics with configured targets become test cases: pass if value >= target.
 func JUnit(opts ...JUnitOption) Reporter {
 	r := &junitReporter{
 		targets: make(map[string]float64),

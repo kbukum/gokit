@@ -25,7 +25,8 @@ func safePath(basePath, path string) (string, error) {
 	return fullPath, nil
 }
 
-// Register registers a configured local storage provider into the given registry. Pass an optional Config to override defaults.
+// Register registers a configured local storage provider into the given registry.
+// Pass an optional Config to override defaults.
 func Register(reg *storage.FactoryRegistry, configs ...Config) error {
 	if reg == nil {
 		return fmt.Errorf("local: storage registry is nil")

@@ -23,7 +23,8 @@ func (g *Graph) GetNodeDef(name string) NodeDef {
 	return g.NodeDefs[name]
 }
 
-// BuildLevels uses Kahn's algorithm to group nodes by dependency level. Nodes within the same level can execute in parallel. Returns an error if a cycle is detected.
+// BuildLevels uses Kahn's algorithm to group nodes by dependency level.
+// Nodes within the same level can execute in parallel. Returns an error if a cycle is detected.
 func BuildLevels(g *Graph) ([][]string, error) {
 	// Build adjacency list and in-degree map
 	inDegree := make(map[string]int)

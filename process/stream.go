@@ -25,7 +25,9 @@ type StreamChunk struct {
 	Data   []byte
 }
 
-// Stream executes a subprocess and emits stdout/stderr chunks while it runs. When emit is non-nil, Stream invokes it sequentially from an internal goroutine. The callback should return promptly; a slow callback can still apply backpressure to subprocess pipe reads after the internal buffer fills.
+// Stream executes a subprocess and emits stdout/stderr chunks while it runs. When emit is non-nil,
+// Stream invokes it sequentially from an internal goroutine. The callback should return promptly;
+// a slow callback can still apply backpressure to subprocess pipe reads after the internal buffer fills.
 func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, error) {
 	if cmd.Binary == "" {
 		return nil, fmt.Errorf("process: binary is required")

@@ -12,7 +12,10 @@ import (
 	"github.com/kbukum/gokit/stream"
 )
 
-// FileSource is a [stage.Source] that reads a tabular file in one of the supported [Format]s. Reading is deferred to stream time and bounded by limits, so the source composes with the generic collector. Its cache key fingerprints the format and path.
+// FileSource is a [stage.Source] that reads a tabular file in one of the supported [Format]s.
+// Reading is deferred to stream time and bounded by limits,
+// so the source composes with the generic collector. Its cache key fingerprints the format
+// and path.
 type FileSource struct {
 	name   string
 	path   string
@@ -31,7 +34,8 @@ func (s *FileSource) Name() string { return s.name }
 // CacheKey fingerprints the source by format and path.
 func (s *FileSource) CacheKey() string { return s.format.String() + ":" + s.path }
 
-// Stream reads the file lazily, surfacing any read or parse error on the first pull rather than at construction time.
+// Stream reads the file lazily, surfacing any read
+// or parse error on the first pull rather than at construction time.
 func (s *FileSource) Stream(context.Context) *stream.Pipeline[Record] {
 	return stream.FromFunc(func(ctx context.Context) stream.Iterator[Record] {
 		p, err := s.read()
@@ -56,7 +60,9 @@ func (s *FileSource) read() (*stream.Pipeline[Record], error) {
 	}
 }
 
-// FileTarget is a [stage.Target] that writes records to a file in one of the supported [Format]s via an atomic replace, so a partial write never leaves a truncated file. It accumulates records across publishes so a multi-source run writes every source's records to the single file rather than clobbering it.
+// FileTarget is a [stage.Target] that writes records to a file in one of the supported [Format]s via an atomic replace,
+// so a partial write never leaves a truncated file. It accumulates records across publishes
+// so a multi-source run writes every source's records to the single file rather than clobbering it.
 type FileTarget struct {
 	name    string
 	path    string
@@ -72,7 +78,10 @@ func NewFileTarget(name, path string, format Format) *FileTarget {
 // Name returns the target's identifier.
 func (t *FileTarget) Name() string { return t.name }
 
-// Publish appends the records to the target's accumulated set and rewrites the file, reporting the total record count now on disk. Publishing is driven from the collector's single main loop, so the accumulator is not shared across goroutines.
+// Publish appends the records to the target's accumulated set and rewrites the file,
+// reporting the total record count now on disk.
+// Publishing is driven from the collector's single main loop,
+// so the accumulator is not shared across goroutines.
 func (t *FileTarget) Publish(ctx context.Context, items *stream.Pipeline[Record]) (stage.PublishResult, error) {
 	write, err := t.writer()
 	if err != nil {

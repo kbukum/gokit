@@ -5,7 +5,10 @@ import (
 	"github.com/kbukum/gokit/dataset/stage"
 )
 
-// Item is a blob dataset item: a named payload tagged real or AI and carrying the source offset it was fetched at. It implements [stage.Labeled] and [stage.Offsetted] so the generic collector aggregates real/AI stats and resumes partial runs by offset.
+// Item is a blob dataset item: a named payload tagged real or AI
+// and carrying the source offset it was fetched at. It implements [stage.Labeled]
+// and [stage.Offsetted] so the generic collector aggregates real/AI stats
+// and resumes partial runs by offset.
 type Item struct {
 	name    string
 	label   stage.Label

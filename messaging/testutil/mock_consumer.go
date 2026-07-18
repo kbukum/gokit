@@ -6,7 +6,9 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-// ChannelConsumer implements messaging.Consumer for testing. Pre-load messages with Feed(), then call Consume() to deliver them to the provided handler. Consume blocks until the context is canceled.
+// ChannelConsumer implements messaging.Consumer for testing. Pre-load messages with Feed(),
+// then call Consume() to deliver them to the provided handler.
+// Consume blocks until the context is canceled.
 type ChannelConsumer struct {
 	topic string
 	ch    chan messaging.Message
@@ -33,7 +35,8 @@ func (c *ChannelConsumer) Feed(msgs ...messaging.Message) {
 	}
 }
 
-// Consume blocks, calling handler for each message fed to the consumer. It returns when ctx is canceled after draining any buffered messages.
+// Consume blocks, calling handler for each message fed to the consumer.
+// It returns when ctx is canceled after draining any buffered messages.
 func (c *ChannelConsumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
 	for {
 		select {

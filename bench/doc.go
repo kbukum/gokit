@@ -1,6 +1,7 @@
 // Package bench provides a pluggable evaluation framework for benchmarking providers against labeled datasets.
 //
-// The framework bridges gokit's provider and pipeline packages to create a composable evaluation workflow:
+// The framework bridges gokit's provider
+// and pipeline packages to create a composable evaluation workflow:
 //
 //   - Evaluator = provider.RequestResponse[[]byte, Prediction[L]]
 //   - Dataset   = stream.Iterator[Sample[L]], loaded from manifest files

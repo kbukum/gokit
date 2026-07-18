@@ -27,7 +27,8 @@ type Service struct {
 	passphrase []byte
 }
 
-// NewService creates a new encryption service with the given key. The passphrase is stretched with PBKDF2-SHA256 using a random 16-byte salt per encryption.
+// NewService creates a new encryption service with the given key.
+// The passphrase is stretched with PBKDF2-SHA256 using a random 16-byte salt per encryption.
 func NewService(key string) (*Service, error) {
 	return &Service{passphrase: []byte(key)}, nil
 }

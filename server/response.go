@@ -24,9 +24,14 @@ type Meta struct {
 	TotalPages int `json:"totalPages,omitempty" example:"5"`
 }
 
-// RespondWithError inspects err: if it is an *apperrors.AppError the status and structured body are derived automatically; otherwise a generic 500 is sent. The response uses Content-Type: application/problem+json per RFC 9457.
+// RespondWithError inspects err: if it is an *apperrors.AppError the status
+// and structured body are derived automatically; otherwise a generic 500 is sent.
+// The response uses Content-Type: application/problem+json per RFC 9457.
 //
-// 5xx responses are logged at Error level (with method, path, status, and the underlying error chain) so operators have a server-side trail even when the client only sees a generic problem detail. Closes F-082 sub-finding. 4xx responses are not logged here — that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
+// 5xx responses are logged at Error level (with method, path, status, and the underlying error chain)
+// so operators have a server-side trail even when the client only sees a generic problem detail.
+// Closes F-082 sub-finding. 4xx responses are not logged here —
+// that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
 func RespondWithError(c *gin.Context, err error) {
 	var appErr *apperrors.AppError
 	if !errors.As(err, &appErr) {

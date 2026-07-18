@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// Formatter transforms a tool Result's content before it is sent to the LLM. This allows tools to return structured data while presenting it to the model in a more readable form (markdown tables, summaries, etc.).
+// Formatter transforms a tool Result's content before it is sent to the LLM.
+// This allows tools to return structured data while presenting it to the model in a more readable form (markdown tables, summaries, etc.).
 type Formatter interface {
 	// Format transforms the result content. The tool name is provided for context.
 	Format(toolName string, result *Result) (string, error)
@@ -19,7 +20,8 @@ func (f FormatterFunc) Format(toolName string, result *Result) (string, error) {
 	return f(toolName, result)
 }
 
-// MarkdownTableFormatter formats JSON array results as markdown tables. Non-array results are returned as-is.
+// MarkdownTableFormatter formats JSON array results as markdown tables.
+// Non-array results are returned as-is.
 var MarkdownTableFormatter Formatter = FormatterFunc(formatMarkdownTable)
 
 // TruncateFormatter returns a Formatter that truncates content to maxLen characters.
@@ -70,7 +72,9 @@ func formatMarkdownTable(_ string, result *Result) (string, error) {
 		return content, nil
 	}
 
-	// Try parsing as JSON array of objects. A parse failure or empty array is not an error condition — it just means the result isn't a tabular JSON payload, so we return the original text content as-is for the caller.
+	// Try parsing as JSON array of objects. A parse failure or empty array is not an error condition —
+	// it just means the result isn't a tabular JSON payload,
+	// so we return the original text content as-is for the caller.
 	var rows []map[string]any
 	if err := json.Unmarshal([]byte(content), &rows); err != nil || len(rows) == 0 {
 		return content, nil //nolint:nilerr // intentional fallback to raw content
@@ -123,7 +127,8 @@ func formatMarkdownTable(_ string, result *Result) (string, error) {
 	return b.String(), nil
 }
 
-// extractKeys returns the top-level keys of the first object in a JSON array, preserving their order as they appear in the source.
+// extractKeys returns the top-level keys of the first object in a JSON array,
+// preserving their order as they appear in the source.
 func extractKeys(data []byte) []string {
 	// Parse the outer array.
 	var arr []json.RawMessage

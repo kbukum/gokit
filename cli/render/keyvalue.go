@@ -7,7 +7,8 @@ import (
 
 // OutputKV is a key-value display block for headers and summaries.
 //
-// Keys are right-aligned to the widest key so values line up in a column. Construct one with [NewOutputKV]; rendering is pure via [OutputKV.String].
+// Keys are right-aligned to the widest key so values line up in a column.
+// Construct one with [NewOutputKV]; rendering is pure via [OutputKV.String].
 type OutputKV struct {
 	keys   []string
 	values []string

@@ -17,7 +17,8 @@ type Component struct {
 	log         *logging.Logger
 }
 
-// NewComponent creates a cache component. The registry is explicit and must contain the selected provider.
+// NewComponent creates a cache component. The registry is explicit
+// and must contain the selected provider.
 func NewComponent(registry *FactoryRegistry, cfg Config, providerCfg any, log *logging.Logger) *Component {
 	return &Component{
 		registry:    registry,

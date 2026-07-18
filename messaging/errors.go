@@ -11,7 +11,8 @@ var ErrClosed = errors.New("messaging: closed")
 // ErrUnsupported is returned when an adapter cannot honor a requested messaging capability.
 var ErrUnsupported = errors.New("messaging: unsupported capability")
 
-// ErrorClassifier categorizes errors for retry/circuit-breaker decisions. Each broker implementation provides its own classification logic.
+// ErrorClassifier categorizes errors for retry/circuit-breaker decisions.
+// Each broker implementation provides its own classification logic.
 type ErrorClassifier interface {
 	// IsConnectionError checks if the error is a connection-level error.
 	IsConnectionError(err error) bool
@@ -31,13 +32,16 @@ var ConnectionPatterns = []string{
 	"dial tcp",
 }
 
-// RetryablePatterns contains generic retryable error patterns that are not connection-specific but typically warrant a retry.
+// RetryablePatterns contains generic retryable error patterns that are not connection-specific
+// but typically warrant a retry.
 var RetryablePatterns = []string{
 	"temporary",
 	"request timed out",
 }
 
-// IsConnectionError checks if err matches any connection pattern. Default ConnectionPatterns are always checked; additional broker-specific patterns can be appended via the variadic argument.
+// IsConnectionError checks if err matches any connection pattern.
+// Default ConnectionPatterns are always checked;
+// additional broker-specific patterns can be appended via the variadic argument.
 func IsConnectionError(err error, extra ...string) bool {
 	if err == nil {
 		return false
@@ -56,7 +60,8 @@ func IsConnectionError(err error, extra ...string) bool {
 	return false
 }
 
-// IsRetryableError checks if err should trigger a retry. Connection errors are always retryable. Additional broker-specific retryable patterns can be appended via the variadic argument.
+// IsRetryableError checks if err should trigger a retry. Connection errors are always retryable.
+// Additional broker-specific retryable patterns can be appended via the variadic argument.
 func IsRetryableError(err error, extra ...string) bool {
 	if err == nil {
 		return false

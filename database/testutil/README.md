@@ -1,6 +1,7 @@
 # Database TestUtil
 
-Testing utilities for the `database` module, providing an in-memory SQLite test database component and fixture helpers.
+Testing utilities for the `database` module, providing an in-memory SQLite test database component
+and fixture helpers.
 
 ## Features
 

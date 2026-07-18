@@ -10,7 +10,9 @@ import (
 	"io"
 )
 
-// ContentAddressableStorage wraps a Storage backend with hash-based deduplication. Content is stored at keys derived from its cryptographic hash, ensuring that identical content is never stored twice.
+// ContentAddressableStorage wraps a Storage backend with hash-based deduplication.
+// Content is stored at keys derived from its cryptographic hash,
+// ensuring that identical content is never stored twice.
 type ContentAddressableStorage struct {
 	storage Storage
 	hasher  func() hash.Hash
@@ -34,7 +36,8 @@ func WithPrefix(prefix string) ContentAddressableOption {
 	}
 }
 
-// NewContentAddressableStorage creates a content-addressable wrapper around the given Storage. Use options to customize the hash function and prefix.
+// NewContentAddressableStorage creates a content-addressable wrapper around the given Storage.
+// Use options to customize the hash function and prefix.
 func NewContentAddressableStorage(storage Storage, opts ...ContentAddressableOption) *ContentAddressableStorage {
 	cas := &ContentAddressableStorage{
 		storage: storage,
@@ -47,10 +50,15 @@ func NewContentAddressableStorage(storage Storage, opts ...ContentAddressableOpt
 	return cas
 }
 
-// Store computes the hash while streaming content to storage. Returns the hex-encoded hash and whether the object was newly stored (vs already existed). The content is never fully buffered in memory.
+// Store computes the hash while streaming content to storage. Returns the hex-encoded hash
+// and whether the object was newly stored (vs already existed).
+// The content is never fully buffered in memory.
 func (c *ContentAddressableStorage) Store(ctx context.Context, reader io.Reader, contentType string) (hexHash string, isNew bool, err error) {
 	h := c.hasher()
-	// Buffer the content while hashing so we can compute the key before uploading. We use a bytes.Buffer because we need to read twice: once for hash, once for upload. For truly large objects a temp-file approach would be better, but this matches the streaming Storage interface without requiring seek support.
+	// Buffer the content while hashing so we can compute the key before uploading.
+	// We use a bytes.Buffer because we need to read twice: once for hash, once for upload.
+	// For truly large objects a temp-file approach would be better,
+	// but this matches the streaming Storage interface without requiring seek support.
 	var buf bytes.Buffer
 	tee := io.TeeReader(reader, h)
 	if _, copyErr := io.Copy(&buf, tee); copyErr != nil {

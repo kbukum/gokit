@@ -149,7 +149,8 @@ func NewServerError(statusCode int, body []byte) *Error {
 	}
 }
 
-// ClassifyStatusCode converts an HTTP status code into a typed error. Returns nil for 2xx status codes.
+// ClassifyStatusCode converts an HTTP status code into a typed error.
+// Returns nil for 2xx status codes.
 func ClassifyStatusCode(statusCode int, body []byte) *Error {
 	switch {
 	case statusCode >= 200 && statusCode < 300:

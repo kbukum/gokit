@@ -16,9 +16,11 @@ var (
 	_ testutil.TestComponent = (*Server)(nil)
 )
 
-// Server is a test server for ConnectRPC handlers backed by httptest.Server. It implements both component.Component and testutil.TestComponent.
+// Server is a test server for ConnectRPC handlers backed by httptest.Server.
+// It implements both component.Component and testutil.TestComponent.
 //
-// Mount Connect handlers before starting the server, then use BaseURL() to create real ConnectRPC clients for testing.
+// Mount Connect handlers before starting the server,
+// then use BaseURL() to create real ConnectRPC clients for testing.
 type Server struct {
 	mux     *http.ServeMux
 	ts      *httptest.Server
@@ -33,7 +35,8 @@ func NewServer() *Server {
 	}
 }
 
-// Mount registers a ConnectRPC handler on the test server. Call this before Start() with the path and handler returned by a generated New*Handler function.
+// Mount registers a ConnectRPC handler on the test server. Call this before Start() with the path
+// and handler returned by a generated New*Handler function.
 //
 // Example:
 //
@@ -43,7 +46,8 @@ func (s *Server) Mount(path string, handler http.Handler) {
 	s.mux.Handle(path, handler)
 }
 
-// BaseURL returns the test server's base URL (e.g., "http://127.0.0.1:PORT"). Returns empty string if the server is not started.
+// BaseURL returns the test server's base URL (e.g., "http://127.0.0.1:PORT").
+// Returns empty string if the server is not started.
 func (s *Server) BaseURL() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -53,7 +57,8 @@ func (s *Server) BaseURL() string {
 	return s.ts.URL
 }
 
-// Client returns an *http.Client configured for the test server. Use this with ConnectRPC client constructors.
+// Client returns an *http.Client configured for the test server.
+// Use this with ConnectRPC client constructors.
 func (s *Server) Client() *http.Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

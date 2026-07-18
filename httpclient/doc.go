@@ -1,6 +1,9 @@
-// Package httpclient provides a configurable HTTP adapter with built-in authentication, TLS, resilience (retry, circuit breaker, rate limiting), and streaming support.
+// Package httpclient provides a configurable HTTP adapter with built-in authentication, TLS,
+// resilience (retry, circuit breaker, rate limiting), and streaming support.
 //
-// The Adapter is both a full-capability HTTP client and a provider.RequestResponse implementation, so it can be used standalone or composed via the provider framework (WithResilience, Manager, Registry, etc.).
+// The Adapter is both a full-capability HTTP client and a provider.RequestResponse implementation,
+// so it can be used standalone
+// or composed via the provider framework (WithResilience, Manager, Registry, etc.).
 //
 // # Basic Usage
 //

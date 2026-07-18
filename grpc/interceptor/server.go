@@ -14,7 +14,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// UnaryServerLoggingInterceptor returns a unary server interceptor that logs each incoming RPC with method, duration, and status code.
+// UnaryServerLoggingInterceptor returns a unary server interceptor that logs each incoming RPC with method,
+// duration, and status code.
 func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -54,7 +55,8 @@ func UnaryServerLoggingInterceptor(log *logging.Logger) grpc.UnaryServerIntercep
 	}
 }
 
-// UnaryServerErrorInterceptor returns a unary server interceptor that converts AppError values returned by handlers into proper gRPC status errors, ensuring clients receive structured codes instead of codes.Unknown.
+// UnaryServerErrorInterceptor returns a unary server interceptor that converts AppError values returned by handlers into proper gRPC status errors,
+// ensuring clients receive structured codes instead of codes.Unknown.
 func UnaryServerErrorInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -76,7 +78,8 @@ func UnaryServerErrorInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-// appErrorToGRPCStatus maps an AppError to a gRPC status error. Mirrors the inverse mapping in errors.go (FromGRPC) without creating a cross-package import cycle between interceptor ↔ root grpc package.
+// appErrorToGRPCStatus maps an AppError to a gRPC status error.
+// Mirrors the inverse mapping in errors.go (FromGRPC) without creating a cross-package import cycle between interceptor ↔ root grpc package.
 func appErrorToGRPCStatus(appErr *apperrors.AppError) error {
 	var code codes.Code
 	switch appErr.Code {

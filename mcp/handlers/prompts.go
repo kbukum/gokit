@@ -15,7 +15,8 @@ type PromptEntry struct {
 	Handler sdkmcp.PromptHandler
 }
 
-// wrapPromptHandler enforces the prompt allow-list and audits the outcome around the caller-supplied handler.
+// wrapPromptHandler enforces the prompt allow-list
+// and audits the outcome around the caller-supplied handler.
 func (h *Handler) wrapPromptHandler(entry PromptEntry) sdkmcp.PromptHandler {
 	name := entry.Prompt.Name
 	return func(ctx context.Context, req *sdkmcp.GetPromptRequest) (*sdkmcp.GetPromptResult, error) {

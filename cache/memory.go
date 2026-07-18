@@ -72,7 +72,8 @@ func (s *MemoryStore) Get(ctx context.Context, key string) (value []byte, found 
 	return cloneBytes(item.value), true, nil
 }
 
-// Set stores a copy of value with the given TTL. ttl=0 uses the store default; a resulting zero TTL means no expiration.
+// Set stores a copy of value with the given TTL. ttl=0 uses the store default;
+// a resulting zero TTL means no expiration.
 func (s *MemoryStore) Set(_ context.Context, key string, value []byte, ttl time.Duration) error {
 	if ttl == 0 {
 		ttl = s.defaultTTL

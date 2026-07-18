@@ -13,7 +13,8 @@ type routerConfig struct {
 	keyFunc func(Message) string
 }
 
-// WithRouterKeyFunc overrides the default routing key extractor. By default, the message topic is used as the routing key.
+// WithRouterKeyFunc overrides the default routing key extractor. By default,
+// the message topic is used as the routing key.
 func WithRouterKeyFunc(fn func(Message) string) RouterOption {
 	return func(c *routerConfig) { c.keyFunc = fn }
 }
@@ -25,7 +26,9 @@ type route struct {
 	prefix  string // non-empty when pattern ends with ".*"
 }
 
-// Router routes incoming messages to handlers based on topic or custom key. It supports exact match, wildcard patterns (e.g. "content.*"), and a default fallback handler. Router is safe for concurrent use.
+// Router routes incoming messages to handlers based on topic or custom key.
+// It supports exact match, wildcard patterns (e.g. "content.*"), and a default fallback handler.
+// Router is safe for concurrent use.
 type Router struct {
 	mu       sync.RWMutex
 	routes   []route
@@ -38,7 +41,9 @@ func NewRouter(opts ...RouterOption) *Router {
 	return &Router{opts: opts}
 }
 
-// Handle registers a handler for the given pattern. Patterns support exact match ("content.discovered") or wildcard ("content.*") where "*" matches any suffix after the last dot.
+// Handle registers a handler for the given pattern.
+// Patterns support exact match ("content.discovered")
+// or wildcard ("content.*") where "*" matches any suffix after the last dot.
 func (r *Router) Handle(pattern string, handler MessageHandler) *Router {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,7 +64,8 @@ func (r *Router) Default(handler MessageHandler) *Router {
 	return r
 }
 
-// Handler returns a MessageHandler that routes messages based on registered patterns. The routing key is the message topic by default; use WithRouterKeyFunc to override.
+// Handler returns a MessageHandler that routes messages based on registered patterns.
+// The routing key is the message topic by default; use WithRouterKeyFunc to override.
 func (r *Router) Handler() MessageHandler {
 	cfg := routerConfig{
 		keyFunc: func(msg Message) string { return msg.Topic },

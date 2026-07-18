@@ -8,7 +8,8 @@ import (
 	"github.com/kbukum/gokit/auth/oidc"
 )
 
-// MockProvider implements oidc.Provider and oidc.ProviderMeta for testing code that depends on OAuth providers without needing a real HTTP server.
+// MockProvider implements oidc.Provider
+// and oidc.ProviderMeta for testing code that depends on OAuth providers without needing a real HTTP server.
 //
 // Use it to inject known responses into code that calls Exchange/UserInfo:
 //
@@ -52,7 +53,8 @@ type MockProvider struct {
 	// RefreshFunc, if set, is called instead of returning RefreshResult/RefreshErr.
 	RefreshFunc func(ctx context.Context, token oidc.RefreshInput) (*oidc.TokenResult, error)
 
-	// ExchangeFunc, if set, is called instead of returning ExchangeResult/ExchangeErr. This allows dynamic behavior in tests.
+	// ExchangeFunc, if set, is called instead of returning ExchangeResult/ExchangeErr.
+	// This allows dynamic behavior in tests.
 	ExchangeFunc func(ctx context.Context, code string, opts ...oidc.ExchangeOption) (*oidc.TokenResult, error)
 
 	// UserInfoFunc, if set, is called instead of returning UserInfoResult/UserInfoErr.

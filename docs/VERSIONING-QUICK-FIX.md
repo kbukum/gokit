@@ -11,7 +11,8 @@ github.com/kbukum/gokit/database v0.0.0-00010101000000-000000000000
 
 ## Root Cause
 
-The modules don't have Git tags, so Go cannot determine their version and falls back to a pseudo-version.
+The modules don't have Git tags, so Go cannot determine their version
+and falls back to a pseudo-version.
 
 ## Quick Fix (3 Steps)
 
@@ -99,7 +100,8 @@ go mod tidy
 
 ## For Local Development
 
-If you want to continue using local development (without tags), keep the `replace` directives in your `go.mod`:
+If you want to continue using local development (without tags),
+keep the `replace` directives in your `go.mod`:
 
 ```go
 replace (
@@ -110,7 +112,8 @@ replace (
 )
 ```
 
-The pseudo-versions won't affect functionality when using `replace` directives. They only appear in the dependency list but are overridden by the local paths.
+The pseudo-versions won't affect functionality when using `replace` directives.
+They only appear in the dependency list but are overridden by the local paths.
 
 ## Future Releases
 

@@ -33,7 +33,8 @@ func getValidator() *validator.Validate {
 	return validate
 }
 
-// Validate validates a struct using struct tags. Uses tags like `validate:"required,email,max=255"`.
+// Validate validates a struct using struct tags.
+// Uses tags like `validate:"required,email,max=255"`.
 func Validate(s any) error {
 	v := getValidator()
 	err := v.Struct(s)

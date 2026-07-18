@@ -5,7 +5,8 @@ import (
 	"github.com/kbukum/gokit/dataset/stage"
 )
 
-// Progress observes a [Collector] run. Embed [NullProgress] and override only the events you care about.
+// Progress observes a [Collector] run. Embed [NullProgress]
+// and override only the events you care about.
 type Progress interface {
 	// OnSourceStart fires before a source is streamed.
 	OnSourceStart(index int, name string, maxItems int, hasMax bool)

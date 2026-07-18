@@ -1,6 +1,10 @@
-// Package tlstest provides TLS certificate generation for testing. All certificates are created using Go's crypto stdlib — no external tools needed. Generated files auto-clean via t.TempDir().
+// Package tlstest provides TLS certificate generation for testing.
+// All certificates are created using Go's crypto stdlib — no external tools needed.
+// Generated files auto-clean via t.TempDir().
 //
-// This package lives in the root gokit module so it can be imported by both root module tests (e.g. security/tls_test.go) and sub-module tests (e.g. httpclient, grpc) without circular dependencies.
+// This package lives in the root gokit module
+// so it can be imported by both root module tests (e.g. security/tls_test.go)
+// and sub-module tests (e.g. httpclient, grpc) without circular dependencies.
 //
 // Usage:
 //
@@ -45,7 +49,9 @@ type TLSCerts struct {
 	CertPool *x509.CertPool
 }
 
-// GenerateTLSCerts creates a self-signed CA and a server certificate for testing. The server cert is valid for localhost, 127.0.0.1, and [::1]. Files are written to t.TempDir() and auto-cleaned on test completion.
+// GenerateTLSCerts creates a self-signed CA and a server certificate for testing.
+// The server cert is valid for localhost, 127.0.0.1, and [::1]. Files are written to t.TempDir()
+// and auto-cleaned on test completion.
 func GenerateTLSCerts(t testing.TB) *TLSCerts {
 	t.Helper()
 	dir := t.TempDir()
@@ -136,7 +142,8 @@ func GenerateTLSCerts(t testing.TB) *TLSCerts {
 	}
 }
 
-// WriteInvalidPEM writes a file with content that looks like PEM but isn't a valid certificate. Useful for testing error paths.
+// WriteInvalidPEM writes a file with content that looks like PEM but isn't a valid certificate.
+// Useful for testing error paths.
 func WriteInvalidPEM(t testing.TB, filename string) string {
 	t.Helper()
 	dir := t.TempDir()

@@ -8,24 +8,32 @@ import (
 
 // Value is the canonical in-memory value tree shared by every [Codec].
 //
-// It is the untyped result of decoding JSON — nested map[string]any, []any, float64, string, bool, and nil. Using any here is a deliberate, documented exception to the no-any rule: the tree carries genuinely heterogeneous document data whose leaf values cannot be given a closed type.
+// It is the untyped result of decoding JSON — nested map[string]any, []any, float64, string, bool,
+// and nil. Using any here is a deliberate, documented exception to the no-any rule:
+// the tree carries genuinely heterogeneous document data whose leaf values cannot be given a closed type.
 type Value = any
 
 // Codec encodes and decodes one structured-text format over the [Value] model.
 //
-// Implementations translate a single on-disk/text representation (JSON, TOML, …) to and from [Value]. The interface is intentionally small so a codec can be held as an interface value and selected at runtime; type-driven conversions live in the free functions [Encode] and [Decode].
+// Implementations translate a single on-disk/text representation (JSON, TOML, …) to
+// and from [Value]. The interface is intentionally small
+// so a codec can be held as an interface value and selected at runtime;
+// type-driven conversions live in the free functions [Encode] and [Decode].
 type Codec interface {
 	// Name returns a short identifier for diagnostics (for example "toml").
 	Name() string
-	// EncodeValue encodes a value tree into this codec's textual representation, returning a typed error (cause preserved) when value cannot be represented.
+	// EncodeValue encodes a value tree into this codec's textual representation,
+	// returning a typed error (cause preserved) when value cannot be represented.
 	EncodeValue(value Value) (string, error)
-	// DecodeValue decodes text into a value tree, returning a typed error (cause preserved) when contents is malformed for this format.
+	// DecodeValue decodes text into a value tree,
+	// returning a typed error (cause preserved) when contents is malformed for this format.
 	DecodeValue(contents string) (Value, error)
 }
 
 // Encode encodes value using codec by first routing it through the [Value] tree.
 //
-// It returns a typed error (cause preserved) when value cannot be converted to the value model or encoded by codec.
+// It returns a typed error (cause preserved) when value cannot be converted to the value model
+// or encoded by codec.
 func Encode[T any](codec Codec, value T) (string, error) {
 	tree, err := toValue(value)
 	if err != nil {

@@ -17,9 +17,11 @@ import (
 // Generic Token Authentication Interceptor
 // ---------------------------------------------------------------------------
 
-// TokenAuthInterceptor returns a Connect interceptor that validates tokens using any auth.TokenValidator implementation and stores the parsed claims in context via authctx.Set.
+// TokenAuthInterceptor returns a Connect interceptor that validates tokens using any auth.TokenValidator implementation
+// and stores the parsed claims in context via authctx.Set.
 //
-// This is the preferred way to add authentication — it works with any validator (JWT, OIDC, API key, etc.) without coupling to a specific implementation.
+// This is the preferred way to add authentication —
+// it works with any validator (JWT, OIDC, API key, etc.) without coupling to a specific implementation.
 //
 // Usage:
 //
@@ -63,7 +65,9 @@ func TokenAuthInterceptor(validator auth.TokenValidator) connect.UnaryIntercepto
 	}
 }
 
-// OptionalTokenAuthInterceptor is like TokenAuthInterceptor but allows requests without authentication to proceed. If a valid token is present, claims are stored in context; otherwise, the request continues without claims.
+// OptionalTokenAuthInterceptor is like TokenAuthInterceptor
+// but allows requests without authentication to proceed. If a valid token is present,
+// claims are stored in context; otherwise, the request continues without claims.
 func OptionalTokenAuthInterceptor(validator auth.TokenValidator) connect.UnaryInterceptorFunc {
 	return func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -92,7 +96,8 @@ func OptionalTokenAuthInterceptor(validator auth.TokenValidator) connect.UnaryIn
 // JWT Authentication Interceptor
 // ---------------------------------------------------------------------------
 
-// JWTAuthInterceptor returns a Connect interceptor that validates JWT tokens using the provided JWT service and stores the parsed claims in the request context using authctx.
+// JWTAuthInterceptor returns a Connect interceptor that validates JWT tokens using the provided JWT service
+// and stores the parsed claims in the request context using authctx.
 //
 // The interceptor:
 //  1. Extracts the JWT from the "Authorization: Bearer <token>" header
@@ -172,9 +177,12 @@ func JWTAuthInterceptor[T gojwt.Claims](jwtSvc *jwt.Service[T]) connect.UnaryInt
 // Optional JWT Interceptor
 // ---------------------------------------------------------------------------
 
-// OptionalJWTAuthInterceptor is like JWTAuthInterceptor but allows requests without authentication to proceed. If a valid token is present, claims are stored in context; otherwise, the request continues without claims.
+// OptionalJWTAuthInterceptor is like JWTAuthInterceptor
+// but allows requests without authentication to proceed. If a valid token is present,
+// claims are stored in context; otherwise, the request continues without claims.
 //
-// This is useful for endpoints that work both for authenticated and unauthenticated users (e.g., public content with optional user features).
+// This is useful for endpoints that work both for authenticated
+// and unauthenticated users (e.g., public content with optional user features).
 //
 // Usage:
 //
@@ -227,7 +235,8 @@ func OptionalJWTAuthInterceptor[T gojwt.Claims](jwtSvc *jwt.Service[T]) connect.
 // Helper: Require Auth in Handlers
 // ---------------------------------------------------------------------------
 
-// RequireAuth is a helper function to retrieve claims from context in handlers. Returns a Connect error if claims are missing (e.g., endpoint called without required authentication middleware).
+// RequireAuth is a helper function to retrieve claims from context in handlers.
+// Returns a Connect error if claims are missing (e.g., endpoint called without required authentication middleware).
 //
 // Usage in handlers:
 //

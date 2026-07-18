@@ -33,7 +33,8 @@ func DefaultRateLimiterConfig(name string) RateLimiterConfig {
 	}
 }
 
-// RateLimiter implements a token bucket rate limiter. It controls the rate of requests to prevent overwhelming services.
+// RateLimiter implements a token bucket rate limiter.
+// It controls the rate of requests to prevent overwhelming services.
 type RateLimiter struct {
 	config RateLimiterConfig
 
@@ -58,7 +59,8 @@ func NewRateLimiter(config RateLimiterConfig) *RateLimiter {
 	}
 }
 
-// Allow checks if a request is allowed without blocking. Returns true if allowed, false if rate limited.
+// Allow checks if a request is allowed without blocking. Returns true if allowed,
+// false if rate limited.
 func (rl *RateLimiter) Allow() bool {
 	return rl.AllowN(1)
 }

@@ -1,10 +1,10 @@
 # database
 
-GORM-backed database contracts, component lifecycle, transaction helpers, repository
-helpers, migrations, query builder, and tenant utilities.
+GORM-backed database contracts, component lifecycle, transaction helpers, repository helpers,
+migrations, query builder, and tenant utilities.
 
-Core does not select a backend driver by default. Applications register or inject the
-driver they need; adapter packages must not use import-time registration.
+Core does not select a backend driver by default. Applications register
+or inject the driver they need; adapter packages must not use import-time registration.
 
 ## Explicit driver
 

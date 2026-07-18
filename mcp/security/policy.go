@@ -8,9 +8,14 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// Policy is the injected, fail-closed hardening configuration applied to every gated MCP access. A zero Policy exposes everything and enforces no limits, authorization, or audit; each field opts a concern in. It is assembled by the parent mcp package from its ServerOptions and consulted by the tool, prompt, and resource handlers.
+// Policy is the injected, fail-closed hardening configuration applied to every gated MCP access.
+// A zero Policy exposes everything and enforces no limits, authorization, or audit;
+// each field opts a concern in. It is assembled by the parent mcp package from its ServerOptions
+// and consulted by the tool, prompt, and resource handlers.
 type Policy struct {
-	// AllowedTools, AllowedPrompts, and AllowedResources are capability allow-lists. An empty set exposes everything of that kind; a populated set fails closed, exposing only the named members.
+	// AllowedTools, AllowedPrompts, and AllowedResources are capability allow-lists.
+	// An empty set exposes everything of that kind; a populated set fails closed,
+	// exposing only the named members.
 	AllowedTools     map[string]struct{}
 	AllowedPrompts   map[string]struct{}
 	AllowedResources map[string]struct{}
@@ -22,11 +27,13 @@ type Policy struct {
 
 	// MaxInputBytes rejects tool-call arguments larger than the limit. Zero means unlimited.
 	MaxInputBytes int
-	// MaxResultBytes rejects tool results (and sampled/elicited content) larger than the limit. Zero means unlimited.
+	// MaxResultBytes rejects tool results (and sampled/elicited content) larger than the limit.
+	// Zero means unlimited.
 	MaxResultBytes int
 }
 
-// ToSet builds a membership set from names, the canonical representation for the Policy allow-lists.
+// ToSet builds a membership set from names,
+// the canonical representation for the Policy allow-lists.
 func ToSet(names []string) map[string]struct{} {
 	set := make(map[string]struct{}, len(names))
 	for _, n := range names {
@@ -82,7 +89,8 @@ func authzRequest(req ToolAuthorizationRequest) authz.Request {
 	}
 }
 
-// DeniedMessage formats the client-facing message for a denied tool call, appending reason when present.
+// DeniedMessage formats the client-facing message for a denied tool call,
+// appending reason when present.
 func DeniedMessage(reason string) string {
 	if reason == "" {
 		return "tool call denied"

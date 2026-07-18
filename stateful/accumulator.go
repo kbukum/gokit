@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// Accumulator accumulates values of type V with configurable flushing. Thread-safe for concurrent Append operations.
+// Accumulator accumulates values of type V with configurable flushing.
+// Thread-safe for concurrent Append operations.
 type Accumulator[V any] struct {
 	store     Store[V]
 	config    Config[V]
@@ -17,7 +18,8 @@ type Accumulator[V any] struct {
 	mu        sync.RWMutex
 }
 
-// NewAccumulator creates a new accumulator with the given store and configuration. If no Measurer is provided in options, CountMeasurer is used by default.
+// NewAccumulator creates a new accumulator with the given store and configuration.
+// If no Measurer is provided in options, CountMeasurer is used by default.
 func NewAccumulator[V any](store Store[V], config Config[V], opts ...Option[V]) *Accumulator[V] {
 	acc := &Accumulator[V]{
 		store:    store,
@@ -44,7 +46,9 @@ func WithMeasurer[V any](m Measurer[V]) Option[V] {
 	}
 }
 
-// Append adds a value to the accumulator. If MaxSize is configured and exceeded, oldest values are evicted (FIFO). After appending, triggers are checked and the accumulator may flush automatically.
+// Append adds a value to the accumulator. If MaxSize is configured and exceeded,
+// oldest values are evicted (FIFO). After appending, triggers are checked
+// and the accumulator may flush automatically.
 //
 // If KeepAlive is enabled, this resets the TTL.
 func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
@@ -74,7 +78,8 @@ func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
 	return a.checkAndFlush(ctx)
 }
 
-// Flush manually flushes the accumulator, returning all values. This bypasses trigger checks and rate limiting.
+// Flush manually flushes the accumulator, returning all values. This bypasses trigger checks
+// and rate limiting.
 func (a *Accumulator[V]) Flush(ctx context.Context) ([]V, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -148,7 +153,8 @@ func (a *Accumulator[V]) Close() error {
 	return a.store.Close()
 }
 
-// checkAndFlush checks triggers and flushes if conditions are met. Respects MinInterval rate limiting.
+// checkAndFlush checks triggers and flushes if conditions are met.
+// Respects MinInterval rate limiting.
 func (a *Accumulator[V]) checkAndFlush(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()

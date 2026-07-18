@@ -2,7 +2,8 @@ package messaging
 
 import "time"
 
-// MetricsCollector records messaging operational metrics. Each broker implementation provides its own metrics collection.
+// MetricsCollector records messaging operational metrics.
+// Each broker implementation provides its own metrics collection.
 type MetricsCollector interface {
 	// RecordPublish records a publish operation's outcome.
 	RecordPublish(topic string, duration time.Duration, err error)

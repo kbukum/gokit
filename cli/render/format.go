@@ -30,7 +30,8 @@ func (f OutputFormat) String() string {
 
 // ParseOutputFormat parses a format from its lowercase name (text/json/yaml).
 //
-// The second return value is false for any other value, so the caller can raise its own typed usage error naming the accepted values.
+// The second return value is false for any other value,
+// so the caller can raise its own typed usage error naming the accepted values.
 func ParseOutputFormat(name string) (OutputFormat, bool) {
 	switch name {
 	case "text":

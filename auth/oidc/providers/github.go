@@ -21,7 +21,8 @@ const (
 // GitHubDefaultScopes are the standard scopes for GitHub login.
 var GitHubDefaultScopes = []string{"read:user", "user:email"}
 
-// NewGitHub creates a GitHub OAuth2 provider. Note: GitHub uses plain OAuth2, not OIDC — there is no ID token. All fields have sensible defaults; override any by setting them in cfg.
+// NewGitHub creates a GitHub OAuth2 provider. Note: GitHub uses plain OAuth2, not OIDC —
+// there is no ID token. All fields have sensible defaults; override any by setting them in cfg.
 //
 // For GitHub Enterprise, use NewGeneric() with custom endpoints:
 //
@@ -51,7 +52,8 @@ func NewGitHub(cfg ProviderConfig) *GenericProvider {
 	})
 }
 
-// newGitHubEmailFallback returns a hook that fetches the user's primary email from the GitHub /user/emails endpoint when it's not public on /user. The endpoint URL is parameterized to support GitHub Enterprise.
+// newGitHubEmailFallback returns a hook that fetches the user's primary email from the GitHub /user/emails endpoint when it's not public on /user.
+// The endpoint URL is parameterized to support GitHub Enterprise.
 func newGitHubEmailFallback(emailsEndpoint string) func(ctx context.Context, accessToken string, info *oidc.UserInfo) error {
 	return func(ctx context.Context, accessToken string, info *oidc.UserInfo) error {
 		if info.Email != "" {

@@ -26,7 +26,8 @@ func (v *VersionInfo) Short() string {
 	return fmt.Sprintf("%s-%s", v.Version, v.GitCommit)
 }
 
-// Full returns a detailed version string including a non-default branch, dirty state, and build date when available.
+// Full returns a detailed version string including a non-default branch, dirty state,
+// and build date when available.
 func (v *VersionInfo) Full() string {
 	parts := []string{v.Version}
 

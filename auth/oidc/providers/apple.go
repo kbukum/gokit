@@ -57,7 +57,8 @@ func NewApple(cfg AppleConfig) *GenericProvider {
 		},
 	}
 
-	// If private key is provided, use JWT-based dynamic secret generation. Otherwise fall back to static client secret (for testing/simple setups).
+	// If private key is provided, use JWT-based dynamic secret generation.
+	// Otherwise fall back to static client secret (for testing/simple setups).
 	if cfg.PrivateKey != "" {
 		gcfg.ClientSecretFunc = newAppleSecretFunc(cfg)
 	}

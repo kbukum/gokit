@@ -37,7 +37,8 @@ const (
 	CriticalityOptional Criticality = "optional"
 )
 
-// DiscoveryClient defines the high-level service discovery interface. The concrete Client type implements this interface.
+// DiscoveryClient defines the high-level service discovery interface.
+// The concrete Client type implements this interface.
 type DiscoveryClient interface {
 	// Discover returns all healthy instances of a service, optionally filtered by protocol.
 	Discover(ctx context.Context, serviceName string, protocol ...string) ([]ServiceInstance, error)

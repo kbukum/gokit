@@ -6,7 +6,9 @@ import (
 	"time"
 )
 
-// MemoryStore is an in-memory ContextStore for testing and development. It enforces TTL expiration on Load for testing fidelity. Not intended for production use (no persistence, no distributed locking).
+// MemoryStore is an in-memory ContextStore for testing and development.
+// It enforces TTL expiration on Load for testing fidelity.
+// Not intended for production use (no persistence, no distributed locking).
 type MemoryStore[C any] struct {
 	mu    sync.RWMutex
 	items map[string]memEntry[C]
@@ -26,7 +28,9 @@ func NewMemoryStore[C any]() *MemoryStore[C] {
 
 // Load retrieves state. Returns (nil, nil) if key doesn't exist or has expired.
 //
-// Store contract — callers branch on the value, not on a typed error. Using a sentinel error here would force every caller to errors.Is on the hot read path. See provider.Store interface docs.
+// Store contract — callers branch on the value, not on a typed error.
+// Using a sentinel error here would force every caller to errors.Is on the hot read path.
+// See provider.Store interface docs.
 //
 //nolint:nilnil // (nil, nil) is the documented "not found" sentinel of the
 func (s *MemoryStore[C]) Load(_ context.Context, key string) (*C, error) {
@@ -67,7 +71,8 @@ func (s *MemoryStore[C]) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-// Len returns the number of entries (including expired but not yet cleaned up). Useful for test assertions.
+// Len returns the number of entries (including expired but not yet cleaned up).
+// Useful for test assertions.
 func (s *MemoryStore[C]) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

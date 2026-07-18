@@ -1,9 +1,9 @@
 # git
 
-Domain-grouped interfaces and backend orchestration for Git repository operations. The root
-package exposes capability-oriented interfaces (refs, remotes, config, diff, log, blame, index,
-commits, …) and shared types; concrete implementations live in backend sub-packages (`embedded`
-and `cli`). A `*Repo` composes those backends behind a single ergonomic surface.
+Domain-grouped interfaces and backend orchestration for Git repository operations.
+The root package exposes capability-oriented interfaces (refs, remotes, config, diff, log, blame, index, commits, …)
+and shared types; concrete implementations live in backend sub-packages (`embedded` and `cli`).
+A `*Repo` composes those backends behind a single ergonomic surface.
 
 ## Install
 

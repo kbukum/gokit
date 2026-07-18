@@ -7,13 +7,15 @@ import (
 	"io"
 )
 
-// ObjectInfo contains minimal metadata about a stored object. This is a simplified alternative to FileInfo for callers that only need key and size information.
+// ObjectInfo contains minimal metadata about a stored object.
+// This is a simplified alternative to FileInfo for callers that only need key and size information.
 type ObjectInfo struct {
 	Key  string // Object path/key
 	Size int64  // Size in bytes
 }
 
-// ByteClient provides a []byte-oriented interface for storage operations. This is useful for callers that work with in-memory data rather than streams.
+// ByteClient provides a []byte-oriented interface for storage operations.
+// This is useful for callers that work with in-memory data rather than streams.
 type ByteClient interface {
 	// Upload stores data at the given path.
 	Upload(ctx context.Context, path string, data []byte) error

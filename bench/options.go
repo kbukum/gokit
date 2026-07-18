@@ -2,7 +2,10 @@ package bench
 
 import "time"
 
-// RunMetric computes evaluation scores from predictions vs ground truth. This interface mirrors metric.Metric[L] but lives in bench to avoid an import cycle (bench/metric already imports bench). Use metric.AsRunMetric to adapt metric.Metric[L] values.
+// RunMetric computes evaluation scores from predictions vs ground truth.
+// This interface mirrors metric.Metric[L]
+// but lives in bench to avoid an import cycle (bench/metric already imports bench).
+// Use metric.AsRunMetric to adapt metric.Metric[L] values.
 type RunMetric[L comparable] interface {
 	Name() string
 	Compute(scored []ScoredSample[L]) MetricResult
@@ -41,7 +44,8 @@ func WithStorage[L comparable](s RunStorage) RunOption[L] {
 	}
 }
 
-// WithConcurrency sets the number of parallel evaluation workers. Values <= 1 mean sequential execution.
+// WithConcurrency sets the number of parallel evaluation workers.
+// Values <= 1 mean sequential execution.
 func WithConcurrency[L comparable](n int) RunOption[L] {
 	return func(c *runConfig[L]) {
 		if n < 1 {

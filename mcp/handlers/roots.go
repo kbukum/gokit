@@ -9,7 +9,9 @@ import (
 	"github.com/kbukum/gokit/mcp/security"
 )
 
-// ListRoots asks the connected client for its roots over the given session. The call is bounded by ctx and audited. It fails closed when the session is nil rather than dereferencing it.
+// ListRoots asks the connected client for its roots over the given session.
+// The call is bounded by ctx and audited.
+// It fails closed when the session is nil rather than dereferencing it.
 func (h *Handler) ListRoots(ctx context.Context, ss *sdkmcp.ServerSession, params *sdkmcp.ListRootsParams) (*sdkmcp.ListRootsResult, error) {
 	if ss == nil {
 		return nil, fmt.Errorf("mcp: roots/list requires an active session")

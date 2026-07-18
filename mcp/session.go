@@ -6,12 +6,16 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Sample performs a server-to-client sampling request (sampling/createMessage) over the given session, enforcing the configured result size limit and auditing the outcome. The returned message is untrusted model output.
+// Sample performs a server-to-client sampling request (sampling/createMessage) over the given session,
+// enforcing the configured result size limit and auditing the outcome.
+// The returned message is untrusted model output.
 func (s *Server) Sample(ctx context.Context, ss *sdkmcp.ServerSession, params *sdkmcp.CreateMessageParams) (*sdkmcp.CreateMessageResult, error) {
 	return s.handler.Sample(ctx, ss, params)
 }
 
-// Elicit performs a server-to-client elicitation request over the given session, enforcing the configured result size limit and auditing the outcome. The submitted content is untrusted user input.
+// Elicit performs a server-to-client elicitation request over the given session,
+// enforcing the configured result size limit and auditing the outcome.
+// The submitted content is untrusted user input.
 func (s *Server) Elicit(ctx context.Context, ss *sdkmcp.ServerSession, params *sdkmcp.ElicitParams) (*sdkmcp.ElicitResult, error) {
 	return s.handler.Elicit(ctx, ss, params)
 }

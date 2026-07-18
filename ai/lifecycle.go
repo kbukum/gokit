@@ -5,9 +5,11 @@ import (
 	"time"
 )
 
-// Lifecycle is a small mixin for AI-plug types that natively implement component.Component (per locked decision D12). It is concurrency-safe and tracks ready state plus the last-call timestamp used by Health.
+// Lifecycle is a small mixin for AI-plug types that natively implement component.Component (per locked decision D12).
+// It is concurrency-safe and tracks ready state plus the last-call timestamp used by Health.
 //
-// Embed it as a value field (not a pointer) and call MarkReady from Start, MarkStopped from Stop, and Touch on every successful provider call (Execute / Stream / Embed / Invoke / etc.).
+// Embed it as a value field (not a pointer) and call MarkReady from Start, MarkStopped from Stop,
+// and Touch on every successful provider call (Execute / Stream / Embed / Invoke / etc.).
 type Lifecycle struct {
 	mu       sync.RWMutex
 	ready    bool
@@ -45,7 +47,8 @@ func (l *Lifecycle) Ready() bool {
 	return l.ready
 }
 
-// LastCall returns the timestamp of the most recent successful call, or the zero time if no call has been recorded.
+// LastCall returns the timestamp of the most recent successful call,
+// or the zero time if no call has been recorded.
 func (l *Lifecycle) LastCall() time.Time {
 	l.mu.RLock()
 	defer l.mu.RUnlock()

@@ -1,4 +1,5 @@
-// Package workload provides a provider-based workload manager for deploying and managing workloads across different runtimes (Docker, Kubernetes, etc.).
+// Package workload provides a provider-based workload manager for deploying
+// and managing workloads across different runtimes (Docker, Kubernetes, etc.).
 package workload
 
 import (
@@ -77,7 +78,8 @@ type ImageInspector interface {
 
 // ImageEventWatcher watches image lifecycle events (pull, delete, tag, untag).
 type ImageEventWatcher interface {
-	// WatchImageEvents streams image-scoped events from the runtime. The filter allows restricting which events are returned.
+	// WatchImageEvents streams image-scoped events from the runtime.
+	// The filter allows restricting which events are returned.
 	WatchImageEvents(ctx context.Context, filter ImageEventFilter) (<-chan ImageEvent, error)
 }
 

@@ -1,6 +1,7 @@
 // Package testutil provides test utilities for OAuth/OIDC provider testing.
 //
-// It includes a mock OAuth server that simulates the standard OAuth2 flow (authorization, token exchange, userinfo) and a MockProvider for unit testing code that depends on oidc.Provider without needing HTTP.
+// It includes a mock OAuth server that simulates the standard OAuth2 flow (authorization, token exchange, userinfo)
+// and a MockProvider for unit testing code that depends on oidc.Provider without needing HTTP.
 //
 // Usage with MockOAuthServer (integration testing):
 //

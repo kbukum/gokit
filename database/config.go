@@ -14,7 +14,8 @@ type Config struct {
 	// Enabled controls whether the database component is active.
 	Enabled bool `yaml:"enabled" mapstructure:"enabled"`
 
-	// DSN is the full database connection string (legacy). When set, it takes precedence over structured fields. Prefer using Host/Port/DBName/User/Password instead.
+	// DSN is the full database connection string (legacy). When set,
+	// it takes precedence over structured fields. Prefer using Host/Port/DBName/User/Password instead.
 	DSN string `yaml:"dsn" mapstructure:"dsn"`
 
 	// Host is the database server hostname or IP.
@@ -35,7 +36,8 @@ type Config struct {
 	// SSLMode controls the SSL connection mode (e.g. "disable", "require").
 	SSLMode string `yaml:"ssl_mode" mapstructure:"ssl_mode"`
 
-	// Resolve is the discovery service name for this database. Empty = use static Host:Port. Set = resolve from discovery provider.
+	// Resolve is the discovery service name for this database. Empty = use static Host:Port.
+	// Set = resolve from discovery provider.
 	Resolve string `yaml:"resolve" mapstructure:"resolve"`
 
 	// MaxOpenConns sets the maximum number of open connections to the database.
@@ -47,7 +49,8 @@ type Config struct {
 	// ConnMaxLifetime is the maximum time a connection may be reused (e.g. "1h", "30m").
 	ConnMaxLifetime string `yaml:"conn_max_lifetime" mapstructure:"conn_max_lifetime"`
 
-	// ConnMaxIdleTime is the maximum time a connection may sit idle (e.g. "5m", "10m"). If empty, no idle timeout is set.
+	// ConnMaxIdleTime is the maximum time a connection may sit idle (e.g. "5m", "10m"). If empty,
+	// no idle timeout is set.
 	ConnMaxIdleTime string `yaml:"conn_max_idle_time" mapstructure:"conn_max_idle_time"`
 
 	// MaxRetries is the number of connection attempts before giving up.
@@ -63,7 +66,9 @@ type Config struct {
 	LogLevel string `yaml:"log_level" mapstructure:"log_level"`
 }
 
-// BuildDSN constructs a PostgreSQL DSN from structured fields. A pre-set [Config.DSN] (e.g., a connection string supplied verbatim from a secret store) takes precedence over the individual host/port/user/etc. fields and is returned unchanged.
+// BuildDSN constructs a PostgreSQL DSN from structured fields.
+// A pre-set [Config.DSN] (e.g., a connection string supplied verbatim from a secret store) takes precedence over the individual host/port/user/etc.
+// fields and is returned unchanged.
 func (c *Config) BuildDSN() string {
 	if c.DSN != "" {
 		return c.DSN

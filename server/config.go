@@ -17,7 +17,8 @@ type Config struct {
 	MaxBodySize  string                `yaml:"max_body_size" mapstructure:"max_body_size"` // e.g. "10MB"
 	TLS          *security.TLSConfig   `yaml:"tls" mapstructure:"tls"`
 	CORS         middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
-	// SecurityHeaders configures the secure-by-default response headers applied to every route. Zero value yields secure defaults; set Disabled to opt out.
+	// SecurityHeaders configures the secure-by-default response headers applied to every route.
+	// Zero value yields secure defaults; set Disabled to opt out.
 	SecurityHeaders security.HeadersConfig `yaml:"security_headers" mapstructure:"security_headers"`
 	Docs            DocsConfig             `yaml:"docs" mapstructure:"docs"`
 	Enabled         bool                   `yaml:"enabled" mapstructure:"enabled"`
@@ -33,7 +34,8 @@ type DocsConfig struct {
 	UIPath string `yaml:"ui_path" mapstructure:"ui_path"`
 	// Title is shown in the browser tab (default: "API Reference").
 	Title string `yaml:"title" mapstructure:"title"`
-	// SpecFile is an optional path to an OpenAPI spec file on disk. If set, the spec is loaded from this file at startup.
+	// SpecFile is an optional path to an OpenAPI spec file on disk. If set,
+	// the spec is loaded from this file at startup.
 	SpecFile string `yaml:"spec_file" mapstructure:"spec_file"`
 }
 

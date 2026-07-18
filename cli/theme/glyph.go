@@ -5,12 +5,15 @@ import (
 	"strings"
 )
 
-// utf8LocaleEnvs are the locale environment variables consulted, in precedence order, to decide whether the terminal encoding is UTF-8.
+// utf8LocaleEnvs are the locale environment variables consulted, in precedence order,
+// to decide whether the terminal encoding is UTF-8.
 var utf8LocaleEnvs = [...]string{"LC_ALL", "LC_CTYPE", "LANG"}
 
 // UnicodeEnvEnabled reports whether the process locale advertises a UTF-8 encoding.
 //
-// It consults LC_ALL, LC_CTYPE, then LANG in order and reports true when any is set to a value naming UTF-8 (case-insensitive, "utf-8" or "utf8"). When none is set the result is false, so the ASCII fallback is the safe default.
+// It consults LC_ALL, LC_CTYPE, then LANG in order
+// and reports true when any is set to a value naming UTF-8 (case-insensitive, "utf-8" or "utf8").
+// When none is set the result is false, so the ASCII fallback is the safe default.
 func UnicodeEnvEnabled() bool {
 	for _, key := range utf8LocaleEnvs {
 		value, ok := os.LookupEnv(key)
@@ -27,7 +30,10 @@ func UnicodeEnvEnabled() bool {
 
 // Glyphs is a resolved set of semantic status glyphs.
 //
-// When Unicode is disabled every accessor returns its ASCII fallback, so the same rendering code stays byte-clean on terminals that cannot display the Unicode symbols. Construct it from a resolved boolean via [NewGlyphs], or from the process locale via [GlyphsFromEnv].
+// When Unicode is disabled every accessor returns its ASCII fallback,
+// so the same rendering code stays byte-clean on terminals that cannot display the Unicode symbols.
+// Construct it from a resolved boolean via [NewGlyphs],
+// or from the process locale via [GlyphsFromEnv].
 type Glyphs struct {
 	unicode bool
 }

@@ -15,7 +15,9 @@ type ProducerFactory func(context.Context, Config, *logging.Logger) (Producer, e
 // ConsumerFactory constructs a consumer for a registered, typed adapter configuration and topic.
 type ConsumerFactory func(context.Context, Config, *logging.Logger, string) (Consumer, error)
 
-// Registry stores explicitly registered messaging adapter factories. Registries are application-owned and injected; packages never register adapters through init side effects.
+// Registry stores explicitly registered messaging adapter factories.
+// Registries are application-owned and injected;
+// packages never register adapters through init side effects.
 type Registry struct {
 	mu        sync.RWMutex
 	producers map[string]ProducerFactory
@@ -66,7 +68,8 @@ func (r *Registry) RegisterConsumer(adapter string, factory ConsumerFactory) err
 	return nil
 }
 
-// NewProducer constructs a producer using cfg.Adapter and the adapter config captured at registration.
+// NewProducer constructs a producer using cfg.Adapter
+// and the adapter config captured at registration.
 func (r *Registry) NewProducer(ctx context.Context, cfg Config, log *logging.Logger) (Producer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -92,7 +95,8 @@ func (r *Registry) NewProducer(ctx context.Context, cfg Config, log *logging.Log
 	return producer, nil
 }
 
-// NewConsumer constructs a consumer using cfg.Adapter, the adapter config captured at registration, and topic.
+// NewConsumer constructs a consumer using cfg.Adapter, the adapter config captured at registration,
+// and topic.
 func (r *Registry) NewConsumer(ctx context.Context, cfg Config, log *logging.Logger, topic string) (Consumer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -104,7 +108,8 @@ func (r *Registry) NewConsumer(ctx context.Context, cfg Config, log *logging.Log
 	if err := ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	// Use Subscriptions if configured, fall back to Topics for backward compatibility. This allows distinct producer topics vs consumer subscriptions.
+	// Use Subscriptions if configured, fall back to Topics for backward compatibility.
+	// This allows distinct producer topics vs consumer subscriptions.
 	allowedTopics := cfg.Subscriptions
 	if len(allowedTopics) == 0 {
 		allowedTopics = cfg.Topics

@@ -30,12 +30,14 @@ func WithDescription(desc string) Option {
 	return func(c *config) { c.description = desc }
 }
 
-// WithDefinitions keeps $defs and uses $ref for nested types instead of inlining all definitions. Default is to inline.
+// WithDefinitions keeps $defs and uses $ref for nested types instead of inlining all definitions.
+// Default is to inline.
 func WithDefinitions() Option {
 	return func(c *config) { c.inline = false }
 }
 
-// WithAdditionalProperties allows additional properties in the generated schema. Default is strict (no additional properties).
+// WithAdditionalProperties allows additional properties in the generated schema.
+// Default is strict (no additional properties).
 func WithAdditionalProperties() Option {
 	return func(c *config) { c.allowAdditional = true }
 }

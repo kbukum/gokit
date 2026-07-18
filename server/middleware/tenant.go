@@ -18,7 +18,8 @@ type tenantContextKey struct{}
 
 var tenantKey = tenantContextKey{}
 
-// Tenant returns a Gin middleware that extracts tenant ID from request headers and stores it in context.
+// Tenant returns a Gin middleware that extracts tenant ID from request headers
+// and stores it in context.
 func Tenant(cfg TenantConfig) gin.HandlerFunc {
 	if cfg.HeaderName == "" {
 		cfg.HeaderName = "X-Tenant-ID"

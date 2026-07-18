@@ -22,12 +22,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// Hasher defines the interface for password hashing and verification. Projects choose which implementation to use based on their requirements.
+// Hasher defines the interface for password hashing and verification.
+// Projects choose which implementation to use based on their requirements.
 type Hasher interface {
 	// Hash returns a hashed representation of the password.
 	Hash(password string) (string, error)
 
-	// Verify checks if a password matches the given hash. Returns nil if they match, an error otherwise.
+	// Verify checks if a password matches the given hash. Returns nil if they match,
+	// an error otherwise.
 	Verify(password, hash string) error
 }
 
@@ -110,7 +112,8 @@ func WithArgon2Threads(t uint8) Argon2Option {
 	return func(h *Argon2Hasher) { h.threads = t }
 }
 
-// NewArgon2Hasher creates an argon2id-based password hasher. Defaults follow the Group 05 baseline: time=3, memory=64MB, threads=4.
+// NewArgon2Hasher creates an argon2id-based password hasher. Defaults follow the Group 05 baseline:
+// time=3, memory=64MB, threads=4.
 func NewArgon2Hasher(opts ...Argon2Option) *Argon2Hasher {
 	h := &Argon2Hasher{
 		time:    3,

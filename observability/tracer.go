@@ -32,7 +32,11 @@ type TracerConfig struct {
 	Insecure bool
 	// SampleRate is the sampling rate (0.0 to 1.0).
 	SampleRate float64
-	// SkipGlobalRegistration, when true, prevents InitTracer from mutating the global otel.SetTracerProvider / otel.SetTextMapPropagator state. Callers that want to thread the returned *TracerProvider through DI can opt out of process-global state. Defaults to false to preserve the convenient "init once, instrument anywhere via observability.Tracer(...)" pattern.
+	// SkipGlobalRegistration, when true,
+	// prevents InitTracer from mutating the global otel.SetTracerProvider / otel.SetTextMapPropagator state.
+	// Callers that want to thread the returned *TracerProvider through DI can opt out of process-global state.
+	// Defaults to false to preserve the convenient "init once,
+	// instrument anywhere via observability.Tracer(...)" pattern.
 	SkipGlobalRegistration bool
 }
 
@@ -48,7 +52,8 @@ func DefaultTracerConfig(serviceName string) TracerConfig {
 	}
 }
 
-// InitTracer initializes the OpenTelemetry tracer provider. Returns a TracerProvider that should be shut down on application exit.
+// InitTracer initializes the OpenTelemetry tracer provider.
+// Returns a TracerProvider that should be shut down on application exit.
 func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProvider, error) {
 	opts := []otlptracehttp.Option{
 		otlptracehttp.WithEndpoint(config.Endpoint),

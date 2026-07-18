@@ -7,11 +7,14 @@ import (
 
 // Stateful wraps a RequestResponse provider with automatic state load/save around each Execute call.
 //
-// Before Execute: loads state from store, calls inject to enrich input. After Execute: calls extract to derive updated state from output, saves to store.
+// Before Execute: loads state from store, calls inject to enrich input. After Execute:
+// calls extract to derive updated state from output, saves to store.
 //
-// If the store returns nil (first call for a key), inject receives nil — the consumer's inject function handles initialization.
+// If the store returns nil (first call for a key), inject receives nil —
+// the consumer's inject function handles initialization.
 //
-// Stateful implements RequestResponse[I, O] so it composes with WithResilience and other middleware.
+// Stateful implements RequestResponse[I, O] so it composes with WithResilience
+// and other middleware.
 type Stateful[I, O, C any] struct {
 	inner   RequestResponse[I, O]
 	store   ContextStore[C]

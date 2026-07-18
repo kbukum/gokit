@@ -10,7 +10,9 @@ import (
 // StreamEvent is the canonical AI streaming event sum-type.
 type StreamEvent = ai.StreamEvent
 
-// Canonical event aliases (D5). These mirror the AI/chat names exactly so downstream consumers can refer to the llm-package names without going through ai.* / chat.*. Redundant aliases (ContentDelta, UsageUpdate, ToolCallDelta) have been removed per D5.
+// Canonical event aliases (D5). These mirror the AI/chat names exactly
+// so downstream consumers can refer to the llm-package names without going through ai.* / chat.*.
+// Redundant aliases (ContentDelta, UsageUpdate, ToolCallDelta) have been removed per D5.
 type (
 	MessageStart   = chat.MessageStart
 	TextDelta      = ai.TextDelta
@@ -23,7 +25,8 @@ type (
 	Error          = ai.Error
 )
 
-// MessageComplete is the llm-layer terminal event carrying the assembled CompletionResponse. Consumers should treat this as the final stream event.
+// MessageComplete is the llm-layer terminal event carrying the assembled CompletionResponse.
+// Consumers should treat this as the final stream event.
 type MessageComplete struct {
 	Response CompletionResponse `json:"response"`
 }

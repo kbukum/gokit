@@ -126,7 +126,8 @@ func (c *jwksCache) refresh(ctx context.Context, client *http.Client, force bool
 	return nil
 }
 
-// getKey retrieves a JWK (not just the public key) so callers can also enforce the JWK's declared `alg` matches the token's header alg (alg-confusion defense — closes F-002).
+// getKey retrieves a JWK (not just the public key)
+// so callers can also enforce the JWK's declared `alg` matches the token's header alg (alg-confusion defense — closes F-002).
 func (v *Verifier) getKey(ctx context.Context, kid string) (*jwk, error) {
 	// Try cache first
 	if !v.jwks.isStale() {

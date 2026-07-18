@@ -13,7 +13,8 @@ import (
 	"github.com/kbukum/gokit/llm/providers/internal/dialect"
 )
 
-// Register installs the OpenAI dialect in the supplied registry. Call once at application startup before invoking [llm.New].
+// Register installs the OpenAI dialect in the supplied registry.
+// Call once at application startup before invoking [llm.New].
 func Register(registry *llm.DialectRegistry) error {
 	return registry.Register("openai", &Dialect{})
 }

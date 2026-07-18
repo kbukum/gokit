@@ -10,13 +10,16 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// Provider implements discovery.Registry and discovery.Discovery using an in-memory list of endpoints. Useful for local development and testing.
+// Provider implements discovery.Registry
+// and discovery.Discovery using an in-memory list of endpoints. Useful for local development
+// and testing.
 type Provider struct {
 	mu        sync.RWMutex
 	instances map[string][]discovery.ServiceInstance // keyed by service name
 }
 
-// Register registers the static and k8s discovery providers into the given registry. It returns an error if either provider name is already registered.
+// Register registers the static and k8s discovery providers into the given registry.
+// It returns an error if either provider name is already registered.
 func Register(reg *discovery.ProviderRegistry) error {
 	if err := reg.Register("static", func(cfg discovery.Config, _ *logging.Logger) (discovery.Registry, discovery.Discovery, error) {
 		p := NewProvider(cfg.StaticEndpoints)
@@ -57,7 +60,8 @@ func NewProvider(endpoints []discovery.StaticEndpoint) *Provider {
 		if !ep.Healthy && ep.Address != "" {
 			inst.Health = discovery.HealthUnhealthy
 		}
-		// Mirror the protocol into Tags/Metadata when not already provided so downstream filters (e.g., resolver tag-match) can select instances by protocol without callers having to populate both fields.
+		// Mirror the protocol into Tags/Metadata when not already provided
+		// so downstream filters (e.g., resolver tag-match) can select instances by protocol without callers having to populate both fields.
 		if ep.Protocol != "" {
 			if inst.Tags == nil {
 				inst.Tags = []string{ep.Protocol}
@@ -145,7 +149,8 @@ func (s *Provider) Discover(_ context.Context, serviceName string) ([]discovery.
 	return out, nil
 }
 
-// Watch returns a channel that never emits for the static provider (instances are fixed). The channel is closed when the context is canceled.
+// Watch returns a channel that never emits for the static provider (instances are fixed).
+// The channel is closed when the context is canceled.
 func (s *Provider) Watch(ctx context.Context, _ string) (<-chan []discovery.ServiceInstance, error) {
 	ch := make(chan []discovery.ServiceInstance)
 	go func() {

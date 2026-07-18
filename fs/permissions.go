@@ -9,7 +9,8 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// CanRead reports whether the current process can open path for reading. A permission-denied or not-found result yields false, not an error; any other failure is returned.
+// CanRead reports whether the current process can open path for reading. A permission-denied
+// or not-found result yields false, not an error; any other failure is returned.
 func CanRead(path string) (bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -22,7 +23,9 @@ func CanRead(path string) (bool, error) {
 	return true, nil
 }
 
-// CanWrite reports whether the current process can write to the file or directory at path. Directories are probed with a create-new temp file that is removed afterward. A permission-denied or not-found result yields false.
+// CanWrite reports whether the current process can write to the file or directory at path.
+// Directories are probed with a create-new temp file that is removed afterward. A permission-denied
+// or not-found result yields false.
 func CanWrite(path string) (bool, error) {
 	if info, err := os.Stat(path); err == nil && info.IsDir() {
 		return canWriteDir(path)

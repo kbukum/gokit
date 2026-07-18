@@ -7,7 +7,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// Option configures the App during creation. Options are non-generic so they can be used with any config type.
+// Option configures the App during creation. Options are non-generic
+// so they can be used with any config type.
 type Option func(*appOptions)
 
 // appOptions collects all option values before applying to App.
@@ -26,7 +27,8 @@ func resolveOptions(opts []Option) *appOptions {
 	return o
 }
 
-// WithLogger sets a custom logger for the application. If not set, the logger is auto-initialized from the config's Logging field.
+// WithLogger sets a custom logger for the application. If not set,
+// the logger is auto-initialized from the config's Logging field.
 func WithLogger(l *logging.Logger) Option {
 	return func(o *appOptions) {
 		o.logger = l

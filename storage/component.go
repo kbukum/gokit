@@ -16,7 +16,8 @@ type Component struct {
 	log      *logging.Logger
 }
 
-// NewComponent creates a storage component for use with the component registry. registry is mandatory; construct one and register the desired provider(s) before passing it.
+// NewComponent creates a storage component for use with the component registry.
+// registry is mandatory; construct one and register the desired provider(s) before passing it.
 func NewComponent(registry *FactoryRegistry, cfg Config, log *logging.Logger) *Component {
 	if log == nil {
 		log = logging.NewDefault("storage") //nolint:contextcheck // default logger construction has no request-scoped operation

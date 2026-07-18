@@ -15,7 +15,9 @@ import (
 // nextTempSequence provides a per-process monotonic counter for collision- resistant temp path generation.
 var nextTempSequence atomic.Uint64
 
-// TempFile is a managed temporary file. Call [TempFile.Remove] to delete it, or [TempFile.Persist] to move it to a permanent location. Go has no destructors, so cleanup is explicit — pair creation with a deferred Remove.
+// TempFile is a managed temporary file. Call [TempFile.Remove] to delete it,
+// or [TempFile.Persist] to move it to a permanent location. Go has no destructors,
+// so cleanup is explicit — pair creation with a deferred Remove.
 type TempFile struct {
 	file      *os.File
 	path      string
@@ -74,7 +76,8 @@ func (t *TempFile) Remove() error {
 	return nil
 }
 
-// TempDir is a managed temporary directory. Call [TempDir.Remove] to delete it and all of its contents.
+// TempDir is a managed temporary directory. Call [TempDir.Remove] to delete it
+// and all of its contents.
 type TempDir struct {
 	path string
 }
@@ -98,7 +101,8 @@ func (d *TempDir) Child(relPath string) (string, error) {
 	return SafeJoin(d.path, relPath)
 }
 
-// WriteFile writes content to relPath under the directory, creating parent directories as needed, and returns the written path.
+// WriteFile writes content to relPath under the directory, creating parent directories as needed,
+// and returns the written path.
 func (d *TempDir) WriteFile(relPath string, content []byte) (string, error) {
 	target, err := d.Child(relPath)
 	if err != nil {
@@ -127,7 +131,11 @@ func (d *TempDir) Remove() error {
 	return nil
 }
 
-// SiblingTempPath builds a collision-resistant temp path next to dest. The prefix and suffix are sanitized so the generated file name stays a single path component under dest's parent directory. It only constructs a path; the caller owns creation, writes, syncing, and any final rename policy.
+// SiblingTempPath builds a collision-resistant temp path next to dest. The prefix
+// and suffix are sanitized
+// so the generated file name stays a single path component under dest's parent directory.
+// It only constructs a path; the caller owns creation, writes, syncing,
+// and any final rename policy.
 func SiblingTempPath(dest, prefix, suffix string) string {
 	parent, ok := ParentDir(dest)
 	if !ok {

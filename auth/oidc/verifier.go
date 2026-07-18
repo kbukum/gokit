@@ -11,7 +11,9 @@ import (
 	"time"
 )
 
-// Verifier validates OIDC ID tokens using auto-discovery and JWKS key rotation. It discovers the issuer's OpenID configuration and caches the JWKS for efficient token verification.
+// Verifier validates OIDC ID tokens using auto-discovery and JWKS key rotation.
+// It discovers the issuer's OpenID configuration
+// and caches the JWKS for efficient token verification.
 type Verifier struct {
 	issuer   string
 	clientID string
@@ -34,7 +36,8 @@ type VerifierConfig struct {
 	// SupportedSigningAlgs restricts allowed signing algorithms. Default: ["RS256"].
 	SupportedSigningAlgs []string
 
-	// HTTPClient is an optional HTTP client for discovery and JWKS requests. Useful for testing or custom TLS configurations.
+	// HTTPClient is an optional HTTP client for discovery and JWKS requests. Useful for testing
+	// or custom TLS configurations.
 	HTTPClient *http.Client
 
 	// JWKSCacheDuration controls how long JWKS keys are cached (default: 1h).
@@ -53,7 +56,8 @@ func (c *VerifierConfig) applyDefaults() {
 	}
 }
 
-// NewVerifier creates a new OIDC token verifier for the given issuer. It performs OIDC discovery to find the JWKS endpoint.
+// NewVerifier creates a new OIDC token verifier for the given issuer.
+// It performs OIDC discovery to find the JWKS endpoint.
 func NewVerifier(ctx context.Context, issuer string, cfg VerifierConfig) (*Verifier, error) {
 	if cfg.ClientID == "" {
 		return nil, errors.New("oidc: client ID is required")
@@ -73,7 +77,8 @@ func NewVerifier(ctx context.Context, issuer string, cfg VerifierConfig) (*Verif
 	return v, nil
 }
 
-// Verify validates a raw ID token string and returns the parsed claims. It checks the signature, issuer, audience, and expiry.
+// Verify validates a raw ID token string and returns the parsed claims. It checks the signature,
+// issuer, audience, and expiry.
 func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, error) {
 	parts := strings.Split(rawIDToken, ".")
 	if len(parts) != 3 {
@@ -100,7 +105,9 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, err
 		return nil, fmt.Errorf("oidc: get signing key: %w", err)
 	}
 
-	// Alg-confusion defense (F-002): if the JWK declares an algorithm, the token's header alg MUST match it. Prevents an attacker from presenting a token signed with a different algorithm than the key was issued for.
+	// Alg-confusion defense (F-002): if the JWK declares an algorithm,
+	// the token's header alg MUST match it.
+	// Prevents an attacker from presenting a token signed with a different algorithm than the key was issued for.
 	if jwkEntry.Alg != "" && jwkEntry.Alg != alg {
 		return nil, fmt.Errorf("oidc: token alg %q does not match JWK alg %q (kid=%q)", alg, jwkEntry.Alg, kid)
 	}
@@ -252,7 +259,8 @@ func (v *Verifier) discover(ctx context.Context) error {
 	return nil
 }
 
-// DiscoveryEndpoints returns the discovered OAuth2/OIDC endpoints. Useful for projects that need to build OAuth2 configs from discovery.
+// DiscoveryEndpoints returns the discovered OAuth2/OIDC endpoints.
+// Useful for projects that need to build OAuth2 configs from discovery.
 func (v *Verifier) DiscoveryEndpoints() DiscoveryEndpoints {
 	if v.disco == nil {
 		return DiscoveryEndpoints{}

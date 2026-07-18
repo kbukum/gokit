@@ -1,9 +1,9 @@
 # schema
 
-JSON Schema generation from Go types. Wraps [`invopop/jsonschema`](https://github.com/invopop/jsonschema)
-to produce standard JSON Schema 2020-12 documents from struct tags, exposed as a plain
-`map[string]any` suitable for tool definitions, MCP, and LLM APIs. Values are validated against
-schemas with bounded depth, node-count, and string-byte limits.
+JSON Schema generation from Go types.
+Wraps [`invopop/jsonschema`](https://github.com/invopop/jsonschema) to produce standard JSON Schema 2020-12 documents from struct tags,
+exposed as a plain `map[string]any` suitable for tool definitions, MCP, and LLM APIs.
+Values are validated against schemas with bounded depth, node-count, and string-byte limits.
 
 ## Install
 

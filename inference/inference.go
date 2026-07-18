@@ -8,11 +8,16 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// Inference is the model-serving runtime interface. It is intentionally general — adapters cover text generation (vLLM, TGI), classification / regression (Triton KServe v2), embeddings (BentoML, custom), image / audio inference (custom REST), and arbitrary tensor protocols.
+// Inference is the model-serving runtime interface. It is intentionally general —
+// adapters cover text generation (vLLM, TGI), classification / regression (Triton KServe v2),
+// embeddings (BentoML, custom), image / audio inference (custom REST),
+// and arbitrary tensor protocols.
 //
-// Inference is NOT chat completion. Conversational LLM surface lives in the llm module; inference sits one layer below as the serving runtime.
+// Inference is NOT chat completion. Conversational LLM surface lives in the llm module;
+// inference sits one layer below as the serving runtime.
 //
-// Inference natively embeds [provider.RequestResponse] so serving adapters plug into canonical provider consumers (pipeline, dag, chain) without a shim.
+// Inference natively embeds [provider.RequestResponse]
+// so serving adapters plug into canonical provider consumers (pipeline, dag, chain) without a shim.
 type Inference interface {
 	provider.RequestResponse[PredictRequest, PredictResponse]
 	Predict(ctx context.Context, req PredictRequest) (PredictResponse, error)
@@ -27,7 +32,10 @@ type StreamingInference interface {
 
 // Descriptor documents a serving runtime adapter.
 //
-// Capabilities advertise lean adapter hints (streaming, batching, tool-calls) to consumers and observability without coupling the inference layer to the richer permission envelope owned by package tool. Available reports whether the adapter is a working backend (true) or a not-yet-live skeleton (false).
+// Capabilities advertise lean adapter hints (streaming, batching, tool-calls) to consumers
+// and observability without coupling the inference layer to the richer permission envelope owned by package tool.
+// Available reports whether the adapter is a working backend (true)
+// or a not-yet-live skeleton (false).
 type Descriptor struct {
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
@@ -36,7 +44,9 @@ type Descriptor struct {
 	Available       bool            `json:"available"`
 }
 
-// PredictRequest carries arbitrary inputs. Inputs is the canonical payload (a map of named inputs to typed values supporting tensors, strings, byte blobs, and nested structs); Parameters carries adapter-specific tuning (max_new_tokens, temperature, top_k, etc.).
+// PredictRequest carries arbitrary inputs.
+// Inputs is the canonical payload (a map of named inputs to typed values supporting tensors, strings, byte blobs, and nested structs);
+// Parameters carries adapter-specific tuning (max_new_tokens, temperature, top_k, etc.).
 type PredictRequest struct {
 	RequestID    string            `json:"request_id,omitempty"`
 	ModelName    string            `json:"model_name"`
@@ -47,7 +57,8 @@ type PredictRequest struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
-// PredictResponse is the normalized response. Outputs is the canonical payload; Usage is optional token / compute accounting.
+// PredictResponse is the normalized response. Outputs is the canonical payload;
+// Usage is optional token / compute accounting.
 type PredictResponse struct {
 	Outputs  map[string]Value  `json:"outputs"`
 	Model    ai.Model          `json:"model"`
@@ -65,7 +76,8 @@ const (
 	StatusError          PredictStatus = "error"
 )
 
-// Value is a typed serving input/output. Use TextValue, BytesValue, TensorValue, and JSONValue to build values; the Kind field is set by the constructor.
+// Value is a typed serving input/output. Use TextValue, BytesValue, TensorValue,
+// and JSONValue to build values; the Kind field is set by the constructor.
 type Value struct {
 	Kind   ValueKind       `json:"kind"`
 	Text   string          `json:"text,omitempty"`

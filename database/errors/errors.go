@@ -1,4 +1,5 @@
-// Package errors provides database error utilities and translation to gokit AppError types for consistent error handling.
+// Package errors provides database error utilities
+// and translation to gokit AppError types for consistent error handling.
 package errors
 
 import (
@@ -73,7 +74,8 @@ func IsDuplicateError(err error) bool {
 	return errors.Is(err, gorm.ErrDuplicatedKey)
 }
 
-// FromDatabase converts a database error to an AppError. It translates GORM and database-specific errors to user-friendly messages.
+// FromDatabase converts a database error to an AppError. It translates GORM
+// and database-specific errors to user-friendly messages.
 func FromDatabase(err error, resource string) *apperrors.AppError {
 	if err == nil {
 		return nil

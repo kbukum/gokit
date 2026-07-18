@@ -1,6 +1,7 @@
 package di
 
-// PkgNames defines the base layer component names for the pkg bootstrap layer. Projects embed this struct in their own shared/service DI names.
+// PkgNames defines the base layer component names for the pkg bootstrap layer.
+// Projects embed this struct in their own shared/service DI names.
 type PkgNames struct {
 	// Core infrastructure
 	Config           string

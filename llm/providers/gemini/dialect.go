@@ -13,7 +13,8 @@ import (
 	"github.com/kbukum/gokit/llm/providers/internal/dialect"
 )
 
-// Register installs the Gemini dialect in the supplied registry. Call once at application startup before invoking [llm.New].
+// Register installs the Gemini dialect in the supplied registry.
+// Call once at application startup before invoking [llm.New].
 func Register(registry *llm.DialectRegistry) error {
 	return registry.Register("gemini", &Dialect{})
 }
@@ -33,9 +34,12 @@ func (d *Dialect) Name() string                   { return "gemini" }
 func (d *Dialect) HealthPath() string             { return "" }
 func (d *Dialect) StreamFormat() llm.StreamFormat { return llm.StreamSSE }
 
-// ChatPath returns a placeholder. The actual path is model-dependent and set dynamically in BuildRequest via the model field. The adapter's base URL combined with this path forms the full endpoint.
+// ChatPath returns a placeholder. The actual path is model-dependent
+// and set dynamically in BuildRequest via the model field.
+// The adapter's base URL combined with this path forms the full endpoint.
 //
-// Gemini endpoint: /v1beta/models/{model}:generateContent The model name is injected by the adapter from CompletionRequest.Model.
+// Gemini endpoint:
+// /v1beta/models/{model}:generateContent The model name is injected by the adapter from CompletionRequest.Model.
 func (d *Dialect) ChatPath() string {
 	return "/v1beta/models"
 }
@@ -181,7 +185,8 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 
 // ParseStreamChunk extracts content from a Gemini SSE data payload.
 //
-// Gemini streaming returns the same structure as non-streaming but incrementally. Each chunk is a full candidates array with partial content.
+// Gemini streaming returns the same structure as non-streaming but incrementally.
+// Each chunk is a full candidates array with partial content.
 func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var chunk struct {
 		Candidates []struct {

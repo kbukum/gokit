@@ -2,7 +2,8 @@ package worker
 
 import "context"
 
-// Handler processes a task and emits events during execution. The handler MUST check ctx.Done() for cooperative cancellation.
+// Handler processes a task and emits events during execution.
+// The handler MUST check ctx.Done() for cooperative cancellation.
 type Handler[I, O any] interface {
 	Handle(ctx context.Context, task I, emit func(Event[O])) error
 }

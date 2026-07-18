@@ -1,6 +1,7 @@
 # vectorstore
 
-Vector similarity search store abstraction with explicit backend registration and an in-memory implementation for gokit.
+Vector similarity search store abstraction with explicit backend registration
+and an in-memory implementation for gokit.
 
 ## Features
 
@@ -156,7 +157,8 @@ All conditions are AND-ed together. Only exact matches are supported.
 
 ## Thread Safety
 
-`InMemoryStore` is thread-safe via `sync.RWMutex`. Multiple goroutines can safely call methods concurrently.
+`InMemoryStore` is thread-safe via `sync.RWMutex`.
+Multiple goroutines can safely call methods concurrently.
 
 ## Performance Notes
 

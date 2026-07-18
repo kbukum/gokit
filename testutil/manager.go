@@ -7,7 +7,8 @@ import (
 	"sync"
 )
 
-// Manager provides lifecycle management for multiple test components. It allows starting, stopping, and resetting multiple components together, making it easier to manage complex test setups.
+// Manager provides lifecycle management for multiple test components. It allows starting, stopping,
+// and resetting multiple components together, making it easier to manage complex test setups.
 type Manager struct {
 	ctx        context.Context
 	components []TestComponent
@@ -50,7 +51,8 @@ func (m *Manager) Get(name string) TestComponent {
 	return nil
 }
 
-// StartAll starts all registered components in order. If any component fails to start, returns immediately with that error.
+// StartAll starts all registered components in order. If any component fails to start,
+// returns immediately with that error.
 func (m *Manager) StartAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -63,7 +65,8 @@ func (m *Manager) StartAll() error {
 	return nil
 }
 
-// StopAll stops all registered components in reverse order. Even if some components fail to stop, continues stopping others and returns a combined error with all failures.
+// StopAll stops all registered components in reverse order. Even if some components fail to stop,
+// continues stopping others and returns a combined error with all failures.
 func (m *Manager) StopAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -84,7 +87,8 @@ func (m *Manager) StopAll() error {
 	return nil
 }
 
-// ResetAll resets all registered components to their initial state. If any component fails to reset, returns immediately with that error.
+// ResetAll resets all registered components to their initial state.
+// If any component fails to reset, returns immediately with that error.
 func (m *Manager) ResetAll() error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -97,7 +101,8 @@ func (m *Manager) ResetAll() error {
 	return nil
 }
 
-// Cleanup is an alias for StopAll, provided for convenience. This makes it easy to use with defer or testing.T.Cleanup().
+// Cleanup is an alias for StopAll, provided for convenience. This makes it easy to use with defer
+// or testing.T.Cleanup().
 func (m *Manager) Cleanup() error {
 	return m.StopAll()
 }

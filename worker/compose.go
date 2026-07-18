@@ -5,7 +5,9 @@ import (
 	"sync"
 )
 
-// FanOut sends the same input to N handlers concurrently. Returns when all complete. Events from all handlers are merged into the composite emit. Results are collected in the same order as handlers.
+// FanOut sends the same input to N handlers concurrently. Returns when all complete.
+// Events from all handlers are merged into the composite emit.
+// Results are collected in the same order as handlers.
 func FanOut[I, O any](name string, handlers ...Handler[I, O]) Handler[I, []O] {
 	return HandlerFunc[I, []O](func(ctx context.Context, task I, emit func(Event[[]O])) error {
 		var (
@@ -80,7 +82,10 @@ type MapReduceConfig[I, O, R any] struct {
 	Pool     *Pool[O, R]          // optional reusable pool; if nil, a temporary pool is created per call
 }
 
-// NewMapReduce creates a handler that splits input, processes sub-tasks concurrently via Handler, and combines results. If cfg.Pool is set, it is reused across invocations (caller manages its lifecycle). Otherwise a temporary pool is created and stopped per call.
+// NewMapReduce creates a handler that splits input, processes sub-tasks concurrently via Handler,
+// and combines results. If cfg.Pool is set,
+// it is reused across invocations (caller manages its lifecycle).
+// Otherwise a temporary pool is created and stopped per call.
 func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
 	return HandlerFunc[I, R](func(ctx context.Context, task I, emit func(Event[R])) error {
 		subtasks := cfg.Split(task)
@@ -106,7 +111,8 @@ func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
 			return err
 		}
 
-		// Forward pool events in a synchronized goroutine. emitMu protects calls to emit from concurrent access.
+		// Forward pool events in a synchronized goroutine.
+		// emitMu protects calls to emit from concurrent access.
 		var emitMu sync.Mutex
 		var eventWg sync.WaitGroup
 		eventWg.Add(1)
@@ -159,9 +165,12 @@ type PipelineStage struct {
 	Handler Handler[any, any]
 }
 
-// NewPipeline chains handlers: output of stage N is input to stage N+1. Events from all stages are merged into the composite emit.
+// NewPipeline chains handlers: output of stage N is input to stage N+1.
+// Events from all stages are merged into the composite emit.
 //
-// Due to Go's generics limitations, pipeline stages use any internally with runtime type assertions. For compile-time safety, compose handlers manually or use dag with typed ports.
+// Due to Go's generics limitations,
+// pipeline stages use any internally with runtime type assertions. For compile-time safety,
+// compose handlers manually or use dag with typed ports.
 func NewPipeline[I, O any](name string, stages ...PipelineStage) Handler[I, O] {
 	return HandlerFunc[I, O](func(ctx context.Context, task I, emit func(Event[O])) error {
 		var current any = task

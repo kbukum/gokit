@@ -14,7 +14,8 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-// Connect establishes a connection to a remote MCP server and returns the session along with all discovered tools as kit Callables.
+// Connect establishes a connection to a remote MCP server
+// and returns the session along with all discovered tools as kit Callables.
 func Connect(ctx context.Context, transport sdkmcp.Transport, opts *ConnectOptions) (*sdkmcp.ClientSession, []tool.Callable, error) {
 	if opts == nil {
 		opts = &ConnectOptions{}

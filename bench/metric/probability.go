@@ -7,7 +7,8 @@ import (
 	"github.com/kbukum/gokit/bench"
 )
 
-// AUCROC computes Area Under ROC Curve for binary classification. positiveLabel is the positive class. Stores bench.ROCCurve in Detail.
+// AUCROC computes Area Under ROC Curve for binary classification.
+// positiveLabel is the positive class. Stores bench.ROCCurve in Detail.
 func AUCROC[L comparable](positiveLabel L) Metric[L] {
 	return &aucroc[L]{positive: positiveLabel}
 }
@@ -79,7 +80,8 @@ func (m *aucroc[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 }
 
-// BrierScore computes the Brier score (mean squared difference between predicted probability and actual outcome). Lower is better. Range: [0, 1].
+// BrierScore computes the Brier score (mean squared difference between predicted probability and actual outcome).
+// Lower is better. Range: [0, 1].
 func BrierScore[L comparable](positiveLabel L) Metric[L] {
 	return &brierScore[L]{positive: positiveLabel}
 }
@@ -144,7 +146,8 @@ func (m *logLoss[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 }
 
-// Calibration computes a calibration curve (predicted probability vs actual frequency). bins is the number of bins (default 10).
+// Calibration computes a calibration curve (predicted probability vs actual frequency).
+// bins is the number of bins (default 10).
 func Calibration[L comparable](positiveLabel L, bins int) Metric[L] {
 	if bins <= 0 {
 		bins = 10

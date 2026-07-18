@@ -8,7 +8,8 @@ import (
 	"github.com/kbukum/gokit/messaging/kafka"
 )
 
-// StartConsumer creates and starts a ManagedConsumer that processes raw message values. This is the most common consumer pattern: read bytes from a topic and hand them to a handler.
+// StartConsumer creates and starts a ManagedConsumer that processes raw message values.
+// This is the most common consumer pattern: read bytes from a topic and hand them to a handler.
 //
 // Example:
 //

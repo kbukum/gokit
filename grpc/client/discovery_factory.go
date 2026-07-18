@@ -15,7 +15,10 @@ import (
 	"github.com/kbukum/gokit/discovery"
 )
 
-// DiscoveryConnectionFactory creates gRPC connections using service discovery. It resolves service names to addresses via a Discovery client and creates connections to the resolved endpoints. This enables dynamic service discovery with load balancing.
+// DiscoveryConnectionFactory creates gRPC connections using service discovery.
+// It resolves service names to addresses via a Discovery client
+// and creates connections to the resolved endpoints.
+// This enables dynamic service discovery with load balancing.
 type DiscoveryConnectionFactory struct {
 	discoveryClient *discovery.Client
 	gRPCCfg         grpccfg.Config
@@ -32,7 +35,8 @@ type DiscoveryConnectionFactory struct {
 //   - log: Optional logger; if nil, uses the global logging.
 //   - opts: Additional gRPC dial options to apply when creating connections.
 //
-// The factory will use the discovery client's load balancing strategy to select among healthy service endpoints. All connections use the same TLS and keepalive configuration from gRPCCfg.
+// The factory will use the discovery client's load balancing strategy to select among healthy service endpoints.
+// All connections use the same TLS and keepalive configuration from gRPCCfg.
 func NewDiscoveryConnectionFactory(
 	discoveryClient *discovery.Client,
 	gRPCCfg grpccfg.Config,
@@ -47,12 +51,15 @@ func NewDiscoveryConnectionFactory(
 	}
 }
 
-// NewConn creates a new gRPC client connection to a discovered service. It uses the discovery client to resolve the service name to a healthy endpoint, then creates a connection with the configured TLS and keepalive settings.
+// NewConn creates a new gRPC client connection to a discovered service.
+// It uses the discovery client to resolve the service name to a healthy endpoint,
+// then creates a connection with the configured TLS and keepalive settings.
 //
 // Parameters:
 //   - serviceName: The name of the service to discover and connect to.
 //
-// Returns the created connection or an error if discovery fails or the connection cannot be established.
+// Returns the created connection or an error if discovery fails
+// or the connection cannot be established.
 func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	// Use background context for service discovery
 	ctx := context.Background()
@@ -109,7 +116,9 @@ func (f *DiscoveryConnectionFactory) NewConn(serviceName string) (*grpc.ClientCo
 	return conn, nil
 }
 
-// buildDialOptions builds the gRPC dial options from the factory's configuration. This mirrors the logic in client.go to ensure consistent behavior between direct and discovery-based connections.
+// buildDialOptions builds the gRPC dial options from the factory's configuration.
+// This mirrors the logic in client.go to ensure consistent behavior between direct
+// and discovery-based connections.
 func (f *DiscoveryConnectionFactory) buildDialOptions() ([]grpc.DialOption, error) {
 	f.gRPCCfg.ApplyDefaults()
 
@@ -143,7 +152,8 @@ func (f *DiscoveryConnectionFactory) buildDialOptions() ([]grpc.DialOption, erro
 	return opts, nil
 }
 
-// transportCredentials returns the appropriate transport credentials for TLS. This mirrors the logic in client.go.
+// transportCredentials returns the appropriate transport credentials for TLS.
+// This mirrors the logic in client.go.
 func (f *DiscoveryConnectionFactory) transportCredentials() (credentials.TransportCredentials, error) {
 	tlsCfg, err := f.gRPCCfg.TLS.Build()
 	if err != nil {

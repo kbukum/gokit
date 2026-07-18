@@ -17,7 +17,10 @@ const (
 	aiDir   = "ai"
 )
 
-// LocalTarget writes each item's payload to a real/ or ai/ subdirectory of an output directory, chosen by the item's label. Every destination is confined under the output directory through [fs] path safety, so a hostile item name cannot escape it.
+// LocalTarget writes each item's payload to a real/ or ai/ subdirectory of an output directory,
+// chosen by the item's label.
+// Every destination is confined under the output directory through [fs] path safety,
+// so a hostile item name cannot escape it.
 type LocalTarget struct {
 	name      string
 	outputDir string
@@ -63,7 +66,8 @@ func (t *LocalTarget) Publish(ctx context.Context, items *stream.Pipeline[Item])
 	}, nil
 }
 
-// write streams one item's payload to a confined path under the label subdirectory, failing closed on a name that would escape the output dir.
+// write streams one item's payload to a confined path under the label subdirectory,
+// failing closed on a name that would escape the output dir.
 func (t *LocalTarget) write(sub string, it Item) error {
 	subDir, err := fs.SafeJoin(t.outputDir, sub)
 	if err != nil {

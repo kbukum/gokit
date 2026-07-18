@@ -1,4 +1,7 @@
-// Package dataset is a streaming dataset-collection toolkit: it fetches records from heterogeneous sources, transforms and validates them, caches progress, and publishes to configurable targets — mirroring rskit's dataset kit as a light, generics-first Go port.
+// Package dataset is a streaming dataset-collection toolkit:
+// it fetches records from heterogeneous sources, transforms and validates them, caches progress,
+// and publishes to configurable targets — mirroring rskit's dataset kit as a light,
+// generics-first Go port.
 //
 // It is split into focused sub-packages by concern:
 //

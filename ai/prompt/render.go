@@ -13,7 +13,8 @@ import (
 
 var placeholderPattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}`)
 
-// identPattern is the placeholder identifier pattern used by validateSyntax. Promoted to package level (vs compiled per call) so each prompt render pays no compile cost.
+// identPattern is the placeholder identifier pattern used by validateSyntax.
+// Promoted to package level (vs compiled per call) so each prompt render pays no compile cost.
 var identPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // Render replaces {{var}} placeholders with values from data.

@@ -2,7 +2,8 @@ package provider
 
 import "context"
 
-// AdaptSink wraps a Sink with input type transformation. This bridges a domain type I to a backend type BI before sending.
+// AdaptSink wraps a Sink with input type transformation.
+// This bridges a domain type I to a backend type BI before sending.
 //
 // mapIn converts the domain input to the backend input.
 //

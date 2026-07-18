@@ -56,7 +56,9 @@ func newHTTPMetrics(serviceName string) (*httpMetrics, error) {
 	}, nil
 }
 
-// PrometheusMetrics returns middleware that instruments HTTP requests with counters and histograms for request count, duration, request size, and response size. Labels: method, path, status_code.
+// PrometheusMetrics returns middleware that instruments HTTP requests with counters
+// and histograms for request count, duration, request size, and response size. Labels: method,
+// path, status_code.
 func PrometheusMetrics(serviceName string) Middleware {
 	metrics, err := newHTTPMetrics(serviceName)
 	if err != nil {

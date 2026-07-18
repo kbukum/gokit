@@ -1,12 +1,17 @@
 # gokit: Integration Patterns
 
-This document shows how gokit modules compose together to solve common microservice challenges. Each pattern demonstrates a practical workflow combining multiple modules.
+This document shows how gokit modules compose together to solve common microservice challenges.
+Each pattern demonstrates a practical workflow combining multiple modules.
 
 ## Pattern 1: Server + Discovery
 
-**Problem**: Start an HTTP/gRPC server and automatically register it with a discovery service (Consul, etcd, etc.) for automatic deregistration on shutdown.
+**Problem**: Start an HTTP/gRPC server
+and automatically register it with a discovery service (Consul, etcd, etc.) for automatic deregistration on shutdown.
 
-**Solution**: Wrap your `Server` component with `DiscoveryServerComponent` from the `server` package. The discovery wrapper automatically calls register on `Start()` and deregister on `Stop()`, ensuring graceful cleanup.
+**Solution**:
+Wrap your `Server` component with `DiscoveryServerComponent` from the `server` package.
+The discovery wrapper automatically calls register on `Start()` and deregister on `Stop()`,
+ensuring graceful cleanup.
 
 **Code example**:
 
@@ -82,9 +87,13 @@ func main() {
 
 ## Pattern 2: Messaging + Middleware Stack
 
-**Problem**: Process messages from a topic with automatic retry, metrics tracking, tracing, deduplication, and circuit breaker protection without manually nesting middleware.
+**Problem**: Process messages from a topic with automatic retry, metrics tracking, tracing,
+deduplication, and circuit breaker protection without manually nesting middleware.
 
-**Solution**: Use `StackBuilder` from `messaging/middleware` to compose a typed middleware stack with a clean, chainable API. The builder applies middleware in a fixed, sensible order (tracing → metrics → dedup → circuit breaker → retry).
+**Solution**:
+Use `StackBuilder` from `messaging/middleware` to compose a typed middleware stack with a clean,
+chainable API. The builder applies middleware in a fixed,
+sensible order (tracing → metrics → dedup → circuit breaker → retry).
 
 **Code example**:
 
@@ -154,9 +163,11 @@ func main() {
 
 ## Pattern 3: gRPC Client + Discovery
 
-**Problem**: Create a gRPC client that dynamically discovers and connects to a remote service with lazy initialization and built-in resilience.
+**Problem**: Create a gRPC client that dynamically discovers
+and connects to a remote service with lazy initialization and built-in resilience.
 
-**Solution**: Use `DiscoveryConnectionFactory` to resolve services by name via discovery, then wrap the connection in a `LazyClient` for thread-safe, lazy initialization on first use.
+**Solution**: Use `DiscoveryConnectionFactory` to resolve services by name via discovery,
+then wrap the connection in a `LazyClient` for thread-safe, lazy initialization on first use.
 
 **Code example**:
 
@@ -228,9 +239,12 @@ func main() {
 
 ## Pattern 4: EventPublisher + Messaging
 
-**Problem**: Publish domain events from your application with automatic envelope (UUID, timestamp, source) construction without manual envelope handling.
+**Problem**:
+Publish domain events from your application with automatic envelope (UUID, timestamp, source) construction without manual envelope handling.
 
-**Solution**: Wrap a `Producer` with `EventPublisher` from the `messaging` package. The wrapper handles Event envelope creation automatically—you only provide the topic, event type, and payload.
+**Solution**: Wrap a `Producer` with `EventPublisher` from the `messaging` package.
+The wrapper handles Event envelope creation automatically—you only provide the topic, event type,
+and payload.
 
 **Code example**:
 
@@ -299,9 +313,12 @@ func main() {
 
 ## Pattern 5: TickerWorker + Resilience
 
-**Problem**: Run periodic health checks or background tasks reliably with degradation tracking, so that if a critical task fails repeatedly, your system can degrade gracefully.
+**Problem**: Run periodic health checks or background tasks reliably with degradation tracking,
+so that if a critical task fails repeatedly, your system can degrade gracefully.
 
-**Solution**: Create a `TickerWorker` for periodic execution and pair it with `DegradationManager` to track health state and make feature decisions based on the current health.
+**Solution**: Create a `TickerWorker` for periodic execution
+and pair it with `DegradationManager` to track health state
+and make feature decisions based on the current health.
 
 **Code example**:
 
@@ -455,7 +472,10 @@ This architecture provides:
 ## Best Practices
 
 1. **Always use DiscoveryServerComponent** for service registration to ensure automatic deregistration on shutdown.
-2. **Compose middleware with StackBuilder** rather than manually nesting; it ensures a predictable, sensible order.
-3. **Use LazyClient for gRPC** to defer connection creation until first use and share connections efficiently.
+2. **Compose middleware with StackBuilder** rather than manually nesting; it ensures a predictable,
+   sensible order.
+3. **Use LazyClient for gRPC** to defer connection creation until first use
+   and share connections efficiently.
 4. **Publish events with EventPublisher** to ensure consistent Event envelopes across your system.
-5. **Track degradation with DegradationManager** to inform feature decisions and degrade gracefully under load.
+5. **Track degradation with DegradationManager** to inform feature decisions
+   and degrade gracefully under load.

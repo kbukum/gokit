@@ -7,7 +7,10 @@ import (
 	"sync"
 )
 
-// Registry manages hook handlers and dispatches events. Handlers are executed sequentially in registration order. Non-fatal errors are aggregated and emitted as EventOnError observations. Fatal errors short-circuit dispatch when they wrap ErrFatalHook.
+// Registry manages hook handlers and dispatches events.
+// Handlers are executed sequentially in registration order. Non-fatal errors are aggregated
+// and emitted as EventOnError observations.
+// Fatal errors short-circuit dispatch when they wrap ErrFatalHook.
 type Registry struct {
 	mu       sync.RWMutex
 	handlers map[EventType][]entry
@@ -26,7 +29,8 @@ func NewRegistry() *Registry {
 	}
 }
 
-// On registers a handler for the given event type. Returns an unsubscribe function that removes the handler.
+// On registers a handler for the given event type.
+// Returns an unsubscribe function that removes the handler.
 func (r *Registry) On(eventType EventType, h Handler) func() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -48,7 +52,10 @@ func (r *Registry) On(eventType EventType, h Handler) func() {
 	}
 }
 
-// Emit dispatches an event to all registered handlers for its type. Panicking handlers are recovered and converted to non-fatal errors. Non-fatal errors do not stop dispatch; each is observed through EventOnError and the aggregate is returned. Fatal errors wrapping ErrFatalHook return immediately.
+// Emit dispatches an event to all registered handlers for its type.
+// Panicking handlers are recovered and converted to non-fatal errors.
+// Non-fatal errors do not stop dispatch; each is observed through EventOnError
+// and the aggregate is returned. Fatal errors wrapping ErrFatalHook return immediately.
 func (r *Registry) Emit(ctx context.Context, event Event) error {
 	entries := r.entries(event.Type())
 	var joined error
@@ -121,7 +128,8 @@ func (r *Registry) HasHandlers(eventType EventType) bool {
 	return len(r.handlers[eventType]) > 0
 }
 
-// Clear removes all handlers for the given event type. If no event type is specified, clears all handlers.
+// Clear removes all handlers for the given event type. If no event type is specified,
+// clears all handlers.
 func (r *Registry) Clear(eventTypes ...EventType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -6,7 +6,8 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
-// Component wraps an Adapter with lifecycle management. Use this when the HTTP adapter is part of a managed application (e.g., with bootstrap.Start/Stop).
+// Component wraps an Adapter with lifecycle management.
+// Use this when the HTTP adapter is part of a managed application (e.g., with bootstrap.Start/Stop).
 type Component struct {
 	adapter *Adapter
 	config  Config

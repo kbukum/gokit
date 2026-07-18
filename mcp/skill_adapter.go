@@ -13,7 +13,8 @@ type SkillToServerAdapter struct {
 	Registry *tool.Registry
 }
 
-// NewServer validates the manifest and constructs a Server whose tool allow-list is pinned to the manifest's referenced tools.
+// NewServer validates the manifest
+// and constructs a Server whose tool allow-list is pinned to the manifest's referenced tools.
 func (a SkillToServerAdapter) NewServer(name, version string, opts ...ServerOption) (*Server, error) {
 	if err := skill.Validate(&a.Manifest); err != nil {
 		return nil, err

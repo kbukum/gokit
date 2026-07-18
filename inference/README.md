@@ -1,6 +1,7 @@
 # gokit/inference
 
-`inference` is the model-serving runtime layer. It adapts serving backends into one `Predict` surface with typed values.
+`inference` is the model-serving runtime layer.
+It adapts serving backends into one `Predict` surface with typed values.
 
 ## Install
 
@@ -55,4 +56,5 @@ func main() {
 
 ## When to use
 
-Use `inference` for model-serving backends and typed runtime I/O. If you want chat semantics, tool use, or canonical message streaming, stay in `llm`.
+Use `inference` for model-serving backends and typed runtime I/O. If you want chat semantics,
+tool use, or canonical message streaming, stay in `llm`.

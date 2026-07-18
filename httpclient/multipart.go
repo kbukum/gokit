@@ -7,7 +7,8 @@ import (
 	"net/textproto"
 )
 
-// MultipartBody represents a multipart/form-data request body. Pass this as the Body field of a Request to automatically construct multipart encoding with the correct Content-Type header.
+// MultipartBody represents a multipart/form-data request body.
+// Pass this as the Body field of a Request to automatically construct multipart encoding with the correct Content-Type header.
 type MultipartBody struct {
 	// Fields are simple key-value form fields.
 	Fields map[string]string

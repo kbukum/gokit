@@ -8,15 +8,18 @@ import (
 	gokitschema "github.com/kbukum/gokit/schema"
 )
 
-// JSON is a JSON Schema document, re-exported from the canonical schema owner so callers need not import both packages.
+// JSON is a JSON Schema document, re-exported from the canonical schema owner
+// so callers need not import both packages.
 type JSON = gokitschema.JSON
 
-// Schema validates records against a compiled JSON Schema. It fails closed: any structural or validation error rejects the record.
+// Schema validates records against a compiled JSON Schema. It fails closed: any structural
+// or validation error rejects the record.
 type Schema struct {
 	compiled *gokitschema.CompiledSchema
 }
 
-// Compile compiles a JSON Schema document for repeated record validation. A nil document compiles to a schema that accepts any record.
+// Compile compiles a JSON Schema document for repeated record validation.
+// A nil document compiles to a schema that accepts any record.
 func Compile(doc JSON) (*Schema, error) {
 	compiled, err := gokitschema.Compile(doc)
 	if err != nil {
@@ -25,7 +28,8 @@ func Compile(doc JSON) (*Schema, error) {
 	return &Schema{compiled: compiled}, nil
 }
 
-// Validate checks a record against the schema, returning a typed InvalidInput error aggregating every failure. A nil Schema accepts any record.
+// Validate checks a record against the schema,
+// returning a typed InvalidInput error aggregating every failure. A nil Schema accepts any record.
 func (s *Schema) Validate(rec record.Record) error {
 	if s == nil || s.compiled == nil {
 		return nil

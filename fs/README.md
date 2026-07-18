@@ -1,10 +1,11 @@
 # fs
 
 Local filesystem primitives for safe paths, temporary files and directories, atomic writes,
-permissions, and metadata. It stays deliberately below storage abstractions — higher-level
-packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each
-re-implementing path safety, temp files, and atomic replacement. Where the standard library
-already suffices (`os`, `io/fs`, `path/filepath`), this package builds on it.
+permissions, and metadata. It stays deliberately below storage abstractions —
+higher-level packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each re-implementing path safety,
+temp files, and atomic replacement.
+Where the standard library already suffices (`os`, `io/fs`, `path/filepath`),
+this package builds on it.
 
 ## Install
 

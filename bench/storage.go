@@ -51,7 +51,8 @@ type ListParams struct {
 	Dataset string
 }
 
-// ResolveListOptions applies the given options and returns the resolved parameters. This is useful for external RunStorage implementations that need to inspect filter values.
+// ResolveListOptions applies the given options and returns the resolved parameters.
+// This is useful for external RunStorage implementations that need to inspect filter values.
 func ResolveListOptions(opts ...ListOption) ListParams {
 	cfg := listConfig{limit: 100}
 	for _, o := range opts {

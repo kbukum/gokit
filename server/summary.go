@@ -11,7 +11,8 @@ var systemPaths = map[string]bool{
 	"/metrics": true,
 }
 
-// formatHandlerName extracts a clean handler name from Gin's full handler path. Gin stores handlers like:
+// formatHandlerName extracts a clean handler name from Gin's full handler path.
+// Gin stores handlers like:
 //
 //	"github.com/yourorg/yourservice/internal/api/port.(*UserPort).List-fm"
 //
@@ -78,7 +79,8 @@ func methodOrder(method string) int {
 	}
 }
 
-// extractServiceNames extracts unique service names from mounted handler patterns. Pattern "/bot_service.BotService/" → "BotService".
+// extractServiceNames extracts unique service names from mounted handler patterns.
+// Pattern "/bot_service.BotService/" → "BotService".
 func extractServiceNames(mounts []MountedHandler) []string {
 	seen := make(map[string]bool)
 	var names []string

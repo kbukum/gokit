@@ -1,6 +1,7 @@
 // Package rest provides a JSON-focused REST client built on the HTTP adapter.
 //
-// It inherits all features from httpclient (auth, TLS, resilience, streaming) and adds typed convenience methods for common REST operations:
+// It inherits all features from httpclient (auth, TLS, resilience, streaming)
+// and adds typed convenience methods for common REST operations:
 //
 //	client := rest.New(httpclient.Config{
 //	    BaseURL: "https://api.example.com",

@@ -9,9 +9,11 @@ import (
 	"github.com/kbukum/gokit/httpclient"
 )
 
-// Client is a JSON-focused REST client that wraps the HTTP adapter. All requests use Content-Type: application/json and Accept: application/json.
+// Client is a JSON-focused REST client that wraps the HTTP adapter. All requests use Content-Type:
+// application/json and Accept: application/json.
 //
-// Client implements provider.Provider (Name, IsAvailable, Close) by delegating to the underlying HTTP adapter, so it composes naturally with gokit middleware.
+// Client implements provider.Provider (Name, IsAvailable, Close) by delegating to the underlying HTTP adapter,
+// so it composes naturally with gokit middleware.
 type Client struct {
 	http *httpclient.Adapter
 }

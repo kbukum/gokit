@@ -1,6 +1,8 @@
 // Package jwt provides a generic JWT token service using Go generics.
 //
-// The service is parameterized by a custom claims type T, which must implement jwt.Claims (typically by embedding jwt.RegisteredClaims). This allows each project to define its own claims structure without gokit knowing about it.
+// The service is parameterized by a custom claims type T,
+// which must implement jwt.Claims (typically by embedding jwt.RegisteredClaims).
+// This allows each project to define its own claims structure without gokit knowing about it.
 //
 // Usage:
 //
@@ -27,13 +29,15 @@ import (
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
 
-// Service provides JWT token generation and parsing for custom claims type T. T must implement jwt.Claims (e.g., by embedding jwt.RegisteredClaims).
+// Service provides JWT token generation
+// and parsing for custom claims type T. T must implement jwt.Claims (e.g., by embedding jwt.RegisteredClaims).
 type Service[T gojwt.Claims] struct {
 	cfg      Config
 	newEmpty func() T
 }
 
-// NewService creates a new JWT service. The newEmpty function returns a zero-value instance of T for parsing.
+// NewService creates a new JWT service.
+// The newEmpty function returns a zero-value instance of T for parsing.
 //
 // Example:
 //
@@ -46,7 +50,8 @@ func NewService[T gojwt.Claims](cfg *Config, newEmpty func() T) (*Service[T], er
 	return &Service[T]{cfg: *cfg, newEmpty: newEmpty}, nil
 }
 
-// Generate creates a signed JWT token from the given claims. If RegisteredClaims.ExpiresAt is zero, it is set to now + AccessTokenTTL. If RegisteredClaims.IssuedAt is zero, it is set to now.
+// Generate creates a signed JWT token from the given claims. If RegisteredClaims.ExpiresAt is zero,
+// it is set to now + AccessTokenTTL. If RegisteredClaims.IssuedAt is zero, it is set to now.
 func (s *Service[T]) Generate(claims T) (string, error) {
 	token := gojwt.NewWithClaims(s.cfg.signingMethod(), claims)
 	signed, err := token.SignedString(s.cfg.signKey())
@@ -56,24 +61,30 @@ func (s *Service[T]) Generate(claims T) (string, error) {
 	return signed, nil
 }
 
-// GenerateAccess creates a signed access token with standard time claims. It calls prepareClaims with AccessTokenTTL before signing.
+// GenerateAccess creates a signed access token with standard time claims.
+// It calls prepareClaims with AccessTokenTTL before signing.
 func (s *Service[T]) GenerateAccess(claims T) (string, error) {
 	s.prepareClaims(claims, s.cfg.AccessTokenTTL)
 	return s.Generate(claims)
 }
 
-// GenerateRefresh creates a signed refresh token with standard time claims. It calls prepareClaims with RefreshTokenTTL before signing.
+// GenerateRefresh creates a signed refresh token with standard time claims.
+// It calls prepareClaims with RefreshTokenTTL before signing.
 func (s *Service[T]) GenerateRefresh(claims T) (string, error) {
 	s.prepareClaims(claims, s.cfg.RefreshTokenTTL)
 	return s.generateWithKey(claims, s.cfg.refreshSignKey())
 }
 
-// Parse validates and parses a JWT token string into claims of type T. It verifies the signature, expiry, issuer, and audience. The service configuration must include Issuer and Audience, and the token must contain matching iss and aud claims.
+// Parse validates and parses a JWT token string into claims of type T. It verifies the signature,
+// expiry, issuer, and audience. The service configuration must include Issuer and Audience,
+// and the token must contain matching iss and aud claims.
 func (s *Service[T]) Parse(tokenString string) (T, error) {
 	return s.parseWithKey(tokenString, s.cfg.verifyKey())
 }
 
-// ParseRefresh validates and parses a refresh token string into claims of type T using the configured signature, expiry, issuer, and audience checks.
+// ParseRefresh validates
+// and parses a refresh token string into claims of type T using the configured signature, expiry,
+// issuer, and audience checks.
 func (s *Service[T]) ParseRefresh(tokenString string) (T, error) {
 	return s.parseWithKey(tokenString, s.cfg.refreshVerifyKey())
 }
@@ -115,7 +126,9 @@ func (s *Service[T]) parseWithKey(tokenString string, verifyKey any) (T, error) 
 	return parsed, nil
 }
 
-// ValidatorFunc returns a function that validates a token string and returns the parsed claims as any. This bridges the typed JWT service with generic middleware that doesn't know about the specific claims type.
+// ValidatorFunc returns a function that validates a token string
+// and returns the parsed claims as any.
+// This bridges the typed JWT service with generic middleware that doesn't know about the specific claims type.
 //
 // To get an auth.TokenValidator interface, wrap with auth.TokenValidatorFunc:
 //
@@ -185,7 +198,8 @@ func (s *Service[T]) validateRequiredClaims(claims T) error {
 	return nil
 }
 
-// prepareClaims sets standard RegisteredClaims fields if they're accessible. It supports three approaches (tried in order):
+// prepareClaims sets standard RegisteredClaims fields if they're accessible.
+// It supports three approaches (tried in order):
 //  1. SetDefaults interface — cleanest, gives full control to the claims type
 //  2. Reflection — finds embedded RegisteredClaims in any custom struct
 //  3. Direct cast — only works if T is literally *jwt.RegisteredClaims
@@ -220,7 +234,8 @@ func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 	}
 }
 
-// findRegisteredClaims uses reflection to find an embedded jwt.RegisteredClaims field in a struct (possibly behind a pointer). Returns a pointer to the embedded field, or nil if not found.
+// findRegisteredClaims uses reflection to find an embedded jwt.RegisteredClaims field in a struct (possibly behind a pointer).
+// Returns a pointer to the embedded field, or nil if not found.
 func findRegisteredClaims(v any) *gojwt.RegisteredClaims {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Ptr {

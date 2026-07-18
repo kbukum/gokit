@@ -4,9 +4,11 @@ import "strings"
 
 // Validator inspects a candidate answer, accepting it or explaining why it is rejected.
 //
-// In an interactive prompt a rejection reason is shown and the question is re-asked; in [ModeNonInteractive] a rejected default is a typed error rather than a silent bad value.
+// In an interactive prompt a rejection reason is shown and the question is re-asked;
+// in [ModeNonInteractive] a rejected default is a typed error rather than a silent bad value.
 type Validator interface {
-	// Validate returns nil to accept input or an error whose message is the human-readable rejection reason.
+	// Validate returns nil to accept input
+	// or an error whose message is the human-readable rejection reason.
 	Validate(input string) error
 }
 
@@ -26,7 +28,8 @@ func NonEmpty(message string) Validator {
 	})
 }
 
-// rejection is a lightweight error carrying only a human-readable reason, used as a validator's rejection signal.
+// rejection is a lightweight error carrying only a human-readable reason,
+// used as a validator's rejection signal.
 type rejection string
 
 func (r rejection) Error() string { return string(r) }

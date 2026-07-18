@@ -3,8 +3,8 @@
 Object storage abstraction for gokit.
 
 Core contains provider-neutral contracts, explicit `FactoryRegistry`, component integration,
-content-addressable wrappers, and lean local storage. Backend SDK dependencies are isolated
-in opt-in adapter modules such as `storage/s3`.
+content-addressable wrappers, and lean local storage.
+Backend SDK dependencies are isolated in opt-in adapter modules such as `storage/s3`.
 
 ## Local default
 
@@ -41,9 +41,9 @@ if err := storages3.Register(reg); err != nil {
 
 ## Supabase adapter
 
-The Supabase adapter lives in the `storage/supabase` package. It is HTTP-only, so it stays
-within the storage module (no separate `go.mod`), but it is still opt-in with no import-time
-side effects — register it explicitly:
+The Supabase adapter lives in the `storage/supabase` package. It is HTTP-only,
+so it stays within the storage module (no separate `go.mod`),
+but it is still opt-in with no import-time side effects — register it explicitly:
 
 ```go
 import (
@@ -57,5 +57,5 @@ if err := supabase.Register(reg); err != nil {
 }
 ```
 
-If a future SDK-backed adapter is introduced, it must move to a nested adapter module before
-adding that dependency.
+If a future SDK-backed adapter is introduced,
+it must move to a nested adapter module before adding that dependency.

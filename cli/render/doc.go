@@ -11,5 +11,11 @@
 //   - [StatusReporter] — one-off feedback lines (success/warn/step/heading) for
 //     guided, multi-step flows, written to an injected [io.Writer].
 //
-// The pure builders ([OutputTable], [OutputKV], [ErrorRenderer]) return strings the caller writes; [StatusReporter] writes to an injected [io.Writer]. Theme use is per renderer: [StatusReporter] applies the palette and glyphs ([github.com/kbukum/gokit/cli/theme.Palette], [github.com/kbukum/gokit/cli/theme.Glyphs]) so color and symbols honor NO_COLOR, TTY detection, and UTF-8 capability; [OutputTable] selects its border charset from glyph capability; [OutputKV] and [ErrorRenderer] emit plain text.
+// The pure builders ([OutputTable], [OutputKV], [ErrorRenderer]) return strings the caller writes;
+// [StatusReporter] writes to an injected [io.Writer]. Theme use is per renderer:
+// [StatusReporter] applies the palette
+// and glyphs ([github.com/kbukum/gokit/cli/theme.Palette], [github.com/kbukum/gokit/cli/theme.Glyphs])
+// so color and symbols honor NO_COLOR, TTY detection, and UTF-8 capability;
+// [OutputTable] selects its border charset from glyph capability; [OutputKV]
+// and [ErrorRenderer] emit plain text.
 package render

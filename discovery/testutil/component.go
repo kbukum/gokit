@@ -11,7 +11,9 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-// Component is a test discovery component backed by in-memory maps. It implements component.Component, testutil.TestComponent, discovery.Registry, and discovery.Discovery.
+// Component is a test discovery component backed by in-memory maps.
+// It implements component.Component, testutil.TestComponent, discovery.Registry,
+// and discovery.Discovery.
 type Component struct {
 	services  map[string]*discovery.ServiceInfo
 	instances map[string][]discovery.ServiceInstance

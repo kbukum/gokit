@@ -12,7 +12,8 @@ type Selector[T Provider] interface {
 	Select(ctx context.Context, providers map[string]T) (T, error)
 }
 
-// PrioritySelector tries providers in the given priority order and returns the first one that is available.
+// PrioritySelector tries providers in the given priority order
+// and returns the first one that is available.
 type PrioritySelector[T Provider] struct {
 	// Priority is the ordered list of provider names to try.
 	Priority []string

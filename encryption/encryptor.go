@@ -1,6 +1,7 @@
 package encryption
 
-// Encryptor defines the interface for symmetric encryption and decryption. Projects choose which implementation to use based on their requirements.
+// Encryptor defines the interface for symmetric encryption and decryption.
+// Projects choose which implementation to use based on their requirements.
 type Encryptor interface {
 	Encrypt(plaintext string) (string, error)
 	Decrypt(ciphertext string) (string, error)
@@ -29,9 +30,11 @@ func WithAlgorithm(alg Algorithm) Option {
 	return func(o *options) { o.algorithm = alg }
 }
 
-// New creates an Encryptor with the given key and options. Default algorithm is AES-256-GCM. Use WithAlgorithm to select ChaCha20-Poly1305.
+// New creates an Encryptor with the given key and options. Default algorithm is AES-256-GCM.
+// Use WithAlgorithm to select ChaCha20-Poly1305.
 //
-// The passphrase is stretched with PBKDF2-SHA256 and each ciphertext is encoded as base64(salt || nonce || ciphertext).
+// The passphrase is stretched with PBKDF2-SHA256
+// and each ciphertext is encoded as base64(salt || nonce || ciphertext).
 func New(key string, opts ...Option) (Encryptor, error) {
 	o := &options{algorithm: AlgorithmAESGCM}
 	for _, opt := range opts {

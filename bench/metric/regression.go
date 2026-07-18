@@ -104,7 +104,8 @@ func (m *rSquared) Compute(scored []bench.ScoredSample[float64]) Result {
 	}
 	meanActual /= float64(len(scored))
 
-	// Residual sum of squares and total sum of squares. SSres = Σ(actual - predicted)², SStot = Σ(actual - mean)²
+	// Residual sum of squares and total sum of squares. SSres = Σ(actual - predicted)²,
+	// SStot = Σ(actual - mean)²
 	ssRes := 0.0
 	ssTot := 0.0
 	for _, s := range scored {

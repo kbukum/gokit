@@ -7,7 +7,9 @@ import (
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
-// StorageFactory creates a Storage implementation from core configuration. Provider-specific configuration is captured by the typed provider Register function, keeping runtime selection free of untyped config blobs.
+// StorageFactory creates a Storage implementation from core configuration.
+// Provider-specific configuration is captured by the typed provider Register function,
+// keeping runtime selection free of untyped config blobs.
 type StorageFactory func(cfg Config, log *logging.Logger) (Storage, error)
 
 // FactoryRegistry stores storage factories by provider name.
@@ -30,7 +32,8 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 	return r.inner.Get(name)
 }
 
-// New creates a Storage implementation using the provided registry. Provider-specific settings are supplied by the typed provider Register call.
+// New creates a Storage implementation using the provided registry.
+// Provider-specific settings are supplied by the typed provider Register call.
 func New(reg *FactoryRegistry, cfg Config, log *logging.Logger) (Storage, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {

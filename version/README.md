@@ -1,6 +1,8 @@
 # version
 
-Build-time version information with Git metadata, derived from embedded build info (debug.ReadBuildInfo), optionally overridden at link time via an unexported seam.
+Build-time version information with Git metadata,
+derived from embedded build info (debug.ReadBuildInfo),
+optionally overridden at link time via an unexported seam.
 
 ## Install
 

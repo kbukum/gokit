@@ -10,7 +10,8 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// FromGRPC converts a gRPC error to an AppError. It translates gRPC status codes to user-friendly error messages.
+// FromGRPC converts a gRPC error to an AppError.
+// It translates gRPC status codes to user-friendly error messages.
 func FromGRPC(err error, serviceName string) *apperrors.AppError {
 	if err == nil {
 		return nil

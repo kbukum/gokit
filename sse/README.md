@@ -55,8 +55,10 @@ func main() {
 
 - `Hub` uses a bounded inbound broadcast queue of `DefaultBroadcastBufferSize`.
 - Each client uses a bounded delivery queue of `DefaultClientBufferSize`.
-- Delivery is best-effort, not durable: when a slow client's queue is full, the newest frame is dropped and `SendFrame` returns `false`.
-- Slow clients never block the hub or other subscribers; callers should rely on reconnect + replay from their own durable source when lossless delivery matters.
+- Delivery is best-effort, not durable: when a slow client's queue is full,
+  the newest frame is dropped and `SendFrame` returns `false`.
+- Slow clients never block the hub or other subscribers;
+  callers should rely on reconnect + replay from their own durable source when lossless delivery matters.
 
 ## Operational notes
 

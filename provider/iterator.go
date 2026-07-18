@@ -2,7 +2,9 @@ package provider
 
 import "context"
 
-// Iterator provides pull-based sequential access to a stream of values. The consumer calls Next() to retrieve values one at a time. Close must be called when done to release resources.
+// Iterator provides pull-based sequential access to a stream of values.
+// The consumer calls Next() to retrieve values one at a time.
+// Close must be called when done to release resources.
 type Iterator[T any] interface {
 	// Next returns the next value. Returns (zero, false, nil) when exhausted.
 	Next(ctx context.Context) (T, bool, error)

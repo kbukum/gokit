@@ -1,6 +1,9 @@
 package skill
 
-// Limits bounds the sizes of untrusted skill-pack files read at load time. Reads fail closed once a bound is exceeded. The zero value is not usable; obtain defaults from DefaultLimits or inject via WithLimits, which fills any non-positive field with its default.
+// Limits bounds the sizes of untrusted skill-pack files read at load time.
+// Reads fail closed once a bound is exceeded. The zero value is not usable;
+// obtain defaults from DefaultLimits or inject via WithLimits,
+// which fills any non-positive field with its default.
 type Limits struct {
 	// Manifest bounds the manifest file size.
 	Manifest int64
@@ -22,7 +25,8 @@ func DefaultLimits() Limits {
 	}
 }
 
-// withDefaults returns a copy where any non-positive field is replaced by its default, so a partially-specified Limits stays safe.
+// withDefaults returns a copy where any non-positive field is replaced by its default,
+// so a partially-specified Limits stays safe.
 func (l Limits) withDefaults() Limits {
 	d := DefaultLimits()
 	if l.Manifest <= 0 {

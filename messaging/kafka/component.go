@@ -47,7 +47,8 @@ func (c *Component) SetProducer(p messaging.ProducerCloser) {
 	c.producer = p
 }
 
-// AddConsumer injects a consumer into the component. If the component is already running, the consumer is started immediately.
+// AddConsumer injects a consumer into the component. If the component is already running,
+// the consumer is started immediately.
 func (c *Component) AddConsumer(cr messaging.ConsumerRunner) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -77,7 +78,8 @@ func (c *Component) Start(ctx context.Context) error {
 		return nil
 	}
 
-	// Detach consumer context from the caller's context so consumers survive beyond the Start() call. They stop only when cancelFn is called in Stop().
+	// Detach consumer context from the caller's context so consumers survive beyond the Start() call.
+	// They stop only when cancelFn is called in Stop().
 	consumeCtx, cancel := context.WithCancel(context.Background())
 	c.cancelFn = cancel
 	c.consumeCtx = consumeCtx
@@ -105,7 +107,9 @@ func (c *Component) startConsumer(cr messaging.ConsumerRunner) {
 	}()
 }
 
-// Stop gracefully shuts down consumers and the producer. Context cancel stops all consume loops in parallel. Consumer close (offset commit, TCP teardown) also runs in parallel to minimize shutdown time.
+// Stop gracefully shuts down consumers and the producer.
+// Context cancel stops all consume loops in parallel.
+// Consumer close (offset commit, TCP teardown) also runs in parallel to minimize shutdown time.
 func (c *Component) Stop(_ context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -151,7 +155,8 @@ type BrokerHealth struct {
 	Latency time.Duration `json:"latency"`
 }
 
-// Health checks broker connectivity by dialing all configured brokers. Returns degraded status when some (but not all) brokers are unreachable.
+// Health checks broker connectivity by dialing all configured brokers.
+// Returns degraded status when some (but not all) brokers are unreachable.
 func (c *Component) Health(ctx context.Context) component.Health {
 	c.mu.Lock()
 	running := c.running
@@ -270,7 +275,8 @@ type TopicConfig struct {
 	ReplicationFactor int
 }
 
-// EnsureTopics creates Kafka topics if they don't already exist. This is safe to call multiple times — existing topics are silently skipped.
+// EnsureTopics creates Kafka topics if they don't already exist.
+// This is safe to call multiple times — existing topics are silently skipped.
 func (c *Component) EnsureTopics(ctx context.Context, topics []TopicConfig) error {
 	if len(topics) == 0 || len(c.cfg.Brokers) == 0 {
 		return nil

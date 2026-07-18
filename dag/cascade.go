@@ -10,7 +10,8 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// CascadeBuilder constructs a staged execution pipeline where each stage is a sub-DAG with its own configuration. Stages execute sequentially, with an advance condition between each pair of stages.
+// CascadeBuilder constructs a staged execution pipeline where each stage is a sub-DAG with its own configuration.
+// Stages execute sequentially, with an advance condition between each pair of stages.
 type CascadeBuilder[I, O any] struct {
 	stages      []*stageSpec[I, O]
 	finalStage  *stageSpec[I, O]
@@ -44,7 +45,8 @@ func Abort() StageFailurePolicy { return StageFailureAbort }
 // ContinueOnFailure returns a policy that continues to the next stage on failure.
 func ContinueOnFailure() StageFailurePolicy { return StageFailureContinue }
 
-// OrderStrategy determines execution priority when multiple nodes within a stage are ready simultaneously and resources are constrained.
+// OrderStrategy determines execution priority when multiple nodes within a stage are ready simultaneously
+// and resources are constrained.
 type OrderStrategy func(nodes []orderableNode) []orderableNode
 
 type orderableNode struct {
@@ -76,7 +78,8 @@ func OrderByLatency() OrderStrategy {
 	}
 }
 
-// WeightedScore sorts nodes by a weighted combination of metadata dimensions. Higher weights mean that dimension matters more. Nodes with lower weighted scores execute first.
+// WeightedScore sorts nodes by a weighted combination of metadata dimensions.
+// Higher weights mean that dimension matters more. Nodes with lower weighted scores execute first.
 func WeightedScore(weights map[string]float64) OrderStrategy {
 	return func(nodes []orderableNode) []orderableNode {
 		type scored struct {
@@ -111,7 +114,8 @@ func NewCascade[I, O any]() *CascadeBuilder[I, O] {
 	}
 }
 
-// Stage adds a named stage to the cascade. The builder function receives the input and can conditionally add nodes based on it.
+// Stage adds a named stage to the cascade. The builder function receives the input
+// and can conditionally add nodes based on it.
 func (c *CascadeBuilder[I, O]) Stage(name string, fn StageFunc[I, O]) *CascadeBuilder[I, O] {
 	c.stages = append(c.stages, &stageSpec[I, O]{
 		name:    name,
@@ -120,7 +124,8 @@ func (c *CascadeBuilder[I, O]) Stage(name string, fn StageFunc[I, O]) *CascadeBu
 	return c
 }
 
-// FinalStage sets the final stage that always executes with all accumulated results, regardless of early exit.
+// FinalStage sets the final stage that always executes with all accumulated results,
+// regardless of early exit.
 func (c *CascadeBuilder[I, O]) FinalStage(name string, fn StageFunc[I, O]) *CascadeBuilder[I, O] {
 	c.finalStage = &stageSpec[I, O]{
 		name:    name,
@@ -203,7 +208,8 @@ type CascadeNodeTrace struct {
 	Error    error         `json:"-"`
 }
 
-// Execute runs the cascade: stages execute sequentially, nodes within each stage execute concurrently, and advance conditions control stage progression.
+// Execute runs the cascade: stages execute sequentially,
+// nodes within each stage execute concurrently, and advance conditions control stage progression.
 func (c *Cascade[I, O]) Execute(ctx context.Context, input I) (O, *CascadeTrace) {
 	start := time.Now()
 	trace := &CascadeTrace{
@@ -636,7 +642,9 @@ func (b *StageBuilder[I, O]) Timeout(d time.Duration) {
 	b.timeout = d
 }
 
-// AdvanceWhen sets the condition for advancing to the next stage. If the function returns false, the cascade stops after this stage (early exit). The function receives the accumulated result so far.
+// AdvanceWhen sets the condition for advancing to the next stage. If the function returns false,
+// the cascade stops after this stage (early exit). The function receives the accumulated result
+// so far.
 func (b *StageBuilder[I, O]) AdvanceWhen(fn func(O) bool) {
 	b.advanceFn = fn
 }

@@ -47,7 +47,8 @@ type Pack struct {
 // LoaderOption configures a Loader.
 type LoaderOption func(*Loader)
 
-// WithVerifier injects the manifest verifier consulted at load time. When omitted the loader uses WarnOnlyVerifier.
+// WithVerifier injects the manifest verifier consulted at load time.
+// When omitted the loader uses WarnOnlyVerifier.
 func WithVerifier(v Verifier) LoaderOption {
 	return func(l *Loader) {
 		if v != nil {
@@ -61,19 +62,23 @@ func WithLogger(logger *slog.Logger) LoaderOption {
 	return func(l *Loader) { l.logger = logger }
 }
 
-// WithLimits injects the size limits enforced on untrusted pack files. Any non-positive field falls back to its DefaultLimits value.
+// WithLimits injects the size limits enforced on untrusted pack files.
+// Any non-positive field falls back to its DefaultLimits value.
 func WithLimits(limits Limits) LoaderOption {
 	return func(l *Loader) { l.limits = limits.withDefaults() }
 }
 
-// Loader loads and activates skill packs from the filesystem, enforcing size limits, rejecting symlinks and escaping paths, and running an injected verifier before a pack is returned.
+// Loader loads and activates skill packs from the filesystem, enforcing size limits,
+// rejecting symlinks and escaping paths,
+// and running an injected verifier before a pack is returned.
 type Loader struct {
 	verifier Verifier
 	logger   *slog.Logger
 	limits   Limits
 }
 
-// NewLoader builds a Loader. Without options it verifies with WarnOnlyVerifier and enforces DefaultLimits.
+// NewLoader builds a Loader. Without options it verifies with WarnOnlyVerifier
+// and enforces DefaultLimits.
 func NewLoader(opts ...LoaderOption) *Loader {
 	l := &Loader{verifier: WarnOnlyVerifier{}, limits: DefaultLimits()}
 	for _, opt := range opts {
@@ -82,7 +87,8 @@ func NewLoader(opts ...LoaderOption) *Loader {
 	return l
 }
 
-// LoadMetadata parses, validates, and verifies only the manifest. It returns the manifest and any non-fatal verification warnings, and fails closed when verification is denied.
+// LoadMetadata parses, validates, and verifies only the manifest. It returns the manifest
+// and any non-fatal verification warnings, and fails closed when verification is denied.
 func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
 	canonRoot, err := fs.Canonicalize(root)
 	if err != nil {
@@ -91,7 +97,8 @@ func (l *Loader) LoadMetadata(root string) (*Manifest, []string, error) {
 	return l.loadMetadata(canonRoot)
 }
 
-// loadMetadata verifies the manifest under an already-canonicalized root so the verifier and warning logger see the same canonical root used for confinement.
+// loadMetadata verifies the manifest under an already-canonicalized root so the verifier
+// and warning logger see the same canonical root used for confinement.
 func (l *Loader) loadMetadata(canonRoot string) (*Manifest, []string, error) {
 	manifest, err := loadManifest(filepath.Join(canonRoot, ManifestFileName), l.limits.Manifest)
 	if err != nil {
@@ -114,7 +121,9 @@ func (l *Loader) loadMetadata(canonRoot string) (*Manifest, []string, error) {
 	}
 }
 
-// Load activates a skill pack: it loads verified metadata, the SKILL.md body, and the inert reference and script asset inventory. Every path is anchored to the canonical pack root.
+// Load activates a skill pack: it loads verified metadata, the SKILL.md body,
+// and the inert reference and script asset inventory.
+// Every path is anchored to the canonical pack root.
 func (l *Loader) Load(root string) (*Pack, error) {
 	canonRoot, err := fs.Canonicalize(root)
 	if err != nil {
@@ -190,7 +199,8 @@ func (p *Pack) ListScripts() []Asset {
 	return out
 }
 
-// rejectSymlink returns an error if the path is a symbolic link, preventing symlink-escape attacks in skill packs.
+// rejectSymlink returns an error if the path is a symbolic link,
+// preventing symlink-escape attacks in skill packs.
 func rejectSymlink(path string) error {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -202,7 +212,12 @@ func rejectSymlink(path string) error {
 	return nil
 }
 
-// rejectSymlinkSegments rejects a symlink on any path segment between canonRoot (exclusive) and full (inclusive). Confinement alone permits symlinked directories that still resolve under the root, so this enforces the loader's reject-symlinks policy on every segment and closes the path-confusion / TOCTOU gap that a symlinked intermediate directory would otherwise reopen. It fails closed when full escapes canonRoot instead of probing paths outside the pack.
+// rejectSymlinkSegments rejects a symlink on any path segment between canonRoot (exclusive)
+// and full (inclusive).
+// Confinement alone permits symlinked directories that still resolve under the root,
+// so this enforces the loader's reject-symlinks policy on every segment
+// and closes the path-confusion / TOCTOU gap that a symlinked intermediate directory would otherwise reopen.
+// It fails closed when full escapes canonRoot instead of probing paths outside the pack.
 func rejectSymlinkSegments(canonRoot, full string) error {
 	rel, err := filepath.Rel(canonRoot, full)
 	if err != nil {
@@ -224,7 +239,10 @@ func rejectSymlinkSegments(canonRoot, full string) error {
 	return nil
 }
 
-// readBounded reads a regular file after rejecting symlinks, failing closed when the file is not regular or exceeds maxBytes. It delegates the bounded read to the fs owner and maps its rejections onto the pack-file error taxonomy.
+// readBounded reads a regular file after rejecting symlinks,
+// failing closed when the file is not regular or exceeds maxBytes.
+// It delegates the bounded read to the fs owner
+// and maps its rejections onto the pack-file error taxonomy.
 func readBounded(path string, maxBytes int64) ([]byte, error) {
 	if err := rejectSymlink(path); err != nil {
 		return nil, err
@@ -246,7 +264,8 @@ func hashAsset(path string, total *int64, limits Limits) (string, error) {
 	if remaining < 0 {
 		remaining = 0
 	}
-	// Bound this read by the smaller of the per-asset and remaining-total budgets so an oversized asset never fully materializes in memory before the aggregate limit is enforced.
+	// Bound this read by the smaller of the per-asset and remaining-total budgets
+	// so an oversized asset never fully materializes in memory before the aggregate limit is enforced.
 	limit := limits.Asset
 	overTotal := false
 	if remaining < limit {
@@ -342,7 +361,10 @@ func enumerateAssets(canonRoot, dir string, total *int64, limits Limits) ([]Asse
 	return assets, nil
 }
 
-// confineToRoot rejects path when, after resolving symlinks, it escapes canonRoot. It reuses the fs owner's confinement and maps only its policy rejection (an escape) onto ErrInvalidPackFile; low-level IO failures (missing or unreadable paths) are returned as-is per the package error taxonomy.
+// confineToRoot rejects path when, after resolving symlinks, it escapes canonRoot.
+// It reuses the fs owner's confinement
+// and maps only its policy rejection (an escape) onto ErrInvalidPackFile;
+// low-level IO failures (missing or unreadable paths) are returned as-is per the package error taxonomy.
 func confineToRoot(canonRoot, path string) error {
 	_, err := fs.ConfineExistingPath(canonRoot, path)
 	if err == nil {

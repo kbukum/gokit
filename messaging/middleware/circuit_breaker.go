@@ -8,7 +8,8 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// CircuitBreakerConfig configures the circuit breaker middleware for message handlers. It maps directly to resilience.CircuitBreakerConfig.
+// CircuitBreakerConfig configures the circuit breaker middleware for message handlers.
+// It maps directly to resilience.CircuitBreakerConfig.
 type CircuitBreakerConfig struct {
 	// Name identifies this circuit breaker (used in state-change callbacks).
 	Name string
@@ -26,7 +27,8 @@ type CircuitBreakerConfig struct {
 	OnStateChange func(name string, from, to resilience.State)
 }
 
-// CircuitBreakerHandler wraps a MessageHandler with circuit breaker logic powered by resilience.CircuitBreaker. When the circuit is open, messages are rejected immediately with resilience.ErrCircuitOpen.
+// CircuitBreakerHandler wraps a MessageHandler with circuit breaker logic powered by resilience.CircuitBreaker.
+// When the circuit is open, messages are rejected immediately with resilience.ErrCircuitOpen.
 func CircuitBreakerHandler(handler messaging.MessageHandler, cfg CircuitBreakerConfig) messaging.MessageHandler {
 	rcfg := resilience.CircuitBreakerConfig{
 		Name:             cfg.Name,

@@ -21,7 +21,9 @@ func BodySizeLimit(maxSize string) Middleware {
 	}
 }
 
-// GinBodySizeLimit returns a Gin middleware for body size limiting. Prefer using BodySizeLimit() at the server level via ApplyMiddleware() which covers all routes. Use this only when you need it on the Gin engine directly.
+// GinBodySizeLimit returns a Gin middleware for body size limiting.
+// Prefer using BodySizeLimit() at the server level via ApplyMiddleware() which covers all routes.
+// Use this only when you need it on the Gin engine directly.
 func GinBodySizeLimit(maxSize string) gin.HandlerFunc {
 	return GinWrap(BodySizeLimit(maxSize))
 }

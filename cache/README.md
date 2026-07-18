@@ -2,8 +2,10 @@
 
 Backend-neutral cache abstraction for gokit.
 
-- Core ships the `Store` contract, explicit `FactoryRegistry`, typed JSON store, component integration, and in-memory backend.
-- External backends are opt-in adapter modules. Redis lives under `cache/redis` and registers only when `redis.Register(registry)` is called.
+- Core ships the `Store` contract, explicit `FactoryRegistry`, typed JSON store,
+  component integration, and in-memory backend.
+- External backends are opt-in adapter modules. Redis lives under `cache/redis`
+  and registers only when `redis.Register(registry)` is called.
 - There is no package-level mutable registry and no import-time backend registration.
 
 ## In-memory default

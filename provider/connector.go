@@ -9,9 +9,11 @@ import (
 
 // Connector provides thread-safe deferred initialization for any client type with optional resilience (circuit breaker, retry, rate limiting, bulkhead).
 //
-// The client is created on first use via GetClient() or Call(). If the underlying service endpoint changes, call Reset() to force re-creation.
+// The client is created on first use via GetClient() or Call().
+// If the underlying service endpoint changes, call Reset() to force re-creation.
 //
-// Connector is protocol-agnostic — it works for ConnectRPC, gRPC, HTTP, or any client that can be expressed as a factory function.
+// Connector is protocol-agnostic — it works for ConnectRPC, gRPC, HTTP,
+// or any client that can be expressed as a factory function.
 //
 // Usage:
 //
@@ -46,13 +48,16 @@ type ConnectorConfig[T any] struct {
 	// ServiceName identifies the service for logging.
 	ServiceName string
 
-	// Create is the factory function that produces the client. Called once on first use; the result is cached until Close/Reset.
+	// Create is the factory function that produces the client. Called once on first use;
+	// the result is cached until Close/Reset.
 	Create func() (T, error)
 
-	// OnClose is called when the connector is closed or reset. Use this for cleanup (e.g., closing a gRPC connection). Optional — nil means no cleanup.
+	// OnClose is called when the connector is closed or reset.
+	// Use this for cleanup (e.g., closing a gRPC connection). Optional — nil means no cleanup.
 	OnClose func() error
 
-	// Resilience configures circuit breaker, retry, rate limiting, and bulkhead. Nil means no resilience wrapping.
+	// Resilience configures circuit breaker, retry, rate limiting, and bulkhead.
+	// Nil means no resilience wrapping.
 	Resilience *ResilienceConfig
 }
 
@@ -70,7 +75,8 @@ func NewConnector[T any](cfg ConnectorConfig[T]) *Connector[T] {
 	}
 }
 
-// GetClient returns the client, creating it on first call. Thread-safe; only calls Create once even under concurrent access.
+// GetClient returns the client, creating it on first call. Thread-safe;
+// only calls Create once even under concurrent access.
 func (c *Connector[T]) GetClient() (T, error) {
 	c.mu.RLock()
 	if c.hasClient {
@@ -108,7 +114,8 @@ func (c *Connector[T]) initClient() (T, error) {
 	return c.client, nil
 }
 
-// Close resets the connector, calling OnClose if configured. The next GetClient/Call will re-create the client.
+// Close resets the connector, calling OnClose if configured.
+// The next GetClient/Call will re-create the client.
 func (c *Connector[T]) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

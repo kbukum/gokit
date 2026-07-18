@@ -1,6 +1,8 @@
-// Package workload provides a provider-based workload manager for deploying and managing containerized workloads across multiple runtimes.
+// Package workload provides a provider-based workload manager for deploying
+// and managing containerized workloads across multiple runtimes.
 //
-// It follows gokit's component pattern with lifecycle management and supports pluggable backends for different container orchestration platforms.
+// It follows gokit's component pattern with lifecycle management
+// and supports pluggable backends for different container orchestration platforms.
 //
 // # Backends
 //

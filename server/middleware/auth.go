@@ -10,7 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TokenValidator validates a bearer token and returns the parsed claims. It is declared locally so the transport layer (L5) never imports the auth module (L6): any concrete validator with this method — including auth.TokenValidator — satisfies it structurally and is injected by the composing application.
+// TokenValidator validates a bearer token and returns the parsed claims. It is declared locally
+// so the transport layer (L5) never imports the auth module (L6):
+// any concrete validator with this method — including auth.TokenValidator —
+// satisfies it structurally and is injected by the composing application.
 type TokenValidator interface {
 	// ValidateToken parses and verifies token, returning opaque claims. The
 	// claims type is genuinely caller-defined, so any is the documented
@@ -19,12 +22,18 @@ type TokenValidator interface {
 	ValidateToken(token string) (any, error)
 }
 
-// PermissionChecker reports whether a subject holds a permission. Declared locally to keep L5 free of the authz module (L6); any authz.Checker satisfies it structurally.
+// PermissionChecker reports whether a subject holds a permission.
+// Declared locally to keep L5 free of the authz module (L6);
+// any authz.Checker satisfies it structurally.
 type PermissionChecker interface {
 	HasPermission(subject, permission string) bool
 }
 
-// ClaimsSetter stores validated claims on ctx, returning the derived context. It is injected rather than imported so the server never depends on the auth module's context package; pass auth/authctx.Set (or an equivalent) from the composing application. The claims value is opaque by design.
+// ClaimsSetter stores validated claims on ctx, returning the derived context.
+// It is injected rather than imported
+// so the server never depends on the auth module's context package;
+// pass auth/authctx.Set (or an equivalent) from the composing application.
+// The claims value is opaque by design.
 type ClaimsSetter func(ctx context.Context, claims any) context.Context
 
 // QueryTokenWarningFunc logs a warning whenever query-token authentication is used.
@@ -52,7 +61,8 @@ func WithHeaderName(name string) AuthOption {
 	return func(o *authOptions) { o.headerName = name }
 }
 
-// WithScheme sets the expected token scheme (default: "Bearer"). Set to empty string to read the raw header value without scheme parsing.
+// WithScheme sets the expected token scheme (default: "Bearer").
+// Set to empty string to read the raw header value without scheme parsing.
 func WithScheme(scheme string) AuthOption {
 	return func(o *authOptions) { o.scheme = scheme }
 }
@@ -67,12 +77,14 @@ func WithQueryTokenAllowedPaths(paths ...string) AuthOption {
 	return func(o *authOptions) { o.queryTokenAllowedPaths = paths }
 }
 
-// WithQueryTokenWarningLogger configures an optional hook invoked each time a token is extracted from a query parameter. Use this for audit logging when query-token auth is a fallback rather than the primary mechanism.
+// WithQueryTokenWarningLogger configures an optional hook invoked each time a token is extracted from a query parameter.
+// Use this for audit logging when query-token auth is a fallback rather than the primary mechanism.
 func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
 	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
 }
 
-// Auth returns a Gin middleware that validates tokens and stores the parsed claims in the request context.
+// Auth returns a Gin middleware that validates tokens
+// and stores the parsed claims in the request context.
 //
 // It applies [RejectMissing]: requests without credentials are rejected with 401.
 // A present-but-invalid token is always rejected. setClaims is the injected sink
@@ -82,14 +94,20 @@ func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) 
 	return newAuthHandler("Auth", validator, setClaims, RejectMissing, opts...)
 }
 
-// OptionalAuth validates a token if present but allows unauthenticated requests (no Authorization header / empty token) to proceed. It applies [AcceptMissing]. A *present but invalid* token is always rejected with 401 — this is a deliberate secure-by-default contract: callers that want pass-through-on-failure should use no auth middleware at all.
+// OptionalAuth validates a token if present
+// but allows unauthenticated requests (no Authorization header / empty token) to proceed.
+// It applies [AcceptMissing]. A *present but invalid* token is always rejected with 401 —
+// this is a deliberate secure-by-default contract:
+// callers that want pass-through-on-failure should use no auth middleware at all.
 //
-// setClaims is the injected sink for validated claims. Both validator and setClaims must be non-nil.
+// setClaims is the injected sink for validated claims. Both validator
+// and setClaims must be non-nil.
 func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
 	return newAuthHandler("OptionalAuth", validator, setClaims, AcceptMissing, opts...)
 }
 
-// newAuthHandler builds the token-authentication middleware shared by Auth and OptionalAuth. policy governs only the missing-credential case; an invalid token is always rejected.
+// newAuthHandler builds the token-authentication middleware shared by Auth and OptionalAuth.
+// policy governs only the missing-credential case; an invalid token is always rejected.
 func newAuthHandler(name string, validator TokenValidator, setClaims ClaimsSetter, policy MissingTokenPolicy, opts ...AuthOption) (gin.HandlerFunc, error) {
 	if validator == nil {
 		return nil, fmt.Errorf("middleware/auth: %s requires a non-nil TokenValidator", name)

@@ -8,7 +8,9 @@ import (
 	"io"
 )
 
-// GenerateToken creates a cryptographically secure random token of the specified byte length, returned as a hex-encoded string. Common usage: session tokens, API keys, email verification tokens.
+// GenerateToken creates a cryptographically secure random token of the specified byte length,
+// returned as a hex-encoded string. Common usage: session tokens, API keys,
+// email verification tokens.
 func GenerateToken(length int) (string, error) {
 	bytes, err := generateRandomBytes(length)
 	if err != nil {
@@ -17,7 +19,8 @@ func GenerateToken(length int) (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-// HashSHA256 returns the SHA-256 hex digest of the input string. Useful for hashing tokens before storing them in a database (store the hash, compare hashes — never store raw tokens).
+// HashSHA256 returns the SHA-256 hex digest of the input string.
+// Useful for hashing tokens before storing them in a database (store the hash, compare hashes — never store raw tokens).
 func HashSHA256(input string) string {
 	h := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(h[:])

@@ -4,7 +4,8 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// ResilienceConfig bundles optional resilience policies for a provider. Nil fields are skipped — zero config means pure passthrough with no overhead.
+// ResilienceConfig bundles optional resilience policies for a provider. Nil fields are skipped —
+// zero config means pure passthrough with no overhead.
 type ResilienceConfig struct {
 	// CircuitBreaker prevents cascading failures by stopping calls after repeated errors.
 	CircuitBreaker *resilience.CircuitBreakerConfig

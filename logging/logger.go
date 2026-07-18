@@ -134,7 +134,8 @@ func (l *Logger) WithContext(ctx context.Context) *Logger {
 // contextKey is an unexported type for context keys to avoid collisions.
 type contextKey string
 
-// WithComponent returns a logger tagged with a component name. If a per-module log level override exists for the component, it is applied.
+// WithComponent returns a logger tagged with a component name.
+// If a per-module log level override exists for the component, it is applied.
 func (l *Logger) WithComponent(name string) *Logger {
 	zl := l.logger.With().Str(FieldComponent, name).Logger()
 
@@ -211,7 +212,8 @@ func (l *Logger) GetLogger() zerolog.Logger {
 
 // Debug logs a debug message.
 //
-// For request- or operation-scoped logging that should propagate cancellation and trace correlation to OTLP, prefer DebugCtx.
+// For request- or operation-scoped logging that should propagate cancellation
+// and trace correlation to OTLP, prefer DebugCtx.
 func (l *Logger) Debug(msg string, fields ...map[string]any) {
 	l.DebugCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API; callers with a ctx in scope should use DebugCtx
 }
@@ -278,12 +280,16 @@ func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]
 
 // --- Process default logger ---
 
-// defaultLogger lazily constructs the process default logger exactly once. It is immutable: there is no setter, so package-level convenience helpers and registries derive from a stable, race-free instance instead of a mutable global that can be reassigned at runtime.
+// defaultLogger lazily constructs the process default logger exactly once. It is immutable:
+// there is no setter, so package-level convenience helpers and registries derive from a stable,
+// race-free instance instead of a mutable global that can be reassigned at runtime.
 var defaultLogger = sync.OnceValue(func() *Logger {
 	return NewDefault("default")
 })
 
-// Default returns the process default logger, constructing it on first use. Prefer injecting an explicit *Logger; use Default only for incidental logging where threading a logger through the call site adds no value.
+// Default returns the process default logger, constructing it on first use.
+// Prefer injecting an explicit *Logger;
+// use Default only for incidental logging where threading a logger through the call site adds no value.
 func Default() *Logger {
 	return defaultLogger()
 }

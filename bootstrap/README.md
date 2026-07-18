@@ -54,7 +54,8 @@ func main() {
 }
 ```
 
-Both modes share the same lifecycle: Initialize → OnStart → Configure → ReadyCheck → OnReady → (execute) → OnStop → Shutdown.
+Both modes share the same lifecycle:
+Initialize → OnStart → Configure → ReadyCheck → OnReady → (execute) → OnStop → Shutdown.
 
 ## Key Types & Functions
 

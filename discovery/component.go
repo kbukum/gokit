@@ -11,7 +11,9 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// ProviderFactory creates a Registry and Discovery pair from a Config. The factory reads generic connection fields (Addr, Scheme, Token) directly from Config, and exotic provider-specific settings from Config.ProviderOptions.
+// ProviderFactory creates a Registry and Discovery pair from a Config.
+// The factory reads generic connection fields (Addr, Scheme, Token) directly from Config,
+// and exotic provider-specific settings from Config.ProviderOptions.
 type ProviderFactory func(cfg Config, log *logging.Logger) (Registry, Discovery, error)
 
 // ProviderRegistry stores discovery provider factories by name.
@@ -24,7 +26,8 @@ func NewProviderRegistry() *ProviderRegistry {
 	return &ProviderRegistry{inner: namedregistry.New[ProviderFactory]("discovery")}
 }
 
-// Register stores a discovery provider factory. It returns an error for invalid input (empty name, nil factory) or duplicate names.
+// Register stores a discovery provider factory.
+// It returns an error for invalid input (empty name, nil factory) or duplicate names.
 //
 // Note: prior versions panicked; callers must now check the returned error.
 func (r *ProviderRegistry) Register(name string, f ProviderFactory) error {
@@ -36,7 +39,8 @@ func (r *ProviderRegistry) Get(name string) (ProviderFactory, bool) {
 	return r.inner.Get(name)
 }
 
-// Component wraps a Registry and Discovery pair and implements component.Component for lifecycle management.
+// Component wraps a Registry and Discovery pair
+// and implements component.Component for lifecycle management.
 type Component struct {
 	registry      Registry
 	discovery     Discovery
@@ -51,7 +55,9 @@ type Component struct {
 // ComponentOption configures discovery component behavior.
 type ComponentOption func(*Component)
 
-// WithIPProbeTarget configures fallback UDP probe target for local IP detection. When not set (or empty), UDP probing is disabled and only interface enumeration is used to determine the local IP address.
+// WithIPProbeTarget configures fallback UDP probe target for local IP detection.
+// When not set (or empty), UDP probing is disabled
+// and only interface enumeration is used to determine the local IP address.
 func WithIPProbeTarget(addr string) ComponentOption {
 	return func(c *Component) {
 		if addr != "" {
@@ -60,7 +66,8 @@ func WithIPProbeTarget(addr string) ComponentOption {
 	}
 }
 
-// NewComponent creates a discovery Component for use with the component registry. reg must not be nil; an error is returned if it is.
+// NewComponent creates a discovery Component for use with the component registry.
+// reg must not be nil; an error is returned if it is.
 func NewComponent(reg *ProviderRegistry, cfg Config, log *logging.Logger, opts ...ComponentOption) (*Component, error) {
 	if reg == nil {
 		return nil, fmt.Errorf("discovery: provider registry must not be nil")
@@ -90,7 +97,8 @@ func (c *Component) Registry() Registry { return c.registry }
 // Discovery returns the underlying Discovery, or nil if not started.
 func (c *Component) Discovery() Discovery { return c.discovery }
 
-// Client returns the high-level discovery Client (with caching and LB), auto-created from Config after Start. Returns nil if not started.
+// Client returns the high-level discovery Client (with caching and LB),
+// auto-created from Config after Start. Returns nil if not started.
 func (c *Component) Client() *Client { return c.client }
 
 // Start initializes the appropriate provider and registers the local service.

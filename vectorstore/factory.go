@@ -6,7 +6,8 @@ import (
 	"github.com/kbukum/gokit/provider/namedregistry"
 )
 
-// Factory creates a Store from provider-agnostic config. Provider-specific configuration is captured by typed backend Register calls.
+// Factory creates a Store from provider-agnostic config.
+// Provider-specific configuration is captured by typed backend Register calls.
 type Factory func(cfg Config) (Store, error)
 
 // FactoryRegistry stores vectorstore factories by provider name.

@@ -8,7 +8,8 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
-// Component wraps an SSE Hub as a lifecycle-managed component. Register it with the component registry so Start/Stop are handled automatically.
+// Component wraps an SSE Hub as a lifecycle-managed component.
+// Register it with the component registry so Start/Stop are handled automatically.
 type Component struct {
 	hub  *Hub
 	wg   sync.WaitGroup

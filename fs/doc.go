@@ -1,4 +1,5 @@
-// Package fs provides local filesystem primitives for safe paths, temporary files and directories, atomic writes, permissions, and metadata.
+// Package fs provides local filesystem primitives for safe paths, temporary files and directories,
+// atomic writes, permissions, and metadata.
 //
 // It stays deliberately below storage abstractions: higher-level packages such
 // as storage, cache, and httpclient reuse these primitives instead of each

@@ -1,7 +1,8 @@
 // Package testutil provides test helpers and mock implementations
 // for the gokit/dag package.
 //
-// It includes mock nodes, graph builders, and a test component that implements testutil.TestComponent for integration with gokit's test infrastructure.
+// It includes mock nodes, graph builders,
+// and a test component that implements testutil.TestComponent for integration with gokit's test infrastructure.
 //
 // Example:
 //

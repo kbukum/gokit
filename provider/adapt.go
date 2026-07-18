@@ -2,9 +2,11 @@ package provider
 
 import "context"
 
-// Adapt wraps a RequestResponse provider with input/output type transformation. This bridges a backend service with types [BI, BO] to a domain interface with types [I, O].
+// Adapt wraps a RequestResponse provider with input/output type transformation.
+// This bridges a backend service with types [BI, BO] to a domain interface with types [I, O].
 //
-// mapIn converts the domain input to the backend input. mapOut converts the backend output to the domain output.
+// mapIn converts the domain input to the backend input.
+// mapOut converts the backend output to the domain output.
 //
 // Adapt composes naturally with WithResilience, Stateful, and other middleware.
 func Adapt[I, O, BI, BO any](

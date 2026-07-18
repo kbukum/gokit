@@ -7,12 +7,15 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// Runner wraps subprocess execution with persistent resilience state. Use NewRunner to create one, then call Run repeatedly. The circuit breaker state persists across calls — repeated crashes trip the breaker.
+// Runner wraps subprocess execution with persistent resilience state. Use NewRunner to create one,
+// then call Run repeatedly. The circuit breaker state persists across calls —
+// repeated crashes trip the breaker.
 type Runner struct {
 	state *provider.ResilienceState
 }
 
-// NewRunner creates a Runner with the given resilience config. Nil config fields are skipped. Empty config means Run() calls process.Run directly.
+// NewRunner creates a Runner with the given resilience config. Nil config fields are skipped.
+// Empty config means Run() calls process.Run directly.
 func NewRunner(cfg provider.ResilienceConfig) *Runner {
 	return &Runner{state: provider.BuildResilience(cfg)}
 }
@@ -27,7 +30,8 @@ func (r *Runner) Run(ctx context.Context, cmd Command) (*Result, error) {
 	})
 }
 
-// RunWithResilience is a convenience for one-shot subprocess execution with resilience. For repeated calls where circuit breaker state should persist, use NewRunner instead.
+// RunWithResilience is a convenience for one-shot subprocess execution with resilience.
+// For repeated calls where circuit breaker state should persist, use NewRunner instead.
 func RunWithResilience(ctx context.Context, cmd Command, runner *Runner) (*Result, error) {
 	if runner == nil {
 		return Run(ctx, cmd)
@@ -35,7 +39,9 @@ func RunWithResilience(ctx context.Context, cmd Command, runner *Runner) (*Resul
 	return runner.Run(ctx, cmd)
 }
 
-// SubprocessProvider wraps a Command as a provider.RequestResponse. The input function builds a Command from the input, and the output function parses the Result into the desired output type.
+// SubprocessProvider wraps a Command as a provider.RequestResponse.
+// The input function builds a Command from the input,
+// and the output function parses the Result into the desired output type.
 type SubprocessProvider[I, O any] struct {
 	name      string
 	buildCmd  func(I) Command

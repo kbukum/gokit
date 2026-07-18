@@ -1,6 +1,7 @@
 # grpc
 
-gRPC client library with lazy initialization, generic client wrapper, interceptors, and error mapping.
+gRPC client library with lazy initialization, generic client wrapper, interceptors,
+and error mapping.
 
 ## Install
 
@@ -72,7 +73,8 @@ For gokit's gRPC client builder, the built-in unary chain is:
 2. resilience
 3. user-supplied interceptors
 
-This keeps logging around the whole RPC while letting resilience set deadlines and retries before custom per-call behavior.
+This keeps logging around the whole RPC while letting resilience set deadlines
+and retries before custom per-call behavior.
 
 ## TLS policy
 

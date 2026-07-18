@@ -6,7 +6,8 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-// AssertPublished asserts that exactly count messages were published to the given topic. It reports test failures with the topic name and counts.
+// AssertPublished asserts that exactly count messages were published to the given topic.
+// It reports test failures with the topic name and counts.
 func AssertPublished(t *testing.T, p *MockProducer, topic string, count int) {
 	t.Helper()
 	msgs := p.MessagesForTopic(topic)
@@ -15,7 +16,8 @@ func AssertPublished(t *testing.T, p *MockProducer, topic string, count int) {
 	}
 }
 
-// AssertPublishedN asserts that exactly count messages were published in total, regardless of topic.
+// AssertPublishedN asserts that exactly count messages were published in total,
+// regardless of topic.
 func AssertPublishedN(t *testing.T, p *MockProducer, count int) {
 	t.Helper()
 	msgs := p.Messages()
@@ -24,7 +26,8 @@ func AssertPublishedN(t *testing.T, p *MockProducer, count int) {
 	}
 }
 
-// AssertConsumed asserts that exactly count messages are present in the received slice. Use this with a handler that collects messages:
+// AssertConsumed asserts that exactly count messages are present in the received slice.
+// Use this with a handler that collects messages:
 //
 //	var received []messaging.Message
 //	handler := func(_ context.Context, msg messaging.Message) error {

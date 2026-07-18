@@ -1,6 +1,7 @@
 // Package testutil provides testing infrastructure for gokit components.
 //
-// The testutil package extends gokit's component lifecycle pattern with testing-specific capabilities, enabling easy setup, teardown, and state management for test components.
+// The testutil package extends gokit's component lifecycle pattern with testing-specific capabilities,
+// enabling easy setup, teardown, and state management for test components.
 //
 // # Quick Start
 //
@@ -35,11 +36,13 @@
 //   - Snapshot(ctx): Capture current state
 //   - Restore(ctx, snapshot): Restore to a captured state
 //
-// This hybrid approach provides consistency with production code while adding testing capabilities needed for test isolation and state management.
+// This hybrid approach provides consistency with production code while adding testing capabilities needed for test isolation
+// and state management.
 //
 // # Thread Safety
 //
-// All Manager operations are thread-safe. Individual TestComponent implementations should ensure thread-safety if used in concurrent tests.
+// All Manager operations are thread-safe.
+// Individual TestComponent implementations should ensure thread-safety if used in concurrent tests.
 //
 // See the README.md for comprehensive documentation and examples.
 package testutil

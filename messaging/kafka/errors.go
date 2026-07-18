@@ -27,12 +27,14 @@ var kafkaRetryablePatterns = []string{
 	"offset out of range",
 }
 
-// IsConnectionError checks if a Kafka error is a connection-level error. It checks both generic patterns and Kafka-specific patterns.
+// IsConnectionError checks if a Kafka error is a connection-level error.
+// It checks both generic patterns and Kafka-specific patterns.
 func IsConnectionError(err error) bool {
 	return messaging.IsConnectionError(err, kafkaConnectionPatterns...)
 }
 
-// IsRetryableError determines if a Kafka error should trigger a retry. It checks both generic patterns and Kafka-specific patterns.
+// IsRetryableError determines if a Kafka error should trigger a retry.
+// It checks both generic patterns and Kafka-specific patterns.
 func IsRetryableError(err error) bool {
 	if err == nil {
 		return false

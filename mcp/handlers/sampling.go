@@ -9,7 +9,10 @@ import (
 	"github.com/kbukum/gokit/mcp/security"
 )
 
-// Sample performs a server-to-client sampling request (sampling/createMessage) over the given session. The returned message is untrusted model output: when a result size limit is configured, an oversized response fails closed rather than being handed back to the caller. Every call is audited and bounded by ctx (the caller must supply a deadline).
+// Sample performs a server-to-client sampling request (sampling/createMessage) over the given session.
+// The returned message is untrusted model output: when a result size limit is configured,
+// an oversized response fails closed rather than being handed back to the caller.
+// Every call is audited and bounded by ctx (the caller must supply a deadline).
 func (h *Handler) Sample(ctx context.Context, ss *sdkmcp.ServerSession, params *sdkmcp.CreateMessageParams) (*sdkmcp.CreateMessageResult, error) {
 	if ss == nil {
 		return nil, fmt.Errorf("mcp: sampling requires an active session")

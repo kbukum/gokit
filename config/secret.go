@@ -4,7 +4,9 @@ import "encoding/json"
 
 const secretMask = "***"
 
-// SecretString wraps a string value and masks it in String(), MarshalJSON(), and MarshalText() to prevent accidental exposure in logs, configs, or serialized output. Use Value() to retrieve the actual plaintext.
+// SecretString wraps a string value and masks it in String(), MarshalJSON(),
+// and MarshalText() to prevent accidental exposure in logs, configs, or serialized output.
+// Use Value() to retrieve the actual plaintext.
 type SecretString struct {
 	value string
 }

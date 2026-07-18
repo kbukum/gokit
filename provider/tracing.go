@@ -6,7 +6,8 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// WithTracing returns a Middleware that creates an OpenTelemetry span around each Execute call using the gokit observability package. The span name is "{serviceName}.{providerName}".
+// WithTracing returns a Middleware that creates an OpenTelemetry span around each Execute call using the gokit observability package.
+// The span name is "{serviceName}.{providerName}".
 func WithTracing[I, O any](serviceName string) Middleware[I, O] {
 	return func(inner RequestResponse[I, O]) RequestResponse[I, O] {
 		return &tracingRR[I, O]{inner: inner, serviceName: serviceName}

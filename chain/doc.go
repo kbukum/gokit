@@ -1,8 +1,13 @@
 // Package chain provides typed, sequential chain execution.
 //
-// A chain is a statically typed sequence of steps where each step consumes the previous step's output and produces the next step's input type. Execution short-circuits on the first error, checks cancellation between steps, and runs the cleanup actions registered by already-completed steps (in reverse order) when a later step fails or the chain is canceled.
+// A chain is a statically typed sequence of steps where each step consumes the previous step's output
+// and produces the next step's input type. Execution short-circuits on the first error,
+// checks cancellation between steps,
+// and runs the cleanup actions registered by already-completed steps (in reverse order) when a later step fails
+// or the chain is canceled.
 //
-// Because Go methods cannot introduce new type parameters, steps are appended with the package-level Then function rather than a fluent method:
+// Because Go methods cannot introduce new type parameters,
+// steps are appended with the package-level Then function rather than a fluent method:
 //
 //	c := chain.Then(
 //		chain.Then(
@@ -18,5 +23,6 @@
 //
 //	out, err := c.Execute(ctx, "21", nil) // out == 42
 //
-// Mirrors rskit-chain (Rust) and pykit-chain (Python): the same typed Step / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
+// Mirrors rskit-chain (Rust) and pykit-chain (Python):
+// the same typed Step / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
 package chain

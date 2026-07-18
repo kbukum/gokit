@@ -7,12 +7,19 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// RawJSON carries a raw JSON value verbatim through the llm API. It is the typed carrier for provider-specific request extensions ([CompletionRequest.Extra]): the bytes stay opaque so the public surface is free of any, and each provider dialect decodes them at its own wire boundary.
+// RawJSON carries a raw JSON value verbatim through the llm API.
+// It is the typed carrier for provider-specific request extensions ([CompletionRequest.Extra]):
+// the bytes stay opaque so the public surface is free of any,
+// and each provider dialect decodes them at its own wire boundary.
 //
-// RawJSON round-trips through both JSON and YAML, so a request may be authored in either format alongside the rest of [CompletionRequest]; a YAML value is normalized to its JSON encoding on decode.
+// RawJSON round-trips through both JSON and YAML,
+// so a request may be authored in either format alongside the rest of [CompletionRequest];
+// a YAML value is normalized to its JSON encoding on decode.
 type RawJSON []byte
 
-// MarshalJSON returns the raw bytes unchanged, or "null" when empty. It fails closed when the bytes are not a valid JSON value, so a RawJSON constructed from arbitrary bytes cannot silently emit a malformed request payload.
+// MarshalJSON returns the raw bytes unchanged, or "null" when empty.
+// It fails closed when the bytes are not a valid JSON value,
+// so a RawJSON constructed from arbitrary bytes cannot silently emit a malformed request payload.
 func (m RawJSON) MarshalJSON() ([]byte, error) {
 	if len(m) == 0 {
 		return []byte("null"), nil
@@ -32,7 +39,8 @@ func (m *RawJSON) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalYAML decodes a YAML node and stores its equivalent JSON encoding, so YAML-authored extensions are carried in the same opaque JSON form as JSON input.
+// UnmarshalYAML decodes a YAML node and stores its equivalent JSON encoding,
+// so YAML-authored extensions are carried in the same opaque JSON form as JSON input.
 func (m *RawJSON) UnmarshalYAML(value *yaml.Node) error {
 	if m == nil {
 		return fmt.Errorf("llm.RawJSON: UnmarshalYAML on nil pointer")
@@ -53,7 +61,9 @@ func (m *RawJSON) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// MarshalYAML renders the raw JSON as its decoded value so it serializes as a native YAML node rather than an opaque byte string. Empty input serializes as an explicit YAML null.
+// MarshalYAML renders the raw JSON as its decoded value
+// so it serializes as a native YAML node rather than an opaque byte string.
+// Empty input serializes as an explicit YAML null.
 func (m RawJSON) MarshalYAML() (any, error) {
 	if len(m) == 0 {
 		return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!null", Value: "null"}, nil

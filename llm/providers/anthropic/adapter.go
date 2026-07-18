@@ -5,7 +5,9 @@ import (
 	"github.com/kbukum/gokit/llm"
 )
 
-// NewAdapter creates an LLM adapter configured for the Anthropic Messages API. It bridges the simple anthropic.Config to gokit's httpclient with proper API key auth (x-api-key header) and the required anthropic-version header.
+// NewAdapter creates an LLM adapter configured for the Anthropic Messages API.
+// It bridges the simple anthropic.Config to gokit's httpclient with proper API key auth (x-api-key header)
+// and the required anthropic-version header.
 //
 //	adapter, err := anthropic.NewAdapter(anthropic.Config{
 //	    APIKey: "sk-ant-...",

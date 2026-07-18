@@ -9,9 +9,12 @@ import (
 	"github.com/kbukum/gokit/provider"
 )
 
-// SinkProvider wraps a Producer as a provider.Sink[kafkago.Message]. This allows the Kafka producer to participate in the provider framework — composable with WithSinkResilience(), selectable via Manager, pipelineable.
+// SinkProvider wraps a Producer as a provider.Sink[kafkago.Message].
+// This allows the Kafka producer to participate in the provider framework —
+// composable with WithSinkResilience(), selectable via Manager, pipelineable.
 //
-// For batch writes, use Producer.WriteMessages directly. The Sink adapter sends one message at a time for composability.
+// For batch writes, use Producer.WriteMessages directly.
+// The Sink adapter sends one message at a time for composability.
 type SinkProvider struct {
 	name     string
 	producer *Producer

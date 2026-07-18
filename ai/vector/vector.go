@@ -5,7 +5,9 @@ import (
 	"math"
 )
 
-// CosineSimilarity computes the cosine similarity between two vectors. Returns a value in [-1.0, 1.0] where 1.0 means identical direction. Returns 0.0 if either vector has zero magnitude.
+// CosineSimilarity computes the cosine similarity between two vectors.
+// Returns a value in [-1.0, 1.0] where 1.0 means identical direction.
+// Returns 0.0 if either vector has zero magnitude.
 func CosineSimilarity(a, b []float32) (float32, error) {
 	if len(a) != len(b) {
 		return 0, fmt.Errorf("vectors must have equal dimensions: %d != %d", len(a), len(b))
@@ -56,7 +58,8 @@ func DotProduct(a, b []float32) (float32, error) {
 	return result, nil
 }
 
-// MeanPooling computes the element-wise mean of a collection of vectors. Returns an error if the input is empty or vectors have inconsistent dimensions.
+// MeanPooling computes the element-wise mean of a collection of vectors.
+// Returns an error if the input is empty or vectors have inconsistent dimensions.
 func MeanPooling(vectors [][]float32) ([]float32, error) {
 	if len(vectors) == 0 {
 		return nil, fmt.Errorf("cannot compute mean pooling of empty vector slice")
@@ -82,7 +85,8 @@ func MeanPooling(vectors [][]float32) ([]float32, error) {
 	return result, nil
 }
 
-// MaxPooling computes the element-wise maximum of a collection of vectors. Returns an error if the input is empty or vectors have inconsistent dimensions.
+// MaxPooling computes the element-wise maximum of a collection of vectors.
+// Returns an error if the input is empty or vectors have inconsistent dimensions.
 func MaxPooling(vectors [][]float32) ([]float32, error) {
 	if len(vectors) == 0 {
 		return nil, fmt.Errorf("cannot compute max pooling of empty vector slice")

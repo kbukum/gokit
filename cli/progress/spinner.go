@@ -15,7 +15,10 @@ var unicodeSpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "�
 
 // Spinner is an indeterminate progress indicator over an injected writer.
 //
-// It advances one frame per [Spinner.Tick], so animation is driven by the caller rather than a background timer — deterministic and clock-free. Each tick overwrites the current line (leading carriage return); [Spinner.Finish] replaces the spinner with a final glyph and message on a fresh line.
+// It advances one frame per [Spinner.Tick],
+// so animation is driven by the caller rather than a background timer — deterministic
+// and clock-free. Each tick overwrites the current line (leading carriage return);
+// [Spinner.Finish] replaces the spinner with a final glyph and message on a fresh line.
 type Spinner struct {
 	writer  io.Writer
 	palette theme.Palette
@@ -38,7 +41,8 @@ func WithSpinnerPalette(palette theme.Palette) SpinnerOption {
 	return func(s *Spinner) { s.palette = palette }
 }
 
-// WithSpinnerGlyphs selects Unicode braille frames when the glyph set supports Unicode, else the ASCII fallback, and sets the completion glyph.
+// WithSpinnerGlyphs selects Unicode braille frames when the glyph set supports Unicode,
+// else the ASCII fallback, and sets the completion glyph.
 func WithSpinnerGlyphs(glyphs theme.Glyphs) SpinnerOption {
 	return func(s *Spinner) {
 		s.glyphs = glyphs

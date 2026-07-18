@@ -22,7 +22,8 @@ const (
 	statusPartial = "partial"
 )
 
-// SourceStats records how many items a source produced and where a partial run left off so it can resume.
+// SourceStats records how many items a source produced and where a partial run left off
+// so it can resume.
 type SourceStats struct {
 	// Total is the number of items collected.
 	Total int `json:"total"`
@@ -75,7 +76,8 @@ func New() *Manifest {
 	return &Manifest{Sources: map[string]SourceEntry{}}
 }
 
-// Load reads the manifest from dir, returning an empty manifest when none exists. The read is bounded to 1 MiB and malformed content fails closed.
+// Load reads the manifest from dir, returning an empty manifest when none exists.
+// The read is bounded to 1 MiB and malformed content fails closed.
 func Load(dir string) (*Manifest, error) {
 	path := filepath.Join(dir, fileName)
 	data, err := fs.ReadFileLimit(path, maxBytes)
@@ -115,7 +117,8 @@ func (m *Manifest) MarkPartial(name, cacheKey string, stats SourceStats) {
 	m.Sources[name] = SourceEntry{CacheKey: cacheKey, Stats: stats, Status: statusPartial}
 }
 
-// CacheStatusFor resolves a source's cache state. A partial entry is promoted to done when it is within five items or 99% of a known ceiling.
+// CacheStatusFor resolves a source's cache state.
+// A partial entry is promoted to done when it is within five items or 99% of a known ceiling.
 func (m *Manifest) CacheStatusFor(name, cacheKey string, ceiling int, hasCeiling bool) CacheStatus {
 	entry, ok := m.Sources[name]
 	if !ok || entry.CacheKey != cacheKey {

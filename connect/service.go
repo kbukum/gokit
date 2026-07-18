@@ -10,7 +10,8 @@ type Service interface {
 	Handler() http.Handler
 }
 
-// NewService creates a Service from a path and handler, typically produced by a Connect-Go generated constructor (e.g. foov1connect.NewFooServiceHandler).
+// NewService creates a Service from a path and handler,
+// typically produced by a Connect-Go generated constructor (e.g. foov1connect.NewFooServiceHandler).
 func NewService(path string, handler http.Handler) Service {
 	return &service{path: path, handler: handler}
 }

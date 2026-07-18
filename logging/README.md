@@ -90,7 +90,10 @@ logging:
 
 ## Masking
 
-Masking is **enabled by default**. Every log field is checked against sensitive field names (case-insensitive) and value patterns (regex). If a match is found, the value is replaced before it reaches any output sink.
+Masking is **enabled by default**.
+Every log field is checked against sensitive field names (case-insensitive)
+and value patterns (regex). If a match is found,
+the value is replaced before it reaches any output sink.
 
 ### Default Masked Fields
 
@@ -151,7 +154,8 @@ This turns `"password": "hunter2"` into `"password": "***REDACTED***ter2"`.
 
 ## Sampling
 
-Sampling reduces log volume in high-throughput services. When enabled, each log level gets an independent counter per one-second window:
+Sampling reduces log volume in high-throughput services. When enabled,
+each log level gets an independent counter per one-second window:
 
 1. **Burst** — the first `initial_rate` messages per second per level pass through unconditionally.
 2. **Thereafter** — after the burst, only every `thereafter_rate`-th message is kept.
@@ -163,7 +167,8 @@ sampling:
   thereafter_rate: 10   # then keep every 10th
 ```
 
-> **When to use:** Enable sampling on hot-path services producing thousands of log lines per second. Leave disabled for low-volume services or during debugging.
+> **When to use:** Enable sampling on hot-path services producing thousands of log lines per second.
+> Leave disabled for low-volume services or during debugging.
 
 Sampling uses zerolog's `BurstSampler` under the hood:
 
@@ -178,7 +183,8 @@ Sampling uses zerolog's `BurstSampler` under the hood:
 
 ## Module Levels
 
-Override the global log level for specific components. Useful for silencing noisy dependencies or enabling debug output for a single subsystem.
+Override the global log level for specific components. Useful for silencing noisy dependencies
+or enabling debug output for a single subsystem.
 
 ```yaml
 logging:
@@ -198,13 +204,14 @@ dbLog := log.WithComponent("database")   // → debug level
 kafkaLog := log.WithComponent("kafka")   // → warn level
 ```
 
-Module levels are configured via the `module_levels` map (config or `logging.Config`) and
-applied automatically by `WithComponent`. The underlying `ModuleLevelManager` is thread-safe;
+Module levels are configured via the `module_levels` map (config or `logging.Config`)
+and applied automatically by `WithComponent`. The underlying `ModuleLevelManager` is thread-safe;
 its `SetLevel()` is used internally when levels are established from configuration.
 
 ## OTLP Export
 
-The OpenTelemetry Logs bridge sends log records to an OTLP collector alongside your local output. Logs are emitted via the OTel SDK `LoggerProvider` with batch processing.
+The OpenTelemetry Logs bridge sends log records to an OTLP collector alongside your local output.
+Logs are emitted via the OTel SDK `LoggerProvider` with batch processing.
 
 ### Setup
 

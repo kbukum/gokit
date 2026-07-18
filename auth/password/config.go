@@ -18,7 +18,8 @@ type Config struct {
 	// Algorithm selects the hashing algorithm (default: "argon2id").
 	Algorithm Algorithm `mapstructure:"algorithm"`
 
-	// BcryptCost is the bcrypt cost parameter (default: 12, range: 12-31). Only used when Algorithm is "bcrypt".
+	// BcryptCost is the bcrypt cost parameter (default: 12, range: 12-31).
+	// Only used when Algorithm is "bcrypt".
 	BcryptCost int `mapstructure:"bcrypt_cost"`
 
 	// Argon2Time is the number of iterations for argon2id (default: 3).
@@ -83,7 +84,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// NewHasher creates a Hasher from configuration. This is the config-driven factory — use it when loading from YAML/env.
+// NewHasher creates a Hasher from configuration. This is the config-driven factory —
+// use it when loading from YAML/env.
 func NewHasher(cfg Config) Hasher {
 	cfg.ApplyDefaults()
 	switch cfg.Algorithm {

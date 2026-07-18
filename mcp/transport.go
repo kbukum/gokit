@@ -7,7 +7,8 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// Transport identifies a canonical MCP transport name. Only stdio and Streamable HTTP are exposed; the obsolete standalone SSE transport is not.
+// Transport identifies a canonical MCP transport name. Only stdio and Streamable HTTP are exposed;
+// the obsolete standalone SSE transport is not.
 type Transport string
 
 const (
@@ -17,7 +18,8 @@ const (
 	TransportStreamableHTTP Transport = "streamable_http"
 )
 
-// ParseTransport validates a canonical MCP transport name, failing closed on any unrecognized value.
+// ParseTransport validates a canonical MCP transport name,
+// failing closed on any unrecognized value.
 func ParseTransport(name string) (Transport, error) {
 	switch Transport(name) {
 	case TransportStdio, TransportStreamableHTTP:
@@ -30,7 +32,8 @@ func ParseTransport(name string) (Transport, error) {
 	}
 }
 
-// ServeStdio runs the server over the MCP stdio transport until ctx is canceled or stdin closes. This is the default transport for local, single-client MCP integrations (IDEs, agents).
+// ServeStdio runs the server over the MCP stdio transport until ctx is canceled or stdin closes.
+// This is the default transport for local, single-client MCP integrations (IDEs, agents).
 func (s *Server) ServeStdio(ctx context.Context) error {
 	return s.Run(ctx, &sdkmcp.StdioTransport{})
 }

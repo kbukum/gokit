@@ -105,7 +105,8 @@ type Engine struct {
 	policies []Policy
 }
 
-// NewEngine constructs an authorization engine. Inputs are deep-copied so callers cannot mutate engine state after construction.
+// NewEngine constructs an authorization engine. Inputs are deep-copied
+// so callers cannot mutate engine state after construction.
 func NewEngine(roles []Role, policies []Policy) (*Engine, error) {
 	roleIndex := make(map[string]Role, len(roles))
 	for _, role := range roles {

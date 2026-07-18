@@ -8,7 +8,10 @@ import (
 
 // Timestamp is a time point in microseconds from the start of the media.
 //
-// Microsecond precision matches the internal timestamp resolution of common container and codec formats, avoiding precision loss during conversion. A Timestamp is never negative: constructors and arithmetic clamp at zero and saturate at the maximum representable value on overflow.
+// Microsecond precision matches the internal timestamp resolution of common container
+// and codec formats, avoiding precision loss during conversion. A Timestamp is never negative:
+// constructors and arithmetic clamp at zero
+// and saturate at the maximum representable value on overflow.
 //
 // It is the light-kit parallel of rskit's media Timestamp.
 type Timestamp int64
@@ -64,7 +67,8 @@ func (t Timestamp) Seconds() float64 { return float64(t) / 1_000_000 }
 // Duration returns the value as a [time.Duration].
 func (t Timestamp) Duration() time.Duration { return time.Duration(t) * time.Microsecond }
 
-// Add shifts the timestamp by a signed offset, clamping the result at zero and saturating at the maximum representable value on overflow.
+// Add shifts the timestamp by a signed offset, clamping the result at zero
+// and saturating at the maximum representable value on overflow.
 func (t Timestamp) Add(offset time.Duration) Timestamp {
 	cur := int64(t)
 	off := offset.Microseconds()
@@ -90,7 +94,9 @@ func (t Timestamp) String() string {
 	return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, mins, secs, ms)
 }
 
-// TimeRange is a half-open time window [Start, End) within a media file: Start is included, End is excluded. Overlaps, Contains, Split, and Merge all follow this model, so touching endpoints do not overlap.
+// TimeRange is a half-open time window [Start, End) within a media file: Start is included,
+// End is excluded. Overlaps, Contains, Split, and Merge all follow this model,
+// so touching endpoints do not overlap.
 type TimeRange struct {
 	Start Timestamp `json:"start"`
 	End   Timestamp `json:"end"`
@@ -124,7 +130,8 @@ func (r TimeRange) Overlaps(other TimeRange) bool {
 	return r.Start < other.End && other.Start < r.End
 }
 
-// Merge combines two overlapping ranges into their union. The bool is false when the ranges do not overlap, in which case the returned range is unset.
+// Merge combines two overlapping ranges into their union.
+// The bool is false when the ranges do not overlap, in which case the returned range is unset.
 func (r TimeRange) Merge(other TimeRange) (TimeRange, bool) {
 	if !r.Overlaps(other) {
 		return TimeRange{}, false
@@ -132,7 +139,9 @@ func (r TimeRange) Merge(other TimeRange) (TimeRange, bool) {
 	return TimeRange{Start: min(r.Start, other.Start), End: max(r.End, other.End)}, true
 }
 
-// Split divides the range at ts. It returns the two resulting sub-ranges when ts lies strictly inside the range; otherwise it returns the range unchanged as a single element.
+// Split divides the range at ts.
+// It returns the two resulting sub-ranges when ts lies strictly inside the range;
+// otherwise it returns the range unchanged as a single element.
 func (r TimeRange) Split(ts Timestamp) []TimeRange {
 	if ts <= r.Start || ts >= r.End {
 		return []TimeRange{r}
@@ -145,7 +154,8 @@ func (r TimeRange) Shift(offset time.Duration) TimeRange {
 	return TimeRange{Start: r.Start.Add(offset), End: r.End.Add(offset)}
 }
 
-// Segment is a labeled time range, useful for chapters, scenes, or detected spans. It is the light-kit parallel of rskit's media Segment, without the backend-specific metadata bag.
+// Segment is a labeled time range, useful for chapters, scenes, or detected spans.
+// It is the light-kit parallel of rskit's media Segment, without the backend-specific metadata bag.
 type Segment struct {
 	Range TimeRange `json:"range"`
 	// Label is an optional human-readable name (e.g. "intro", "chorus").
@@ -163,7 +173,8 @@ func (s Segment) WithLabel(label string) Segment {
 	return s
 }
 
-// WithConfidence returns a copy of the segment with the confidence clamped to the range [0, 1]. A NaN input is treated as unset (0).
+// WithConfidence returns a copy of the segment with the confidence clamped to the range [0, 1].
+// A NaN input is treated as unset (0).
 func (s Segment) WithConfidence(c float64) Segment {
 	if math.IsNaN(c) {
 		c = 0

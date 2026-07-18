@@ -12,7 +12,8 @@ type ConsumerOption func(*consumerOptions)
 
 type consumerOptions struct{}
 
-// BrokerComponent extends component.Component with producer/consumer factory methods. Implementations provide broker-specific creation logic while sharing the common lifecycle management from component.Component.
+// BrokerComponent extends component.Component with producer/consumer factory methods.
+// Implementations provide broker-specific creation logic while sharing the common lifecycle management from component.Component.
 type BrokerComponent interface {
 	component.Component
 

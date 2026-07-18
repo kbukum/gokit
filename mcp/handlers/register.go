@@ -1,6 +1,8 @@
 package handlers
 
-// Register wires the allowed tools, prompts, resources, and resource templates into the SDK server. Tools are filtered by the allow-list at registration time; prompts and resources are additionally gated at call time by their wrappers.
+// Register wires the allowed tools, prompts, resources, and resource templates into the SDK server.
+// Tools are filtered by the allow-list at registration time; prompts
+// and resources are additionally gated at call time by their wrappers.
 func (h *Handler) Register(prompts []PromptEntry, resources []ResourceEntry, templates []ResourceTemplateEntry) {
 	defs := h.registry.List()
 	for i := range defs {

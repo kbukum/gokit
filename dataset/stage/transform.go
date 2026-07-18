@@ -2,11 +2,14 @@ package stage
 
 import "context"
 
-// Transform maps an input value to an optional output value. Returning keep as false drops the item from the stream (a filter), letting one stage both map and filter.
+// Transform maps an input value to an optional output value.
+// Returning keep as false drops the item from the stream (a filter), letting one stage both map
+// and filter.
 type Transform[I, O any] interface {
 	// Name returns a stable identifier for diagnostics.
 	Name() string
-	// Apply transforms in, returning the output and whether to keep it, or a typed error that aborts the stream.
+	// Apply transforms in, returning the output and whether to keep it,
+	// or a typed error that aborts the stream.
 	Apply(ctx context.Context, in I) (out O, keep bool, err error)
 }
 

@@ -10,7 +10,8 @@ import (
 type TimeoutMode int
 
 const (
-	// TimeoutOverrideExisting applies the timeout budget even when the incoming context already has a deadline, effectively choosing the earlier deadline.
+	// TimeoutOverrideExisting applies the timeout budget even when the incoming context already has a deadline,
+	// effectively choosing the earlier deadline.
 	TimeoutOverrideExisting TimeoutMode = iota
 	// TimeoutIfUnset applies the timeout budget only when the incoming context does not already carry a deadline.
 	TimeoutIfUnset
@@ -93,7 +94,8 @@ func (p *Policy) init() {
 
 // Execute runs fn through the configured resilience stack.
 //
-// Execution order from outermost to innermost: rate limiter → bulkhead → circuit breaker → timeout → retry → fn.
+// Execution order from outermost to innermost:
+// rate limiter → bulkhead → circuit breaker → timeout → retry → fn.
 func Execute[T any](ctx context.Context, p *Policy, fn func(ctx context.Context) (T, error)) (T, error) {
 	if p == nil {
 		return fn(ctx)

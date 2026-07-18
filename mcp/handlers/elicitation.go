@@ -9,7 +9,9 @@ import (
 	"github.com/kbukum/gokit/mcp/security"
 )
 
-// Elicit performs a server-to-client elicitation request over the given session. The submitted content is untrusted user input: when a result size limit is configured, oversized content fails closed. Every call is audited and bounded by ctx.
+// Elicit performs a server-to-client elicitation request over the given session.
+// The submitted content is untrusted user input: when a result size limit is configured,
+// oversized content fails closed. Every call is audited and bounded by ctx.
 func (h *Handler) Elicit(ctx context.Context, ss *sdkmcp.ServerSession, params *sdkmcp.ElicitParams) (*sdkmcp.ElicitResult, error) {
 	if ss == nil {
 		return nil, fmt.Errorf("mcp: elicitation requires an active session")

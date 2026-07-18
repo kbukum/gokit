@@ -14,7 +14,8 @@ const (
 	kindStringSlice
 )
 
-// attrValue is a closed, typed union of the attribute value types this package supports. It replaces an untyped `any` so span and metric attributes carry no open interface value.
+// attrValue is a closed, typed union of the attribute value types this package supports.
+// It replaces an untyped `any` so span and metric attributes carry no open interface value.
 type attrValue struct {
 	kind        attrKind
 	str         string

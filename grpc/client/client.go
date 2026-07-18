@@ -15,7 +15,9 @@ import (
 	"github.com/kbukum/gokit/security"
 )
 
-// NewClient creates a gRPC client connection using the provided configuration and logging. It configures keepalive, TLS, message size limits, and attaches logging and resilience interceptors.
+// NewClient creates a gRPC client connection using the provided configuration and logging.
+// It configures keepalive, TLS, message size limits, and attaches logging
+// and resilience interceptors.
 func NewClient(cfg grpccfg.Config, log *logging.Logger) (*grpc.ClientConn, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {

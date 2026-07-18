@@ -12,11 +12,15 @@ import (
 type RetryMiddlewareConfig struct {
 	resilience.RetryConfig
 
-	// OnExhausted is called after all retries fail. When nil, the final handler error is returned. When non-nil, its return value is returned, allowing successful DLQ routing to acknowledge the failed message.
+	// OnExhausted is called after all retries fail. When nil, the final handler error is returned.
+	// When non-nil, its return value is returned,
+	// allowing successful DLQ routing to acknowledge the failed message.
 	OnExhausted func(ctx context.Context, msg messaging.Message, err error) error
 }
 
-// RetryHandler wraps a MessageHandler with retry logic powered by resilience.RetryFunc. Each retry attempt updates the "x-retry-count" header on the message so downstream consumers (and DLQ producers) can observe how many times processing was attempted.
+// RetryHandler wraps a MessageHandler with retry logic powered by resilience.RetryFunc.
+// Each retry attempt updates the "x-retry-count" header on the message
+// so downstream consumers (and DLQ producers) can observe how many times processing was attempted.
 func RetryHandler(handler messaging.MessageHandler, cfg RetryMiddlewareConfig) messaging.MessageHandler {
 	return func(ctx context.Context, msg messaging.Message) error {
 		// Clone headers so retries don't mutate the caller's map.

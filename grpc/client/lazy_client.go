@@ -9,7 +9,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// LazyClient provides thread-safe lazy initialization for gRPC clients. It creates the connection and client on first use and reuses them for subsequent calls.
+// LazyClient provides thread-safe lazy initialization for gRPC clients. It creates the connection
+// and client on first use and reuses them for subsequent calls.
 //
 // Type parameter T is the gRPC client interface (e.g., analysispb.AnalysisServiceClient).
 //
@@ -60,7 +61,9 @@ func NewLazyClient[T any](
 	return lc
 }
 
-// GetClient returns the gRPC client, initializing the connection if needed. This method is thread-safe and will only create one connection even if called concurrently from multiple goroutines.
+// GetClient returns the gRPC client, initializing the connection if needed.
+// This method is thread-safe
+// and will only create one connection even if called concurrently from multiple goroutines.
 func (c *LazyClient[T]) GetClient() (T, error) {
 	// Fast path: check if already initialized
 	c.mu.RLock()
@@ -121,7 +124,8 @@ func (c *LazyClient[T]) initializeClient() (T, error) {
 	return client, nil
 }
 
-// Close closes the underlying gRPC connection. After calling Close, the client can be reinitialized by calling GetClient again.
+// Close closes the underlying gRPC connection. After calling Close,
+// the client can be reinitialized by calling GetClient again.
 func (c *LazyClient[T]) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -166,12 +170,14 @@ func (c *LazyClient[T]) ServiceName() string {
 	return c.serviceName
 }
 
-// Reset forces the client to reconnect on the next GetClient call. This is useful when you want to force a fresh connection (e.g., after a network issue).
+// Reset forces the client to reconnect on the next GetClient call.
+// This is useful when you want to force a fresh connection (e.g., after a network issue).
 func (c *LazyClient[T]) Reset() error {
 	return c.Close()
 }
 
-// GetConnection returns the underlying gRPC connection, if connected. Returns nil if not connected. Use this for advanced use cases only.
+// GetConnection returns the underlying gRPC connection, if connected. Returns nil if not connected.
+// Use this for advanced use cases only.
 func (c *LazyClient[T]) GetConnection() *grpc.ClientConn {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

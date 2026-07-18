@@ -27,7 +27,8 @@ type Config struct {
 	Concurrency int
 	// Force reprocesses sources even when the manifest reports them cached.
 	Force bool
-	// Limits bounds record and payload sizes and, via StreamBuffer, the work and event channels that apply backpressure.
+	// Limits bounds record and payload sizes and, via StreamBuffer, the work
+	// and event channels that apply backpressure.
 	Limits payload.Limits
 }
 

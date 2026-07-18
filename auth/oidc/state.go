@@ -21,7 +21,8 @@ func GenerateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// PKCE holds a PKCE (Proof Key for Code Exchange) challenge/verifier pair. Use NewPKCE to generate a pair, then:
+// PKCE holds a PKCE (Proof Key for Code Exchange) challenge/verifier pair.
+// Use NewPKCE to generate a pair, then:
 //   - Send CodeChallenge + CodeChallengeMethod in the authorization URL
 //   - Send CodeVerifier in the token exchange
 type PKCE struct {
@@ -35,7 +36,8 @@ type PKCE struct {
 	CodeChallengeMethod string
 }
 
-// NewPKCE generates a new PKCE challenge/verifier pair using S256 method. The verifier is a 32-byte random value, base64url-encoded (43 characters).
+// NewPKCE generates a new PKCE challenge/verifier pair using S256 method.
+// The verifier is a 32-byte random value, base64url-encoded (43 characters).
 func NewPKCE() (*PKCE, error) {
 	verifier := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, verifier); err != nil {

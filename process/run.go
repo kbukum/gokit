@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-// Run executes a subprocess and waits for it to complete. If the context is canceled, the process group receives SIGTERM on Unix (or the process is killed on Windows), then the runtime escalates to SIGKILL after GracePeriod via WaitDelay.
+// Run executes a subprocess and waits for it to complete. If the context is canceled,
+// the process group receives SIGTERM on Unix (or the process is killed on Windows),
+// then the runtime escalates to SIGKILL after GracePeriod via WaitDelay.
 func Run(ctx context.Context, cmd Command) (*Result, error) {
 	if cmd.Binary == "" {
 		return nil, fmt.Errorf("process: binary is required")
@@ -34,7 +36,8 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 
 	configureSysProcAttr(c)
 
-	// Don't let exec.CommandContext kill with SIGKILL immediately; graceful-terminate via platform-specific helper.
+	// Don't let exec.CommandContext kill with SIGKILL immediately;
+	// graceful-terminate via platform-specific helper.
 	c.Cancel = func() error {
 		return terminateGracefully(c)
 	}

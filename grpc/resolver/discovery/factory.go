@@ -14,7 +14,9 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// ResolverConnectionFactory creates gRPC connections using the native gRPC resolver. Unlike DiscoveryConnectionFactory (which resolves once), this factory creates connections that dynamically resolve addresses via Consul/discovery throughout their lifetime.
+// ResolverConnectionFactory creates gRPC connections using the native gRPC resolver.
+// Unlike DiscoveryConnectionFactory (which resolves once),
+// this factory creates connections that dynamically resolve addresses via Consul/discovery throughout their lifetime.
 type ResolverConnectionFactory struct {
 	builder  *ResolverBuilder
 	gRPCCfg  grpccfg.Config
@@ -36,7 +38,8 @@ func NewResolverConnectionFactory(
 	}
 }
 
-// NewConn creates a gRPC connection that dynamically resolves addresses. The serviceName is used as the resolver target (e.g., "consul:///ssm-ingestion").
+// NewConn creates a gRPC connection that dynamically resolves addresses.
+// The serviceName is used as the resolver target (e.g., "consul:///ssm-ingestion").
 func (f *ResolverConnectionFactory) NewConn(serviceName string) (*grpc.ClientConn, error) {
 	target := f.builder.Scheme() + ":///" + serviceName
 
@@ -60,7 +63,8 @@ func (f *ResolverConnectionFactory) NewConn(serviceName string) (*grpc.ClientCon
 	return conn, nil
 }
 
-// buildDialOptions builds the gRPC dial options from the factory's configuration. This mirrors the logic in DiscoveryConnectionFactory to ensure consistent behavior.
+// buildDialOptions builds the gRPC dial options from the factory's configuration.
+// This mirrors the logic in DiscoveryConnectionFactory to ensure consistent behavior.
 func (f *ResolverConnectionFactory) buildDialOptions() ([]grpc.DialOption, error) {
 	f.gRPCCfg.ApplyDefaults()
 

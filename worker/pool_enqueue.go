@@ -19,7 +19,8 @@ func (p *Pool[I, O]) enqueueAffinity(ctx context.Context, idx int, env taskEnvel
 		env.handle.Cancel()
 		return nil, p.stoppedError()
 	default:
-		// Affinity is only a steering hint under supervision. Fall back to the shared pool queue so QueueSize/Overflow semantics remain pool-wide.
+		// Affinity is only a steering hint under supervision. Fall back to the shared pool queue
+		// so QueueSize/Overflow semantics remain pool-wide.
 		return p.enqueue(ctx, env)
 	}
 }
@@ -80,7 +81,8 @@ func (p *Pool[I, O]) enqueueTo(
 			env.handle.Cancel()
 			return nil, p.stoppedError()
 		default:
-			// A worker drained the queue between probes; enqueue normally and let the pool-wide queue semantics decide the outcome.
+			// A worker drained the queue between probes; enqueue normally
+			// and let the pool-wide queue semantics decide the outcome.
 		}
 		return p.enqueueBlocking(ctx, ch, env)
 	default:

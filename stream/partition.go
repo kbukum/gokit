@@ -6,7 +6,9 @@ import (
 	"sync"
 )
 
-// Partition splits a pipeline into two streaming branches using predicate. The upstream is consumed once by a bounded tee. Both branches should be consumed concurrently; closing one branch drops values routed to it while the other branch continues.
+// Partition splits a pipeline into two streaming branches using predicate.
+// The upstream is consumed once by a bounded tee. Both branches should be consumed concurrently;
+// closing one branch drops values routed to it while the other branch continues.
 func Partition[T any](p *Pipeline[T], predicate func(T) bool) (matching *Pipeline[T], rejected *Pipeline[T]) {
 	shared := newPartitionState(predicate)
 	left := &Pipeline[T]{
@@ -169,7 +171,11 @@ func (s *partitionState[T]) send(ctx context.Context, branch partitionBranch, r 
 	}
 }
 
-// finish delivers the terminal result to both branches exactly once and closes them. The terminal error is delivered with sendTerminal, which blocks until each branch drains it or is closed. It deliberately does not select on the tee context: when the terminal error is the cancellation itself, that context is already canceled, so a ctx arm would race the delivery and drop the error.
+// finish delivers the terminal result to both branches exactly once and closes them.
+// The terminal error is delivered with sendTerminal, which blocks until each branch drains it
+// or is closed. It deliberately does not select on the tee context:
+// when the terminal error is the cancellation itself, that context is already canceled,
+// so a ctx arm would race the delivery and drop the error.
 func (s *partitionState[T]) finish(terminal result[T]) {
 	s.finishOnce.Do(func() {
 		if terminal.err != nil {

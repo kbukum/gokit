@@ -23,7 +23,8 @@ func NewFilePipelineLoader(dirs ...string) PipelineLoader {
 	return &FilePipelineLoader{dirs: dirs}
 }
 
-// Load searches for a pipeline YAML file by name across configured directories. It searches for {name}.yaml and {name}.yml in each directory (recursively).
+// Load searches for a pipeline YAML file by name across configured directories.
+// It searches for {name}.yaml and {name}.yml in each directory (recursively).
 func (l *FilePipelineLoader) Load(name string) (*Pipeline, error) {
 	for _, dir := range l.dirs {
 		for _, ext := range []string{".yaml", ".yml"} {
@@ -68,7 +69,9 @@ func LoadPipeline(name string, paths ...string) (*Pipeline, error) {
 	return nil, fmt.Errorf("dag: pipeline %q not found in provided paths", name)
 }
 
-// ResolvePipeline converts a Pipeline definition into an executable Graph. It resolves includes recursively and looks up node implementations from the registry. Optional nodes not found in the registry get a placeholder that returns ErrUnavailable.
+// ResolvePipeline converts a Pipeline definition into an executable Graph.
+// It resolves includes recursively and looks up node implementations from the registry.
+// Optional nodes not found in the registry get a placeholder that returns ErrUnavailable.
 func ResolvePipeline(p *Pipeline, registry *Registry, loader PipelineLoader) (*Graph, error) {
 	stack := make(map[string]bool)    // current recursion path (cycle detection)
 	resolved := make(map[string]bool) // already fully resolved (dedup)

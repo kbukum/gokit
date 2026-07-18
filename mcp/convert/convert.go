@@ -25,7 +25,8 @@ func ToMCPTool(def tool.Definition) *sdkmcp.Tool {
 	}
 
 	t.Title = def.Annotations.Title
-	// Only attach annotations when there are actual non-title hints to convey, so a round-trip doesn't mutate unset Safety into SafetyMutating.
+	// Only attach annotations when there are actual non-title hints to convey,
+	// so a round-trip doesn't mutate unset Safety into SafetyMutating.
 	hasSafetyHint := def.Envelope.Safety != ""
 	hasIdempotentHint := def.Annotations.IdempotentHint != nil
 	hasOpenWorldHint := (def.Envelope.Network != nil && len(def.Envelope.Network.AllowList) > 0) ||
@@ -39,7 +40,9 @@ func ToMCPTool(def tool.Definition) *sdkmcp.Tool {
 	return t
 }
 
-// toMCPAnnotations builds MCP wire-format annotations from Definition + Envelope. Read-only / destructive / open-world hints are derived from Envelope. Pointers are only set when the hint is explicitly intended to avoid round-trip mutation.
+// toMCPAnnotations builds MCP wire-format annotations from Definition + Envelope.
+// Read-only / destructive / open-world hints are derived from Envelope.
+// Pointers are only set when the hint is explicitly intended to avoid round-trip mutation.
 func toMCPAnnotations(def tool.Definition) sdkmcp.ToolAnnotations {
 	ann := sdkmcp.ToolAnnotations{
 		Title:          def.Annotations.Title,
@@ -82,7 +85,9 @@ func ToDefinition(t *sdkmcp.Tool) tool.Definition {
 		}
 	}
 
-	// Convert annotations. MCP safety/open-world hints are executable wire metadata, so they populate Envelope rather than internal Annotations. Only set Safety when hints are explicitly present; otherwise preserve "unknown".
+	// Convert annotations. MCP safety/open-world hints are executable wire metadata,
+	// so they populate Envelope rather than internal Annotations.
+	// Only set Safety when hints are explicitly present; otherwise preserve "unknown".
 	title := t.Title
 	if t.Annotations != nil {
 		if t.Annotations.Title != "" {
@@ -97,7 +102,8 @@ func ToDefinition(t *sdkmcp.Tool) tool.Definition {
 			// Explicitly not destructive + not read-only → mutating.
 			def.Envelope.Safety = tool.SafetyMutating
 		}
-		// Only set Mutating if we have explicit non-zero annotations indicating the tool is neither read-only nor destructive.
+		// Only set Mutating if we have explicit non-zero annotations indicating the tool is neither read-only
+		// nor destructive.
 		if t.Annotations.IdempotentHint {
 			def.Annotations.IdempotentHint = boolPtr(true)
 		}

@@ -1,6 +1,7 @@
 // Package config provides configuration loading and validation for gokit applications.
 //
-// It uses Viper to load configuration from files and environment variables, supporting multiple formats (YAML, JSON, TOML) and environment-specific overrides.
+// It uses Viper to load configuration from files and environment variables,
+// supporting multiple formats (YAML, JSON, TOML) and environment-specific overrides.
 //
 // # Usage
 //

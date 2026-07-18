@@ -21,7 +21,8 @@ func resolveClient(client *http.Client) *http.Client {
 	return DefaultHTTPClient
 }
 
-// TokenResponse is the standard OAuth2 token response. Exported for use by custom providers that implement oidc.Provider directly.
+// TokenResponse is the standard OAuth2 token response.
+// Exported for use by custom providers that implement oidc.Provider directly.
 type TokenResponse = tokenResponse
 
 // tokenResponse is the standard OAuth2 token response.
@@ -34,7 +35,9 @@ type tokenResponse struct {
 	Scope        string `json:"scope"`
 }
 
-// ExchangeCode performs a standard OAuth2 authorization code exchange. This is a low-level helper used by GenericProvider. Custom providers that can't use GenericConfig can call this directly.
+// ExchangeCode performs a standard OAuth2 authorization code exchange.
+// This is a low-level helper used by GenericProvider.
+// Custom providers that can't use GenericConfig can call this directly.
 func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, extraHeaders map[string]string) (*tokenResponse, error) {
 	redirectURI := opts.RedirectURI
 	if redirectURI == "" {
@@ -83,7 +86,8 @@ func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg
 	return &tok, nil
 }
 
-// ExchangeJSON performs a token exchange using a JSON request body. Used by providers like TikTok that require JSON instead of form-encoded.
+// ExchangeJSON performs a token exchange using a JSON request body.
+// Used by providers like TikTok that require JSON instead of form-encoded.
 func ExchangeJSON(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, clientIDParam string, extraHeaders map[string]string) (*tokenResponse, error) {
 	redirectURI := opts.RedirectURI
 	if redirectURI == "" {

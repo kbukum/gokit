@@ -2,7 +2,10 @@ package chain
 
 import "context"
 
-// StepContext is the per-step execution context. It carries cancellation (through the underlying context.Context) and a callback for reporting step-local progress. It is passed by value; the zero value is not useful — obtain one from the executor.
+// StepContext is the per-step execution context.
+// It carries cancellation (through the underlying context.Context)
+// and a callback for reporting step-local progress. It is passed by value;
+// the zero value is not useful — obtain one from the executor.
 type StepContext struct {
 	ctx      context.Context
 	progress func(percent uint8, message string)
@@ -19,7 +22,8 @@ func (c StepContext) Context() context.Context { return c.ctx }
 // Err reports why the context was canceled, or nil if it is still live.
 func (c StepContext) Err() error { return c.ctx.Err() }
 
-// Progress reports step-local progress. percent is clamped to 0..=100 and message may be empty. It is a no-op when no progress reporter is attached.
+// Progress reports step-local progress. percent is clamped to 0..=100 and message may be empty.
+// It is a no-op when no progress reporter is attached.
 func (c StepContext) Progress(percent uint8, message string) {
 	if c.progress == nil {
 		return
@@ -30,13 +34,18 @@ func (c StepContext) Progress(percent uint8, message string) {
 	c.progress(percent, message)
 }
 
-// StepFn executes a single typed step. It receives the previous step's output (or the chain input for the first step) and returns this step's output.
+// StepFn executes a single typed step.
+// It receives the previous step's output (or the chain input for the first step)
+// and returns this step's output.
 type StepFn[I, O any] func(sctx StepContext, input I) (O, error)
 
-// CleanupFn releases resources produced by a completed step. It runs only when a later step fails or the chain is canceled, in reverse (LIFO) order.
+// CleanupFn releases resources produced by a completed step. It runs only when a later step fails
+// or the chain is canceled, in reverse (LIFO) order.
 type CleanupFn func(ctx context.Context) error
 
-// Step is a typed operation in a sequential chain: it consumes an I and produces an O. Steps are values; construct them with NewStep or StepFunc and register cleanup with WithCleanup.
+// Step is a typed operation in a sequential chain: it consumes an I
+// and produces an O. Steps are values; construct them with NewStep or StepFunc
+// and register cleanup with WithCleanup.
 type Step[I, O any] struct {
 	id      string
 	name    string
@@ -54,7 +63,9 @@ func StepFunc[I, O any](id string, execute StepFn[I, O]) Step[I, O] {
 	return NewStep(id, id, execute)
 }
 
-// WithCleanup registers a cleanup action that runs only if a later step fails or the chain is canceled after this step has completed. It returns a copy of the step; the receiver is not modified.
+// WithCleanup registers a cleanup action that runs only if a later step fails
+// or the chain is canceled after this step has completed. It returns a copy of the step;
+// the receiver is not modified.
 func (s Step[I, O]) WithCleanup(cleanup CleanupFn) Step[I, O] {
 	s.cleanup = cleanup
 	return s

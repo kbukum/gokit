@@ -44,7 +44,8 @@ func NewResolverBuilder(disc discovery.Discovery, log *logging.Logger, opts ...O
 	}
 }
 
-// Build creates a new resolver for the given target. target.Endpoint() returns the service name (e.g., "ssm-ingestion" from "consul:///ssm-ingestion").
+// Build creates a new resolver for the given target.
+// target.Endpoint() returns the service name (e.g., "ssm-ingestion" from "consul:///ssm-ingestion").
 func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
 	serviceName := target.Endpoint()
 

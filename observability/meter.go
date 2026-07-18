@@ -28,7 +28,9 @@ type MeterConfig struct {
 	Insecure bool
 	// Interval is the metric export interval.
 	Interval time.Duration
-	// SkipGlobalRegistration, when true, prevents InitMeter from mutating the global otel.SetMeterProvider state. See TracerConfig.SkipGlobalRegistration.
+	// SkipGlobalRegistration, when true,
+	// prevents InitMeter from mutating the global otel.SetMeterProvider state.
+	// See TracerConfig.SkipGlobalRegistration.
 	SkipGlobalRegistration bool
 }
 
@@ -44,7 +46,8 @@ func DefaultMeterConfig(serviceName string) MeterConfig {
 	}
 }
 
-// InitMeter initializes the OpenTelemetry meter provider. Returns a MeterProvider that should be shut down on application exit.
+// InitMeter initializes the OpenTelemetry meter provider.
+// Returns a MeterProvider that should be shut down on application exit.
 func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvider, error) {
 	opts := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(config.Endpoint),

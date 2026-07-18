@@ -33,7 +33,8 @@ func NewMessage(topic, key string, value []byte, headers map[string]string) Mess
 	}
 }
 
-// Event represents a structured event for domain messaging. Data is json.RawMessage so events can be forwarded without re-marshaling.
+// Event represents a structured event for domain messaging. Data is json.RawMessage
+// so events can be forwarded without re-marshaling.
 type Event struct {
 	ID          string          `json:"id"`
 	Type        string          `json:"type"`
@@ -50,7 +51,9 @@ func (e Event) ToJSON() ([]byte, error) {
 	return json.Marshal(e)
 }
 
-// NewEvent creates an Event with auto-generated ID and timestamp. Data is marshaled to json.RawMessage automatically. Returns an error if data cannot be marshaled to JSON.
+// NewEvent creates an Event with auto-generated ID and timestamp.
+// Data is marshaled to json.RawMessage automatically.
+// Returns an error if data cannot be marshaled to JSON.
 func NewEvent[D any](eventType, source string, data D, subject ...string) (Event, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -100,7 +103,8 @@ func (m Message) IsJSON() bool {
 	return false
 }
 
-// UnmarshalValueJSON unmarshals the message value as JSON into v. v is intentionally opaque because encoding/json requires a caller-owned destination.
+// UnmarshalValueJSON unmarshals the message value as JSON into v.
+// v is intentionally opaque because encoding/json requires a caller-owned destination.
 func (m Message) UnmarshalValueJSON(v any) error {
 	return json.Unmarshal(m.Value, v)
 }

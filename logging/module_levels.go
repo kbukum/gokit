@@ -13,7 +13,8 @@ type ModuleLevelManager struct {
 	mu     sync.RWMutex
 }
 
-// NewModuleLevelManager creates a manager from a map of module names to level strings. Unrecognized level strings are silently ignored.
+// NewModuleLevelManager creates a manager from a map of module names to level strings.
+// Unrecognized level strings are silently ignored.
 func NewModuleLevelManager(levels map[string]string) *ModuleLevelManager {
 	m := &ModuleLevelManager{
 		levels: make(map[string]zerolog.Level, len(levels)),
@@ -27,7 +28,8 @@ func NewModuleLevelManager(levels map[string]string) *ModuleLevelManager {
 	return m
 }
 
-// Level returns the override level for a module. The second return value is false if no override exists.
+// Level returns the override level for a module.
+// The second return value is false if no override exists.
 func (m *ModuleLevelManager) Level(module string) (zerolog.Level, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

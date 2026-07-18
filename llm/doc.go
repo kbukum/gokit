@@ -1,11 +1,13 @@
 // Package llm provides a config-driven LLM adapter built on gokit's HTTP/REST foundation.
 //
-// The adapter works with any LLM provider (Ollama, OpenAI, Anthropic, Gemini, etc.) via the Dialect pattern — similar to how database/sql works with driver packages.
+// The adapter works with any LLM provider (Ollama, OpenAI, Anthropic, Gemini, etc.) via the Dialect pattern
+// — similar to how database/sql works with driver packages.
 //
 // # Architecture
 //
 // The llm package provides:
-//   - Universal types: [CompletionRequest], [CompletionResponse], [StreamEvent], [chat.Message], [Usage]
+//   - Universal types: [CompletionRequest], [CompletionResponse], [StreamEvent], [chat.Message],
+//     [Usage]
 //   - [Dialect] interface: maps universal types to/from provider-specific HTTP format
 //   - [Adapter]: composes gokit's REST client + a Dialect to create a complete LLM client
 //   - [DialectRegistry]: explicit, isolated, thread-safe registry of dialect drivers
@@ -13,7 +15,9 @@
 //
 // # Usage
 //
-// Driver packages (under github.com/kbukum/gokit/llm/providers/...) expose a Register function that adds their dialect to a registry. Build a registry, register the providers you want, then create an adapter:
+// Driver packages (under github.com/kbukum/gokit/llm/providers/...)
+// expose a Register function that adds their dialect to a registry. Build a registry,
+// register the providers you want, then create an adapter:
 //
 //	import (
 //	    "github.com/kbukum/gokit/llm"
@@ -41,7 +45,8 @@
 //
 // # Writing a Dialect
 //
-// Implement the [Dialect] interface in a driver package and expose a Register function that callers invoke against an explicit *DialectRegistry:
+// Implement the [Dialect] interface in a driver package
+// and expose a Register function that callers invoke against an explicit *DialectRegistry:
 //
 //	package myprovider
 //

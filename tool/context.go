@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-// Context carries execution metadata through the tool call chain. It embeds context.Context for cancellation, deadlines, and values, and adds tool-specific fields (request ID, tool use ID, metadata).
+// Context carries execution metadata through the tool call chain.
+// It embeds context.Context for cancellation, deadlines, and values,
+// and adds tool-specific fields (request ID, tool use ID, metadata).
 //
 // Use NewContext to create one from a standard context.Context.
 type Context struct {

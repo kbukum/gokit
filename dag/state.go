@@ -31,12 +31,14 @@ func (s *State) Set(key string, value any) {
 	s.data[key] = value
 }
 
-// Port is a compile-time typed accessor for State. It prevents type mismatches between nodes at compile time.
+// Port is a compile-time typed accessor for State.
+// It prevents type mismatches between nodes at compile time.
 type Port[T any] struct {
 	Key string
 }
 
-// Read retrieves a typed value from state using a Port. Returns an error if the key is missing or the type doesn't match.
+// Read retrieves a typed value from state using a Port. Returns an error if the key is missing
+// or the type doesn't match.
 func Read[T any](state *State, port Port[T]) (T, error) {
 	var zero T
 	raw, ok := state.Get(port.Key)
@@ -50,7 +52,9 @@ func Read[T any](state *State, port Port[T]) (T, error) {
 	return val, nil
 }
 
-// TryRead retrieves a typed value from state using a Port. Returns (zero, false) if the key is missing, without an error. Returns an error only if the key exists but has the wrong type.
+// TryRead retrieves a typed value from state using a Port.
+// Returns (zero, false) if the key is missing, without an error.
+// Returns an error only if the key exists but has the wrong type.
 func TryRead[T any](state *State, port Port[T]) (val T, found bool, err error) {
 	raw, ok := state.Get(port.Key)
 	if !ok {

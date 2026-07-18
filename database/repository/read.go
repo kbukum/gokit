@@ -10,7 +10,8 @@ import (
 	"github.com/kbukum/gokit/database/query"
 )
 
-// ReadRepository provides read-only database operations for any GORM model. Use it for entities that are generated/immutable and should not be modified.
+// ReadRepository provides read-only database operations for any GORM model.
+// Use it for entities that are generated/immutable and should not be modified.
 //
 //	type AuditLogRepository struct {
 //	    *repository.ReadRepository[models.AuditLog, string]
@@ -21,7 +22,8 @@ type ReadRepository[T any, ID comparable] struct {
 	idField  string
 }
 
-// NewReadRepository creates a read-only Repository for model T with ID type ID. The resource name is used in error messages (e.g. "audit_log", "report").
+// NewReadRepository creates a read-only Repository for model T with ID type ID.
+// The resource name is used in error messages (e.g. "audit_log", "report").
 func NewReadRepository[T any, ID comparable](db *gorm.DB, resource string, opts ...Option) *ReadRepository[T, ID] {
 	cfg := applyOptions(opts)
 	return &ReadRepository[T, ID]{
@@ -50,7 +52,9 @@ func (r *ReadRepository[T, ID]) WithTx(tx *gorm.DB) *ReadRepository[T, ID] {
 	}
 }
 
-// GetByID retrieves a single entity by its primary key. Returns (nil, nil) if the entity is not found — callers branch on the pointer rather than on a typed error so the read hot-path stays cheap.
+// GetByID retrieves a single entity by its primary key.
+// Returns (nil, nil) if the entity is not found —
+// callers branch on the pointer rather than on a typed error so the read hot-path stays cheap.
 //
 //nolint:nilnil // documented "not found" sentinel of ReadRepository contract.
 func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) {
@@ -64,7 +68,8 @@ func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) 
 	return &entity, nil
 }
 
-// List retrieves entities using the gokit query builder for pagination, filtering, sorting, and facets.
+// List retrieves entities using the gokit query builder for pagination, filtering, sorting,
+// and facets.
 func (r *ReadRepository[T, ID]) List(ctx context.Context, params query.Params, config query.Config) (*query.Result[T], error) {
 	result, err := query.ApplyToGorm[T](r.db.WithContext(ctx).Model(new(T)), params, config)
 	if err != nil {
@@ -82,7 +87,8 @@ func (r *ReadRepository[T, ID]) Count(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
-// FindOneBy retrieves a single entity matching field == value. Returns (nil, nil) if no matching entity is found.
+// FindOneBy retrieves a single entity matching field == value.
+// Returns (nil, nil) if no matching entity is found.
 //
 //nolint:nilnil // mirrors GetByID's "not found" sentinel; see method docs.
 func (r *ReadRepository[T, ID]) FindOneBy(ctx context.Context, field string, value any) (*T, error) {

@@ -7,7 +7,8 @@ import (
 	"github.com/kbukum/gokit/validation"
 )
 
-// BindJSON binds a JSON request body into T and validates it via gokit/validation struct tags. Returns a gokit/errors.AppError on parse or validation failure.
+// BindJSON binds a JSON request body into T and validates it via gokit/validation struct tags.
+// Returns a gokit/errors.AppError on parse or validation failure.
 func BindJSON[T any](c *gin.Context) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {

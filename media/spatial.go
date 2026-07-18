@@ -5,7 +5,8 @@ import (
 	"math"
 )
 
-// Resolution is a width × height in pixels. It is the light-kit parallel of rskit's media Resolution and is used to enrich probe [Metadata].
+// Resolution is a width × height in pixels.
+// It is the light-kit parallel of rskit's media Resolution and is used to enrich probe [Metadata].
 type Resolution struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`
@@ -22,7 +23,8 @@ func Resolution1080p() Resolution { return Resolution{1920, 1080} }
 func Resolution1440p() Resolution { return Resolution{2560, 1440} }
 func Resolution4K() Resolution    { return Resolution{3840, 2160} }
 
-// AspectRatio returns the aspect ratio as a simplified integer fraction (e.g. 16, 9). It returns (0, 0) when either dimension is zero.
+// AspectRatio returns the aspect ratio as a simplified integer fraction (e.g. 16, 9).
+// It returns (0, 0) when either dimension is zero.
 func (r Resolution) AspectRatio() (w, h int) {
 	g := gcd(r.Width, r.Height)
 	if g == 0 {
@@ -74,7 +76,9 @@ func (r Resolution) scale(factor float64) Resolution {
 	return Resolution{Width: scaleDim(r.Width, factor), Height: scaleDim(r.Height, factor)}
 }
 
-// scaleDim multiplies a dimension by factor, rounds to nearest, and clamps the result to a valid non-negative int: NaN and negative results become zero and overflow saturates, so scaling never yields a negative or wrapped dimension.
+// scaleDim multiplies a dimension by factor, rounds to nearest,
+// and clamps the result to a valid non-negative int: NaN and negative results become zero
+// and overflow saturates, so scaling never yields a negative or wrapped dimension.
 func scaleDim(d int, factor float64) int {
 	v := math.Round(float64(d) * factor)
 	if !(v > 0) { // negative, zero, or NaN

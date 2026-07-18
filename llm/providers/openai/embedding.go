@@ -16,7 +16,8 @@ import (
 
 // EmbeddingProvider implements embedding.Provider for OpenAI-compatible APIs.
 //
-// Per locked decision D12 (NATIVE COMPONENT), EmbeddingProvider implements component.Component so bootstrap auto-wires it as infrastructure.
+// Per locked decision D12 (NATIVE COMPONENT), EmbeddingProvider implements component.Component
+// so bootstrap auto-wires it as infrastructure.
 type EmbeddingProvider struct {
 	client    *httpclient.Adapter
 	config    Config

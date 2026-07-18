@@ -5,14 +5,17 @@ import (
 	"os"
 )
 
-// NoColorEnv is the environment variable that, when present (regardless of value), disables color regardless of any explicit choice. See the NO_COLOR standard: https://no-color.org.
+// NoColorEnv is the environment variable that, when present (regardless of value),
+// disables color regardless of any explicit choice. See the NO_COLOR standard:
+// https://no-color.org.
 const NoColorEnv = "NO_COLOR"
 
 // ColorChoice is a user's requested color policy, before environment/TTY resolution.
 type ColorChoice int
 
 const (
-	// ColorAuto enables color only when writing to a terminal and NO_COLOR is unset. It is the zero value, so an unset choice defaults to auto.
+	// ColorAuto enables color only when writing to a terminal and NO_COLOR is unset.
+	// It is the zero value, so an unset choice defaults to auto.
 	ColorAuto ColorChoice = iota
 	// ColorAlways forces color on (still overridden by NO_COLOR).
 	ColorAlways
@@ -36,7 +39,8 @@ func (c ColorChoice) String() string {
 
 // ParseColorChoice parses a choice from its lowercase name (auto/always/never).
 //
-// The second return value is false for any other value, so the caller can raise its own typed usage error naming the accepted values.
+// The second return value is false for any other value,
+// so the caller can raise its own typed usage error naming the accepted values.
 func ParseColorChoice(name string) (ColorChoice, bool) {
 	switch name {
 	case "auto":
@@ -52,7 +56,8 @@ func ParseColorChoice(name string) (ColorChoice, bool) {
 
 // NoColorEnvSet reports whether the NO_COLOR environment variable is present.
 //
-// Per the NO_COLOR standard (https://no-color.org) any presence disables color, so an empty value (NO_COLOR=) still counts.
+// Per the NO_COLOR standard (https://no-color.org) any presence disables color,
+// so an empty value (NO_COLOR=) still counts.
 func NoColorEnvSet() bool {
 	_, ok := os.LookupEnv(NoColorEnv)
 	return ok
@@ -60,14 +65,19 @@ func NoColorEnvSet() bool {
 
 // ResolveColor resolves a [ColorChoice] into an effective on/off decision.
 //
-// Resolution order (the NO_COLOR standard takes precedence over an explicit request): if NO_COLOR is set the result is off; otherwise ColorAlways is on, ColorNever is off, and ColorAuto follows isTerminal. It reads the process environment for NO_COLOR; use [ResolveColorWith] for a fully injected, environment-free decision.
+// Resolution order (the NO_COLOR standard takes precedence over an explicit request):
+// if NO_COLOR is set the result is off; otherwise ColorAlways is on, ColorNever is off,
+// and ColorAuto follows isTerminal. It reads the process environment for NO_COLOR;
+// use [ResolveColorWith] for a fully injected, environment-free decision.
 func ResolveColor(choice ColorChoice, isTerminal bool) bool {
 	return ResolveColorWith(choice, NoColorEnvSet(), isTerminal)
 }
 
-// ResolveColorWith is the pure resolver core: it folds an explicit NO_COLOR presence and TTY detection into an effective on/off decision, so it is environment-free and unit-testable.
+// ResolveColorWith is the pure resolver core: it folds an explicit NO_COLOR presence
+// and TTY detection into an effective on/off decision, so it is environment-free and unit-testable.
 //
-// NO_COLOR wins over every choice; otherwise ColorAlways/ColorNever are absolute and ColorAuto follows isTerminal.
+// NO_COLOR wins over every choice; otherwise ColorAlways/ColorNever are absolute
+// and ColorAuto follows isTerminal.
 func ResolveColorWith(choice ColorChoice, noColor, isTerminal bool) bool {
 	if noColor {
 		return false
@@ -84,7 +94,10 @@ func ResolveColorWith(choice ColorChoice, noColor, isTerminal bool) bool {
 
 // Palette is a resolved, semantic color palette.
 //
-// When disabled every style is the identity function, so callers render the same way regardless of terminal capability. Construct it from a resolved boolean via [NewPalette], or resolve a [ColorChoice] against a stream's TTY status via [PaletteForStream].
+// When disabled every style is the identity function,
+// so callers render the same way regardless of terminal capability.
+// Construct it from a resolved boolean via [NewPalette],
+// or resolve a [ColorChoice] against a stream's TTY status via [PaletteForStream].
 type Palette struct {
 	enabled bool
 }
@@ -94,7 +107,8 @@ func NewPalette(enabled bool) Palette {
 	return Palette{enabled: enabled}
 }
 
-// PaletteForStream resolves a palette for a specific output stream by folding NO_COLOR, the choice, and the stream's TTY status via [ResolveColor].
+// PaletteForStream resolves a palette for a specific output stream by folding NO_COLOR, the choice,
+// and the stream's TTY status via [ResolveColor].
 func PaletteForStream(choice ColorChoice, isTerminal bool) Palette {
 	return NewPalette(ResolveColor(choice, isTerminal))
 }
@@ -120,7 +134,8 @@ func (p Palette) Dim(text string) string { return p.paint("2", text) }
 // Bold paints text bold — emphasis (headings, totals).
 func (p Palette) Bold(text string) string { return p.paint("1", text) }
 
-// paint wraps text in an SGR code plus reset when enabled, else returns it verbatim so callers on pipes or redirects stay byte-clean.
+// paint wraps text in an SGR code plus reset when enabled, else returns it verbatim
+// so callers on pipes or redirects stay byte-clean.
 func (p Palette) paint(code, text string) string {
 	if !p.enabled {
 		return text

@@ -1,8 +1,6 @@
 # gokit/mcp MCP 2025-06-18 conformance
 
-This document tracks `gokit/mcp` conformance to the
-[Model Context Protocol](https://modelcontextprotocol.io/) revision
-**2025-06-18**.
+This document tracks `gokit/mcp` conformance to the [Model Context Protocol](https://modelcontextprotocol.io/) revision **2025-06-18**.
 
 Transports are locked to `stdio` and `streamable_http`; `sse` is not exposed as a peer transport.
 

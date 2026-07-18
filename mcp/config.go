@@ -10,7 +10,9 @@ import (
 	"github.com/kbukum/gokit/mcp/security"
 )
 
-// serverConfig is the assembled, validated configuration for a Server. It is populated by ServerOption values grouped by concern across the handler files and carries the security.Policy consulted by every gated access.
+// serverConfig is the assembled, validated configuration for a Server.
+// It is populated by ServerOption values grouped by concern across the handler files
+// and carries the security.Policy consulted by every gated access.
 type serverConfig struct {
 	title  string
 	prefix string
@@ -35,7 +37,10 @@ type serverConfig struct {
 	baseServerOpts *sdkmcp.ServerOptions
 }
 
-// serverOptions assembles the SDK ServerOptions from the configured capability handlers, overlaying them onto any caller-supplied base options. The SDK infers advertised capabilities (tools/prompts/resources) from registered features and from the subscribe/roots handlers wired here.
+// serverOptions assembles the SDK ServerOptions from the configured capability handlers,
+// overlaying them onto any caller-supplied base options.
+// The SDK infers advertised capabilities (tools/prompts/resources) from registered features
+// and from the subscribe/roots handlers wired here.
 func (c *serverConfig) serverOptions() *sdkmcp.ServerOptions {
 	var opts sdkmcp.ServerOptions
 	if c.baseServerOpts != nil {

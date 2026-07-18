@@ -53,7 +53,9 @@ func NewDeadLetterProducer(publisher messaging.Producer, opts ...DLQOption) *Dea
 	return d
 }
 
-// Send publishes a DeadLetterEnvelope to the DLQ topic for the given message. The envelope includes a redacted payload summary, redacted headers, sanitized error summary, retry count (read from the "x-retry-count" header), and a UTC timestamp.
+// Send publishes a DeadLetterEnvelope to the DLQ topic for the given message.
+// The envelope includes a redacted payload summary, redacted headers, sanitized error summary,
+// retry count (read from the "x-retry-count" header), and a UTC timestamp.
 func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, originalErr error) error {
 	retryCount := 0
 	if rc, ok := msg.Headers["x-retry-count"]; ok {

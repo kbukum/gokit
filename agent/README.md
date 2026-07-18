@@ -1,6 +1,7 @@
 # gokit/agent
 
-`agent` owns the bounded LLM/tool loop. Defaults are bounded: `MaxTurns=10`, `WallClock=60s`, `MaxTokens=100000`, `MaxToolCalls=50`, `ToolConcurrency=4`, and `ToolTimeout=30s`.
+`agent` owns the bounded LLM/tool loop. Defaults are bounded: `MaxTurns=10`, `WallClock=60s`,
+`MaxTokens=100000`, `MaxToolCalls=50`, `ToolConcurrency=4`, and `ToolTimeout=30s`.
 
 ## Install
 
@@ -86,4 +87,5 @@ func main() {
 
 ## When to use
 
-Use `agent` when you want the bounded turn loop, budgets, tool dispatch, hooks, and memory policy in one place instead of building an orchestration loop yourself.
+Use `agent` when you want the bounded turn loop, budgets, tool dispatch, hooks,
+and memory policy in one place instead of building an orchestration loop yourself.

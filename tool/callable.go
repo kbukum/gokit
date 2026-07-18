@@ -7,7 +7,8 @@ import (
 	"github.com/kbukum/gokit/schema"
 )
 
-// Callable is the type-erased interface for tools that can be stored in heterogeneous collections (registries). It accepts raw JSON input and returns a structured Result.
+// Callable is the type-erased interface for tools that can be stored in heterogeneous collections (registries).
+// It accepts raw JSON input and returns a structured Result.
 type Callable interface {
 	// Definition returns the tool's metadata.
 	Definition() Definition

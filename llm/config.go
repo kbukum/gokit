@@ -8,12 +8,14 @@ import (
 	"github.com/kbukum/gokit/security"
 )
 
-// Config holds configuration for creating an LLM adapter. It is provider-agnostic — the Dialect field selects the provider mapping.
+// Config holds configuration for creating an LLM adapter. It is provider-agnostic —
+// the Dialect field selects the provider mapping.
 type Config struct {
 	// Name identifies this adapter instance (e.g., "primary-llm", "fallback-llm").
 	Name string `yaml:"name" json:"name"`
 
-	// Dialect selects the provider mapping (e.g., "ollama", "openai", "anthropic"). Must match a dialect registered via RegisterDialect.
+	// Dialect selects the provider mapping (e.g., "ollama", "openai", "anthropic").
+	// Must match a dialect registered via RegisterDialect.
 	Dialect string `yaml:"dialect" json:"dialect"`
 
 	// BaseURL is the provider's API base URL (e.g., "http://localhost:11434").

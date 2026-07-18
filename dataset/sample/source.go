@@ -18,7 +18,10 @@ func NewSliceSource(name string, items []Item) stage.Source[Item] {
 	return stage.NewSliceSource(name, items)
 }
 
-// DirSource is a [stage.Source] over the regular files in a directory: each file becomes a file-backed [Item] tagged with the source's label, offset by its sorted position. File bytes are not read until a target consumes them; a file larger than the payload limit fails the source closed.
+// DirSource is a [stage.Source] over the regular files in a directory:
+// each file becomes a file-backed [Item] tagged with the source's label,
+// offset by its sorted position. File bytes are not read until a target consumes them;
+// a file larger than the payload limit fails the source closed.
 type DirSource struct {
 	name   string
 	dir    string
@@ -26,7 +29,9 @@ type DirSource struct {
 	limits payload.Limits
 }
 
-// NewDirSource returns a directory-backed item source. Every produced item is tagged with label; the payloads are file-backed and confined to dir, and a file exceeding limits fails the source closed.
+// NewDirSource returns a directory-backed item source. Every produced item is tagged with label;
+// the payloads are file-backed and confined to dir,
+// and a file exceeding limits fails the source closed.
 func NewDirSource(name, dir string, label stage.Label, limits payload.Limits) *DirSource {
 	return &DirSource{name: name, dir: dir, label: label, limits: limits.WithDefaults()}
 }
@@ -48,7 +53,8 @@ func (s *DirSource) Stream(context.Context) *stream.Pipeline[Item] {
 	})
 }
 
-// list builds the items for the directory's regular files in sorted order, failing closed on a file larger than the payload limit.
+// list builds the items for the directory's regular files in sorted order,
+// failing closed on a file larger than the payload limit.
 func (s *DirSource) list() ([]Item, error) {
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {

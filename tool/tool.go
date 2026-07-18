@@ -7,7 +7,8 @@ type Handler[I, O any] interface {
 	Execute(ctx context.Context, input I) (O, error)
 }
 
-// HandlerFunc is the function adapter for [Handler]. It allows using a plain function where a Handler is expected.
+// HandlerFunc is the function adapter for [Handler].
+// It allows using a plain function where a Handler is expected.
 type HandlerFunc[I, O any] func(ctx context.Context, input I) (O, error)
 
 // Execute implements [Handler].

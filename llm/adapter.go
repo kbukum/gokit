@@ -20,7 +20,8 @@ var (
 
 // Adapter is a config-driven LLM client that works with any provider via the Dialect pattern.
 //
-// It composes gokit's REST client (which wraps the HTTP adapter) with a Dialect that handles provider-specific request/response mapping. This gives you:
+// It composes gokit's REST client (which wraps the HTTP adapter) with a Dialect that handles provider-specific request/response mapping.
+// This gives you:
 //   - TLS, auth, resilience, timeout from the HTTP adapter
 //   - JSON encoding/decoding from the REST client
 //   - Provider-specific mapping from the Dialect
@@ -37,7 +38,10 @@ type Adapter struct {
 	maxTokens int
 }
 
-// New creates an LLM adapter from config using the supplied dialect registry. The config's Dialect field must match a name registered in `registry`. Pass an explicit registry built via [NewDialectRegistry] and populated via the driver packages' Register functions.
+// New creates an LLM adapter from config using the supplied dialect registry.
+// The config's Dialect field must match a name registered in `registry`.
+// Pass an explicit registry built via [NewDialectRegistry]
+// and populated via the driver packages' Register functions.
 func New(registry *DialectRegistry, cfg Config) (*Adapter, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("llm: dialect registry is nil")
@@ -52,7 +56,8 @@ func New(registry *DialectRegistry, cfg Config) (*Adapter, error) {
 	return newAdapter(dialect, cfg)
 }
 
-// NewWithDialect creates an LLM adapter with an explicit dialect instance. Use this when you don't want to rely on the global dialect registry.
+// NewWithDialect creates an LLM adapter with an explicit dialect instance.
+// Use this when you don't want to rely on the global dialect registry.
 func NewWithDialect(dialect Dialect, cfg Config) (*Adapter, error) {
 	if dialect == nil {
 		return nil, ErrNoDialect
@@ -95,7 +100,8 @@ func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 // Name returns the adapter name.
 func (a *Adapter) Name() string { return a.rest.Name() }
 
-// IsAvailable checks if the LLM provider is reachable. Uses the dialect's health endpoint if available, otherwise delegates to the REST client.
+// IsAvailable checks if the LLM provider is reachable.
+// Uses the dialect's health endpoint if available, otherwise delegates to the REST client.
 func (a *Adapter) IsAvailable(ctx context.Context) bool {
 	if hp := a.dialect.HealthPath(); hp != "" {
 		_, err := rest.Get[json.RawMessage](ctx, a.rest, hp)
@@ -134,7 +140,8 @@ func (a *Adapter) Execute(ctx context.Context, req CompletionRequest) (Completio
 
 // --- provider.Streamable streaming ---
 
-// Stream sends a completion request and returns canonical stream events. The channel is closed when the stream ends or an error occurs.
+// Stream sends a completion request and returns canonical stream events.
+// The channel is closed when the stream ends or an error occurs.
 func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamEvent, error) {
 	chunkCh, model, streamCtx, cancel, err := a.streamChunks(ctx, req)
 	if err != nil {
@@ -143,7 +150,12 @@ func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan Str
 	return streamEventsFromChunks(streamCtx, chunkCh, model, cancel), nil
 }
 
-// streamChunks starts the upstream stream and returns the chunk channel, the cancelable stream context, and a cancel func that tears down the producer goroutine and underlying connection. To stop early, callers cancel the context passed to Stream (or the returned streamCtx); every send in the pipeline selects on that context so no goroutine blocks on an abandoned channel.
+// streamChunks starts the upstream stream and returns the chunk channel,
+// the cancelable stream context, and a cancel func that tears down the producer goroutine
+// and underlying connection. To stop early,
+// callers cancel the context passed to Stream (or the returned streamCtx);
+// every send in the pipeline selects on that context
+// so no goroutine blocks on an abandoned channel.
 func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, streamCtx context.Context, cancel context.CancelFunc, err error) {
 	a.applyDefaults(&req)
 	req.Stream = true

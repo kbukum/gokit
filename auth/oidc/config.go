@@ -12,7 +12,8 @@ type Config struct {
 	// Enabled controls whether OIDC verification is active.
 	Enabled bool `mapstructure:"enabled"`
 
-	// Issuer is the OIDC provider's issuer URL (e.g., "https://accounts.google.com"). Used for auto-discovery of JWKS endpoint, authorization endpoint, etc.
+	// Issuer is the OIDC provider's issuer URL (e.g., "https://accounts.google.com").
+	// Used for auto-discovery of JWKS endpoint, authorization endpoint, etc.
 	Issuer string `mapstructure:"issuer"`
 
 	// ClientID is the OAuth2 client ID (also used as expected "aud" claim).

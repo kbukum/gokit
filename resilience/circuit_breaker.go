@@ -1,4 +1,5 @@
-// Package resilience provides patterns for building fault-tolerant systems. It includes circuit breaker, retry, bulkhead, and rate limiting patterns.
+// Package resilience provides patterns for building fault-tolerant systems.
+// It includes circuit breaker, retry, bulkhead, and rate limiting patterns.
 package resilience
 
 import (
@@ -63,7 +64,8 @@ func DefaultCircuitBreakerConfig(name string) CircuitBreakerConfig {
 	}
 }
 
-// CircuitBreaker implements the circuit breaker pattern. It prevents cascading failures by failing fast when a service is unhealthy.
+// CircuitBreaker implements the circuit breaker pattern.
+// It prevents cascading failures by failing fast when a service is unhealthy.
 //
 // States:
 //   - Closed: Normal operation, requests pass through
@@ -98,7 +100,8 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	}
 }
 
-// Execute runs the given function through the circuit breaker. Returns ErrCircuitOpen if the circuit is open.
+// Execute runs the given function through the circuit breaker.
+// Returns ErrCircuitOpen if the circuit is open.
 func (cb *CircuitBreaker) Execute(fn func() error) error {
 	if !cb.allowRequest() {
 		return ErrCircuitOpen

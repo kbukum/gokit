@@ -7,7 +7,8 @@ import (
 	"github.com/kbukum/gokit/hook"
 )
 
-// Hook is a lifecycle callback that runs during application startup or shutdown. Services register hooks to perform setup/teardown without bootstrap knowing about specific infrastructure.
+// Hook is a lifecycle callback that runs during application startup or shutdown.
+// Services register hooks to perform setup/teardown without bootstrap knowing about specific infrastructure.
 type Hook func(ctx context.Context) error
 
 // Lifecycle event types used with the hook registry.
@@ -24,7 +25,8 @@ type lifecycleEvent struct {
 
 func (e lifecycleEvent) Type() hook.EventType { return e.eventType }
 
-// OnStart registers a hook that runs after all components are started but before the application is marked as ready.
+// OnStart registers a hook that runs after all components are started
+// but before the application is marked as ready.
 func (a *App[C]) OnStart(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h
@@ -37,7 +39,8 @@ func (a *App[C]) OnStart(hooks ...Hook) {
 	}
 }
 
-// OnReady registers a hook that runs after the application passes its ready check and is about to begin accepting traffic.
+// OnReady registers a hook that runs after the application passes its ready check
+// and is about to begin accepting traffic.
 func (a *App[C]) OnReady(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h
@@ -50,7 +53,8 @@ func (a *App[C]) OnReady(hooks ...Hook) {
 	}
 }
 
-// OnStop registers a hook that runs during graceful shutdown before components are stopped. Use this for cleanup tasks like draining connections or deregistering from service discovery.
+// OnStop registers a hook that runs during graceful shutdown before components are stopped.
+// Use this for cleanup tasks like draining connections or deregistering from service discovery.
 func (a *App[C]) OnStop(hooks ...Hook) {
 	for _, h := range hooks {
 		fn := h

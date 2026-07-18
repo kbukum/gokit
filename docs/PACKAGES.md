@@ -1,8 +1,11 @@
 # gokit Package Map
 
-gokit is a multi-module Go workspace. The **core module** (`github.com/kbukum/gokit`) is light-weight and dependency-thin; **sub-modules** (`github.com/kbukum/gokit/{name}`) bring in heavier dependencies à la carte.
+gokit is a multi-module Go workspace.
+The **core module** (`github.com/kbukum/gokit`) is light-weight and dependency-thin;
+**sub-modules** (`github.com/kbukum/gokit/{name}`) bring in heavier dependencies à la carte.
 
-Every package has its own `README.md` with API examples — start there for details. This file is the bird's-eye index.
+Every package has its own `README.md` with API examples — start there for details.
+This file is the bird's-eye index.
 
 ## Compatibility
 
@@ -96,7 +99,8 @@ See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) fo
 
 ## Multi-Module Versioning
 
-Core and sub-modules version **independently**. Each sub-module has its own `go.mod` and release tags:
+Core and sub-modules version **independently**. Each sub-module has its own `go.mod`
+and release tags:
 
 ```
 v0.5.0              ← core module

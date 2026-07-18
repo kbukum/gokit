@@ -52,7 +52,8 @@ const (
 
 var ErrBudgetExceeded = errors.New("ai: budget exceeded")
 
-// BudgetExceededError carries the specific budget reason and matches ErrBudgetExceeded with errors.Is.
+// BudgetExceededError carries the specific budget reason
+// and matches ErrBudgetExceeded with errors.Is.
 type BudgetExceededError struct {
 	Reason BudgetExceededReason
 }

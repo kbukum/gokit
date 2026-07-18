@@ -19,7 +19,9 @@ type Message struct {
 	Headers map[string]string
 }
 
-// MockProducer is an in-memory producer that records all written messages. Implements messaging.ProducerCloser and messaging.Producer. Use SetError to configure a fixed error returned by all publish methods.
+// MockProducer is an in-memory producer that records all written messages.
+// Implements messaging.ProducerCloser and messaging.Producer.
+// Use SetError to configure a fixed error returned by all publish methods.
 type MockProducer struct {
 	messages   []Message
 	mu         sync.Mutex
@@ -220,7 +222,8 @@ func (c *MockConsumer) Feed(msg Message) {
 	c.messages <- msg
 }
 
-// Consume blocks until context is canceled, processing fed messages. After cancellation, any remaining buffered messages are still delivered.
+// Consume blocks until context is canceled, processing fed messages. After cancellation,
+// any remaining buffered messages are still delivered.
 func (c *MockConsumer) Consume(ctx context.Context) error {
 	for {
 		select {

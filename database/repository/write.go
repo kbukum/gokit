@@ -8,7 +8,8 @@ import (
 	dberrors "github.com/kbukum/gokit/database/errors"
 )
 
-// WriteRepository provides read and write (Create/Update) operations. Use it for entities that can be created and modified but not deleted.
+// WriteRepository provides read and write (Create/Update) operations.
+// Use it for entities that can be created and modified but not deleted.
 //
 //	type LedgerRepository struct {
 //	    *repository.WriteRepository[models.LedgerEntry, string]
@@ -17,7 +18,8 @@ type WriteRepository[T any, ID comparable] struct {
 	*ReadRepository[T, ID]
 }
 
-// NewWriteRepository creates a WriteRepository for model T with ID type ID. The resource name is used in error messages (e.g. "ledger_entry", "event").
+// NewWriteRepository creates a WriteRepository for model T with ID type ID.
+// The resource name is used in error messages (e.g. "ledger_entry", "event").
 func NewWriteRepository[T any, ID comparable](db *gorm.DB, resource string, opts ...Option) *WriteRepository[T, ID] {
 	return &WriteRepository[T, ID]{
 		ReadRepository: NewReadRepository[T, ID](db, resource, opts...),

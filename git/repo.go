@@ -6,9 +6,12 @@ import (
 	"github.com/kbukum/gokit/git/internal/model"
 )
 
-// Repo orchestrates git operations across the available backends. Operations are routed to whichever backend implements them:
+// Repo orchestrates git operations across the available backends.
+// Operations are routed to whichever backend implements them:
 // - embedded (go-git): Repository, Diff, TreeRead, Log, Blame, Index, Commit, Ref, Remote, Config
-// - cli (git binary): Exec, Inspect, Merge, Rebase, CherryPick, Reset, Stash, Maintain When preferCLI is true and a future CLI implementation covers an embedded operation, the CLI backend will be preferred for that operation.
+// - cli (git binary): Exec, Inspect, Merge, Rebase, CherryPick, Reset, Stash, Maintain
+// When preferCLI is true and a future CLI implementation covers an embedded operation,
+// the CLI backend will be preferred for that operation.
 type Repo struct {
 	embedded  *embedded.Backend
 	cli       *cliimpl.Backend

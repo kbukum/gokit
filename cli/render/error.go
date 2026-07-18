@@ -40,7 +40,8 @@ func (c ExitCode) Int() int { return int(c) }
 
 // ExitCodeForError maps an error's code onto the CLI exit-code convention.
 //
-// It resolves the underlying [github.com/kbukum/gokit/errors.AppError] via errors.As; a nil error maps to [ExitSuccess] and any non-AppError to [ExitFailure].
+// It resolves the underlying [github.com/kbukum/gokit/errors.AppError] via errors.As;
+// a nil error maps to [ExitSuccess] and any non-AppError to [ExitFailure].
 func ExitCodeForError(err error) ExitCode {
 	if err == nil {
 		return ExitSuccess
@@ -87,7 +88,8 @@ func NewErrorRenderer(format OutputFormat) ErrorRenderer {
 	return ErrorRenderer{format: format}
 }
 
-// errorEnvelope is the machine-readable projection of an error, shared by the JSON and YAML formats.
+// errorEnvelope is the machine-readable projection of an error, shared by the JSON
+// and YAML formats.
 type errorEnvelope struct {
 	Code       errors.ErrorCode `json:"code" yaml:"code"`
 	Message    string           `json:"message" yaml:"message"`
@@ -99,7 +101,9 @@ type errorEnvelope struct {
 
 // Render renders an error and returns the matching CLI exit code.
 //
-// The same exit code is returned regardless of format, so callers can render in any format and still exit consistently. A non-AppError is first wrapped as an internal AppError so every error renders through the same envelope.
+// The same exit code is returned regardless of format, so callers can render in any format
+// and still exit consistently. A non-AppError is first wrapped as an internal AppError
+// so every error renders through the same envelope.
 func (r ErrorRenderer) Render(err error) (string, ExitCode) {
 	if err == nil {
 		return "", ExitSuccess
@@ -137,7 +141,8 @@ func newEnvelope(err *errors.AppError, exit ExitCode) errorEnvelope {
 	}
 }
 
-// fallbackJSON renders a Details-free envelope when the full envelope fails to marshal (an unmarshalable detail value). Dropping Details leaves only JSON-safe scalars; the final string is a defensive last resort.
+// fallbackJSON renders a Details-free envelope when the full envelope fails to marshal (an unmarshalable detail value).
+// Dropping Details leaves only JSON-safe scalars; the final string is a defensive last resort.
 func fallbackJSON(err *errors.AppError, exit ExitCode) string {
 	envelope := newEnvelope(err, exit)
 	envelope.Details = nil

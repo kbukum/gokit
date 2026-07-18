@@ -4,7 +4,9 @@ import "strings"
 
 // runConfirm asks a yes/no question with an explicit default.
 //
-// In non-interactive mode it resolves to default without touching the terminal; otherwise it prints the prompt and parses y/yes/n/no (blank accepts the default), re-asking on unrecognized input.
+// In non-interactive mode it resolves to default without touching the terminal;
+// otherwise it prints the prompt and parses y/yes/n/no (blank accepts the default),
+// re-asking on unrecognized input.
 func runConfirm(term Terminal, style Style, mode PromptMode, prompt string, def bool) (bool, error) {
 	if !mode.IsInteractive() {
 		return def, nil

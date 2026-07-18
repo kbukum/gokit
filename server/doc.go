@@ -1,10 +1,13 @@
-// Package server provides a unified HTTP server for gokit applications using Gin with HTTP/2 and h2c support for serving both REST and gRPC traffic.
+// Package server provides a unified HTTP server for gokit applications using Gin with HTTP/2
+// and h2c support for serving both REST and gRPC traffic.
 //
-// The server follows gokit's component pattern with lifecycle management, health endpoints, and configurable middleware.
+// The server follows gokit's component pattern with lifecycle management, health endpoints,
+// and configurable middleware.
 //
 // # API Documentation
 //
-// The server can serve interactive API documentation powered by Scalar UI. Enable via config and provide an OpenAPI spec:
+// The server can serve interactive API documentation powered by Scalar UI. Enable via config
+// and provide an OpenAPI spec:
 //
 //	cfg := &server.Config{
 //	    Port: 8080,
@@ -37,7 +40,8 @@
 //   - BodySize: Request body size limits
 //   - Auth: JWT authentication middleware
 //
-// Shared middleware order for transport concerns is: tracing → logging → auth → validation → handler → metrics. Apply recovery around that chain.
+// Shared middleware order for transport concerns is:
+// tracing → logging → auth → validation → handler → metrics. Apply recovery around that chain.
 //
 // # Endpoints
 //

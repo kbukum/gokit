@@ -1,4 +1,5 @@
-// Package storage provides interfaces and implementations for object storage. Supported providers: local filesystem, Amazon S3 (and S3-compatible services).
+// Package storage provides interfaces and implementations for object storage. Supported providers:
+// local filesystem, Amazon S3 (and S3-compatible services).
 package storage
 
 import (
@@ -20,7 +21,8 @@ type Storage interface {
 	// Upload writes data from reader to the given path.
 	Upload(ctx context.Context, path string, reader io.Reader) error
 
-	// Download returns a reader for the object at the given path. The caller is responsible for closing the returned ReadCloser.
+	// Download returns a reader for the object at the given path.
+	// The caller is responsible for closing the returned ReadCloser.
 	Download(ctx context.Context, path string) (io.ReadCloser, error)
 
 	// Delete removes the object at the given path. Returns nil if the object does not exist.

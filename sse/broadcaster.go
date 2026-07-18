@@ -1,8 +1,11 @@
 // Package sse provides Server-Sent Events (SSE) support for real-time streaming.
 package sse
 
-// Broadcaster is an interface for broadcasting events to clients. This allows handlers to depend on an abstraction rather than a concrete Hub.
+// Broadcaster is an interface for broadcasting events to clients.
+// This allows handlers to depend on an abstraction rather than a concrete Hub.
 type Broadcaster interface {
-	// BroadcastToPattern sends data to all clients matching the given pattern. Pattern uses glob-style matching (e.g., "resource:*" or "resource:abc123"). Delivery is best-effort: slow clients may drop frames when their bounded queue is full.
+	// BroadcastToPattern sends data to all clients matching the given pattern.
+	// Pattern uses glob-style matching (e.g., "resource:*" or "resource:abc123").
+	// Delivery is best-effort: slow clients may drop frames when their bounded queue is full.
 	BroadcastToPattern(pattern string, data []byte)
 }

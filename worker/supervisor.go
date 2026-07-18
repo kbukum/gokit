@@ -36,7 +36,12 @@ func (c SupervisorConfig) withDefaults() SupervisorConfig {
 
 // supervisor monitors worker health, tracks per-worker panic counts, and enforces failure policies.
 //
-// Design: worker goroutines catch panics per-task and survive — the goroutine keeps processing the next task from its channel. The supervisor tracks failure counts per worker and can mark a worker as unhealthy when it exceeds MaxRestarts. This avoids the complexity of goroutine replacement while still providing supervision visibility and policy enforcement.
+// Design: worker goroutines catch panics per-task and survive —
+// the goroutine keeps processing the next task from its channel.
+// The supervisor tracks failure counts per worker
+// and can mark a worker as unhealthy when it exceeds MaxRestarts.
+// This avoids the complexity of goroutine replacement while still providing supervision visibility
+// and policy enforcement.
 type supervisor[I, O any] struct {
 	pool *Pool[I, O]
 	cfg  SupervisorConfig
@@ -74,7 +79,9 @@ func (s *supervisor[I, O]) run(ctx context.Context) {
 	}
 }
 
-// reportCrash is called by a worker goroutine when a task panics. The worker goroutine itself survives (panic is caught per-task in executeTask). The supervisor tracks the crash count and marks the worker unhealthy when it exceeds MaxRestarts.
+// reportCrash is called by a worker goroutine when a task panics.
+// The worker goroutine itself survives (panic is caught per-task in executeTask).
+// The supervisor tracks the crash count and marks the worker unhealthy when it exceeds MaxRestarts.
 func (s *supervisor[I, O]) reportCrash(workerIdx int, reason any) {
 	s.mu.Lock()
 	s.panics[workerIdx]++
@@ -94,7 +101,8 @@ func (s *supervisor[I, O]) reportCrash(workerIdx int, reason any) {
 	}
 }
 
-// shouldAcceptTask returns whether a supervised worker should process tasks. Workers marked unhealthy by the supervisor are skipped by dispatch.
+// shouldAcceptTask returns whether a supervised worker should process tasks.
+// Workers marked unhealthy by the supervisor are skipped by dispatch.
 func (s *supervisor[I, O]) shouldAcceptTask(workerIdx int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -122,7 +130,8 @@ func (s *supervisor[I, O]) healthCheck() {
 	}
 }
 
-// backoff returns the exponential backoff duration for a worker's Nth panic. Returns 0 if no panics have occurred. Caps at 30 seconds.
+// backoff returns the exponential backoff duration for a worker's Nth panic.
+// Returns 0 if no panics have occurred. Caps at 30 seconds.
 func (s *supervisor[I, O]) backoff(workerIdx int) time.Duration {
 	s.mu.Lock()
 	n := s.panics[workerIdx]

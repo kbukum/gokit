@@ -9,7 +9,8 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// HostResolver resolves the Docker daemon host for a given context. Implementations can look up per-tenant or per-workspace hosts.
+// HostResolver resolves the Docker daemon host for a given context.
+// Implementations can look up per-tenant or per-workspace hosts.
 type HostResolver interface {
 	ResolveHost(ctx context.Context) (string, error)
 }
@@ -33,7 +34,8 @@ type cachedManager struct {
 	expiresAt time.Time
 }
 
-// ManagerPool manages multiple Docker Managers keyed by resolved host. It caches managers and creates new ones on-demand via the HostResolver.
+// ManagerPool manages multiple Docker Managers keyed by resolved host. It caches managers
+// and creates new ones on-demand via the HostResolver.
 type ManagerPool struct {
 	mu            sync.RWMutex
 	resolver      HostResolver
@@ -53,7 +55,8 @@ func WithCacheTTL(ttl time.Duration) ManagerPoolOption {
 	return func(p *ManagerPool) { p.cacheTTL = ttl }
 }
 
-// NewManagerPool creates a pool that resolves Docker hosts dynamically. When resolver is nil, it behaves like a single-host manager.
+// NewManagerPool creates a pool that resolves Docker hosts dynamically. When resolver is nil,
+// it behaves like a single-host manager.
 func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string]string, log *logging.Logger, opts ...ManagerPoolOption) (*ManagerPool, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -80,7 +83,8 @@ func NewManagerPool(cfg *Config, resolver HostResolver, defaultLabels map[string
 	return pool, nil
 }
 
-// For returns the Manager for the current context. If a HostResolver is configured and resolves to a different host, a cached manager for that host is returned (or created).
+// For returns the Manager for the current context. If a HostResolver is configured
+// and resolves to a different host, a cached manager for that host is returned (or created).
 func (p *ManagerPool) For(ctx context.Context) (*Manager, error) {
 	if p.resolver == nil {
 		return p.defaultMgr, nil
