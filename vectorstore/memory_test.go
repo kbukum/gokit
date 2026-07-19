@@ -224,6 +224,26 @@ func TestInMemoryStoreSearchNegativeLimit(t *testing.T) {
 	}
 }
 
+func TestInMemoryStoreSearchZeroLimit(t *testing.T) {
+	store := NewInMemoryStore()
+	ctx := context.Background()
+
+	if err := store.EnsureCollection(ctx, "test", 1); err != nil {
+		t.Fatalf("EnsureCollection() error = %v", err)
+	}
+	if err := store.Upsert(ctx, "test", Point{ID: "1", Vector: []float32{1.0}, Payload: NewPointPayload()}); err != nil {
+		t.Fatalf("Upsert() error = %v", err)
+	}
+
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0}, Limit: 0})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results for zero limit, got %d", len(results))
+	}
+}
+
 func TestInMemoryStoreSearchLimit(t *testing.T) {
 	store := NewInMemoryStore()
 	ctx := context.Background()

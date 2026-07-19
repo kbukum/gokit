@@ -49,16 +49,20 @@ func main() {
 		WithField("title", "Document 1").
 		WithField("source", "web")
 	
-	err = store.Upsert(ctx, "documents", "doc1", []float32{
-		0.1, 0.2, 0.3, // ... 384 dimensions total
-	}, payload1)
+	err = store.Upsert(ctx, "documents", vectorstore.Point{
+		ID: "doc1",
+		Vector: []float32{
+			0.1, 0.2, 0.3, // ... 384 dimensions total
+		},
+		Payload: payload1,
+	})
 	if err != nil {
 		panic(err)
 	}
 	
 	// Search for similar vectors
 	query := []float32{0.1, 0.2, 0.3, /* ... */}
-	results, err := store.Search(ctx, "documents", query, 10, nil)
+	results, err := store.Search(ctx, "documents", vectorstore.SearchQuery{Vector: query, Limit: 10})
 	if err != nil {
 		panic(err)
 	}
@@ -80,7 +84,7 @@ filter := vectorstore.NewSearchFilter().
 	MustMatch("source", "web").
 	MustMatch("status", "active")
 
-results, err := store.Search(ctx, "documents", query, 10, filter)
+results, err := store.Search(ctx, "documents", vectorstore.SearchQuery{Vector: query, Limit: 10, Filter: filter})
 if err != nil {
 	panic(err)
 }
@@ -99,7 +103,7 @@ if err != nil {
 newPayload := vectorstore.NewPointPayload().
 	WithField("title", "Updated Document 1")
 
-err = store.Upsert(ctx, "documents", "doc1", newVector, newPayload)
+err = store.Upsert(ctx, "documents", vectorstore.Point{ID: "doc1", Vector: newVector, Payload: newPayload})
 if err != nil {
 	panic(err)
 }
@@ -110,8 +114,8 @@ if err != nil {
 ```go
 type Store interface {
 	EnsureCollection(ctx context.Context, collection string, dimensions int) error
-	Upsert(ctx context.Context, collection, id string, vector []float32, payload *PointPayload) error
-	Search(ctx context.Context, collection string, vector []float32, limit int, filter *SearchFilter) ([]SearchResult, error)
+	Upsert(ctx context.Context, collection string, point Point) error
+	Search(ctx context.Context, collection string, query SearchQuery) ([]SearchResult, error)
 	Delete(ctx context.Context, collection, id string) error
 }
 ```
@@ -200,15 +204,18 @@ for i, embedding := range embeddings {
 		WithField("doc_id", docIDs[i]).
 		WithField("chunk_index", i)
 	
-	err := store.Upsert(ctx, "rag_docs", fmt.Sprintf("doc_%d", i), 
-		embedding, payload)
+	err := store.Upsert(ctx, "rag_docs", vectorstore.Point{
+		ID:      fmt.Sprintf("doc_%d", i),
+		Vector:  embedding,
+		Payload: payload,
+	})
 	if err != nil {
 		panic(err)
 	}
 }
 
 // Search for similar documents
-results, err := store.Search(ctx, "rag_docs", queryEmbedding, 5, nil)
+results, err := store.Search(ctx, "rag_docs", vectorstore.SearchQuery{Vector: queryEmbedding, Limit: 5})
 ```
 
 ### Filtered Search
@@ -223,5 +230,5 @@ payload := vectorstore.NewPointPayload().
 filter := vectorstore.NewSearchFilter().
 	MustMatch("source", "web")
 
-results, err := store.Search(ctx, "documents", query, 10, filter)
+results, err := store.Search(ctx, "documents", vectorstore.SearchQuery{Vector: query, Limit: 10, Filter: filter})
 ```
