@@ -131,7 +131,8 @@ type Store interface {
 	// Upsert inserts or updates a vector point.
 	Upsert(ctx context.Context, collection string, point Point) error
 
-	// Search searches for similar vectors.
+	// Search searches for similar vectors. It returns a non-nil,
+	// possibly empty slice when there are no matches (including when SearchQuery.Limit is zero).
 	Search(ctx context.Context, collection string, query SearchQuery) ([]SearchResult, error)
 
 	// Delete deletes a point by ID.

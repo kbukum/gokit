@@ -224,6 +224,24 @@ func TestSearchRejectsUnsupportedFilterValueWithZeroLimit(t *testing.T) {
 	}
 }
 
+func TestSearchZeroLimitReturnsNonNilEmptySlice(t *testing.T) {
+	t.Parallel()
+	store, err := NewStore(Config{URL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	results, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 0})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if results == nil {
+		t.Fatal("expected non-nil empty slice for zero limit, got nil")
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results for zero limit, got %d", len(results))
+	}
+}
+
 func TestSearchRejectsMalformedResponse(t *testing.T) {
 	t.Parallel()
 	server, _ := newQdrantTestServer(t, []int{http.StatusOK}, []string{`{"result":`})

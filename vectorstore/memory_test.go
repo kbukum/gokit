@@ -239,8 +239,31 @@ func TestInMemoryStoreSearchZeroLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
+	if results == nil {
+		t.Fatal("expected non-nil empty slice for zero limit, got nil")
+	}
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results for zero limit, got %d", len(results))
+	}
+}
+
+func TestInMemoryStoreSearchNoMatchesReturnsNonNil(t *testing.T) {
+	store := NewInMemoryStore()
+	ctx := context.Background()
+
+	if err := store.EnsureCollection(ctx, "test", 1); err != nil {
+		t.Fatalf("EnsureCollection() error = %v", err)
+	}
+
+	results, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0}, Limit: 5})
+	if err != nil {
+		t.Fatalf("Search() error = %v", err)
+	}
+	if results == nil {
+		t.Fatal("expected non-nil empty slice when no points match, got nil")
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results, got %d", len(results))
 	}
 }
 

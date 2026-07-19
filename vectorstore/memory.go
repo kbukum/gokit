@@ -116,10 +116,10 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, query
 		return nil, fmt.Errorf("query limit must be non-negative, got %d", query.Limit)
 	}
 	if query.Limit == 0 {
-		return nil, nil
+		return []SearchResult{}, nil
 	}
 
-	var results []SearchResult
+	results := make([]SearchResult, 0)
 
 	for _, point := range col.Points {
 		// Apply filter if provided

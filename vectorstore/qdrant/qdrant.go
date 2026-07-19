@@ -112,7 +112,7 @@ func (s *Store) Search(ctx context.Context, collection string, query vectorstore
 		return nil, err
 	}
 	if query.Limit == 0 {
-		return nil, nil
+		return []vectorstore.SearchResult{}, nil
 	}
 	body := map[string]any{"vector": query.Vector, "limit": query.Limit, "with_payload": true}
 	if filterJSON != nil {
