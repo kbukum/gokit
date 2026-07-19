@@ -11,17 +11,11 @@ user-invocable: true
 
 # Planning gokit work as applyable step files
 
-A plan is a written contract for a change set: what to do, in what order,
-and how you will know each part is done. In this repo a plan is **not prose to admire** —
-it is a folder of markdown that the `apply-plan` / `apply-step` skills execute iteratively.
+A plan is a written contract for a change set: what to do, in what order, and how you will know each part is done. In this repo a plan is **not prose to admire** — it is a folder of markdown that the `apply-plan` / `apply-step` skills execute iteratively.
 
 ## Where plans live: `tmp/<plan-name>/`
 
-Always create plans under `tmp/` at the repo root. `tmp/` is **gitignored** —
-plans are local working scratch, never committed and never shipped.
-Name the folder by the change itself in kebab-case (`tmp/typed-di-cycle-detection/`, `tmp/storage-gcs-backend/`)
-— the same high-level naming rule as branches: no `batch-N`, plan numbers,
-or internal/session detail in the folder name.
+Always create plans under `tmp/` at the repo root. `tmp/` is **gitignored** — plans are local working scratch, never committed and never shipped. Name the folder by the change itself in kebab-case (`tmp/typed-di-cycle-detection/`, `tmp/storage-gcs-backend/`) — the same high-level naming rule as branches: no `batch-N`, plan numbers, or internal/session detail in the folder name.
 
 ```bash
 mkdir -p tmp/<plan-name>
@@ -71,11 +65,7 @@ and the `- [ ]` boxes are the progress signal `apply-plan` reads to find the fir
 
 ## Bind every plan to the baseline
 
-A plan may **not** invent a lighter standard than gokit's. Its cross-cutting rules restate —
-and link to —
-the engineering baseline in [`../../copilot-instructions.md`](../../copilot-instructions.md)
-and defer detailed judgment to the `review` skill's eight passes. In every plan's README,
-make these load-bearing (not decorative):
+A plan may **not** invent a lighter standard than gokit's. Its cross-cutting rules restate — and link to — the engineering baseline in [`../../copilot-instructions.md`](../../copilot-instructions.md) and defer detailed judgment to the `review` skill's eight passes. In every plan's README, make these load-bearing (not decorative):
 
 - **Test-first (TDD).** Each behavior gets a failing test first, then minimal code,
   then refactor while green — failure paths included. Never batch production code

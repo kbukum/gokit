@@ -1,8 +1,6 @@
 # httpclient
 
-Configurable HTTP client with built-in authentication, TLS,
-resilience (retry, circuit breaker, rate limiting), and streaming support.
-Includes a typed REST client for JSON APIs.
+Configurable HTTP client with built-in authentication, TLS, resilience (retry, circuit breaker, rate limiting), and streaming support. Includes a typed REST client for JSON APIs.
 
 ## Install
 
@@ -101,12 +99,9 @@ httpclient.BearerAuth("token")
 // Basic auth
 httpclient.BasicAuth("user", "pass")
 
-// API key in header
+// API key in header (default: "X-API-Key")
 httpclient.APIKeyAuth("secret")
 httpclient.APIKeyAuthHeader("secret", "X-Custom-Key")
-
-// API key in query parameter
-httpclient.APIKeyAuthQuery("secret", "api_key")
 
 // Custom auth
 httpclient.CustomAuth(func(req *http.Request) {

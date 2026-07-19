@@ -51,7 +51,7 @@ func main() {
 | Name | Description |
 |------|-------------|
 | `Component` | Interface: `Name()`, `Start()`, `Stop()`, `Health()` |
-| `ComponentHealth` | Health status with name, status, message |
+| `Health` | Health status with name, status, message |
 | `Registry` | Manages component lifecycle with deterministic ordering |
 | `BaseLazyComponent` | Thread-safe lazy initialization wrapper |
 | `NewRegistry()` | Create component registry |

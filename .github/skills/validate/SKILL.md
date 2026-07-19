@@ -10,12 +10,7 @@ user-invocable: true
 
 # Validating gokit changes with toven
 
-gokit is a multi-module Go monorepo.
-**`toven` is the canonical task runner** (config in `toven.toml`, sibling repo `../toven`).
-It discovers every `go.mod`, orders work by the dependency graph, caches results,
-and can scope to just the modules a diff touched.
-Prefer it over calling `go`/`make`/`gomod.sh` by hand — the Makefile targets are thin wrappers
-and toven gives you affected-set detection and per-module caching for free.
+gokit is a multi-module Go monorepo. **`toven` is the canonical task runner** (config in `toven.toml`, sibling repo `../toven`). It discovers every `go.mod`, orders work by the dependency graph, caches results, and can scope to just the modules a diff touched. Prefer it over calling `go`/`make`/`gomod.sh` by hand — the Makefile targets are thin wrappers and toven gives you affected-set detection and per-module caching for free.
 
 ## Golden rule: scope to what changed
 
@@ -95,9 +90,6 @@ toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` 
 
 ## Before you hand work off
 
-For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`,
-`check` (vet), and `test -- -race -count=1 -shuffle=on` on the affected modules.
-Escalate to a full-tree run only when the affected set is genuinely tree-wide
-or you are preparing a release.
+For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`, `check` (vet), and `test -- -race -count=1 -shuffle=on` on the affected modules. Escalate to a full-tree run only when the affected set is genuinely tree-wide or you are preparing a release.
 
 Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.

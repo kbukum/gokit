@@ -101,13 +101,13 @@ func TestWithFixtures(t *testing.T) {
     db.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
     
     // Load fixture data
-    dbtestutil.LoadFixture(db.DB(), "users", []map[string]interface{}{
+    dbtestutil.LoadFixture(db.DB(), "users", []map[string]any{
         {"name": "Alice", "email": "alice@example.com"},
         {"name": "Bob", "email": "bob@example.com"},
     })
     
     // Or use MustLoadFixture to fail test on error
-    dbtestutil.MustLoadFixture(t, db.DB(), "users", []map[string]interface{}{
+    dbtestutil.MustLoadFixture(t, db.DB(), "users", []map[string]any{
         {"name": "Charlie", "email": "charlie@example.com"},
     })
 }
@@ -295,7 +295,7 @@ Prefer fixture helpers over raw SQL when loading test data:
 
 ```go
 // Good ✓
-dbtestutil.MustLoadFixture(t, db.DB(), "users", []map[string]interface{}{
+dbtestutil.MustLoadFixture(t, db.DB(), "users", []map[string]any{
     {"name": "Alice", "email": "alice@example.com"},
     {"name": "Bob", "email": "bob@example.com"},
 })
@@ -330,7 +330,7 @@ if count != 5 {
 func NewComponent() *Component
 
 // WithModels registers models for auto-migration
-func (c *Component) WithModels(models ...interface{}) *Component
+func (c *Component) WithModels(models ...any) *Component
 
 // DB returns the underlying *gorm.DB
 func (c *Component) DB() *gorm.DB
@@ -343,18 +343,18 @@ Health(ctx context.Context) component.Health
 
 // TestComponent interface methods
 Reset(ctx context.Context) error
-Snapshot(ctx context.Context) (interface{}, error)
-Restore(ctx context.Context, snapshot interface{}) error
+Snapshot(ctx context.Context) (any, error)
+Restore(ctx context.Context, snapshot any) error
 ```
 
 ### Fixture Functions
 
 ```go
 // LoadFixture loads test data into a table
-func LoadFixture(db *gorm.DB, table string, data []map[string]interface{}) error
+func LoadFixture(db *gorm.DB, table string, data []map[string]any) error
 
 // MustLoadFixture loads test data and fails the test on error
-func MustLoadFixture(t *testing.T, db *gorm.DB, table string, data []map[string]interface{})
+func MustLoadFixture(t *testing.T, db *gorm.DB, table string, data []map[string]any)
 
 // TruncateTable removes all rows from a table
 func TruncateTable(db *gorm.DB, table string) error
@@ -391,7 +391,3 @@ func AssertRowCount(t *testing.T, db *gorm.DB, table string, expected int64)
 See the test files for comprehensive examples:
 - `component_test.go` - TestComponent lifecycle and state management
 - `fixtures_test.go` - Fixture helper usage patterns
-
-## Coverage
-
-Current test coverage: **84.2%** (32 tests, all passing)

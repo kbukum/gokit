@@ -1,7 +1,6 @@
 # gokit/security
 
-TLS configuration, secure header policies,
-and test helpers for secure transport across gokit modules.
+TLS configuration, secure header policies, and test helpers for secure transport across gokit modules.
 
 ## Overview
 
@@ -18,11 +17,9 @@ The locked transport policy is explicit:
 - minimum supported floor: TLS 1.2
 - default negotiation outcome: TLS 1.3 whenever both peers support it
 - explicit floors below TLS 1.2 are rejected during validation
-- secure headers default-on: HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
-  Permissions-Policy
+- secure headers default-on: HSTS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
 
-The companion `tlstest` sub-package generates self-signed certificates for integration tests —
-no external tools or fixtures required.
+The companion `tlstest` sub-package generates self-signed certificates for integration tests — no external tools or fixtures required.
 
 ## Installation
 
@@ -163,8 +160,7 @@ func TestMTLS(t *testing.T) {
 }
 ```
 
-`GenerateTLSCerts` creates an ECDSA P-256 CA and server certificate valid for `localhost`,
-`127.0.0.1`, and `::1`. Files are written to `t.TempDir()` and cleaned up automatically.
+`GenerateTLSCerts` creates an ECDSA P-256 CA and server certificate valid for `localhost`, `127.0.0.1`, and `::1`. Files are written to `t.TempDir()` and cleaned up automatically.
 
 Use `WriteInvalidPEM(t, "bad.pem")` to generate invalid certificate files for error-path testing.
 

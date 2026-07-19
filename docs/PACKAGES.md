@@ -1,8 +1,6 @@
 # gokit Package Map
 
-gokit is a multi-module Go workspace.
-The **core module** (`github.com/kbukum/gokit`) is light-weight and dependency-thin;
-**sub-modules** (`github.com/kbukum/gokit/{name}`) bring in heavier dependencies à la carte.
+gokit is a multi-module Go workspace. The **core module** (`github.com/kbukum/gokit`) is light-weight and dependency-thin; **sub-modules** (`github.com/kbukum/gokit/{name}`) bring in heavier dependencies à la carte.
 
 Every package has its own `README.md` with API examples — start there for details.
 This file is the bird's-eye index.
@@ -34,12 +32,13 @@ This file is the bird's-eye index.
 | `stream` | `gokit/stream` | Pull-based stream (Throttle, Batch, Debounce, Window) |
 | `dag` | `gokit/dag` | DAG execution engine — batch / streaming / cascade |
 | `chain` | `gokit/chain` | Sequential chain execution — step piping, progress, cancellation |
-| `media` | `gokit/media` | Light standalone kit: type/format detection, metadata, cheap image ops |
 | `security` | `gokit/security` | TLS configuration and certificate utilities |
 | `process` | `gokit/process` | Subprocess execution with cancellation |
 | `worker` | `gokit/worker` | Push-based worker pools with supervision |
 | `component` | `gokit/component` | Lifecycle interface (start/stop/health) |
 | `bootstrap` | `gokit/bootstrap` | Application startup orchestration & graceful shutdown |
+| `hook` | `gokit/hook` | Generic event hook system |
+| `cli` | `gokit/cli` | Parser-agnostic terminal-UX toolkit — theme, render, progress, prompt, signal, live |
 
 ## Sub-Modules
 
@@ -59,6 +58,8 @@ This file is the bird's-eye index.
 | `workload` | `gokit/workload` | Docker / Kubernetes workload execution |
 | `testutil` | `gokit/testutil` | Component lifecycle & state-management testing |
 | `stateful` | `gokit/stateful` | Push-based stateful accumulation |
+| `media` | `gokit/media` | Light standalone kit: type/format detection, metadata, cheap image ops |
+| `dataset` | `gokit/dataset` | Streaming dataset-collection toolkit — fetch, transform, validate, publish |
 | `llm` | `gokit/llm` | LLM chat completion abstraction |
 | `inference` | `gokit/inference` | Model-serving runtime adapters — Triton, KServe v2, vLLM, TGI |
 | `ai` | `gokit/ai` | Universal AI/ML primitives — value types, sentinel errors, semantic keys |
@@ -68,7 +69,6 @@ This file is the bird's-eye index.
 | `agent` | `gokit/agent` | Agentic loop — LLM, tools, context management |
 | `tool` | `gokit/tool` | Type-safe tool definitions with auto-generated schemas |
 | `schema` | `gokit/schema` | JSON Schema generation from Go types |
-| `hook` | `gokit/hook` | Generic event hook system |
 | `mcp` | `gokit/mcp` | Model Context Protocol server / client |
 | `skill` | `gokit/skill` | SDK-free skill manifests, loading, registry, activation |
 | `git` | `gokit/git` | Git repository operations — capability interfaces, embedded/CLI backends |
@@ -81,26 +81,25 @@ This file is the bird's-eye index.
 |---|---|---|
 | **Foundation** | errors, config, logging, version, codec, fs | Configuration, logging, errors, encoding, filesystem |
 | **Utilities** | util, encryption, validation | Helpers and data validation |
-| **Architecture** | di, provider, component, bootstrap | DI, lifecycle, provider pattern |
+| **Architecture** | di, provider, component, bootstrap, hook | DI, lifecycle, provider pattern, event hooks |
 | **Auth & Authz** | auth, authz | Authentication and authorization |
 | **Resilience** | resilience, observability | Fault tolerance, tracing, metrics |
-| **Data & Flow** | stream, dag, chain, sse, media, stateful | Streams, DAGs, chains, SSE, media, accumulation |
+| **Data & Flow** | stream, dag, chain, sse, media, stateful, dataset | Streams, DAGs, chains, SSE, media, accumulation, dataset collection |
 | **Infrastructure** | database, cache, messaging, storage | Data stores and messaging |
 | **Networking** | httpclient | HTTP client with resilience |
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload, worker | Subprocess and container workloads |
 | **Testing** | testutil | Component lifecycle testing infrastructure |
-| **AI** | ai, llm, inference, agent, tool, hook, mcp, skill, schema | LLM orchestration & tooling |
+| **AI** | ai, llm, inference, agent, tool, mcp, skill, schema | LLM orchestration & tooling |
 | **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking |
 | **Vectors** | embedding, vectorstore | Embedding & similarity search |
-| **Devtools** | git | Git repository operations |
+| **Devtools** | git, cli | Git repository operations, terminal UX tooling |
 
 See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) for the layering rationale.
 
 ## Multi-Module Versioning
 
-Core and sub-modules version **independently**. Each sub-module has its own `go.mod`
-and release tags:
+Core and sub-modules version **independently**. Each sub-module has its own `go.mod` and release tags:
 
 ```
 v0.5.0              ← core module

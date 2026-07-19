@@ -10,18 +10,13 @@ user-invocable: true
 
 # Opening a reviewer-friendly pull request
 
-A PR is a reviewer's entry point, not a changelog of your keystrokes.
-This skill turns a pushed branch into a PR whose description explains the change **at a high level,
-organized and simplified**,
-and whose template sections are filled **honestly** against gokit's baseline.
+A PR is a reviewer's entry point, not a changelog of your keystrokes. This skill turns a pushed branch into a PR whose description explains the change **at a high level, organized and simplified**, and whose template sections are filled **honestly** against gokit's baseline.
 
 Create a PR **only when explicitly asked** — never as a side effect of finishing work.
 
 ## 1. Preconditions
 
-- The branch is committed
-  and **pushed** to `origin` (the maintainer commits and pushes, per repo workflow).
-  Confirm before opening:
+- The branch is committed and **pushed** to `origin` (the maintainer commits and pushes, per repo workflow). Confirm before opening:
 
 ```bash
 git rev-parse --abbrev-ref HEAD
@@ -41,9 +36,7 @@ git diff origin/main...HEAD --stat
 git diff origin/main...HEAD            # skim for the shape of the change, not to transcribe it
 ```
 
-Answer, in your head: what capability/fix/refactor is this, which modules it touches,
-what a reviewer must understand to judge it,
-and whether it changes a public abstraction (error codes, Component lifecycle, Provider/stream shapes) that needs sibling-parity handling.
+Answer, in your head: what capability/fix/refactor is this, which modules it touches, what a reviewer must understand to judge it, and whether it changes a public abstraction (error codes, Component lifecycle, Provider/stream shapes) that needs sibling-parity handling.
 
 ## 3. Write the description — high level, organized, simplified
 
@@ -54,15 +47,10 @@ without reconstructing it from the diff.
 - **Title** — Conventional Commit style, naming the change: `feat(storage): add GCS backend`,
   `refactor(di): typed cycle detection`. No plan/batch/step numbers or internal sequencing —
   the PR stands alone.
-- **Description** — a few sentences of *what changed and why it's shaped this way*,
-  at the level of capabilities and decisions, not code lines.
-- **Motivation** — the problem it solves. Link issues as `Fixes #123`;
-  reference **other repos as full URLs** (e.g. `https://github.com/kbukum/rskit/issues/45`),
-  never a bare `#45`.
+- **Description** — a few sentences of *what changed and why it's shaped this way*, at the level of capabilities and decisions, not code lines.
+- **Motivation** — the problem it solves. Link issues as `Fixes #123`; reference **other repos as full URLs** (e.g. `https://github.com/kbukum/rskit/issues/45`), never a bare `#45`.
 - **Type of Change / Module(s) Affected** — mark accurately.
-- **Changes Made** — a short,
-  grouped bullet list of the *key* changes by concern (e.g. "typed registry factory", "in-memory default kept in core"),
-  not one bullet per file and not a commit log.
+- **Changes Made** — a short, grouped bullet list of the *key* changes by concern (e.g. "typed registry factory", "in-memory default kept in core"), not one bullet per file and not a commit log.
 - **Testing** — check only the gates you actually ran; scope to affected modules.
   These map to `toven` (see the `validate` skill):
   `toven test/lint/format-check/vuln --module go:<name>` or `toven affected ...`.
@@ -91,6 +79,4 @@ gh pr create --base main --title "<conventional-title>" --body-file <path>
 
 ## Baseline
 
-The PR asserts the change meets gokit's engineering baseline ([`../../copilot-instructions.md`](../../copilot-instructions.md));
-if it doesn't yet, run the `review` skill first
-and fix findings rather than opening a PR that fails its own checklist.
+The PR asserts the change meets gokit's engineering baseline ([`../../copilot-instructions.md`](../../copilot-instructions.md)); if it doesn't yet, run the `review` skill first and fix findings rather than opening a PR that fails its own checklist.

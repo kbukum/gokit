@@ -1,10 +1,6 @@
 # gokit development skills
 
-[Agent Skills](https://docs.github.com/copilot/concepts/agents/about-agent-skills) for developing **gokit itself**
-—
-loaded on demand by GitHub Copilot (CLI, coding agent, code review, IDEs) when a task matches a skill's description.
-These are **project skills** for contributors;
-they do not affect anyone who consumes gokit as a library.
+[Agent Skills](https://docs.github.com/copilot/concepts/agents/about-agent-skills) for developing **gokit itself** — loaded on demand by GitHub Copilot (CLI, coding agent, code review, IDEs) when a task matches a skill's description. These are **project skills** for contributors; they do not affect anyone who consumes gokit as a library.
 
 Each skill is a folder with a `SKILL.md` (YAML frontmatter + workflow)
 and optional bundled reference files loaded only when the skill activates (progressive disclosure).
@@ -32,10 +28,6 @@ and drive tasks through [`toven`](../../toven.toml), the repo's argv-first task 
 
 ## Conventions
 
-- Skills are discoverable in Copilot CLI via `/skills`;
-  project skills live under `.github/skills/` (also `.claude/skills` / `.agents/skills` are honored),
-  personal skills under `~/.copilot/skills`.
-- Run reviews (`review`) in a **fresh, clean-context agent**,
-  never inline in the session that wrote the code.
-- Validation is toven-first:
-  prefer `toven <task> --module go:<name>` / `toven affected <task> --base origin/main --merge-base` over hand-rolled `go`/`make` commands.
+- Skills are discoverable in Copilot CLI via `/skills`; project skills live under `.github/skills/` (also `.claude/skills` / `.agents/skills` are honored), personal skills under `~/.copilot/skills`.
+- Run reviews (`review`) in a **fresh, clean-context agent**, never inline in the session that wrote the code.
+- Validation is toven-first: prefer `toven <task> --module go:<name>` / `toven affected <task> --base origin/main --merge-base` over hand-rolled `go`/`make` commands.

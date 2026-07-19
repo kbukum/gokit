@@ -1,7 +1,6 @@
 # auth
 
-Authentication building blocks with locked JWT policy, Argon2id-first password hashing,
-OIDC verification, and shared token validation interfaces.
+Authentication building blocks with locked JWT policy, Argon2id-first password hashing, OIDC verification, and shared token validation interfaces.
 
 For authorization (permission checking, RBAC), see [authz](../authz/).
 

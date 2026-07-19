@@ -46,7 +46,9 @@ result, _ := mgr.Deploy(ctx, workload.DeployRequest{
 ### As a Component
 
 ```go
-comp := workload.NewComponent(workload.Config{Provider: "docker"}, dockerCfg, log)
+reg := workload.NewFactoryRegistry()
+_ = docker.Register(reg)
+comp := workload.NewComponent(reg, workload.Config{Provider: "docker"}, dockerCfg, log)
 comp.Start(ctx)
 defer comp.Stop(ctx)
 
@@ -64,7 +66,7 @@ mgr := comp.Manager()
 | `StatsProvider` | Optional — `Stats(ctx, id)` for CPU/memory/network metrics |
 | `LogStreamer` | Optional — `StreamLogs(ctx, id, opts)` for real-time log streaming |
 | `EventWatcher` | Optional — `WatchEvents(ctx, filter)` for lifecycle events |
-| `NewComponent(cfg, providerCfg, log)` | Create lifecycle-managed component |
+| `NewComponent(registry, cfg, providerCfg, log)` | Create lifecycle-managed component |
 | `DeployRequest` | Name, Image, Command, Environment, Resources, Ports, Volumes |
 | `WorkloadStatus` | ID, Status, Running, Healthy, ExitCode, Restarts |
 | `ParseMemory(s)` | Parse memory strings ("512m", "1g") to bytes |

@@ -1,27 +1,17 @@
 # Review project
 
-Standing, re-runnable **whole-toolkit audit**, independent of any diff. Use it periodically,
-before a release, when onboarding to a module,
-or whenever you want assurance the tree as a whole still honors the baseline.
-It sequences the same eight focused passes in [`references/`](./)
-but over the existing code rather than a change set.
+Standing, re-runnable **whole-toolkit audit**, independent of any diff. Use it periodically, before a release, when onboarding to a module, or whenever you want assurance the tree as a whole still honors the baseline. It sequences the same eight focused passes in [`references/`](./) but over the existing code rather than a change set.
 
 ## Run this in a separate, clean-context agent
 
-**Always dispatch this audit to a fresh agent with no shared session context.** The point of a full audit is an independent read of the code as it exists
-— not filtered through whatever a prior session believed about it.
-Do not run it inline in a session that has been editing the same code.
+**Always dispatch this audit to a fresh agent with no shared session context.** The point of a full audit is an independent read of the code as it exists — not filtered through whatever a prior session believed about it. Do not run it inline in a session that has been editing the same code.
 
 - Hand the agent: the module(s)/domain to audit (or "the whole tree"), this file,
   and the [`references/`](./) folder.
 - The agent judges the code as written,
   against the principles in [`.github/copilot-instructions.md`](../../../copilot-instructions.md) —
   not against any session's recollection.
-- **Optional roadmap check.** If there is a roadmap
-  or versioning plan (e.g. under a `tmp/<plan-name>/` folder, `docs/VERSIONING.md`),
-  pass it in *as context for intended state only* — "here is where the toolkit is meant to be;
-  flag where the tree has not caught up." It frames expectations;
-  it never excuses a baseline violation.
+- **Optional roadmap check.** If there is a roadmap or versioning plan (e.g. under a `tmp/<plan-name>/` folder, `docs/VERSIONING.md`), pass it in *as context for intended state only* — "here is where the toolkit is meant to be; flag where the tree has not caught up." It frames expectations; it never excuses a baseline violation.
 
 ## Scope first to keep the audit tractable
 
@@ -95,6 +85,4 @@ make check                # full canonical gate
 govulncheck ./...         # per module via ./gomod.sh cmd "govulncheck ./..."
 ```
 
-A green `make check` is necessary but **not sufficient** — goroutine leaks,
-missing timeouts/ cancellation, unbounded channels, global-registry composition smells,
-duplicated owners, and boundary-validation gaps are on the reviewer, not the gate.
+A green `make check` is necessary but **not sufficient** — goroutine leaks, missing timeouts/cancellation, unbounded channels, global-registry composition smells, duplicated owners, and boundary-validation gaps are on the reviewer, not the gate.

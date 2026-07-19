@@ -39,7 +39,7 @@ func main() {
 	ctx := context.Background()
 	
 	// Ensure collection exists
-	err := store.EnsureCollection(ctx, "documents", 384)
+	err = store.EnsureCollection(ctx, "documents", 384)
 	if err != nil {
 		panic(err)
 	}
@@ -161,8 +161,7 @@ All conditions are AND-ed together. Only exact matches are supported.
 
 ## Thread Safety
 
-`InMemoryStore` is thread-safe via `sync.RWMutex`.
-Multiple goroutines can safely call methods concurrently.
+`InMemoryStore` is thread-safe via `sync.RWMutex`. Multiple goroutines can safely call methods concurrently.
 
 ## Performance Notes
 
@@ -181,16 +180,14 @@ For production use cases, consider:
 
 ## Testing
 
-Run tests with:
-
 ```bash
-go test ./... -race -count=1
+make test M=vectorstore
 ```
 
 Run linting with:
 
 ```bash
-go vet ./...
+make lint M=vectorstore
 ```
 
 ## Examples

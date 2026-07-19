@@ -1,15 +1,8 @@
 # media
 
-Light, dependency-free media handling for Go: byte-signature type/format detection,
-container metadata reads, cheap pure-Go image ops, pure-Go time/spatial vocabulary,
-and subtitle (SRT/WebVTT) parsing. Zero external dependencies.
+Light, dependency-free media handling for Go: byte-signature type/format detection, container metadata reads, cheap pure-Go image ops, pure-Go time/spatial vocabulary, and subtitle (SRT/WebVTT) parsing. Zero external dependencies.
 
-`media` is a standalone module (`github.com/kbukum/gokit/media`).
-It is the **light** mirror of rskit's media capability: Go handles metadata, format
-and container inspection, cheap image ops, time/spatial math, and subtitle parsing;
-**heavy audio/video/matrix/DSP processing stays rskit-only by design**.
-This is a capability decision, not a parity gap —
-see [Capability split](#capability-split-light-by-design).
+`media` is a standalone module (`github.com/kbukum/gokit/media`). It is the **light** mirror of rskit's media capability: Go handles metadata, format and container inspection, cheap image ops, time/spatial math, and subtitle parsing; **heavy audio/video/matrix/DSP processing stays rskit-only by design**. This is a capability decision, not a parity gap — see [Capability split](#capability-split-light-by-design).
 
 ## Install
 
@@ -54,8 +47,7 @@ info, err := media.DetectFile("/path/to/file.png")
 
 ## Registry & probing
 
-A `Registry` ties the format catalog together with injected `Prober` backends.
-It is constructed explicitly with functional options — no package globals, no `init()` side effects.
+A `Registry` ties the format catalog together with injected `Prober` backends. It is constructed explicitly with functional options — no package globals, no `init()` side effects.
 
 ```go
 reg := media.NewRegistry(media.WithImageProber())
@@ -89,9 +81,7 @@ thumb := media.Thumbnail(img, 256, 256)       // nearest-neighbor, never upscale
 view := media.Crop(img, image.Rect(0, 0, 100, 100))
 ```
 
-Formats outside the stdlib decoders (WebP, TIFF, HEIF, AVIF) are **detected** but not decoded here;
-decoding/processing those is rskit's or an external service's job. `Decode` reads the header first
-and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
+Formats outside the stdlib decoders (WebP, TIFF, HEIF, AVIF) are **detected** but not decoded here; decoding/processing those is rskit's or an external service's job. `Decode` reads the header first and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
 
 ## Time & spatial types (pure Go)
 
@@ -111,8 +101,7 @@ fps := media.NTSC30().Float() // 29.97
 
 ## Subtitles (SRT / WebVTT)
 
-Pure-Go parsing, serialization, time-shifting, and range filtering. HTML tags are stripped
-and (for VTT) entities decoded; malformed timestamps fail closed with `ErrInvalidSubtitle`.
+Pure-Go parsing, serialization, time-shifting, and range filtering. HTML tags are stripped and (for VTT) entities decoded; malformed timestamps fail closed with `ErrInvalidSubtitle`.
 
 ```go
 track, err := media.ParseSRT(srtText)
@@ -135,10 +124,7 @@ vtt := clip.VTT()                         // convert SRT → WebVTT
 | Matrix/DSP, scene detection, waveforms | ➖ (by design) | ✅ |
 | Codec/color/pipeline/output executor vocabulary | ➖ (backend-only) | ✅ |
 
-The heavy path is **rskit or an external service**, never a Go reimplementation.
-gokit deliberately has **no cgo, no ffmpeg, and no Go DSP/matrix code**.
-Backend-only vocabulary (codec, color, filter graphs, pipeline/output configs) is intentionally omitted:
-without a transcoding executor it would be dead surface.
+The heavy path is **rskit or an external service**, never a Go reimplementation. gokit deliberately has **no cgo, no ffmpeg, and no Go DSP/matrix code**. Backend-only vocabulary (codec, color, filter graphs, pipeline/output configs) is intentionally omitted: without a transcoding executor it would be dead surface.
 
 ## Supported formats (detection)
 

@@ -1,8 +1,6 @@
 # codec
 
-Pluggable structured-text codecs (JSON, TOML, …) over a single canonical in-memory model.
-Any package that reads or writes a config file, manifest,
-or document reuses these codecs instead of re-implementing "bounded read → parse → typed error" per format.
+Pluggable structured-text codecs (JSON, TOML, …) over a single canonical in-memory model. Any package that reads or writes a config file, manifest, or document reuses these codecs instead of re-implementing "bounded read → parse → typed error" per format.
 
 ## Install
 

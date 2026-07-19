@@ -1,10 +1,6 @@
 # Go Review — Plan, Clarify, Apply
 
-An alternative orchestrator to [`review-changes.md`](./review-changes.md) / [`review-project.md`](./review-project.md):
-instead of sequencing the 00–07 lenses,
-it fans the review out into **parallel subagent passes by Go concern**, then plans
-and applies fixes.
-Use it when you want one driver to take a change from review through to merged fixes.
+An alternative orchestrator to [`review-changes.md`](./review-changes.md) / [`review-project.md`](./review-project.md): instead of sequencing the 00–07 lenses, it fans the review out into **parallel subagent passes by Go concern**, then plans and applies fixes. Use it when you want one driver to take a change from review through to merged fixes.
 
 Run each pass as a **separate subagent with clean context**.
 The orchestrator (this file) sequences them and collects findings.
@@ -34,9 +30,7 @@ or **project** (whole tree, no diff). State the mode up front.
 3. Determine which passes apply via the triggers below.
    Skip non-applicable passes explicitly in the final report.
 
-The reviewer judges code as written, against the rules below
-and the baseline in [`.github/copilot-instructions.md`](../../../copilot-instructions.md).
-PR descriptions, commit messages, or plan/ADR docs are scope hints only — never justifications.
+The reviewer judges code as written, against the rules below and the baseline in [`.github/copilot-instructions.md`](../../../copilot-instructions.md). PR descriptions, commit messages, or plan/ADR docs are scope hints only — never justifications.
 
 ## Phase 2 — Passes
 
@@ -44,9 +38,7 @@ Run **A first** (cheap, gates the rest). Then **B–F in parallel** where indepe
 Then **G last** (cross-references everything).
 
 Each subagent receives: its scope, the pass spec below, and nothing else.
-Scope `go`/`make` to the touched module(s) with `./gomod.sh cmd "<cmd>" -m <module>`
-or `make check-<domain>`; the unscoped workspace gates are slow across every module
-and belong to sign-off/CI.
+Scope `go`/`make` to the touched module(s) with `./gomod.sh cmd "<cmd>" -m <module>` or `make check-<domain>`; the unscoped workspace gates are slow across every module and belong to sign-off/CI.
 
 ### Pass A — Mechanical (always runs)
 

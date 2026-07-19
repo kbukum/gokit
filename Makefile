@@ -1,6 +1,6 @@
 .PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
-       check-media check-infra clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act
+       check-media check-infra check-devtools clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act
 
 GOMOD := ./gomod.sh
 
@@ -204,6 +204,10 @@ check-media:
 check-infra:
 	@./scripts/check-domain.sh infra
 
+## Check only devtools domain modules
+check-devtools:
+	@./scripts/check-domain.sh devtools
+
 ## Clean build artifacts
 clean:
 	@find . -name "coverage.out" -o -name "coverage.html" | xargs rm -f
@@ -258,6 +262,7 @@ help:
 	@echo "  make check-ai                 Check only ai domain modules"
 	@echo "  make check-media              Check only media domain modules"
 	@echo "  make check-infra              Check only infra domain modules"
+	@echo "  make check-devtools           Check only devtools domain modules"
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
 	@echo "Go version:"
