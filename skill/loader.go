@@ -146,12 +146,12 @@ func (l *Loader) Load(root string) (*Pack, error) {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidUTF8, mdPath)
 	}
 
-	var total int64
-	refs, err := enumerateAssets(canonRoot, "references", &total, l.limits)
+	walker := &assetWalker{root: canonRoot, limits: l.limits}
+	refs, err := walker.dir("references")
 	if err != nil {
 		return nil, err
 	}
-	scripts, err := enumerateDeclaredScripts(canonRoot, manifest.Scripts, &total, l.limits)
+	scripts, err := walker.declaredScripts(manifest.Scripts)
 	if err != nil {
 		return nil, err
 	}
@@ -259,14 +259,23 @@ func readBounded(path string, maxBytes int64) ([]byte, error) {
 	return data, nil
 }
 
-func hashAsset(path string, total *int64, limits Limits) (string, error) {
-	remaining := limits.AssetTotal - *total
+// assetWalker enumerates and hashes a skill pack's inert assets under a confined
+// root. It accumulates the aggregate byte count in total so the total-size budget
+// is enforced across every reference and script within a single pack load.
+type assetWalker struct {
+	root   string
+	limits Limits
+	total  int64
+}
+
+func (w *assetWalker) hashAsset(path string) (string, error) {
+	remaining := w.limits.AssetTotal - w.total
 	if remaining < 0 {
 		remaining = 0
 	}
 	// Bound this read by the smaller of the per-asset and remaining-total budgets
 	// so an oversized asset never fully materializes in memory before the aggregate limit is enforced.
-	limit := limits.Asset
+	limit := w.limits.Asset
 	overTotal := false
 	if remaining < limit {
 		limit = remaining
@@ -279,29 +288,29 @@ func hashAsset(path string, total *int64, limits Limits) (string, error) {
 		}
 		return "", err
 	}
-	*total += int64(len(data))
-	if *total > limits.AssetTotal {
-		return "", fmt.Errorf("%w: reading %s (%d bytes)", ErrAssetsTooLarge, path, *total)
+	w.total += int64(len(data))
+	if w.total > w.limits.AssetTotal {
+		return "", fmt.Errorf("%w: reading %s (%d bytes)", ErrAssetsTooLarge, path, w.total)
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func enumerateDeclaredScripts(canonRoot string, scripts []Script, total *int64, limits Limits) ([]Asset, error) {
+func (w *assetWalker) declaredScripts(scripts []Script) ([]Asset, error) {
 	assets := make([]Asset, 0, len(scripts))
 	for _, script := range scripts {
 		if err := fs.ValidateRelativePath(script.Path); err != nil {
 			return nil, fmt.Errorf("%w: invalid script path %q", ErrInvalidPackFile, script.Path)
 		}
 		clean := filepath.Clean(script.Path)
-		full := filepath.Join(canonRoot, clean)
-		if err := confineToRoot(canonRoot, full); err != nil {
+		full := filepath.Join(w.root, clean)
+		if err := confineToRoot(w.root, full); err != nil {
 			return nil, err
 		}
-		if err := rejectSymlinkSegments(canonRoot, full); err != nil {
+		if err := rejectSymlinkSegments(w.root, full); err != nil {
 			return nil, err
 		}
-		digest, err := hashAsset(full, total, limits)
+		digest, err := w.hashAsset(full)
 		if err != nil {
 			return nil, err
 		}
@@ -311,8 +320,8 @@ func enumerateDeclaredScripts(canonRoot string, scripts []Script, total *int64, 
 	return assets, nil
 }
 
-func enumerateAssets(canonRoot, dir string, total *int64, limits Limits) ([]Asset, error) {
-	base := filepath.Join(canonRoot, filepath.Clean(dir))
+func (w *assetWalker) dir(dir string) ([]Asset, error) {
+	base := filepath.Join(w.root, filepath.Clean(dir))
 	info, err := os.Lstat(base)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -326,7 +335,7 @@ func enumerateAssets(canonRoot, dir string, total *int64, limits Limits) ([]Asse
 	if !info.IsDir() {
 		return nil, fmt.Errorf("%w: %s is not a directory", ErrInvalidPackFile, dir)
 	}
-	if escErr := confineToRoot(canonRoot, base); escErr != nil {
+	if escErr := confineToRoot(w.root, base); escErr != nil {
 		return nil, escErr
 	}
 	var assets []Asset
@@ -340,10 +349,10 @@ func enumerateAssets(canonRoot, dir string, total *int64, limits Limits) ([]Asse
 		if d.IsDir() {
 			return nil
 		}
-		if escErr := confineToRoot(canonRoot, path); escErr != nil {
+		if escErr := confineToRoot(w.root, path); escErr != nil {
 			return escErr
 		}
-		digest, err := hashAsset(path, total, limits)
+		digest, err := w.hashAsset(path)
 		if err != nil {
 			return err
 		}
