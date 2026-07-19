@@ -12,6 +12,7 @@ import (
 type Consumer struct {
 	conn   rabbitConn
 	ch     rabbitChannel
+	dial   func(Config) (rabbitConn, error)
 	cfg    Config
 	topic  string
 	queue  string
@@ -30,7 +31,7 @@ func NewConsumer(cfg Config, topic string) (*Consumer, error) {
 	if err := messaging.ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	return &Consumer{cfg: cfg, topic: topic, queue: queueName(cfg, topic)}, nil
+	return &Consumer{cfg: cfg, topic: topic, queue: queueName(cfg, topic), dial: defaultDialRabbit}, nil
 }
 
 func (c *Consumer) ensureChannel() (rabbitChannel, error) {
@@ -42,7 +43,7 @@ func (c *Consumer) ensureChannel() (rabbitChannel, error) {
 	if c.ch != nil {
 		return c.ch, nil
 	}
-	conn, err := dialRabbit(c.cfg)
+	conn, err := c.dial(c.cfg)
 	if err != nil {
 		return nil, redactError("rabbitmq consumer connect", err)
 	}

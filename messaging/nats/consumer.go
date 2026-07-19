@@ -6,17 +6,20 @@ import (
 	"sync"
 	"time"
 
+	natsgo "github.com/nats-io/nats.go"
+
 	"github.com/kbukum/gokit/messaging"
 )
 
 // Consumer consumes messages from a NATS subject.
 type Consumer struct {
-	conn   natsConn
-	sub    natsSubscription
-	cfg    Config
-	topic  string
-	mu     sync.Mutex
-	closed bool
+	conn    natsConn
+	sub     natsSubscription
+	connect func(string, ...natsgo.Option) (natsConn, error)
+	cfg     Config
+	topic   string
+	mu      sync.Mutex
+	closed  bool
 }
 
 var _ messaging.Consumer = (*Consumer)(nil)
@@ -30,7 +33,7 @@ func NewConsumer(cfg Config, topic string) (*Consumer, error) {
 	if err := messaging.ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	return &Consumer{cfg: cfg, topic: topic}, nil
+	return &Consumer{cfg: cfg, topic: topic, connect: defaultConnectNATS}, nil
 }
 
 func (c *Consumer) ensureSubscription() (natsSubscription, error) {
@@ -46,7 +49,7 @@ func (c *Consumer) ensureSubscription() (natsSubscription, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := connectNATS(c.cfg.URL, opts...)
+	conn, err := c.connect(c.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats consumer connect %s: %w", c.cfg.RedactedURL(), err)
 	}

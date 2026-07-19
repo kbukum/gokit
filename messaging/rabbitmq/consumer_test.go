@@ -66,15 +66,13 @@ func TestConsumerNacksHandlerErrorAndMapsConsumeErrors(t *testing.T) {
 }
 
 func TestConsumerEnsureChannelAndClose(t *testing.T) {
-	original := dialRabbit
-	defer func() { dialRabbit = original }()
 	ch := &fakeRabbitChannel{deliveries: make(chan amqp.Delivery)}
 	conn := &fakeRabbitConn{ch: ch}
-	dialRabbit = func(Config) (rabbitConn, error) { return conn, nil }
 	c, err := NewConsumer(Config{URL: "amqp://localhost:5672/", AllowInsecureDev: true, QueuePrefix: "q"}, "orders")
 	if err != nil {
 		t.Fatalf("NewConsumer: %v", err)
 	}
+	c.dial = func(Config) (rabbitConn, error) { return conn, nil }
 	if c.Topic() != "orders" {
 		t.Fatalf("Topic = %q", c.Topic())
 	}

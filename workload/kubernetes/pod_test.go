@@ -126,7 +126,7 @@ func assertPodSpecTranslated(t *testing.T, spec corev1.PodSpec, wantRestart core
 	if spec.ServiceAccountName != "request-sa" || len(spec.ImagePullSecrets) != 1 || spec.ImagePullSecrets[0].Name != "pull-secret" {
 		t.Fatalf("service account/secrets = %q %#v", spec.ServiceAccountName, spec.ImagePullSecrets)
 	}
-	if spec.DNSPolicy != corev1.DNSNone || spec.DNSConfig.Nameservers[0] != "1.1.1.1" || len(spec.HostAliases) != 1 || !spec.HostNetwork {
+	if spec.DNSPolicy != corev1.DNSNone || spec.DNSConfig == nil || len(spec.DNSConfig.Nameservers) == 0 || spec.DNSConfig.Nameservers[0] != "1.1.1.1" || len(spec.HostAliases) != 1 || !spec.HostNetwork {
 		t.Fatalf("network = policy:%s dns:%#v aliases:%#v host:%v", spec.DNSPolicy, spec.DNSConfig, spec.HostAliases, spec.HostNetwork)
 	}
 	if spec.RestartPolicy != wantRestart {

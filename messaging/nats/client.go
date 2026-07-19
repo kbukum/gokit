@@ -37,7 +37,7 @@ func (c natsConnAdapter) QueueSubscribeSync(subject, queue string) (natsSubscrip
 	return c.conn.QueueSubscribeSync(subject, queue)
 }
 
-var connectNATS = func(url string, opts ...natsgo.Option) (natsConn, error) {
+func defaultConnectNATS(url string, opts ...natsgo.Option) (natsConn, error) {
 	conn, err := natsgo.Connect(url, opts...)
 	if err != nil {
 		return nil, err

@@ -59,7 +59,7 @@ func (c amqpChannelAdapter) ConsumeWithContext(ctx context.Context, queue, consu
 }
 func (c amqpChannelAdapter) Close() error { return c.ch.Close() }
 
-var dialRabbit = func(cfg Config) (rabbitConn, error) {
+func defaultDialRabbit(cfg Config) (rabbitConn, error) {
 	conn, err := dial(cfg)
 	if err != nil {
 		return nil, err

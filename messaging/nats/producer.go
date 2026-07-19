@@ -16,6 +16,7 @@ import (
 // Producer publishes messages to NATS subjects.
 type Producer struct {
 	conn          natsConn
+	connect       func(string, ...natsgo.Option) (natsConn, error)
 	cfg           Config
 	retryAttempts int
 	retryBackoff  time.Duration
@@ -38,7 +39,7 @@ func newProducer(cfg Config, retryAttempts int, retryBackoff time.Duration) (*Pr
 	if retryAttempts <= 0 {
 		retryAttempts = 1
 	}
-	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff}, nil
+	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff, connect: defaultConnectNATS}, nil
 }
 
 func (p *Producer) ensureConnLocked() (natsConn, error) {
@@ -52,7 +53,7 @@ func (p *Producer) ensureConnLocked() (natsConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := connectNATS(p.cfg.URL, opts...)
+	conn, err := p.connect(p.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats producer connect %s: %w", p.cfg.RedactedURL(), err)
 	}

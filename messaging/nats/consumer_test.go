@@ -74,16 +74,14 @@ func TestConsumerHandlerAndReceiveErrors(t *testing.T) {
 }
 
 func TestConsumerEnsureSubscriptionAndClose(t *testing.T) {
-	original := connectNATS
-	defer func() { connectNATS = original }()
 	sub := &fakeNATSSub{msgs: make(chan *natsgo.Msg)}
 	conn := &fakeNATSConn{sub: sub}
-	connectNATS = func(string, ...natsgo.Option) (natsConn, error) { return conn, nil }
 
 	c, err := NewConsumer(Config{URL: "nats://localhost:4222", AllowInsecureDev: true, QueueGroup: "workers"}, "orders")
 	if err != nil {
 		t.Fatalf("NewConsumer: %v", err)
 	}
+	c.connect = func(string, ...natsgo.Option) (natsConn, error) { return conn, nil }
 	if c.Topic() != "orders" {
 		t.Fatalf("Topic = %q", c.Topic())
 	}
