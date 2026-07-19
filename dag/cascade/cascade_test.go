@@ -317,6 +317,51 @@ func TestCascade_InternalEdges(t *testing.T) {
 	}
 }
 
+func TestCascade_InternalEdges_HonorsOrderWithinLevel(t *testing.T) {
+	var mu sync.Mutex
+	order := make([]string, 0, 4)
+
+	makeProvider := func(name string, cost float64) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProviderWithMeta(name,
+			provider.Meta{"cost": cost},
+			func(_ context.Context, _ analysisInput) (analysisResult, error) {
+				mu.Lock()
+				order = append(order, name)
+				mu.Unlock()
+				return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+			})
+	}
+
+	// root fans out to three ready-simultaneous dependents; OrderNodesBy must
+	// order that level deterministically by cost, not by map iteration.
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("fanout", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("root", makeProvider("root", 0.5))
+			b.AddNode("expensive", makeProvider("expensive", 1.0))
+			b.AddNode("cheap", makeProvider("cheap", 0.01))
+			b.AddNode("free", makeProvider("free", 0.0))
+			b.Edge("root", "expensive")
+			b.Edge("root", "cheap")
+			b.Edge("root", "free")
+		}).
+		OrderNodesBy(OrderByCost()).
+		MaxConcurrency(1). // Force sequential so intra-level order is observable.
+		MergeStrategy(mergeResults).
+		Build()
+
+	cascade.Execute(context.Background(), analysisInput{})
+
+	want := []string{"root", "free", "cheap", "expensive"}
+	if len(order) != len(want) {
+		t.Fatalf("expected %d executions, got %d (%v)", len(want), len(order), order)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, order)
+		}
+	}
+}
+
 func TestCascade_StageFailure_Abort(t *testing.T) {
 	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("analyzer crashed")

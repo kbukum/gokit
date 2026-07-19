@@ -32,7 +32,7 @@ func (c *Cascade[I, O]) Execute(ctx context.Context, input I) (O, *CascadeTrace)
 			continue
 		}
 
-		stageResult, stageNodeTraces, err := c.executeStage(ctx, spec, input)
+		stageResult, stageNodeTraces, advanceFn, err := c.executeStage(ctx, spec, input)
 		for k, v := range stageNodeTraces {
 			trace.NodeResults[k] = v
 		}
@@ -61,8 +61,7 @@ func (c *Cascade[I, O]) Execute(ctx context.Context, input I) (O, *CascadeTrace)
 			accumulated = stageResult
 		}
 
-		sb := c.buildStage(spec, input)
-		if sb.advanceFn != nil && !sb.advanceFn(accumulated) {
+		if advanceFn != nil && !advanceFn(accumulated) {
 			exitedEarly = true
 			trace.EarlyExit = true
 			trace.ExitedAtStage = spec.name
@@ -70,7 +69,7 @@ func (c *Cascade[I, O]) Execute(ctx context.Context, input I) (O, *CascadeTrace)
 	}
 
 	if c.finalStage != nil && ctx.Err() == nil {
-		finalResult, finalTraces, err := c.executeStage(ctx, c.finalStage, input)
+		finalResult, finalTraces, _, err := c.executeStage(ctx, c.finalStage, input)
 		for k, v := range finalTraces {
 			trace.NodeResults[k] = v
 		}
@@ -106,13 +105,13 @@ func (c *Cascade[I, O]) buildStage(spec *stageSpec[I, O], input I) *StageBuilder
 	return sb
 }
 
-func (c *Cascade[I, O]) executeStage(ctx context.Context, spec *stageSpec[I, O], input I) (result O, nodeTraces map[string]CascadeNodeTrace, err error) {
+func (c *Cascade[I, O]) executeStage(ctx context.Context, spec *stageSpec[I, O], input I) (result O, nodeTraces map[string]CascadeNodeTrace, advanceFn func(O) bool, err error) {
 	sb := c.buildStage(spec, input)
 	traces := make(map[string]CascadeNodeTrace)
 
 	if len(sb.nodes) == 0 {
 		var zero O
-		return zero, traces, nil
+		return zero, traces, sb.advanceFn, nil
 	}
 
 	stageCtx := ctx
@@ -130,9 +129,11 @@ func (c *Cascade[I, O]) executeStage(ctx context.Context, spec *stageSpec[I, O],
 		traces: traces,
 	}
 	if len(sb.edges) > 0 {
-		return c.executeStageWithEdges(stageCtx, exec)
+		result, _, err = c.executeStageWithEdges(stageCtx, exec)
+	} else {
+		result, _, err = c.executeStageParallel(stageCtx, exec)
 	}
-	return c.executeStageParallel(stageCtx, exec)
+	return result, traces, sb.advanceFn, err
 }
 
 func (c *Cascade[I, O]) orderStageNodes(nodes []*cascadeNode[I, O]) []*cascadeNode[I, O] {
@@ -319,9 +320,9 @@ func (c *Cascade[I, O]) executeStageWithEdges(ctx context.Context, exec stageExe
 
 	var levels [][]string
 	var queue []string
-	for name, deg := range inDegree {
-		if deg == 0 {
-			queue = append(queue, name)
+	for _, n := range exec.nodes {
+		if inDegree[n.name] == 0 {
+			queue = append(queue, n.name)
 		}
 	}
 	for len(queue) > 0 {
@@ -351,7 +352,7 @@ func (c *Cascade[I, O]) executeStageWithEdges(ctx context.Context, exec stageExe
 		}
 
 		levelExec := exec
-		levelExec.nodes = levelNodes
+		levelExec.nodes = c.orderStageNodes(levelNodes)
 		levelResult, levelTraces, err := c.executeStageParallel(ctx, levelExec)
 		for k, v := range levelTraces {
 			exec.traces[k] = v

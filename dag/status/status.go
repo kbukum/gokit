@@ -19,7 +19,7 @@ func (s Status) String() string {
 	return string(s)
 }
 
-// IsTerminal returns true if the node ran.
+// IsTerminal returns true if the node ran to a terminal outcome (Completed or Failed).
 func (s Status) IsTerminal() bool {
 	return s == Completed || s == Failed
 }
