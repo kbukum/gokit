@@ -6,15 +6,13 @@ import (
 	"sync"
 	"time"
 
-	natsgo "github.com/nats-io/nats.go"
-
 	"github.com/kbukum/gokit/messaging"
 )
 
 // Consumer consumes messages from a NATS subject.
 type Consumer struct {
-	conn   *natsgo.Conn
-	sub    *natsgo.Subscription
+	conn   natsConn
+	sub    natsSubscription
 	cfg    Config
 	topic  string
 	mu     sync.Mutex
@@ -35,7 +33,7 @@ func NewConsumer(cfg Config, topic string) (*Consumer, error) {
 	return &Consumer{cfg: cfg, topic: topic}, nil
 }
 
-func (c *Consumer) ensureSubscription() (*natsgo.Subscription, error) {
+func (c *Consumer) ensureSubscription() (natsSubscription, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
@@ -48,11 +46,11 @@ func (c *Consumer) ensureSubscription() (*natsgo.Subscription, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := natsgo.Connect(c.cfg.URL, opts...)
+	conn, err := connectNATS(c.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats consumer connect %s: %w", c.cfg.RedactedURL(), err)
 	}
-	var sub *natsgo.Subscription
+	var sub natsSubscription
 	if c.cfg.QueueGroup != "" {
 		sub, err = conn.QueueSubscribeSync(subject(c.cfg, c.topic), c.cfg.QueueGroup)
 	} else {

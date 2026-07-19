@@ -4,8 +4,62 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kbukum/gokit/database/query"
 	repository "github.com/kbukum/gokit/database/repository"
 )
+
+func TestRepository_DeleteWithCustomIDField(t *testing.T) {
+	db := setupTestDB(t)
+	repo := repository.NewRepository[testModel, string](db, "test", repository.WithIDField("name"))
+	ctx := context.Background()
+	if err := repo.Create(ctx, &testModel{ID: "1", Name: "Alice", Age: 30}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := repo.Delete(ctx, "Alice"); err != nil {
+		t.Fatalf("Delete by custom field: %v", err)
+	}
+	got, err := repo.GetByID(ctx, "1")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("record should be deleted by name field, got %+v", got)
+	}
+}
+
+func TestRepository_WrapsDatabaseErrorsAfterDropTable(t *testing.T) {
+	db := setupTestDB(t)
+	repo := repository.NewRepository[testModel, string](db, "test")
+	ctx := context.Background()
+	if err := repo.Create(ctx, &testModel{ID: "1", Name: "Alice", Age: 30}); err != nil {
+		t.Fatalf("Create seed: %v", err)
+	}
+	if err := db.Migrator().DropTable(&testModel{}); err != nil {
+		t.Fatalf("drop table: %v", err)
+	}
+
+	if _, err := repo.Count(ctx); err == nil {
+		t.Error("expected count error after dropping table")
+	}
+	if _, err := repo.List(ctx, query.Params{Page: 1, PageSize: 10}, query.Config{}); err == nil {
+		t.Error("expected list error after dropping table")
+	}
+	if err := repo.Update(ctx, &testModel{ID: "1", Name: "x"}); err == nil {
+		t.Error("expected update error after dropping table")
+	}
+	if err := repo.Delete(ctx, "1"); err == nil {
+		t.Error("expected delete error after dropping table")
+	}
+	if _, err := repo.FindAllBy(ctx, "name", "Alice"); err == nil {
+		t.Error("expected find-all error after dropping table")
+	}
+	if _, err := repo.FindOneBy(ctx, "name", "Alice"); err == nil {
+		t.Error("expected find-one error after dropping table")
+	}
+	if _, err := repo.GetByID(ctx, "1"); err == nil {
+		t.Error("expected get error after dropping table")
+	}
+}
 
 func TestRepository_Delete(t *testing.T) {
 	db := setupTestDB(t)

@@ -1,6 +1,8 @@
 package embedded_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -43,6 +45,29 @@ func TestDiffModified(t *testing.T) {
 	repo, err := embedded.Open(dir, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	func TestDiffDeleted(t *testing.T) {
+		t.Parallel()
+		dir := initTestRepo(t)
+		commitFile(t, dir, "remove.txt", "remove", "add removable")
+		createTag(t, dir, "before-delete")
+		if err := os.Remove(filepath.Join(dir, "remove.txt")); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, dir, "add", "remove.txt")
+		runGit(t, dir, "commit", "-m", "remove file")
+		repo, err := embedded.Open(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries, err := repo.Diff("before-delete", "HEAD")
+		if err != nil {
+			t.Fatalf("Diff() error: %v", err)
+		}
+		if len(entries) != 1 || entries[0].Path != "remove.txt" || entries[0].Status != git.FileDeleted {
+			t.Fatalf("Diff() = %+v, want deleted remove.txt", entries)
+		}
 	}
 	entries, err := repo.Diff("v1", "HEAD")
 	if err != nil {
@@ -154,6 +179,27 @@ func TestFileAtNotFound(t *testing.T) {
 	repo, err := embedded.Open(dir, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	func TestTreeReadErrors(t *testing.T) {
+		t.Parallel()
+		dir := initTestRepo(t)
+		repo, err := embedded.Open(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.TreeHash("missing", ""); err == nil {
+			t.Fatal("TreeHash(missing ref) expected error")
+		}
+		if _, err := repo.TreeHash("HEAD", "missing-dir"); err == nil {
+			t.Fatal("TreeHash(missing path) expected error")
+		}
+		if _, err := repo.ListEntries("HEAD", "missing-dir"); err == nil {
+			t.Fatal("ListEntries(missing path) expected error")
+		}
+		if _, err := repo.FileAt("missing", "README.md"); err == nil {
+			t.Fatal("FileAt(missing ref) expected error")
+		}
 	}
 	if _, err := repo.FileAt("HEAD", "nonexistent.txt"); err == nil {
 		t.Fatal("FileAt() expected error")
@@ -299,6 +345,15 @@ func TestLog(t *testing.T) {
 			wantLen: 1,
 			wantMsg: []string{"commit one\n"},
 		},
+		{
+			name: "author filter",
+			setup: func(t *testing.T, dir string) git.LogOptions {
+				commitFileAt(t, dir, "author.txt", "author", "author commit", time.Now().Add(2*time.Hour))
+				return git.LogOptions{AuthorFilter: "test@test.com", MaxCount: 1}
+			},
+			wantLen: 1,
+			wantMsg: []string{"author commit\n"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -338,6 +393,27 @@ func TestMergeBase(t *testing.T) {
 	repo, err := embedded.Open(dir, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	func TestMergeBaseAndIsAncestorRefErrors(t *testing.T) {
+		t.Parallel()
+		dir := initTestRepo(t)
+		repo, err := embedded.Open(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := repo.MergeBase("missing", "HEAD"); err == nil {
+			t.Fatal("MergeBase(missing left) expected error")
+		}
+		if _, err := repo.MergeBase("HEAD", "missing"); err == nil {
+			t.Fatal("MergeBase(missing right) expected error")
+		}
+		if _, err := repo.IsAncestor("missing", "HEAD"); err == nil {
+			t.Fatal("IsAncestor(missing left) expected error")
+		}
+		if _, err := repo.IsAncestor("HEAD", "missing"); err == nil {
+			t.Fatal("IsAncestor(missing right) expected error")
+		}
 	}
 	oid, err := repo.MergeBase("HEAD", "feature")
 	if err != nil {
@@ -386,6 +462,34 @@ func TestBlame(t *testing.T) {
 	repo, err := embedded.Open(dir, nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	func TestBlameErrorsAndOutOfRange(t *testing.T) {
+		t.Parallel()
+
+		dir := initTestRepo(t)
+		commitFile(t, dir, "notes.txt", "one\ntwo\n", "add notes")
+		repo, err := embedded.Open(dir, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := repo.Blame("HEAD", "notes.txt", git.WithLineRange(3, 4)); err != nil {
+			t.Fatalf("Blame(out of range) error: %v", err)
+		}
+		lines, err := repo.Blame("HEAD", "notes.txt", git.WithLineRange(0, -1))
+		if err == nil {
+			t.Fatalf("Blame(invalid range) = %+v, want error", lines)
+		}
+		if _, err := repo.Blame("HEAD", "missing.txt"); err == nil {
+			t.Fatal("Blame(missing file) expected error")
+		}
+		if _, err := repo.Blame("missing", "notes.txt"); err == nil {
+			t.Fatal("Blame(missing ref) expected error")
+		}
+		if _, err := repo.Blame("HEAD", "notes.txt", git.WithLineRange(2, 1)); err == nil {
+			t.Fatal("Blame(start > end) expected error")
+		}
 	}
 	lines, err := repo.Blame("HEAD", "notes.txt")
 	if err != nil {

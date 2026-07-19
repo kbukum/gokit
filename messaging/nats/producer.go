@@ -15,7 +15,7 @@ import (
 
 // Producer publishes messages to NATS subjects.
 type Producer struct {
-	conn          *natsgo.Conn
+	conn          natsConn
 	cfg           Config
 	retryAttempts int
 	retryBackoff  time.Duration
@@ -41,7 +41,7 @@ func newProducer(cfg Config, retryAttempts int, retryBackoff time.Duration) (*Pr
 	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff}, nil
 }
 
-func (p *Producer) ensureConnLocked() (*natsgo.Conn, error) {
+func (p *Producer) ensureConnLocked() (natsConn, error) {
 	if p.closed {
 		return nil, messaging.ErrClosed
 	}
@@ -52,7 +52,7 @@ func (p *Producer) ensureConnLocked() (*natsgo.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := natsgo.Connect(p.cfg.URL, opts...)
+	conn, err := connectNATS(p.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats producer connect %s: %w", p.cfg.RedactedURL(), err)
 	}
@@ -144,7 +144,7 @@ func (p *Producer) publish(ctx context.Context, topic string, data []byte, heade
 	return p.publishWithRetry(ctx, conn, msg)
 }
 
-func (p *Producer) publishWithRetry(ctx context.Context, conn *natsgo.Conn, msg *natsgo.Msg) error {
+func (p *Producer) publishWithRetry(ctx context.Context, conn natsConn, msg *natsgo.Msg) error {
 	retryCfg := resilience.RetryConfig{
 		MaxAttempts:    p.retryAttempts,
 		InitialBackoff: p.retryBackoff,

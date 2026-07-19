@@ -3,6 +3,8 @@ package cache
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -120,4 +122,87 @@ func TestTypedStoreLoadSaveDelete(t *testing.T) {
 
 type testState struct {
 	Count int `json:"count"`
+}
+
+func TestMemoryStoreExistsAndGetMany(t *testing.T) {
+	t.Parallel()
+
+	store := NewMemoryStore(MemoryConfig{})
+	ctx := context.Background()
+	if exists, err := store.Exists(ctx, "missing"); err != nil || exists {
+		t.Fatalf("Exists missing = %v, %v", exists, err)
+	}
+	if err := store.Set(ctx, "a", []byte("A"), 0); err != nil {
+		t.Fatalf("Set a: %v", err)
+	}
+	if err := store.Set(ctx, "b", nil, 0); err != nil {
+		t.Fatalf("Set b: %v", err)
+	}
+	if exists, err := store.Exists(ctx, "a"); err != nil || !exists {
+		t.Fatalf("Exists a = %v, %v", exists, err)
+	}
+	got, err := store.GetMany(ctx, []string{"a", "missing", "b"})
+	if err != nil {
+		t.Fatalf("GetMany: %v", err)
+	}
+	if string(got["a"]) != "A" {
+		t.Fatalf("GetMany a = %q", got["a"])
+	}
+	if _, ok := got["missing"]; ok {
+		t.Fatal("GetMany returned missing key")
+	}
+	if got["b"] != nil {
+		t.Fatalf("GetMany b = %#v, want nil value", got["b"])
+	}
+}
+
+func TestMemoryStoreGetManySkipsExpired(t *testing.T) {
+	t.Parallel()
+
+	now := time.Unix(200, 0)
+	store := newMemoryStore(MemoryConfig{}, func() time.Time { return now })
+	ctx := context.Background()
+	if err := store.Set(ctx, "expired", []byte("old"), time.Second); err != nil {
+		t.Fatalf("Set expired: %v", err)
+	}
+	if err := store.Set(ctx, "fresh", []byte("new"), 0); err != nil {
+		t.Fatalf("Set fresh: %v", err)
+	}
+	now = now.Add(time.Second)
+	got, err := store.GetMany(ctx, []string{"expired", "fresh"})
+	if err != nil {
+		t.Fatalf("GetMany: %v", err)
+	}
+	if _, ok := got["expired"]; ok {
+		t.Fatal("GetMany returned expired key")
+	}
+	if string(got["fresh"]) != "new" {
+		t.Fatalf("GetMany fresh = %q", got["fresh"])
+	}
+}
+
+func TestMemoryStoreConcurrentAccess(t *testing.T) {
+	t.Parallel()
+
+	store := NewMemoryStore(MemoryConfig{})
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			key := fmt.Sprintf("k-%d", i%4)
+			if err := store.Set(ctx, key, []byte(key), 0); err != nil {
+				t.Errorf("Set %s: %v", key, err)
+				return
+			}
+			if _, _, err := store.Get(ctx, key); err != nil {
+				t.Errorf("Get %s: %v", key, err)
+			}
+			if _, err := store.Exists(ctx, key); err != nil {
+				t.Errorf("Exists %s: %v", key, err)
+			}
+		}(i)
+	}
+	wg.Wait()
 }

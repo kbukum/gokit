@@ -1,7 +1,9 @@
 package encryption
 
 import (
+	"crypto/cipher"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -324,6 +326,96 @@ func TestKeyRotation_FallbackPattern(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecryptRejectsPayloadWithoutNonce(t *testing.T) {
+	t.Parallel()
+
+	raw := make([]byte, saltSize)
+	ciphertext := base64.StdEncoding.EncodeToString(raw)
+
+	for _, tc := range []struct {
+		name string
+		new  func(string) (Encryptor, error)
+	}{
+		{name: "aes", new: func(key string) (Encryptor, error) { return NewService(key) }},
+		{name: "chacha20", new: func(key string) (Encryptor, error) { return NewChaCha20(key) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			enc, err := tc.new("missing-nonce")
+			if err != nil {
+				t.Fatalf("new encryptor: %v", err)
+			}
+			_, err = enc.Decrypt(ciphertext)
+			if err == nil || !strings.Contains(err.Error(), "ciphertext too short") {
+				t.Fatalf("Decrypt() error = %v, want ciphertext too short", err)
+			}
+		})
+	}
+}
+
+func TestAEADFactoriesRejectInvalidKeyMaterial(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		factory aeadFactory
+	}{
+		{name: "aes", factory: newAESGCM},
+		{name: "chacha20", factory: newChaCha20Poly1305},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if _, err := tc.factory([]byte("short")); err == nil {
+				t.Fatal("expected invalid key material to be rejected")
+			}
+		})
+	}
+}
+
+func TestEncryptWithAEADPropagatesFactoryError(t *testing.T) {
+	t.Parallel()
+
+	want := errors.New("factory unavailable")
+	_, err := encryptWithAEAD([]byte("key"), func([]byte) (cipher.AEAD, error) {
+		return nil, want
+	}, "secret")
+	if !errors.Is(err, want) {
+		t.Fatalf("Encrypt error = %v, want %v", err, want)
+	}
+}
+
+func FuzzDecryptRejectsTamperedPayload(f *testing.F) {
+	svc, err := NewService("fuzz-key")
+	if err != nil {
+		f.Fatalf("NewService: %v", err)
+	}
+	ciphertext, err := svc.Encrypt("authenticated plaintext")
+	if err != nil {
+		f.Fatalf("Encrypt: %v", err)
+	}
+	valid, err := base64.StdEncoding.DecodeString(ciphertext)
+	if err != nil {
+		f.Fatalf("DecodeString: %v", err)
+	}
+
+	f.Add([]byte{0})
+	f.Add([]byte{1, 2, 3, 4})
+	f.Add([]byte("tamper"))
+	f.Fuzz(func(t *testing.T, mutation []byte) {
+		tampered := append([]byte(nil), valid...)
+		tampered[0] ^= 0x80
+		for i, b := range mutation {
+			tampered[i%len(tampered)] ^= b
+		}
+
+		if plaintext, err := svc.Decrypt(base64.StdEncoding.EncodeToString(tampered)); err == nil {
+			t.Fatalf("tampered ciphertext decrypted to %q", plaintext)
+		}
+	})
 }
 
 // ─── 5. Factory pattern (New + WithAlgorithm) ─────────────────────────

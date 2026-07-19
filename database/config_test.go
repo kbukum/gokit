@@ -111,7 +111,43 @@ func TestConfig_ApplyDefaults_PreservesExistingValues(t *testing.T) {
 	}
 }
 
-// TestConfig_Validate_DisabledSkipsValidation tests that disabled config doesn't validate
+// TestConfig_BuildDSN covers DSN precedence and construction from structured fields.
+func TestConfig_BuildDSN(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{
+			name: "explicit DSN takes precedence",
+			cfg:  Config{DSN: "postgres://verbatim", Host: "ignored"},
+			want: "postgres://verbatim",
+		},
+		{
+			name: "empty host yields empty DSN",
+			cfg:  Config{},
+			want: "",
+		},
+		{
+			name: "structured fields with defaults",
+			cfg:  Config{Host: "db.example", User: "u", Password: "p", DBName: "app"},
+			want: "postgres://u:p@db.example:5432/app?sslmode=disable",
+		},
+		{
+			name: "explicit port and sslmode preserved",
+			cfg:  Config{Host: "db.example", Port: 6543, SSLMode: "require", User: "u", Password: "p", DBName: "app"},
+			want: "postgres://u:p@db.example:6543/app?sslmode=require",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.cfg.BuildDSN(); got != tc.want {
+				t.Errorf("BuildDSN() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestConfig_Validate_DisabledSkipsValidation(t *testing.T) {
 	cfg := Config{
 		Enabled: false,

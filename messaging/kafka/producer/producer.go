@@ -20,7 +20,7 @@ const defaultProviderName = "kafka.producer"
 
 // Producer wraps a kafka-go Writer with TLS/SASL and gokit logging.
 type Producer struct {
-	writer         *kafkago.Writer
+	writer         kafkaWriter
 	cfg            kafka.Config
 	name           string
 	retryAttempts  int

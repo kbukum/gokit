@@ -16,7 +16,7 @@ import (
 
 // Consumer wraps a kafka-go Reader with TLS/SASL, backoff, and gokit logging.
 type Consumer struct {
-	reader         *kafkago.Reader
+	reader         kafkaReader
 	topic          string
 	groupID        string
 	log            *logging.Logger

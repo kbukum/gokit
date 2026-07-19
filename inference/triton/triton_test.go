@@ -129,6 +129,44 @@ func TestProviderHealth(t *testing.T) {
 	}
 }
 
+func TestProviderLifecycleAvailabilityAndExecute(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/models/demo/infer":
+			_, _ = w.Write([]byte(`{"model_name":"demo","outputs":[{"name":"label","datatype":"BYTES","shape":[1],"data":["cat"]}]}`))
+		default:
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	provider, err := triton.NewProvider(triton.Config{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+	if provider.Name() != triton.Kind || !provider.IsAvailable(context.Background()) {
+		t.Fatalf("provider state: name=%q available=%v", provider.Name(), provider.IsAvailable(context.Background()))
+	}
+	if health := provider.Health(context.Background()); health.Status != component.StatusDegraded {
+		t.Fatalf("initial Health = %+v", health)
+	}
+	resp, err := provider.Execute(context.Background(), inference.PredictRequest{
+		ModelName: "demo",
+		Inputs:    map[string]inference.Value{"prompt": inference.TextValue("x")},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if resp.Outputs["label"].Tensor.Data.([]string)[0] != "cat" {
+		t.Fatalf("Execute response = %+v", resp)
+	}
+	if err := provider.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+}
+
 func TestProviderPredictSpanAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
@@ -172,5 +210,28 @@ func TestProviderPredictSpanAttributes(t *testing.T) {
 	}
 	if got := attrs[semconv.GenAIResponseModel]; got != "demo" {
 		t.Fatalf("%s = %q, want demo (attrs %#v)", semconv.GenAIResponseModel, got, attrs)
+	}
+}
+
+func TestProviderPredictEncodeError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("server should not be called when request encoding fails")
+	}))
+	defer server.Close()
+
+	provider, err := triton.NewProvider(triton.Config{BaseURL: server.URL})
+	if err != nil {
+		t.Fatalf("NewProvider: %v", err)
+	}
+	_, err = provider.Predict(context.Background(), inference.PredictRequest{
+		ModelName: "demo",
+		Inputs: map[string]inference.Value{
+			"bad": inference.TensorValue(inference.Tensor{DType: "FP32", Shape: []int64{1}, Data: []int{1}}),
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "FP32 data") {
+		t.Fatalf("Predict error = %v", err)
 	}
 }

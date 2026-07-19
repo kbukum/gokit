@@ -15,8 +15,8 @@ import (
 
 // Producer publishes messages through RabbitMQ.
 type Producer struct {
-	conn          *amqp.Connection
-	ch            *amqp.Channel
+	conn          rabbitConn
+	ch            rabbitChannel
 	cfg           Config
 	retryAttempts int
 	retryBackoff  time.Duration
@@ -43,14 +43,14 @@ func newProducer(cfg Config, retryAttempts int, retryBackoff time.Duration) (*Pr
 	return &Producer{cfg: cfg, retryAttempts: retryAttempts, retryBackoff: retryBackoff, declared: make(map[string]struct{})}, nil
 }
 
-func (p *Producer) ensureChannelLocked() (*amqp.Channel, error) {
+func (p *Producer) ensureChannelLocked() (rabbitChannel, error) {
 	if p.closed {
 		return nil, messaging.ErrClosed
 	}
 	if p.ch != nil {
 		return p.ch, nil
 	}
-	conn, err := dial(p.cfg)
+	conn, err := dialRabbit(p.cfg)
 	if err != nil {
 		return nil, redactError("rabbitmq producer connect", err)
 	}
@@ -163,7 +163,7 @@ func (p *Producer) publish(ctx context.Context, topic string, data []byte, heade
 	return p.publishWithRetry(ctx, ch, topic, publishing)
 }
 
-func (p *Producer) publishWithRetry(ctx context.Context, ch *amqp.Channel, topic string, publishing amqp.Publishing) error {
+func (p *Producer) publishWithRetry(ctx context.Context, ch rabbitChannel, topic string, publishing amqp.Publishing) error {
 	retryCfg := resilience.RetryConfig{
 		MaxAttempts:    p.retryAttempts,
 		InitialBackoff: p.retryBackoff,

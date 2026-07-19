@@ -44,7 +44,7 @@ func routingKey(cfg Config, topic string) string {
 	return prefix + "." + topic
 }
 
-func declareExchange(ch *amqp.Channel, cfg Config) error {
+func declareExchange(ch rabbitChannel, cfg Config) error {
 	if cfg.Exchange == "" {
 		return nil
 	}
@@ -54,7 +54,7 @@ func declareExchange(ch *amqp.Channel, cfg Config) error {
 	return nil
 }
 
-func bindQueue(ch *amqp.Channel, cfg Config, queue, bindingKey string) error {
+func bindQueue(ch rabbitChannel, cfg Config, queue, bindingKey string) error {
 	if cfg.Exchange == "" {
 		return nil
 	}
