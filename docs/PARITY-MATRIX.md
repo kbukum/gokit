@@ -1,6 +1,6 @@
 # Cross-Kit Parity Matrix — gokit
 
-This matrix records the gokit side of reusable infrastructure and data/storage parity. The module-presence table is shared with `rskit/docs/PARITY-MATRIX.md`; the capability tables below are gokit-specific.
+This matrix records the gokit side of reusable infrastructure and data/storage parity. The module-presence table is kept identical to rskit's counterpart at https://github.com/kbukum/rskit/blob/main/docs/PARITY-MATRIX.md; the capability tables below are gokit-specific.
 
 ## Module presence & naming (shared cross-kit)
 
@@ -92,5 +92,3 @@ Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
 | Audio/video transcoding, ffmpeg | ➖ by design | ✅ | rskit `contrib/media/ffmpeg`/`audio` |
 | Matrix/DSP, scene detection, waveforms | ➖ by design | ✅ | Rust is stronger for these; rskit-only |
 | Codec/color/filter/pipeline/output executor vocabulary | ➖ backend-only | ✅ | dead surface without a transcoding executor; omitted intentionally |
-
-> Follow-up: mirror this LIGHT-split note in `rskit/docs/PARITY-MATRIX.md` so both kits state the capability boundary identically.
