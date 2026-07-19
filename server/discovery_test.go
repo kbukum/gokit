@@ -74,12 +74,7 @@ func TestDiscoveryServerComponent_LifecycleSuccess(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"test-svc-1",
-		"test-service",
-		"127.0.0.1",
-		9999,
-		[]string{"test", "v1"},
-		map[string]string{"env": "test"},
+		discovery.ServiceInfo{ID: "test-svc-1", Name: "test-service", Address: "127.0.0.1", Port: 9999, Tags: []string{"test", "v1"}, Metadata: map[string]string{"env": "test"}},
 		log,
 	)
 	require.NoError(t, err)
@@ -126,12 +121,7 @@ func TestDiscoveryServerComponent_NameAndComponents(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"svc-123",
-		"my-service",
-		"192.168.1.1",
-		8888,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "svc-123", Name: "my-service", Address: "192.168.1.1", Port: 8888},
 		log,
 	)
 	require.NoError(t, err)
@@ -163,12 +153,7 @@ func TestDiscoveryServerComponent_RegistrationFailure(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"test-svc",
-		"test-service",
-		"127.0.0.1",
-		7777,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "test-svc", Name: "test-service", Address: "127.0.0.1", Port: 7777},
 		log,
 	)
 	require.NoError(t, err)
@@ -198,12 +183,7 @@ func TestDiscoveryServerComponent_DeregistrationError(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"test-svc",
-		"test-service",
-		"127.0.0.1",
-		6666,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "test-svc", Name: "test-service", Address: "127.0.0.1", Port: 6666},
 		log,
 	)
 	require.NoError(t, err)
@@ -238,12 +218,7 @@ func TestDiscoveryServerComponent_NilRegistry(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		nil, // nil registry
-		"test-svc",
-		"test-service",
-		"127.0.0.1",
-		5555,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "test-svc", Name: "test-service", Address: "127.0.0.1", Port: 5555},
 		log,
 	)
 	require.Error(t, err)
@@ -259,12 +234,7 @@ func TestDiscoveryServerComponent_NilInnerComponent(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		nil, // nil inner
 		registry,
-		"test-svc",
-		"test-service",
-		"127.0.0.1",
-		5555,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "test-svc", Name: "test-service", Address: "127.0.0.1", Port: 5555},
 		log,
 	)
 	require.Error(t, err)
@@ -287,12 +257,7 @@ func TestDiscoveryServerComponent_LocalIPResolution(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"test-svc",
-		"test-service",
-		"", // empty address
-		4444,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "test-svc", Name: "test-service", Address: "", Port: 4444}, // empty address
 		log,
 	)
 	// Currently expects address to be provided
@@ -314,12 +279,7 @@ func TestDiscoveryServerComponent_Describe(t *testing.T) {
 	dsc, err := NewDiscoveryServerComponent(
 		inner,
 		registry,
-		"svc-desc",
-		"descriptor-service",
-		"10.0.0.1",
-		3333,
-		nil,
-		nil,
+		discovery.ServiceInfo{ID: "svc-desc", Name: "descriptor-service", Address: "10.0.0.1", Port: 3333},
 		log,
 	)
 	require.NoError(t, err)
@@ -340,14 +300,14 @@ func TestDiscoveryServerComponent_MultipleInstances(t *testing.T) {
 	cfg1 := &Config{Host: "localhost", Port: 2222}
 	srv1 := New(cfg1, log)
 	inner1 := NewComponent(srv1)
-	dsc1, err := NewDiscoveryServerComponent(inner1, registry, "svc-1", "service", "127.0.0.1", 2222, nil, nil, log)
+	dsc1, err := NewDiscoveryServerComponent(inner1, registry, discovery.ServiceInfo{ID: "svc-1", Name: "service", Address: "127.0.0.1", Port: 2222}, log)
 	require.NoError(t, err)
 
 	// Create second instance with different port
 	cfg2 := &Config{Host: "localhost", Port: 1111}
 	srv2 := New(cfg2, log)
 	inner2 := NewComponent(srv2)
-	dsc2, err := NewDiscoveryServerComponent(inner2, registry, "svc-2", "service", "127.0.0.1", 1111, nil, nil, log)
+	dsc2, err := NewDiscoveryServerComponent(inner2, registry, discovery.ServiceInfo{ID: "svc-2", Name: "service", Address: "127.0.0.1", Port: 1111}, log)
 	require.NoError(t, err)
 
 	// Both should coexist in registry

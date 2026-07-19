@@ -172,26 +172,31 @@ func NewManager(store Store, hasher *Hasher) *Manager {
 	return &Manager{store: store, hasher: hasher}
 }
 
+// IssueRequest describes a new API key to issue.
+type IssueRequest struct {
+	KeyID     string
+	OwnerID   string
+	Name      string
+	Prefix    string
+	Scopes    []string
+	ExpiresAt *time.Time
+}
+
 // IssueKey generates and persists a new API key record.
-func (m *Manager) IssueKey(
-	ctx context.Context,
-	keyID, ownerID, name, prefix string,
-	scopes []string,
-	expiresAt *time.Time,
-) (*GenerateResult, *Key, error) {
-	issued, err := m.hasher.GenerateKey(prefix)
+func (m *Manager) IssueKey(ctx context.Context, req IssueRequest) (*GenerateResult, *Key, error) {
+	issued, err := m.hasher.GenerateKey(req.Prefix)
 	if err != nil {
 		return nil, nil, err
 	}
 	record := &Key{
-		ID:        keyID,
-		OwnerID:   ownerID,
-		Name:      name,
+		ID:        req.KeyID,
+		OwnerID:   req.OwnerID,
+		Name:      req.Name,
 		KeyPrefix: issued.KeyPrefix,
 		KeyDigest: issued.KeyDigest,
-		Scopes:    slices.Clone(scopes),
+		Scopes:    slices.Clone(req.Scopes),
 		IsActive:  true,
-		ExpiresAt: expiresAt,
+		ExpiresAt: req.ExpiresAt,
 		CreatedAt: time.Now(),
 	}
 	if err := m.store.Create(ctx, record); err != nil {

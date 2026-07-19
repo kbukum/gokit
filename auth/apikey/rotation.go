@@ -64,7 +64,14 @@ func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationCo
 		prefix = oldKey.KeyPrefix
 	}
 
-	issued, record, err := m.IssueKey(ctx, cfg.NewKeyID, ownerID, name, prefix, scopes, cfg.ExpiresAt)
+	issued, record, err := m.IssueKey(ctx, IssueRequest{
+		KeyID:     cfg.NewKeyID,
+		OwnerID:   ownerID,
+		Name:      name,
+		Prefix:    prefix,
+		Scopes:    scopes,
+		ExpiresAt: cfg.ExpiresAt,
+	})
 	if err != nil {
 		return nil, err
 	}
