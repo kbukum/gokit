@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kbukum/gokit/dag/status"
+
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 )
@@ -147,10 +149,10 @@ func TestWithTracing_InDAG(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusCompleted {
+	if result.NodeResults["a"].Status != status.Completed {
 		t.Fatal("expected a completed")
 	}
-	if result.NodeResults["b"].Status != StatusCompleted {
+	if result.NodeResults["b"].Status != status.Completed {
 		t.Fatal("expected b completed")
 	}
 	if result.NodeResults["b"].Output != "b-got:from-a" {

@@ -2,21 +2,23 @@ package dag
 
 import (
 	"testing"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 func TestNodeResult_Helpers(t *testing.T) {
 	tests := []struct {
-		status     string
+		status     status.Status
 		isTerminal bool
 		isSkipped  bool
 		isSuccess  bool
 	}{
-		{StatusCompleted, true, false, true},
-		{StatusFailed, true, false, false},
-		{StatusSkipped, false, true, false},
-		{StatusUnavailable, false, false, false},
-		{StatusDepUnavailable, false, true, false},
-		{StatusDepFailed, false, true, false},
+		{status.Completed, true, false, true},
+		{status.Failed, true, false, false},
+		{status.Skipped, false, true, false},
+		{status.Unavailable, false, false, false},
+		{status.DepUnavailable, false, true, false},
+		{status.DepFailed, false, true, false},
 	}
 
 	for _, tt := range tests {

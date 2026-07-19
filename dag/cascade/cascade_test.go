@@ -1,4 +1,4 @@
-package dag
+package cascade
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 
 	"github.com/kbukum/gokit/provider"
 )
@@ -416,11 +418,11 @@ func TestCascade_ContinueWithPartial(t *testing.T) {
 	if len(trace.NodeResults) != 2 {
 		t.Errorf("expected 2 node results, got %d", len(trace.NodeResults))
 	}
-	if trace.NodeResults["failing"].Status != StatusFailed {
-		t.Errorf("failing node status = %q, want %q", trace.NodeResults["failing"].Status, StatusFailed)
+	if trace.NodeResults["failing"].Status != status.Failed {
+		t.Errorf("failing node status = %q, want %q", trace.NodeResults["failing"].Status, status.Failed)
 	}
-	if trace.NodeResults["good"].Status != StatusCompleted {
-		t.Errorf("good node status = %q, want %q", trace.NodeResults["good"].Status, StatusCompleted)
+	if trace.NodeResults["good"].Status != status.Completed {
+		t.Errorf("good node status = %q, want %q", trace.NodeResults["good"].Status, status.Completed)
 	}
 }
 
@@ -626,10 +628,10 @@ func TestCascade_TraceCompleteness(t *testing.T) {
 	}
 
 	// Check node results.
-	if trace.NodeResults["metadata"].Status != StatusCompleted {
+	if trace.NodeResults["metadata"].Status != status.Completed {
 		t.Error("metadata should be completed")
 	}
-	if trace.NodeResults["frequency"].Status != StatusCompleted {
+	if trace.NodeResults["frequency"].Status != status.Completed {
 		t.Error("frequency should be completed")
 	}
 
@@ -776,7 +778,7 @@ func TestCascade_SequentialContextCancel(t *testing.T) {
 	// Second and third should be skipped.
 	skipped := 0
 	for _, nt := range trace.NodeResults {
-		if nt.Status == StatusSkipped {
+		if nt.Status == status.Skipped {
 			skipped++
 		}
 	}

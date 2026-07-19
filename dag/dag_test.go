@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 // --- test helpers ---
@@ -223,10 +225,10 @@ func TestEngine_BatchExecution(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusCompleted {
+	if result.NodeResults["a"].Status != status.Completed {
 		t.Fatalf("expected a completed, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != StatusCompleted {
+	if result.NodeResults["b"].Status != status.Completed {
 		t.Fatalf("expected b completed, got %s", result.NodeResults["b"].Status)
 	}
 
@@ -256,7 +258,7 @@ func TestEngine_ErrorPropagation(t *testing.T) {
 	}
 
 	nr := result.NodeResults["a"]
-	if nr.Status != StatusFailed {
+	if nr.Status != status.Failed {
 		t.Fatalf("expected failed, got %s", nr.Status)
 	}
 	if !errors.Is(nr.Error, nodeErr) {

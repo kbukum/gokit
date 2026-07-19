@@ -326,7 +326,12 @@ func TestNewOTLPProviderGRPC(t *testing.T) {
 		Insecure: true,
 	}
 
-	p, err := NewOTLPProvider(cfg, "test-svc", "test", "1.0.0")
+	p, err := NewOTLPProvider(OTLPProviderConfig{
+		Exporter:    cfg,
+		ServiceName: "test-svc",
+		Environment: "test",
+		Version:     "1.0.0",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -350,7 +355,12 @@ func TestNewOTLPProviderHTTP(t *testing.T) {
 		Insecure: true,
 	}
 
-	p, err := NewOTLPProvider(cfg, "test-svc", "test", "1.0.0")
+	p, err := NewOTLPProvider(OTLPProviderConfig{
+		Exporter:    cfg,
+		ServiceName: "test-svc",
+		Environment: "test",
+		Version:     "1.0.0",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

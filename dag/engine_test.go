@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 func TestDeepChain_20Levels(t *testing.T) {
@@ -44,7 +46,7 @@ func TestDeepChain_20Levels(t *testing.T) {
 	for i := 0; i < depth; i++ {
 		name := fmt.Sprintf("n%d", i)
 		nr := result.NodeResults[name]
-		if nr.Status != StatusCompleted {
+		if nr.Status != status.Completed {
 			t.Fatalf("node %s: expected completed, got %s", name, nr.Status)
 		}
 	}
@@ -88,7 +90,7 @@ func TestWideParallelism_50Nodes(t *testing.T) {
 
 	for i := 0; i < count; i++ {
 		name := fmt.Sprintf("w%d", i)
-		if result.NodeResults[name].Status != StatusCompleted {
+		if result.NodeResults[name].Status != status.Completed {
 			t.Fatalf("node %s not completed: %s", name, result.NodeResults[name].Status)
 		}
 	}
@@ -123,13 +125,13 @@ func TestErrorCascade_SkipPolicy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
+	if result.NodeResults["a"].Status != status.Failed {
 		t.Fatalf("expected a failed, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != StatusDepFailed {
+	if result.NodeResults["b"].Status != status.DepFailed {
 		t.Fatalf("expected b dep_failed, got %s", result.NodeResults["b"].Status)
 	}
-	if result.NodeResults["c"].Status != StatusCompleted {
+	if result.NodeResults["c"].Status != status.Completed {
 		t.Fatalf("expected c completed, got %s", result.NodeResults["c"].Status)
 	}
 }
@@ -181,13 +183,13 @@ func TestErrorCascade_ContinuePolicy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
+	if result.NodeResults["a"].Status != status.Failed {
 		t.Fatalf("expected a failed, got %s", result.NodeResults["a"].Status)
 	}
 	if !bRan {
 		t.Fatal("expected b to run despite a's failure")
 	}
-	if result.NodeResults["b"].Status != StatusCompleted {
+	if result.NodeResults["b"].Status != status.Completed {
 		t.Fatalf("expected b completed, got %s", result.NodeResults["b"].Status)
 	}
 }
@@ -216,7 +218,7 @@ func TestContextTimeout_PerNodeSimulation(t *testing.T) {
 		return // context error propagated at engine level — pass
 	}
 	nr := result.NodeResults["slow"]
-	if nr.Status != StatusFailed {
+	if nr.Status != status.Failed {
 		t.Fatalf("expected slow node to fail from timeout, got %s", nr.Status)
 	}
 }
@@ -280,20 +282,20 @@ func TestDiamondWith_OneContinueOneSkip(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
+	if result.NodeResults["a"].Status != status.Failed {
 		t.Fatalf("a: expected failed, got %s", result.NodeResults["a"].Status)
 	}
 	// "a" has OnError=skip, so both "b" and "c" should be dep_failed
-	if result.NodeResults["b"].Status != StatusDepFailed {
+	if result.NodeResults["b"].Status != status.DepFailed {
 		t.Fatalf("b: expected dep_failed, got %s", result.NodeResults["b"].Status)
 	}
-	if result.NodeResults["c"].Status != StatusDepFailed {
+	if result.NodeResults["c"].Status != status.DepFailed {
 		t.Fatalf("c: expected dep_failed, got %s", result.NodeResults["c"].Status)
 	}
 	// "d" depends on both "b" (continue) and "c" (skip)
 	// Since "c" is dep_failed with skip policy, "d" should be skipped
 	dStatus := result.NodeResults["d"].Status
-	if dStatus != StatusDepFailed {
+	if dStatus != status.DepFailed {
 		t.Fatalf("d: expected dep_failed, got %s", dStatus)
 	}
 }
@@ -321,13 +323,13 @@ func TestEngine_UnavailableNodeCascades(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusUnavailable {
+	if result.NodeResults["a"].Status != status.Unavailable {
 		t.Fatalf("a: expected unavailable, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != StatusDepUnavailable {
+	if result.NodeResults["b"].Status != status.DepUnavailable {
 		t.Fatalf("b: expected dep_unavailable, got %s", result.NodeResults["b"].Status)
 	}
-	if result.NodeResults["c"].Status != StatusDepUnavailable {
+	if result.NodeResults["c"].Status != status.DepUnavailable {
 		t.Fatalf("c: expected dep_unavailable, got %s", result.NodeResults["c"].Status)
 	}
 }
@@ -372,7 +374,7 @@ func TestLargeGraph_100Nodes(t *testing.T) {
 	// Verify all nodes completed
 	for name := range nodes {
 		nr := result.NodeResults[name]
-		if nr.Status != StatusCompleted {
+		if nr.Status != status.Completed {
 			t.Fatalf("node %s: expected completed, got %s", name, nr.Status)
 		}
 	}
@@ -414,16 +416,16 @@ func TestEngine_UnavailableSkipsDependents(t *testing.T) {
 	}
 
 	// ser should be unavailable
-	if result.NodeResults["ser"].Status != StatusUnavailable {
-		t.Fatalf("expected ser=%s, got %s", StatusUnavailable, result.NodeResults["ser"].Status)
+	if result.NodeResults["ser"].Status != status.Unavailable {
+		t.Fatalf("expected ser=%s, got %s", status.Unavailable, result.NodeResults["ser"].Status)
 	}
 	// compositor should be skipped due to dep unavailable
-	if result.NodeResults["compositor"].Status != StatusDepUnavailable {
-		t.Fatalf("expected compositor=%s, got %s", StatusDepUnavailable, result.NodeResults["compositor"].Status)
+	if result.NodeResults["compositor"].Status != status.DepUnavailable {
+		t.Fatalf("expected compositor=%s, got %s", status.DepUnavailable, result.NodeResults["compositor"].Status)
 	}
 	// independent should complete normally
-	if result.NodeResults["independent"].Status != StatusCompleted {
-		t.Fatalf("expected independent=%s, got %s", StatusCompleted, result.NodeResults["independent"].Status)
+	if result.NodeResults["independent"].Status != status.Completed {
+		t.Fatalf("expected independent=%s, got %s", status.Completed, result.NodeResults["independent"].Status)
 	}
 }
 
@@ -450,11 +452,11 @@ func TestEngine_FailedSkipsDependents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
-		t.Fatalf("expected a=%s, got %s", StatusFailed, result.NodeResults["a"].Status)
+	if result.NodeResults["a"].Status != status.Failed {
+		t.Fatalf("expected a=%s, got %s", status.Failed, result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != StatusDepFailed {
-		t.Fatalf("expected b=%s, got %s", StatusDepFailed, result.NodeResults["b"].Status)
+	if result.NodeResults["b"].Status != status.DepFailed {
+		t.Fatalf("expected b=%s, got %s", status.DepFailed, result.NodeResults["b"].Status)
 	}
 }
 
@@ -481,12 +483,12 @@ func TestEngine_OnErrorContinue_RunsDependents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
-		t.Fatalf("expected a=%s, got %s", StatusFailed, result.NodeResults["a"].Status)
+	if result.NodeResults["a"].Status != status.Failed {
+		t.Fatalf("expected a=%s, got %s", status.Failed, result.NodeResults["a"].Status)
 	}
 	// b should run because a has on_error=continue
-	if result.NodeResults["b"].Status != StatusCompleted {
-		t.Fatalf("expected b=%s, got %s", StatusCompleted, result.NodeResults["b"].Status)
+	if result.NodeResults["b"].Status != status.Completed {
+		t.Fatalf("expected b=%s, got %s", status.Completed, result.NodeResults["b"].Status)
 	}
 	if result.NodeResults["b"].Output != "b-ran" {
 		t.Fatalf("expected b output='b-ran', got %v", result.NodeResults["b"].Output)
@@ -545,12 +547,12 @@ func TestEngine_MultiLevelCascade(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusUnavailable {
-		t.Fatalf("expected a=%s, got %s", StatusUnavailable, result.NodeResults["a"].Status)
+	if result.NodeResults["a"].Status != status.Unavailable {
+		t.Fatalf("expected a=%s, got %s", status.Unavailable, result.NodeResults["a"].Status)
 	}
 	for _, name := range []string{"b", "c", "d"} {
-		if result.NodeResults[name].Status != StatusDepUnavailable {
-			t.Fatalf("expected %s=%s, got %s", name, StatusDepUnavailable, result.NodeResults[name].Status)
+		if result.NodeResults[name].Status != status.DepUnavailable {
+			t.Fatalf("expected %s=%s, got %s", name, status.DepUnavailable, result.NodeResults[name].Status)
 		}
 	}
 }
@@ -585,18 +587,18 @@ func TestEngine_DiamondWithOnePathUnavailable(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["root"].Status != StatusCompleted {
-		t.Fatalf("expected root=%s, got %s", StatusCompleted, result.NodeResults["root"].Status)
+	if result.NodeResults["root"].Status != status.Completed {
+		t.Fatalf("expected root=%s, got %s", status.Completed, result.NodeResults["root"].Status)
 	}
-	if result.NodeResults["left"].Status != StatusUnavailable {
-		t.Fatalf("expected left=%s, got %s", StatusUnavailable, result.NodeResults["left"].Status)
+	if result.NodeResults["left"].Status != status.Unavailable {
+		t.Fatalf("expected left=%s, got %s", status.Unavailable, result.NodeResults["left"].Status)
 	}
-	if result.NodeResults["right"].Status != StatusCompleted {
-		t.Fatalf("expected right=%s, got %s", StatusCompleted, result.NodeResults["right"].Status)
+	if result.NodeResults["right"].Status != status.Completed {
+		t.Fatalf("expected right=%s, got %s", status.Completed, result.NodeResults["right"].Status)
 	}
 	// merge depends on left (unavailable) so it gets skipped
-	if result.NodeResults["merge"].Status != StatusDepUnavailable {
-		t.Fatalf("expected merge=%s, got %s", StatusDepUnavailable, result.NodeResults["merge"].Status)
+	if result.NodeResults["merge"].Status != status.DepUnavailable {
+		t.Fatalf("expected merge=%s, got %s", status.DepUnavailable, result.NodeResults["merge"].Status)
 	}
 }
 
@@ -629,8 +631,8 @@ func TestEngine_DiamondWithContinueOnError(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["merge"].Status != StatusCompleted {
-		t.Fatalf("expected merge=%s (left on_error=continue), got %s", StatusCompleted, result.NodeResults["merge"].Status)
+	if result.NodeResults["merge"].Status != status.Completed {
+		t.Fatalf("expected merge=%s (left on_error=continue), got %s", status.Completed, result.NodeResults["merge"].Status)
 	}
 }
 
@@ -659,8 +661,8 @@ func TestEngine_StreamingCycleFreshStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cycle 1 error: %v", err)
 	}
-	if result1.NodeResults["compositor"].Status != StatusDepUnavailable {
-		t.Fatalf("cycle 1: expected compositor=%s, got %s", StatusDepUnavailable, result1.NodeResults["compositor"].Status)
+	if result1.NodeResults["compositor"].Status != status.DepUnavailable {
+		t.Fatalf("cycle 1: expected compositor=%s, got %s", status.DepUnavailable, result1.NodeResults["compositor"].Status)
 	}
 
 	// Simulate service becoming available: swap the node
@@ -674,11 +676,11 @@ func TestEngine_StreamingCycleFreshStart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cycle 2 error: %v", err)
 	}
-	if result2.NodeResults["ser"].Status != StatusCompleted {
-		t.Fatalf("cycle 2: expected ser=%s, got %s", StatusCompleted, result2.NodeResults["ser"].Status)
+	if result2.NodeResults["ser"].Status != status.Completed {
+		t.Fatalf("cycle 2: expected ser=%s, got %s", status.Completed, result2.NodeResults["ser"].Status)
 	}
-	if result2.NodeResults["compositor"].Status != StatusCompleted {
-		t.Fatalf("cycle 2: expected compositor=%s, got %s", StatusCompleted, result2.NodeResults["compositor"].Status)
+	if result2.NodeResults["compositor"].Status != status.Completed {
+		t.Fatalf("cycle 2: expected compositor=%s, got %s", status.Completed, result2.NodeResults["compositor"].Status)
 	}
 	if callCount != 1 {
 		t.Fatalf("expected ser to run once in cycle 2, ran %d times", callCount)
@@ -707,12 +709,12 @@ func TestEngine_NoNodeDefs_BackwardCompatible(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusFailed {
-		t.Fatalf("expected a=%s, got %s", StatusFailed, result.NodeResults["a"].Status)
+	if result.NodeResults["a"].Status != status.Failed {
+		t.Fatalf("expected a=%s, got %s", status.Failed, result.NodeResults["a"].Status)
 	}
 	// Default on_error=skip means b is skipped
-	if result.NodeResults["b"].Status != StatusDepFailed {
-		t.Fatalf("expected b=%s, got %s", StatusDepFailed, result.NodeResults["b"].Status)
+	if result.NodeResults["b"].Status != status.DepFailed {
+		t.Fatalf("expected b=%s, got %s", status.DepFailed, result.NodeResults["b"].Status)
 	}
 }
 
@@ -755,13 +757,13 @@ func TestEngine_SignalAnalysisPipeline_SERUnavailable(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["ser"].Status != StatusUnavailable {
-		t.Fatalf("expected ser=%s, got %s", StatusUnavailable, result.NodeResults["ser"].Status)
+	if result.NodeResults["ser"].Status != status.Unavailable {
+		t.Fatalf("expected ser=%s, got %s", status.Unavailable, result.NodeResults["ser"].Status)
 	}
-	if result.NodeResults["signal_compositor"].Status != StatusDepUnavailable {
-		t.Fatalf("expected signal_compositor=%s, got %s", StatusDepUnavailable, result.NodeResults["signal_compositor"].Status)
+	if result.NodeResults["signal_compositor"].Status != status.DepUnavailable {
+		t.Fatalf("expected signal_compositor=%s, got %s", status.DepUnavailable, result.NodeResults["signal_compositor"].Status)
 	}
-	if result.NodeResults["notes"].Status != StatusDepUnavailable {
-		t.Fatalf("expected notes=%s, got %s", StatusDepUnavailable, result.NodeResults["notes"].Status)
+	if result.NodeResults["notes"].Status != status.DepUnavailable {
+		t.Fatalf("expected notes=%s, got %s", status.DepUnavailable, result.NodeResults["notes"].Status)
 	}
 }

@@ -180,13 +180,13 @@ node = dag.WithLogging(node, log)
 
 ## Cascade: Staged Execution Pipeline
 
-For multi-stage processing where each stage is a sub-DAG with its own configuration, conditional advancement, and early exit.
+For multi-stage processing where each stage is a sub-DAG with its own configuration, conditional advancement, and early exit, use the `dag/cascade` subpackage.
 
 ```go
-cascade := dag.NewCascade[Input, Result]().
+c := cascade.NewCascade[Input, Result]().
 
     // Stage 1: cheap, fast checks
-    Stage("quick-check", func(b *dag.StageBuilder[Input, Result], input Input) {
+    Stage("quick-check", func(b *cascade.StageBuilder[Input, Result], input Input) {
         b.AddNode("metadata", metadataAnalyzer)
         b.Timeout(time.Second)
         b.AdvanceWhen(func(r Result) bool {
@@ -195,7 +195,7 @@ cascade := dag.NewCascade[Input, Result]().
     }).
 
     // Stage 2: deeper analysis (parallel within stage)
-    Stage("deep-analysis", func(b *dag.StageBuilder[Input, Result], input Input) {
+    Stage("deep-analysis", func(b *cascade.StageBuilder[Input, Result], input Input) {
         b.AddNode("frequency", frequencyAnalyzer)
         b.AddNode("statistical", statisticalAnalyzer)
         // No edges = parallel execution within stage
@@ -203,18 +203,18 @@ cascade := dag.NewCascade[Input, Result]().
     }).
 
     // Final stage: always runs with all accumulated results
-    FinalStage("fusion", func(b *dag.StageBuilder[Input, Result], input Input) {
+    FinalStage("fusion", func(b *cascade.StageBuilder[Input, Result], input Input) {
         b.AddNode("fusion", fusionEngine)
     }).
 
     // Global configuration
     MergeStrategy(mergeResults).
-    OrderNodesBy(dag.OrderByCost()).
+    OrderNodesBy(cascade.OrderByCost()).
     MaxConcurrency(4).
-    OnStageFailure(dag.SkipToFinal()).
+    OnStageFailure(cascade.SkipToFinal()).
     Build()
 
-result, trace := cascade.Execute(ctx, input)
+result, trace := c.Execute(ctx, input)
 fmt.Println(trace.StagesExecuted) // ["quick-check"]
 fmt.Println(trace.EarlyExit)     // true — confident at stage 1
 ```
@@ -236,13 +236,13 @@ OrderBy affects scheduling when multiple nodes are ready simultaneously and reso
 
 ```go
 // Cheapest nodes first (reads "cost" from provider.Meta)
-OrderNodesBy(dag.OrderByCost())
+OrderNodesBy(cascade.OrderByCost())
 
 // Fastest nodes first (reads "latency_ms" from provider.Meta)
-OrderNodesBy(dag.OrderByLatency())
+OrderNodesBy(cascade.OrderByLatency())
 
 // Multi-objective weighted scoring
-OrderNodesBy(dag.WeightedScore(map[string]float64{
+OrderNodesBy(cascade.WeightedScore(map[string]float64{
     "cost": 0.5, "latency_ms": 0.3, "reliability": 0.2,
 }))
 ```
@@ -264,11 +264,11 @@ OrderNodesBy(dag.WeightedScore(map[string]float64{
 | `Registry` | Named node lookup for dynamic graph construction |
 | `Pipeline` / `NodeDef` | YAML-defined graph definitions with includes, optional, on_error |
 | `Session` | Per-session state and schedule tracking for streaming mode |
-| `NewCascade[I,O]()` | Creates a staged execution pipeline builder |
-| `StageBuilder[I,O]` | Per-stage config: AddNode, Edge, Timeout, AdvanceWhen, OnFailure |
-| `Cascade[I,O]` | Executable staged pipeline with `Execute(ctx, input)` |
-| `CascadeTrace` | Execution details: stages, node results, cost, early exit |
-| `OrderByCost` / `OrderByLatency` / `WeightedScore` | Node ordering strategies |
+| `cascade.NewCascade[I,O]()` | Creates a staged execution pipeline builder |
+| `cascade.StageBuilder[I,O]` | Per-stage config: AddNode, Edge, Timeout, AdvanceWhen, OnFailure |
+| `cascade.Cascade[I,O]` | Executable staged pipeline with `Execute(ctx, input)` |
+| `cascade.CascadeTrace` | Execution details: stages, node results, cost, early exit |
+| `cascade.OrderByCost` / `cascade.OrderByLatency` / `cascade.WeightedScore` | Node ordering strategies |
 | `WithTracing` / `WithMetrics` / `WithLogging` | Observability node wrappers |
 
 ---
