@@ -65,6 +65,32 @@ func TestExecRedactsCredentialsFromFailure(t *testing.T) {
 	}
 }
 
+func TestExecRedactsSensitiveExtraArgs(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-git")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'fatal: request failed' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake-git): %v", err)
+	}
+	const token = "Basic c2VjcmV0LXRva2Vu"
+	backend := New(dir, &model.OpenOptions{
+		CLIPath:   script,
+		ExtraArgs: []string{"-c", "http.extraHeader=Authorization: " + token},
+	})
+
+	_, err := backend.Exec("fetch", "origin")
+	if err == nil {
+		t.Fatal("Exec() expected error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("Exec() error leaked extra-arg secret: %v", err)
+	}
+	if !strings.Contains(err.Error(), "http.extraHeader=***") {
+		t.Fatalf("Exec() error = %v, want redacted extraHeader", err)
+	}
+}
+
 func TestExecMissingBinaryReportsInternalError(t *testing.T) {
 	t.Parallel()
 

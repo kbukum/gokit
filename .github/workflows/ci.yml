@@ -148,7 +148,7 @@ jobs:
             (cd "$mod" && go build ./... && go vet ./...) || { echo "::error::Build/vet failed: $mod"; failed=1; echo "::endgroup::"; continue; }
             testargs=()
             if [ -f "$mod/.coverpkg" ]; then
-              coverpkg=$(tr -d '[:space:]' < "$mod/.coverpkg")
+              coverpkg=$(tr -s '[:space:]' ',' < "$mod/.coverpkg" | sed 's/^,//; s/,$//')
               if [ -n "$coverpkg" ]; then
                 testargs+=("-coverpkg=$coverpkg")
               fi

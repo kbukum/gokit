@@ -45,9 +45,29 @@ func (b *Backend) commandError(args []string, result *process.Result) error {
 	full := append(append([]string(nil), b.extraArgs...), args...)
 	sanitized := make([]string, len(full))
 	for i, arg := range full {
-		sanitized[i] = redactCredentials(arg)
+		sanitized[i] = redactArg(arg)
 	}
 	return fmt.Errorf("git %v: %s", sanitized, msg)
+}
+
+// sensitiveArgKeys are substrings of a `key=value` argument key whose value carries
+// credential material (e.g. `git -c http.extraHeader=Authorization: Basic ...`).
+var sensitiveArgKeys = []string{"extraheader", "authorization", "password", "token", "secret"}
+
+// redactArg masks credentials in a single CLI argument. It redacts URL credentials
+// and the value of any `key=value` argument whose key names a secret, so raw extra
+// args do not leak auth headers or tokens into error messages.
+func redactArg(arg string) string {
+	arg = redactCredentials(arg)
+	if key, value, ok := strings.Cut(arg, "="); ok && value != "" {
+		lower := strings.ToLower(key)
+		for _, name := range sensitiveArgKeys {
+			if strings.Contains(lower, name) {
+				return key + "=***"
+			}
+		}
+	}
+	return arg
 }
 
 // redactCredentials masks credentials in URLs to prevent leakage in error messages and logs.
