@@ -28,8 +28,12 @@ func Merge(base, overlay any) any {
 // Objects merge recursively; on a key collision the overlay value wins.
 // When both sides hold an array at the same key,
 // arrayStrategy is consulted with that key to decide [Replace] vs [Concat].
+// A nil arrayStrategy is treated as always [Replace], matching [Merge].
 // Type mismatches (for example object vs scalar) resolve to the overlay. Neither input is mutated.
 func MergeWith(base, overlay any, arrayStrategy func(key string) ArrayStrategy) any {
+	if arrayStrategy == nil {
+		arrayStrategy = func(string) ArrayStrategy { return Replace }
+	}
 	return merger{arrayStrategy: arrayStrategy}.merge(base, overlay, "", false)
 }
 
