@@ -18,9 +18,9 @@ func (h *Handler) ListRoots(ctx context.Context, ss *sdkmcp.ServerSession, param
 	}
 	res, err := ss.ListRoots(ctx, params)
 	if err != nil {
-		h.policy.AuditAccess(ctx, "roots", "roots/list", security.OutcomeToolError, err.Error())
+		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindRoots, Target: "roots/list", Outcome: security.OutcomeToolError, Reason: err.Error()})
 		return nil, err
 	}
-	h.policy.AuditAccess(ctx, "roots", "roots/list", security.OutcomeSuccess, "")
+	h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindRoots, Target: "roots/list", Outcome: security.OutcomeSuccess, Reason: ""})
 	return res, nil
 }

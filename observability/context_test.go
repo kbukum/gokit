@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewOperationContext(t *testing.T) {
-	oc := NewOperationContext("backend", "create-user", "req-1", "user-1", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "user-1", Metrics: nil})
 
 	if oc.ServiceName != "backend" {
 		t.Errorf("expected ServiceName 'backend', got %s", oc.ServiceName)
@@ -33,7 +33,7 @@ func TestNewOperationContext(t *testing.T) {
 }
 
 func TestOperationContextFromContext(t *testing.T) {
-	oc := NewOperationContext("backend", "create-user", "req-1", "user-1", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "user-1", Metrics: nil})
 	ctx := WithOperationContext(context.Background(), oc)
 
 	retrieved := OperationContextFromContext(ctx)
@@ -53,7 +53,7 @@ func TestOperationContextFromContext_NotSet(t *testing.T) {
 }
 
 func TestOperationContext_Duration(t *testing.T) {
-	oc := NewOperationContext("backend", "create-user", "req-1", "", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "", Metrics: nil})
 	oc.StartTime = time.Now().Add(-50 * time.Millisecond)
 
 	duration := oc.Duration()
@@ -63,7 +63,7 @@ func TestOperationContext_Duration(t *testing.T) {
 }
 
 func TestOperationContext_NilMetrics(t *testing.T) {
-	oc := NewOperationContext("backend", "create-user", "req-1", "", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "", Metrics: nil})
 	ctx := context.Background()
 
 	ctx, span := oc.StartSpanForOperation(ctx, "test.op")
@@ -74,7 +74,7 @@ func TestOperationContextWithMetrics(t *testing.T) {
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
 
-	oc := NewOperationContext("backend", "create-user", "req-1", "user-1", metrics)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "user-1", Metrics: metrics})
 	ctx := context.Background()
 
 	ctx, span := oc.StartSpanForOperation(ctx, "test.op")
@@ -85,7 +85,7 @@ func TestOperationContextEndWithError(t *testing.T) {
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
 
-	oc := NewOperationContext("backend", "create-user", "req-1", "", metrics)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "create-user", RequestID: "req-1", UserID: "", Metrics: metrics})
 	ctx := context.Background()
 
 	ctx, span := oc.StartSpanForOperation(ctx, "test.op")
@@ -93,7 +93,7 @@ func TestOperationContextEndWithError(t *testing.T) {
 }
 
 func TestOperationContextWithMetadata(t *testing.T) {
-	oc := NewOperationContext("backend", "op", "req-1", "", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "backend", OperationName: "op", RequestID: "req-1", UserID: "", Metrics: nil})
 	if oc.Metrics != nil {
 		t.Error("expected nil metrics")
 	}
@@ -107,7 +107,7 @@ func TestOperationContextAllAttributes(t *testing.T) {
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
 
-	oc := NewOperationContext("my-service", "create-user", "req-123", "user-456", metrics)
+	oc := NewOperationContext(OperationSpec{ServiceName: "my-service", OperationName: "create-user", RequestID: "req-123", UserID: "user-456", Metrics: metrics})
 	ctx := context.Background()
 	ctx, span := oc.StartSpanForOperation(ctx, "test.all-attrs")
 	oc.EndOperation(ctx, span, "ok", nil)
@@ -148,7 +148,7 @@ func TestOperationContextWithoutUserID(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	setTracerProvider(t, tp)
 
-	oc := NewOperationContext("svc", "op", "req-1", "", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "", Metrics: nil})
 	ctx := context.Background()
 	ctx, span := oc.StartSpanForOperation(ctx, "test.no-user")
 	oc.EndOperation(ctx, span, "ok", nil)
@@ -170,7 +170,7 @@ func TestOperationContextSpanAttributes(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	setTracerProvider(t, tp)
 
-	oc := NewOperationContext("svc", "op", "req-1", "user-1", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "user-1", Metrics: nil})
 	ctx := context.Background()
 	ctx, span := oc.StartSpanForOperation(ctx, "test.span")
 
@@ -203,7 +203,7 @@ func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
 	setTracerProvider(t, tp)
 
-	oc := NewOperationContext("svc", "op", "req-1", "", nil)
+	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "", Metrics: nil})
 	ctx := context.Background()
 	ctx, span := oc.StartSpanForOperation(ctx, "test.error")
 	testErr := fmt.Errorf("database connection failed")
@@ -242,7 +242,7 @@ func TestConcurrentOperationContexts(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(id int) {
 			defer wg.Done()
-			oc := NewOperationContext("svc", fmt.Sprintf("op-%d", id), fmt.Sprintf("req-%d", id), "", metrics)
+			oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: fmt.Sprintf("op-%d", id), RequestID: fmt.Sprintf("req-%d", id), UserID: "", Metrics: metrics})
 			ctx := context.Background()
 			ctx, span := oc.StartSpanForOperation(ctx, fmt.Sprintf("span-%d", id))
 			oc.EndOperation(ctx, span, "ok", nil)

@@ -36,7 +36,7 @@ func Then[I, M, N any](b *Builder[I, M], step Step[M, N]) *Builder[I, N] {
 			return chainState[N]{}, cancelError(ctx, step.id, runCleanups(ctx, state.cleanups))
 		}
 
-		emitProgress(cctx, stepIndex, step.id, StatusRunning, 0, "")
+		emitProgress(cctx, StepProgress{StepIndex: stepIndex, StepID: step.id, Status: StatusRunning})
 		sctx := newStepContext(ctx, stepProgressReporter(cctx, stepIndex, step.id))
 
 		if step.execute == nil {
@@ -48,7 +48,7 @@ func Then[I, M, N any](b *Builder[I, M], step Step[M, N]) *Builder[I, N] {
 			return chainState[N]{}, stepError(step.id, err, runCleanups(ctx, state.cleanups))
 		}
 
-		emitProgress(cctx, stepIndex, step.id, StatusCompleted, 100, "")
+		emitProgress(cctx, StepProgress{StepIndex: stepIndex, StepID: step.id, Status: StatusCompleted, ProgressPercent: 100})
 
 		cleanups := state.cleanups
 		if step.cleanup != nil {
@@ -66,17 +66,11 @@ func (b *Builder[I, O]) Build() *Chain[I, O] {
 }
 
 // emitProgress forwards a chain-level progress update when a callback is set.
-func emitProgress(cctx chainContext, index int, stepID string, status StepStatus, percent uint8, message string) {
+func emitProgress(cctx chainContext, p StepProgress) {
 	if cctx.progress == nil {
 		return
 	}
-	cctx.progress(StepProgress{
-		StepIndex:       index,
-		StepID:          stepID,
-		Status:          status,
-		ProgressPercent: percent,
-		Message:         message,
-	})
+	cctx.progress(p)
 }
 
 // stepProgressReporter adapts a chain-level callback into the (percent, message) reporter handed to a step's StepContext.

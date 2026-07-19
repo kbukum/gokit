@@ -165,32 +165,48 @@ func (m *Metrics) RecordRequestStart(ctx context.Context) {
 	m.requestActive.Add(ctx, 1)
 }
 
+// RequestMetric describes a completed request for [Metrics.RecordRequestEnd].
+type RequestMetric struct {
+	Service  string
+	Method   string
+	Status   string
+	Duration time.Duration
+}
+
 // RecordRequestEnd decrements active requests and records the completed request.
-func (m *Metrics) RecordRequestEnd(ctx context.Context, service, method, status string, duration time.Duration) {
+func (m *Metrics) RecordRequestEnd(ctx context.Context, r RequestMetric) {
 	attrs := metric.WithAttributes(
-		attribute.String("service", service),
-		attribute.String("method", method),
-		attribute.String("status", status),
+		attribute.String("service", r.Service),
+		attribute.String("method", r.Method),
+		attribute.String("status", r.Status),
 	)
 	m.requestActive.Add(ctx, -1)
 	m.requestTotal.Add(ctx, 1, attrs)
-	m.requestDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
-		attribute.String("service", service),
-		attribute.String("method", method),
+	m.requestDuration.Record(ctx, r.Duration.Seconds(), metric.WithAttributes(
+		attribute.String("service", r.Service),
+		attribute.String("method", r.Method),
 	))
 }
 
+// OperationMetric describes an executed operation for [Metrics.RecordOperation].
+type OperationMetric struct {
+	Service   string
+	Operation string
+	Status    string
+	Duration  time.Duration
+}
+
 // RecordOperation records an operation execution.
-func (m *Metrics) RecordOperation(ctx context.Context, service, operation, status string, duration time.Duration) {
+func (m *Metrics) RecordOperation(ctx context.Context, op OperationMetric) {
 	attrs := metric.WithAttributes(
-		attribute.String("service", service),
-		attribute.String("operation", operation),
-		attribute.String("status", status),
+		attribute.String("service", op.Service),
+		attribute.String("operation", op.Operation),
+		attribute.String("status", op.Status),
 	)
 	m.operationTotal.Add(ctx, 1, attrs)
-	m.operationDuration.Record(ctx, duration.Seconds(), metric.WithAttributes(
-		attribute.String("service", service),
-		attribute.String("operation", operation),
+	m.operationDuration.Record(ctx, op.Duration.Seconds(), metric.WithAttributes(
+		attribute.String("service", op.Service),
+		attribute.String("operation", op.Operation),
 	))
 }
 

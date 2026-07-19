@@ -37,14 +37,15 @@ func (p *GenericProvider) Name() string { return p.cfg.ProviderName }
 
 func (p *GenericProvider) AuthURL(state string, opts ...oidc.AuthURLOption) string {
 	o := oidc.ApplyAuthURLOptions(opts)
-	return BuildAuthURL(
-		p.cfg.AuthEndpoint,
-		p.cfg.ProviderConfig,
-		state, o,
-		p.cfg.AuthExtraParams,
-		p.cfg.ClientIDParam,
-		p.cfg.ScopeSeparator,
-	)
+	return BuildAuthURL(AuthURLRequest{
+		Endpoint:       p.cfg.AuthEndpoint,
+		Config:         p.cfg.ProviderConfig,
+		State:          state,
+		Options:        o,
+		ExtraParams:    p.cfg.AuthExtraParams,
+		ClientIDParam:  p.cfg.ClientIDParam,
+		ScopeSeparator: p.cfg.ScopeSeparator,
+	})
 }
 
 func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oidc.ExchangeOption) (*oidc.TokenResult, error) {
@@ -63,7 +64,15 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 	var result *oidc.TokenResult
 
 	if p.cfg.TokenRequestFormat == "json" {
-		tok, err := ExchangeJSON(ctx, p.cfg.HTTPClient, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.ClientIDParam, p.cfg.TokenExtraHeaders)
+		tok, err := ExchangeJSON(ctx, ExchangeRequest{
+			Client:        p.cfg.HTTPClient,
+			TokenURL:      p.cfg.TokenEndpoint,
+			Config:        cfg,
+			Code:          code,
+			Options:       o,
+			ExtraHeaders:  p.cfg.TokenExtraHeaders,
+			ClientIDParam: p.cfg.ClientIDParam,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
 		}
@@ -73,7 +82,14 @@ func (p *GenericProvider) Exchange(ctx context.Context, code string, opts ...oid
 			result.Scopes = strings.Split(tok.Scope, ",")
 		}
 	} else {
-		tok, err := ExchangeCode(ctx, p.cfg.HTTPClient, p.cfg.TokenEndpoint, cfg, code, o, p.cfg.TokenExtraHeaders)
+		tok, err := ExchangeCode(ctx, ExchangeRequest{
+			Client:       p.cfg.HTTPClient,
+			TokenURL:     p.cfg.TokenEndpoint,
+			Config:       cfg,
+			Code:         code,
+			Options:      o,
+			ExtraHeaders: p.cfg.TokenExtraHeaders,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", p.cfg.ProviderName, err)
 		}
@@ -141,7 +157,11 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 	reqURL := stripAccessTokenPlaceholder(p.cfg.UserInfoEndpoint)
 
 	var raw map[string]any
-	if err := FetchJSON(ctx, p.cfg.HTTPClient, reqURL, accessToken, &raw); err != nil {
+	if err := FetchJSON(ctx, FetchRequest{
+		Client:      p.cfg.HTTPClient,
+		Endpoint:    reqURL,
+		AccessToken: accessToken,
+	}, &raw); err != nil {
 		return nil, fmt.Errorf("%s userinfo: %w", p.cfg.ProviderName, err)
 	}
 

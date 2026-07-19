@@ -54,12 +54,23 @@ func (p *Prompter) Mode() PromptMode { return p.mode }
 // Terminal returns the bound terminal, for inspecting captured output in tests.
 func (p *Prompter) Terminal() Terminal { return p.terminal }
 
+// session binds the terminal, style, and mode threaded through every prompt.
+type session struct {
+	term  Terminal
+	style Style
+	mode  PromptMode
+}
+
+func (p *Prompter) session() session {
+	return session{term: p.terminal, style: p.style, mode: p.mode}
+}
+
 // Select asks for exactly one choice.
 //
 // In [ModeNonInteractive] it resolves to the recommended choice; with none it is a typed error.
 // Interactively it shows a numbered list.
 func (p *Prompter) Select(prompt string, choices []Choice) (ChoiceID, error) {
-	return runSelect(p.terminal, p.style, p.mode, prompt, choices)
+	return p.session().runSelect(prompt, choices)
 }
 
 // MultiSelect asks for zero or more choices.
@@ -67,12 +78,12 @@ func (p *Prompter) Select(prompt string, choices []Choice) (ChoiceID, error) {
 // The default answer is the set of recommended choices, which may be empty.
 // Interactively it accepts a comma-separated list of numbers.
 func (p *Prompter) MultiSelect(prompt string, choices []Choice) ([]ChoiceID, error) {
-	return runMultiSelect(p.terminal, p.style, p.mode, prompt, choices)
+	return p.session().runMultiSelect(prompt, choices)
 }
 
 // Confirm asks a yes/no question with an explicit default.
 func (p *Prompter) Confirm(prompt string, def bool) (bool, error) {
-	return runConfirm(p.terminal, p.style, p.mode, prompt, def)
+	return p.session().runConfirm(prompt, def)
 }
 
 // Text asks for freeform text with an optional default.
@@ -80,7 +91,7 @@ func (p *Prompter) Confirm(prompt string, def bool) (bool, error) {
 // A nil def means no default: in [ModeNonInteractive] that is a typed error.
 func (p *Prompter) Text(prompt string, def *string) (string, error) {
 	value, has := deref(def)
-	return runText(p.terminal, p.style, p.mode, prompt, value, has, nil)
+	return p.session().runText(prompt, value, has, nil)
 }
 
 // TextWith asks for freeform text validated by validator, re-asking on rejection.
@@ -88,7 +99,7 @@ func (p *Prompter) Text(prompt string, def *string) (string, error) {
 // In [ModeNonInteractive] a rejected default is a typed error rather than a silent bad value.
 func (p *Prompter) TextWith(prompt string, def *string, validator Validator) (string, error) {
 	value, has := deref(def)
-	return runText(p.terminal, p.style, p.mode, prompt, value, has, validator)
+	return p.session().runText(prompt, value, has, validator)
 }
 
 func deref(s *string) (string, bool) {

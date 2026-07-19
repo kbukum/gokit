@@ -333,7 +333,7 @@ func TestFetchJSON(t *testing.T) {
 	defer srv.Close()
 
 	var raw map[string]any
-	err := FetchJSON(context.Background(), nil, srv.UserInfoURL(), "test-token", &raw)
+	err := FetchJSON(context.Background(), FetchRequest{Endpoint: srv.UserInfoURL(), AccessToken: "test-token"}, &raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -374,14 +374,14 @@ func TestCommaSeparatedScopesInResponse(t *testing.T) {
 func TestFetchJSON_Errors(t *testing.T) {
 	ctx := context.Background()
 	var out map[string]any
-	if err := FetchJSON(ctx, nil, "http://\x7f/bad", "tok", &out); err == nil {
+	if err := FetchJSON(ctx, FetchRequest{Endpoint: "http://\x7f/bad", AccessToken: "tok"}, &out); err == nil {
 		t.Error("expected request-construction error")
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	url := srv.URL
 	srv.Close()
-	if err := FetchJSON(ctx, nil, url, "tok", &out); err == nil {
+	if err := FetchJSON(ctx, FetchRequest{Endpoint: url, AccessToken: "tok"}, &out); err == nil {
 		t.Error("expected connection error")
 	}
 
@@ -389,7 +389,7 @@ func TestFetchJSON_Errors(t *testing.T) {
 		http.Error(w, "no", http.StatusUnauthorized)
 	}))
 	defer fail.Close()
-	if err := FetchJSON(ctx, nil, fail.URL, "tok", &out); err == nil {
+	if err := FetchJSON(ctx, FetchRequest{Endpoint: fail.URL, AccessToken: "tok"}, &out); err == nil {
 		t.Error("expected HTTP status error")
 	}
 }

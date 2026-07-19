@@ -48,6 +48,17 @@ this pass rejects that.
   no "might need it later" scaffolding. Remove it.
 - **Consistent with neighbors.** Matches the patterns of the surrounding package (option structs, constructor shape, error style) rather than introducing a one-off style.
 
+## Signatures
+
+- **Reduce parameters, don't wrap them.** Go has no column cap and `gofmt` does not wrap signatures,
+  so a function taking 5+ positional parameters is a design signal: fold optional/defaulted
+  or cohesive parameters into a typed request/options struct or functional options,
+  using the owning package's existing `Config`/`...Option` pattern. `context.Context` stays first
+  and is never folded into a struct. A genuinely distinct positional list may stay,
+  but that is a recorded judgment, not the default.
+- **No manual column-wrapping.** A signature hand-broken to hit a column is a fix-by-refactor,
+  not an accepted state; the remedy is fewer parameters, not a wrapped parameter list.
+
 ## Detection starters
 
 Read each hit — size and nesting are signals, not automatic verdicts.

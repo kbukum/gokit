@@ -30,6 +30,14 @@ func (e *Engine) ExecuteStreaming(ctx context.Context, g *Graph, state *State, f
 // NodeFilter returns true if a node should execute in this cycle.
 type NodeFilter func(nodeName string, state *State) bool
 
+// run holds the graph-execution state threaded through a single ExecuteBatch/ExecuteStreaming call.
+type run struct {
+	g         *Graph
+	state     *State
+	result    *Result
+	upstreams map[string][]string
+}
+
 func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter NodeFilter) (*Result, error) {
 	start := time.Now()
 
@@ -44,8 +52,11 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 		upstreams[edge.To] = append(upstreams[edge.To], edge.From)
 	}
 
-	result := &Result{
-		NodeResults: make(map[string]NodeResult),
+	r := &run{
+		g:         g,
+		state:     state,
+		result:    &Result{NodeResults: make(map[string]NodeResult)},
+		upstreams: upstreams,
 	}
 
 	for _, level := range levels {
@@ -56,8 +67,8 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 		var toRun []string
 		for _, name := range level {
 			// Check upstream dependency results from this cycle
-			if skipStatus, shouldSkip := e.checkUpstreams(name, upstreams, result, g, state); shouldSkip {
-				result.NodeResults[name] = NodeResult{
+			if skipStatus, shouldSkip := e.checkUpstreams(r, name); shouldSkip {
+				r.result.NodeResults[name] = NodeResult{
 					Name:   name,
 					Status: skipStatus,
 				}
@@ -66,7 +77,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 
 			// Apply schedule/condition filter
 			if filter != nil && !filter(name, state) {
-				result.NodeResults[name] = NodeResult{
+				r.result.NodeResults[name] = NodeResult{
 					Name:   name,
 					Status: StatusSkipped,
 				}
@@ -80,11 +91,11 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 		}
 
 		// Execute nodes in this level concurrently
-		e.executeLevel(ctx, g, state, toRun, result)
+		e.executeLevel(ctx, r, toRun)
 
 		// Check for on_error=fail after each level
 		for _, name := range toRun {
-			nr, ok := result.NodeResults[name]
+			nr, ok := r.result.NodeResults[name]
 			if !ok {
 				continue
 			}
@@ -92,27 +103,27 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 				continue
 			}
 			if e.nodeFailurePolicy(g.GetNodeDef(name)) == FailFast {
-				result.Duration = time.Since(start)
+				r.result.Duration = time.Since(start)
 				return nil, fmt.Errorf("dag: node %q failed with failure_policy=fail_fast: %w", name, nr.Error)
 			}
 		}
 	}
 
-	result.Duration = time.Since(start)
-	return result, nil
+	r.result.Duration = time.Since(start)
+	return r.result, nil
 }
 
 // checkUpstreams examines this cycle's results for all upstream dependencies.
 // Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed.
 // For skipped dependencies, also checks if state has cached output from a previous cycle.
-func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, result *Result, g *Graph, state *State) (string, bool) {
-	for _, upstream := range upstreams[name] {
-		ur, exists := result.NodeResults[upstream]
+func (e *Engine) checkUpstreams(r *run, name string) (string, bool) {
+	for _, upstream := range r.upstreams[name] {
+		ur, exists := r.result.NodeResults[upstream]
 		if !exists {
 			continue // upstream not yet processed or not in this cycle
 		}
 
-		policy := e.nodeFailurePolicy(g.GetNodeDef(upstream))
+		policy := e.nodeFailurePolicy(r.g.GetNodeDef(upstream))
 		if policy != SkipDependents {
 			continue
 		}
@@ -125,7 +136,7 @@ func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, resu
 		case StatusSkipped, StatusDepSkipped:
 			// Dependency was filtered/skipped this cycle. Only skip the dependent
 			// if the dependency's output isn't available in state from a prior cycle.
-			if _, hasState := state.Get(upstream); !hasState {
+			if _, hasState := r.state.Get(upstream); !hasState {
 				return StatusDepSkipped, true
 			}
 		}
@@ -133,7 +144,7 @@ func (e *Engine) checkUpstreams(name string, upstreams map[string][]string, resu
 	return "", false
 }
 
-func (e *Engine) executeLevel(ctx context.Context, g *Graph, state *State, names []string, result *Result) {
+func (e *Engine) executeLevel(ctx context.Context, r *run, names []string) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -146,9 +157,9 @@ func (e *Engine) executeLevel(ctx context.Context, g *Graph, state *State, names
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			nr := e.executeNode(ctx, g.Nodes[nodeName], state)
+			nr := e.executeNode(ctx, r.g.Nodes[nodeName], r.state)
 			mu.Lock()
-			result.NodeResults[nodeName] = nr
+			r.result.NodeResults[nodeName] = nr
 			mu.Unlock()
 		}(name)
 	}

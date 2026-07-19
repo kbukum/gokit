@@ -22,7 +22,7 @@ func TestDisplaySummaryEmptyComponents(t *testing.T) {
 func TestDisplaySummaryZeroPort(t *testing.T) {
 	s := NewSummary("svc", "1.0")
 	s.SetStartupDuration(50 * time.Millisecond)
-	s.TrackInfrastructure("DB", "database", "active", "localhost", 0, true)
+	s.TrackInfrastructure(InfrastructureInfo{Name: "DB", Type: "database", Status: "active", Details: "localhost", Port: 0, Healthy: true})
 
 	registry := component.NewRegistry()
 	container := di.NewContainer()

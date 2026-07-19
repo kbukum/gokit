@@ -46,7 +46,7 @@ func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting b
 				fmt.Sprintf("failed to create temp file '%s': %v", tempPath, err),
 				http.StatusInternalServerError).WithCause(err)
 		}
-		if err := writeAndPersist(file, tempPath, dest, bytes, replaceExisting); err != nil {
+		if err := writeAndPersist(file, bytes, atomicTarget{tempPath: tempPath, dest: dest, replaceExisting: replaceExisting}); err != nil {
 			_ = os.Remove(tempPath)
 			return err
 		}
@@ -58,34 +58,41 @@ func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting b
 		http.StatusInternalServerError)
 }
 
-func writeAndPersist(file *os.File, tempPath, dest string, bytes []byte, replaceExisting bool) error {
+// atomicTarget describes the destination of an atomic write for writeAndPersist.
+type atomicTarget struct {
+	tempPath        string
+	dest            string
+	replaceExisting bool
+}
+
+func writeAndPersist(file *os.File, bytes []byte, target atomicTarget) error {
 	if _, err := file.Write(bytes); err != nil {
 		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to write temp file '%s': %v", tempPath, err),
+			fmt.Sprintf("failed to write temp file '%s': %v", target.tempPath, err),
 			http.StatusInternalServerError).WithCause(err)
 	}
 	if err := file.Sync(); err != nil {
 		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to sync temp file '%s': %v", tempPath, err),
+			fmt.Sprintf("failed to sync temp file '%s': %v", target.tempPath, err),
 			http.StatusInternalServerError).WithCause(err)
 	}
 	if err := file.Close(); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to close temp file '%s': %v", tempPath, err),
+			fmt.Sprintf("failed to close temp file '%s': %v", target.tempPath, err),
 			http.StatusInternalServerError).WithCause(err)
 	}
-	if replaceExisting && runtime.GOOS == "windows" {
-		if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+	if target.replaceExisting && runtime.GOOS == "windows" {
+		if err := os.Remove(target.dest); err != nil && !os.IsNotExist(err) {
 			return apperrors.New(apperrors.ErrCodeInternal,
-				fmt.Sprintf("failed to remove existing destination '%s': %v", dest, err),
+				fmt.Sprintf("failed to remove existing destination '%s': %v", target.dest, err),
 				http.StatusInternalServerError).WithCause(err)
 		}
 	}
-	if err := os.Rename(tempPath, dest); err != nil {
+	if err := os.Rename(target.tempPath, target.dest); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to rename temp file to '%s': %v", dest, err),
+			fmt.Sprintf("failed to rename temp file to '%s': %v", target.dest, err),
 			http.StatusInternalServerError).WithCause(err)
 	}
 	return nil

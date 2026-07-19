@@ -22,24 +22,24 @@ func recommendedIndex(choices []Choice) int {
 // In non-interactive mode it resolves to the recommended choice (a typed error when none is marked).
 // Interactively it prints a numbered list and reads a one-based number;
 // a blank answer accepts the default when present.
-func runSelect(term Terminal, style Style, mode PromptMode, prompt string, choices []Choice) (ChoiceID, error) {
+func (s session) runSelect(prompt string, choices []Choice) (ChoiceID, error) {
 	if len(choices) == 0 {
 		return "", errors.InvalidInput("prompt", fmt.Sprintf("select requires at least one choice: %s", prompt))
 	}
 	def := recommendedIndex(choices)
 
-	if !mode.IsInteractive() {
+	if !s.mode.IsInteractive() {
 		if def < 0 {
 			return "", nonInteractiveError(prompt)
 		}
 		return choices[def].ID(), nil
 	}
 
-	if err := term.WriteLine(heading(style, prompt)); err != nil {
+	if err := s.term.WriteLine(heading(s.style, prompt)); err != nil {
 		return "", err
 	}
-	for _, row := range numberedRows(style, choices) {
-		if err := term.WriteLine(row); err != nil {
+	for _, row := range numberedRows(s.style, choices) {
+		if err := s.term.WriteLine(row); err != nil {
 			return "", err
 		}
 	}
@@ -48,10 +48,10 @@ func runSelect(term Terminal, style Style, mode PromptMode, prompt string, choic
 		if def >= 0 {
 			hint = fmt.Sprintf("[%d]", def+1)
 		}
-		if err := writeAnswer(term, style, hint); err != nil {
+		if err := writeAnswer(s.term, s.style, hint); err != nil {
 			return "", err
 		}
-		line, ok, err := term.ReadLine()
+		line, ok, err := s.term.ReadLine()
 		if err != nil {
 			return "", err
 		}
@@ -63,7 +63,7 @@ func runSelect(term Terminal, style Style, mode PromptMode, prompt string, choic
 			if def >= 0 {
 				return choices[def].ID(), nil
 			}
-			if err := notice(term, style, "a choice is required"); err != nil {
+			if err := notice(s.term, s.style, "a choice is required"); err != nil {
 				return "", err
 			}
 			continue
@@ -71,7 +71,7 @@ func runSelect(term Terminal, style Style, mode PromptMode, prompt string, choic
 		if index, valid := parseIndex(answer, len(choices)); valid {
 			return choices[index].ID(), nil
 		}
-		if err := notice(term, style, fmt.Sprintf("enter a number between 1 and %d", len(choices))); err != nil {
+		if err := notice(s.term, s.style, fmt.Sprintf("enter a number between 1 and %d", len(choices))); err != nil {
 			return "", err
 		}
 	}

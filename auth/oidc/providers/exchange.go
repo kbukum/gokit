@@ -38,33 +38,33 @@ type tokenResponse struct {
 // ExchangeCode performs a standard OAuth2 authorization code exchange.
 // This is a low-level helper used by GenericProvider.
 // Custom providers that can't use GenericConfig can call this directly.
-func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, extraHeaders map[string]string) (*tokenResponse, error) {
-	redirectURI := opts.RedirectURI
+func ExchangeCode(ctx context.Context, req ExchangeRequest) (*tokenResponse, error) {
+	redirectURI := req.Options.RedirectURI
 	if redirectURI == "" {
-		redirectURI = cfg.RedirectURL
+		redirectURI = req.Config.RedirectURL
 	}
 
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
-		"code":          {code},
-		"client_id":     {cfg.ClientID},
-		"client_secret": {cfg.ClientSecret},
+		"code":          {req.Code},
+		"client_id":     {req.Config.ClientID},
+		"client_secret": {req.Config.ClientSecret},
 		"redirect_uri":  {redirectURI},
 	}
-	if opts.CodeVerifier != "" {
-		data.Set("code_verifier", opts.CodeVerifier)
+	if req.Options.CodeVerifier != "" {
+		data.Set("code_verifier", req.Options.CodeVerifier)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, req.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("create token request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	for k, v := range extraHeaders {
-		req.Header.Set(k, v)
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	for k, v := range req.ExtraHeaders {
+		httpReq.Header.Set(k, v)
 	}
 
-	resp, err := resolveClient(client).Do(req)
+	resp, err := resolveClient(req.Client).Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %w", err)
 	}
@@ -88,26 +88,26 @@ func ExchangeCode(ctx context.Context, client *http.Client, tokenURL string, cfg
 
 // ExchangeJSON performs a token exchange using a JSON request body.
 // Used by providers like TikTok that require JSON instead of form-encoded.
-func ExchangeJSON(ctx context.Context, client *http.Client, tokenURL string, cfg ProviderConfig, code string, opts oidc.ExchangeOptions, clientIDParam string, extraHeaders map[string]string) (*tokenResponse, error) {
-	redirectURI := opts.RedirectURI
+func ExchangeJSON(ctx context.Context, req ExchangeRequest) (*tokenResponse, error) {
+	redirectURI := req.Options.RedirectURI
 	if redirectURI == "" {
-		redirectURI = cfg.RedirectURL
+		redirectURI = req.Config.RedirectURL
 	}
 
 	clientIDKey := "client_id"
-	if clientIDParam != "" {
-		clientIDKey = clientIDParam
+	if req.ClientIDParam != "" {
+		clientIDKey = req.ClientIDParam
 	}
 
 	payload := map[string]string{
-		clientIDKey:     cfg.ClientID,
-		"client_secret": cfg.ClientSecret,
-		"code":          code,
+		clientIDKey:     req.Config.ClientID,
+		"client_secret": req.Config.ClientSecret,
+		"code":          req.Code,
 		"grant_type":    "authorization_code",
 		"redirect_uri":  redirectURI,
 	}
-	if opts.CodeVerifier != "" {
-		payload["code_verifier"] = opts.CodeVerifier
+	if req.Options.CodeVerifier != "" {
+		payload["code_verifier"] = req.Options.CodeVerifier
 	}
 
 	jsonBody, err := json.Marshal(payload)
@@ -115,16 +115,16 @@ func ExchangeJSON(ctx context.Context, client *http.Client, tokenURL string, cfg
 		return nil, fmt.Errorf("marshal token request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(string(jsonBody)))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, req.TokenURL, strings.NewReader(string(jsonBody)))
 	if err != nil {
 		return nil, fmt.Errorf("build token request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	for k, v := range extraHeaders {
-		req.Header.Set(k, v)
+	httpReq.Header.Set("Content-Type", "application/json")
+	for k, v := range req.ExtraHeaders {
+		httpReq.Header.Set(k, v)
 	}
 
-	resp, err := resolveClient(client).Do(req)
+	resp, err := resolveClient(req.Client).Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange: %w", err)
 	}

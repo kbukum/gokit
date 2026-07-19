@@ -27,8 +27,8 @@
 //
 // # REST Convenience
 //
-//	user, err := httpclient.Get[User](adapter, ctx, "/users/123")
-//	created, err := httpclient.Post[User](adapter, ctx, "/users", body)
+//	user, err := httpclient.Get[User](ctx, adapter, "/users/123")
+//	created, err := httpclient.Post[User](ctx, adapter, "/users", body)
 //
 // # With Resilience
 //

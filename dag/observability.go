@@ -58,7 +58,12 @@ func (n *metricsNode) Run(ctx context.Context, state *State) (any, error) {
 		status = "error"
 		n.metrics.RecordError(ctx, "execute", n.inner.Name())
 	}
-	n.metrics.RecordOperation(ctx, n.inner.Name(), "dag.run", status, duration)
+	n.metrics.RecordOperation(ctx, observability.OperationMetric{
+		Service:   n.inner.Name(),
+		Operation: "dag.run",
+		Status:    status,
+		Duration:  duration,
+	})
 
 	return result, err
 }

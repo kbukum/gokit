@@ -86,8 +86,8 @@ func TestNewMetrics(t *testing.T) {
 
 	ctx := context.Background()
 	metrics.RecordRequestStart(ctx)
-	metrics.RecordRequestEnd(ctx, "svc", "GET /test", "ok", 100*time.Millisecond)
-	metrics.RecordOperation(ctx, "svc", "create", "ok", 50*time.Millisecond)
+	metrics.RecordRequestEnd(ctx, RequestMetric{Service: "svc", Method: "GET /test", Status: "ok", Duration: 100 * time.Millisecond})
+	metrics.RecordOperation(ctx, OperationMetric{Service: "svc", Operation: "create", Status: "ok", Duration: 50 * time.Millisecond})
 	metrics.RecordError(ctx, "validation", "handler")
 }
 
@@ -132,7 +132,7 @@ func TestConcurrentRecordRequestStartEnd(t *testing.T) {
 			ctx := context.Background()
 			metrics.RecordRequestStart(ctx)
 			method := fmt.Sprintf("GET /item/%d", id)
-			metrics.RecordRequestEnd(ctx, "svc", method, "ok", 5*time.Millisecond)
+			metrics.RecordRequestEnd(ctx, RequestMetric{Service: "svc", Method: method, Status: "ok", Duration: 5 * time.Millisecond})
 		}(i)
 	}
 	wg.Wait()
@@ -153,7 +153,7 @@ func TestConcurrentRecordOperation(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			ctx := context.Background()
-			metrics.RecordOperation(ctx, "svc", fmt.Sprintf("op-%d", id), "ok", time.Millisecond)
+			metrics.RecordOperation(ctx, OperationMetric{Service: "svc", Operation: fmt.Sprintf("op-%d", id), Status: "ok", Duration: time.Millisecond})
 		}(i)
 	}
 	wg.Wait()

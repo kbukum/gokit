@@ -92,6 +92,19 @@ func TestUnselectedArraysReplaceUnderConcatStrategy(t *testing.T) {
 	}
 }
 
+func TestNilArrayStrategyReplacesWithoutPanic(t *testing.T) {
+	t.Parallel()
+	got := value.MergeWith(
+		obj("ports", []any{1, 2, 3}),
+		obj("ports", []any{9}),
+		nil,
+	)
+	want := obj("ports", []any{9})
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v want %#v", got, want)
+	}
+}
+
 func TestTypeMismatchResolvesToOverlay(t *testing.T) {
 	t.Parallel()
 	got := value.Merge(obj("x", obj("deep", true)), obj("x", 5))

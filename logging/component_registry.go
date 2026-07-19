@@ -154,16 +154,10 @@ func (r *ComponentRegistry) RegisterHandler(method, path, handler string) {
 }
 
 // RegisterConsumer registers a message consumer.
-func (r *ComponentRegistry) RegisterConsumer(name, groupID, topic string, partitions int, status string) {
+func (r *ComponentRegistry) RegisterConsumer(c ConsumerComponent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.consumers = append(r.consumers, ConsumerComponent{
-		Name:       name,
-		Group:      groupID,
-		Topic:      topic,
-		Partitions: partitions,
-		Status:     status,
-	})
+	r.consumers = append(r.consumers, c)
 }
 
 // Infrastructure returns all registered infrastructure components.

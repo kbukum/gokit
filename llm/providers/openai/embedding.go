@@ -148,7 +148,7 @@ func (p *EmbeddingProvider) embedOne(ctx context.Context, req embedding.EmbedReq
 	}
 
 	resp, err := resilience.Execute(ctx, p.policy, func(callCtx context.Context) (*httpclient.TypedResponse[json.RawMessage], error) {
-		return httpclient.Post[json.RawMessage](p.client, callCtx, "/embeddings", reqBody)
+		return httpclient.Post[json.RawMessage](callCtx, p.client, "/embeddings", reqBody)
 	})
 	if err != nil {
 		return embedding.EmbedResponse{}, fmt.Errorf("openai: embedding request failed: %w", err)

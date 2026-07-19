@@ -78,10 +78,10 @@ func TestStoreMethodsRoundTripAgainstHTTP(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	ctx := context.Background()
-	if err := store.Upsert(ctx, "tenant_vectors", "42", []float32{0.1, 0.2}, vectorstore.NewPointPayload().WithField("tag", "blue")); err != nil {
+	if err := store.Upsert(ctx, "tenant_vectors", vectorstore.Point{ID: "42", Vector: []float32{0.1, 0.2}, Payload: vectorstore.NewPointPayload().WithField("tag", "blue")}); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
-	results, err := store.Search(ctx, "tenant_vectors", []float32{0.1, 0.2}, 1, vectorstore.NewSearchFilter().MustMatch("tag", "blue"))
+	results, err := store.Search(ctx, "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1, 0.2}, Limit: 1, Filter: vectorstore.NewSearchFilter().MustMatch("tag", "blue")})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestSearchRejectsUnsupportedUpstreamPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	if _, err := store.Search(context.Background(), "tenant_vectors", []float32{1}, 1, nil); err == nil {
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{1}, Limit: 1, Filter: nil}); err == nil {
 		t.Fatal("expected bad id error")
 	}
 }
@@ -163,10 +163,10 @@ func TestStoreMethodsPropagateNetworkErrors(t *testing.T) {
 	if err := store.EnsureCollection(ctx, "tenant_vectors", 3); err == nil {
 		t.Error("EnsureCollection should fail against unreachable server")
 	}
-	if err := store.Upsert(ctx, "tenant_vectors", "1", []float32{0.1}, nil); err == nil {
+	if err := store.Upsert(ctx, "tenant_vectors", vectorstore.Point{ID: "1", Vector: []float32{0.1}, Payload: nil}); err == nil {
 		t.Error("Upsert should fail against unreachable server")
 	}
-	if _, err := store.Search(ctx, "tenant_vectors", []float32{0.1}, 1, nil); err == nil {
+	if _, err := store.Search(ctx, "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 1, Filter: nil}); err == nil {
 		t.Error("Search should fail against unreachable server")
 	}
 	if err := store.Delete(ctx, "tenant_vectors", "1"); err == nil {
@@ -180,7 +180,7 @@ func TestUpsertRejectsInvalidPointID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	if err := store.Upsert(context.Background(), "tenant_vectors", "not-a-uuid", []float32{0.1}, nil); err == nil {
+	if err := store.Upsert(context.Background(), "tenant_vectors", vectorstore.Point{ID: "not-a-uuid", Vector: []float32{0.1}, Payload: nil}); err == nil {
 		t.Fatal("expected invalid point id error before network")
 	}
 	if err := store.Delete(context.Background(), "tenant_vectors", "not-a-uuid"); err == nil {
@@ -195,7 +195,7 @@ func TestUpsertRejectsUnsupportedPayload(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	payload := vectorstore.NewPointPayload().WithField("nested", map[string]string{"bad": "value"})
-	if err := store.Upsert(context.Background(), "tenant_vectors", "1", []float32{0.1}, payload); err == nil {
+	if err := store.Upsert(context.Background(), "tenant_vectors", vectorstore.Point{ID: "1", Vector: []float32{0.1}, Payload: payload}); err == nil {
 		t.Fatal("expected unsupported payload error before network")
 	}
 }
@@ -207,8 +207,38 @@ func TestSearchRejectsUnsupportedFilterValue(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	filter := vectorstore.NewSearchFilter().MustMatch("nested", map[string]string{"bad": "value"})
-	if _, err := store.Search(context.Background(), "tenant_vectors", []float32{0.1}, 1, filter); err == nil {
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 1, Filter: filter}); err == nil {
 		t.Fatal("expected unsupported filter value error before network")
+	}
+}
+
+func TestSearchRejectsUnsupportedFilterValueWithZeroLimit(t *testing.T) {
+	t.Parallel()
+	store, err := NewStore(Config{URL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	filter := vectorstore.NewSearchFilter().MustMatch("nested", map[string]string{"bad": "value"})
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 0, Filter: filter}); err == nil {
+		t.Fatal("expected unsupported filter value error even when limit is zero")
+	}
+}
+
+func TestSearchZeroLimitReturnsNonNilEmptySlice(t *testing.T) {
+	t.Parallel()
+	store, err := NewStore(Config{URL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	results, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 0})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if results == nil {
+		t.Fatal("expected non-nil empty slice for zero limit, got nil")
+	}
+	if len(results) != 0 {
+		t.Fatalf("expected 0 results for zero limit, got %d", len(results))
 	}
 }
 
@@ -220,7 +250,7 @@ func TestSearchRejectsMalformedResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	if _, err := store.Search(context.Background(), "tenant_vectors", []float32{0.1}, 1, nil); err == nil {
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 1, Filter: nil}); err == nil {
 		t.Fatal("expected decode error for malformed response")
 	}
 }
@@ -234,7 +264,7 @@ func TestSearchRejectsUnsupportedReturnedPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	if _, err := store.Search(context.Background(), "tenant_vectors", []float32{0.1}, 1, nil); err == nil {
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 1, Filter: nil}); err == nil {
 		t.Fatal("expected unsupported returned payload error")
 	}
 }
@@ -290,10 +320,10 @@ func TestStoreMethodsReturnErrorOnUpstreamFailure(t *testing.T) {
 		t.Fatalf("NewStore: %v", err)
 	}
 	ctx := context.Background()
-	if err := store.Upsert(ctx, "tenant_vectors", "1", []float32{0.1}, nil); err == nil {
+	if err := store.Upsert(ctx, "tenant_vectors", vectorstore.Point{ID: "1", Vector: []float32{0.1}, Payload: nil}); err == nil {
 		t.Error("Upsert should surface upstream 500")
 	}
-	if _, err := store.Search(ctx, "tenant_vectors", []float32{0.1}, 1, nil); err == nil {
+	if _, err := store.Search(ctx, "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 1, Filter: nil}); err == nil {
 		t.Error("Search should surface upstream 500")
 	}
 	if err := store.Delete(ctx, "tenant_vectors", "1"); err == nil {

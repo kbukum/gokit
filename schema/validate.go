@@ -134,7 +134,7 @@ func validateValue(s JSON, value any, path string, errs *[]ValidationError) {
 	case "string":
 		validateString(s, value, path, errs)
 	case "number", "integer":
-		validateNumber(s, schemaType, value, path, errs)
+		validateNumber(s, value, path, errs)
 	case "boolean":
 		if _, ok := value.(bool); !ok {
 			*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected boolean, got %T", value)})
@@ -218,7 +218,8 @@ func validateString(s JSON, value any, path string, errs *[]ValidationError) {
 	}
 }
 
-func validateNumber(s JSON, schemaType string, value any, path string, errs *[]ValidationError) {
+func validateNumber(s JSON, value any, path string, errs *[]ValidationError) {
+	schemaType, _ := s["type"].(string)
 	num, ok := value.(float64)
 	if !ok {
 		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected number, got %T", value)})

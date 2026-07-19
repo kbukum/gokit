@@ -30,7 +30,7 @@ func TestGet_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Get[testItem](a, context.Background(), "/items/1")
+	resp, err := Get[testItem](context.Background(), a, "/items/1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestPost_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Post[testItem](a, context.Background(), "/items", testItem{Name: "Gadget"})
+	resp, err := Post[testItem](context.Background(), a, "/items", testItem{Name: "Gadget"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestPut_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Put[testItem](a, context.Background(), "/items/1", testItem{Name: "Updated"})
+	resp, err := Put[testItem](context.Background(), a, "/items/1", testItem{Name: "Updated"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestPatch_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Patch[testItem](a, context.Background(), "/items/1", map[string]string{"name": "Patched"})
+	resp, err := Patch[testItem](context.Background(), a, "/items/1", map[string]string{"name": "Patched"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestDelete_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Delete[map[string]bool](a, context.Background(), "/items/1")
+	resp, err := Delete[map[string]bool](context.Background(), a, "/items/1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestGet_WithOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Get[[]testItem](a, context.Background(), "/items",
+	resp, err := Get[[]testItem](context.Background(), a, "/items",
 		WithQueryParam("page", "2"),
 		WithHeader("X-Trace", "abc"),
 	)
@@ -184,7 +184,7 @@ func TestGet_WithAuthOption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = Get[testItem](a, context.Background(), "/items/1",
+	_, err = Get[testItem](context.Background(), a, "/items/1",
 		WithRequestAuth(BearerAuth("test-token")),
 	)
 	if err != nil {
@@ -204,7 +204,7 @@ func TestGet_ErrorResponse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := Get[map[string]string](a, context.Background(), "/items/999")
+	resp, err := Get[map[string]string](context.Background(), a, "/items/999")
 	if err == nil {
 		t.Fatal("expected error for 404")
 	}

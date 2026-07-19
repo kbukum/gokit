@@ -620,7 +620,7 @@ func TestIntegration_Resilience_Provider_RetryWithProvider(t *testing.T) {
 
 func TestIntegration_Observability_Errors_OperationContextTracksErrors(t *testing.T) {
 	// Create an operation context (without real OTEL — just testing the struct integration)
-	oc := observability.NewOperationContext("test-svc", "db-query", "req-123", "user-456", nil)
+	oc := observability.NewOperationContext(observability.OperationSpec{ServiceName: "test-svc", OperationName: "db-query", RequestID: "req-123", UserID: "user-456", Metrics: nil})
 
 	if oc.ServiceName != "test-svc" {
 		t.Errorf("expected service name 'test-svc', got '%s'", oc.ServiceName)
@@ -640,7 +640,7 @@ func TestIntegration_Observability_Errors_OperationContextTracksErrors(t *testin
 }
 
 func TestIntegration_Observability_Errors_ContextPropagation(t *testing.T) {
-	oc := observability.NewOperationContext("svc", "op", "req-1", "user-1", nil)
+	oc := observability.NewOperationContext(observability.OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "user-1", Metrics: nil})
 	ctx := observability.WithOperationContext(context.Background(), oc)
 
 	// Retrieve from context
@@ -806,7 +806,7 @@ func TestIntegration_Component_Health_ObservabilityContext(t *testing.T) {
 	}
 
 	// Create observability context based on health check
-	oc := observability.NewOperationContext("test-svc", "health-check", "hc-1", "", nil)
+	oc := observability.NewOperationContext(observability.OperationSpec{ServiceName: "test-svc", OperationName: "health-check", RequestID: "hc-1", UserID: "", Metrics: nil})
 	if oc.OperationName != "health-check" {
 		t.Errorf("expected health-check, got %s", oc.OperationName)
 	}

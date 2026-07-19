@@ -20,7 +20,7 @@ func Recovery(log *logging.Logger) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() { //nolint:contextcheck // panic recovery closure passes r.Context() to the panic logger explicitly
 				if err := recover(); err != nil {
-					logRecoveredPanic(r.Context(), log, err, r.URL.Path, r.Method, r.RemoteAddr)
+					logRecoveredPanic(r.Context(), log, err, r)
 					pd := apperrors.Internal(fmt.Errorf("%v", err)).ToProblemDetail()
 					pd.Instance = r.URL.Path
 					w.Header().Set("Content-Type", "application/problem+json")
@@ -43,13 +43,13 @@ func GinRecovery() gin.HandlerFunc {
 
 // logRecoveredPanic logs a recovered panic with stack trace. If log is nil,
 // the global logger is used.
-func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, path, method, remoteAddr string) {
+func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, r *http.Request) {
 	fields := map[string]any{
 		"error":     fmt.Sprintf("%v", err),
 		"stack":     string(debug.Stack()),
-		"path":      path,
-		"method":    method,
-		"remote_ip": remoteAddr,
+		"path":      r.URL.Path,
+		"method":    r.Method,
+		"remote_ip": r.RemoteAddr,
 	}
 	if log != nil {
 		log.ErrorCtx(ctx, "Panic recovered", fields)
