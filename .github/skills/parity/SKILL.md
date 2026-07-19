@@ -2,7 +2,7 @@
 name: parity
 description: >-
     Mirror capabilities from rskit (the Rust reference kit) into gokit by capability, not blindly,
-    and keep docs/parity-matrix.md accurate. Use when porting or aligning a module with its rskit
+    and keep docs/PARITY-MATRIX.md accurate. Use when porting or aligning a module with its rskit
     counterpart, deciding whether something should be fully mirrored or stay rskit-only, or when
     touching anything that has a cross-kit parity row.
 user-invocable: true
@@ -27,7 +27,7 @@ When in doubt about a heavy capability, prefer the light-gokit / strong-rskit sp
 1. **Read the rskit owner.** Find the counterpart crate in the [rskit repo](https://github.com/kbukum/rskit) and study its public API, invariants, and error model — not just its surface.
 2. **Decide the mirroring level** (full / light / kit-only) using the rules above.
 3. **Implement idiomatically in Go** — generics-first, typed errors (`AppError`/RFC 9457), options constructors, no `any` in public APIs. Do not transliterate Rust; match behavior and invariants, express them the Go way. Enforce documented value invariants in code (saturate/clamp, NaN guards, half-open ranges) as gokit `media` does.
-4. **Update `docs/parity-matrix.md`.** Adjust the module-presence row (✅ / ➖ / ⏳) and the gokit-specific capability tables. The module-presence table is a shared cross-kit source (kept identical in `rskit/docs/parity-matrix.md`) — keep both sides consistent and note any intentional divergence.
+4. **Update `docs/PARITY-MATRIX.md`.** Adjust the module-presence row (✅ / ➖ / ⏳) and the gokit-specific capability tables. The module-presence table is a shared cross-kit source (kept identical in `rskit/docs/PARITY-MATRIX.md`) — keep both sides consistent and note any intentional divergence.
 5. **Flag rskit improvements upward.** If aligning gokit exposes a gap, weakness, or redesign opportunity in rskit, note it — rskit is foundational and multi-purpose (not gokit-specific), and is still in development, so improving it generically is wanted. Never make rskit gokit-specific.
 
 ## Naming and cross-references

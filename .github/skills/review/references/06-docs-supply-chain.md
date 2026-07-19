@@ -13,7 +13,7 @@ Docs drift and dependency risk are the quiet failures — the code works, so nob
 
 - **Public API documented.** Every exported identifier has a godoc comment starting with its name; every package has a `doc.go` with a package overview. gokit publishes to **pkg.go.dev**, so godoc *is* the public documentation — missing docs on new exports is a should-fix.
 - **Docs match behavior.** A behavioral change updates the affected godoc, package overview, and any README/example. Stale docs that now describe removed or changed behavior are a should-fix. (Godoc *accuracy* vs the code is pass `07`; this check is that docs were updated at all.)
-- **Canonical docs regenerated.** A module rename/add/remove updates `domains.toml`, `docs/MODULE-INDEX.md`, and `docs/parity-matrix.md` in the same change. A stale parity matrix or module index is a should-fix.
+- **Canonical docs regenerated.** A module rename/add/remove updates `domains.toml`, `docs/MODULE-INDEX.md`, and `docs/PARITY-MATRIX.md` in the same change. A stale parity matrix or module index is a should-fix.
 - **Examples compile.** Example code / `Example` test functions build and reflect the current API.
 - **Prose flows naturally.** Markdown paragraphs stay continuous in source instead of being hard-wrapped to a fixed column; renderers own viewport-aware wrapping. `doc.go` and godoc/`//` prose likewise avoid arbitrary column-based breaks. Intentional paragraph, list, blockquote, table, and code-block structure remains intact. AI-generated hard wraps are a should-fix.
 
@@ -35,7 +35,7 @@ for d in $(find . -name '*.go' -not -name '*_test.go' | xargs -n1 dirname|sort -
 # actions pinned by tag rather than SHA
 grep -rn 'uses:' .github/workflows | grep -v '@[0-9a-f]\{40\}'
 # module map / matrix touched when modules change?
-git diff --name-only | grep -E 'domains.toml|MODULE-INDEX|parity-matrix'
+git diff --name-only | grep -E 'domains.toml|MODULE-INDEX|PARITY-MATRIX'
 ```
 
 ## Validation gate

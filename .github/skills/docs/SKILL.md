@@ -19,7 +19,7 @@ The authoritative doc policy lives in the Documentation section of [`.github/cop
 
 Sweep every committed prose surface, not just `docs/`:
 
-- `docs/**` — `PACKAGES.md`, `MODULE-INDEX.md`, `concern-owners.md`, `EXAMPLES.md`, `VERSIONING*.md`, `RELEASING.md`, `security-model.md`, `parity-matrix.md`, and the ADRs under `docs/adr/`.
+- `docs/**` — `PACKAGES.md`, `MODULE-INDEX.md`, `concern-owners.md`, `EXAMPLES.md`, `VERSIONING*.md`, `RELEASING.md`, `security-model.md`, `PARITY-MATRIX.md`, and the ADRs under `docs/adr/`.
 - `README.md`, `CHANGELOG.md`, `MAINTAINERS.md`, and any top-level `*.md`.
 - `.github/skills/**/SKILL.md` and their `references/*.md`.
 - `doc.go` package documentation and `//` comments in the packages in scope (these are docs too).
@@ -41,7 +41,7 @@ Verify each doc against the code it describes; a doc that lies is worse than no 
 
 - **Commands & gates** match how the repo actually builds — the `Makefile` targets and the argv-first `toven` planner the repo drives tasks through (`make check`, `make lint M=<module>`, `make test M=<module>`, `make check-<domain>`, `make test-affected`). No renamed or removed target/verb lingers in the docs.
 - **Module & package structure** matches reality: the module lists in `PACKAGES.md`/`MODULE-INDEX.md`, `go.work` membership, and the layer direction (`depguard`) match the tree; every package still has a `doc.go`; renamed/added/dropped modules are reflected everywhere they appear (including `concern-owners.md`).
-- **Parity matrix** is current: `parity-matrix.md` reflects which rskit capabilities gokit currently mirrors (see the `parity` skill), including deliberate light-version or rskit-only decisions.
+- **Parity matrix** is current: `PARITY-MATRIX.md` reflects which rskit capabilities gokit currently mirrors (see the `parity` skill), including deliberate light-version or rskit-only decisions.
 - **Examples build.** Code/command examples reflect current behavior and compile.
 - **Links resolve.** Internal relative links and cross-references point at files that exist; other-repo references use full URLs, never bare `#123`.
 
