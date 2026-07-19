@@ -8,6 +8,14 @@
 #   2. God-file (ADVISORY): a package whose non-test code is piled into a single oversized
 #      file is a refactor signal — split it by concern into named sibling files. Reported
 #      as a warning, never a hard failure (small single-file packages are legitimate).
+#   3. Crowded package (ADVISORY): a package directory that has accumulated many non-test
+#      files is a prompt to consider whether separable groups belong in concern-named
+#      sub-packages (sub-folder + declare-only doc.go). File count alone is not a verdict —
+#      a flat set of files that all serve one concern is legitimate; this only surfaces the
+#      candidate. The CROWDED_PKG_FILES default (15) is a deliberately conservative backstop
+#      above the "roughly >5-10" judgment range in the docs, to avoid flagging legitimate
+#      packages; author/reviewer judgment stays the primary signal. Reported as a warning,
+#      never a hard failure.
 #
 # Both checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
 set -euo pipefail
@@ -16,6 +24,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
 god_file_lines="${GOD_FILE_LINES:-600}"
+crowded_pkg_files="${CROWDED_PKG_FILES:-15}"
 
 # ast-grep may be installed into a user-writable prefix by ensure-ast-grep.sh;
 # expose those bin dirs so a freshly installed binary resolves in this process too.
@@ -51,6 +60,23 @@ while IFS= read -r dir; do
   if [ "$lines" -gt "$god_file_lines" ]; then
     printf 'warning: single-file package (%s lines) — split by concern: %s\n' \
       "$lines" "$src" >&2
+  fi
+done < <(find . \
+  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+  -o -type d -print | sort)
+
+# 3. Crowded package (advisory): a package directory with many non-test .go files (excluding
+# doc.go) is a candidate for grouping separable concerns into sub-packages. File count alone is
+# not a verdict; this only surfaces the candidate to judge.
+while IFS= read -r dir; do
+  count=0
+  while IFS= read -r _; do
+    count=$((count + 1))
+  done < <(find "$dir" -maxdepth 1 -name '*.go' -not -name '*_test.go' \
+    -not -name 'doc.go' -type f)
+  if [ "$count" -gt "$crowded_pkg_files" ]; then
+    printf 'warning: crowded package (%s non-test files) — consider grouping separable concerns into sub-packages: %s\n' \
+      "$count" "$dir" >&2
   fi
 done < <(find . \
   \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \

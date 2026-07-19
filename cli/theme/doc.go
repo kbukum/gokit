@@ -7,6 +7,8 @@
 //     honors the NO_COLOR standard and TTY detection.
 //   - [Glyphs] — a semantic symbol set (✓ ✗ ⚠ ℹ • → …) with a pure-ASCII
 //     fallback for terminals without UTF-8 support.
+//   - [Style] — the two bundled together, so renderers thread one value instead of a
+//     separate palette/glyphs pair.
 //
 // Both resolve from a single boolean
 // so callers render identically regardless of terminal capability,

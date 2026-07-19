@@ -11,7 +11,7 @@ import (
 )
 
 func newConsole(buf *bytes.Buffer, cfg live.Config) *live.Console {
-	return live.NewConsole(buf, cfg, theme.NewPalette(false), theme.NewGlyphs(true))
+	return live.NewConsole(buf, cfg, theme.NewStyle(theme.NewPalette(false), theme.NewGlyphs(true)))
 }
 
 func TestConsoleRendersRegionTilesAndLatestLines(t *testing.T) {
@@ -89,7 +89,7 @@ func TestAddRegionEnforcesMaxRegionsBound(t *testing.T) {
 func TestFinishWritesDurableVerdicts(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	console := live.NewConsole(&buf, live.Config{MaxRegions: 3, RegionHeight: 2}, theme.NewPalette(false), theme.NewGlyphs(true))
+	console := live.NewConsole(&buf, live.Config{MaxRegions: 3, RegionHeight: 2}, theme.NewStyle(theme.NewPalette(false), theme.NewGlyphs(true)))
 	ok, _ := console.AddRegion("build")
 	ok.Println("...")
 	ok.Done("passed")
@@ -114,7 +114,7 @@ func TestFinishWritesDurableVerdicts(t *testing.T) {
 func TestFinishUsesASCIIVerdictsWhenGlyphsDisabled(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	console := live.NewConsole(&buf, live.Config{MaxRegions: 2, RegionHeight: 1}, theme.NewPalette(false), theme.NewGlyphs(false))
+	console := live.NewConsole(&buf, live.Config{MaxRegions: 2, RegionHeight: 1}, theme.NewStyle(theme.NewPalette(false), theme.NewGlyphs(false)))
 	ok, _ := console.AddRegion("build")
 	ok.Done("passed")
 	bad, _ := console.AddRegion("test")

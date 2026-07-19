@@ -67,13 +67,14 @@ func (r *Region) snapshot() []string {
 }
 
 // verdictLine renders the region's durable one-line verdict for scrollback.
-func (r *Region) verdictLine(palette theme.Palette, glyphs theme.Glyphs) string {
+func (r *Region) verdictLine(style theme.Style) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	label := r.title
 	if r.reason != "" {
 		label = r.title + ": " + r.reason
 	}
+	palette, glyphs := style.Palette(), style.Glyphs()
 	switch r.status {
 	case statusDone:
 		return palette.Success(glyphs.Success() + " " + label)
