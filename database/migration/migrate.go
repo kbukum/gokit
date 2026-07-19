@@ -138,6 +138,13 @@ func (c Config) Reset() error {
 // newMigrator creates a golang-migrate instance backed by the embedded FS.
 // Callers must NOT call m.Close() — it would close the shared sql.DB.
 func (c Config) newMigrator() (*migrate.Migrate, error) {
+	if c.DB == nil {
+		return nil, errors.New("migration: Config.DB is required")
+	}
+	if c.Driver == nil {
+		return nil, errors.New("migration: Config.Driver is required")
+	}
+
 	sqlDB, err := c.DB.DB()
 	if err != nil {
 		return nil, fmt.Errorf("get sql.DB: %w", err)
