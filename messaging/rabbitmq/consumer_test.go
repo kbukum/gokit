@@ -45,7 +45,9 @@ func TestConsumerNacksHandlerErrorAndMapsConsumeErrors(t *testing.T) {
 	ch := &fakeRabbitChannel{deliveries: deliveries}
 	handlerErr := errors.New("handler failed")
 	c := &Consumer{ch: ch, topic: "orders", queue: "orders"}
-	if err := c.Consume(context.Background(), func(context.Context, messaging.Message) error { return handlerErr }); !errors.Is(err, handlerErr) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.Consume(ctx, func(context.Context, messaging.Message) error { return handlerErr }); !errors.Is(err, handlerErr) {
 		t.Fatalf("handler error = %v", err)
 	}
 	if acks.nacked != 1 {
