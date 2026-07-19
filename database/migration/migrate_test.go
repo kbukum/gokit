@@ -1,9 +1,12 @@
 package migration
 
 import (
+	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/golang-migrate/migrate/v4/database"
 	"gorm.io/gorm"
 )
 
@@ -42,5 +45,20 @@ func TestConfigRequiresDriver(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Config.Driver is required") {
 		t.Fatalf("expected Driver-required error, got %v", err)
+	}
+}
+
+func TestConfigRequiresPath(t *testing.T) {
+	t.Parallel()
+	c := Config{
+		DB:     &gorm.DB{},
+		Driver: func(*sql.DB) (database.Driver, error) { return nil, errors.New("unused") },
+	}
+	err := c.Up()
+	if err == nil {
+		t.Fatal("expected error when Path is missing, got nil")
+	}
+	if !strings.Contains(err.Error(), "Config.Path is required") {
+		t.Fatalf("expected Path-required error, got %v", err)
 	}
 }

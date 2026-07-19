@@ -144,6 +144,9 @@ func (c Config) newMigrator() (*migrate.Migrate, error) {
 	if c.Driver == nil {
 		return nil, errors.New("migration: Config.Driver is required")
 	}
+	if c.Path == "" {
+		return nil, errors.New("migration: Config.Path is required")
+	}
 
 	sqlDB, err := c.DB.DB()
 	if err != nil {
