@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
@@ -32,6 +33,9 @@ type StartConsumerConfig struct {
 //		Log: log,
 //	})
 func StartConsumer(ctx context.Context, cfg StartConsumerConfig) (*ManagedConsumer, error) {
+	if cfg.Handler == nil {
+		return nil, fmt.Errorf("kafka consumer: StartConsumerConfig.Handler is required")
+	}
 	mc, err := NewManagedConsumer(ManagedConsumerConfig{ //nolint:contextcheck // kafka-go connection error logger callback fires without a request context
 		Common: messaging.Config{Adapter: "kafka", ConsumerGroup: cfg.GroupID},
 		Config: cfg.Config,
