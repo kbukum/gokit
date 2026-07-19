@@ -63,8 +63,7 @@ func (s Truncate) Compact(_ context.Context, messages []chat.Message, _ int) ([]
 	return messages[len(messages)-s.KeepLast:], nil
 }
 
-// SlidingWindow drops oldest messages until the token count fits maxTokens, preserving a leading
-// system message.
+// SlidingWindow drops oldest messages until the token count fits maxTokens, preserving a leading system message.
 type SlidingWindow struct{ TokenCounter func([]chat.Message) int }
 
 func (s SlidingWindow) Compact(_ context.Context, messages []chat.Message, maxTokens int) ([]chat.Message, error) {
@@ -99,8 +98,7 @@ func (s SlidingWindow) Compact(_ context.Context, messages []chat.Message, maxTo
 	return rest, nil
 }
 
-// Summarize replaces the older messages with an LLM-generated summary, keeping the last KeepLast
-// verbatim.
+// Summarize replaces the older messages with an LLM-generated summary, keeping the last KeepLast verbatim.
 type Summarize struct {
 	Provider      llm.Provider
 	KeepLast      int

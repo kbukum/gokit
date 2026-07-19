@@ -17,7 +17,7 @@
 #      packages; author/reviewer judgment stays the primary signal. Reported as a warning,
 #      never a hard failure.
 #
-# Both checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
+# All checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -45,41 +45,44 @@ else
   echo "structure: skipping doc.go docs-only check (ast-grep unavailable)" >&2
 fi
 
-# 2. God-file (advisory): a package with a single non-test .go file (excluding doc.go)
-# larger than the threshold.
-while IFS= read -r dir; do
-  src=""
-  count=0
-  while IFS= read -r f; do
-    src="$f"
-    count=$((count + 1))
-  done < <(find "$dir" -maxdepth 1 -name '*.go' -not -name '*_test.go' \
-    -not -name 'doc.go' -type f)
+package_counts="$(find . \
+  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+  -o -type f -name '*.go' -not -name '*_test.go' -not -name 'doc.go' -print \
+  | sort \
+  | awk '
+    {
+      dir = $0
+      sub("/[^/][^/]*$", "", dir)
+      if (dir == $0) {
+        dir = "."
+      }
+      count[dir]++
+      file[dir] = $0
+    }
+    END {
+      for (dir in count) {
+        printf "%d\t%s\t%s\n", count[dir], dir, file[dir]
+      }
+    }
+  ' \
+  | sort -k2,2)"
+
+# 2. God-file (advisory): a package with a single non-test .go file (excluding doc.go) larger than the threshold.
+while IFS=$'\t' read -r count _ src; do
   [ "$count" -eq 1 ] || continue
   lines="$(wc -l < "$src")"
   if [ "$lines" -gt "$god_file_lines" ]; then
     printf 'warning: single-file package (%s lines) — split by concern: %s\n' \
       "$lines" "$src" >&2
   fi
-done < <(find . \
-  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
-  -o -type d -print | sort)
+done <<< "$package_counts"
 
-# 3. Crowded package (advisory): a package directory with many non-test .go files (excluding
-# doc.go) is a candidate for grouping separable concerns into sub-packages. File count alone is
-# not a verdict; this only surfaces the candidate to judge.
-while IFS= read -r dir; do
-  count=0
-  while IFS= read -r _; do
-    count=$((count + 1))
-  done < <(find "$dir" -maxdepth 1 -name '*.go' -not -name '*_test.go' \
-    -not -name 'doc.go' -type f)
+# 3. Crowded package (advisory): a package directory with many non-test .go files (excluding doc.go) is a candidate for grouping separable concerns into sub-packages. File count alone is not a verdict; this only surfaces the candidate to judge.
+while IFS=$'\t' read -r count dir _; do
   if [ "$count" -gt "$crowded_pkg_files" ]; then
     printf 'warning: crowded package (%s non-test files) — consider grouping separable concerns into sub-packages: %s\n' \
       "$count" "$dir" >&2
   fi
-done < <(find . \
-  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
-  -o -type d -print | sort)
+done <<< "$package_counts"
 
 exit 0

@@ -6,10 +6,7 @@ import (
 
 // Prompter is a terminal-agnostic prompt driver.
 //
-// It binds a [Terminal], a resolved [PromptMode], and a rendering [theme.Style],
-// and exposes one method per question type. The same call works over cooked stdio
-// or a scripted test double. Build one from explicit parts with [New] (deterministic tests)
-// or from the environment with [FromEnv].
+// It binds a [Terminal], a resolved [PromptMode], and a rendering [theme.Style], and exposes one method per question type. The same call works over cooked stdio or a scripted test double. Build one from explicit parts with [New] (deterministic tests) or from the environment with [FromEnv].
 type Prompter struct {
 	terminal Terminal
 	mode     PromptMode
@@ -30,10 +27,7 @@ func New(terminal Terminal, mode PromptMode, palette theme.Palette) *Prompter {
 
 // FromEnv builds a prompter bound to process stdin/stderr.
 //
-// The [PromptMode] follows whether both stdin and stderr are terminals,
-// and the [theme.Palette] follows color against stderr, so interactivity
-// and styling both honor redirection and NO_COLOR. Prompts render to stderr,
-// so a redirected stderr forces [ModeNonInteractive] rather than blocking on input behind an invisible prompt.
+// The [PromptMode] follows whether both stdin and stderr are terminals, and the [theme.Palette] follows color against stderr, so interactivity and styling both honor redirection and NO_COLOR. Prompts render to stderr, so a redirected stderr forces [ModeNonInteractive] rather than blocking on input behind an invisible prompt.
 func FromEnv(color theme.ColorChoice, stdinIsTTY, stderrIsTTY bool) *Prompter {
 	mode := ModeFromStdio(stdinIsTTY, stderrIsTTY)
 	palette := theme.PaletteForStream(color, stderrIsTTY)

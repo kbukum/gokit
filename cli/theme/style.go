@@ -1,8 +1,6 @@
 package theme
 
-// Style bundles a color [Palette] and a [Glyphs] set — the two visual capabilities a
-// terminal renderer resolves from NO_COLOR and UTF-8 support — into one value, so renderers
-// thread a single style rather than a separate palette/glyphs pair.
+// Style bundles a color [Palette] and a [Glyphs] set — the two visual capabilities a terminal renderer resolves from NO_COLOR and UTF-8 support — into one value, so renderers thread a single style rather than a separate palette/glyphs pair.
 type Style struct {
 	palette Palette
 	glyphs  Glyphs

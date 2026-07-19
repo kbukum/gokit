@@ -64,8 +64,7 @@ type SlidingWindowStore struct {
 	maxMessages int
 }
 
-// NewSlidingWindowStore wraps store so loads and saves keep at most maxMessages (plus a leading
-// system message).
+// NewSlidingWindowStore wraps store so loads and saves keep at most maxMessages (plus a leading system message).
 func NewSlidingWindowStore(store Store, maxMessages int) *SlidingWindowStore {
 	return &SlidingWindowStore{store: store, maxMessages: maxMessages}
 }
