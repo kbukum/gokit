@@ -140,15 +140,6 @@ make check                           # full canonical gate (build + vet + test) 
 
 ## Documentation
 
-- Prose uses **semantic line breaks** within a 100-column soft ceiling — in Markdown,
-  `doc.go`/godoc comments, and `//` code comments.
-  A paragraph that fits on one line stays on one line;
-  a longer one is broken only at meaningful boundaries: sentence ends first,
-  then clause boundaries (after a comma/semicolon/colon, around an em or en dash, or before a coordinating conjunction).
-  Never break in the middle of a clause to hit a column, and never split an inline link
-  or code span; a clause with no legal break point may exceed the ceiling rather than break.
-  Run `make prose` to check and `make prose-fix` to apply. Line-length limits are for *code*,
-  not prose. Preserve code blocks, tables, and lists as-is.
-  (YAML folded scalars like a skill's frontmatter `description` are exempt — they already collapse to one logical line.)
-- Comments and godoc describe the code as it is now — not history, plans,
-  or the process that produced it.
+- Write Markdown paragraphs as natural, continuous source lines. Do not hard-wrap prose to a column limit or insert source newlines for visual presentation; Markdown renderers handle viewport-aware wrapping. Keep intentional structure such as paragraph breaks, headings, lists, blockquotes, tables, and fenced code blocks.
+- Apply the same rule to prose in `doc.go`, godoc, and `//` comments: do not introduce arbitrary column-based breaks. Preserve Go formatting conventions for code examples and directives.
+- Comments and godoc describe the code as it is now — not history, plans, or the process that produced it.

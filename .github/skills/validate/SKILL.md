@@ -46,7 +46,6 @@ toven test --base origin/main --merge-base    # run just those
 | Tidy (write) | `toven tidy-fix` | `go mod tidy` |
 | Vuln scan | `toven vuln` | `govulncheck` per module |
 | Structure | `make structure` | declare-only aggregator guard (`doc.go` docs-only + god-file advisory) |
-| Prose | `make prose` | semantic line breaks in Markdown + Go comments (`make prose-fix` reflows) |
 
 ## Scoping to modules
 

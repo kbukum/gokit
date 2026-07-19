@@ -82,27 +82,13 @@ make these load-bearing (not decorative):
   and bolt tests on later.
 - **Structure & placement.** Correct module (root vs sub-module vs nested adapter);
   acyclic layering (lower layers never import higher); every new package has `doc.go`.
-- **Canonical reuse.** Reuse or enhance the owning package / stdlib before writing new code;
-  never duplicate a shared concern.
-  Consult [`docs/concern-owners.md`](../../../docs/concern-owners.md) for the canonical owner (formats → `codec`, helpers → `util`, paths → `fs`, …).
-- **Typed & minimal APIs.** Generics-first;
-  no public `interface{}`/`any` (documented opaque exceptions only);
-  typed errors that preserve cause; timeouts + cancellation on remote calls.
-- **Root-cause, no shims.** Pre-stable: redesign cleanly and remove the old path; no compat shims
-  or half-migrations.
-- **Readable files.** Split by concern into focused files — never pile into one file.
-  The aggregator is declare-only: `doc.go` carries package docs only, never code.
-  Scope any structure reorg **together with the change that touches it, per domain** —
-  when a step reshapes signatures or otherwise edits an oversized / concern-mixed file,
-  that same step splits it into concern-named siblings.
-  Reorg is criteria-driven (piled-up or concern-mixed file, or a package with many organizable siblings),
-  never a standalone deferred sweep and never arbitrary.
-- **Composition.** Injected registries/config; no `init()` side effects,
-  no mutable package-global registries; inject logger/tracer/policies.
+- **Canonical reuse.** Reuse or enhance the owning package / stdlib before writing new code; never duplicate a shared concern. Consult [`docs/concern-owners.md`](../../../docs/concern-owners.md) for the canonical owner (formats → `codec`, helpers → `util`, paths → `fs`, …).
+- **Typed & minimal APIs.** Generics-first; no public `interface{}`/`any` (documented opaque exceptions only); typed errors that preserve cause; timeouts + cancellation on remote calls.
+- **Root-cause, no shims.** Pre-stable: redesign cleanly and remove the old path; no compat shims or half-migrations.
+- **Readable files.** Split by concern into focused files — never pile into one file. The aggregator is declare-only: `doc.go` carries package docs only, never code. Scope any structure reorg **together with the change that touches it, per domain** — when a step reshapes signatures or otherwise edits an oversized / concern-mixed file, that same step splits it into concern-named siblings. Reorg is criteria-driven (piled-up or concern-mixed file, or a package with many organizable siblings), never a standalone deferred sweep and never arbitrary.
+- **Composition.** Injected registries/config; no `init()` side effects, no mutable package-global registries; inject logger/tracer/policies.
 
-Order steps so each starts only when its dependencies are green, and so each maps to a **standalone,
-reviewable change** —
-a reviewer seeing one step's diff should need no knowledge of the plan's sequencing.
+Order steps so each starts only when its dependencies are green, and so each maps to a **standalone, reviewable change** — a reviewer seeing one step's diff should need no knowledge of the plan's sequencing.
 
 ## Handoff
 
