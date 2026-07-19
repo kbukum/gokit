@@ -212,6 +212,18 @@ func TestSearchRejectsUnsupportedFilterValue(t *testing.T) {
 	}
 }
 
+func TestSearchRejectsUnsupportedFilterValueWithZeroLimit(t *testing.T) {
+	t.Parallel()
+	store, err := NewStore(Config{URL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	filter := vectorstore.NewSearchFilter().MustMatch("nested", map[string]string{"bad": "value"})
+	if _, err := store.Search(context.Background(), "tenant_vectors", vectorstore.SearchQuery{Vector: []float32{0.1}, Limit: 0, Filter: filter}); err == nil {
+		t.Fatal("expected unsupported filter value error even when limit is zero")
+	}
+}
+
 func TestSearchRejectsMalformedResponse(t *testing.T) {
 	t.Parallel()
 	server, _ := newQdrantTestServer(t, []int{http.StatusOK}, []string{`{"result":`})
