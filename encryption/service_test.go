@@ -1,6 +1,7 @@
 package encryption
 
 import (
+	"bytes"
 	"crypto/cipher"
 	"encoding/base64"
 	"errors"
@@ -410,6 +411,12 @@ func FuzzDecryptRejectsTamperedPayload(f *testing.F) {
 		tampered[0] ^= 0x80
 		for i, b := range mutation {
 			tampered[i%len(tampered)] ^= b
+		}
+
+		// The mutation can XOR the payload back to its original bytes; an
+		// unchanged ciphertext is not a tampered one, so skip that case.
+		if bytes.Equal(tampered, valid) {
+			return
 		}
 
 		if plaintext, err := svc.Decrypt(base64.StdEncoding.EncodeToString(tampered)); err == nil {
