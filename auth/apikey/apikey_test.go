@@ -165,7 +165,7 @@ func TestManagerIssueValidateAndRotate(t *testing.T) {
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
 
-	issued, record, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pkg", []string{"read"}, nil)
+	issued, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "primary", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -207,7 +207,7 @@ func TestManagerValidateRejectsExpiredKey(t *testing.T) {
 
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "expired", "pkg", nil, nil)
+	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "expired", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -224,7 +224,7 @@ func TestMiddleware(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager(newMemStore(), testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), "key-1", "user-1", "primary", "pkg", nil, nil)
+	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "primary", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestValidateKeyErrorPaths(t *testing.T) {
 		t.Parallel()
 		store := newMemStore()
 		manager := NewManager(store, testHasher(t))
-		issued, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", []string{"read"}, nil)
+		issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
 		if err != nil {
 			t.Fatalf("IssueKey: %v", err)
 		}
@@ -367,7 +367,7 @@ func TestValidateKeyErrorPaths(t *testing.T) {
 func TestIssueKeyRejectsInvalidPrefix(t *testing.T) {
 	t.Parallel()
 	manager := NewManager(newMemStore(), testHasher(t))
-	if _, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "ab", nil, nil); err == nil {
+	if _, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "ab", Scopes: nil, ExpiresAt: nil}); err == nil {
 		t.Fatal("expected invalid prefix error")
 	}
 }
@@ -407,7 +407,7 @@ func TestIssueKeyPropagatesCreateError(t *testing.T) {
 	t.Parallel()
 	store := &failingStore{memStore: newMemStore(), createErr: errors.New("create failed")}
 	manager := NewManager(store, testHasher(t))
-	if _, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", nil, nil); err == nil {
+	if _, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil}); err == nil {
 		t.Fatal("expected create error to propagate")
 	}
 }
@@ -416,7 +416,7 @@ func TestValidateKeyPropagatesUpdateLastUsedError(t *testing.T) {
 	t.Parallel()
 	store := &failingStore{memStore: newMemStore()}
 	manager := NewManager(store, testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), "k1", "owner", "name", "pkg", nil, nil)
+	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}

@@ -24,24 +24,15 @@ type DiscoveryServerComponent struct {
 // Parameters:
 //   - inner: the HTTP/gRPC server component to wrap
 //   - registry: the discovery registry for registration
-//   - serviceID: unique identifier for this service instance (e.g. "svc-1")
-//   - svcName: logical service name (e.g. "payment-service")
-//   - address: host/IP to register (empty string uses local IP)
-//   - port: port number for the service
-//   - tags: optional service tags for filtering
-//   - metadata: optional key-value metadata
+//   - svc: the service instance descriptor to register (ID, Name, Address,
+//     Port, Tags, Metadata). Address must be provided.
 //   - log: logger instance
 //
-// Returns an error if the local IP cannot be resolved (when address is empty).
+// Returns an error if Address is empty (auto-resolution is not yet implemented).
 func NewDiscoveryServerComponent(
 	inner *Component,
 	registry discovery.Registry,
-	serviceID string,
-	svcName string,
-	address string,
-	port int,
-	tags []string,
-	metadata map[string]string,
+	svc discovery.ServiceInfo,
 	log *logging.Logger,
 ) (*DiscoveryServerComponent, error) {
 	if registry == nil {
@@ -51,27 +42,16 @@ func NewDiscoveryServerComponent(
 		return nil, fmt.Errorf("inner component cannot be nil")
 	}
 
-	// Resolve local IP if not provided
-	if address == "" {
-		// Use discovery's getLocalIP utility (it's package-internal but we can use similar logic) For now,
-		// we'll accept that the caller should provide an address
-		// or leave it to be resolved at the discovery component level
+	if svc.Address == "" {
 		return nil, fmt.Errorf("address must be provided (auto-resolution not yet implemented)")
 	}
 
 	return &DiscoveryServerComponent{
 		inner:     inner,
 		registry:  registry,
-		serviceID: serviceID,
-		svcInfo: &discovery.ServiceInfo{
-			ID:       serviceID,
-			Name:     svcName,
-			Address:  address,
-			Port:     port,
-			Tags:     tags,
-			Metadata: metadata,
-		},
-		log: log.WithComponent("discovery-server"),
+		serviceID: svc.ID,
+		svcInfo:   &svc,
+		log:       log.WithComponent("discovery-server"),
 	}, nil
 }
 

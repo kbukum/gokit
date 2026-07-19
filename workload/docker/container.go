@@ -175,7 +175,7 @@ func (m *Manager) resolvePlatform(platform string) *ocispec.Platform {
 		return nil
 	}
 	parts := strings.SplitN(plat, "/", 2)
-	if len(parts) == 2 {
+	if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
 		return &ocispec.Platform{OS: parts[0], Architecture: parts[1]}
 	}
 	return nil

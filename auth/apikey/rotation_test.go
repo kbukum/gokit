@@ -28,7 +28,7 @@ func TestRotateKeyRejectsRevokedOldKey(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), "old", "owner", "name", "pkg", []string{"read"}, nil)
+	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestRotateKeyInheritsOldMetadata(t *testing.T) {
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
 	expires := time.Now().Add(time.Hour)
-	_, record, err := manager.IssueKey(context.Background(), "old", "owner", "primary", "pkg", []string{"read", "write"}, &expires)
+	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "primary", Prefix: "pkg", Scopes: []string{"read", "write"}, ExpiresAt: &expires})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestRotateKeyPropagatesIssueError(t *testing.T) {
 	t.Parallel()
 	store := newMemStore()
 	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), "old", "owner", "name", "pkg", nil, nil)
+	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRotateKeyPropagatesSetRotationError(t *testing.T) {
 	t.Parallel()
 	store := &rotationErrStore{memStore: newMemStore()}
 	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), "old", "owner", "name", "pkg", nil, nil)
+	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}

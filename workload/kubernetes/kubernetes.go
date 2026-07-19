@@ -373,41 +373,59 @@ func buildLabelSelector(labels, defaults map[string]string) string {
 	return strings.Join(parts, ",")
 }
 
-// readLines reads all lines from a reader.
+// readLines reads all lines from a reader, splitting on universal newlines
+// (LF, CR, and CRLF) and dropping empty lines.
 func readLines(r interface{ Read([]byte) (int, error) }) []string {
 	var lines []string
 	buf := make([]byte, 4096)
 	var current strings.Builder
 
+	appendLine := func(line string) {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+
 	for {
 		n, err := r.Read(buf)
 		if n > 0 {
 			current.Write(buf[:n])
-			// Split accumulated data into lines
-			text := current.String()
-			for {
-				idx := strings.IndexByte(text, '\n')
-				if idx < 0 {
-					break
-				}
-				line := strings.TrimRight(text[:idx], "\r")
-				if line != "" {
-					lines = append(lines, line)
-				}
-				text = text[idx+1:]
+			complete, remainder := splitLines(current.String())
+			for _, line := range complete {
+				appendLine(line)
 			}
 			current.Reset()
-			current.WriteString(text)
+			current.WriteString(remainder)
 		}
 		if err != nil {
-			// Flush remaining
-			if remaining := current.String(); strings.TrimSpace(remaining) != "" {
-				lines = append(lines, remaining)
-			}
+			// Flush the remainder; a held trailing CR is a line break at EOF.
+			appendLine(strings.TrimRight(current.String(), "\r"))
 			break
 		}
 	}
 	return lines
+}
+
+// splitLines splits text on universal newlines (LF, CR, CRLF), returning the
+// completed lines and any trailing remainder. A lone trailing CR is deferred
+// into the remainder so a following LF can coalesce across reads.
+func splitLines(text string) (lines []string, remainder string) {
+	start := 0
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c != '\n' && c != '\r' {
+			continue
+		}
+		if c == '\r' && i == len(text)-1 {
+			break // possible CRLF split across the buffer boundary
+		}
+		lines = append(lines, text[start:i])
+		if c == '\r' && text[i+1] == '\n' {
+			i++
+		}
+		start = i + 1
+	}
+	return lines, text[start:]
 }
 
 // Compile-time interface checks.
