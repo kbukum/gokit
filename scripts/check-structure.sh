@@ -46,36 +46,43 @@ else
   echo "structure: skipping doc.go docs-only check (ast-grep unavailable)" >&2
 fi
 
-package_counts="$(find . \
-  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
-  -o -type f -name '*.go' -not -name '*_test.go' -not -name 'doc.go' -print \
-  | sort \
-  | awk '
-    {
-      dir = $0
-      sub("/[^/][^/]*$", "", dir)
-      if (dir == $0) {
-        dir = "."
+package_counts_cmd() {
+  find . \
+    \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+    -o -type f -name '*.go' -not -name '*_test.go' -not -name 'doc.go' -print \
+    | sort \
+    | awk '
+      {
+        dir = $0
+        sub("/[^/][^/]*$", "", dir)
+        if (dir == $0) {
+          dir = "."
+        }
+        count[dir]++
+        file[dir] = $0
       }
-      count[dir]++
-      file[dir] = $0
-    }
-    END {
-      for (dir in count) {
-        printf "%d\t%s\t%s\n", count[dir], dir, file[dir]
+      END {
+        for (dir in count) {
+          printf "%d\t%s\t%s\n", count[dir], dir, file[dir]
+        }
       }
-    }
-  ' \
-  | sort -k2,2)"
+    ' \
+    | sort -k2,2
+}
 
-# List of all non-test, non-doc.go Go files (skips the same trees as above).
-go_files="$(find . \
-  \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
-  -o -type f -name '*.go' -not -name '*_test.go' -not -name 'doc.go' -print \
-  | sort)"
+# Stream all non-test, non-doc.go Go files (skips the same trees as above) so the
+# checks scale to large workspaces without buffering the whole list in a variable.
+go_files_cmd() {
+  find . \
+    \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+    -o -type f -name '*.go' -not -name '*_test.go' -not -name 'doc.go' -print \
+    | sort
+}
 
 # 2. Large file (advisory): any non-test file whose code-only line count (excluding
 #    comments and blank lines) exceeds the threshold is a concern-mixing candidate to judge.
+#    Comment stripping is best-effort: "//" and "/*" inside string literals (e.g. a URL)
+#    are treated as comment starts, so the count can slightly undercount such lines.
 count_code_lines() {
   awk '
     BEGIN { inblock = 0; n = 0 }
@@ -109,7 +116,7 @@ while IFS= read -r src; do
     printf 'warning: large file (%s code lines) — check for mixed concerns to split into concern-named sibling files or a sub-package: %s\n' \
       "$code_lines" "$src" >&2
   fi
-done <<< "$go_files"
+done < <(go_files_cmd)
 
 # 3. Crowded package (advisory): a package directory with more than the threshold of non-test .go files (excluding doc.go) and 2-3+ separable concern groups is a candidate for grouping those groups into concern-named sub-packages. File count alone is not a verdict; this only surfaces the candidate to judge.
 while IFS=$'\t' read -r count dir _; do
@@ -117,6 +124,6 @@ while IFS=$'\t' read -r count dir _; do
     printf 'warning: crowded package (%s non-test files) — if 2-3+ separable concern groups, consider grouping them into concern-named sub-packages: %s\n' \
       "$count" "$dir" >&2
   fi
-done <<< "$package_counts"
+done < <(package_counts_cmd)
 
 exit 0

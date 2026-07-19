@@ -3,6 +3,7 @@ package cascade
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -852,5 +853,112 @@ func TestCascade_SequentialAllFailWithPartial(t *testing.T) {
 	// With ContinueWithPartial, stage should not propagate error.
 	if trace.Error != nil {
 		t.Errorf("expected no error with ContinueWithPartial, got %v", trace.Error)
+	}
+}
+
+func TestCascade_InternalEdges_CycleReturnsError(t *testing.T) {
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("cyclic", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.AddNode("b", makeNode("b"))
+			b.Edge("a", "b")
+			b.Edge("b", "a")
+		}).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error == nil {
+		t.Fatal("expected error for cyclic stage edges, got nil")
+	}
+	if !strings.Contains(trace.Error.Error(), "cycle detected") {
+		t.Errorf("expected cycle error, got %v", trace.Error)
+	}
+}
+
+func TestCascade_InternalEdges_UnknownNodeReturnsError(t *testing.T) {
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("dangling", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.Edge("a", "ghost") // "ghost" was never added
+		}).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error == nil {
+		t.Fatal("expected error for edge to unknown node, got nil")
+	}
+	if !strings.Contains(trace.Error.Error(), "unknown node") {
+		t.Errorf("expected unknown-node error, got %v", trace.Error)
+	}
+}
+
+func TestCascade_OrderStrategy_DropDuplicateIsResilient(t *testing.T) {
+	var mu sync.Mutex
+	order := make([]string, 0, 3)
+
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			mu.Lock()
+			order = append(order, name)
+			mu.Unlock()
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	// A misbehaving strategy that drops one node, duplicates another, and invents
+	// an unknown name must never panic or drop real nodes from execution.
+	bad := func(nodes []orderableNode) []orderableNode {
+		if len(nodes) == 0 {
+			return nodes
+		}
+		return []orderableNode{nodes[0], nodes[0], {Name: "phantom"}}
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("noisy", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.AddNode("b", makeNode("b"))
+			b.AddNode("c", makeNode("c"))
+		}).
+		OrderNodesBy(bad).
+		MaxConcurrency(1).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error != nil {
+		t.Fatalf("expected no error, got %v", trace.Error)
+	}
+	if len(order) != 3 {
+		t.Fatalf("expected all 3 nodes executed exactly once, got %v", order)
+	}
+	seen := map[string]bool{}
+	for _, n := range order {
+		if seen[n] {
+			t.Fatalf("node %q executed more than once: %v", n, order)
+		}
+		seen[n] = true
+	}
+	for _, want := range []string{"a", "b", "c"} {
+		if !seen[want] {
+			t.Fatalf("node %q missing from execution: %v", want, order)
+		}
 	}
 }

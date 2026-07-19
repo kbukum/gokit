@@ -183,6 +183,8 @@ node = dag.WithLogging(node, log)
 For multi-stage processing where each stage is a sub-DAG with its own configuration, conditional advancement, and early exit, use the `dag/cascade` subpackage.
 
 ```go
+import "github.com/kbukum/gokit/dag/cascade"
+
 c := cascade.NewCascade[Input, Result]().
 
     // Stage 1: cheap, fast checks

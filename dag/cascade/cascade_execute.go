@@ -141,18 +141,34 @@ func (c *Cascade[I, O]) orderStageNodes(nodes []*cascadeNode[I, O]) []*cascadeNo
 		return nodes
 	}
 
+	nodeMap := make(map[string]*cascadeNode[I, O], len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.name] = n
+	}
+
 	orderables := make([]orderableNode, len(nodes))
 	for i, n := range nodes {
 		orderables[i] = orderableNode{Name: n.name, Meta: n.meta}
 	}
 	orderables = c.orderFunc(orderables)
-	ordered := make([]*cascadeNode[I, O], len(nodes))
-	nodeMap := make(map[string]*cascadeNode[I, O])
-	for _, n := range nodes {
-		nodeMap[n.name] = n
+
+	// The strategy is user-supplied: ignore unknown or duplicate names, then
+	// append any nodes it omitted in their original order so ordering can never
+	// drop, duplicate, or introduce nodes.
+	ordered := make([]*cascadeNode[I, O], 0, len(nodes))
+	seen := make(map[string]bool, len(nodes))
+	for _, o := range orderables {
+		n, ok := nodeMap[o.Name]
+		if !ok || seen[o.Name] {
+			continue
+		}
+		seen[o.Name] = true
+		ordered = append(ordered, n)
 	}
-	for i, o := range orderables {
-		ordered[i] = nodeMap[o.Name]
+	for _, n := range nodes {
+		if !seen[n.name] {
+			ordered = append(ordered, n)
+		}
 	}
 	return ordered
 }
@@ -314,6 +330,14 @@ func (c *Cascade[I, O]) executeStageWithEdges(ctx context.Context, exec stageExe
 		}
 	}
 	for _, e := range exec.sb.edges {
+		if _, ok := nodeMap[e.from]; !ok {
+			var zero O
+			return zero, exec.traces, fmt.Errorf("stage %q: edge references unknown node %q", exec.name, e.from)
+		}
+		if _, ok := nodeMap[e.to]; !ok {
+			var zero O
+			return zero, exec.traces, fmt.Errorf("stage %q: edge references unknown node %q", exec.name, e.to)
+		}
 		inDegree[e.to]++
 		dependents[e.from] = append(dependents[e.from], e.to)
 	}
@@ -325,8 +349,10 @@ func (c *Cascade[I, O]) executeStageWithEdges(ctx context.Context, exec stageExe
 			queue = append(queue, n.name)
 		}
 	}
+	scheduled := 0
 	for len(queue) > 0 {
 		levels = append(levels, queue)
+		scheduled += len(queue)
 		var next []string
 		for _, n := range queue {
 			for _, dep := range dependents[n] {
@@ -337,6 +363,13 @@ func (c *Cascade[I, O]) executeStageWithEdges(ctx context.Context, exec stageExe
 			}
 		}
 		queue = next
+	}
+
+	// A node left unscheduled means a cycle: skipping it silently would drop part
+	// of the graph, so surface an explicit error instead.
+	if scheduled < len(exec.sb.nodes) {
+		var zero O
+		return zero, exec.traces, fmt.Errorf("stage %q: cycle detected in stage edges", exec.name)
 	}
 
 	var accumulated O
