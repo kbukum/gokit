@@ -84,6 +84,7 @@ type Point struct {
 // SearchQuery describes a vector similarity search.
 type SearchQuery struct {
 	Vector []float32
+	// Limit caps the number of results; it must be non-negative (0 returns no results).
 	Limit  int
 	Filter *SearchFilter
 }

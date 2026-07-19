@@ -19,16 +19,16 @@ func (h *Handler) Sample(ctx context.Context, ss *sdkmcp.ServerSession, params *
 	}
 	res, err := ss.CreateMessage(ctx, params)
 	if err != nil {
-		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: "sampling", Target: "sampling/createMessage", Outcome: security.OutcomeToolError, Reason: err.Error()})
+		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindSampling, Target: "sampling/createMessage", Outcome: security.OutcomeToolError, Reason: err.Error()})
 		return nil, err
 	}
 	if res == nil {
 		return nil, fmt.Errorf("mcp: sampling returned no result")
 	}
 	if reason, tooLarge := h.contentTooLarge(res.Content); tooLarge {
-		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: "sampling", Target: "sampling/createMessage", Outcome: security.OutcomeResultTooLarge, Reason: "sampled content " + reason})
+		h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindSampling, Target: "sampling/createMessage", Outcome: security.OutcomeResultTooLarge, Reason: "sampled content " + reason})
 		return nil, fmt.Errorf("mcp: sampled content too large: %s", reason)
 	}
-	h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: "sampling", Target: "sampling/createMessage", Outcome: security.OutcomeSuccess, Reason: ""})
+	h.policy.AuditAccess(ctx, security.AccessAuditEvent{Kind: security.AccessKindSampling, Target: "sampling/createMessage", Outcome: security.OutcomeSuccess, Reason: ""})
 	return res, nil
 }

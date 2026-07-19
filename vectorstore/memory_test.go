@@ -210,6 +210,20 @@ func TestInMemoryStoreDeleteMissingCollection(t *testing.T) {
 	}
 }
 
+func TestInMemoryStoreSearchNegativeLimit(t *testing.T) {
+	store := NewInMemoryStore()
+	ctx := context.Background()
+
+	if err := store.EnsureCollection(ctx, "test", 1); err != nil {
+		t.Fatalf("EnsureCollection() error = %v", err)
+	}
+
+	_, err := store.Search(ctx, "test", SearchQuery{Vector: []float32{1.0}, Limit: -1})
+	if err == nil {
+		t.Fatal("Search() expected error for negative limit")
+	}
+}
+
 func TestInMemoryStoreSearchLimit(t *testing.T) {
 	store := NewInMemoryStore()
 	ctx := context.Background()

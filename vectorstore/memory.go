@@ -112,6 +112,9 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, query
 	if len(query.Vector) != col.Dimensions {
 		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(query.Vector))
 	}
+	if query.Limit < 0 {
+		return nil, fmt.Errorf("query limit must be non-negative, got %d", query.Limit)
+	}
 
 	var results []SearchResult
 

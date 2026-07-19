@@ -104,6 +104,9 @@ func (s *Store) Search(ctx context.Context, collection string, query vectorstore
 	if err := validateCollection(collection); err != nil {
 		return nil, err
 	}
+	if query.Limit < 0 {
+		return nil, fmt.Errorf("query limit must be non-negative, got %d", query.Limit)
+	}
 	body := map[string]any{"vector": query.Vector, "limit": query.Limit, "with_payload": true}
 	filterJSON, err := filterToJSON(query.Filter)
 	if err != nil {

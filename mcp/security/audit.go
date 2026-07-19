@@ -23,9 +23,12 @@ const (
 
 // Access kinds distinguish audit records emitted for different protocol surfaces sharing the capability allow-list.
 const (
-	AccessKindTool     = "tool"
-	AccessKindPrompt   = "prompt"
-	AccessKindResource = "resource"
+	AccessKindTool        = "tool"
+	AccessKindPrompt      = "prompt"
+	AccessKindResource    = "resource"
+	AccessKindSampling    = "sampling"
+	AccessKindRoots       = "roots"
+	AccessKindElicitation = "elicitation"
 )
 
 // ToolAuthorizationRequest is the input to a per-call tool authorization decision.
