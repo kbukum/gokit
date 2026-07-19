@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -177,5 +176,3 @@ func TestDeployPodRestartPolicyDefaultsAndAlways(t *testing.T) {
 		t.Fatalf("restart policy = %q", pod.Spec.RestartPolicy)
 	}
 }
-
-var _ = batchv1.Job{}

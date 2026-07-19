@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/moby/moby/api/types/container"
-
-	"github.com/kbukum/gokit/workload"
 )
 
 func TestSystemInfoMapsDaemonFieldsAndGPU(t *testing.T) {
@@ -104,5 +102,3 @@ func makeDockerNetworkStats(stats map[string]containerNetworkStats) map[string]c
 	}
 	return result
 }
-
-var _ = workload.DiskUsage{}
