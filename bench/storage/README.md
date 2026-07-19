@@ -22,6 +22,7 @@ import (
 	"github.com/kbukum/gokit/bench"
 	benchstore "github.com/kbukum/gokit/bench/storage"
 	"github.com/kbukum/gokit/storage"
+	"github.com/kbukum/gokit/storage/local"
 )
 
 func main() {
@@ -29,8 +30,13 @@ func main() {
 
 	// 1. Build a gokit/storage provider (register a backend into the registry first).
 	reg := storage.NewFactoryRegistry()
-	// Register the desired backend (e.g. via s3.Register, gcs.Register, or local.Register).
-	store, _ := storage.New(reg, storage.Config{Provider: "s3"}, nil)
+	if err := local.Register(reg, local.Config{BasePath: "./benchmarks"}); err != nil {
+		panic(err)
+	}
+	store, err := storage.New(reg, storage.Config{Provider: storage.ProviderLocal}, nil)
+	if err != nil {
+		panic(err)
+	}
 
 	// 2. Wrap it as bench RunStorage.
 	rs := benchstore.NewProviderStorage(store,

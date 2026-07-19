@@ -46,11 +46,17 @@ result, _ := mgr.Deploy(ctx, workload.DeployRequest{
 ### As a Component
 
 ```go
+import "github.com/kbukum/gokit/workload/docker"
+
 reg := workload.NewFactoryRegistry()
-_ = docker.Register(reg)
+if err := docker.Register(reg); err != nil {
+    return err
+}
 comp := workload.NewComponent(reg, workload.Config{Provider: "docker"}, dockerCfg, log)
-comp.Start(ctx)
-defer comp.Stop(ctx)
+if err := comp.Start(ctx); err != nil {
+    return err
+}
+defer func() { _ = comp.Stop(ctx) }()
 
 mgr := comp.Manager()
 ```

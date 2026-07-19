@@ -280,6 +280,8 @@ package mymodule
 
 import (
     "context"
+    "fmt"
+
     "github.com/kbukum/gokit/component"
     "github.com/kbukum/gokit/testutil"
 )
@@ -328,7 +330,10 @@ func (c *TestMyComponent) Snapshot(ctx context.Context) (any, error) {
 
 func (c *TestMyComponent) Restore(ctx context.Context, snapshot any) error {
     // Restore from snapshot
-    state := snapshot.(map[string]any)
+    state, ok := snapshot.(map[string]any)
+    if !ok {
+        return fmt.Errorf("unexpected snapshot type %T", snapshot)
+    }
     c.data = state["data"]
     return nil
 }
