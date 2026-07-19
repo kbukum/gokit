@@ -117,6 +117,12 @@ func currentBranch(t *testing.T, dir string) string {
 	return stringTrimSpace(runGit(t, dir, "branch", "--show-current"))
 }
 
+func statusShort(t *testing.T, dir string, paths ...string) string {
+	t.Helper()
+	args := append([]string{"status", "--short", "--"}, paths...)
+	return stringTrimSpace(runGit(t, dir, args...))
+}
+
 func stringTrimSpace(s string) string {
 	for s != "" && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r' || s[len(s)-1] == ' ' || s[len(s)-1] == '\t') {
 		s = s[:len(s)-1]

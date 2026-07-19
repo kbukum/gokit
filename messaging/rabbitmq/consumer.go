@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"sync"
 
-	amqp "github.com/rabbitmq/amqp091-go"
-
 	"github.com/kbukum/gokit/messaging"
 )
 
 // Consumer consumes messages from RabbitMQ.
 type Consumer struct {
-	conn   *amqp.Connection
-	ch     *amqp.Channel
+	conn   rabbitConn
+	ch     rabbitChannel
+	dial   func(Config) (rabbitConn, error)
 	cfg    Config
 	topic  string
 	queue  string
@@ -32,10 +31,10 @@ func NewConsumer(cfg Config, topic string) (*Consumer, error) {
 	if err := messaging.ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	return &Consumer{cfg: cfg, topic: topic, queue: queueName(cfg, topic)}, nil
+	return &Consumer{cfg: cfg, topic: topic, queue: queueName(cfg, topic), dial: defaultDialRabbit}, nil
 }
 
-func (c *Consumer) ensureChannel() (*amqp.Channel, error) {
+func (c *Consumer) ensureChannel() (rabbitChannel, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
@@ -44,7 +43,10 @@ func (c *Consumer) ensureChannel() (*amqp.Channel, error) {
 	if c.ch != nil {
 		return c.ch, nil
 	}
-	conn, err := dial(c.cfg)
+	if c.dial == nil {
+		c.dial = defaultDialRabbit
+	}
+	conn, err := c.dial(c.cfg)
 	if err != nil {
 		return nil, redactError("rabbitmq consumer connect", err)
 	}

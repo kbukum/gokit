@@ -15,11 +15,65 @@ func TestOpen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error: %v", err)
 	}
+
 	if repo.Root() != dir {
 		absDir, _ := filepath.Abs(dir)
 		if repo.Root() != absDir {
 			t.Errorf("Root() = %q, want %q", repo.Root(), absDir)
 		}
+	}
+}
+
+func TestInitAndInitBare(t *testing.T) {
+	t.Parallel()
+
+	repoDir := filepath.Join(t.TempDir(), "repo")
+	repo, err := embedded.Init(repoDir, nil)
+	if err != nil {
+		t.Fatalf("Init() error: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repoDir, ".git")); err != nil {
+		t.Fatalf(".git stat error: %v", err)
+	}
+	if repo.Root() != repoDir {
+		absDir, _ := filepath.Abs(repoDir)
+		if repo.Root() != absDir {
+			t.Fatalf("Root() = %q, want %q", repo.Root(), absDir)
+		}
+	}
+
+	bareDir := filepath.Join(t.TempDir(), "repo.git")
+	bare, err := embedded.InitBare(bareDir, nil)
+	if err != nil {
+		t.Fatalf("InitBare() error: %v", err)
+	}
+	if bare.Root() != bareDir {
+		absDir, _ := filepath.Abs(bareDir)
+		if bare.Root() != absDir {
+			t.Fatalf("Root() = %q, want %q", bare.Root(), absDir)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(bareDir, "HEAD")); err != nil {
+		t.Fatalf("bare HEAD stat error: %v", err)
+	}
+}
+
+func TestClone(t *testing.T) {
+	t.Parallel()
+
+	source := initTestRepo(t)
+	remote := createRemote(t, source)
+	cloneDir := filepath.Join(t.TempDir(), "clone")
+
+	repo, err := embedded.Clone(remote, cloneDir, nil)
+	if err != nil {
+		t.Fatalf("Clone() error: %v", err)
+	}
+	if repo.Root() != cloneDir {
+		t.Fatalf("Root() = %q, want %q", repo.Root(), cloneDir)
+	}
+	if _, err := repo.Head(); err != nil {
+		t.Fatalf("Head() error: %v", err)
 	}
 }
 
@@ -37,12 +91,21 @@ func TestDiscover(t *testing.T) {
 	if err := os.MkdirAll(subdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+
 	repo, err := embedded.Discover(subdir, nil)
 	if err != nil {
 		t.Fatalf("Discover() error: %v", err)
 	}
 	if repo.Root() == subdir {
 		t.Error("Discover() root should be repo root")
+	}
+}
+
+func TestDiscoverNotFound(t *testing.T) {
+	t.Parallel()
+
+	if _, err := embedded.Discover(t.TempDir(), nil); err == nil {
+		t.Fatal("Discover() expected error outside repository")
 	}
 }
 
@@ -53,12 +116,28 @@ func TestHead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	ref, err := repo.Head()
 	if err != nil {
 		t.Fatalf("Head() error: %v", err)
 	}
 	if ref.Target.IsZero() {
 		t.Error("Head() target is zero OID")
+	}
+}
+
+func TestHeadDetached(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	head := revParse(t, dir, "HEAD")
+	runGit(t, dir, "checkout", "--detach", head)
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Head(); err == nil {
+		t.Fatal("Head() expected detached HEAD error")
 	}
 }
 

@@ -13,12 +13,13 @@ import (
 
 // Consumer consumes messages from a NATS subject.
 type Consumer struct {
-	conn   *natsgo.Conn
-	sub    *natsgo.Subscription
-	cfg    Config
-	topic  string
-	mu     sync.Mutex
-	closed bool
+	conn    natsConn
+	sub     natsSubscription
+	connect func(string, ...natsgo.Option) (natsConn, error)
+	cfg     Config
+	topic   string
+	mu      sync.Mutex
+	closed  bool
 }
 
 var _ messaging.Consumer = (*Consumer)(nil)
@@ -32,10 +33,10 @@ func NewConsumer(cfg Config, topic string) (*Consumer, error) {
 	if err := messaging.ValidateTopic(topic); err != nil {
 		return nil, err
 	}
-	return &Consumer{cfg: cfg, topic: topic}, nil
+	return &Consumer{cfg: cfg, topic: topic, connect: defaultConnectNATS}, nil
 }
 
-func (c *Consumer) ensureSubscription() (*natsgo.Subscription, error) {
+func (c *Consumer) ensureSubscription() (natsSubscription, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
@@ -48,11 +49,14 @@ func (c *Consumer) ensureSubscription() (*natsgo.Subscription, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn, err := natsgo.Connect(c.cfg.URL, opts...)
+	if c.connect == nil {
+		c.connect = defaultConnectNATS
+	}
+	conn, err := c.connect(c.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats consumer connect %s: %w", c.cfg.RedactedURL(), err)
 	}
-	var sub *natsgo.Subscription
+	var sub natsSubscription
 	if c.cfg.QueueGroup != "" {
 		sub, err = conn.QueueSubscribeSync(subject(c.cfg, c.topic), c.cfg.QueueGroup)
 	} else {

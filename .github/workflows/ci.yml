@@ -146,7 +146,14 @@ jobs:
           for mod in $modules; do
             echo "::group::Check $mod"
             (cd "$mod" && go build ./... && go vet ./...) || { echo "::error::Build/vet failed: $mod"; failed=1; echo "::endgroup::"; continue; }
-            if ! (cd "$mod" && go test -race -shuffle=on -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage.out ./...); then
+            testargs=()
+            if [ -f "$mod/.coverpkg" ]; then
+              coverpkg=$(tr -s '[:space:]' ',' < "$mod/.coverpkg" | sed 's/^,//; s/,$//')
+              if [ -n "$coverpkg" ]; then
+                testargs+=("-coverpkg=$coverpkg")
+              fi
+            fi
+            if ! (cd "$mod" && go test -race -shuffle=on -count=1 -timeout=20m -covermode=atomic "${testargs[@]+"${testargs[@]}"}" -coverprofile=coverage.out ./...); then
               echo "::error::Tests failed: $mod"
               failed=1
             fi

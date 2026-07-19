@@ -1,11 +1,14 @@
 package connect
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	connectrpc "connectrpc.com/connect"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/logging"
 )
 
 // ---------------------------------------------------------------------------
@@ -106,5 +109,128 @@ func TestFromConnectError_NonConnectError(t *testing.T) {
 	}
 	if appErr.Code != apperrors.ErrCodeInternal {
 		t.Fatalf("expected Internal, got %v", appErr.Code)
+	}
+}
+
+func TestErrorInterceptor(t *testing.T) {
+	ctx := context.Background()
+	req := connectrpc.NewRequest(&struct{}{})
+	wantResp := connectrpc.NewResponse(&struct{}{})
+
+	t.Run("success passes response", func(t *testing.T) {
+		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return wantResp, nil
+		})(ctx, req)
+		if err != nil {
+			t.Fatalf("ErrorInterceptor returned error: %v", err)
+		}
+		if resp != wantResp {
+			t.Fatal("response was not passed through")
+		}
+	})
+
+	t.Run("connect error passes through", func(t *testing.T) {
+		wantErr := connectrpc.NewError(connectrpc.CodePermissionDenied, errors.New("denied"))
+		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return wantResp, wantErr
+		})(ctx, req)
+		if resp != wantResp {
+			t.Fatal("response was not passed through")
+		}
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want original connect error", err)
+		}
+	})
+
+	t.Run("app error converts to connect error", func(t *testing.T) {
+		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return wantResp, apperrors.Unauthorized("login required")
+		})(ctx, req)
+		if resp != wantResp {
+			t.Fatal("response was not passed through")
+		}
+		if connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
+			t.Fatalf("CodeOf(err) = %v, want unauthenticated", connectrpc.CodeOf(err))
+		}
+	})
+
+	t.Run("plain error passes through", func(t *testing.T) {
+		wantErr := errors.New("plain")
+		_, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return nil, wantErr
+		})(ctx, req)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want original plain error", err)
+		}
+	})
+}
+
+func TestLoggingInterceptor(t *testing.T) {
+	log := logging.New(&logging.Config{Level: "debug", Format: "json", Output: "stdout"}, "connect-test")
+	req := connectrpc.NewRequest(&struct{}{})
+	wantResp := connectrpc.NewResponse(&struct{}{})
+
+	t.Run("success", func(t *testing.T) {
+		resp, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return wantResp, nil
+		})(context.Background(), req)
+		if err != nil {
+			t.Fatalf("LoggingInterceptor returned error: %v", err)
+		}
+		if resp != wantResp {
+			t.Fatal("response was not passed through")
+		}
+	})
+
+	t.Run("connect error", func(t *testing.T) {
+		wantErr := connectrpc.NewError(connectrpc.CodeUnavailable, errors.New("down"))
+		resp, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return wantResp, wantErr
+		})(context.Background(), req)
+		if resp != wantResp {
+			t.Fatal("response was not passed through")
+		}
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want original connect error", err)
+		}
+	})
+
+	t.Run("plain error", func(t *testing.T) {
+		wantErr := errors.New("plain")
+		_, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			return nil, wantErr
+		})(context.Background(), req)
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want original plain error", err)
+		}
+	})
+}
+
+func TestConnectCodeToAppError_AllCodes(t *testing.T) {
+	cases := []struct {
+		code     connectrpc.Code
+		wantCode apperrors.ErrorCode
+	}{
+		{connectrpc.CodeNotFound, apperrors.ErrCodeNotFound},
+		{connectrpc.CodeAlreadyExists, apperrors.ErrCodeAlreadyExists},
+		{connectrpc.CodeInvalidArgument, apperrors.ErrCodeInvalidInput},
+		{connectrpc.CodeUnauthenticated, apperrors.ErrCodeUnauthorized},
+		{connectrpc.CodePermissionDenied, apperrors.ErrCodeForbidden},
+		{connectrpc.CodeFailedPrecondition, apperrors.ErrCodeConflict},
+		{connectrpc.CodeDeadlineExceeded, apperrors.ErrCodeTimeout},
+		{connectrpc.CodeResourceExhausted, apperrors.ErrCodeRateLimited},
+		{connectrpc.CodeUnavailable, apperrors.ErrCodeServiceUnavailable},
+		{connectrpc.CodeCanceled, apperrors.ErrCodeInternal},
+		{connectrpc.CodeInternal, apperrors.ErrCodeInternal},
+	}
+
+	for _, tc := range cases {
+		appErr := connectCodeToAppError(tc.code, "message")
+		if appErr == nil {
+			t.Fatalf("connectCodeToAppError(%v) returned nil", tc.code)
+		}
+		if appErr.Code != tc.wantCode {
+			t.Fatalf("connectCodeToAppError(%v).Code = %v, want %v", tc.code, appErr.Code, tc.wantCode)
+		}
 	}
 }

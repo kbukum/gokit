@@ -194,3 +194,12 @@ func TestPredictValidationAndHealthError(t *testing.T) {
 		t.Fatalf("Health = %+v", health)
 	}
 }
+
+func FuzzDecodeResponse(f *testing.F) {
+	f.Add(`{"model_name":"demo","outputs":[{"name":"scores","datatype":"FP32","shape":[1],"data":[0.5]}]}`)
+	f.Add(`{"outputs":[{"name":"bad","datatype":"FP32","shape":[1],"data":["x"]}]}`)
+	f.Add(`{bad}`)
+	f.Fuzz(func(t *testing.T, body string) {
+		_, _ = decodeResponse(&httpclient.Response{Body: []byte(body)})
+	})
+}

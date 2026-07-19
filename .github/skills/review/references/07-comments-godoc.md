@@ -34,9 +34,7 @@ prioritizing public API godoc that pkg.go.dev renders.
   or they don't belong (ties to pass `04`).
 - **Accurate, minimal.** When in doubt, fewer comments — but the ones present must be correct.
   A misleading comment is a should-fix even if the code is right.
-- **Semantic line breaks.** Comment and godoc prose wraps at a 100-column soft ceiling,
-  breaking only at sentence then clause boundaries — never mid-clause
-  and never splitting an inline link or code span. `make prose` gates this (details in pass `06`).
+- **Natural prose flow.** Comment and godoc prose is not hard-wrapped to a fixed column. Keep intentional paragraph, list, heading, directive, and code-example structure intact (details in pass `06`).
 
 ## Detection starters
 

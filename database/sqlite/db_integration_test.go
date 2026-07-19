@@ -3,8 +3,10 @@ package sqlite_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -327,5 +329,126 @@ func TestPingContext_Success(t *testing.T) {
 
 	if err := db.PingContext(context.Background()); err != nil {
 		t.Errorf("PingContext() error: %v", err)
+	}
+}
+
+// --- Connection retry and cancellation ---
+
+func TestNewWithContext_ExhaustsRetries(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: "/nonexistent-dir-xyz/db.sqlite", MaxRetries: 1}
+	cfg.ApplyDefaults()
+	cfg.MaxRetries = 1
+	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	if err == nil || db != nil {
+		t.Fatalf("NewWithContext = db:%v err:%v, want failure", db, err)
+	}
+	if !strings.Contains(err.Error(), "failed to connect to database") {
+		t.Fatalf("error = %v, want connect-failure", err)
+	}
+}
+
+func TestNewWithContext_CancelsDuringBackoff(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: "/nonexistent-dir-xyz/db.sqlite", MaxRetries: 3}
+	cfg.ApplyDefaults()
+	cfg.MaxRetries = 3
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	if err == nil || db != nil {
+		t.Fatalf("NewWithContext = db:%v err:%v, want cancellation", db, err)
+	}
+	if !strings.Contains(err.Error(), "canceled") {
+		t.Fatalf("error = %v, want cancellation", err)
+	}
+}
+
+func TestNewWithContext_CanceledBeforeFirstAttempt(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: ":memory:"}
+	cfg.ApplyDefaults()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	if err == nil || db != nil || !strings.Contains(err.Error(), "canceled") {
+		t.Fatalf("NewWithContext canceled = db:%v err:%v", db, err)
+	}
+}
+
+// --- Operations on a closed database ---
+
+func TestOperationsFailOnClosedDB(t *testing.T) {
+	db := newTestDB(t)
+	if err := db.AutoMigrate(&testItem{}); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := db.Ping(); err == nil {
+		t.Error("Ping on closed DB should fail")
+	}
+	if err := db.PingContext(ctx); err == nil {
+		t.Error("PingContext on closed DB should fail")
+	}
+	if err := db.WithTransaction(ctx, func(*gorm.DB) error { return nil }); err == nil {
+		t.Error("WithTransaction on closed DB should fail to begin")
+	}
+	if err := db.WithReadOnlyTransaction(ctx, func(*gorm.DB) error { return nil }); err == nil {
+		t.Error("WithReadOnlyTransaction on closed DB should fail to begin")
+	}
+	if err := db.AutoMigrate(&testItem{}); err == nil {
+		t.Error("AutoMigrate on closed DB should fail")
+	}
+}
+
+func TestWithTransaction_RepanicsAfterRollback(t *testing.T) {
+	db := newTestDB(t)
+	defer db.Close()
+	if err := db.AutoMigrate(&testItem{}); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic to be re-raised")
+		}
+		var count int64
+		db.GormDB.Model(&testItem{}).Count(&count)
+		if count != 0 {
+			t.Fatalf("panic transaction persisted %d rows", count)
+		}
+	}()
+
+	_ = db.WithTransaction(context.Background(), func(tx *gorm.DB) error {
+		if err := tx.Create(&testItem{ID: 1, Name: "panic"}).Error; err != nil {
+			return err
+		}
+		panic("boom")
+	})
+}
+
+// --- provider.Provider contract via the non-context constructor ---
+
+func TestNewAndProviderContract(t *testing.T) {
+	cfg := Config{Enabled: true, Name: "primary", DSN: ":memory:"}
+	cfg.ApplyDefaults()
+	db, err := New(cfg, logging.NewDefault("test"), sqlite.Open(cfg.DSN))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	ctx := context.Background()
+	if db.Name() != "primary" {
+		t.Fatalf("Name = %q, want primary", db.Name())
+	}
+	if !db.IsAvailable(ctx) {
+		t.Fatal("expected database to be available before Close")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if db.IsAvailable(ctx) {
+		t.Fatal("closed database should not be available")
 	}
 }

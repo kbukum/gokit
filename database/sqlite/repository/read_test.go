@@ -4,8 +4,27 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kbukum/gokit/database/query"
 	repository "github.com/kbukum/gokit/database/repository"
 )
+
+func TestReadRepository_ListUsesQueryBuilder(t *testing.T) {
+	db := setupTestDB(t)
+	seedModel(t, db, "1", "Alice", 30)
+	seedModel(t, db, "2", "Bob", 20)
+	seedModel(t, db, "3", "Bea", 25)
+	repo := repository.NewReadRepository[testModel, string](db, "test")
+
+	params := query.Params{Page: 1, PageSize: 10, SortBy: "age", SortOrder: "desc"}
+	params.AddCondition("age", query.OpGte, "25")
+	res, err := repo.List(context.Background(), params, query.Config{AllowedSortFields: []string{"age"}})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if res.Pagination.Total != 2 || len(res.Data) != 2 || res.Data[0].Age != 30 {
+		t.Fatalf("List result = %+v", res)
+	}
+}
 
 func TestReadRepository_GetByID(t *testing.T) {
 	db := setupTestDB(t)

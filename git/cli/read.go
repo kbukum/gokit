@@ -45,7 +45,7 @@ func (b *Backend) Grep(pattern string, paths ...string) ([]model.GrepMatch, erro
 		return nil, nil
 	}
 	if result.ExitCode != 0 {
-		return nil, giterr.Internal(commandError(args, result))
+		return nil, giterr.Internal(b.commandError(args, result))
 	}
 	out := result.Stdout
 	text := strings.TrimSpace(string(out))

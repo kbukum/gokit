@@ -25,11 +25,7 @@ and the CI/release wiring for the invariants below.
   `docs/MODULE-INDEX.md`, and `docs/parity-matrix.md` in the same change. A stale parity matrix
   or module index is a should-fix.
 - **Examples compile.** Example code / `Example` test functions build and reflect the current API.
-- **Prose obeys semantic line breaks.** Markdown, `doc.go`,
-  and godoc/`//` prose wraps at a 100-column soft ceiling,
-  breaking only at sentence then clause boundaries — never mid-clause
-  and never splitting an inline link or code span. `make prose` passes;
-  unreflowed prose is a should-fix.
+- **Prose flows naturally.** Markdown paragraphs stay continuous in source instead of being hard-wrapped to a fixed column; renderers own viewport-aware wrapping. `doc.go` and godoc/`//` prose likewise avoid arbitrary column-based breaks. Intentional paragraph, list, blockquote, table, and code-block structure remains intact. AI-generated hard wraps are a should-fix.
 
 ## Supply chain
 
@@ -65,7 +61,6 @@ git diff --name-only | grep -E 'domains.toml|MODULE-INDEX|parity-matrix'
 ```bash
 ./gomod.sh cmd "go mod tidy" -m <module>          # per affected module
 make lint                                          # includes vet; depguard for layering
-make prose                                         # semantic line breaks in Markdown + Go comments
 govulncheck ./...                                  # vuln scan (from the affected module)
 ```
 

@@ -41,6 +41,65 @@ func TestExecReportsGitFailure(t *testing.T) {
 	}
 }
 
+func TestExecRedactsCredentialsFromFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-git")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'fatal: https://user:secret@example.com/repo.git failed' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake-git): %v", err)
+	}
+	backend := New(dir, &model.OpenOptions{CLIPath: script, ExtraArgs: []string{"https://arg:secret@example.com/repo.git"}})
+
+	_, err := backend.Exec("fetch", "https://other:secret@example.com/repo.git")
+	if err == nil {
+		t.Fatal("Exec() expected error")
+	}
+	if strings.Contains(err.Error(), "secret") {
+		t.Fatalf("Exec() error leaked credential: %v", err)
+	}
+	for _, want := range []string{"https://user:***@", "https://arg:***@", "https://other:***@"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Exec() error = %v, want redacted %q", err, want)
+		}
+	}
+}
+
+func TestExecRedactsSensitiveExtraArgs(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "fake-git")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'fatal: request failed' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake-git): %v", err)
+	}
+	const token = "Basic c2VjcmV0LXRva2Vu"
+	backend := New(dir, &model.OpenOptions{
+		CLIPath:   script,
+		ExtraArgs: []string{"-c", "http.extraHeader=Authorization: " + token},
+	})
+
+	_, err := backend.Exec("fetch", "origin")
+	if err == nil {
+		t.Fatal("Exec() expected error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("Exec() error leaked extra-arg secret: %v", err)
+	}
+	if !strings.Contains(err.Error(), "http.extraHeader=***") {
+		t.Fatalf("Exec() error = %v, want redacted extraHeader", err)
+	}
+}
+
+func TestExecMissingBinaryReportsInternalError(t *testing.T) {
+	t.Parallel()
+
+	backend := New(t.TempDir(), &model.OpenOptions{CLIPath: filepath.Join(t.TempDir(), "missing-git")})
+	if _, err := backend.Exec("status"); err == nil {
+		t.Fatal("Exec() expected missing binary error")
+	}
+}
+
 func TestInspectorOperations(t *testing.T) {
 	t.Parallel()
 
@@ -55,6 +114,7 @@ func TestInspectorOperations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("RevParse() error: %v", err)
 		}
+
 		want := mustParseOID(t, strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD")))
 		if got != want {
 			t.Fatalf("RevParse() = %s, want %s", got.String(), want.String())
@@ -111,6 +171,64 @@ func TestInspectorOperations(t *testing.T) {
 			t.Fatalf("Show() = %q, want %q", got, "# test repo\n")
 		}
 	})
+}
+
+func TestInspectorInvalidOutput(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		body   string
+		call   func(*Backend) error
+		errMsg string
+	}{
+		{
+			name: "rev-parse invalid oid",
+			body: "#!/bin/sh\necho not-a-full-oid\n",
+			call: func(backend *Backend) error {
+				_, err := backend.RevParse("HEAD")
+				return err
+			},
+			errMsg: "invalid object id length",
+		},
+		{
+			name: "grep invalid output",
+			body: "#!/bin/sh\nprintf 'README.md:not-a-line:content\\n'\n",
+			call: func(backend *Backend) error {
+				_, err := backend.Grep("content")
+				return err
+			},
+			errMsg: "invalid git grep line number",
+		},
+		{
+			name: "stash invalid output",
+			body: "#!/bin/sh\nif [ \"$1\" = \"stash\" ]; then printf 'not-a-stash\\n'; exit 0; fi\nexit 1\n",
+			call: func(backend *Backend) error {
+				_, err := backend.StashList()
+				return err
+			},
+			errMsg: "invalid git stash output",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			dir := t.TempDir()
+			script := filepath.Join(dir, "fake-git")
+			if err := os.WriteFile(script, []byte(tc.body), 0o755); err != nil {
+				t.Fatalf("WriteFile(fake-git): %v", err)
+			}
+			err := tc.call(New(dir, &model.OpenOptions{CLIPath: script}))
+			if err == nil {
+				t.Fatal("call expected error")
+			}
+			if !strings.Contains(err.Error(), tc.errMsg) {
+				t.Fatalf("error = %v, want containing %q", err, tc.errMsg)
+			}
+		})
+	}
 }
 
 func TestMerge(t *testing.T) {
@@ -241,6 +359,15 @@ func TestResetModes(t *testing.T) {
 	}
 }
 
+func TestResetRejectsInvalidMode(t *testing.T) {
+	t.Parallel()
+
+	backend := New(initTestRepo(t), nil)
+	if err := backend.Reset("HEAD", model.ResetMode(99)); err == nil {
+		t.Fatal("Reset() expected invalid mode error")
+	}
+}
+
 func TestCheckout(t *testing.T) {
 	t.Parallel()
 
@@ -254,8 +381,24 @@ func TestCheckout(t *testing.T) {
 	if err := backend.Checkout("feature"); err != nil {
 		t.Fatalf("Checkout() error: %v", err)
 	}
+
 	if got := currentBranch(t, dir); got != "feature" {
 		t.Fatalf("current branch = %q, want %q", got, "feature")
+	}
+}
+
+func TestCheckoutPath(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	backend := New(dir, nil)
+	writeFile(t, dir, "README.md", "dirty\n")
+
+	if err := backend.Checkout("HEAD", "README.md"); err != nil {
+		t.Fatalf("Checkout(path) error: %v", err)
+	}
+	if got := readFile(t, dir, "README.md"); got != "# test repo\n" {
+		t.Fatalf("README.md = %q, want original content", got)
 	}
 }
 
@@ -269,6 +412,7 @@ func TestStash(t *testing.T) {
 	if err := backend.StashPush("save work"); err != nil {
 		t.Fatalf("StashPush() error: %v", err)
 	}
+
 	if got := statusShort(t, dir); got != "" {
 		t.Fatalf("status after stash push = %q, want clean tree", got)
 	}
@@ -298,6 +442,25 @@ func TestStash(t *testing.T) {
 	}
 }
 
+func TestStashPushBlankMessage(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	backend := New(dir, nil)
+	writeFile(t, dir, "README.md", "dirty\n")
+
+	if err := backend.StashPush(" \t "); err != nil {
+		t.Fatalf("StashPush(blank) error: %v", err)
+	}
+	entries, err := backend.StashList()
+	if err != nil {
+		t.Fatalf("StashList() error: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Message == "" {
+		t.Fatalf("StashList() = %+v, want default git stash message", entries)
+	}
+}
+
 func TestMaintenance(t *testing.T) {
 	t.Parallel()
 
@@ -308,6 +471,7 @@ func TestMaintenance(t *testing.T) {
 	if err := backend.GC(); err != nil {
 		t.Fatalf("GC() error: %v", err)
 	}
+
 	if err := backend.Prune(); err != nil {
 		t.Fatalf("Prune() error: %v", err)
 	}
@@ -320,6 +484,29 @@ func TestMaintenance(t *testing.T) {
 	}
 	if len(cleaned) != 1 || cleaned[0] != "junk.txt" {
 		t.Fatalf("Clean() = %v, want [junk.txt]", cleaned)
+	}
+}
+
+func TestCleanDryRunDirectoriesAndIgnored(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	backend := New(dir, nil)
+	writeFile(t, dir, ".gitignore", "*.log\n")
+	runGit(t, dir, "add", ".gitignore")
+	runGit(t, dir, "commit", "-m", "ignore logs")
+	writeFile(t, dir, "build/out.txt", "out\n")
+	writeFile(t, dir, "debug.log", "log\n")
+
+	cleaned, err := backend.Clean(model.WithCleanDirectories(true), model.WithCleanIgnored(true))
+	if err != nil {
+		t.Fatalf("Clean(dry-run) error: %v", err)
+	}
+	if len(cleaned) != 2 {
+		t.Fatalf("Clean(dry-run) = %v, want directory and ignored file", cleaned)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "build", "out.txt")); err != nil {
+		t.Fatalf("dry-run removed untracked directory file: %v", err)
 	}
 }
 
