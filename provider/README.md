@@ -81,7 +81,7 @@ cost, _ := meta.Float("cost")
 latency, _ := meta.Duration("latency_ms")
 ```
 
-Meta is consumed by `dag.OrderByCost()`, `dag.OrderByLatency()`, and `dag.WeightedScore()` for intelligent node scheduling. Also available for Sink and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
+Meta is consumed by `dag/cascade` ordering strategies (`cascade.OrderByCost()`, `cascade.OrderByLatency()`, and `cascade.WeightedScore()`) for intelligent node scheduling. Also available for Sink and Stream providers via `WithSinkMeta` and `WithStreamMeta`.
 
 ## Stream Composition
 

@@ -108,20 +108,26 @@ When adding a new module:
 - Errors: RFC 9457 `AppError` with typed error codes.
 - Tests: parallel, table-driven, use `testutil` helpers; deterministic under `-race -shuffle`.
 - **Readability & structure (load-bearing, not cosmetic):** organize by focused,
-  well-named files within a package — never pile unrelated logic into one large file.
+  well-named files within a package — never pile unrelated concerns into one large file.
   Split by concern (types, options, registry, middleware, adapter) into separate files
   so the next reader can navigate by filename.
-  A file that has grown to cover several responsibilities is a refactor signal, not a normal state.
-  Reorg is not only about one oversized file: when a single package/folder accumulates many
-  loosely-related non-test files (roughly >5–10, excluding `_test.go`) that fall into groups which are
-  not tightly coupled, lift each cohesive group into its own concern-named sub-package (sub-folder with
+  When a single non-test `.go` file grows past roughly **300–400 code lines** (code only —
+  excluding test files, comments, and blank lines; a soft average, not a strict cutoff),
+  check whether distinct concerns are piled together; if so it is a refactor signal, not a
+  normal state. Length alone is never the verdict — a cohesive single-concern file is fine
+  at any size; concern-mixing is the real signal.
+  Reorg is not only about one oversized file: when a single package/folder accumulates
+  **more than ~10 non-test files** (excluding `_test.go`) that fall into **2–3+ separable
+  concern groups**, lift each cohesive group into its own concern-named sub-package (sub-folder with
   its own declare-only `doc.go`), so a reader lands in the right file *and folder* from the layout alone
   (as in `agent/{memory}`, `cli/{theme,render,…}`, `dataset/{payload,record,stage,…}`).
-  Keep it criteria-driven — only where the groups are genuinely separable and it improves maintainability.
-- **Declare-only aggregator.** `doc.go` holds package documentation only;
-  a package's parent file never accumulates code —
-  split by concern into named sibling files (as in `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`).
-  Reported (advisory) by the ast-grep rule `scripts/sg-rules/declare-only-aggregator.yml` via `make structure`.
+  Keep it criteria-driven — only where the groups are genuinely separable and it improves
+  readability, maintainability, scalability, extendability, and reusability without causing
+  other issues (import cycles, over-fragmentation).
+- **Declare-only aggregator.** `doc.go` holds the package clause and package documentation only —
+  no `func`/`method`/`type`/`var`/`const` declarations and no imports;
+  split code by concern into named sibling files (as in `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`).
+  Reported (advisory, never gating) by the ast-grep rule `scripts/sg-rules/declare-only-aggregator.yml` via `make structure`.
 
 ## Validation scope
 

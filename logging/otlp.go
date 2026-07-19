@@ -23,16 +23,24 @@ type OTLPProvider struct {
 	logger   otellog.Logger
 }
 
+// OTLPProviderConfig configures an OTLP log provider and its service resource attributes.
+type OTLPProviderConfig struct {
+	Exporter    OTLPConfig
+	ServiceName string
+	Environment string
+	Version     string
+}
+
 // NewOTLPProvider creates and starts an OTLP log provider.
-func NewOTLPProvider(cfg OTLPConfig, serviceName, environment, version string) (*OTLPProvider, error) {
+func NewOTLPProvider(cfg OTLPProviderConfig) (*OTLPProvider, error) {
 	ctx := context.Background()
 
-	exporter, err := newLogExporter(ctx, cfg)
+	exporter, err := newLogExporter(ctx, cfg.Exporter)
 	if err != nil {
 		return nil, fmt.Errorf("creating OTLP log exporter: %w", err)
 	}
 
-	res, err := newLogResource(serviceName, environment, version)
+	res, err := newLogResource(cfg.ServiceName, cfg.Environment, cfg.Version)
 	if err != nil {
 		return nil, fmt.Errorf("creating OTLP log resource: %w", err)
 	}

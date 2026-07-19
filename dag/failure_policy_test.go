@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 func TestEngineConfig_FailurePolicy(t *testing.T) {
@@ -13,7 +15,7 @@ func TestEngineConfig_FailurePolicy(t *testing.T) {
 		name          string
 		engine        *Engine
 		wantTopErr    bool
-		wantDependent string
+		wantDependent status.Status
 	}{
 		{
 			name:       "fail fast",
@@ -23,12 +25,12 @@ func TestEngineConfig_FailurePolicy(t *testing.T) {
 		{
 			name:          "continue",
 			engine:        NewEngine(EngineConfig{FailurePolicy: Continue}),
-			wantDependent: StatusCompleted,
+			wantDependent: status.Completed,
 		},
 		{
 			name:          "skip dependents",
 			engine:        NewEngine(EngineConfig{FailurePolicy: SkipDependents}),
-			wantDependent: StatusDepFailed,
+			wantDependent: status.DepFailed,
 		},
 	}
 
@@ -84,8 +86,8 @@ func TestEngine_ZeroValueDefaultSkipsDependents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := result.NodeResults["b"].Status; got != StatusDepFailed {
-		t.Fatalf("status = %s, want %s", got, StatusDepFailed)
+	if got := result.NodeResults["b"].Status; got != status.DepFailed {
+		t.Fatalf("status = %s, want %s", got, status.DepFailed)
 	}
 }
 
@@ -111,7 +113,7 @@ func TestEngine_NodePolicyOverridesEnginePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := result.NodeResults["b"].Status; got != StatusCompleted {
-		t.Fatalf("status = %s, want %s", got, StatusCompleted)
+	if got := result.NodeResults["b"].Status; got != status.Completed {
+		t.Fatalf("status = %s, want %s", got, status.Completed)
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 func TestSession_ReadyFilter_NoSchedule(t *testing.T) {
@@ -133,14 +135,14 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["a"].Status != StatusCompleted {
+	if result.NodeResults["a"].Status != status.Completed {
 		t.Fatalf("expected a completed, got %s", result.NodeResults["a"].Status)
 	}
-	if result.NodeResults["b"].Status != StatusSkipped {
+	if result.NodeResults["b"].Status != status.Skipped {
 		t.Fatalf("expected b skipped, got %s", result.NodeResults["b"].Status)
 	}
 	// "c" should be dep-skipped because "b" was skipped and has no state output
-	if result.NodeResults["c"].Status != StatusDepSkipped {
+	if result.NodeResults["c"].Status != status.DepSkipped {
 		t.Fatalf("expected c dep-skipped, got %s", result.NodeResults["c"].Status)
 	}
 
@@ -152,7 +154,7 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result2.NodeResults["b"].Status != StatusCompleted {
+	if result2.NodeResults["b"].Status != status.Completed {
 		t.Fatalf("expected b completed, got %s", result2.NodeResults["b"].Status)
 	}
 
@@ -161,7 +163,7 @@ func TestEngine_ExecuteStreaming(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result3.NodeResults["c"].Status != StatusCompleted {
+	if result3.NodeResults["c"].Status != status.Completed {
 		t.Fatalf("expected c completed with cached state, got %s", result3.NodeResults["c"].Status)
 	}
 }
@@ -208,7 +210,7 @@ func TestSessionState_AcrossCycles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cycle 1 error: %v", err)
 	}
-	if result1.NodeResults["writer"].Status != StatusCompleted {
+	if result1.NodeResults["writer"].Status != status.Completed {
 		t.Fatalf("cycle 1: writer expected completed, got %s", result1.NodeResults["writer"].Status)
 	}
 
@@ -221,7 +223,7 @@ func TestSessionState_AcrossCycles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cycle 2 error: %v", err)
 	}
-	if result2.NodeResults["reader"].Status != StatusCompleted {
+	if result2.NodeResults["reader"].Status != status.Completed {
 		t.Fatalf("cycle 2: reader expected completed, got %s", result2.NodeResults["reader"].Status)
 	}
 	if result2.NodeResults["reader"].Output != "written-value" {

@@ -1,11 +1,14 @@
-package dag
+package cascade
 
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 
 	"github.com/kbukum/gokit/provider"
 )
@@ -315,6 +318,51 @@ func TestCascade_InternalEdges(t *testing.T) {
 	}
 }
 
+func TestCascade_InternalEdges_HonorsOrderWithinLevel(t *testing.T) {
+	var mu sync.Mutex
+	order := make([]string, 0, 4)
+
+	makeProvider := func(name string, cost float64) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProviderWithMeta(name,
+			provider.Meta{"cost": cost},
+			func(_ context.Context, _ analysisInput) (analysisResult, error) {
+				mu.Lock()
+				order = append(order, name)
+				mu.Unlock()
+				return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+			})
+	}
+
+	// root fans out to three ready-simultaneous dependents; OrderNodesBy must
+	// order that level deterministically by cost, not by map iteration.
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("fanout", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("root", makeProvider("root", 0.5))
+			b.AddNode("expensive", makeProvider("expensive", 1.0))
+			b.AddNode("cheap", makeProvider("cheap", 0.01))
+			b.AddNode("free", makeProvider("free", 0.0))
+			b.Edge("root", "expensive")
+			b.Edge("root", "cheap")
+			b.Edge("root", "free")
+		}).
+		OrderNodesBy(OrderByCost()).
+		MaxConcurrency(1). // Force sequential so intra-level order is observable.
+		MergeStrategy(mergeResults).
+		Build()
+
+	cascade.Execute(context.Background(), analysisInput{})
+
+	want := []string{"root", "free", "cheap", "expensive"}
+	if len(order) != len(want) {
+		t.Fatalf("expected %d executions, got %d (%v)", len(want), len(order), order)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, order)
+		}
+	}
+}
+
 func TestCascade_StageFailure_Abort(t *testing.T) {
 	pFail := newTestProvider("failing", func(_ context.Context, _ analysisInput) (analysisResult, error) {
 		return analysisResult{}, errors.New("analyzer crashed")
@@ -416,11 +464,11 @@ func TestCascade_ContinueWithPartial(t *testing.T) {
 	if len(trace.NodeResults) != 2 {
 		t.Errorf("expected 2 node results, got %d", len(trace.NodeResults))
 	}
-	if trace.NodeResults["failing"].Status != StatusFailed {
-		t.Errorf("failing node status = %q, want %q", trace.NodeResults["failing"].Status, StatusFailed)
+	if trace.NodeResults["failing"].Status != status.Failed {
+		t.Errorf("failing node status = %q, want %q", trace.NodeResults["failing"].Status, status.Failed)
 	}
-	if trace.NodeResults["good"].Status != StatusCompleted {
-		t.Errorf("good node status = %q, want %q", trace.NodeResults["good"].Status, StatusCompleted)
+	if trace.NodeResults["good"].Status != status.Completed {
+		t.Errorf("good node status = %q, want %q", trace.NodeResults["good"].Status, status.Completed)
 	}
 }
 
@@ -626,10 +674,10 @@ func TestCascade_TraceCompleteness(t *testing.T) {
 	}
 
 	// Check node results.
-	if trace.NodeResults["metadata"].Status != StatusCompleted {
+	if trace.NodeResults["metadata"].Status != status.Completed {
 		t.Error("metadata should be completed")
 	}
-	if trace.NodeResults["frequency"].Status != StatusCompleted {
+	if trace.NodeResults["frequency"].Status != status.Completed {
 		t.Error("frequency should be completed")
 	}
 
@@ -776,7 +824,7 @@ func TestCascade_SequentialContextCancel(t *testing.T) {
 	// Second and third should be skipped.
 	skipped := 0
 	for _, nt := range trace.NodeResults {
-		if nt.Status == StatusSkipped {
+		if nt.Status == status.Skipped {
 			skipped++
 		}
 	}
@@ -805,5 +853,112 @@ func TestCascade_SequentialAllFailWithPartial(t *testing.T) {
 	// With ContinueWithPartial, stage should not propagate error.
 	if trace.Error != nil {
 		t.Errorf("expected no error with ContinueWithPartial, got %v", trace.Error)
+	}
+}
+
+func TestCascade_InternalEdges_CycleReturnsError(t *testing.T) {
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("cyclic", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.AddNode("b", makeNode("b"))
+			b.Edge("a", "b")
+			b.Edge("b", "a")
+		}).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error == nil {
+		t.Fatal("expected error for cyclic stage edges, got nil")
+	}
+	if !strings.Contains(trace.Error.Error(), "cycle detected") {
+		t.Errorf("expected cycle error, got %v", trace.Error)
+	}
+}
+
+func TestCascade_InternalEdges_UnknownNodeReturnsError(t *testing.T) {
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("dangling", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.Edge("a", "ghost") // "ghost" was never added
+		}).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error == nil {
+		t.Fatal("expected error for edge to unknown node, got nil")
+	}
+	if !strings.Contains(trace.Error.Error(), "unknown node") {
+		t.Errorf("expected unknown-node error, got %v", trace.Error)
+	}
+}
+
+func TestCascade_OrderStrategy_DropDuplicateIsResilient(t *testing.T) {
+	var mu sync.Mutex
+	order := make([]string, 0, 3)
+
+	makeNode := func(name string) provider.RequestResponse[analysisInput, analysisResult] {
+		return newTestProvider(name, func(_ context.Context, _ analysisInput) (analysisResult, error) {
+			mu.Lock()
+			order = append(order, name)
+			mu.Unlock()
+			return analysisResult{Confidence: 0.5, Scores: map[string]float64{name: 0.5}}, nil
+		})
+	}
+
+	// A misbehaving strategy that drops one node, duplicates another, and invents
+	// an unknown name must never panic or drop real nodes from execution.
+	bad := func(nodes []orderableNode) []orderableNode {
+		if len(nodes) == 0 {
+			return nodes
+		}
+		return []orderableNode{nodes[0], nodes[0], {Name: "phantom"}}
+	}
+
+	cascade := NewCascade[analysisInput, analysisResult]().
+		Stage("noisy", func(b *StageBuilder[analysisInput, analysisResult], _ analysisInput) {
+			b.AddNode("a", makeNode("a"))
+			b.AddNode("b", makeNode("b"))
+			b.AddNode("c", makeNode("c"))
+		}).
+		OrderNodesBy(bad).
+		MaxConcurrency(1).
+		MergeStrategy(mergeResults).
+		Build()
+
+	_, trace := cascade.Execute(context.Background(), analysisInput{})
+
+	if trace.Error != nil {
+		t.Fatalf("expected no error, got %v", trace.Error)
+	}
+	if len(order) != 3 {
+		t.Fatalf("expected all 3 nodes executed exactly once, got %v", order)
+	}
+	seen := map[string]bool{}
+	for _, n := range order {
+		if seen[n] {
+			t.Fatalf("node %q executed more than once: %v", n, order)
+		}
+		seen[n] = true
+	}
+	for _, want := range []string{"a", "b", "c"} {
+		if !seen[want] {
+			t.Fatalf("node %q missing from execution: %v", want, order)
+		}
 	}
 }

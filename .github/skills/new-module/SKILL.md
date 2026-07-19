@@ -73,7 +73,7 @@ so the Makefile/CI `check-<domain>` gates and generated docs pick it up.
 ## Step 6 — Parity matrix
 
 If this capability exists (or should be tracked) in rskit,
-add/adjust its row in `docs/parity-matrix.md` (✅ present · ➖ absent · ⏳ planned) with a short note.
+add/adjust its row in `docs/PARITY-MATRIX.md` (✅ present · ➖ absent · ⏳ planned) with a short note.
 See the `parity` skill for the capability-not-blind mirroring policy.
 
 ## Step 7 — Validate
@@ -94,7 +94,7 @@ toven tidy  --module go:<newmodule>
 - [ ] Public API typed/generic, options-based, no `any`
 - [ ] (sub-module) `go.mod` + `replace`, added to the right `*.go.work`
 - [ ] `domains.toml` updated
-- [ ] `docs/parity-matrix.md` updated if it has a cross-kit counterpart
+- [ ] `docs/PARITY-MATRIX.md` updated if it has a cross-kit counterpart
 - [ ] build/lint/test/tidy green for the module
 
 Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/kbukum/gokit/dag/status"
 )
 
 // Engine executes a graph in dependency order.
@@ -79,7 +81,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 			if filter != nil && !filter(name, state) {
 				r.result.NodeResults[name] = NodeResult{
 					Name:   name,
-					Status: StatusSkipped,
+					Status: status.Skipped,
 				}
 				continue
 			}
@@ -99,7 +101,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 			if !ok {
 				continue
 			}
-			if nr.Status != StatusFailed && nr.Status != StatusUnavailable {
+			if nr.Status != status.Failed && nr.Status != status.Unavailable {
 				continue
 			}
 			if e.nodeFailurePolicy(g.GetNodeDef(name)) == FailFast {
@@ -116,7 +118,7 @@ func (e *Engine) execute(ctx context.Context, g *Graph, state *State, filter Nod
 // checkUpstreams examines this cycle's results for all upstream dependencies.
 // Returns (skipStatus, true) if the node should be skipped, or ("", false) to proceed.
 // For skipped dependencies, also checks if state has cached output from a previous cycle.
-func (e *Engine) checkUpstreams(r *run, name string) (string, bool) {
+func (e *Engine) checkUpstreams(r *run, name string) (status.Status, bool) {
 	for _, upstream := range r.upstreams[name] {
 		ur, exists := r.result.NodeResults[upstream]
 		if !exists {
@@ -129,15 +131,17 @@ func (e *Engine) checkUpstreams(r *run, name string) (string, bool) {
 		}
 
 		switch ur.Status {
-		case StatusUnavailable, StatusDepUnavailable:
-			return StatusDepUnavailable, true
-		case StatusFailed, StatusDepFailed:
-			return StatusDepFailed, true
-		case StatusSkipped, StatusDepSkipped:
+		case status.Completed:
+			// Upstream succeeded; the dependent may proceed.
+		case status.Unavailable, status.DepUnavailable:
+			return status.DepUnavailable, true
+		case status.Failed, status.DepFailed:
+			return status.DepFailed, true
+		case status.Skipped, status.DepSkipped:
 			// Dependency was filtered/skipped this cycle. Only skip the dependent
 			// if the dependency's output isn't available in state from a prior cycle.
 			if _, hasState := r.state.Get(upstream); !hasState {
-				return StatusDepSkipped, true
+				return status.DepSkipped, true
 			}
 		}
 	}
@@ -173,13 +177,13 @@ func (e *Engine) executeNode(ctx context.Context, node Node, state *State) NodeR
 	duration := time.Since(start)
 
 	if err != nil {
-		status := StatusFailed
+		nodeStatus := status.Failed
 		if errors.Is(err, ErrUnavailable) {
-			status = StatusUnavailable
+			nodeStatus = status.Unavailable
 		}
 		return NodeResult{
 			Name:     node.Name(),
-			Status:   status,
+			Status:   nodeStatus,
 			Duration: duration,
 			Error:    err,
 		}
@@ -187,7 +191,7 @@ func (e *Engine) executeNode(ctx context.Context, node Node, state *State) NodeR
 
 	return NodeResult{
 		Name:     node.Name(),
-		Status:   StatusCompleted,
+		Status:   status.Completed,
 		Duration: duration,
 		Output:   output,
 	}

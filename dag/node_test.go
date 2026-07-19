@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kbukum/gokit/dag/status"
+
 	"github.com/kbukum/gokit/provider"
 )
 
@@ -150,10 +152,10 @@ func TestFromProvider_InDAG(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.NodeResults["extract"].Status != StatusCompleted {
+	if result.NodeResults["extract"].Status != status.Completed {
 		t.Fatal("expected extract completed")
 	}
-	if result.NodeResults["transform"].Status != StatusCompleted {
+	if result.NodeResults["transform"].Status != status.Completed {
 		t.Fatal("expected transform completed")
 	}
 
