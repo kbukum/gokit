@@ -2,24 +2,17 @@
 
 **Push-based task execution with real-time event streaming, worker pools, and supervision**
 
-`worker` provides a generic `Handler[I, O]` abstraction for executing tasks that emit events during execution
-— progress updates, partial results, logs — with built-in pooling, dispatch strategies, supervision,
-middleware, and composition patterns.
-Designed for use cases where callers need real-time visibility into task execution:
-file downloaders, CLI subprocess orchestration, parallel data processing,
-and long-running background jobs.
+`worker` provides a generic `Handler[I, O]` abstraction for executing tasks that emit events during execution — progress updates, partial results, logs — with built-in pooling, dispatch strategies, supervision, middleware, and composition patterns. Designed for use cases where callers need real-time visibility into task execution: file downloaders, CLI subprocess orchestration, parallel data processing, and long-running background jobs.
 
 ## Features
 
 - **Handler[I, O]** — single generic interface for all task execution
 - **Push-based events** — handlers call `emit()` for progress, partial results,
   and logs during execution
-- **Worker pool** — fixed-size goroutine pool with per-task handles, cancellation,
-  and graceful shutdown
+- **Worker pool** — fixed-size goroutine pool with per-task handles, cancellation, and graceful shutdown
 - **Dispatch strategies** — round-robin and least-loaded worker selection
 - **Supervision** — panic tracking, health monitoring, backoff, and configurable restart policies
-- **Middleware** —
-  composable cross-cutting concerns (timeout, recovery) using the same `Chain` pattern as `provider`
+- **Middleware** — composable cross-cutting concerns (timeout, recovery) using the same `Chain` pattern as `provider`
 - **Composition** — FanOut, MapReduce, and Pipeline for combining handlers
 - **Provider bridges** — `FromProvider` / `AsProvider` for interop with `provider.RequestResponse`
 - **Subprocess handler** — wraps `process.Command` with line-by-line stdout/stderr streaming
@@ -169,10 +162,7 @@ pool := worker.NewPool(handler, worker.PoolConfig{
 })
 ```
 
-When a task panics, the worker goroutine survives (panics are caught per-task).
-The supervisor tracks per-worker panic counts
-and marks workers unhealthy after exceeding `MaxRestarts`.
-Unhealthy workers are skipped by the dispatcher.
+When a task panics, the worker goroutine survives (panics are caught per-task). The supervisor tracks per-worker panic counts and marks workers unhealthy after exceeding `MaxRestarts`. Unhealthy workers are skipped by the dispatcher.
 
 ### Example 4: MapReduce — Parallel Processing with Combine
 
@@ -356,11 +346,9 @@ func TestMyWorker(t *testing.T) {
 
 - **Lock-free hot path** — `stopped` is `atomic.Bool`, worker stats use `atomic.Int32`.
   No mutex on Submit, dispatch, or runWorker
-- **Non-blocking event forwarding** —
-  pool-level events use `select/default` to avoid blocking workers; per-task events are buffered
+- **Non-blocking event forwarding** — pool-level events use `select/default` to avoid blocking workers; per-task events are buffered
 - **Timer management** — backoff uses `time.NewTimer` + `Stop()` (no `time.After` leaks)
-- **Context.AfterFunc** —
-  ties task context to pool context for zero-overhead cancellation propagation (Go 1.21+)
+- **Context.AfterFunc** — ties task context to pool context for zero-overhead cancellation propagation (Go 1.21+)
 - **Atomic stats** — `PoolStats` reads use no locks, only atomic loads
 
 ## Related Packages

@@ -1,8 +1,6 @@
 # TestUtil - Testing Infrastructure for gokit
 
-The `testutil` package provides a comprehensive testing infrastructure for gokit components,
-following the same lifecycle patterns as production components. It enables easy setup, teardown,
-and management of test components with support for state snapshots and resets.
+The `testutil` package provides a comprehensive testing infrastructure for gokit components, following the same lifecycle patterns as production components. It enables easy setup, teardown, and management of test components with support for state snapshots and resets.
 
 ## Features
 
@@ -113,8 +111,8 @@ type TestComponent interface {
     
     // Testing-specific methods
     Reset(ctx context.Context) error
-    Snapshot(ctx context.Context) (interface{}, error)
-    Restore(ctx context.Context, snapshot interface{}) error
+    Snapshot(ctx context.Context) (any, error)
+    Restore(ctx context.Context, snapshot any) error
 }
 ```
 
@@ -282,6 +280,8 @@ package mymodule
 
 import (
     "context"
+    "fmt"
+
     "github.com/kbukum/gokit/component"
     "github.com/kbukum/gokit/testutil"
 )
@@ -321,16 +321,19 @@ func (c *TestMyComponent) Reset(ctx context.Context) error {
     return nil
 }
 
-func (c *TestMyComponent) Snapshot(ctx context.Context) (interface{}, error) {
+func (c *TestMyComponent) Snapshot(ctx context.Context) (any, error) {
     // Capture current state
-    return map[string]interface{}{
+    return map[string]any{
         "data": c.data,
     }, nil
 }
 
-func (c *TestMyComponent) Restore(ctx context.Context, snapshot interface{}) error {
+func (c *TestMyComponent) Restore(ctx context.Context, snapshot any) error {
     // Restore from snapshot
-    state := snapshot.(map[string]interface{})
+    state, ok := snapshot.(map[string]any)
+    if !ok {
+        return fmt.Errorf("unexpected snapshot type %T", snapshot)
+    }
     c.data = state["data"]
     return nil
 }
@@ -368,14 +371,11 @@ See the test files for comprehensive examples:
 
 ## Thread Safety
 
-All TestManager operations are thread-safe and can be called concurrently.
-Individual TestComponent implementations should also ensure thread-safety if they will be used in concurrent tests.
+All TestManager operations are thread-safe and can be called concurrently. Individual TestComponent implementations should also ensure thread-safety if they will be used in concurrent tests.
 
 ## Next Steps
 
 - See module-specific testutil packages for database, Redis, Kafka, etc.
-- Review the [Testing Guide](../docs/testing-guide.md) for best practices (when available)
-- Check the [TestUtil Cookbook](../docs/testutil-cookbook.md) for common patterns (when available)
 
 ## Contributing
 

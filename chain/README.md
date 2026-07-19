@@ -1,14 +1,8 @@
 # chain
 
-Typed, sequential chain execution:
-a statically typed sequence of steps where each step consumes the previous step's output
-and produces the next step's input type. Supports per-step progress reporting,
-cancellation at step boundaries,
-and automatic reverse-order cleanup of completed steps when a later step fails
-or the chain is canceled.
+Typed, sequential chain execution: a statically typed sequence of steps where each step consumes the previous step's output and produces the next step's input type. Supports per-step progress reporting, cancellation at step boundaries, and automatic reverse-order cleanup of completed steps when a later step fails or the chain is canceled.
 
-Mirrors `rskit-chain` (Rust) and `pykit-chain` (Python) —
-the same typed `Step` / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
+Mirrors `rskit-chain` (Rust) and `pykit-chain` (Python) — the same typed `Step` / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
 
 ## Install
 
@@ -48,9 +42,7 @@ func main() {
 }
 ```
 
-Because Go methods cannot introduce new type parameters,
-steps are appended with the package-level `Then` function rather than a fluent method,
-so each `Then` can transform the output type.
+Because Go methods cannot introduce new type parameters, steps are appended with the package-level `Then` function rather than a fluent method, so each `Then` can transform the output type.
 
 ## Key Types & Functions
 

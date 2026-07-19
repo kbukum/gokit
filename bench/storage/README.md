@@ -2,8 +2,7 @@
 
 **Cloud storage adapter for bench results — wraps gokit/storage**
 
-`bench/storage` implements the `bench.RunStorage` interface on top of any `gokit/storage.Storage` provider (S3, GCS, Azure Blob, local filesystem, etc.),
-so benchmark results can be persisted and queried without changing a line of benchmarking code.
+`bench/storage` implements the `bench.RunStorage` interface on top of any `gokit/storage.Storage` provider (S3, GCS, Azure Blob, local filesystem, etc.), so benchmark results can be persisted and queried without changing a line of benchmarking code.
 
 ## Install
 
@@ -23,13 +22,21 @@ import (
 	"github.com/kbukum/gokit/bench"
 	benchstore "github.com/kbukum/gokit/bench/storage"
 	"github.com/kbukum/gokit/storage"
+	"github.com/kbukum/gokit/storage/local"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// 1. Create a gokit/storage provider (e.g. S3, GCS, local).
-	store, _ := storage.New("s3://my-bucket")
+	// 1. Build a gokit/storage provider (register a backend into the registry first).
+	reg := storage.NewFactoryRegistry()
+	if err := local.Register(reg, local.Config{BasePath: "./benchmarks"}); err != nil {
+		panic(err)
+	}
+	store, err := storage.New(reg, storage.Config{Provider: storage.ProviderLocal}, nil)
+	if err != nil {
+		panic(err)
+	}
 
 	// 2. Wrap it as bench RunStorage.
 	rs := benchstore.NewProviderStorage(store,

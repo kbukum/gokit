@@ -89,5 +89,4 @@ func main() {
 
 ## When to use
 
-Import only the providers you actually ship. Registration is explicit
-so composition stays predictable and there are no package-init side effects.
+Import only the providers you actually ship. Registration is explicit so composition stays predictable and there are no package-init side effects.

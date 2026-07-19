@@ -57,7 +57,7 @@ instances, _ := comp.Discovery().Discover(ctx, "user-service")
 | `Config` | Provider, Consul address/token, service name/port, health check, tags, metadata |
 | `ServiceInfo` | ID, Name, Address, Port, Tags, Metadata |
 | `ServiceInstance` | Extends ServiceInfo with Health status and LastSeen |
-| `NewComponent(cfg, log)` | Create a managed discovery component |
+| `NewComponent(reg, cfg, log, ...opts) (*Component, error)` | Create a managed discovery component |
 
 ### Providers
 

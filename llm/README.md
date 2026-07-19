@@ -1,8 +1,6 @@
 # gokit/llm
 
-`llm` owns gokit's canonical chat-completion surface: request/response types,
-canonical stream events, the provider-facing `Dialect` seam,
-and the adapter that turns provider wire formats into one SDK-free API.
+`llm` owns gokit's canonical chat-completion surface: request/response types, canonical stream events, the provider-facing `Dialect` seam, and the adapter that turns provider wire formats into one SDK-free API.
 
 ## Install
 
@@ -57,5 +55,4 @@ func main() {
 
 ## When to use
 
-Use `llm` for chat-style completions, tool calling, and canonical streaming.
-Use `inference` when you are integrating lower-level serving runtimes such as Triton, vLLM, or TGI.
+Use `llm` for chat-style completions, tool calling, and canonical streaming. Use `inference` when you are integrating lower-level serving runtimes such as Triton, vLLM, or TGI.

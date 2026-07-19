@@ -4,13 +4,9 @@ Subprocess execution with context cancellation, signal handling, and provider in
 
 ## Overview
 
-The `process` package provides a structured way to run external commands from Go services.
-It wraps `os/exec` with context-aware cancellation, process group management,
-graceful shutdown (SIGTERM → SIGKILL), and automatic output capture. Results include stdout, stderr,
-exit code, and duration.
+The `process` package provides a structured way to run external commands from Go services. It wraps `os/exec` with context-aware cancellation, process group management, graceful shutdown (SIGTERM → SIGKILL), and automatic output capture. Results include stdout, stderr, exit code, and duration.
 
-For long-running or unreliable subprocesses, the package integrates with gokit's provider
-and resilience frameworks — adding retry, circuit breaker, and generic I/O adapters.
+For long-running or unreliable subprocesses, the package integrates with gokit's provider and resilience frameworks — adding retry, circuit breaker, and generic I/O adapters.
 
 ## Installation
 
@@ -74,8 +70,7 @@ Executes the command, captures output, and returns a `*Result` (always populated
 
 ### Context Cancellation
 
-When the context is cancelled, `Run` sends SIGTERM to the entire process group.
-If the process doesn't exit within `GracePeriod` (default 5s), it escalates to SIGKILL.
+When the context is cancelled, `Run` sends SIGTERM to the entire process group. If the process doesn't exit within `GracePeriod` (default 5s), it escalates to SIGKILL.
 
 ```go
 ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -103,13 +98,12 @@ Extra environment variables are merged with the parent process environment.
 
 ### Resilient Execution
 
-Use `Runner` for subprocesses that may fail transiently.
-Circuit breaker state persists across calls.
+Use `Runner` for subprocesses that may fail transiently. Circuit breaker state persists across calls.
 
 ```go
 runner := process.NewRunner(provider.ResilienceConfig{
 	CircuitBreaker: &resilience.CircuitBreakerConfig{
-		Threshold: 3, ResetTimeout: 30 * time.Second,
+		MaxFailures: 3, Timeout: 30 * time.Second,
 	},
 })
 

@@ -1,7 +1,6 @@
 # gokit/ai
 
-`ai` owns shared AI/ML value types only: content blocks, chat messages, models, usage, streams,
-prompts, vectors, and OTel semantic conventions.
+`ai` owns shared AI/ML value types only: content blocks, chat messages, models, usage, streams, prompts, vectors, and OTel semantic conventions.
 
 ## Architecture
 

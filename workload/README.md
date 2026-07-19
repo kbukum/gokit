@@ -46,9 +46,17 @@ result, _ := mgr.Deploy(ctx, workload.DeployRequest{
 ### As a Component
 
 ```go
-comp := workload.NewComponent(workload.Config{Provider: "docker"}, dockerCfg, log)
-comp.Start(ctx)
-defer comp.Stop(ctx)
+import "github.com/kbukum/gokit/workload/docker"
+
+reg := workload.NewFactoryRegistry()
+if err := docker.Register(reg); err != nil {
+    return err
+}
+comp := workload.NewComponent(reg, workload.Config{Provider: "docker"}, dockerCfg, log)
+if err := comp.Start(ctx); err != nil {
+    return err
+}
+defer func() { _ = comp.Stop(ctx) }()
 
 mgr := comp.Manager()
 ```
@@ -64,7 +72,7 @@ mgr := comp.Manager()
 | `StatsProvider` | Optional — `Stats(ctx, id)` for CPU/memory/network metrics |
 | `LogStreamer` | Optional — `StreamLogs(ctx, id, opts)` for real-time log streaming |
 | `EventWatcher` | Optional — `WatchEvents(ctx, filter)` for lifecycle events |
-| `NewComponent(cfg, providerCfg, log)` | Create lifecycle-managed component |
+| `NewComponent(registry, cfg, providerCfg, log)` | Create lifecycle-managed component |
 | `DeployRequest` | Name, Image, Command, Environment, Resources, Ports, Volumes |
 | `WorkloadStatus` | ID, Status, Running, Healthy, ExitCode, Restarts |
 | `ParseMemory(s)` | Parse memory strings ("512m", "1g") to bytes |

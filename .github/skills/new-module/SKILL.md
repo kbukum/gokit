@@ -10,16 +10,12 @@ user-invocable: true
 
 # Adding a package or module to gokit
 
-gokit is a multi-module monorepo. Core packages share the root `go.mod` (`github.com/kbukum/gokit`);
-packages with heavy external dependencies get their own `go.mod` as sub-modules. Getting placement
-and wiring right up front avoids layering violations and pseudo -version breakage later.
+gokit is a multi-module monorepo. Core packages share the root `go.mod` (`github.com/kbukum/gokit`); packages with heavy external dependencies get their own `go.mod` as sub-modules. Getting placement and wiring right up front avoids layering violations and pseudo-version breakage later.
 
 ## Step 1 — Decide: root package or sub-module
 
-- **No heavy third-party deps** (stdlib + existing gokit only) → add a package **under the root module**.
-  No new `go.mod`.
-- **Heavy deps** (a cloud SDK, a driver, a broker client, an ML runtime) → create a **sub-module** with its own `go.mod`
-  so consumers who don't need it don't pay for the dependency.
+- **No heavy third-party deps** (stdlib + existing gokit only) → add a package **under the root module**. No new `go.mod`.
+- **Heavy deps** (a cloud SDK, a driver, a broker client, an ML runtime) → create a **sub-module** with its own `go.mod` so consumers who don't need it don't pay for the dependency.
 
 When in doubt, prefer the root module;
 promote to a sub-module only when a real heavy dependency forces it.
@@ -31,10 +27,7 @@ Consult `domains.toml` for the domain→module map and each domain's `depends_on
 
 - core → patterns → crosscutting → composition → transport → auth → {data, ai} → media → infra
 
-Your new package may only import lower or same-layer packages.
-A lower layer importing a higher one is a **blocker**.
-Transport (server/grpc/connect/sse) specifically must not import auth/authz —
-inject local interfaces instead.
+Your new package may only import lower or same-layer packages. A lower layer importing a higher one is a **blocker**. Transport (server/grpc/connect/sse) specifically must not import auth/authz — inject local interfaces instead.
 
 ## Step 3 — Create the package
 
@@ -49,11 +42,7 @@ package foo
 Conventions: package names are lowercase, single-word, no plurals.
 Exported interfaces (1–3 methods) + factory functions; concrete implementations unexported.
 Constructors take `...Option` (functional options).
-No `interface{}`/`any` in public APIs except a documented opaque value. Organize by focused,
-concern-named files (types, options, registry, middleware, adapter) from the start —
-the `doc.go` aggregator stays docs-only, never a monolithic starter file.
-Before adding a shared helper, check [`docs/concern-owners.md`](../../../docs/concern-owners.md)
-so the new module does not re-own an existing concern.
+No `interface{}`/`any` in public APIs except a documented opaque value. Organize by focused, concern-named files (types, options, registry, middleware, adapter) from the start — the `doc.go` aggregator stays docs-only, never a monolithic starter file. Before adding a shared helper, check [`docs/concern-owners.md`](../../../docs/concern-owners.md) so the new module does not re-own an existing concern.
 
 ## Step 4 — Sub-module wiring (only if you created a new go.mod)
 

@@ -1,18 +1,13 @@
 # Pass 04 — Quality, readability & maintainability
 
-This is the pass the user cares about most: **is the code readable, maintainable, and well organized
-—
-or is it piled into one file?** Correctness passes (`02`, `03`) can be green while the code is still a maintenance liability.
-Vibe-coded output tends to grow one giant file with a few 300-line functions;
-this pass rejects that.
+This is the pass the user cares about most: **is the code readable, maintainable, and well organized — or is it piled into one file?** Correctness passes (`02`, `03`) can be green while the code is still a maintenance liability. Vibe-coded output tends to grow one giant file with a few 300-line functions; this pass rejects that.
 
 > **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
 > An independent reviewer re-derives every judgment from the code
 > and the principles instead of trusting prior reasoning.
 > A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
 
-**Scope note.** *Changes mode:* judge the readability of the touched files and functions.
-*Project mode:* sweep for oversized files, god-packages, and duplicated logic across the tree.
+**Scope note.** *Changes mode:* judge the readability of the touched files and functions. *Project mode:* sweep for oversized files, god-packages, and duplicated logic across the tree.
 
 ## File & package organization (primary focus)
 
@@ -50,12 +45,7 @@ this pass rejects that.
 
 ## Signatures
 
-- **Reduce parameters, don't wrap them.** Go has no column cap and `gofmt` does not wrap signatures,
-  so a function taking 5+ positional parameters is a design signal: fold optional/defaulted
-  or cohesive parameters into a typed request/options struct or functional options,
-  using the owning package's existing `Config`/`...Option` pattern. `context.Context` stays first
-  and is never folded into a struct. A genuinely distinct positional list may stay,
-  but that is a recorded judgment, not the default.
+- **Reduce parameters, don't wrap them.** Go has no column cap and `gofmt` does not wrap signatures, so a function taking 5+ positional parameters is a design signal: fold optional/defaulted or cohesive parameters into a typed request/options struct or functional options, using the owning package's existing `Config`/`...Option` pattern. `context.Context` stays first and is never folded into a struct. A genuinely distinct positional list may stay, but that is a recorded judgment, not the default.
 - **No manual column-wrapping.** A signature hand-broken to hit a column is a fix-by-refactor,
   not an accepted state; the remedy is fewer parameters, not a wrapped parameter list.
 
@@ -76,10 +66,8 @@ grep -rn --include=*.go '^\s*//\s*[a-z].*(' . | grep -v _test.go   # candidate c
 grep -rn --include=*.go 'TODO\|FIXME\|HACK' . | grep -v _test.go   # each needs a tracked issue link
 ```
 
-Then run `make fmt` (`gofmt -s`) and `make lint` — a clean gofmt/golangci-lint run is necessary
-but not sufficient; the organization judgments above are the point of this pass.
+Then run `make fmt` (`gofmt -s`) and `make lint` — a clean gofmt/golangci-lint run is necessary but not sufficient; the organization judgments above are the point of this pass.
 
 ## Output for this pass
 
-For each finding, name the concrete refactor: which file to split, into which files,
-and along which concern boundary — so it is directly actionable, not just "this file is too big".
+For each finding, name the concrete refactor: which file to split, into which files, and along which concern boundary — so it is directly actionable, not just "this file is too big".

@@ -10,10 +10,7 @@ user-invocable: true
 
 # Releasing gokit
 
-gokit is a multi-module repo where **each module needs its own semver git tag** —
-without proper tags Go assigns broken pseudo-versions.
-`tag-modules.sh` tags every module consistently. Full details live in `docs/RELEASING.md`,
-`docs/VERSIONING.md`, `policy/SEMVER.md`, and `policy/DEPRECATION.md`.
+gokit is a multi-module repo where **each module needs its own semver git tag** — without proper tags Go assigns broken pseudo-versions. `tag-modules.sh` tags every module consistently. Full details live in `docs/RELEASING.md`, `docs/VERSIONING.md`, `docs/policy/SEMVER.md`, and `docs/policy/DEPRECATION.md`.
 
 ## Prerequisites
 
@@ -46,7 +43,7 @@ git tag --sort=-v:refname | head -1                 # latest tag
 git log --oneline $(git describe --tags --abbrev=0)..HEAD
 ```
 
-Use `policy/SEMVER.md`. While in `0.x`:
+Use `docs/policy/SEMVER.md`. While in `0.x`:
 a breaking change in the `[Unreleased]` CHANGELOG section bumps **MINOR**; otherwise **PATCH**.
 
 ## Step 3 — Update the CHANGELOG
@@ -78,7 +75,5 @@ CI actions must be SHA-pinned; artifacts signed.
 ## Guardrails
 
 - **Never** run destructive git commands (`reset --hard`, `checkout -- .`, `clean`) on uncommitted work without explicit permission.
-- Per repo workflow, the agent prepares the branch/CHANGELOG/edits; **the maintainer commits,
-  pushes, and runs the actual `--push` tagging** unless explicitly asked otherwise.
-  Only create a PR when explicitly requested, following the PR template.
+- Per repo workflow, the agent prepares the branch/CHANGELOG/edits; **the maintainer commits, pushes, and runs the actual `--push` tagging** unless explicitly asked otherwise. Only create a PR when explicitly requested, following the PR template.
 - Reference other-repo items with full URLs, never bare `#123`.

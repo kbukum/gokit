@@ -1,7 +1,6 @@
 # config
 
-Configuration loading from YAML files and environment variables with automatic resolution
-and validation.
+Configuration loading from YAML files and environment variables with automatic resolution and validation.
 
 ## Install
 

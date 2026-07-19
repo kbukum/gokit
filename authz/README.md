@@ -1,7 +1,6 @@
 # authz
 
-Authorization building blocks with a canonical **RBAC + ABAC** engine
-and explicit default-deny semantics.
+Authorization building blocks with a canonical **RBAC + ABAC** engine and explicit default-deny semantics.
 
 This module has **zero external dependencies**.
 

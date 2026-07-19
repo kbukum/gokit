@@ -5,5 +5,4 @@
 
 # Skill title
 
-Describe when to use this skill, its workflow, and references.
-This file is progressive-disclosure content loaded only when the skill is activated.
+Describe when to use this skill, its workflow, and references. This file is progressive-disclosure content loaded only when the skill is activated.

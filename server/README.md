@@ -1,7 +1,6 @@
 # server
 
-Gin-based HTTP server with h2c support, built-in middleware, health/info endpoints,
-and component lifecycle.
+Gin-based HTTP server with h2c support, built-in middleware, health/info endpoints, and component lifecycle.
 
 ## Install
 
@@ -37,7 +36,7 @@ defer comp.Stop(ctx)
 | `Server` | Wraps Gin engine + `http.ServeMux` with h2c |
 | `Config` | Host, Port, timeouts, max body size, CORS, Docs |
 | `DocsConfig` | Controls API documentation serving (`docs.enabled`) |
-| `ServerComponent` | Managed lifecycle — `Start`, `Stop`, `Health` |
+| `Component` | Managed lifecycle — `Start`, `Stop`, `Health` |
 | `New(cfg, log)` | Create a server instance |
 | `(*Server) GinEngine()` | Access the underlying `*gin.Engine` |
 | `RespondOK(c, data)` | JSON 200 response |
@@ -122,9 +121,7 @@ Apply recovery outside that chain so panics from any layer are captured consiste
 
 ### TLS policy
 
-`server` itself is transport-focused and commonly runs behind TLS termination
-or alongside a gRPC listener. For TLS settings shared across gokit transports,
-use `security.TLSConfig` with the locked policy:
+`server` itself is transport-focused and commonly runs behind TLS termination or alongside a gRPC listener. For TLS settings shared across gokit transports, use `security.TLSConfig` with the locked policy:
 
 - minimum supported floor: TLS 1.2
 - default negotiation outcome: TLS 1.3 whenever peers support it

@@ -103,9 +103,7 @@ graph, _ := dag.ResolvePipeline(pipeline, registry, loader)
 
 ### Optional Nodes & Error Policies
 
-Nodes can be marked `optional` — if the component is not registered,
-a placeholder is inserted that returns `ErrUnavailable`.
-The engine skips dependents per-cycle without removing them from the graph.
+Nodes can be marked `optional` — if the component is not registered, a placeholder is inserted that returns `ErrUnavailable`. The engine skips dependents per-cycle without removing them from the graph.
 
 ```yaml
 nodes:
@@ -129,9 +127,7 @@ nodes:
 
 ### FailurePolicy modes
 
-`EngineConfig.FailurePolicy` controls how batch and streaming execution react to node failures.
-Node-level `on_error` values from YAML map onto the same behavior
-and override the engine default for that node.
+`EngineConfig.FailurePolicy` controls how batch and streaming execution react to node failures. Node-level `on_error` values from YAML map onto the same behavior and override the engine default for that node.
 
 | Mode | Behavior |
 |---|---|
@@ -141,18 +137,11 @@ and override the engine default for that node.
 
 ### Cycle detection guarantee
 
-`BuildLevels` uses Kahn's algorithm before execution. Any cycle returns an error
-and prevents execution from starting; the engine never runs a partial cyclic graph.
-Edges that reference unknown nodes are also rejected during level building.
+`BuildLevels` uses Kahn's algorithm before execution. Any cycle returns an error and prevents execution from starting; the engine never runs a partial cyclic graph. Edges that reference unknown nodes are also rejected during level building.
 
 ### Parallelism semantics
 
-Nodes are grouped into dependency levels.
-Nodes within the same level have no unresolved dependencies between them and may run concurrently.
-`Engine.MaxParallel` / `EngineConfig.MaxParallel` limits concurrency per level;
-`0` means no explicit limit beyond the number of ready nodes.
-Dependent levels start only after the previous level has completed
-or been skipped according to the active `FailurePolicy`.
+Nodes are grouped into dependency levels. Nodes within the same level have no unresolved dependencies between them and may run concurrently. `Engine.MaxParallel` / `EngineConfig.MaxParallel` limits concurrency per level; `0` means no explicit limit beyond the number of ready nodes. Dependent levels start only after the previous level has completed or been skipped according to the active `FailurePolicy`.
 
 ### Schedule Config
 
@@ -191,8 +180,7 @@ node = dag.WithLogging(node, log)
 
 ## Cascade: Staged Execution Pipeline
 
-For multi-stage processing where each stage is a sub-DAG with its own configuration,
-conditional advancement, and early exit.
+For multi-stage processing where each stage is a sub-DAG with its own configuration, conditional advancement, and early exit.
 
 ```go
 cascade := dag.NewCascade[Input, Result]().
@@ -239,15 +227,12 @@ fmt.Println(trace.EarlyExit)     // true — confident at stage 1
 - **Per-stage timeout** — independent timeout for each stage
 - **Node failure policies** — `ContinueWithPartial()` or abort on node failure
 - **Stage failure policies** — `Abort()`, `SkipToFinal()`, or `ContinueOnFailure()`
-- **Ordering strategies** — `OrderByCost()`, `OrderByLatency()`,
-  `WeightedScore(weights)` using `provider.Meta`
-- **Execution trace** — `CascadeTrace` with per-node timing, cost aggregation,
-  stages executed/skipped
+- **Ordering strategies** — `OrderByCost()`, `OrderByLatency()`, `WeightedScore(weights)` using `provider.Meta`
+- **Execution trace** — `CascadeTrace` with per-node timing, cost aggregation, stages executed/skipped
 
 ### Ordering Strategies
 
-OrderBy affects scheduling when multiple nodes are ready simultaneously
-and resources are constrained (`MaxConcurrency`). Strategies read `provider.Meta`:
+OrderBy affects scheduling when multiple nodes are ready simultaneously and resources are constrained (`MaxConcurrency`). Strategies read `provider.Meta`:
 
 ```go
 // Cheapest nodes first (reads "cost" from provider.Meta)

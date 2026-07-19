@@ -1,7 +1,6 @@
 # gokit/tool
 
-`tool` owns typed callable definitions, JSON Schema input/output, structured results, registries,
-batch dispatch, and the executable permission envelope.
+`tool` owns typed callable definitions, JSON Schema input/output, structured results, registries, batch dispatch, and the executable permission envelope.
 
 ## Architecture
 

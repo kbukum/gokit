@@ -22,11 +22,13 @@ func main() {
     ctx := context.Background()
 
     // Initialize tracer
-    tp, _ := observability.InitTracer(ctx, observability.DefaultTracerConfig("my-service"))
+    tracerCfg := observability.DefaultTracerConfig("my-service")
+    tp, _ := observability.InitTracer(ctx, &tracerCfg)
     defer tp.Shutdown(ctx)
 
     // Initialize metrics
-    mp, _ := observability.InitMeter(ctx, observability.DefaultMeterConfig("my-service"))
+    meterCfg := observability.DefaultMeterConfig("my-service")
+    mp, _ := observability.InitMeter(ctx, &meterCfg)
     defer mp.Shutdown(ctx)
 
     // Start a span
@@ -36,7 +38,7 @@ func main() {
 
     // Health checks
     health := observability.NewServiceHealth("my-service", "1.0.0")
-    health.AddComponent(observability.ComponentHealth{
+    health.AddComponent(observability.Health{
         Name:   "database",
         Status: "healthy",
     })

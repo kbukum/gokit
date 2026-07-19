@@ -1,10 +1,6 @@
 # hook
 
-A lightweight, generic, observe-only event system. Register handlers for arbitrary event types;
-handlers run sequentially in registration order. Non-fatal errors are aggregated
-and surfaced through the canonical `on_error` event —
-only errors wrapping `ErrFatalHook` abort dispatch. The package is domain-agnostic:
-applications define their own event types by implementing the `Event` interface.
+A lightweight, generic, observe-only event system. Register handlers for arbitrary event types; handlers run sequentially in registration order. Non-fatal errors are aggregated and surfaced through the canonical `on_error` event — only errors wrapping `ErrFatalHook` abort dispatch. The package is domain-agnostic: applications define their own event types by implementing the `Event` interface.
 
 ## Install
 

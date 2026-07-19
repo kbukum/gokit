@@ -1,26 +1,17 @@
 # Pass 01 — Canonical-owner reuse
 
-gokit *is* the canonical toolkit, so the duplication risk is internal:
-**did the change reimplement something an existing package (or the standard library) already owns?** Vibe-coded code reaches for a fresh local helper instead of the owner
-— assume duplication until proven otherwise. Treat findings here as a blocker class.
+gokit *is* the canonical toolkit, so the duplication risk is internal: **did the change reimplement something an existing package (or the standard library) already owns?** Vibe-coded code reaches for a fresh local helper instead of the owner — assume duplication until proven otherwise. Treat findings here as a blocker class.
 
 > **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
 > An independent reviewer re-derives every judgment from the code
 > and the principles instead of trusting prior reasoning.
 > A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
 
-**Scope note.** *Changes mode:* for each new type/helper in the diff, name the concern
-and find its owner. *Project mode:* sweep the tree for the patterns below
-and check each against the owning package —
-long-lived internal forks are exactly what this pass exists to surface.
+**Scope note.** *Changes mode:* for each new type/helper in the diff, name the concern and find its owner. *Project mode:* sweep the tree for the patterns below and check each against the owning package — long-lived internal forks are exactly what this pass exists to surface.
 
 ## The rule
 
-Reuse or enhance the canonical owner before writing new code. Never duplicate a shared concern —
-**errors, config, logging, auth, retries/resilience, observability, HTTP, registries, validation,
-process, di**. If the owner is inadequate,
-enhance it *generically* rather than forking a copy in another package. gokit must stay foundational
-and multi-purpose: a fix belongs in the owner so every consumer benefits.
+Reuse or enhance the canonical owner before writing new code. Never duplicate a shared concern — **errors, config, logging, auth, retries/resilience, observability, HTTP, registries, validation, process, di**. If the owner is inadequate, enhance it *generically* rather than forking a copy in another package. gokit must stay foundational and multi-purpose: a fix belongs in the owner so every consumer benefits.
 
 ## How to check — build the owner map, then compare
 
@@ -29,17 +20,14 @@ The canonical owner set is documented in [`docs/concern-owners.md`](../../../../
 and do not rely on a fixed concern list — that is how a fork slips through. Work it as a method,
 in order:
 
-**1. Build the owner map.** Every gokit module is a potential owner.
-Establish what this module *could* reuse before judging what it *does*:
+**1. Build the owner map.** Every gokit module is a potential owner. Establish what this module *could* reuse before judging what it *does*:
 
 ```bash
 ls -d */ | tr -d /                                       # all gokit modules = the candidate owner set
 grep -E '^\s+github.com/kbukum/gokit' <module>/go.mod    # owners it already imports (reuse adds no new edge)
 ```
 
-**2. Scan the module for every low-level operation
-and check each against that map.** The class most often missed is a **drop to the standard library for a capability a gokit module already wraps** (safe file/path handling, subprocess, HTTP, atomic writes)
-— not just a reimplemented named concern. Sweep the in-scope code, not the tree:
+**2. Scan the module for every low-level operation and check each against that map.** The class most often missed is a **drop to the standard library for a capability a gokit module already wraps** (safe file/path handling, subprocess, HTTP, atomic writes) — not just a reimplemented named concern. Sweep the in-scope code, not the tree:
 
 ```bash
 grep -rnE 'os\.|filepath\.|ioutil\.|exec\.Command|net/http|http\.Client|sort\.Slice|"sort"|errors\.New\(|fmt\.Errorf\(|log\.Print|fmt\.Print|time\.After|context\.WithTimeout' <module> --include=*.go | grep -v _test.go
@@ -78,8 +66,7 @@ so if a hit maps to a gokit owner not named here, it still counts.
 - Deliberately stricter/narrower policy that must not be shared → **justified local**: state why,
   and flag it as a candidate to promote into the owner.
 
-An owner that **nothing imports yet** is a strong signal its intended consumers are running local forks
-— check it explicitly:
+An owner that **nothing imports yet** is a strong signal its intended consumers are running local forks — check it explicitly:
 
 ```bash
 grep -rln 'kbukum/gokit/<owner>' --include=*.go . | grep -v _test.go | grep -v '^./<owner>/'
@@ -87,6 +74,4 @@ grep -rln 'kbukum/gokit/<owner>' --include=*.go . | grep -v _test.go | grep -v '
 
 ## Output for this pass
 
-Per finding,
-name the concrete package/symbol that should have been used (e.g. "use `fs.ConfineExistingPath` instead of the local `ensureUnderRoot`", "use `resilience` retry policy instead of a hand-rolled loop", "wrap with `process` rather than `exec.Command`")
-and its outcome (reuse / enhance / add / justified-local).
+Per finding, name the concrete package/symbol that should have been used (e.g. "use `fs.ConfineExistingPath` instead of the local `ensureUnderRoot`", "use `resilience` retry policy instead of a hand-rolled loop", "wrap with `process` rather than `exec.Command`") and its outcome (reuse / enhance / add / justified-local).

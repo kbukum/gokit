@@ -1,7 +1,6 @@
 # connect
 
-Connect-Go integration for gokit — server-side interceptors, error mapping, service mounting,
-and client utilities.
+Connect-Go integration for gokit — server-side interceptors, error mapping, service mounting, and client utilities.
 
 ## Install
 
@@ -288,11 +287,11 @@ func main() {
     )
 
     // Start server
-    srv := server.New(server.Config{Port: 8080}, log)
+    srv := server.New(&server.Config{Port: 8080}, log)
     goconnect.Mount(srv, publicPath, publicHandler)
     goconnect.Mount(srv, protectedPath, protectedHandler)
     
-    if err := srv.Start(); err != nil {
+    if err := srv.Start(context.Background()); err != nil {
         log.Fatal("server failed", map[string]interface{}{"error": err})
     }
 }
