@@ -20,7 +20,7 @@ func (b *Backend) run(ctx context.Context, args ...string) ([]byte, error) {
 		return nil, err
 	}
 	if result.ExitCode != 0 {
-		return result.Stdout, giterr.Internal(commandError(args, result))
+		return result.Stdout, giterr.Internal(b.commandError(args, result))
 	}
 	return result.Stdout, nil
 }
@@ -37,13 +37,14 @@ func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Resul
 	return result, nil
 }
 
-func commandError(args []string, result *process.Result) error {
+func (b *Backend) commandError(args []string, result *process.Result) error {
 	msg := redactCredentials(strings.TrimSpace(string(result.Stderr)))
 	if msg == "" {
 		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
 	}
-	sanitized := make([]string, len(args))
-	for i, arg := range args {
+	full := append(append([]string(nil), b.extraArgs...), args...)
+	sanitized := make([]string, len(full))
+	for i, arg := range full {
 		sanitized[i] = redactCredentials(arg)
 	}
 	return fmt.Errorf("git %v: %s", sanitized, msg)

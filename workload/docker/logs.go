@@ -38,7 +38,7 @@ func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions)
 	for scanner.Scan() {
 		line := scanner.Text()
 		// Docker multiplexes stdout/stderr with an 8-byte header; strip it
-		if len(line) > 8 {
+		if len(line) >= 8 {
 			line = line[8:]
 		}
 		if strings.TrimSpace(line) != "" {

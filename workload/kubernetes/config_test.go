@@ -32,7 +32,6 @@ func TestConfigApplyDefaultsAndValidate(t *testing.T) {
 		{name: "pull policy", cfg: Config{Namespace: "default", ImagePullPolicy: "Sometimes", WorkloadType: WorkloadTypePod}, want: "unsupported image_pull_policy"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := tc.cfg.Validate()

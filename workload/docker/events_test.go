@@ -30,7 +30,6 @@ func TestMapDockerEventNormalizesKnownActions(t *testing.T) {
 		"health_status":      "health_status",
 	}
 	for action, want := range cases {
-		action, want := action, want
 		t.Run(string(action), func(t *testing.T) {
 			t.Parallel()
 			if got := mapDockerEvent(action); got != want {

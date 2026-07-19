@@ -300,7 +300,6 @@ func TestRepoCLISequencingOperations(t *testing.T) {
 
 	checkoutNewBranch(t, dir, "feature")
 	commitFile(t, dir, "feature.txt", "feature\n", "feature change")
-	featureCommit := revParse(t, dir, "HEAD")
 	checkoutBranch(t, dir, baseBranch)
 	commitFile(t, dir, "main.txt", "main\n", "main change")
 
@@ -322,8 +321,11 @@ func TestRepoCLISequencingOperations(t *testing.T) {
 		t.Fatal("RebaseAbort() expected error outside rebase")
 	}
 
+	checkoutBranch(t, dir, "feature")
+	commitFile(t, dir, "cherry.txt", "cherry\n", "cherry change")
+	cherryCommit := revParse(t, dir, "HEAD")
 	checkoutBranch(t, dir, baseBranch)
-	if err := repo.CherryPick(featureCommit); err != nil {
+	if err := repo.CherryPick(cherryCommit); err != nil {
 		t.Fatalf("CherryPick() error: %v", err)
 	}
 	if err := repo.CherryPickContinue(); err == nil {

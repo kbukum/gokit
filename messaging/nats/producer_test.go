@@ -13,12 +13,12 @@ import (
 )
 
 type fakeNATSConn struct {
-	published []*natsgo.Msg
-	sub       natsSubscription
-	closed    bool
+	published  []*natsgo.Msg
+	sub        natsSubscription
+	closed     bool
 	publishErr error
-	flushErr error
-	drainErr error
+	flushErr   error
+	drainErr   error
 }
 
 func (c *fakeNATSConn) PublishMsg(msg *natsgo.Msg) error {
@@ -28,12 +28,14 @@ func (c *fakeNATSConn) PublishMsg(msg *natsgo.Msg) error {
 	c.published = append(c.published, msg)
 	return nil
 }
-func (c *fakeNATSConn) FlushTimeout(time.Duration) error { return c.flushErr }
-func (c *fakeNATSConn) Drain() error { return c.drainErr }
-func (c *fakeNATSConn) Close() { c.closed = true }
-func (c *fakeNATSConn) IsClosed() bool { return c.closed }
+func (c *fakeNATSConn) FlushTimeout(time.Duration) error               { return c.flushErr }
+func (c *fakeNATSConn) Drain() error                                   { return c.drainErr }
+func (c *fakeNATSConn) Close()                                         { c.closed = true }
+func (c *fakeNATSConn) IsClosed() bool                                 { return c.closed }
 func (c *fakeNATSConn) SubscribeSync(string) (natsSubscription, error) { return c.sub, nil }
-func (c *fakeNATSConn) QueueSubscribeSync(string, string) (natsSubscription, error) { return c.sub, nil }
+func (c *fakeNATSConn) QueueSubscribeSync(string, string) (natsSubscription, error) {
+	return c.sub, nil
+}
 
 func TestProducerPublishMethodsUseSubjectHeadersAndPayloads(t *testing.T) {
 	conn := &fakeNATSConn{}

@@ -62,35 +62,6 @@ func TestBranchCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	func TestBranchErrors(t *testing.T) {
-		t.Parallel()
-
-		dir := initTestRepo(t)
-		repo, err := embedded.Open(dir, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		current := currentBranch(t, dir)
-
-		if err := repo.CreateBranch("bad name", "HEAD"); err == nil {
-			t.Fatal("CreateBranch(invalid) expected error")
-		}
-		if err := repo.CreateBranch("missing-target", "missing"); err == nil {
-			t.Fatal("CreateBranch(missing target) expected error")
-		}
-		if err := repo.CreateBranch("release", "HEAD"); err != nil {
-			t.Fatalf("CreateBranch() error: %v", err)
-		}
-		if err := repo.CreateBranch("release", "HEAD"); err == nil {
-			t.Fatal("CreateBranch(duplicate) expected error")
-		}
-		if err := repo.DeleteBranch("missing"); err == nil {
-			t.Fatal("DeleteBranch(missing) expected error")
-		}
-		if err := repo.DeleteBranch(current); err == nil {
-			t.Fatal("DeleteBranch(checked out) expected error")
-		}
-	}
 	if err := repo.CreateBranch("release", "HEAD"); err != nil {
 		t.Fatalf("CreateBranch() error: %v", err)
 	}
@@ -121,6 +92,36 @@ func TestBranchCRUD(t *testing.T) {
 	}
 }
 
+func TestBranchErrors(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := currentBranch(t, dir)
+
+	if err := repo.CreateBranch("bad name", "HEAD"); err == nil {
+		t.Fatal("CreateBranch(invalid) expected error")
+	}
+	if err := repo.CreateBranch("missing-target", "missing"); err == nil {
+		t.Fatal("CreateBranch(missing target) expected error")
+	}
+	if err := repo.CreateBranch("release", "HEAD"); err != nil {
+		t.Fatalf("CreateBranch() error: %v", err)
+	}
+	if err := repo.CreateBranch("release", "HEAD"); err == nil {
+		t.Fatal("CreateBranch(duplicate) expected error")
+	}
+	if err := repo.DeleteBranch("missing"); err == nil {
+		t.Fatal("DeleteBranch(missing) expected error")
+	}
+	if err := repo.DeleteBranch(current); err == nil {
+		t.Fatal("DeleteBranch(checked out) expected error")
+	}
+}
+
 func TestTagCRUD(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
@@ -130,27 +131,6 @@ func TestTagCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	func TestTagErrors(t *testing.T) {
-		t.Parallel()
-
-		dir := initTestRepo(t)
-		repo, err := embedded.Open(dir, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repo.CreateTag("v1.0.0", "missing", ""); err == nil {
-			t.Fatal("CreateTag(missing target) expected error")
-		}
-		if err := repo.CreateTag("v1.0.0", "HEAD", ""); err != nil {
-			t.Fatalf("CreateTag() error: %v", err)
-		}
-		if err := repo.CreateTag("v1.0.0", "HEAD", ""); err == nil {
-			t.Fatal("CreateTag(duplicate) expected error")
-		}
-		if err := repo.DeleteTag("missing"); err == nil {
-			t.Fatal("DeleteTag(missing) expected error")
-		}
-	}
 	if err := repo.CreateTag("v2.0.0", "HEAD", "release v2"); err != nil {
 		t.Fatalf("CreateTag() error: %v", err)
 	}
@@ -194,6 +174,28 @@ func TestTagCRUD(t *testing.T) {
 	}
 }
 
+func TestTagErrors(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateTag("v1.0.0", "missing", ""); err == nil {
+		t.Fatal("CreateTag(missing target) expected error")
+	}
+	if err := repo.CreateTag("v1.0.0", "HEAD", ""); err != nil {
+		t.Fatalf("CreateTag() error: %v", err)
+	}
+	if err := repo.CreateTag("v1.0.0", "HEAD", ""); err == nil {
+		t.Fatal("CreateTag(duplicate) expected error")
+	}
+	if err := repo.DeleteTag("missing"); err == nil {
+		t.Fatal("DeleteTag(missing) expected error")
+	}
+}
+
 func TestListRemotes(t *testing.T) {
 	t.Parallel()
 	dir := initTestRepo(t)
@@ -230,26 +232,6 @@ func TestTrackingBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	func TestTrackingBranchMissingAndUnconfigured(t *testing.T) {
-		t.Parallel()
-
-		dir := initTestRepo(t)
-		createBranch(t, dir, "local-only")
-		repo, err := embedded.Open(dir, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := repo.TrackingBranch("local-only")
-		if err != nil {
-			t.Fatalf("TrackingBranch(local-only) error: %v", err)
-		}
-		if got != "" {
-			t.Fatalf("TrackingBranch(local-only) = %q, want empty", got)
-		}
-		if _, err := repo.TrackingBranch("missing"); err == nil {
-			t.Fatal("TrackingBranch(missing) expected error")
-		}
-	}
 	branch := currentBranch(t, dir)
 	got, err := repo.TrackingBranch(branch)
 	if err != nil {
@@ -257,6 +239,27 @@ func TestTrackingBranch(t *testing.T) {
 	}
 	if got != "origin/"+branch {
 		t.Fatalf("TrackingBranch() = %q, want origin/%s", got, branch)
+	}
+}
+
+func TestTrackingBranchMissingAndUnconfigured(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	createBranch(t, dir, "local-only")
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.TrackingBranch("local-only")
+	if err != nil {
+		t.Fatalf("TrackingBranch(local-only) error: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("TrackingBranch(local-only) = %q, want empty", got)
+	}
+	if _, err := repo.TrackingBranch("missing"); err == nil {
+		t.Fatal("TrackingBranch(missing) expected error")
 	}
 }
 
@@ -278,21 +281,6 @@ func TestFetch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	func TestFetchAndPushMissingRemote(t *testing.T) {
-		t.Parallel()
-
-		dir := initTestRepo(t)
-		repo, err := embedded.Open(dir, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := repo.Fetch("missing"); err == nil {
-			t.Fatal("Fetch(missing) expected error")
-		}
-		if err := repo.Push("missing"); err == nil {
-			t.Fatal("Push(missing) expected error")
-		}
-	}
 	if err := repo.Fetch("origin", git.WithFetchPrune(true)); err != nil {
 		t.Fatalf("Fetch() error: %v", err)
 	}
@@ -302,6 +290,22 @@ func TestFetch(t *testing.T) {
 	}
 	if got.String() != want {
 		t.Fatalf("origin/%s = %s, want %s", mainBranch, got.String(), want)
+	}
+}
+
+func TestFetchAndPushMissingRemote(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Fetch("missing"); err == nil {
+		t.Fatal("Fetch(missing) expected error")
+	}
+	if err := repo.Push("missing"); err == nil {
+		t.Fatal("Push(missing) expected error")
 	}
 }
 
@@ -336,29 +340,6 @@ func TestConfigGetAndGetAll(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	func TestConfigErrors(t *testing.T) {
-		t.Parallel()
-
-		dir := initTestRepo(t)
-		repo, err := embedded.Open(dir, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, key := range []string{"missing", "remote..url"} {
-			if _, err := repo.ConfigGet(key); err == nil {
-				t.Fatalf("ConfigGet(%q) expected error", key)
-			}
-			if _, err := repo.ConfigGetAll(key); err == nil {
-				t.Fatalf("ConfigGetAll(%q) expected error", key)
-			}
-			if err := repo.ConfigSet(key, "value"); err == nil {
-				t.Fatalf("ConfigSet(%q) expected error", key)
-			}
-		}
-		if _, err := repo.ConfigGet("tool.missing"); err == nil {
-			t.Fatal("ConfigGet(missing value) expected error")
-		}
-	}
 	got, err := repo.ConfigGet("remote.origin.fetch")
 	if err != nil {
 		t.Fatalf("ConfigGet() error: %v", err)
@@ -372,6 +353,30 @@ func TestConfigGetAndGetAll(t *testing.T) {
 	}
 	if len(gotAll) != 2 {
 		t.Fatalf("ConfigGetAll() returned %d values, want 2", len(gotAll))
+	}
+}
+
+func TestConfigErrors(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	repo, err := embedded.Open(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"missing", "remote..url"} {
+		if _, err := repo.ConfigGet(key); err == nil {
+			t.Fatalf("ConfigGet(%q) expected error", key)
+		}
+		if _, err := repo.ConfigGetAll(key); err == nil {
+			t.Fatalf("ConfigGetAll(%q) expected error", key)
+		}
+		if err := repo.ConfigSet(key, "value"); err == nil {
+			t.Fatalf("ConfigSet(%q) expected error", key)
+		}
+	}
+	if _, err := repo.ConfigGet("tool.missing"); err == nil {
+		t.Fatal("ConfigGet(missing value) expected error")
 	}
 }
 

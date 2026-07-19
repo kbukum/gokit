@@ -153,7 +153,7 @@ func TestStatsComputesResourceUsage(t *testing.T) {
 	t.Parallel()
 
 	manager := newTestManager(t, func(req *http.Request) (int, string) {
-		if dockerPath(req.URL.Path) != "/containers/id/stats" || req.URL.Query().Get("stream") != "0" {
+		if dockerPath(req.URL.Path) != "/containers/id/stats" || req.URL.Query().Get("stream") != "false" {
 			return http.StatusNotFound, `{}`
 		}
 		return http.StatusOK, jsonBody(t, map[string]any{

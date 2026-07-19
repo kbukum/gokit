@@ -46,10 +46,18 @@ func TestDiskUsageAggregatesDaemonUsage(t *testing.T) {
 		switch dockerPath(req.URL.Path) {
 		case "/system/df":
 			return http.StatusOK, jsonBody(t, map[string]any{
-				"Images":     []map[string]any{{"Id": "img", "RepoTags": []string{"app:1"}, "Size": 100, "SharedSize": 20, "Created": 1710000000}},
-				"Containers": []map[string]any{{"SizeRw": 30}},
-				"Volumes":    []map[string]any{{"UsageData": map[string]any{"Size": 40}}, {"UsageData": map[string]any{"Size": 0}}},
-				"BuildCache": []map[string]any{{"Size": 50, "Shared": false}, {"Size": 60, "Shared": true}},
+				"ImageUsage": map[string]any{
+					"Items": []map[string]any{{"Id": "img", "RepoTags": []string{"app:1"}, "Size": 100, "SharedSize": 20, "Created": 1710000000}},
+				},
+				"ContainerUsage": map[string]any{
+					"Items": []map[string]any{{"SizeRw": 30}},
+				},
+				"VolumeUsage": map[string]any{
+					"Items": []map[string]any{{"UsageData": map[string]any{"Size": 40}}, {"UsageData": map[string]any{"Size": 0}}},
+				},
+				"BuildCacheUsage": map[string]any{
+					"Items": []map[string]any{{"Size": 50, "Shared": false}, {"Size": 60, "Shared": true}},
+				},
 			})
 		case "/info":
 			return http.StatusOK, jsonBody(t, map[string]any{"DockerRootDir": "/remote/docker"})

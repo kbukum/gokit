@@ -92,6 +92,11 @@ make these load-bearing (not decorative):
   or half-migrations.
 - **Readable files.** Split by concern into focused files — never pile into one file.
   The aggregator is declare-only: `doc.go` carries package docs only, never code.
+  Scope any structure reorg **together with the change that touches it, per domain** —
+  when a step reshapes signatures or otherwise edits an oversized / concern-mixed file,
+  that same step splits it into concern-named siblings.
+  Reorg is criteria-driven (piled-up or concern-mixed file, or a package with many organizable siblings),
+  never a standalone deferred sweep and never arbitrary.
 - **Composition.** Injected registries/config; no `init()` side effects,
   no mutable package-global registries; inject logger/tracer/policies.
 

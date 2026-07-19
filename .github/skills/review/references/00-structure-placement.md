@@ -60,6 +60,17 @@ gokit is a multi-module monorepo split by dependency weight and role:
   no `func`/`type`/`var`/`const`. Code in a `doc.go`,
   or a package whose logic is piled into one oversized file instead of concern-named siblings,
   is a should-fix. Run `scripts/check-structure.sh` (`make structure`).
+- **Package cohesion & file-level structuring.** A package whose non-test code is piled into one **oversized
+  or concern-mixed file** should be split into concern-named sibling files (`client.go`, `options.go`, `types.go`, `errors.go`, `doc.go`),
+  or a large area promoted to a sub-package. This is **criteria-driven, not a line count**:
+  reorganize only where the split genuinely improves discoverability
+  and maintainability (the reader lands in the right file from the package layout instead of scanning one grab-bag file),
+  or where a package already holds many organizable siblings. A cohesive,
+  single-concern file is fine at any length — do not split for the sake of it.
+  When a change touches such a file,
+  restructure it **in the same change** rather than deferring the reorg (deferred reorg is how structure debt accumulates).
+  The god-file guard (`scripts/check-structure.sh`, `GOD_FILE_LINES` default 600) surfaces candidates;
+  an oversized, concern-mixed file left un-split is a should-fix.
 - **No misplaced concerns.** Each cross-cutting concern stays in its canonical package —
   e.g. gRPC status mapping belongs in `grpc`, not `errors`. (Reuse of those owners is pass `01`.)
 - **Backend opt-in.** A nested adapter registers via an explicit `Register(registry)` call,

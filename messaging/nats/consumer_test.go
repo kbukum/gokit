@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	natsgo "github.com/nats-io/nats.go"
@@ -11,9 +12,9 @@ import (
 )
 
 type fakeNATSSub struct {
-	msgs chan *natsgo.Msg
-	err  error
-	unsubErr error
+	msgs         chan *natsgo.Msg
+	err          error
+	unsubErr     error
 	unsubscribed bool
 }
 

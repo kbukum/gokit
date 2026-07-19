@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 
 	"github.com/kbukum/gokit/logging"
@@ -86,8 +87,8 @@ func TestConfigApplyDefaultsAndValidate(t *testing.T) {
 	if err := (&Config{}).Validate(); err == nil {
 		t.Fatal("empty host should fail validation before defaults are applied")
 	}
-	if err := (&Config{Host: "tcp://docker", TLS: &security.TLSConfig{Enabled: true}}).Validate(); err == nil {
-		t.Fatal("enabled empty TLS config should fail validation")
+	if err := (&Config{Host: "tcp://docker", TLS: &security.TLSConfig{CertFile: "cert.pem"}}).Validate(); err == nil {
+		t.Fatal("TLS config with cert_file but no key_file should fail validation")
 	}
 }
 
@@ -135,13 +136,13 @@ func TestBuildContainerConfigTranslatesDeployRequest(t *testing.T) {
 	if len(containerCfg.Env) != 1 || containerCfg.Env[0] != "A=1" {
 		t.Fatalf("environment not translated: %#v", containerCfg.Env)
 	}
-	if _, ok := containerCfg.ExposedPorts["8080/tcp"]; !ok {
+	if _, ok := containerCfg.ExposedPorts[network.MustParsePort("8080/tcp")]; !ok {
 		t.Fatalf("tcp port not exposed: %#v", containerCfg.ExposedPorts)
 	}
-	if _, ok := containerCfg.ExposedPorts["5353/udp"]; !ok {
+	if _, ok := containerCfg.ExposedPorts[network.MustParsePort("5353/udp")]; !ok {
 		t.Fatalf("udp port not exposed: %#v", containerCfg.ExposedPorts)
 	}
-	if hostCfg.PortBindings["8080/tcp"][0].HostPort != "18080" {
+	if hostCfg.PortBindings[network.MustParsePort("8080/tcp")][0].HostPort != "18080" {
 		t.Fatalf("host port binding not translated: %#v", hostCfg.PortBindings)
 	}
 	if hostCfg.RestartPolicy.Name != "on-failure" || hostCfg.Memory == 0 || hostCfg.NanoCPUs == 0 {
@@ -233,8 +234,7 @@ func TestManagerLifecycleMethodsUseDockerAPI(t *testing.T) {
 	if result.ID != "abcdef1234567890" || result.Status != workload.StatusRunning {
 		t.Fatalf("deploy result = %#v", result)
 	}
-	config, ok := createdBody["Config"].(map[string]any)
-	if !ok || config["Image"] != "example/worker:1" {
+	if createdBody["Image"] != "example/worker:1" {
 		t.Fatalf("create body did not include image config: %#v", createdBody)
 	}
 	if err := manager.Stop(context.Background(), result.ID); err != nil {

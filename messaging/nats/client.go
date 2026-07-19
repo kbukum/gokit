@@ -32,6 +32,7 @@ func (c natsConnAdapter) IsClosed() bool                     { return c.conn.IsC
 func (c natsConnAdapter) SubscribeSync(subject string) (natsSubscription, error) {
 	return c.conn.SubscribeSync(subject)
 }
+
 func (c natsConnAdapter) QueueSubscribeSync(subject, queue string) (natsSubscription, error) {
 	return c.conn.QueueSubscribeSync(subject, queue)
 }

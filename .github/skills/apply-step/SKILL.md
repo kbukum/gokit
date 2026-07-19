@@ -54,7 +54,13 @@ and the authority is [`../../copilot-instructions.md`](../../copilot-instruction
 - **Root-cause, no shims.** Redesign cleanly;
   remove the old path completely (pre-stable, no back-compat).
 - **Readable files & injected composition.** Split by concern into focused files;
-  injected registries/config; no `init()` side effects or mutable package globals.
+  when you touch a package that has piled its non-test code into one oversized
+  or concern-mixed file,
+  split it into concern-named siblings (`client.go`, `options.go`, `types.go`, `doc.go`) **in this step**
+  — do not defer the reorg. Structure work travels with the change;
+  only split where it genuinely improves discoverability,
+  and leave cohesive single-concern files alone. Inject registries/config; no `init()` side effects
+  or mutable package globals.
 
 Keep the edit scoped to *this* step's `Files touched`; if you discover the step is mis-scoped,
 report it rather than silently expanding.

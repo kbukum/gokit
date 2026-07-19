@@ -410,6 +410,9 @@ func matchesAuthorFilter(commit *object.Commit, filter string) bool {
 }
 
 func blameRange(total int, opts model.BlameOptions) (start, end int, err error) {
+	if opts.StartLine < 0 || opts.EndLine < 0 {
+		return 0, 0, giterr.InvalidLineRange(opts.StartLine, opts.EndLine)
+	}
 	start = 1
 	if opts.StartLine > 0 {
 		start = opts.StartLine
@@ -418,7 +421,7 @@ func blameRange(total int, opts model.BlameOptions) (start, end int, err error) 
 	if opts.EndLine > 0 {
 		end = opts.EndLine
 	}
-	if start < 1 || end < 0 || start > end {
+	if start < 1 || start > end {
 		return 0, 0, giterr.InvalidLineRange(opts.StartLine, opts.EndLine)
 	}
 	if start > total {
