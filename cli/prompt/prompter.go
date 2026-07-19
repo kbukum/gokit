@@ -6,14 +6,11 @@ import (
 
 // Prompter is a terminal-agnostic prompt driver.
 //
-// It binds a [Terminal], a resolved [PromptMode], and a rendering [Style],
-// and exposes one method per question type. The same call works over cooked stdio
-// or a scripted test double. Build one from explicit parts with [New] (deterministic tests)
-// or from the environment with [FromEnv].
+// It binds a [Terminal], a resolved [PromptMode], and a rendering [theme.Style], and exposes one method per question type. The same call works over cooked stdio or a scripted test double. Build one from explicit parts with [New] (deterministic tests) or from the environment with [FromEnv].
 type Prompter struct {
 	terminal Terminal
 	mode     PromptMode
-	style    Style
+	style    theme.Style
 }
 
 // New builds a prompter from an explicit terminal, mode, and palette.
@@ -24,27 +21,24 @@ func New(terminal Terminal, mode PromptMode, palette theme.Palette) *Prompter {
 	return &Prompter{
 		terminal: terminal,
 		mode:     mode,
-		style:    NewStyle(palette, theme.NewGlyphs(false)),
+		style:    theme.NewStyle(palette, theme.NewGlyphs(false)),
 	}
 }
 
 // FromEnv builds a prompter bound to process stdin/stderr.
 //
-// The [PromptMode] follows whether both stdin and stderr are terminals,
-// and the [theme.Palette] follows color against stderr, so interactivity
-// and styling both honor redirection and NO_COLOR. Prompts render to stderr,
-// so a redirected stderr forces [ModeNonInteractive] rather than blocking on input behind an invisible prompt.
+// The [PromptMode] follows whether both stdin and stderr are terminals, and the [theme.Palette] follows color against stderr, so interactivity and styling both honor redirection and NO_COLOR. Prompts render to stderr, so a redirected stderr forces [ModeNonInteractive] rather than blocking on input behind an invisible prompt.
 func FromEnv(color theme.ColorChoice, stdinIsTTY, stderrIsTTY bool) *Prompter {
 	mode := ModeFromStdio(stdinIsTTY, stderrIsTTY)
 	palette := theme.PaletteForStream(color, stderrIsTTY)
 	p := New(NewStdioTerminal(), mode, palette)
-	p.style = NewStyle(palette, theme.GlyphsFromEnv())
+	p.style = theme.NewStyle(palette, theme.GlyphsFromEnv())
 	return p
 }
 
 // WithGlyphs overrides the glyph set (Unicode symbols vs ASCII fallback) and returns the receiver.
 func (p *Prompter) WithGlyphs(glyphs theme.Glyphs) *Prompter {
-	p.style = NewStyle(p.style.Palette(), glyphs)
+	p.style = theme.NewStyle(p.style.Palette(), glyphs)
 	return p
 }
 
@@ -57,7 +51,7 @@ func (p *Prompter) Terminal() Terminal { return p.terminal }
 // session binds the terminal, style, and mode threaded through every prompt.
 type session struct {
 	term  Terminal
-	style Style
+	style theme.Style
 	mode  PromptMode
 }
 

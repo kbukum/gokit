@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
@@ -129,3 +131,22 @@ type MemoryLoaded struct {
 }
 
 func (MemoryLoaded) Type() hook.EventType { return EventMemoryLoaded }
+
+func (a *Agent) emitHook(ctx context.Context, event hook.Event) error {
+	if a.config.Hooks == nil {
+		return nil
+	}
+	return a.config.Hooks.Emit(ctx, event)
+}
+
+func (a *Agent) emitHookErr(ctx context.Context, event hook.Event) error {
+	err := a.emitHook(ctx, event)
+	if err == nil {
+		return nil
+	}
+	_ = a.emitHook(ctx, ErrorEvent{Err: err, Source: string(event.Type())})
+	if errors.Is(err, hook.ErrFatalHook) {
+		return err
+	}
+	return nil
+}

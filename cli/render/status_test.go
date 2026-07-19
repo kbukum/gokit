@@ -10,7 +10,7 @@ import (
 )
 
 func reporter(buf *bytes.Buffer, color, unicode bool) *render.StatusReporter {
-	return render.NewStatusReporter(buf, theme.NewPalette(color), theme.NewGlyphs(unicode))
+	return render.NewStatusReporter(buf, theme.NewStyle(theme.NewPalette(color), theme.NewGlyphs(unicode)))
 }
 
 func TestStatusSuccessCarriesGlyphAndMessage(t *testing.T) {
@@ -97,7 +97,7 @@ func TestStatusBulletIsIndented(t *testing.T) {
 
 func TestStatusWriteErrorSurfaces(t *testing.T) {
 	t.Parallel()
-	r := render.NewStatusReporter(failWriter{}, theme.NewPalette(false), theme.NewGlyphs(false))
+	r := render.NewStatusReporter(failWriter{}, theme.NewStyle(theme.NewPalette(false), theme.NewGlyphs(false)))
 	if err := r.Success("x"); err == nil {
 		t.Error("write failure must surface")
 	}

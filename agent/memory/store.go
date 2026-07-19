@@ -1,4 +1,4 @@
-package agent
+package memory
 
 import (
 	"context"
@@ -9,23 +9,24 @@ import (
 	"github.com/kbukum/gokit/ai/chat"
 )
 
-// Memory provides conversation history persistence for agent sessions.
-type Memory interface {
+// Store provides conversation history persistence for agent sessions.
+type Store interface {
 	Load(ctx context.Context, sessionID string) ([]chat.Message, error)
 	Save(ctx context.Context, sessionID string, messages []chat.Message) error
 	Append(ctx context.Context, sessionID string, messages ...chat.Message) error
 	Clear(ctx context.Context, sessionID string) error
 }
 
-// InMemoryStore is a thread-safe, in-memory implementation of Memory.
-type InMemoryStore struct {
+// MapStore is a thread-safe, in-process Store backed by a map.
+type MapStore struct {
 	mu   sync.RWMutex
 	data map[string][]chat.Message
 }
 
-func NewInMemoryStore() *InMemoryStore { return &InMemoryStore{data: make(map[string][]chat.Message)} }
+// NewMapStore creates an empty in-process Store.
+func NewMapStore() *MapStore { return &MapStore{data: make(map[string][]chat.Message)} }
 
-func (s *InMemoryStore) Load(_ context.Context, sessionID string) ([]chat.Message, error) {
+func (s *MapStore) Load(_ context.Context, sessionID string) ([]chat.Message, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	msgs, ok := s.data[sessionID]
@@ -35,39 +36,40 @@ func (s *InMemoryStore) Load(_ context.Context, sessionID string) ([]chat.Messag
 	return copyMessages(msgs), nil
 }
 
-func (s *InMemoryStore) Save(_ context.Context, sessionID string, messages []chat.Message) error {
+func (s *MapStore) Save(_ context.Context, sessionID string, messages []chat.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[sessionID] = copyMessages(messages)
 	return nil
 }
 
-func (s *InMemoryStore) Append(_ context.Context, sessionID string, messages ...chat.Message) error {
+func (s *MapStore) Append(_ context.Context, sessionID string, messages ...chat.Message) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data[sessionID] = append(s.data[sessionID], copyMessages(messages)...)
 	return nil
 }
 
-func (s *InMemoryStore) Clear(_ context.Context, sessionID string) error {
+func (s *MapStore) Clear(_ context.Context, sessionID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.data, sessionID)
 	return nil
 }
 
-// SlidingWindowMemory wraps any Memory and keeps only the last N messages.
+// SlidingWindowStore wraps any Store and keeps only the last N messages.
 // If the first message is a SystemMessage, it is preserved outside the window.
-type SlidingWindowMemory struct {
-	store       Memory
+type SlidingWindowStore struct {
+	store       Store
 	maxMessages int
 }
 
-func NewSlidingWindowMemory(store Memory, maxMessages int) *SlidingWindowMemory {
-	return &SlidingWindowMemory{store: store, maxMessages: maxMessages}
+// NewSlidingWindowStore wraps store so loads and saves keep at most maxMessages (plus a leading system message).
+func NewSlidingWindowStore(store Store, maxMessages int) *SlidingWindowStore {
+	return &SlidingWindowStore{store: store, maxMessages: maxMessages}
 }
 
-func (s *SlidingWindowMemory) Load(ctx context.Context, sessionID string) ([]chat.Message, error) {
+func (s *SlidingWindowStore) Load(ctx context.Context, sessionID string) ([]chat.Message, error) {
 	msgs, err := s.store.Load(ctx, sessionID)
 	if err != nil {
 		return nil, err
@@ -75,19 +77,19 @@ func (s *SlidingWindowMemory) Load(ctx context.Context, sessionID string) ([]cha
 	return s.trimToWindow(msgs), nil
 }
 
-func (s *SlidingWindowMemory) Save(ctx context.Context, sessionID string, messages []chat.Message) error {
+func (s *SlidingWindowStore) Save(ctx context.Context, sessionID string, messages []chat.Message) error {
 	return s.store.Save(ctx, sessionID, s.trimToWindow(messages))
 }
 
-func (s *SlidingWindowMemory) Append(ctx context.Context, sessionID string, messages ...chat.Message) error {
+func (s *SlidingWindowStore) Append(ctx context.Context, sessionID string, messages ...chat.Message) error {
 	return s.store.Append(ctx, sessionID, messages...)
 }
 
-func (s *SlidingWindowMemory) Clear(ctx context.Context, sessionID string) error {
+func (s *SlidingWindowStore) Clear(ctx context.Context, sessionID string) error {
 	return s.store.Clear(ctx, sessionID)
 }
 
-func (s *SlidingWindowMemory) trimToWindow(msgs []chat.Message) []chat.Message {
+func (s *SlidingWindowStore) trimToWindow(msgs []chat.Message) []chat.Message {
 	if len(msgs) == 0 || s.maxMessages <= 0 {
 		return msgs
 	}

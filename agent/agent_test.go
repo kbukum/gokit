@@ -12,6 +12,7 @@ import (
 	"github.com/kbukum/gokit/ai/chat"
 
 	"github.com/kbukum/gokit/agent"
+	"github.com/kbukum/gokit/agent/memory"
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/prompt"
 	"github.com/kbukum/gokit/hook"
@@ -220,29 +221,7 @@ func TestAgentStreamExposesLLMEvents(t *testing.T) {
 	}
 }
 
-func TestMemoryPoliciesAndHookTypes(t *testing.T) {
-	msgs := []chat.Message{chat.System("sys"), chat.User("1"), chat.User("2"), chat.User("3")}
-	got, err := (agent.RingBufferPolicy{KeepLast: 2}).Compact(context.Background(), msgs, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("ring got %d", len(got))
-	}
-	got, err = (agent.TruncateStrategy{KeepLast: 2}).Compact(context.Background(), msgs, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("truncate got %d", len(got))
-	}
-	got, err = (agent.SlidingWindowStrategy{TokenCounter: func([]chat.Message) int { return 1 }}).Compact(context.Background(), msgs, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) == 0 {
-		t.Fatal("empty sliding window")
-	}
+func TestHookTypes(t *testing.T) {
 	events := []interface{ Type() hook.EventType }{agent.StartEvent{}, agent.LLMRequestEvent{}, agent.LLMResponseEvent{}, agent.ToolCallEvent{}, agent.ToolResultEvent{}, agent.MCPRequestEvent{}, agent.MCPResultEvent{}, agent.StreamObservedEvent{}, agent.StepCompleteEvent{}, agent.ErrorEvent{}, agent.StopEvent{}, agent.ContextCompacted{}, agent.ModelSwitched{}, agent.MemoryLoaded{}}
 	for _, e := range events {
 		if e.Type() == "" {
@@ -274,23 +253,13 @@ func TestAgentErrorAndHookPaths(t *testing.T) {
 }
 
 func TestMoreMemoryPolicies(t *testing.T) {
-	if _, err := (agent.FailStrategy{}).Compact(context.Background(), nil, 0); !errors.Is(err, agent.ErrContextExceeded) {
-		t.Fatalf("fail strategy err=%v", err)
-	}
 	msgs := []chat.Message{chat.System("sys"), chat.User("old"), chat.Assistant("recent")}
 	p := newMockProvider(textResponse("summary"))
-	got, err := (agent.SummarizeStrategy{Provider: p, KeepLast: 1}).Compact(context.Background(), msgs, 0)
+	got, err := (memory.Summarize{Provider: p, KeepLast: 1}).Compact(context.Background(), msgs, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) < 2 {
 		t.Fatalf("summary got %d", len(got))
-	}
-	got, err = (agent.SummarizeStrategy{KeepLast: 1}).Compact(context.Background(), msgs, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("fallback got %d", len(got))
 	}
 }

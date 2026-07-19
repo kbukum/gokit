@@ -31,4 +31,11 @@
 // so a call fails closed until an operator wires a real evaluator/approver.
 // A per-tool [github.com/kbukum/gokit/resilience.Policy] can be attached via [Registry.WithToolPolicy]
 // and read back with [Registry.PolicyFor].
+//
+// # Package layout
+//
+// [Registry] behavior is split by concern across registry_*.go sibling files
+// (registration, call, filter, batch, lifecycle, options) rather than a sub-package,
+// because each is tightly coupled to [Registry] and the core [Callable], [Definition],
+// and [Result] types that stay in this package.
 package tool

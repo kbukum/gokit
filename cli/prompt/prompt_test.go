@@ -463,17 +463,6 @@ func TestFromEnvNonInteractiveWhenNotTTY(t *testing.T) {
 	}
 }
 
-func TestStyleExposesPaletteAndGlyphs(t *testing.T) {
-	t.Parallel()
-	style := prompt.NewStyle(theme.NewPalette(true), theme.NewGlyphs(true))
-	if !style.Palette().Enabled() {
-		t.Error("style must expose its palette")
-	}
-	if !style.Glyphs().Unicode() {
-		t.Error("style must expose its glyph set")
-	}
-}
-
 func TestLineTerminalWritePropagatesError(t *testing.T) {
 	t.Parallel()
 	term := prompt.NewLineTerminal(strings.NewReader(""), failWriter{})

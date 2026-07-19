@@ -45,10 +45,9 @@ func (c Config) withDefaults() Config {
 // Ownership, cancellation, and render cadence belong to the caller —
 // the console itself spawns no goroutines.
 type Console struct {
-	writer  io.Writer
-	palette theme.Palette
-	glyphs  theme.Glyphs
-	config  Config
+	writer io.Writer
+	style  theme.Style
+	config Config
 
 	mu        sync.Mutex
 	regions   []*Region
@@ -56,10 +55,10 @@ type Console struct {
 }
 
 // NewConsole creates a live console writing to w, bounded by config.
-// The glyph set selects the verdict symbols
+// The [theme.Style] carries the palette and glyph set that select the verdict symbols,
 // so [Console.Finish] stays byte-clean on non-UTF-8 terminals.
-func NewConsole(w io.Writer, config Config, palette theme.Palette, glyphs theme.Glyphs) *Console {
-	return &Console{writer: w, palette: palette, glyphs: glyphs, config: config.withDefaults()}
+func NewConsole(w io.Writer, config Config, style theme.Style) *Console {
+	return &Console{writer: w, style: style, config: config.withDefaults()}
 }
 
 // AddRegion appends a new tile titled title.
@@ -89,7 +88,7 @@ func (c *Console) Render() error {
 	}
 	lines := 0
 	for _, region := range c.regions {
-		b.WriteString(c.palette.Bold(region.title))
+		b.WriteString(c.style.Palette().Bold(region.title))
 		b.WriteByte('\n')
 		lines++
 		for _, line := range region.snapshot() {
@@ -118,7 +117,7 @@ func (c *Console) Finish() error {
 	}
 	c.lastFrame = 0
 	for _, region := range c.regions {
-		b.WriteString(region.verdictLine(c.palette, c.glyphs))
+		b.WriteString(region.verdictLine(c.style))
 		b.WriteByte('\n')
 	}
 	if _, err := io.WriteString(c.writer, b.String()); err != nil {

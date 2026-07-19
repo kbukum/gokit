@@ -171,13 +171,13 @@ func builtinModel(ctx context.Context, args string, a *Agent) (string, error) {
 }
 
 func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
-	if a.config.MemoryPolicy == nil {
-		return "No memory policy configured.", nil
+	if a.config.Compaction == nil {
+		return "No compaction policy configured.", nil
 	}
-	if a.config.Memory == nil || a.config.SessionID == "" {
+	if a.config.Store == nil || a.config.SessionID == "" {
 		return "No memory configured for compaction.", nil
 	}
-	msgs, err := a.config.Memory.Load(ctx, a.config.SessionID)
+	msgs, err := a.config.Store.Load(ctx, a.config.SessionID)
 	if err != nil {
 		return "", fmt.Errorf("compact: failed to load memory: %w", err)
 	}
@@ -188,11 +188,11 @@ func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
 	if a.config.Provider != nil {
 		maxTokens = a.config.Provider.Capabilities().MaxInputTokens
 	}
-	compacted, err := a.config.MemoryPolicy.Compact(ctx, msgs, maxTokens)
+	compacted, err := a.config.Compaction.Compact(ctx, msgs, maxTokens)
 	if err != nil {
 		return "", fmt.Errorf("compact: %w", err)
 	}
-	if err := a.config.Memory.Save(ctx, a.config.SessionID, compacted); err != nil {
+	if err := a.config.Store.Save(ctx, a.config.SessionID, compacted); err != nil {
 		return "", fmt.Errorf("compact: failed to save: %w", err)
 	}
 	return fmt.Sprintf("Compacted %d messages to %d.", len(msgs), len(compacted)), nil
@@ -208,10 +208,10 @@ func (a *Agent) GetModel() string { return a.config.Model }
 
 // ClearMemory clears the conversation memory for the current session.
 func (a *Agent) ClearMemory(ctx context.Context) error {
-	if a.config.Memory == nil {
+	if a.config.Store == nil {
 		return fmt.Errorf("agent: no memory configured")
 	}
-	return a.config.Memory.Clear(ctx, a.config.SessionID)
+	return a.config.Store.Clear(ctx, a.config.SessionID)
 }
 
 // extractUserText returns the text content of the last user message.

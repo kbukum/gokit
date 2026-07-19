@@ -8,6 +8,7 @@ import (
 	"github.com/kbukum/gokit/ai/chat"
 
 	"github.com/kbukum/gokit/agent"
+	"github.com/kbukum/gokit/agent/memory"
 	"github.com/kbukum/gokit/hook"
 )
 
@@ -143,7 +144,7 @@ func TestBuiltin_Help(t *testing.T) {
 }
 
 func TestBuiltin_Clear(t *testing.T) {
-	mem := agent.NewInMemoryStore()
+	mem := memory.NewMapStore()
 	_ = mem.Save(context.Background(), "s1", []chat.Message{chat.User("old")})
 
 	reg := agent.NewCommandRegistry()
@@ -151,7 +152,7 @@ func TestBuiltin_Clear(t *testing.T) {
 
 	a := agent.New(agent.Config{
 		Provider:  newMockProvider(textResponse("unused")),
-		Memory:    mem,
+		Store:     mem,
 		SessionID: "s1",
 		Commands:  reg,
 	})
@@ -250,7 +251,7 @@ func TestBuiltin_Model_ShowCurrent(t *testing.T) {
 }
 
 func TestBuiltin_Compact(t *testing.T) {
-	mem := agent.NewInMemoryStore()
+	mem := memory.NewMapStore()
 	msgs := []chat.Message{
 		chat.User("1"), chat.User("2"), chat.User("3"),
 		chat.User("4"), chat.User("5"),
@@ -261,11 +262,11 @@ func TestBuiltin_Compact(t *testing.T) {
 	reg.RegisterBuiltins()
 
 	a := agent.New(agent.Config{
-		Provider:     newMockProvider(textResponse("unused")),
-		Memory:       mem,
-		SessionID:    "s1",
-		Commands:     reg,
-		MemoryPolicy: agent.TruncateStrategy{KeepLast: 2},
+		Provider:   newMockProvider(textResponse("unused")),
+		Store:      mem,
+		SessionID:  "s1",
+		Commands:   reg,
+		Compaction: memory.Truncate{KeepLast: 2},
 	})
 
 	result, err := a.Run(context.Background(), []chat.Message{chat.User("/compact")})

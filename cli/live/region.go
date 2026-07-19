@@ -17,8 +17,7 @@ const (
 
 // Region is a single bounded tile within a [Console].
 //
-// It retains only its most recent lines (up to the console's configured height);
-// older lines scroll out of the live peek.
+// It retains only its most recent lines (up to the console's configured height); older lines scroll out of the live peek.
 // A region is safe to append to from a goroutine separate from the one rendering the console.
 type Region struct {
 	title  string
@@ -30,8 +29,7 @@ type Region struct {
 	reason string
 }
 
-// Println appends a line to the region,
-// dropping the oldest retained line once the height bound is exceeded (the ephemeral-peek bound).
+// Println appends a line to the region, dropping the oldest retained line once the height bound is exceeded (the ephemeral-peek bound).
 func (r *Region) Println(line string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -67,13 +65,14 @@ func (r *Region) snapshot() []string {
 }
 
 // verdictLine renders the region's durable one-line verdict for scrollback.
-func (r *Region) verdictLine(palette theme.Palette, glyphs theme.Glyphs) string {
+func (r *Region) verdictLine(style theme.Style) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	label := r.title
 	if r.reason != "" {
 		label = r.title + ": " + r.reason
 	}
+	palette, glyphs := style.Palette(), style.Glyphs()
 	switch r.status {
 	case statusDone:
 		return palette.Success(glyphs.Success() + " " + label)
