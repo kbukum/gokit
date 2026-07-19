@@ -53,6 +53,9 @@ func (p *Producer) ensureConnLocked() (natsConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	if p.connect == nil {
+		p.connect = defaultConnectNATS
+	}
 	conn, err := p.connect(p.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats producer connect %s: %w", p.cfg.RedactedURL(), err)

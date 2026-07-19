@@ -49,6 +49,9 @@ func (c *Consumer) ensureSubscription() (natsSubscription, error) {
 	if err != nil {
 		return nil, err
 	}
+	if c.connect == nil {
+		c.connect = defaultConnectNATS
+	}
 	conn, err := c.connect(c.cfg.URL, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("nats consumer connect %s: %w", c.cfg.RedactedURL(), err)

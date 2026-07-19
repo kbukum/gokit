@@ -51,6 +51,9 @@ func (p *Producer) ensureChannelLocked() (rabbitChannel, error) {
 	if p.ch != nil {
 		return p.ch, nil
 	}
+	if p.dial == nil {
+		p.dial = defaultDialRabbit
+	}
 	conn, err := p.dial(p.cfg)
 	if err != nil {
 		return nil, redactError("rabbitmq producer connect", err)

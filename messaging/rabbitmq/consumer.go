@@ -43,6 +43,9 @@ func (c *Consumer) ensureChannel() (rabbitChannel, error) {
 	if c.ch != nil {
 		return c.ch, nil
 	}
+	if c.dial == nil {
+		c.dial = defaultDialRabbit
+	}
 	conn, err := c.dial(c.cfg)
 	if err != nil {
 		return nil, redactError("rabbitmq consumer connect", err)
