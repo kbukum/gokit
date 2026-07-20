@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+## [0.2.0-alpha.1] - 2026-07-19
+
 ### Added — Generic dataset collection kit
 - **dataset** (NEW module, light mirror of rskit-dataset): a streaming,
   generics-first dataset-collection toolkit built on one item-generic `collect.Collector[T]` engine.
@@ -197,14 +201,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.0] - 2026-04-25
 
-> Tag `v0.2.0` shipped on 2026-04-04 but never received a CHANGELOG entry.
-> This entry back-fills the previous `[Unreleased]` section verbatim. From this release on,
-> every tag MUST be accompanied by a corresponding CHANGELOG entry —
-> enforced by `tag-modules.sh` (see `docs/RELEASING.md`).
->
-> The `kafka/v0.2.0`
-> and `kafka/testutil/v0.2.0` tags are orphans from when the kafka provider lived at `/kafka`;
-> the package now lives at `/messaging/kafka` and is versioned in lock-step with `messaging`.
+> Historical development baseline retained for changelog context. The old `v0.2.0`
+> tags were removed before the prerelease line was started.
 
 ### Changed (Breaking API Changes)
 - **workload**: `RegisterFactory()` global and `New(cfg, providerCfg, log)` removed.

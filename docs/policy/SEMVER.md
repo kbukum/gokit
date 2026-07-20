@@ -49,12 +49,12 @@ The following are explicitly **not** part of the public API and may change in an
 
 ## Module-level version skew
 
-Sub-modules may temporarily be at different versions when a focused fix ships (e.g. `storage/v0.2.1` while the rest of the workspace stays at `v0.2.0`).
+Sub-modules may temporarily be at different versions when a focused fix ships (e.g. `storage/v0.2.0-alpha.2` while the rest of the workspace stays at `v0.2.0-alpha.1`).
 The next root-level release brings everything back into lock-step.
 
 ## Pre-release identifiers
 
-Pre-releases use SemVer suffixes: `v0.3.0-rc.1`, `v0.3.0-beta.2`.
+Pre-releases use SemVer suffixes: `v0.2.0-alpha.1`, `v0.2.0-beta.1`.
 Pre-release tags do not require CHANGELOG entries
 but **must** be reproducible builds (no moving Go-toolchain reference, no floating action SHAs).
 

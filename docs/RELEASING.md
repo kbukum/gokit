@@ -28,43 +28,37 @@ otherwise PATCH.
 ## 2. Update the CHANGELOG
 
 1. Open `CHANGELOG.md`.
-2. Replace `## [Unreleased]` with `## [vX.Y.Z] - YYYY-MM-DD`.
-3. Add a fresh empty `## [Unreleased]` section above it.
-4. If `[Unreleased]` is empty, refuse to release — there is nothing to ship.
-5. Update the link reference at the bottom of the file (if present).
+2. For a prerelease, replace the populated `## [Unreleased]` section with `## [X.Y.Z-alpha.N] - YYYY-MM-DD` and add a fresh empty `## [Unreleased]` section above it.
+3. For a stable release, use `## [X.Y.Z] - YYYY-MM-DD` and the same empty-section rotation.
+4. Refuse to release when the populated `[Unreleased]` section is empty.
 
-The `tag-modules.sh` script will refuse to tag if `[Unreleased]` is the only populated section,
-or if `[vX.Y.Z]` for the version you're cutting doesn't exist in the file.
+For stable releases, `tag-modules.sh` requires a matching changelog section.
+Prereleases use the dated alpha or beta section for release notes.
 
 ## 3. Tag every module
 
 ```sh
-./tag-modules.sh vX.Y.Z          # local-only dry run
-./tag-modules.sh vX.Y.Z --push   # push tags to origin
+./tag-modules.sh vX.Y.Z --dry-run # inspect tags without creating them
+./tag-modules.sh vX.Y.Z           # create signed local tags
+./tag-modules.sh vX.Y.Z --push    # create and push signed tags
 ```
 
 The script will:
 - Refuse to run with a dirty working tree (`git status --porcelain` non-empty).
 - Refuse to overwrite existing tags unless `--force` is passed.
-- Refuse if `CHANGELOG.md` lacks a `## [vX.Y.Z]` section.
+- Refuse if a stable release lacks a matching `CHANGELOG.md` section.
 - Create signed annotated tags (`git tag -s -a vX.Y.Z -m "..."`) using your configured GPG key.
 - Tag the root and every sub-module in lock-step.
 
-## 4. Cut the GitHub Release
+## 4. Publish the GitHub Release
 
-Once the tag is on `origin`, generate release notes from the CHANGELOG
-and create the GitHub Release via `gh`:
+Pushing the root tag starts `.github/workflows/release.yml`. GoReleaser creates
+the GitHub prerelease or stable release and publishes the source archive,
+checksums, SBOM, signatures, and provenance. Do not create a second release
+manually with `gh`.
 
-```sh
-./scripts/release-notes.sh vX.Y.Z > /tmp/notes.md
-gh release create vX.Y.Z --title "vX.Y.Z" --notes-file /tmp/notes.md
-```
-
-The release-notes script extracts the matching CHANGELOG section verbatim
-and prepends a generated summary line and a link to the full diff.
-
-GitHub Releases are mandatory;
-downstream tooling (`go install`, `dependabot`, `pkg.go.dev`) only surface signal when both the tag *and* the Release exist.
+GitHub Releases are mandatory; downstream tooling (`go install`, Dependabot,
+and pkg.go.dev) only surface release signal when both the tag and release exist.
 
 ## 5. Verify on `pkg.go.dev`
 
@@ -91,26 +85,26 @@ Hotfixes follow the same flow
 but skip the `[Unreleased]` rotation if the fix is targeted at an older line:
 
 ```sh
-git checkout v0.2.0
-git checkout -b hotfix/v0.2.1
+git checkout <existing-release-tag>
+git checkout -b hotfix/vX.Y.Z
 # … apply fix …
 # add a `## [0.2.1] - YYYY-MM-DD` section to CHANGELOG.md
-./tag-modules.sh v0.2.1 --push
+./tag-modules.sh vX.Y.Z --push
 ```
 
 ## Pre-releases
 
 ```sh
-./tag-modules.sh v0.3.0-rc.1 --push
-gh release create v0.3.0-rc.1 --prerelease --title "v0.3.0-rc.1" \
-  --notes-file /tmp/notes.md
+./tag-modules.sh v0.2.0-alpha.1 --dry-run
+./tag-modules.sh v0.2.0-alpha.1 --push
 ```
 
-Pre-releases bypass the CHANGELOG check (the `-rc.N` / `-beta.N` suffix is detected by `tag-modules.sh`).
+The prerelease suffix is detected by GoReleaser and the resulting GitHub
+Release is marked as a prerelease.
 
 ## Supply-chain artifacts (automated)
 
-Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.1.0-alpha.1`) triggers `.github/workflows/release.yml`,
+Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.2.0-alpha.1`) triggers `.github/workflows/release.yml`,
 which runs GoReleaser in library mode and produces, for every release:
 
 - a reproducible source archive (`gokit-<version>-source.tar.gz`) and a `checksums.txt`;

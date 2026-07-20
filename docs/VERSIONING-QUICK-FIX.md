@@ -1,137 +1,36 @@
-# Quick Fix: Versioning Issue
+# Versioning Quick Fix
 
-## Problem
+Use this procedure when a consumer resolves a gokit module to a zero-date pseudo-version.
 
-You're seeing pseudo-versions in your dependencies:
-```
-github.com/kbukum/gokit/connect v0.0.0-00010101000000-000000000000
-github.com/kbukum/gokit/database v0.0.0-00010101000000-000000000000
-...
-```
+## Cause
 
-## Root Cause
+The module's version tag is missing from the remote repository, or the consumer has not requested a published version.
 
-The modules don't have Git tags, so Go cannot determine their version
-and falls back to a pseudo-version.
+## Fix
 
-## Quick Fix (3 Steps)
-
-### Step 1: Commit Your Changes
+From a clean `main` checkout, preview the tags first:
 
 ```bash
-cd /path/to/gokit
-
-# Add all changes
-git add .
-
-# Commit
-git commit -m "chore: prepare release"
+./tag-modules.sh v0.2.0-alpha.1 --dry-run
 ```
 
-### Step 2: Tag All Modules
+Configure signing and create the complete module tag family:
 
 ```bash
-# Tag all modules with v0.1.0
-make tag VERSION=v0.1.0
+git config tag.gpgsign true
+git config user.signingkey <KEY-ID>
+./tag-modules.sh v0.2.0-alpha.1 --push
 ```
 
-This will create tags for all modules automatically (discovered from `go.mod` files):
-- `v0.1.0` (main module)
-- `auth/v0.1.0`
-- `authz/v0.1.0`
-- `bench/v0.1.0`
-- `connect/v0.1.0`
-- `database/v0.1.0`
-- `discovery/v0.1.0`
-- `grpc/v0.1.0`
-- `httpclient/v0.1.0`
-- `llm/v0.1.0`
-- `messaging/v0.1.0`
-- `cache/v0.1.0`
-- `server/v0.1.0`
-- `stateful/v0.1.0`
-- `storage/v0.1.0`
-- `testutil/v0.1.0`
-- `workload/v0.1.0`
-- ... plus all `*/testutil` modules
+The script discovers all `go.mod` files automatically. It creates the root tag (`v0.2.0-alpha.1`) and path-scoped tags such as `auth/v0.2.0-alpha.1` and `database/sqlite/v0.2.0-alpha.1`.
 
-### Step 3: Push Tags to Remote (Optional but Recommended)
+Consumers can then request the published version:
 
 ```bash
-# Push commits and tags
-git push
-git push origin --tags
-
-# Or use the combined command
-make tag-push VERSION=v0.1.0
-```
-
-## Verify the Fix
-
-### In gokit repository:
-
-```bash
-# List all tags
-make list-tags
-
-# Should show:
-# auth/v0.1.0
-# connect/v0.1.0
-# v0.1.0
-# ...
-```
-
-### In consuming projects (like platform):
-
-```bash
-cd /path/to/consuming-project
-
-# Update dependencies to use tagged versions
-go get github.com/kbukum/gokit@v0.1.0
-go get github.com/kbukum/gokit/auth@v0.1.0
-go get github.com/kbukum/gokit/connect@v0.1.0
-
-# Or update all at once
-go get -u github.com/kbukum/gokit/...@v0.1.0
-
-# Then tidy
+go get github.com/kbukum/gokit@v0.2.0-alpha.1
+go get github.com/kbukum/gokit/auth@v0.2.0-alpha.1
+go get github.com/kbukum/gokit/database/sqlite@v0.2.0-alpha.1
 go mod tidy
 ```
 
-## For Local Development
-
-If you want to continue using local development (without tags),
-keep the `replace` directives in your `go.mod`:
-
-```go
-replace (
-    github.com/kbukum/gokit => ../gokit
-    github.com/kbukum/gokit/auth => ../gokit/auth
-    github.com/kbukum/gokit/connect => ../gokit/connect
-    // ... other modules
-)
-```
-
-The pseudo-versions won't affect functionality when using `replace` directives.
-They only appear in the dependency list but are overridden by the local paths.
-
-## Future Releases
-
-When you make changes and want to release:
-
-```bash
-# 1. Update CHANGELOG.md with changes
-# 2. Commit changes
-git add .
-git commit -m "chore: prepare v0.2.0 release"
-
-# 3. Tag new version
-make tag VERSION=v0.2.0
-
-# 4. Push
-git push origin --tags
-```
-
-## More Information
-
-See [docs/VERSIONING.md](docs/VERSIONING.md) for complete versioning guide.
+For local development, use `replace` directives instead of publishing temporary tags. See [`VERSIONING.md`](VERSIONING.md) for the complete policy.

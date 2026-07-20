@@ -60,8 +60,9 @@ or if the `[vX.Y.Z]` section for the version you're cutting is missing.
 ## Step 4 — Tag every module
 
 ```bash
-./tag-modules.sh vX.Y.Z            # local-only dry run — inspect the tags it would create
-./tag-modules.sh vX.Y.Z --push     # create and push tags to origin
+./tag-modules.sh vX.Y.Z --dry-run # inspect tags without creating them
+./tag-modules.sh vX.Y.Z           # create signed local tags
+./tag-modules.sh vX.Y.Z --push    # create and push tags to origin
 ```
 
 Equivalent Makefile wrappers: `make tag VERSION=vX.Y.Z`, `make tag-push VERSION=vX.Y.Z`,
