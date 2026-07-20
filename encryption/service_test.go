@@ -4,12 +4,32 @@ import (
 	"bytes"
 	"crypto/cipher"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"testing"
 )
+
+func TestDeriveKeyMatchesPBKDF2SHA256Vector(t *testing.T) {
+	old := pbkdf2Iterations
+	pbkdf2Iterations = 1000
+	t.Cleanup(func() { pbkdf2Iterations = old })
+
+	got, err := deriveKey([]byte("password"), []byte("salt"))
+	if err != nil {
+		t.Fatalf("deriveKey: %v", err)
+	}
+
+	want, err := hex.DecodeString("632c2812e46d4604102ba7618e9d6d7d2f8128f6266b4a03264d2a0460b7dcb3")
+	if err != nil {
+		t.Fatalf("DecodeString: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("deriveKey() = %x, want %x", got, want)
+	}
+}
 
 func TestRoundTrip_BinaryData(t *testing.T) {
 	// All 256 byte values including null bytes
