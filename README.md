@@ -10,6 +10,9 @@
 > **Status — pre-1.0.** Public surface is semver-stable per module;
 > breaking changes are documented in [`CHANGELOG.md`](CHANGELOG.md).
 > See [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md).
+>
+> **Current development line — `v0.2.0-alpha.1`.** This is a prerelease for
+> evaluation and integration testing; APIs may change before `v0.2.0`.
 
 > **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python).
 > Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are evaluated for parity across all three.
@@ -41,7 +44,7 @@ CI still runs full-workspace validation; on pull requests the `changes` job also
 - **Lifecycle-managed components** — uniform `Component` interface (start / stop / health) and `bootstrap.App` orchestrator with graceful shutdown.
 - **Production resilience** — circuit breakers, retries with backoff + jitter, bulkheads, rate limiting, OpenTelemetry tracing & metrics.
 - **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`, and `Duplex` traits with composable middleware and sink combinators.
-- **Per-module versioning** — `gokit/server` and `gokit/database` upgrade independently of core. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
+- **Per-module versioning** — every module has its own matching tag, while normal releases are cut in lock-step for convenience. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
 - **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust) and [pykit](https://github.com/kbukum/pykit) (Python).
 
 ## Install

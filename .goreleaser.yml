@@ -1,16 +1,7 @@
-# goreleaser configuration — library mode (no binaries; SBOM + checksums + signed source archive).
-# Closes F-055 (no .goreleaser.yml).
-#
-# Usage:
-#   goreleaser release --clean       (CI; expects GITHUB_TOKEN, COSIGN_KEY)
-#   goreleaser release --snapshot    (local dry run)
+# Source-only library release: archive, complete source SBOM, checksum, and signature bundle.
 version: 2
 
 project_name: gokit
-
-before:
-  hooks:
-    - go mod tidy
 
 builds:
   - skip: true   # gokit ships libraries, not binaries.
@@ -24,53 +15,23 @@ checksum:
   name_template: "checksums.txt"
   algorithm: sha256
 
-# SBOM generation (CycloneDX) — closes F-037 SBOM gap when paired with CI.
-# goreleaser runs the sbom cmd from the dist/ directory, so the module root is
-# one level up; cyclonedx-gomod catalogs the root module and its dependencies.
 sboms:
   - artifacts: source
     documents:
       - "{{ .ProjectName }}-{{ .Version }}.cdx.json"
-    cmd: cyclonedx-gomod
-    args: ["mod", "-licenses", "-json", "-output", "$document", ".."]
+    cmd: syft
+    args: ["$artifact", "--output", "cyclonedx-json=$document", "--enrich", "all"]
 
-# Cosign keyless signing of source + checksums + SBOM. Requires the
-# release workflow to run with id-token:write so OIDC is available. The
-# certificate is emitted alongside the signature so the release job can
-# `cosign verify-blob` the artifacts without a static key.
 signs:
   - cmd: cosign
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - "sign-blob"
-      - "--yes"
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
-    artifacts: all
+      - "--yes"
+    artifacts: checksum
     output: true
-
-changelog:
-  use: github
-  sort: asc
-  groups:
-    - title: Features
-      regexp: '^.*?feat(\(.+\))??:.+$'
-      order: 0
-    - title: Bug fixes
-      regexp: '^.*?fix(\(.+\))??:.+$'
-      order: 1
-    - title: Performance
-      regexp: '^.*?perf(\(.+\))??:.+$'
-      order: 2
-    - title: Other
-      order: 999
-  filters:
-    exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
-      - '^ci:'
 
 release:
   github:
@@ -78,8 +39,4 @@ release:
     name: gokit
   prerelease: auto
   draft: false
-  mode: append
-  header: |
-    ## gokit {{ .Tag }}
-
-    See [`CHANGELOG.md`](https://github.com/kbukum/gokit/blob/{{ .Tag }}/CHANGELOG.md) for the curated list of changes.
+  name_template: "{{ .Tag }}"

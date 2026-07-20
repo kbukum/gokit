@@ -9,7 +9,7 @@ This file is the bird's-eye index.
 
 | Go version | gokit version |
 |------------|---------------|
-| 1.26+      | v0.1.2+       |
+| 1.26+      | v0.2.0-alpha.1+ |
 
 ## Core Packages
 

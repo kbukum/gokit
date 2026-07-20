@@ -88,8 +88,8 @@ body:
     id: version
     attributes:
       label: Version
-      description: "Which version of gokit? (e.g., v0.1.2, server/v0.1.1)"
-      placeholder: "v0.1.2"
+      description: "Which version of gokit? (e.g., v0.2.0-alpha.1, server/v0.2.0-alpha.1)"
+      placeholder: "v0.2.0-alpha.1"
     validations:
       required: true
 

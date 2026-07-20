@@ -4,18 +4,17 @@ name: Release
 # Closes F-037 (no release/SBOM/cosign workflow), F-055 (no goreleaser),
 # F-056 (gh release list empty despite tags).
 #
-# Trigger: push of any vX.Y.Z tag (root module). Per-submodule tags
-# (e.g. kafka/v0.2.0) are handled separately by tag-modules.sh and do
+# Trigger: push of any root v* tag. Per-submodule tags
+# (e.g. messaging/kafka/v0.2.0-alpha.1) are handled separately by tag-modules.sh and do
 # not trigger a release here.
 
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+    - "v*"
 
 permissions:
   contents: write   # publish release assets
-  packages: write   # in case we publish OCI artifacts later
   id-token: write   # cosign keyless signing via OIDC
   attestations: write   # SLSA build provenance attestation
 
@@ -48,7 +47,7 @@ jobs:
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: "v2.11.2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
