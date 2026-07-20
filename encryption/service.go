@@ -3,13 +3,12 @@ package encryption
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"io"
-
-	"golang.org/x/crypto/pbkdf2"
 )
 
 const (
@@ -33,8 +32,8 @@ func NewService(key string) (*Service, error) {
 	return &Service{passphrase: []byte(key)}, nil
 }
 
-func deriveKey(passphrase, salt []byte) []byte {
-	return pbkdf2.Key(passphrase, salt, pbkdf2Iterations, keySize, sha256.New)
+func deriveKey(passphrase, salt []byte) ([]byte, error) {
+	return pbkdf2.Key(sha256.New, string(passphrase), salt, pbkdf2Iterations, keySize)
 }
 
 func newAESGCM(key []byte) (cipher.AEAD, error) {
@@ -57,7 +56,12 @@ func encryptWithAEAD(passphrase []byte, factory aeadFactory, plaintext string) (
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
 
-	aead, err := factory(deriveKey(passphrase, salt))
+	key, err := deriveKey(passphrase, salt)
+	if err != nil {
+		return "", fmt.Errorf("derive key: %w", err)
+	}
+
+	aead, err := factory(key)
 	if err != nil {
 		return "", err
 	}
@@ -87,7 +91,12 @@ func decryptWithAEAD(passphrase []byte, factory aeadFactory, ciphertext string) 
 	}
 
 	salt := data[:saltSize]
-	aead, err := factory(deriveKey(passphrase, salt))
+	key, err := deriveKey(passphrase, salt)
+	if err != nil {
+		return "", fmt.Errorf("derive key: %w", err)
+	}
+
+	aead, err := factory(key)
 	if err != nil {
 		return "", err
 	}

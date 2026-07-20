@@ -32,7 +32,10 @@ func main() {
         return n * 2, nil
     })
 
-    c := chain.Then(chain.Then(chain.New[string](), parse), double).Build()
+    start := chain.New[string]()
+    parsed := chain.Then(start, parse)
+    doubled := chain.Then(parsed, double)
+    c := doubled.Build()
 
     out, err := c.Execute(context.Background(), "21", nil)
     if err != nil {
@@ -42,7 +45,7 @@ func main() {
 }
 ```
 
-Because Go methods cannot introduce new type parameters, steps are appended with the package-level `Then` function rather than a fluent method, so each `Then` can transform the output type.
+Because Go methods cannot introduce new type parameters, steps are appended with the package-level `Then` function rather than a fluent method, so each `Then` can transform the output type. For chains longer than a couple of steps, prefer naming the intermediate builders as above; the composition reads in execution order and matches the package-level operator style used by `stream`.
 
 ## Key Types & Functions
 
