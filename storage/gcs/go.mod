@@ -9,7 +9,7 @@ require (
 	cloud.google.com/go/storage v1.63.1
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/storage v0.2.0
-	google.golang.org/api v0.289.0
+	google.golang.org/api v0.290.0
 )
 
 require (
