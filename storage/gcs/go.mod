@@ -6,7 +6,7 @@ toolchain go1.26.5
 
 require (
 	cloud.google.com/go/auth v0.22.0
-	cloud.google.com/go/storage v1.63.1
+	cloud.google.com/go/storage v1.64.0
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/storage v0.2.0
 	google.golang.org/api v0.290.0
