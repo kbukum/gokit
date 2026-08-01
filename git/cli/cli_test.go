@@ -3,10 +3,14 @@ package cli
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/git/internal/model"
 	"github.com/kbukum/gokit/process"
@@ -45,10 +49,7 @@ func TestExecRedactsCredentialsFromFailure(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	script := filepath.Join(dir, "fake-git")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'fatal: https://user:secret@example.com/repo.git failed' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatalf("WriteFile(fake-git): %v", err)
-	}
+	script := writeFakeGit(t, dir, "#!/bin/sh\necho 'fatal: https://user:secret@example.com/repo.git failed' >&2\nexit 1\n")
 	backend := New(dir, &model.OpenOptions{CLIPath: script, ExtraArgs: []string{"https://arg:secret@example.com/repo.git"}})
 
 	_, err := backend.Exec("fetch", "https://other:secret@example.com/repo.git")
@@ -69,10 +70,7 @@ func TestExecRedactsSensitiveExtraArgs(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	script := filepath.Join(dir, "fake-git")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'fatal: request failed' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatalf("WriteFile(fake-git): %v", err)
-	}
+	script := writeFakeGit(t, dir, "#!/bin/sh\necho 'fatal: request failed' >&2\nexit 1\n")
 	const token = "Basic c2VjcmV0LXRva2Vu"
 	backend := New(dir, &model.OpenOptions{
 		CLIPath:   script,
@@ -216,10 +214,7 @@ func TestInspectorInvalidOutput(t *testing.T) {
 			t.Parallel()
 
 			dir := t.TempDir()
-			script := filepath.Join(dir, "fake-git")
-			if err := os.WriteFile(script, []byte(tc.body), 0o755); err != nil {
-				t.Fatalf("WriteFile(fake-git): %v", err)
-			}
+			script := writeFakeGit(t, dir, tc.body)
 			err := tc.call(New(dir, &model.OpenOptions{CLIPath: script}))
 			if err == nil {
 				t.Fatal("call expected error")
@@ -507,6 +502,34 @@ func TestCleanDryRunDirectoriesAndIgnored(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "build", "out.txt")); err != nil {
 		t.Fatalf("dry-run removed untracked directory file: %v", err)
+	}
+}
+
+// writeFakeGit writes an executable fake-git script into dir and returns its path.
+//
+// A freshly written executable can transiently fail to exec with ETXTBSY ("text
+// file busy") when a concurrent test goroutine forks for its own subprocess and
+// inherits the still-open write descriptor to this file. The helper blocks until
+// the kernel will exec the script so the code under test never observes that race.
+func writeFakeGit(t *testing.T, dir, body string) string {
+	t.Helper()
+
+	script := filepath.Join(dir, "fake-git")
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake-git): %v", err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		// The script exits by design; only ETXTBSY signals the write/exec race,
+		// so any other outcome means the file is runnable.
+		if err := exec.Command(script).Run(); !errors.Is(err, syscall.ETXTBSY) {
+			return script
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fake-git remained text-file-busy")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
