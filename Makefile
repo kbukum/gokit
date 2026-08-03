@@ -1,8 +1,12 @@
 .PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
-       check-media check-infra check-devtools clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act
+       check-media check-infra check-devtools clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act toven-canary
 
 GOMOD := ./gomod.sh
+# Candidate Toven binary for the read-only self-hosting canary. Defaults to a
+# `toven` on PATH; point it at a freshly built binary to dogfood a candidate,
+# e.g. `make TOVEN=../toven/target/release/toven toven-canary`.
+TOVEN ?= toven
 
 # Module flag: pass -m $(M) to gomod.sh when M is set
 _M = $(if $(M),-m $(M))
@@ -81,6 +85,31 @@ tag-force:
 list-tags:
 	@echo "==> All version tags:"
 	@git tag -l | sort -V
+
+## Read-only Toven self-hosting canary: discover modules and the dependency
+## graph, then exercise the mutation-free release previews (status + plan) with
+## the candidate Toven binary. The native tag-modules.sh / goreleaser release
+## path stays authoritative. Toven never fabricates a synthetic 0.0.0, so before
+## the first version tag the release previews fail closed with "no reachable
+## release tag" — that is the expected outcome and is tolerated here; any other
+## failure (or an unexpected success once a tag exists) still surfaces. TOVEN
+## selects the binary (see the TOVEN var).
+toven-canary:
+	@$(TOVEN) modules
+	@$(TOVEN) graph
+	@for verb in status plan; do \
+	  echo ">> toven release $$verb (mutation-free preview)"; \
+	  if out="$$($(TOVEN) release $$verb 2>&1)"; then \
+	    printf '%s\n' "$$out"; \
+	    echo "release $$verb now succeeds — a release tag is reachable"; \
+	  elif printf '%s\n' "$$out" | grep -q 'no reachable release tag'; then \
+	    echo "release $$verb fails closed as expected — no reachable release tag before the first Go release"; \
+	  else \
+	    printf '%s\n' "$$out"; \
+	    echo "error: release $$verb failed for an unexpected reason" >&2; \
+	    exit 1; \
+	  fi; \
+	done
 
 ## Release dry-run: build source archive + SBOM + checksums without signing or
 ## publishing (usage: make release-dry [VERSION=v0.1.0-alpha.1]). Requires
