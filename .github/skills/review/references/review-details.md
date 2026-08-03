@@ -167,7 +167,7 @@ Otherwise should-fix or nit.
 
 Group by file in the final report.
 State explicitly any pass that was **skipped** (with the trigger that failed)
-and any pass that was **deferred** (with reason).
+and any pass that was **not run** (with reason).
 
 ## Phase 4 — Plan and clarify
 

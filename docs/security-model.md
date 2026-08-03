@@ -37,7 +37,7 @@ gokit assumes:
 
 - default password hash: **Argon2id**
 - default parameters: memory `64 MiB`, iterations `3`, parallelism `4`
-- bcrypt is retained only as a migration fallback and must use cost `>= 12`
+- bcrypt is supported only when explicitly allowed and must use cost `>= 12`
 
 ### OIDC
 

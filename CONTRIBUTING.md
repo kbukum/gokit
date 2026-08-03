@@ -38,9 +38,9 @@ gokit/
 ├── go.mod                  # Root module (core packages)
 ├── errors/                 # ─┐
 ├── config/                 #  │
-├── logger/                 #  │ Core packages — share root go.mod
+├── logging/                #  │ Core packages — share root go.mod
 ├── provider/               #  │ Zero heavy dependencies
-├── pipeline/               #  │
+├── stream/                 #  │
 ├── resilience/             # ─┘
 ├── database/               # ─┐
 │   ├── go.mod              #  │ Sub-modules — own go.mod
@@ -157,8 +157,7 @@ You never maintain a hardcoded module list:
   }
   ```
 
-Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to a `[]struct` slice when adjacent cases share setup,
-assertions, or inputs. Tracked: F-046 (#63) — adoption is currently ~30% repo-wide.
+Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to a `[]struct` slice when adjacent cases share setup, assertions, or inputs.
 
 ## Versioning & Releases
 
@@ -199,7 +198,7 @@ make ci-lint   # lint jobs only
 
 ### Sibling-parity reminder
 
-Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
+Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
 [rskit](https://github.com/kbukum/rskit), and [pykit](https://github.com/kbukum/pykit).
 When you change one of these surfaces here, please open tracking issues in the sibling repos
 so the change can be evaluated for parity.

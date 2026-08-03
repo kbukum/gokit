@@ -5,9 +5,9 @@
 ## Versioning surface
 
 `gokit` is a Go *workspace* with one root module (`github.com/kbukum/gokit`)
-and 33 sub-modules (e.g. `github.com/kbukum/gokit/storage`, `…/server`, …).
-**Each module is versioned independently**, even though we currently cut all tags in lock-step.
-The lock-step practice is convenience, not contract — consumers should pin per module.
+and 49 sub-modules (e.g. `github.com/kbukum/gokit/storage`, `…/server`, …).
+All modules are released in lock-step with path-scoped tags.
+Consumers should pin only the modules they import.
 
 ## Pre-1.0 (`0.x.y`)
 

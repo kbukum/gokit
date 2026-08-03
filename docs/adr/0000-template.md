@@ -1,6 +1,6 @@
 # NNNN. Title
 
-- Status: Proposed | Accepted | Superseded by [ADR-XXXX](XXXX-title.md)
+- Status: Proposed | Accepted | Superseded by ADR-NNNN
 - Date: YYYY-MM-DD
 - Authors: @handle
 

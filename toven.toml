@@ -9,6 +9,42 @@ base_ref = "origin/main"
 [ecosystems.go]
 modules = "auto"
 
+[ecosystems.go.coverage]
+changed_line = 85.0
+enforcement = "advisory"
+line = 80.0
+
+# gokit publishes Go module tags only (no registry): Toven selects the changed
+# modules, cuts Go path-prefixed tags, gates on a clean tree, supports an alpha
+# prerelease channel, and cuts a hosted GitHub Release.
+#
+# Publishability decision — every discovered module, including the `testutil`
+# and `bench` modules, is deliberately included in the release and tagged in
+# lock-step, matching the authoritative `tag-modules.sh`, which discovers and
+# tags every `go.mod`. The `testutil` modules exist so a downstream consumer can
+# import gokit's test helpers without pulling test-only dependencies into its
+# production module graph, so they must carry consumable path-prefixed tags. The
+# `bench` modules are internal but are ordinary Go modules under the same fixed
+# tag scheme (`vX.Y.Z` at the root, `<path>/vX.Y.Z` for sub-modules). Toven does
+# support a per-module `exclude` opt-out, but gokit's contract deliberately
+# withholds none: the classification here is explicit inclusion of every module,
+# not the absence of a mechanism. The Go tag grammar is fixed (Toven rejects a
+# `tag_format` override).
+#
+# First-release note — gokit has no reachable release tags yet, so the version
+# is tag-derived from none and the mutation-free previews (`release status` /
+# `plan`) fail closed ("no reachable release tag") until the first version is
+# cut. That first version is supplied explicitly to the mutating `release tag`
+# action in step 04/05; Toven never fabricates a synthetic `0.0.0` baseline.
+[ecosystems.go.release]
+readiness = ["clean-tree"]
+
+[ecosystems.go.release.host]
+forge = "github"
+
+[ecosystems.go.release.prerelease]
+channels = ["alpha"]
+
 [ecosystems.go.tasks.build]
 argv = ["go", "-C", "{module.root}", "build", "{args}", "{module.selector}"]
 fan_out = "per-module"
@@ -21,6 +57,13 @@ fan_out = "per-module"
 selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
+[ecosystems.go.tasks.coverage]
+argv = ["go", "test", "-coverprofile=target/toven/coverage/go-{module.name}.out", "{args}", "./..."]
+cacheable = false
+fan_out = "whole-workspace"
+kind = "coverage"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
 [ecosystems.go.tasks.format]
 argv = ["gofmt", "-w", "{args}", "{workspace.root}"]
 cacheable = false
@@ -30,6 +73,7 @@ shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.format-check]
 argv = ["gofmt", "-l", "{args}", "{workspace.root}"]
+fail_if_output = true
 fan_out = "whole-workspace"
 kind = "format"
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
@@ -37,7 +81,7 @@ shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 [ecosystems.go.tasks.lint]
 argv = ["golangci-lint", "run", "--allow-parallel-runners", "{args}", "{module.selector}"]
 fan_out = "per-module"
-selector = ["{module.root}/..."]
+selector = ["./{module.root}/..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.run]
