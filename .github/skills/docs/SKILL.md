@@ -4,7 +4,8 @@ description: >-
     Review and update gokit's documentation so it reads naturally and reflects the toolkit as it is
     today — keep Markdown paragraphs flowing without hard column wrapping, preserve intentional
     document structure, sync commands, module structure, and examples with the actual code, fix stale
-    links and dead references, and drop history/plan narration. Use when writing or auditing docs,
+    links and dead references, drop history/plan narration, keep prose humanized and scannable with
+    a task-first quickstart, and add mermaid diagrams where they clarify architecture or flow. Use when writing or auditing docs,
     repairing AI-generated hard wraps, after a change that outdated docs, or before a release.
 user-invocable: true
 ---
@@ -29,7 +30,7 @@ Never touch `tmp/` (gitignored scratch) and never add a committed doc that refer
 ## Pass 1 — Standards (how it reads)
 
 - **Flowing Markdown prose.** A Markdown paragraph is one continuous source line. Do not hard-wrap prose to a column limit or add source newlines to control how it looks at one editor width; GitHub and other renderers wrap it for the reader's viewport. Collapse AI-generated hard wraps only within the same logical paragraph.
-- **Preserve intentional structure.** Keep blank-line paragraph boundaries, headings, list items, blockquotes, tables, link definitions, HTML blocks, and fenced or indented code blocks. Never join separate list items or paragraphs. Preserve hard line breaks that are semantically meaningful (`<br>` or two trailing spaces).
+- **Preserve intentional structure.** Keep blank-line paragraph boundaries, headings, list items, blockquotes, tables, link definitions, HTML blocks, mermaid diagrams, and fenced or indented code blocks. Never join separate list items or paragraphs. Preserve hard line breaks that are semantically meaningful (`<br>` or two trailing spaces).
 - **Go documentation.** Write `doc.go`, godoc, and `//` prose naturally without arbitrary column-based breaks. Preserve Go directives, headings, lists, and indented code examples. Do not join separate comment paragraphs.
 - **No history/plan/process narration.** A doc or comment describes the system as it is now, not how it got here or what a future plan intends. Delete "previously…", "we changed…", batch/plan/PR references, and TODO-narration.
 - **`tmp/` stays uncommitted.** No committed doc references a `tmp/` plan or handoff note.
@@ -44,6 +45,17 @@ Verify each doc against the code it describes; a doc that lies is worse than no 
 - **Parity matrix** is current: `PARITY-MATRIX.md` reflects which rskit capabilities gokit currently mirrors (see the `parity` skill), including deliberate light-version or rskit-only decisions.
 - **Examples build.** Code/command examples reflect current behavior and compile.
 - **Links resolve.** Internal relative links and cross-references point at files that exist; other-repo references use full URLs, never bare `#123`.
+
+## Pass 3 — Clarity & developer experience (does it actually help the reader?)
+
+Standards and accuracy make a doc correct; this pass makes it *usable*. Judge every doc by whether a developer under time pressure finds what they need and gets running fast — a correct doc nobody can skim has still failed.
+
+- **Humanized, plain language.** Write for a developer skimming, not a spec lawyer. One idea per sentence; keep sentences short. Use active voice and direct instructions ("Call `New`", "Send a GET request"), never passive throat-clearing ("a request should be sent"). Cut filler and hedging. Prefer the plain word over jargon; define an unavoidable term the first time it appears.
+- **Scannable, uncrowded structure.** Let the reader find the answer by scanning, not by reading top to bottom. Break content with meaningful headings, short lists, and tables; bold the load-bearing terms; keep paragraphs to a few sentences. Whitespace and sectioning carry meaning — never a wall of text.
+- **Task-first, quickstart up top.** Order each doc by what the reader wants to do, most common first (inverted pyramid). Lead with the shortest copy-pasteable path to a first working result, before deep reference. Know which of the four Diátaxis modes each page is — tutorial, how-to, reference, or explanation — and don't blend them on one page.
+- **Real, runnable examples.** Every non-trivial capability shows a real, copy-pasteable snippet that compiles against the current API — never pseudo-code. Show the common path first, then the important options and failure cases. Prefer runnable godoc `Example` functions so the compiler keeps them honest.
+- **Diagrams where prose is the wrong tool.** When a doc explains architecture, layer/dependency direction, a request or data flow, a state machine, or component interaction, add a focused `mermaid` diagram right where the concept is introduced — a diagram earns its place only by replacing a paragraph the reader would otherwise assemble in their head. Keep each diagram to one idea (prefer several small diagrams over one crowded one), pair it with a one-line caption so it degrades where mermaid isn't rendered, and keep it in sync with the code like any other doc. Don't diagram the trivial.
+- **Every element earns its place.** Delete restated-obvious prose, duplicate explanations, and decoration that doesn't help someone build. Meaning over volume.
 
 ## Apply, then validate
 
