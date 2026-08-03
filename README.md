@@ -15,7 +15,7 @@
 > evaluation and integration testing; APIs may change before `v0.2.0`.
 
 > **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python).
-> Public abstractions (`AppError`, `Component`, `Provider`, `Pipeline`, lifecycle hooks) are evaluated for parity across all three.
+> Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are evaluated for parity across all three.
 
 ## Browse by Domain
 
@@ -27,7 +27,7 @@ See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
 | core | Foundation types, config, logging | `make check-core` |
 | patterns | Component, provider, DI, hooks | `make check-patterns` |
 | crosscutting | Observability, resilience, security | `make check-crosscutting` |
-| composition | Bootstrap, pipeline, DAG, workers | `make check-composition` |
+| composition | Bootstrap, stream, DAG, workers | `make check-composition` |
 | transport | Server, HTTP, gRPC, SSE | `make check-transport` |
 | auth | Authentication, authorization | `make check-auth` |
 | data | Database, cache, storage, messaging | `make check-data` |

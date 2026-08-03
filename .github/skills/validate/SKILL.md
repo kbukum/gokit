@@ -20,7 +20,7 @@ or name the module explicitly. Full-tree gates are for audits and CI sign-off (s
 ```bash
 # What would this task run, and where? (no execution — reviewable argv)
 toven plan test
-toven explain test --module go:media          # exact planned argv for one module
+toven explain test --module go:media          # exact argv for one module
 
 # Only the modules the diff touches (blast radius incl. reverse-dependents)
 toven affected test --base origin/main --merge-base

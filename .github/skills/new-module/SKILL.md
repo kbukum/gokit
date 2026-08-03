@@ -73,7 +73,7 @@ so the Makefile/CI `check-<domain>` gates and generated docs pick it up.
 ## Step 6 — Parity matrix
 
 If this capability exists (or should be tracked) in rskit,
-add/adjust its row in `docs/PARITY-MATRIX.md` (✅ present · ➖ absent · ⏳ planned) with a short note.
+add/adjust its row in `docs/PARITY-MATRIX.md` (✅ present · ➖ absent) with a short note.
 See the `parity` skill for the capability-not-blind mirroring policy.
 
 ## Step 7 — Validate

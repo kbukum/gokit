@@ -11,14 +11,14 @@ Maintainers are responsible for code review, releases, and project direction.
 
 ## Bus Factor: 1 — Co-Maintainers Wanted
 
-gokit currently has a **single core maintainer**.
-This is a known sustainability risk for a project of this size (34 modules).
+gokit has a **single core maintainer**.
+This is a known sustainability risk for a project of this size (50 Go modules).
 We are actively looking for contributors interested in becoming co-maintainers,
 particularly in the following areas:
 
 - **Transport/protocol packages**: `grpc`, `connect`, `sse`, `server`
-- **Messaging**: `messaging/kafka`, `messaging/managed`
-- **Observability**: `observability`, `logger`
+- **Messaging**: `messaging`, `messaging/kafka`, `messaging/nats`, `messaging/rabbitmq`
+- **Observability**: `observability`, `logging`
 - **Security**: `auth`, `auth/oidc`, `encryption`
 - **Storage**: `storage/*`, `cache/*`
 
@@ -41,8 +41,7 @@ Maintainers are expected to:
 
 - Review pull requests within a reasonable timeframe.
 - Triage issues and security reports (see [SECURITY.md](SECURITY.md)).
-- Cut releases following the process documented in [docs/release-process.md](docs/release-process.md) (when present)
-  or the `tag-modules.sh` workflow.
+- Cut releases following the process documented in [docs/RELEASING.md](docs/RELEASING.md).
 - Uphold the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Becoming Inactive / Stepping Down

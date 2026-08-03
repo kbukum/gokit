@@ -32,7 +32,7 @@ func main() {
         Format: "console",
     }, cfg.Name)
 
-    log.Info("service configured", map[string]interface{}{
+    log.Info("service configured", map[string]any{
         "env": cfg.Environment,
     })
 }
@@ -105,24 +105,34 @@ fmt.Println(string(result.Stdout))
 ## Bootstrap Lifecycle
 
 ```go
-import "github.com/kbukum/gokit/bootstrap"
+import (
+    "context"
 
-app := bootstrap.NewApp("my-service", "1.0.0",
-    bootstrap.WithLogger(log),
-    bootstrap.WithGracefulTimeout(15 * time.Second),
+    "github.com/kbukum/gokit/bootstrap"
+    "github.com/kbukum/gokit/config"
 )
 
-app.RegisterComponent(db)    // component.Component
-app.RegisterComponent(cache) // component.Component
+type AppConfig struct {
+    config.ServiceConfig `mapstructure:",squash"`
+}
 
-app.OnConfigure(func(ctx context.Context, app *bootstrap.App) error {
+cfg := &AppConfig{ServiceConfig: config.ServiceConfig{Name: "my-service", Version: "1.0.0"}}
+app, err := bootstrap.NewApp(cfg)
+if err != nil {
+    return err
+}
+
+_ = app.RegisterComponent(db)    // component.Component
+_ = app.RegisterComponent(cache) // component.Component
+
+app.OnConfigure(func(ctx context.Context, app *bootstrap.App[*AppConfig]) error {
     // All components started — set up routes, handlers, business logic
     return nil
 })
 
 // Run: Init → Start → Configure → Ready → wait for signal → Stop
 if err := app.Run(ctx); err != nil {
-    log.Fatal("app failed", map[string]interface{}{"error": err})
+    log.Fatal("app failed", map[string]any{"error": err})
 }
 ```
 
@@ -130,79 +140,124 @@ if err := app.Run(ctx); err != nil {
 
 ```go
 import (
+    "context"
     "github.com/kbukum/gokit/agent"
-    "github.com/kbukum/gokit/tool"
+    "github.com/kbukum/gokit/ai/chat"
+    "github.com/kbukum/gokit/llm"
+    "github.com/kbukum/gokit/llm/providers/ollama"
 )
 
-registry := tool.NewRegistry()
-registry.Register(weatherTool)
+registry := llm.NewDialectRegistry()
+_ = ollama.Register(registry)
 
-a := agent.New(llmProvider, registry,
-    agent.WithContextStrategy(&agent.SlidingWindowStrategy{MaxTokens: 4096}),
-)
-result, err := a.Run(ctx, "What's the weather in Berlin?")
-fmt.Println(result.Events)
+adapter, err := llm.New(registry, llm.Config{
+    Dialect: ollama.DialectName,
+    BaseURL: ollama.DefaultBaseURL,
+    Model:   "llama3.2",
+})
+if err != nil {
+    return err
+}
+
+runner := agent.New(agent.Config{
+    Provider: llm.NewProvider(adapter, "llama3.2"),
+    Model:    "llama3.2",
+})
+result, err := runner.Run(context.Background(), []chat.Message{
+    chat.User("What's the weather in Berlin?"),
+})
+fmt.Println(result.FinalMessage.Text())
 ```
 
 ## LLM Chat Completion
 
 ```go
-import "github.com/kbukum/gokit/llm"
+import (
+    "github.com/kbukum/gokit/ai/chat"
+    "github.com/kbukum/gokit/llm"
+    "github.com/kbukum/gokit/llm/providers/ollama"
+)
 
-provider := llm.NewProvider(llm.Config{
-    Dialect: "openai",
-    Model:   "gpt-4",
-    APIKey:  os.Getenv("OPENAI_API_KEY"),
+registry := llm.NewDialectRegistry()
+_ = ollama.Register(registry)
+
+adapter, err := llm.New(registry, llm.Config{
+    Dialect: ollama.DialectName,
+    BaseURL: ollama.DefaultBaseURL,
+    Model:   "llama3.2",
 })
 
-resp, err := provider.ChatCompletion(ctx, llm.Request{
-    Messages: []llm.Message{
-        {Role: "user", Content: "Explain circuit breakers"},
+resp, err := adapter.Execute(ctx, llm.CompletionRequest{
+    Messages: []chat.Message{
+        chat.User("Explain circuit breakers"),
     },
 })
-fmt.Println(resp.Content)
+fmt.Println(resp.Text())
 ```
 
 ## Tool Definition
 
 ```go
-import "github.com/kbukum/gokit/tool"
-
-t := tool.New("get_weather", "Get current weather for a city",
-    tool.HandlerFunc(func(ctx context.Context, input map[string]any) (any, error) {
-        city := input["city"].(string)
-        return fetchWeather(ctx, city)
-    }),
+import (
+    "encoding/json"
+    "github.com/kbukum/gokit/tool"
 )
 
+type WeatherInput struct {
+    City string `json:"city" jsonschema:"required"`
+}
+
+type WeatherOutput struct {
+    Summary string `json:"summary"`
+}
+
+t := tool.FromFunc("get_weather", "Get current weather for a city",
+    func(ctx context.Context, input WeatherInput) (WeatherOutput, error) {
+        return WeatherOutput{Summary: "sunny in " + input.City}, nil
+    })
+
 registry := tool.NewRegistry()
-registry.Register(t)
+_ = registry.Register(t)
+
+result, err := registry.Call(tool.NewContext(ctx), "get_weather", json.RawMessage(`{"city":"Berlin"}`))
+fmt.Println(result.Text())
 ```
 
 ## Messaging
 
 ```go
-import "github.com/kbukum/gokit/messaging"
+import (
+    "github.com/kbukum/gokit/messaging"
+    "github.com/kbukum/gokit/messaging/memory"
+)
 
-producer, _ := messaging.NewProducer(cfg)
-producer.Publish(ctx, "events", messaging.Message{
-    Key:   []byte("user-123"),
-    Value: payload,
-})
+broker := memory.NewBroker()
+producer := broker.Producer()
+consumer := broker.Consumer("events")
 
-consumer, _ := messaging.NewConsumer(cfg, "my-group")
-consumer.Subscribe("events", func(ctx context.Context, msg messaging.Message) error {
+event, _ := messaging.NewEvent("user.created", "auth-service", map[string]string{"id": "user-123"}, "user-123")
+_ = producer.Publish(ctx, "events", event)
+
+go consumer.Consume(ctx, func(ctx context.Context, msg messaging.Message) error {
     return processEvent(msg)
 })
-consumer.Start(ctx)
 ```
 
 ## Object Storage
 
 ```go
-import "github.com/kbukum/gokit/storage"
+import (
+    "github.com/kbukum/gokit/storage"
+    local "github.com/kbukum/gokit/storage/local"
+)
 
-store, _ := storage.New(cfg)
+reg := storage.NewFactoryRegistry()
+_ = local.Register(reg, local.Config{BasePath: "./data"})
+
+store, _ := storage.New(reg, storage.Config{
+    Provider: storage.ProviderLocal,
+    Enabled:  true,
+}, log)
 _ = store.Put(ctx, "uploads/report.pdf", reader)
 rc, _ := store.Get(ctx, "uploads/report.pdf")
 defer rc.Close()

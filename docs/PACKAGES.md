@@ -75,6 +75,36 @@ This file is the bird's-eye index.
 | `embedding` | `gokit/embedding` | Cosine similarity, distance metrics, pooling |
 | `vectorstore` | `gokit/vectorstore` | Vector similarity search abstraction |
 
+## Nested Adapter Modules
+
+| Module | Import | Description |
+|---|---|---|
+| `cache/redis` | `gokit/cache/redis` | Redis cache adapter |
+| `database/sqlite` | `gokit/database/sqlite` | SQLite database driver |
+| `llm/providers` | `gokit/llm/providers` | LLM provider adapters |
+| `messaging/kafka` | `gokit/messaging/kafka` | Kafka messaging adapter |
+| `messaging/nats` | `gokit/messaging/nats` | NATS messaging adapter |
+| `messaging/rabbitmq` | `gokit/messaging/rabbitmq` | RabbitMQ messaging adapter |
+| `storage/gcs` | `gokit/storage/gcs` | Google Cloud Storage adapter |
+| `storage/s3` | `gokit/storage/s3` | S3-compatible storage adapter |
+| `inference/tgi` | `gokit/inference/tgi` | Text Generation Inference adapter |
+| `inference/triton` | `gokit/inference/triton` | Triton inference adapter |
+| `inference/vllm` | `gokit/inference/vllm` | vLLM inference adapter |
+| `vectorstore/qdrant` | `gokit/vectorstore/qdrant` | Qdrant vectorstore adapter |
+
+## Nested Test Utility Modules
+
+| Module | Import | Description |
+|---|---|---|
+| `connect/testutil` | `gokit/connect/testutil` | ConnectRPC test helpers |
+| `dag/testutil` | `gokit/dag/testutil` | DAG test helpers |
+| `database/testutil` | `gokit/database/testutil` | Database test helpers |
+| `discovery/testutil` | `gokit/discovery/testutil` | Discovery test helpers |
+| `git/testutil` | `gokit/git/testutil` | Git test helpers |
+| `server/testutil` | `gokit/server/testutil` | Server test helpers |
+| `storage/testutil` | `gokit/storage/testutil` | Storage test helpers |
+| `workload/testutil` | `gokit/workload/testutil` | Workload test helpers |
+
 ## Layered Architecture (Foundation → Specialist)
 
 | Group | Packages | Focus |
@@ -99,16 +129,16 @@ See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) fo
 
 ## Multi-Module Versioning
 
-Core and sub-modules version **independently**. Each sub-module has its own `go.mod` and release tags:
+Core and sub-modules are tagged in lock-step. Each sub-module has its own `go.mod` and path-scoped release tag:
 
 ```
-v0.5.0              ← core module
-server/v0.3.2       ← server sub-module
-database/v0.4.1     ← database sub-module
+v0.2.0-alpha.1                  ← core module
+server/v0.2.0-alpha.1           ← server sub-module
+database/sqlite/v0.2.0-alpha.1  ← nested sub-module
 ```
 
-- Upgrading `gokit/server` does not force an upgrade of `gokit/database`.
-- Core can ship breaking changes without touching sub-modules (and vice versa).
-- Each module follows [semver](https://semver.org/) on its own timeline.
+- Consumers pin only the modules they import.
+- `tag-modules.sh` discovers every `go.mod` and creates the complete tag family.
+- All modules follow the same [semver](https://semver.org/) release line.
 
 See [`docs/VERSIONING.md`](VERSIONING.md) for the full guide.

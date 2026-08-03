@@ -18,10 +18,9 @@ and checked against a permissive license allow-list by [`scripts/check-licenses.
   Deprecated-by-design modules that we do not import are documented as suppressions rather than kept as live dependencies.
 - **Audited on entry.** Every new direct dependency is justified in the table below when it is added.
 
-## New direct dependencies from the parity work
+## Direct dependency decisions
 
-These are the third-party modules introduced while bringing gokit to rskit parity.
-Each lives in an opt-in sub-module so the core stays clean.
+These third-party modules live in opt-in sub-modules so the core stays clean.
 
 | Module (sub-module) | Dependency | License | Why |
 |---|---|---|---|
@@ -29,8 +28,7 @@ Each lives in an opt-in sub-module so the core stays clean.
 | `vectorstore/qdrant` | `github.com/google/uuid` | BSD-3-Clause | Point-ID generation for the Qdrant adapter; the adapter itself reuses the first-party `httpclient`, so no vendor client SDK is pulled in. |
 | `database/sqlite` | `gorm.io/driver/sqlite`, `gorm.io/gorm` (→ `github.com/mattn/go-sqlite3`) | MIT | SQLite backend for the shared GORM-based `database` layer. `mattn/go-sqlite3` is **CGO** (needs a C toolchain to build); it is isolated in this sub-module so CGO never leaks into the core. |
 
-Modules added during the same parity work that introduced **no** new third-party dependency,
-by design:
+Dependency-free modules:
 
 - `media` — pure standard library (`image`, `image/jpeg`, `image/png`, …);
   heavy audio/video/matrix work stays rskit-only, so no codec libraries are vendored.

@@ -22,6 +22,7 @@ import (
 	"context"
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/discovery"
+	"github.com/kbukum/gokit/discovery/consul"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 )
@@ -35,12 +36,14 @@ func setupDiscoveryServer(
 	discoveryServer, err := server.NewDiscoveryServerComponent(
 		httpServer,
 		discoveryRegistry,
-		"payment-svc-1",      // unique service instance ID
-		"payment-service",    // logical service name
-		"127.0.0.1",          // advertised address
-		8080,                 // port to register
-		[]string{"v1", "prod"}, // optional tags
-		map[string]string{"region": "us-west"},
+		discovery.ServiceInfo{
+			ID:       "payment-svc-1",
+			Name:     "payment-service",
+			Address:  "127.0.0.1",
+			Port:     8080,
+			Tags:     []string{"v1", "prod"},
+			Metadata: map[string]string{"region": "us-west"},
+		},
 		log,
 	)
 	if err != nil {
@@ -72,9 +75,10 @@ func main() {
 	}
 	
 	// Use like any component
-	component.Register(discServer)
-	component.StartAll(ctx)
-	defer component.StopAll(ctx)
+	components := component.NewRegistry()
+	_ = components.Register(discServer)
+	_ = components.StartAll(ctx)
+	defer components.StopAll(ctx)
 }
 ```
 
@@ -102,55 +106,68 @@ package main
 
 import (
 	"context"
+	"time"
+
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/middleware"
 	"github.com/kbukum/gokit/messaging/kafka"
+	kafkaconsumer "github.com/kbukum/gokit/messaging/kafka/consumer"
+	"github.com/kbukum/gokit/resilience"
 )
 
 func setupHandler(baseHandler messaging.MessageHandler, log *logging.Logger) messaging.MessageHandler {
 	// Build a resilient message handler with multiple layers
 	return middleware.NewStack(baseHandler).
 		WithRetry(middleware.RetryMiddlewareConfig{
-			MaxRetries: 3,
-			BackoffMs:  100,
-			DLQTopic:   "events.dlq",
+			RetryConfig: resilience.RetryConfig{
+				MaxAttempts:    3,
+				InitialBackoff: 100 * time.Millisecond,
+				Strategy:       resilience.ConstantBackoff,
+			},
 		}).
 		WithMetrics("orders.events", "order-processor").
 		WithTracing().
 		WithDedup(middleware.DedupConfig{
-			Window: 60, // seconds
+			TTL: 60 * time.Second,
 		}).
 		WithCircuitBreaker(middleware.CircuitBreakerConfig{
-			FailureThreshold: 5,
-			SuccessThreshold: 2,
-			Timeout:          30,
+			Name:        "orders.events",
+			Threshold:   5,
+			HalfOpenMax: 2,
+			Timeout:     30 * time.Second,
 		}).
 		Build()
 }
 
-func processOrder(ctx context.Context, msg *messaging.Message) error {
+func processOrder(ctx context.Context, msg messaging.Message) error {
 	// Your business logic
 	return nil
 }
 
 func main() {
+	log := logging.NewDefault("order-processor")
+
 	// Create base handler
-	baseHandler := messaging.HandlerFunc(processOrder)
+	baseHandler := messaging.MessageHandler(processOrder)
 	
 	// Wrap with middleware
 	resilientHandler := setupHandler(baseHandler, log)
 	
 	// Create consumer with wrapped handler
-	consumer := kafka.NewConsumer(
+	consumer, _ := kafkaconsumer.NewConsumer(
+		messaging.Config{
+			Adapter:       "kafka",
+			ConsumerGroup: "order-processor",
+			Subscriptions: []string{"orders.created"},
+		},
 		kafka.Config{Brokers: []string{"localhost:9092"}},
 		"orders.created",
-		"order-processor",
-		resilientHandler,
+		log,
 	)
 	
-	consumer.Start(context.Background())
-	defer consumer.Stop(context.Background())
+	go consumer.Consume(context.Background(), resilientHandler)
+	defer consumer.Close()
 }
 ```
 
@@ -177,9 +194,10 @@ package main
 import (
 	"context"
 	"github.com/kbukum/gokit/discovery"
+	"github.com/kbukum/gokit/discovery/consul"
+	gkgrpc "github.com/kbukum/gokit/grpc"
 	"github.com/kbukum/gokit/grpc/client"
 	"github.com/kbukum/gokit/logging"
-	"google.golang.org/grpc"
 	
 	analysispb "github.com/myorg/analysis/api"
 )
@@ -191,7 +209,7 @@ func setupAnalysisClient(
 	// Create a discovery-based connection factory
 	factory := client.NewDiscoveryConnectionFactory(
 		discoveryClient,
-		grpc.DefaultCallOptions,
+		gkgrpc.Config{},
 		log,
 	)
 	
@@ -256,6 +274,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
+	kafkaproducer "github.com/kbukum/gokit/messaging/kafka/producer"
 )
 
 type OrderCreatedEvent struct {
@@ -270,10 +289,18 @@ func publishOrderEvents(kafkaProducer messaging.Producer, log *logging.Logger) *
 }
 
 func main() {
+	log := logging.NewDefault("order-service")
+
 	// Create Kafka producer
-	producer, err := kafka.NewProducer(kafka.Config{
-		Brokers: []string{"localhost:9092"},
-	})
+	producer, err := kafkaproducer.NewProducer(
+		messaging.Config{
+			Adapter: "kafka",
+			Name:    "order-service-producer",
+			Topics:  []string{"orders.created"},
+		},
+		kafka.Config{Brokers: []string{"localhost:9092"}},
+		log,
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -336,7 +363,7 @@ import (
 )
 
 type HealthCheckService struct {
-	cacheSvc      interface{}      // Your cache service
+	cacheSvc      interface{ Ping(context.Context) error } // Your cache service
 	degradation   *resilience.DegradationManager
 	log           *logging.Logger
 }
@@ -357,7 +384,7 @@ func (h *HealthCheckService) checkCacheHealth(ctx context.Context) error {
 
 func (h *HealthCheckService) shouldUseCacheOptimization() bool {
 	// Check degradation state before applying optimization
-	status := h.degradation.GetService("cache")
+	status := h.degradation.ServiceStatus("cache")
 	if status.Health == resilience.Healthy {
 		return true // Use cache optimization
 	}
@@ -384,14 +411,16 @@ func setupHealthChecker(log *logging.Logger) *worker.TickerWorker {
 
 func main() {
 	ctx := context.Background()
+	log := logging.NewDefault("health-checker")
 	
 	// Setup health checker
 	healthTicker := setupHealthChecker(log)
 	
 	// Register and start
-	component.Register(healthTicker)
-	component.StartAll(ctx)
-	defer component.StopAll(ctx)
+	components := component.NewRegistry()
+	_ = components.Register(healthTicker)
+	_ = components.StartAll(ctx)
+	defer components.StopAll(ctx)
 	
 	// Worker runs in background, checking cache health every 30s
 	select {}
@@ -430,19 +459,36 @@ func main() {
 	// 1. HTTP server with discovery
 	httpServer := server.NewComponent(server.New(&server.Config{Port: 8080}, log))
 	discServer, _ := server.NewDiscoveryServerComponent(
-		httpServer, consulProvider, "svc-1", "my-service", "127.0.0.1", 8080, nil, nil, log)
-	component.Register(discServer)
+		httpServer,
+		consulProvider,
+		discovery.ServiceInfo{ID: "svc-1", Name: "my-service", Address: "127.0.0.1", Port: 8080},
+		log,
+	)
+	components := component.NewRegistry()
+	_ = components.Register(discServer)
 	
 	// 2. Kafka message handler with middleware stack
-	kafkaProducer, _ := kafka.NewProducer(kafka.Config{})
-	baseHandler := messaging.HandlerFunc(processOrderEvent)
+	kafkaProducer, _ := kafkaproducer.NewProducer(
+		messaging.Config{Adapter: "kafka", Name: "my-service-producer", Topics: []string{"orders.created"}},
+		kafka.Config{},
+		log,
+	)
+	baseHandler := messaging.MessageHandler(processOrderEvent)
 	resHandler := middleware.NewStack(baseHandler).
-		WithRetry(/* ... */).
+		WithRetry(middleware.RetryMiddlewareConfig{}).
 		WithMetrics("orders", "group").
 		WithTracing().
 		Build()
-	consumer := kafka.NewConsumer(kafka.Config{}, "orders.created", "group", resHandler)
-	component.Register(consumer)
+	consumer, _ := kafkaconsumer.NewConsumer(
+		messaging.Config{Adapter: "kafka", ConsumerGroup: "group", Subscriptions: []string{"orders.created"}},
+		kafka.Config{},
+		"orders.created",
+		log,
+	)
+	kafkaComponent := kafka.NewComponent(kafka.Config{}, log)
+	kafkaComponent.SetProducer(kafkaProducer)
+	kafkaComponent.AddConsumer(messaging.AsRunner(consumer, resHandler))
+	_ = components.Register(kafkaComponent)
 	
 	// 3. Event publisher for publishing domain events
 	eventPub := messaging.NewEventPublisher(kafkaProducer, "my-service")
@@ -452,11 +498,11 @@ func main() {
 	
 	// 5. Health checks with degradation tracking
 	healthTicker := setupHealthChecker(log)
-	component.Register(healthTicker)
+	_ = components.Register(healthTicker)
 	
 	// Start all components
-	component.StartAll(ctx)
-	defer component.StopAll(ctx)
+	_ = components.StartAll(ctx)
+	defer components.StopAll(ctx)
 }
 ```
 

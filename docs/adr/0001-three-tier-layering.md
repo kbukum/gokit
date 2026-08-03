@@ -6,23 +6,21 @@
 
 ## Context
 
-The OSS engineering review surfaced a layering inversion (worker → sse, F-012)
-and noted that nothing prevented similar regressions (F-014).
-We need a stable rule that engineers can apply without case-by-case debate.
+gokit needs a stable dependency-direction rule that engineers can apply without case-by-case debate.
 
 ## Decision
 
 We will organize gokit packages into three tiers:
 
 1. **Foundation** — transport-agnostic primitives. May depend on stdlib
-   and other foundation packages only. Examples: `worker`, `errors`, `logger`, `validation`, `hook`,
+   and other foundation packages only. Examples: `worker`, `errors`, `logging`, `validation`, `hook`,
    `util`, `version`, `encryption`, `schema`, `resilience`, `httpclient`.
 
 2. **Transport** — protocol-specific adapters. May depend on foundation packages.
    Must NOT be imported from foundation. Examples: `sse`, `server`, `grpc`, `connect`.
 
 3. **Integration** — composes foundation + transport into runnable units. May depend on either.
-   Examples: `bootstrap`, `component`, `agent`, `llm`, `mcp`, `dag`, `pipeline`, `chain`.
+   Examples: `bootstrap`, `component`, `agent`, `llm`, `mcp`, `dag`, `stream`, `chain`.
 
 When foundation needs a service that lives in transport (e.g. SSE broadcasting),
 foundation declares a **local interface** for the operation it needs.

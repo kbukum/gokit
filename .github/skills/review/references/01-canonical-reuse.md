@@ -46,7 +46,7 @@ For each hit and each new local helper, name the concern, find its owner in the 
 - **HTTP** → `httpclient` / `server`, not a raw `http.Client{}` with custom retry/timeout.
 - **Subprocess** → `process` (argv-only), not a bare `exec.Command`.
 - **Config / logging / di / observability** → the owning package;
-  logging is `log/slog` via `logger`, never a fresh `log` or `fmt.Print`.
+  logging is `log/slog` via `logging`, never a fresh `log` or `fmt.Print`.
 - **Collections / time / crypto / codec** → a modern stdlib primitive first (`slices`, `maps`, `cmp`, `errors.Join`, `sync.OnceValue`, `slices.SortFunc` over `sort.Slice`)
   or the gokit owner (`util` clock/slice helpers, `encryption`/`security`, `codec`/`schema`).
   Reinventing either is a fork.

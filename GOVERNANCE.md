@@ -5,7 +5,7 @@ This document describes how decisions are made in the gokit project.
 ## Project Status
 
 gokit is **pre-stable** (`v0.x`).
-Backward compatibility is **not** guaranteed between `v0.x` releases;
+API compatibility is **not** guaranteed between `v0.x` releases;
 breaking changes are acceptable when they yield a cleaner long-term design.
 See [CHANGELOG.md](CHANGELOG.md) for the full breaking-change history.
 
@@ -36,7 +36,7 @@ the contributor is encouraged to open a discussion or RFC issue first.
 
 For significant architectural changes (e.g. introducing a new sub-module, removing a public package, changing the release process),
 at least two maintainers must approve. If maintainers disagree,
-the proposal is deferred until consensus is reached or a clear path forward is documented.
+the proposal is not accepted until consensus is reached or a clear path forward is documented.
 
 ## Release Process
 

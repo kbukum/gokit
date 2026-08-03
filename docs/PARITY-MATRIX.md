@@ -4,7 +4,7 @@ This matrix records the gokit side of reusable infrastructure and data/storage p
 
 ## Module presence & naming (shared cross-kit)
 
-Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
+Legend: ✅ present · ➖ absent.
 
 | Layer | Canonical concept | gokit | rskit | Note |
 |---|---|---|---|---|
@@ -14,7 +14,7 @@ Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
 | L0 | codec | ✅ | ✅ | framing/value/json/toml |
 | L0 | fs | ✅ | ✅ | safe paths, temp, atomic writes, permissions; watch is rskit-only |
 | L1 | config | ✅ | ✅ | depends on `logging` for `LoggingConfig` |
-| L1 | logging | ✅ | ✅ | naming aligned (was gokit `logger`) |
+| L1 | logging | ✅ | ✅ | aligned |
 | L1 | validation | ✅ | ✅ | generic `Validate` seam |
 | L1 | encryption | ✅ | ✅ | AES-GCM / ChaCha20 |
 | L1 | schema | ✅ | ✅ | generics + compiled validator + limits |
@@ -33,12 +33,12 @@ Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
 | L6 | vectorstore (+ qdrant) | ✅ | ✅ | aligned; both kits have memory default + qdrant adapter |
 | L6 | messaging (kafka/nats/rabbitmq/memory) | ✅ | ✅ | aligned |
 | L7 | ai / llm / embedding / inference | ✅ | ✅ | provider granularity differs (subdirs vs crates) |
-| L7 | agent / tool / mcp / skill | ✅ | ✅ | mcp redesign to protocol-shaped tracked |
+| L7 | agent / tool / mcp / skill | ✅ | ✅ | protocol-shaped MCP surface |
 | L8 | media | ✅ | ✅ | gokit is a light **standalone module**: detection + metadata + cheap image ops + time/spatial + subtitle (SRT/VTT); heavy audio/video/matrix transcoding stays rskit by design |
 | L9 | bench / git / testutil | ✅ | ✅ | aligned |
 | L9 | workload | ✅ | ✅ | aligned: provider-based `Manager` + registry + component; backends stay in adapter crates |
 | L9 | cli | ✅ | ✅ | aligned (light): theme/render/progress/prompt/signal + bounded live console; line + scripted prompt terminals with non-interactive fallback; raw-mode rich widgets stay rskit-only |
-| L9 | dataset | ✅ | ✅ | cross-kit (light): one generic `Collector[T]` engine (bounded worker pool + `StreamBuffer` backpressure, per-source timeout/cancel, offset resume, real/AI stats, pluggable `Validator[T]`) over generic `Source`/`Transform`/`Target`; concrete item families for tabular `record.Record` (CSV/JSON-array/JSON-lines readers+writers, schema validator adapter) and blob `sample.Item` (labeled/offset, real/AI local disk target); manifest cache with one canonical `CacheStatusFor`. Deliberate divergences: gokit folds rskit's per-item `ItemSink<T>` and post-hoc directory `Target` into a single `stage.Target[T]` that publishes per source from the single-owner main loop (no shared sink); rskit's `MediaType`, rich `DataItem` metadata, and image/resize transforms stay rskit-only. pykit tracked separately |
+| L9 | dataset | ✅ | ✅ | cross-kit (light): one generic `Collector[T]` engine (bounded worker pool + `StreamBuffer` backpressure, per-source timeout/cancel, offset resume, real/AI stats, pluggable `Validator[T]`) over generic `Source`/`Transform`/`Target`; concrete item families for tabular `record.Record` (CSV/JSON-array/JSON-lines readers+writers, schema validator adapter) and blob `sample.Item` (labeled/offset, real/AI local disk target); manifest cache with one canonical `CacheStatusFor`. Deliberate divergences: gokit folds rskit's per-item `ItemSink<T>` and post-hoc directory `Target` into a single `stage.Target[T]` that publishes per source from the single-owner main loop (no shared sink); rskit's `MediaType`, rich `DataItem` metadata, and image/resize transforms stay rskit-only. pykit has its own parity row |
 
 ## Infrastructure and pattern parity
 
@@ -56,7 +56,7 @@ Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
 | Storage | `storage` core with explicit registry/local default; `storage/s3` and `storage/gcs` nested adapters own their cloud SDK deps | Core object-store abstraction + local default + opt-in S3/GCS/Azure adapters | S3/GCS splits aligned; Supabase left in core only because it has no heavy SDK dependency |
 | Database | GORM-backed contracts with explicit `DriverRegistry`/`WithDriver`; `database/sqlite` nested adapter; repository/tenant/transaction helpers | Core database contracts + opt-in drivers; tenant and transaction semantics tested | Runtime code is driver-agnostic; GORM remains the Go repository substrate for alpha |
 | Vectorstore | `vectorstore` core with explicit registry, memory backend, metrics `cosine`, `dot`, `l2`, and opt-in `vectorstore/qdrant` nested adapter | In-memory default + config-driven selection + canonical metric names + opt-in Qdrant adapter | Aligned; Qdrant adapter is dependency-isolated in a nested module |
-| Messaging | `messaging` core owns broker-neutral config, registry/selector, memory default, middleware, bridge, and testutil; Kafka/NATS/RabbitMQ live in opt-in subpackages with config-free `Register(registry)` and creation-time adapter config | Transport-agnostic producer/consumer + injected registry + memory default + opt-in broker adapters | Group 07 aligned — dependency-isolated adapters, secure-by-default config with explicit insecure-dev opt-ins, canonical DLQ vocabulary, and broker-neutral topic validation |
+| Messaging | `messaging` core owns broker-neutral config, registry/selector, memory default, middleware, bridge, and testutil; Kafka/NATS/RabbitMQ live in opt-in subpackages with config-free `Register(registry)` and creation-time adapter config | Transport-agnostic producer/consumer + injected registry + memory default + opt-in broker adapters | Dependency-isolated adapters, secure-by-default config with explicit insecure-dev opt-ins, canonical DLQ vocabulary, and broker-neutral topic validation |
 
 ## AI / ML and agent surface parity
 
@@ -64,13 +64,13 @@ Legend: ✅ present · ➖ absent · ⏳ planned (skeleton pending).
 |---------|-------------|------------------|--------|
 | LLM core | `llm` owns messages, provider interface, capabilities, usage, tool calls, token counting, and stream events | Same public concepts across kits with provider-specific dialects hidden behind adapters | Aligned; streamed tool-call args are `json.RawMessage` with bounded accumulation, cross-provider stream events normalized |
 | LLM providers | `llm/providers` has OpenAI, Anthropic, Gemini, and Ollama adapters (plus shared `common`) with explicit registration and no init side effects | OpenAI, Anthropic, Gemini, and Ollama in every kit; opt-in adapters with no init side effects | Aligned; request extensions are a typed JSON/YAML-authorable `RawJSON` carrier merged fail-closed via `common.MergeExtra` |
-| Agent loop | `agent` has run/stream loops, hooks, memory, context compaction, token budget, commands, and read-only parallel tools | Bounded turns, wall-clock budget, token budget, cancellation propagation, backpressure, and identical hook/event semantics | Enhance: adopt canonical resilience/observability policy seams and bounded stream semantics |
+| Agent loop | `agent` has run/stream loops, hooks, memory, context compaction, token budget, commands, and read-only parallel tools | Bounded turns, wall-clock budget, token budget, cancellation propagation, backpressure, and identical hook/event semantics | Uses canonical resilience/observability policy seams and bounded stream semantics |
 | Tool definitions | `tool.Definition`, annotations, registry, batching, schema validation, and middleware | Typed tools with JSON Schema input/output, structured results, MCP annotations, explicit registry ownership | Aligned on typed I/O: untrusted input is `json.RawMessage` normalized/validated fail-closed, per-tool `*resilience.Policy` is typed (no `any`), destructive calls gated by human approval |
-| MCP | `mcp` (own module) is a hardened, protocol-shaped wrapper over `modelcontextprotocol/go-sdk`: kit tools → MCP tools, remote MCP tools → kit callables | Protocol-shaped tools, prompts, resources/templates + subscribe, roots, sampling, elicitation, cancellation, progress, logging, stdio, Streamable HTTP | Redesigned to protocol-shaped module — split by concern into `types`/`server`/`capabilities`/`security`/`transport_*`/`handlers_*`; wire parsers fuzzed; ≥95% tested |
+| MCP | `mcp` (own module) is a hardened, protocol-shaped wrapper over `modelcontextprotocol/go-sdk`: kit tools → MCP tools, remote MCP tools → kit callables | Protocol-shaped tools, prompts, resources/templates + subscribe, roots, sampling, elicitation, cancellation, progress, logging, stdio, Streamable HTTP | Protocol-shaped module split by concern into `types`/`server`/`capabilities`/`security`/`transport_*`/`handlers_*`; wire parsers fuzzed; ≥95% tested |
 | MCP security | Fail-closed hardening chain on every `tools/call` (allow-list → input-size → schema → authz → registry HITL destructive gate → result-size → output-validate → audit); server→client helpers size-limit untrusted model/elicited content | Allow-list, authz, audit, payload/result limits, output validation, Origin validation, local bind defaults, HTTP auth | Aligned via `authz`, `security`, `observability`; Origin validation + constant-time bearer auth + localhost-default on Streamable HTTP |
-| Schema | `schema` owns JSON Schema generation and validation consumed by tool/MCP paths | Schema owner for tool input/output, MCP prompts/resources/elicitation, structured LLM output, and inference APIs | Leave as owner; enhance for output/structured-content validation where needed |
-| Embedding | `embedding` exposes provider abstraction and vector utilities | Provider abstraction, batch embeddings, dimensions, normalization, and endpoint ownership aligned with `llm-providers`/`inference` | Align endpoint ownership during Group 08 |
-| Inference | `inference` is an independent module with neutral types, explicit registry/building, and an `openai_compatible` adapter with streaming for TGI and vLLM | Cross-kit inference module with registry/config-selected backends and adapter split | Align: extend backend set while preserving neutral module identity |
+| Schema | `schema` owns JSON Schema generation and validation consumed by tool/MCP paths | Schema owner for tool input/output, MCP prompts/resources/elicitation, structured LLM output, and inference APIs | Owner for output and structured-content validation |
+| Embedding | `embedding` exposes provider abstraction and vector utilities | Provider abstraction, batch embeddings, dimensions, normalization, and endpoint ownership aligned with `llm-providers`/`inference` | Endpoint ownership aligns with `llm-providers` and `inference` |
+| Inference | `inference` is a neutral module with shared types, explicit registry/building, and streaming adapters for TGI and vLLM | Cross-kit inference module with registry/config-selected backends and adapter split | Neutral module identity with adapter-driven backend selection |
 | Agent Skills packages | `skill` module owns `kit.skill.yaml` manifests, progressive-disclosure loading, injected-verifier activation with bounded reads (manifest/body/asset + aggregate), symlink/path-escape rejection, provider registry, and effective-envelope helpers | Lightweight Agent Skills-compatible discovery/loader over tools/prompts/resources/MCP; no custom runtime | Aligned with reference: manifest/loader/registry at parity, verifier wired into load (Verified/Warning/Denied), untrusted input fails closed, fuzzed manifest/activation parsers |
 
 ## Media parity (light by design)
