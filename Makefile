@@ -91,9 +91,10 @@ list-tags:
 ## the candidate Toven binary. The native tag-modules.sh / goreleaser release
 ## path stays authoritative. Toven never fabricates a synthetic 0.0.0, so before
 ## the first version tag the release previews fail closed with "no reachable
-## release tag" — that is the expected outcome and is tolerated here; any other
-## failure (or an unexpected success once a tag exists) still surfaces. TOVEN
-## selects the binary (see the TOVEN var).
+## release tag" — that is the expected outcome and is tolerated here. Once the
+## first version tag exists the previews succeed instead; that success is the
+## expected steady state and is reported as a pass. Only a failure for any other
+## reason fails the canary. TOVEN selects the binary (see the TOVEN var).
 toven-canary:
 	@$(TOVEN) modules
 	@$(TOVEN) graph
