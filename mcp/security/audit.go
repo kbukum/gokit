@@ -19,6 +19,7 @@ const (
 	OutcomeOutputInvalid      = "output_validation_error"
 	OutcomeAuthorizationError = "authorization_error"
 	OutcomeToolError          = "tool_error"
+	OutcomeInputRequired      = "input_required"
 )
 
 // Access kinds distinguish audit records emitted for different protocol surfaces sharing the capability allow-list.

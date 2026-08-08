@@ -6,9 +6,13 @@
 //   - Server: expose a tool.Registry as an MCP server so external clients
 //     (LLMs, agents, IDEs) can discover and call kit tools, with a fail-closed
 //     hardening chain (capability allow-list, payload/result size limits,
-//     schema validation, authorization, destructive-tool gate, and audit) and
-//     typed server-to-client helpers for sampling, elicitation, roots, and
-//     logging.
+//     schema validation, authorization, destructive-tool gate, and audit).
+//     Server-to-client sampling, elicitation, and roots requests are issued as
+//     multi round-trip input requests (SEP-2322) from an interactive tool
+//     registered with AddInteractiveTool, with SampleResponse, ElicitResponse,
+//     and RootsResponse hardening the untrusted responses; the standalone
+//     Sample, Elicit, and ListRoots helpers remain for clients on protocol
+//     versions before 2026-07-28.
 //
 //   - Client: connect to a remote MCP server and import its tools as
 //     tool.Callable instances that can be registered in a local tool.Registry.

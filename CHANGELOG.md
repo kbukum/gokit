@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Changed — MCP go-sdk 1.7.0 / SEP-2322 multi round-trip
+- **mcp**: bump `modelcontextprotocol/go-sdk` to 1.7.0. Its default
+  2026-07-28 protocol forbids standalone server-initiated sampling,
+  elicitation, and roots requests (SEP-2322). Add first-class hardened
+  interactive (multi round-trip) tools via `Server.AddInteractiveTool`,
+  which return these as `InputRequests` from a `tools/call` handler and
+  read the responses back through the size-limited, audited
+  `SampleResponse`/`ElicitResponse`/`RootsResponse` helpers. The standalone
+  `Sample`/`Elicit`/`ListRoots` helpers are reframed as pre-2026-07-28-only
+  and fail closed against modern clients.
 
 ## [0.2.0-alpha.1] - 2026-07-19
 

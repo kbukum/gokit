@@ -2,7 +2,6 @@ package mcp_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -35,7 +34,7 @@ func sampleParams() *sdkmcp.CreateMessageParams {
 	}
 }
 
-func TestSampleRoundTrip(t *testing.T) {
+func TestSampleRejectedByModernClient(t *testing.T) {
 	ctx := context.Background()
 	audit := &captureAuditor{}
 	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry(), kitMcp.WithAuditor(audit))
@@ -44,34 +43,13 @@ func TestSampleRoundTrip(t *testing.T) {
 	}
 	p := connectPeer(t, ctx, server, samplingClientOpts("sampled reply"))
 
-	res, err := p.server.Sample(ctx, p.serverSession, sampleParams())
-	if err != nil {
-		t.Fatalf("Sample: %v", err)
-	}
-	tc, ok := res.Content.(*sdkmcp.TextContent)
-	if !ok || tc.Text != "sampled reply" {
-		t.Fatalf("unexpected sampled content: %+v", res.Content)
-	}
-	if audit.outcomeFor("sampling/createMessage") != security.OutcomeSuccess {
-		t.Errorf("expected success audit, got %q", audit.outcomeFor("sampling/createMessage"))
-	}
-}
-
-func TestSampleResultTooLarge(t *testing.T) {
-	ctx := context.Background()
-	audit := &captureAuditor{}
-	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry(),
-		kitMcp.WithMaxResultBytes(4), kitMcp.WithAuditor(audit))
-	if err != nil {
-		t.Fatalf("NewServer: %v", err)
-	}
-	p := connectPeer(t, ctx, server, samplingClientOpts(strings.Repeat("x", 128)))
-
+	// Under SEP-2322 a client on protocol 2026-07-28+ rejects a standalone
+	// server-initiated sampling request; the helper must fail closed and audit it.
 	if _, err := p.server.Sample(ctx, p.serverSession, sampleParams()); err == nil {
-		t.Fatal("oversized sampled content must fail closed")
+		t.Fatal("standalone Sample must fail closed against a modern client")
 	}
-	if audit.outcomeFor("sampling/createMessage") != security.OutcomeResultTooLarge {
-		t.Errorf("expected result_too_large audit, got %q", audit.outcomeFor("sampling/createMessage"))
+	if audit.outcomeFor("sampling/createMessage") != security.OutcomeToolError {
+		t.Errorf("expected tool_error audit, got %q", audit.outcomeFor("sampling/createMessage"))
 	}
 }
 
@@ -128,7 +106,7 @@ func elicitParams() *sdkmcp.ElicitParams {
 	}
 }
 
-func TestElicitRoundTrip(t *testing.T) {
+func TestElicitRejectedByModernClient(t *testing.T) {
 	ctx := context.Background()
 	audit := &captureAuditor{}
 	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry(), kitMcp.WithAuditor(audit))
@@ -137,36 +115,12 @@ func TestElicitRoundTrip(t *testing.T) {
 	}
 	p := connectPeer(t, ctx, server, elicitClientOpts(map[string]any{"ok": true}))
 
-	res, err := p.server.Elicit(ctx, p.serverSession, elicitParams())
-	if err != nil {
-		t.Fatalf("Elicit: %v", err)
-	}
-	if res.Action != "accept" {
-		t.Fatalf("unexpected action: %q", res.Action)
-	}
-	if audit.outcomeFor("elicitation/create") != security.OutcomeSuccess {
-		t.Errorf("expected success audit outcome, got %q", audit.outcomeFor("elicitation/create"))
-	}
-	if audit.reasonFor("elicitation/create") != "accept" {
-		t.Errorf("expected accept audit reason, got %q", audit.reasonFor("elicitation/create"))
-	}
-}
-
-func TestElicitResultTooLarge(t *testing.T) {
-	ctx := context.Background()
-	audit := &captureAuditor{}
-	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry(),
-		kitMcp.WithMaxResultBytes(4), kitMcp.WithAuditor(audit))
-	if err != nil {
-		t.Fatalf("NewServer: %v", err)
-	}
-	p := connectPeer(t, ctx, server, elicitClientOpts(map[string]any{"blob": strings.Repeat("x", 128)}))
-
+	// SEP-2322: a modern client rejects a standalone server-initiated elicitation.
 	if _, err := p.server.Elicit(ctx, p.serverSession, elicitParams()); err == nil {
-		t.Fatal("oversized elicited content must fail closed")
+		t.Fatal("standalone Elicit must fail closed against a modern client")
 	}
-	if audit.outcomeFor("elicitation/create") != security.OutcomeResultTooLarge {
-		t.Errorf("expected result_too_large audit, got %q", audit.outcomeFor("elicitation/create"))
+	if audit.outcomeFor("elicitation/create") != security.OutcomeToolError {
+		t.Errorf("expected tool_error audit outcome, got %q", audit.outcomeFor("elicitation/create"))
 	}
 }
 
@@ -204,7 +158,7 @@ func TestElicitClientError(t *testing.T) {
 
 // --- Roots ---
 
-func TestListRoots(t *testing.T) {
+func TestListRootsRejectedByModernClient(t *testing.T) {
 	ctx := context.Background()
 	audit := &captureAuditor{}
 	server, err := kitMcp.NewServer("s", "1.0.0", tool.NewRegistry(), kitMcp.WithAuditor(audit))
@@ -214,15 +168,12 @@ func TestListRoots(t *testing.T) {
 	p := connectPeer(t, ctx, server, nil,
 		&sdkmcp.Root{URI: "file:///workspace", Name: "workspace"})
 
-	res, err := p.server.ListRoots(ctx, p.serverSession, nil)
-	if err != nil {
-		t.Fatalf("ListRoots: %v", err)
+	// SEP-2322/SEP-2577: a modern client rejects a standalone roots/list request.
+	if _, err := p.server.ListRoots(ctx, p.serverSession, nil); err == nil {
+		t.Fatal("standalone ListRoots must fail closed against a modern client")
 	}
-	if len(res.Roots) != 1 || res.Roots[0].URI != "file:///workspace" {
-		t.Fatalf("unexpected roots: %+v", res.Roots)
-	}
-	if audit.outcomeFor("roots/list") != security.OutcomeSuccess {
-		t.Errorf("expected success audit, got %q", audit.outcomeFor("roots/list"))
+	if audit.outcomeFor("roots/list") != security.OutcomeToolError {
+		t.Errorf("expected tool_error audit, got %q", audit.outcomeFor("roots/list"))
 	}
 }
 

@@ -70,6 +70,16 @@ linters:
         linters:
           - errcheck
         source: "fmt\\.Fprint"
+      # The mcp package deliberately keeps the MCP roots, sampling, and logging
+      # features that SEP-2577 deprecated as of protocol version 2026-07-28.
+      # They remain functional during the deprecation window (at least twelve
+      # months) and are still the mechanism the SDK requires for these
+      # server-to-client interactions (including the SEP-2322 multi round-trip
+      # input requests), so the SA1019 deprecation warnings are expected here.
+      - path: "mcp/"
+        linters:
+          - staticcheck
+        text: "SA1019.*SEP-2577"
   settings:
     govet:
       enable:
