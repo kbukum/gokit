@@ -12,8 +12,9 @@ import (
 
 // Server is a hardened, protocol-shaped MCP server backed by a gokit tool.Registry.
 // It wraps the official MCP Go SDK server,
-// adding a fail-closed hardening chain (capability allow-list, size limits, schema validation, authorization, destructive-tool gate, and audit)
-// and typed server-to-client helpers for sampling, elicitation, roots, and logging.
+// adding a fail-closed hardening chain (capability allow-list, size limits, schema validation, authorization, destructive-tool gate, and audit),
+// multi round-trip interactive tools for server-to-client sampling, elicitation, and roots (SEP-2322),
+// and typed logging and progress helpers.
 //
 // Construct a Server with NewServer and drive it over a transport with Run or ServeStdio,
 // or by mounting the SDK server behind the Streamable HTTP handler built via NewStreamableHTTPOptions.

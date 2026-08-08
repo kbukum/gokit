@@ -12,7 +12,7 @@ allow-list → input-size limit → schema validation → authorization
   → output schema validation → audit
 ```
 
-Prompts and resources share the capability allow-list and audit; server→client helpers (`Sample`, `Elicit`, `ListRoots`, `Log`, `NotifyProgress`) treat model output and elicited content as untrusted (size-limited and audited) and guard against nil sessions.
+Prompts and resources share the capability allow-list and audit. Under MCP 2026-07-28 (SEP-2322), server-initiated sampling, elicitation, and roots requests must be issued as multi round-trip *input requests* from inside a tool: register one with `Server.AddInteractiveTool`, return an `InputRequests` map to ask the client for input, and read the responses back with `Server.SampleResponse` / `ElicitResponse` / `RootsResponse`, which treat model output and elicited content as untrusted (size-limited and audited). The standalone `Sample`, `Elicit`, and `ListRoots` helpers remain for clients negotiating an earlier protocol version (the SEP-2577 deprecation window) and still guard against nil sessions; `Log` and `NotifyProgress` send notifications.
 
 Untrusted client/model payloads are carried as `json.RawMessage`; documented JSON-Schema is `schema.JSON`. No `interface{}`/`any` on exported surfaces beyond those documented opaque types.
 
@@ -30,7 +30,7 @@ flowchart TD
     Client[Connect\nremote MCP -> callables]
     Stdio[ServeStdio]
     HTTP[StreamableHTTPHandler\nOrigin + bearer auth]
-    S2C[server->client\nSample/Elicit/ListRoots/Log/NotifyProgress]
+    S2C[server->client\ninteractive MRTR + Sample/Elicit/ListRoots/Log/NotifyProgress]
     SkillAdapter[skill adapter\nallow-list pinned]
     ToolReg[tool.Registry\nHITL destructive gate]
     Security[allow-list / authz / size limits / audit]

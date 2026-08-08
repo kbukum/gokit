@@ -1,6 +1,6 @@
-# gokit/mcp MCP 2025-06-18 conformance
+# gokit/mcp MCP 2026-07-28 conformance
 
-This document tracks `gokit/mcp` conformance to the [Model Context Protocol](https://modelcontextprotocol.io/) revision **2025-06-18**.
+This document tracks `gokit/mcp` conformance to the [Model Context Protocol](https://modelcontextprotocol.io/) revision **2026-07-28** (backed by the official Go SDK, which also negotiates earlier revisions down to 2025-03-26).
 
 Transports are locked to `stdio` and `streamable_http`; `sse` is not exposed as a peer transport.
 
@@ -11,12 +11,13 @@ Transports are locked to `stdio` and `streamable_http`; `sse` is not exposed as 
 | resources/list + resources/read | Present | Static resources registered with `WithResource`; gated by the resource allow-list and audited. |
 | resource templates | Present | Resource templates registered with `WithResourceTemplate`; URI matching is SDK-owned, allow-list keyed on the template URI. |
 | resources/subscribe | Present | `WithSubscribeHandler` wires subscribe/unsubscribe and advertises the capability. |
-| roots | Present | `Server.ListRoots` is a typed server→client helper (nil-session guard + audit); `WithRootsListChangedHandler` observes client roots changes. |
-| sampling | Present | `Server.Sample` treats model output as untrusted: result-size limit + audit; nil-session guard. |
-| elicitation | Present | `Server.Elicit` treats elicited content as untrusted: result-size limit + audit; nil-session guard. |
+| multi round-trip input (SEP-2322) | Present | `Server.AddInteractiveTool` registers a hardened tool that returns `InputRequests` for sampling/elicitation/roots; `Server.SampleResponse`/`ElicitResponse`/`RootsResponse` size-limit and audit the untrusted responses on re-invocation. |
+| roots | Present | Requested from an interactive tool via `RootsResponse`; the standalone `Server.ListRoots` helper (nil-session guard + audit) serves clients on protocol versions before 2026-07-28. `WithRootsListChangedHandler` observes client roots changes. Deprecated upstream by SEP-2577. |
+| sampling | Present | Requested from an interactive tool via `SampleResponse` (result-size limit + audit on untrusted model output); the standalone `Server.Sample` helper serves clients before 2026-07-28. Deprecated upstream by SEP-2577. |
+| elicitation | Present | Requested from an interactive tool via `ElicitResponse` (result-size limit + audit on untrusted user input); the standalone `Server.Elicit` helper serves clients before 2026-07-28. |
 | cancellation | Present | `context.Context` propagates through every tool call and server→client helper; a canceled context aborts the call and surfaces as an error result. |
 | progress | Present | `Server.NotifyProgress` sends progress notifications; `WithProgressHandler` observes client progress. |
-| logging | Present | `Server.Log` sends `logging/message` notifications over the session. |
+| logging | Present | `Server.Log` sends `logging/message` notifications over the session. Deprecated upstream by SEP-2577. |
 | pagination/completion | Partial | Native SDK request handlers can be added without protocol forks. |
 | structured tool output | Present | Output schema validation runs before MCP result conversion and `tool.Result.Output` maps to `structuredContent`. |
 | tool annotations | Present | Derived from `tool.Envelope` and local annotations at the MCP boundary. |
