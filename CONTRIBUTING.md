@@ -50,7 +50,6 @@ gokit/
 ├── messaging/              #  │
 ├── server/                 # ─┘
 ├── gomod.sh                # Cross-module operations script
-├── tag-modules.sh          # Multi-module tagging script
 ├── Makefile                # Developer workflow targets
 └── .golangci.yml           # Shared linter configuration
 ```
@@ -164,12 +163,12 @@ Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to 
 All modules are tagged together at the same version:
 
 ```bash
-make tag-push VERSION=v0.2.0   # tag all modules and push
+make release-tag                # cut manifests, commit, and create signed module tags
 make list-tags                  # view all tags
 ```
 
-Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by `tag-modules.sh`,
-which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by Toven
+(`toven release tag`), which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
 
 ## CI
 

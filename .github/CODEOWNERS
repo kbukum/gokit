@@ -45,7 +45,6 @@
 /.github/ @kbukum
 /Makefile @kbukum
 /gomod.sh @kbukum
-/tag-modules.sh @kbukum
 /.golangci.yml @kbukum
 
 # Documentation

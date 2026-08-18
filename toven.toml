@@ -20,8 +20,7 @@ line = 80.0
 #
 # Publishability decision — every discovered module, including the `testutil`
 # and `bench` modules, is deliberately included in the release and tagged in
-# lock-step, matching the authoritative `tag-modules.sh`, which discovers and
-# tags every `go.mod`. The `testutil` modules exist so a downstream consumer can
+# lock-step. The `testutil` modules exist so a downstream consumer can
 # import gokit's test helpers without pulling test-only dependencies into its
 # production module graph, so they must carry consumable path-prefixed tags. The
 # `bench` modules are internal but are ordinary Go modules under the same fixed
@@ -45,6 +44,16 @@ forge = "github"
 [ecosystems.go.release.prerelease]
 channels = ["alpha"]
 
+# go:gokit (the root module `github.com/kbukum/gokit`) is the release train's
+# umbrella: it fronts the single hosted GitHub Release tagged `vX.Y.Z`. Every
+# other module publishes its own path-prefixed `<path>/vX.Y.Z` tag in lock-step
+# but cuts no separate Release, aggregating its notes onto this one. Toven cuts
+# and pushes the tags + this Release (`toven release publish`); pushing the root
+# `v*` tag triggers `.github/workflows/release.yml`, where GoReleaser attaches
+# artifacts to the existing Release (mode: keep-existing).
+[modules."go:gokit".release]
+umbrella = true
+
 [ecosystems.go.tasks.build]
 argv = ["go", "-C", "{module.root}", "build", "{args}", "{module.selector}"]
 fan_out = "per-module"
@@ -65,14 +74,14 @@ kind = "coverage"
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.format]
-argv = ["gofmt", "-w", "{args}", "{workspace.root}"]
+argv = ["gofmt", "-s", "-w", "{args}", "{workspace.root}"]
 cacheable = false
 fan_out = "whole-workspace"
 kind = "format"
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.format-check]
-argv = ["gofmt", "-l", "{args}", "{workspace.root}"]
+argv = ["gofmt", "-s", "-l", "{args}", "{workspace.root}"]
 fail_if_output = true
 fan_out = "whole-workspace"
 kind = "format"
@@ -112,3 +121,39 @@ argv = ["govulncheck", "-C", "{module.root}", "{args}", "{module.selector}"]
 fan_out = "per-module"
 selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+# The `command` ecosystem is Toven's generic-tool adapter: language-agnostic
+# gates that have no `go` home. Declaring gokit's structural guardrails here lets
+# Toven drive the full validation surface, not just the `go` tasks. One module
+# rooted at the repo root owns them all.
+#
+# Toven ORCHESTRATES these gokit-specific guardrails; it does not reimplement
+# them. Each task shells out to the existing script (`scripts/*.sh`) so the rule
+# logic stays script-owned with a single source of truth — the Makefile/CI and
+# `toven run <task>` invoke the very same script.
+#
+# Two guardrails are deliberately NOT wired here and stay native (tracked in
+# docs/TOVEN-MIGRATION.md):
+#   - the change→domain projection (`scripts/affected-domains.sh`) is a stdin-fed
+#     helper used by CI to shard work, not a runnable gate; and
+#   - the dependency license gate (`scripts/check-licenses.sh`) is network-bound
+#     and runs `go-licenses` across every module, exceeding Toven's bounded task
+#     timeout — the same reason rskit keeps its `cargo-deny` gate native.
+[[ecosystems.command.modules]]
+name = "repo"
+root = "."
+
+# Declare-only aggregator / god-file / crowded-package advisory guard
+# (ast-grep-backed). Advisory: it never gates. Mirrors `make structure`.
+[ecosystems.command.tasks.structure]
+argv = ["scripts/check-structure.sh", "{args}"]
+fan_out = "whole-workspace"
+kind = "lint"
+
+# Regenerate docs/MODULE-INDEX.md from discovered modules. A doc projection, so
+# `kind = "doc"`; it mutates the working tree, so it is never cached.
+[ecosystems.command.tasks.module-index]
+argv = ["scripts/generate-module-index.sh", "{args}"]
+cacheable = false
+fan_out = "whole-workspace"
+kind = "doc"

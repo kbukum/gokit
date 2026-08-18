@@ -12,11 +12,12 @@ name: Toven canary
 #
 # This proves the published Toven artifact, its installation instructions, its
 # least-privilege permissions, and its command-line contract work in a real
-# downstream workflow. It never publishes and never mutates the repository: the
-# native tag-modules.sh / goreleaser path stays authoritative for actual
-# releases. gokit has no reachable release tag yet, so the release previews fail
-# closed with "no reachable release tag"; `make toven-canary` tolerates exactly
-# that documented outcome and fails on anything else.
+# downstream workflow. It never publishes and never mutates the repository:
+# Toven owns the authoritative release tag/publish path, and GoReleaser only
+# attaches supply-chain artifacts to the Toven-created Release. gokit has no
+# reachable release tag yet, so the release previews fail closed with "no
+# reachable release tag"; `make toven-canary` tolerates exactly that documented
+# outcome and fails on anything else.
 on:
   push:
     branches:

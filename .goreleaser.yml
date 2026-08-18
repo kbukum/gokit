@@ -37,6 +37,12 @@ release:
   github:
     owner: kbukum
     name: gokit
+  # Toven owns the hosted GitHub Release and its commit-derived notes: `toven
+  # release publish` cuts and pushes the tag and creates the Release before this
+  # tag-triggered run. GoReleaser only uploads the supply-chain artifacts to that
+  # existing Release — keep-existing prevents it from recreating the Release or
+  # replacing Toven's notes body.
+  mode: keep-existing
   prerelease: auto
   draft: false
   name_template: "{{ .Tag }}"

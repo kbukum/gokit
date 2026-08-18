@@ -138,7 +138,7 @@ database/sqlite/v0.2.0-alpha.1  ← nested sub-module
 ```
 
 - Consumers pin only the modules they import.
-- `tag-modules.sh` discovers every `go.mod` and creates the complete tag family.
+- `toven release` discovers every `go.mod` and creates the complete tag family.
 - All modules follow the same [semver](https://semver.org/) release line.
 
 See [`docs/VERSIONING.md`](VERSIONING.md) for the full guide.

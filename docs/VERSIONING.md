@@ -23,27 +23,29 @@ database/sqlite/v0.2.0-alpha.1
 messaging/kafka/v0.2.0-alpha.1
 ```
 
-`tag-modules.sh` discovers every `go.mod` file, so the module list is never maintained in documentation. Releases tag all modules in lock-step, while consumers still import and pin only the modules they use.
+Toven discovers every `go.mod` file, so the module list is never maintained in documentation. Releases tag all modules in lock-step, while consumers still import and pin only the modules they use.
 
 ## Prerelease workflow
 
 1. Add the completed changes to a dated `## [0.2.0-alpha.N]` section in `CHANGELOG.md` and leave an empty `## [Unreleased]` section above it.
 2. Run the complete release gates on a clean `main` checkout.
-3. Preview the exact tag set without creating tags:
+3. Stage the lock-step version + dependency-floor bump and land it through a reviewed PR (Phase 1) — `make release-bump` rewrites each module's version and its inter-module `require` floors without committing; cut a `release/vX.Y.Z` branch carrying the staged bump and merge it into `main`. See [`RELEASING.md`](RELEASING.md) for the full mechanics.
+4. Preview the exact tag set without creating tags:
 
    ```bash
-   ./tag-modules.sh v0.2.0-alpha.1 --dry-run
+   toven release plan
+   toven release publish --dry-run
    ```
 
-4. Configure a GPG signing key, create the signed tags, and push them:
+5. Configure a GPG signing key, then cut and push the signed tags and the hosted Release (Phase 2, after the bump PR merges):
 
    ```bash
    git config tag.gpgsign true
    git config user.signingkey <KEY-ID>
-   ./tag-modules.sh v0.2.0-alpha.1 --push
+   toven release publish --yes
    ```
 
-5. The root tag starts the release workflow. GoReleaser publishes the GitHub prerelease together with the source archive, checksums, SBOM, signatures, and provenance.
+6. Cutting the tags creates the hosted GitHub prerelease with commit-derived notes; the pushed root tag then triggers the release workflow, where GoReleaser attaches the source archive, checksums, SBOM, signatures, and provenance to that Release.
 
 Subsequent prereleases repeat the same flow with `alpha.2`, `alpha.3`, or `beta.N`. Once the API and behavior are ready for consumers, cut `v0.2.0` from the same release line.
 
@@ -51,7 +53,7 @@ Subsequent prereleases repeat the same flow with `alpha.2`, `alpha.3`, or `beta.
 
 While gokit is below `1.0.0`, breaking changes require a minor version bump and non-breaking additions or fixes use a patch bump. A stable release rotates the populated `[Unreleased]` section into `## [X.Y.Z] - YYYY-MM-DD`, then adds a new empty `[Unreleased]` section.
 
-Hotfixes for an older line use a dedicated hotfix branch and the same module-tagging script. Never move an existing published tag.
+Hotfixes for an older line use a dedicated hotfix branch and the same Toven release flow. Never move an existing published tag.
 
 ## Consumer usage
 
@@ -74,16 +76,15 @@ GOPROXY=https://proxy.golang.org go list -m github.com/kbukum/gokit/database/sql
 
 The complete mechanical procedure is in [`RELEASING.md`](RELEASING.md), and the SemVer compatibility rules are in [`policy/SEMVER.md`](policy/SEMVER.md).
 
-## Toven release checks
+## Toven release
 
-`toven.toml`'s `[ecosystems.go.release]` block encodes the same tag-only, registry-less model this document describes. The `toven` binary previews the version cascade and exact tag set before `tag-modules.sh` cuts them.
+`toven.toml`'s `[ecosystems.go.release]` block encodes the tag-only, registry-less model this document describes. The `toven` binary is the authoritative release path: it previews the version cascade and exact tag set, then cuts, signs, and pushes the tags and creates the hosted Release.
 
-| Versioning behavior | Source of truth | Toven check | Expected output |
-|---|---|---|---|
-| Next version selection | `CHANGELOG.md` + SemVer policy, cut with `./tag-modules.sh vX.Y.Z` | `toven release plan` / `toven release status` | fails closed until the first tag exists — with no reachable release tag Toven reports "no reachable release tag; set an explicit release version before the first Go release" rather than fabricating a `0.0.0` baseline. The first version is supplied to the mutating `release tag`/`tag-modules.sh` cut; the tag line stays authoritative |
-| Per-module tag names | `tag-modules.sh` (root `vX.Y.Z`, sub-modules `<path>/vX.Y.Z`) | `toven release plan` / `toven release publish --dry-run` | path-prefixed tag names (`auth/v…`, `database/sqlite/v…`, `messaging/nats/v…`) |
-| Lock-step tagging of every `go.mod` | `tag-modules.sh` discovers and tags all modules, testutil and bench modules included | `toven modules` + `toven release plan` | all 50 modules discovered; every module deliberately included and tagged in lock-step. Toven does support a per-module `exclude`, but gokit's contract withholds none — inclusion is explicit, not a missing mechanism |
-| Dependency-aware cascade | module graph | `toven release plan` (`dependency-cascade` reason column) | dependents shown as `cascade` when a dependency changes |
-| Clean-tree requirement | `tag-modules.sh` refuses a dirty tree | `toven release readiness` | `clean-tree` check, `fail` on a dirty tree |
-
-Toven's plan is a cross-check against `tag-modules.sh`: the git-tag line remains the authoritative version, and `tag-modules.sh` creates and pushes the signed tags.
+| Versioning behavior | Toven command | Expected output |
+|---|---|---|
+| Next version selection | `toven release plan` / `toven release status` | fails closed until the first tag exists — with no reachable release tag Toven reports "no reachable release tag; set an explicit release version before the first Go release" rather than fabricating a `0.0.0` baseline. The first version is supplied to the mutating `release tag`/`release publish` cut |
+| Per-module tag names | `toven release plan` / `toven release publish --dry-run` | path-prefixed tag names (`auth/v…`, `database/sqlite/v…`, `messaging/nats/v…`) |
+| Lock-step tagging of every `go.mod` | `toven modules` + `toven release plan` | all 50 modules discovered; every module deliberately included and tagged in lock-step. Toven does support a per-module `exclude`, but gokit's contract withholds none — inclusion is explicit, not a missing mechanism |
+| Dependency-aware cascade | `toven release plan` (`dependency-cascade` reason column) | dependents shown as `cascade` when a dependency changes |
+| Clean-tree requirement | `toven release readiness` | `clean-tree` check, `fail` on a dirty tree |
+| Cut and push the signed tags | `toven release tag` / `toven release publish` | signed annotated tags created and pushed; the hosted Release is created with commit-derived notes |
