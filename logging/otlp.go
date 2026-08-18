@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.41.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -80,10 +81,10 @@ func (p *OTLPProvider) EmitLog(ctx context.Context, level, message string, field
 	rec.SetTimestamp(time.Now())
 	rec.SetSeverity(mapSeverity(level))
 	rec.SetSeverityText(strings.ToUpper(level))
-	rec.SetBody(otellog.StringValue(message))
+	rec.SetBody(attribute.StringValue(message))
 
 	if len(fields) > 0 {
-		attrs := make([]otellog.KeyValue, 0, len(fields))
+		attrs := make([]attribute.KeyValue, 0, len(fields))
 		for k, v := range fields {
 			attrs = append(attrs, toOTLPKeyValue(k, v))
 		}
@@ -113,23 +114,23 @@ func mapSeverity(level string) otellog.Severity {
 	}
 }
 
-// toOTLPKeyValue converts an arbitrary key-value pair to an OTel log KeyValue.
-func toOTLPKeyValue(key string, value any) otellog.KeyValue {
+// toOTLPKeyValue converts an arbitrary key-value pair to an OTel log attribute.
+func toOTLPKeyValue(key string, value any) attribute.KeyValue {
 	switch v := value.(type) {
 	case string:
-		return otellog.String(key, v)
+		return attribute.String(key, v)
 	case bool:
-		return otellog.Bool(key, v)
+		return attribute.Bool(key, v)
 	case int:
-		return otellog.Int(key, v)
+		return attribute.Int(key, v)
 	case int64:
-		return otellog.Int64(key, v)
+		return attribute.Int64(key, v)
 	case float64:
-		return otellog.Float64(key, v)
+		return attribute.Float64(key, v)
 	case []byte:
-		return otellog.Bytes(key, v)
+		return attribute.ByteSlice(key, v)
 	default:
-		return otellog.String(key, fmt.Sprintf("%v", v))
+		return attribute.String(key, fmt.Sprintf("%v", v))
 	}
 }
 
