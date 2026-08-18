@@ -40,7 +40,7 @@ the proposal is not accepted until consensus is reached or a clear path forward 
 
 ## Release Process
 
-Releases are cut by maintainers using `make tag VERSION=v0.x.y` and pushed via `make tag-push`.
+Releases are cut by maintainers with Toven, which owns tagging and publication: `make release-tag` cuts and pushes the signed module tags and `make release-publish` creates the hosted GitHub Release.
 Each release MUST be accompanied by a CHANGELOG entry that follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
 
 The single `[Unreleased]` heading invariant is enforced by `scripts/check_changelog_unreleased.sh` in CI.

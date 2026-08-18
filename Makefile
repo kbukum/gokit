@@ -1,6 +1,7 @@
 .PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
-       check-media check-infra check-devtools clean help tag tag-push tag-force list-tags release-dry ci ci-test ci-lint ensure-act toven-canary
+       check-media check-infra check-devtools clean help release-plan release-status release-readiness release-tag \
+       release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump
 
 GOMOD := ./gomod.sh
 # Candidate Toven binary for the read-only self-hosting canary. Defaults to a
@@ -14,48 +15,80 @@ _M = $(if $(M),-m $(M))
 # Workspace flag: pass -w $(W) to gomod.sh when W is set
 _W = $(if $(W),-w $(W))
 
+# Non-empty when a module (M=) or workspace (W=) subset is requested. The
+# everyday gates (build/test/lint/vet/fmt/tidy/coverage) run the WHOLE workspace
+# through Toven — the argv-first orchestrator that discovers modules, orders by
+# the dependency graph, and fans out across cores. A specific M=/W= subset falls
+# back to the native gomod.sh path: Toven has no first-class selector for
+# gokit's named domains yet (see docs/TOVEN-MIGRATION.md, gap 3).
+_FILTERED = $(strip $(M)$(W))
+
 ## Default target
 all: check
 
-## Build packages (M=<module> for specific, W=core|contrib for filtered workspace)
+## Build packages. Unfiltered → Toven (whole workspace); M=/W= → native gomod.sh.
 build:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) build
+else
 	@$(GOMOD) cmd "go build" $(_M) $(_W)
+endif
 
-## Run tests (M=<module>, T=<test pattern>, W=core|contrib)
+## Run tests. Unfiltered → Toven (whole workspace, single wave); M=/W= → native.
+## T=<pattern> passes through as `-run` either way.
 test:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) test -- -race -shuffle=on -count=1 $(if $(T),-run $(T))
+else
 	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M) $(_W)
+endif
 
 ## Run integration suite (gated by `//go:build integration`).
 ## Slow / dependency-heavy; not part of `make test` or default CI `check`.
 test-integration:
 	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M) $(_W)
 
-## Run tests with coverage (M=<module>, T=<test pattern>, W=core|contrib)
+## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W= → native.
 test-coverage:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) coverage -- -race -covermode=atomic $(if $(T),-run $(T))
+else
 	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M) $(_W)
+endif
 
-## Run linter (M=<module>, W=core|contrib)
+## Run linter. Unfiltered → Toven; M=/W= → native gomod.sh.
 lint:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) lint
+else
 	@$(GOMOD) cmd "golangci-lint run" $(_M) $(_W)
+endif
 
-## Run go vet (M=<module>, W=core|contrib)
+## Run go vet (Toven's `check` task). Unfiltered → Toven; M=/W= → native.
 vet:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) check
+else
 	@$(GOMOD) cmd "go vet" $(_M) $(_W)
+endif
 
-## Format code (M=<module>)
+## Format code. Unfiltered → Toven's `format` task; M=<module> → native gofmt.
 fmt:
 ifdef M
 	@echo "==> Formatting $(M)..."
 	@gofmt -s -w $(M)
-else
-	@echo "==> Formatting..."
-	@gofmt -s -w .
-endif
 	@echo "✓ Formatted"
+else
+	@$(TOVEN) format
+endif
 
-## Tidy modules (M=<module>, W=core|contrib)
+## Tidy modules. Unfiltered → Toven's `tidy-fix` (mutating); M=/W= → native.
 tidy:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) tidy-fix
+else
 	@$(GOMOD) tidy $(_M) $(_W)
+endif
 
 ## Update dependencies (M=<module>, W=core|contrib)
 update:
@@ -66,20 +99,42 @@ update-go:
 	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.26.0" && exit 1)
 	@$(GOMOD) update-go $(VERSION) $(_W)
 
-## Tag all modules with a version (usage: make tag VERSION=v0.1.0)
-tag:
-	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make tag VERSION=v0.1.0" && exit 1)
-	@./tag-modules.sh $(VERSION)
+## Preview the release plan: selected modules, versions, tags, and order (read-only)
+release-plan:
+	@$(TOVEN) release plan
 
-## Tag all modules and push to remote (usage: make tag-push VERSION=v0.1.0)
-tag-push:
-	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make tag-push VERSION=v0.1.0" && exit 1)
-	@./tag-modules.sh $(VERSION) --push
+## Report release status: policies, declared versions, tags, published versions (read-only)
+release-status:
+	@$(TOVEN) release status
 
-## Tag all modules, overwriting existing (usage: make tag-force VERSION=v0.1.0)
-tag-force:
-	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make tag-force VERSION=v0.1.0" && exit 1)
-	@./tag-modules.sh $(VERSION) --force
+## Fail-closed release go/no-go checks (read-only)
+release-readiness:
+	@$(TOVEN) release readiness
+
+## Phase 1 — bump: rewrite every module's version + inter-module dependency floors
+## (the lock-step `require github.com/kbukum/gokit/<mod> vX.Y.Z` lines) and, where
+## configured, roll the CHANGELOG, then STAGE the mutation WITHOUT committing.
+## Run it on a clean `main`. Toven never commits, tags, pushes, or publishes here:
+## the maintainer rotates the `[Unreleased]` CHANGELOG heading, cuts a
+## `release/vX.Y.Z` branch carrying the staged bump, and opens a PR. The signed
+## tags are cut by `release-tag` only after that PR merges into `main`.
+release-bump:
+	@$(TOVEN) release bump --yes
+
+## Phase 2 — tag (run only after the release-bump PR merges into `main`): create and
+## push the signed lock-step module tags on the merged commit. Toven owns tagging
+## and commit-derived release notes. (usage: make release-tag)
+release-tag:
+	@$(TOVEN) release tag --yes
+
+## Mutation-free registry + hosted-Release rehearsal (read-only)
+release-publish-dry-run:
+	@$(TOVEN) release publish --dry-run
+
+## Authoritative release: tag, push, and create the hosted GitHub Release; the pushed tag then
+## triggers .github/workflows/release.yml (GoReleaser) to attach source archive + SBOM + signatures.
+release-publish:
+	@$(TOVEN) release publish --yes
 
 ## List all version tags
 list-tags:
@@ -88,13 +143,14 @@ list-tags:
 
 ## Read-only Toven self-hosting canary: discover modules and the dependency
 ## graph, then exercise the mutation-free release previews (status + plan) with
-## the candidate Toven binary. The native tag-modules.sh / goreleaser release
-## path stays authoritative. Toven never fabricates a synthetic 0.0.0, so before
-## the first version tag the release previews fail closed with "no reachable
-## release tag" — that is the expected outcome and is tolerated here. Once the
-## first version tag exists the previews succeed instead; that success is the
-## expected steady state and is reported as a pass. Only a failure for any other
-## reason fails the canary. TOVEN selects the binary (see the TOVEN var).
+## the candidate Toven binary. Toven owns the authoritative release tag/publish
+## path; GoReleaser only attaches supply-chain artifacts to the Toven-created
+## Release. Toven never fabricates a synthetic 0.0.0, so before the first version
+## tag the release previews fail closed with "no reachable release tag" — that is
+## the expected outcome and is tolerated here. Once the first version tag exists
+## the previews succeed instead; that success is the expected steady state and is
+## reported as a pass. Only a failure for any other reason fails the canary.
+## TOVEN selects the binary (see the TOVEN var).
 toven-canary:
 	@$(TOVEN) modules
 	@$(TOVEN) graph
@@ -190,9 +246,16 @@ test-affected:
 ## Run all checks (build + vet + test) — supports M=<module>
 check: build vet test
 
-## Verify declare-only aggregators (doc.go docs-only) + god-file — advisory, not gating
+## Verify declare-only aggregators (doc.go docs-only) + god-file — advisory, not gating.
+## Driven through Toven's `command` ecosystem (`toven run structure`), which shells out
+## to scripts/check-structure.sh — one source of truth, invoked by both make and CI.
 structure:
-	@./scripts/check-structure.sh
+	@$(TOVEN) run structure
+
+## Regenerate docs/MODULE-INDEX.md from the discovered modules via Toven's
+## `command` ecosystem (`toven run module-index` → scripts/generate-module-index.sh).
+module-index:
+	@$(TOVEN) run module-index
 
 ## Check only core domain modules
 check-core:
@@ -295,13 +358,21 @@ help:
 	@echo "  make check-devtools           Check only devtools domain modules"
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
+	@echo "Guardrails (Toven-driven):"
+	@echo "  make structure                Declare-only/god-file guard (advisory)"
+	@echo "  make module-index             Regenerate docs/MODULE-INDEX.md"
+	@echo ""
 	@echo "Go version:"
 	@echo "  make update-go VERSION=1.26.0 [W=]  Update Go version in go.mod files"
 	@echo ""
-	@echo "Versioning & Release:"
-	@echo "  make tag VERSION=v0.1.0        Tag all modules"
-	@echo "  make tag-push VERSION=v0.1.0   Tag and push to remote"
-	@echo "  make tag-force VERSION=v0.1.0  Force overwrite tags"
+	@echo "Versioning & Release (Toven owns tag + publish):"
+	@echo "  make release-plan              Preview the release plan (read-only)"
+	@echo "  make release-status            Report release status (read-only)"
+	@echo "  make release-readiness         Fail-closed release go/no-go checks"
+	@echo "  make release-bump              Phase 1: stage version + CHANGELOG bump (no commit) for a PR"
+	@echo "  make release-tag               Phase 2: create + push signed module tags (after bump PR merges)"
+	@echo "  make release-publish-dry-run   Mutation-free registry + hosted-Release rehearsal"
+	@echo "  make release-publish           Authoritative release: tag, push, and hosted Release"
 	@echo "  make list-tags                 List all version tags"
 	@echo ""
 	@echo "Local CI (GitHub Actions via act + Docker):"

@@ -1,12 +1,14 @@
 name: Release
 
-# Release workflow: tag push → goreleaser → SBOM + cosign + GitHub Release.
-# Closes F-037 (no release/SBOM/cosign workflow), F-055 (no goreleaser),
-# F-056 (gh release list empty despite tags).
+# Release workflow: tag push → goreleaser attaches supply-chain artifacts to the
+# Toven-created GitHub Release (source archive + SBOM + cosign + provenance).
 #
-# Trigger: push of any root v* tag. Per-submodule tags
-# (e.g. messaging/kafka/v0.2.0-alpha.1) are handled separately by tag-modules.sh and do
-# not trigger a release here.
+# Toven owns the authoritative release: `toven release publish` cuts and pushes
+# the tags and creates the hosted GitHub Release with commit-derived notes. The
+# pushed root v* tag then triggers this workflow, which runs GoReleaser in
+# keep-existing mode to attach the supply-chain artifacts to that existing
+# Release without recreating it or replacing Toven's notes. Per-submodule tags
+# (e.g. messaging/kafka/v0.2.0-alpha.1) do not trigger a release here.
 
 on:
   push:
