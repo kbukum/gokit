@@ -38,21 +38,19 @@ line = 80.0
 [ecosystems.go.release]
 readiness = ["clean-tree"]
 
-[ecosystems.go.release.host]
-forge = "github"
-
 [ecosystems.go.release.prerelease]
 channels = ["alpha"]
 
-# go:gokit (the root module `github.com/kbukum/gokit`) is the release train's
-# umbrella: it fronts the single hosted GitHub Release tagged `vX.Y.Z`. Every
-# other module publishes its own path-prefixed `<path>/vX.Y.Z` tag in lock-step
-# but cuts no separate Release, aggregating its notes onto this one. Toven cuts
+# go:gokit (the root module `github.com/kbukum/gokit`) fronts the single hosted
+# GitHub Release. A hosted Release is opt-in per tag, so `host.forge` is declared
+# only on the root module: its `vX.Y.Z` tag cuts the one hosted Release. Every
+# other module is still tagged in lock-step with its own path-prefixed
+# `<path>/vX.Y.Z` tag but, having no `host`, cuts no separate Release. Toven cuts
 # and pushes the tags + this Release (`toven release publish`); pushing the root
 # `v*` tag triggers `.github/workflows/release.yml`, where GoReleaser attaches
 # artifacts to the existing Release (mode: keep-existing).
-[modules."go:gokit".release]
-umbrella = true
+[modules."go:gokit".release.host]
+forge = "github"
 
 [ecosystems.go.tasks.build]
 argv = ["go", "-C", "{module.root}", "build", "{args}", "{module.selector}"]
