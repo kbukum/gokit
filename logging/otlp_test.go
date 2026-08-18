@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 )
@@ -87,12 +88,12 @@ func TestToOTLPKeyValue(t *testing.T) {
 		name  string
 		key   string
 		value any
-		check func(t *testing.T, kv otellog.KeyValue)
+		check func(t *testing.T, kv attribute.KeyValue)
 	}{
 		{
 			name: "string",
 			key:  "name", value: "alice",
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if kv.Key != "name" {
 					t.Errorf("key = %q, want 'name'", kv.Key)
 				}
@@ -104,7 +105,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "bool",
 			key:  "active", value: true,
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if !kv.Value.AsBool() {
 					t.Error("expected true")
 				}
@@ -113,7 +114,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "int",
 			key:  "count", value: 42,
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if kv.Value.AsInt64() != 42 {
 					t.Errorf("value = %d, want 42", kv.Value.AsInt64())
 				}
@@ -122,7 +123,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "int64",
 			key:  "big", value: int64(1234567890),
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if kv.Value.AsInt64() != 1234567890 {
 					t.Errorf("value = %d, want 1234567890", kv.Value.AsInt64())
 				}
@@ -131,7 +132,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "float64",
 			key:  "rate", value: 3.14,
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if kv.Value.AsFloat64() != 3.14 {
 					t.Errorf("value = %f, want 3.14", kv.Value.AsFloat64())
 				}
@@ -140,8 +141,8 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "bytes",
 			key:  "data", value: []byte{0x01, 0x02},
-			check: func(t *testing.T, kv otellog.KeyValue) {
-				b := kv.Value.AsBytes()
+			check: func(t *testing.T, kv attribute.KeyValue) {
+				b := kv.Value.AsByteSlice()
 				if len(b) != 2 || b[0] != 0x01 || b[1] != 0x02 {
 					t.Errorf("unexpected bytes: %v", b)
 				}
@@ -150,7 +151,7 @@ func TestToOTLPKeyValue(t *testing.T) {
 		{
 			name: "fallback to string",
 			key:  "custom", value: struct{ X int }{X: 1},
-			check: func(t *testing.T, kv otellog.KeyValue) {
+			check: func(t *testing.T, kv attribute.KeyValue) {
 				if kv.Value.AsString() != "{1}" {
 					t.Errorf("value = %q, want '{1}'", kv.Value.AsString())
 				}
@@ -218,9 +219,9 @@ func TestEmitLogFieldConversion(t *testing.T) {
 		t.Errorf("body = %q, want 'hello world'", rec.Body().AsString())
 	}
 
-	attrs := make(map[string]otellog.Value)
-	rec.WalkAttributes(func(kv otellog.KeyValue) bool {
-		attrs[kv.Key] = kv.Value
+	attrs := make(map[string]attribute.Value)
+	rec.WalkAttributes(func(kv attribute.KeyValue) bool {
+		attrs[string(kv.Key)] = kv.Value
 		return true
 	})
 
