@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/workload
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	github.com/containerd/errdefs v1.0.0

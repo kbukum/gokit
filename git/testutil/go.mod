@@ -2,6 +2,8 @@ module github.com/kbukum/gokit/git/testutil
 
 go 1.26.0
 
+toolchain go1.26.6
+
 require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/git v0.0.0
