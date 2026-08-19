@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/storage/gcs
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	cloud.google.com/go/auth v0.22.0

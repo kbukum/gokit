@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/discovery
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.6
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
