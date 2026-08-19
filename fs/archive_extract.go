@@ -186,7 +186,6 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 		return "", false, true, nil
 	}
 	components := 0
-	result := dest
 	for _, part := range strings.Split(filepath.ToSlash(cleaned), "/") {
 		switch part {
 		case "", ".":
@@ -197,19 +196,20 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 			if strings.Contains(part, ":") || filepath.IsAbs(part) {
 				return "", false, false, escapeError(archivePath, name)
 			}
-			result = filepath.Join(result, part)
 			components++
 		}
 	}
 	if components == 0 {
 		return "", false, true, nil
 	}
-	// Defense-in-depth containment barrier: the loop above already rejects every
-	// ".." component, but re-assert that the materialized path resolves within dest
-	// using the canonical clean-and-prefix check so the guarantee is explicit at the
-	// point target is produced (and recognizable to static zip-slip analysis).
-	target = filepath.Clean(result)
+	// Containment barrier in the canonical single-Join + HasPrefix form: join the
+	// whole member name under dest once, then require the cleaned result to stay
+	// within dest. The component loop above already rejects "..", absolute, and
+	// drive-prefixed members; this restates the guarantee as one recognizable
+	// zip-slip sanitizer that clears the tainted name before it reaches any
+	// filesystem sink.
 	cleanDest := filepath.Clean(dest)
+	target = filepath.Clean(filepath.Join(cleanDest, filepath.Clean(cleaned)))
 	if target != cleanDest && !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) {
 		return "", false, false, escapeError(archivePath, name)
 	}
