@@ -16,13 +16,13 @@ This file is the bird's-eye index.
 | Package | Import | Description |
 |---|---|---|
 | `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, RFC 9457 |
-| `config` | `gokit/config` | Base configuration with `Environment` type and defaults |
-| `logging` | `gokit/logging` | Structured logging via zerolog with context injection |
-| `util` | `gokit/util` | Generic slice, map, pointer, functional utilities |
-| `codec` | `gokit/codec` | Pluggable structured-text codecs (JSON, TOML, …) over a shared value tree |
-| `fs` | `gokit/fs` | Local filesystem primitives — safe paths, atomic writes, temp files, metadata |
-| `version` | `gokit/version` | Build version info — git commit, branch, build time |
-| `encryption` | `gokit/encryption` | AES-256-GCM encryption for sensitive data |
+| `config` | `gokit/config` | Configuration loading & validation with `Environment` type, strict mode, change watching, and sinks |
+| `logging` | `gokit/logging` | Structured logging via zerolog with context/span helpers and directive filtering |
+| `util` | `gokit/util` | Generic helpers — collections, casing, env, hashing, secret redaction, templates |
+| `codec` | `gokit/codec` | Pluggable structured-text codecs (JSON, TOML, YAML, …) over a shared value tree |
+| `fs` | `gokit/fs` | Local filesystem primitives — safe paths, atomic writes, archives, watching, links, app dirs |
+| `version` | `gokit/version` | Build version info + semantic-version parsing and constraint matching |
+| `encryption` | `gokit/encryption` | AES-256-GCM / ChaCha20-Poly1305 authenticated encryption for sensitive data |
 | `validation` | `gokit/validation` | Struct tag and programmatic validation |
 | `di` | `gokit/di` | Type-keyed dependency injection with eager/singleton/transient modes and closeable lifecycle |
 | `resilience` | `gokit/resilience` | Circuit breaker, retry, bulkhead, rate limiting |

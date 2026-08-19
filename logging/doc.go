@@ -17,4 +17,11 @@
 //	// Component-scoped logger derived from a base logger.
 //	dbLog := log.WithComponent("database")
 //	dbLog.Debug("query executed")
+//
+// # Context and filtering
+//
+// [ContextWithTraceID] and its siblings carry trace, span, request, user, and correlation IDs
+// on a context; [ComponentSpan] and [RequestSpan] derive loggers enriched from that context.
+// [BuildDirectives] and [ParseDirectives] convert between a base level plus per-module overrides
+// and the compact directive string used to configure level filtering from the environment.
 package logging

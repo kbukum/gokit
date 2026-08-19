@@ -1,6 +1,6 @@
 # config
 
-Configuration loading from YAML files and environment variables with automatic resolution and validation.
+Configuration loading from YAML files and environment variables with automatic resolution and validation, plus strict (unknown-key-rejecting) loading, change watching, and pluggable persistence sinks.
 
 ## Install
 
@@ -57,6 +57,10 @@ fmt.Printf("Running %s on %s:%d in %s mode\n",
 | `WithProfile()` | Option to load profile-specific env file |
 | `WithFileSystem()` | Option to inject custom filesystem |
 | `FileSystem` | Interface for file existence and env loading |
+| `LoadStrict[T]()` / `LoadStrictWithCodec[T]()` | Load into `T`, rejecting unknown keys instead of ignoring them |
+| `AppConfig` | Typed contract: embed `*ServiceConfig` and implement `ApplyDefaults` + `Validate` |
+| `ConfigSink` / `NewInMemoryConfigSink()` / `NewFileConfigSink()` | Persist runtime configuration entries (in-memory or file-backed) |
+| `ConfigWatch` / `ConfigChange` | Stream set / remove change events over a channel |
 
 ### Loading Order (lowest → highest priority)
 

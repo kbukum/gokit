@@ -28,12 +28,12 @@ func newChaCha20Poly1305(key []byte) (cipher.AEAD, error) {
 	return aead, nil
 }
 
-// Encrypt encrypts plaintext and returns base64(salt || nonce || ciphertext).
+// Encrypt encrypts plaintext and returns a base64-encoded versioned envelope.
 func (s *ChaCha20Service) Encrypt(plaintext string) (string, error) {
-	return encryptWithAEAD(s.passphrase, newChaCha20Poly1305, plaintext)
+	return sealEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, plaintext)
 }
 
-// Decrypt decrypts a base64-encoded ciphertext.
+// Decrypt decrypts a base64-encoded ciphertext envelope.
 func (s *ChaCha20Service) Decrypt(ciphertext string) (string, error) {
-	return decryptWithAEAD(s.passphrase, newChaCha20Poly1305, ciphertext)
+	return openEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, ciphertext)
 }

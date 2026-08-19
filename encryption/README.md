@@ -47,7 +47,7 @@ func main() {
 | `ChaCha20Service` | ChaCha20-Poly1305 encryption/decryption service |
 | `NewService(key string)` | Create AES-GCM service using PBKDF2-SHA256 with a random salt per encryption |
 | `NewChaCha20(key string)` | Create ChaCha20-Poly1305 service using PBKDF2-SHA256 with a random salt per encryption |
-| `Encrypt(plaintext string)` | Encrypt to `base64(salt || nonce || ciphertext)` |
+| `Encrypt(plaintext string)` | Encrypt to a versioned envelope `base64(version || algorithm || salt || nonce || ciphertext)` with the header bound as AEAD associated data |
 | `Decrypt(ciphertext string)` | Decrypt from base64-encoded ciphertext |
 
 ---

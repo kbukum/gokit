@@ -334,6 +334,9 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 | `NewFromEnv(name)` | Create logger from `LOG_LEVEL`, `LOG_FORMAT` env vars |
 | `Default()` | Access the process-wide default logger (immutable) |
 | `WithContext(ctx)` | Enrich with trace/span/request IDs from context |
+| `ContextWith*(ctx, id)` | Inject trace/span/request/user/correlation ID into a context |
+| `ComponentSpan(ctx, name)` | Component-tagged logger enriched from context |
+| `RequestSpan(ctx, method, path, requestID)` | Logger enriched with HTTP request metadata |
 | `WithComponent(name)` | Tag with component + apply module level |
 | `WithFields(map)` | Add structured fields |
 | `WithError(err)` | Add error field |

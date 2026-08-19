@@ -64,6 +64,36 @@ func IsReadonly(path string) (bool, error) {
 	return info.Mode().Perm()&0o200 == 0, nil
 }
 
+// Permissions returns the permission bits of the file or directory at path.
+func Permissions(path string) (os.FileMode, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, accessError("read permissions", path, err)
+	}
+	return info.Mode().Perm(), nil
+}
+
+// SetReadonly toggles the owner-write bit of path, clearing it when readonly is true
+// and restoring it otherwise. Group and other bits are left untouched.
+func SetReadonly(path string, readonly bool) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return accessError("read permissions", path, err)
+	}
+	mode := info.Mode().Perm()
+	if readonly {
+		mode &^= 0o200
+	} else {
+		mode |= 0o200
+	}
+	if err := os.Chmod(path, mode); err != nil {
+		code, status := osErrorCode(err)
+		return apperrors.New(code,
+			fmt.Sprintf("failed to set permissions for '%s': %v", path, err), status).WithCause(err)
+	}
+	return nil
+}
+
 func accessError(context, path string, err error) error {
 	code, status := osErrorCode(err)
 	return apperrors.New(code,

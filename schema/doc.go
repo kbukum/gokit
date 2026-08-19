@@ -19,4 +19,8 @@
 // or by pre-checking a schema once with [Compile] and reusing the resulting [CompiledSchema].
 // Both apply [ValidationLimits] (depth, node count, and string-byte bounds) to guard against resource exhaustion from untrusted schema
 // or value input.
+//
+// [GenerateDocument] returns the schema wrapped in a validated [SchemaDocument], and
+// [ValidateStructuredOutput] checks a value (such as a model's structured response) against a
+// schema, returning a [ValidationResult] rather than an error so callers can inspect every failure.
 package schema

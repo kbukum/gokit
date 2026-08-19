@@ -5,7 +5,17 @@
 //
 // # Usage
 //
-//	cfg, err := config.Load[MyConfig]("config.yaml")
+//	var cfg ServiceConfig
+//	err := config.LoadConfig("my-service", &cfg)
 //
-// Environment variables override file values using the APP_ prefix with underscore-separated paths (e.g., APP_DATABASE_HOST).
+// Environment variables override file values: an underscore-separated variable such as
+// DATABASE_HOST binds to the nested key database.host. Use [LoadStrict] to reject
+// unknown keys instead of ignoring them.
+//
+// # Watching and sinks
+//
+// [ConfigWatch] streams [ConfigChange] events as configuration entries are set or removed,
+// and a [ConfigSink] ([NewInMemoryConfigSink] or [NewFileConfigSink]) persists runtime
+// configuration entries. [AppConfig] is the typed contract an application config satisfies
+// by embedding *ServiceConfig and implementing ApplyDefaults and Validate.
 package config

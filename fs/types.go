@@ -15,6 +15,10 @@ type FileMeta struct {
 	Path string
 	// Len is the file size in bytes.
 	Len int64
+	// Created is the creation time when the platform reports it, and the zero time
+	// otherwise. Creation time is not portably available across filesystems, so
+	// callers must treat a zero value as "unknown".
+	Created time.Time
 	// Modified is the last modification time.
 	Modified time.Time
 	// IsFile reports whether the path is a regular file.
@@ -50,6 +54,7 @@ func Metadata(path string) (FileMeta, error) {
 	return FileMeta{
 		Path:      path,
 		Len:       info.Size(),
+		Created:   createdTime(info),
 		Modified:  info.ModTime(),
 		IsFile:    info.Mode().IsRegular(),
 		IsDir:     info.IsDir(),

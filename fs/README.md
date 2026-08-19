@@ -1,6 +1,6 @@
 # fs
 
-Local filesystem primitives for safe paths, temporary files and directories, atomic writes, permissions, and metadata. It stays deliberately below storage abstractions — higher-level packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each re-implementing path safety, temp files, and atomic replacement. Where the standard library already suffices (`os`, `io/fs`, `path/filepath`), this package builds on it.
+Local filesystem primitives for safe paths, temporary files and directories, atomic writes, permissions, metadata, symlinks and hard links, bounded archive create/extract, debounced change watching, and OS-standard application directories. It stays deliberately below storage abstractions — higher-level packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each re-implementing path safety, temp files, and atomic replacement. Where the standard library already suffices (`os`, `io/fs`, `path/filepath`), this package builds on it.
 
 ## Install
 
@@ -43,6 +43,11 @@ func main() {
 | `CanRead()` / `CanWrite()` / `IsReadonly()` | Capability checks before optional operations |
 | `Mode()` / `SetMode()` / `IsExecutable()` | Permission inspection and updates |
 | `FindInAncestors()` / `ParentDir()` | Walk ancestor directories |
+| `TarGz()` / `Zip()` / `ExtractTarGz()` / `ExtractZip()` | Create and bounded-extract tar.gz / zip archives |
+| `ExtractLimits` / `DefaultExtractLimits()` | Bound entry count, per-entry and total size; reject traversal / symlink escapes |
+| `HardLink()` / `SymlinkFile()` / `SymlinkDir()` / `ReadLink()` | Hard and symbolic links |
+| `NewFsWatcher()` / `FsWatcher` | Debounced filesystem change watching |
+| `AppCacheDir(app)` | OS-standard per-application cache directory |
 
 ---
 

@@ -1,7 +1,7 @@
 // Package codec provides pluggable structured-text codecs over a shared value tree.
 //
 // A [Codec] encodes
-// and decodes one on-disk/text format (JSON, TOML, …) through a single canonical in-memory model,
+// and decodes one on-disk/text format (JSON, TOML, YAML, …) through a single canonical in-memory model,
 // [Value]. Any package that reads or writes a config file, manifest,
 // or document reuses these codecs instead of re-implementing "bounded read → parse → typed error" per format.
 //
