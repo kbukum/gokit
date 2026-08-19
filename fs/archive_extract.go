@@ -202,18 +202,29 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 	if components == 0 {
 		return "", false, true, nil
 	}
-	// Containment barrier in the canonical single-Join + HasPrefix form: join the
-	// whole member name under dest once, then require the cleaned result to stay
-	// within dest. The component loop above already rejects "..", absolute, and
-	// drive-prefixed members; this restates the guarantee as one recognizable
-	// zip-slip sanitizer that clears the tainted name before it reaches any
-	// filesystem sink.
-	cleanDest := filepath.Clean(dest)
-	target = filepath.Clean(filepath.Join(cleanDest, filepath.Clean(cleaned)))
-	if target != cleanDest && !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) {
+	// Containment barrier: resolve the member against dest through the sanitizer
+	// helper, whose positive HasPrefix guard clears the tainted member name before
+	// the resulting path reaches any filesystem sink. The component loop above
+	// already rejects "..", absolute, and drive-prefixed members.
+	target, err = sanitizeArchivePath(dest, cleaned)
+	if err != nil {
 		return "", false, false, escapeError(archivePath, name)
 	}
 	return target, trailingSlash, false, nil
+}
+
+// sanitizeArchivePath joins a member name under dest and returns the result only when
+// it stays within dest, mirroring the canonical zip-slip remediation: a single
+// filepath.Join followed by a positive filepath.Clean + strings.HasPrefix guard. This
+// is the recognized sanitizer that clears the tainted archive member name before the
+// path is used in any filesystem operation.
+func sanitizeArchivePath(dest, name string) (string, error) {
+	target := filepath.Join(dest, name)
+	if target == filepath.Clean(dest) ||
+		strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) {
+		return target, nil
+	}
+	return "", fmt.Errorf("archive member %q escapes destination %q", name, dest)
 }
 
 func extractDir(archivePath, root, target, member string, mode os.FileMode) error {
