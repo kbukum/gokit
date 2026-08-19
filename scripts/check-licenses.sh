@@ -10,10 +10,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Permissive plus weak (file-level) copyleft licenses accepted for
-# redistribution: MPL-2.0 is weak copyleft and is allowed. Strong copyleft
+# redistribution: MPL-2.0 is weak copyleft and is allowed. CC0-1.0 is a
+# public-domain dedication (more permissive than MIT). Strong copyleft
 # (GPL/LGPL/AGPL) and unknown licenses are rejected; add a new SPDX id here only
 # with maintainer sign-off recorded in docs/dependencies.md.
-ALLOWED="Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,BSD-3-Clause-Clear,ISC,MPL-2.0,Unlicense,Zlib,Python-2.0"
+ALLOWED="Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,BSD-3-Clause-Clear,ISC,MPL-2.0,Unlicense,Zlib,Python-2.0,CC0-1.0"
 IGNORE="github.com/kbukum/gokit"
 
 modules=$(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' \
