@@ -137,8 +137,13 @@ func (m *Manager) Restart(ctx context.Context, id string) error {
 
 // Wait blocks until the container exits and returns the exit status.
 func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	waitResult := m.client.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	case err := <-waitResult.Error:
 		if err != nil {
 			return nil, fmt.Errorf("docker: wait: %w", err)
@@ -149,8 +154,6 @@ func (m *Manager) Wait(ctx context.Context, id string) (*workload.WaitResult, er
 			result.Error = status.Error.Message
 		}
 		return result, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 	// Wait blocks until the container exits and returns the exit status.
 	// Returns (nil, nil) only on the unreachable post-select fall-through;
