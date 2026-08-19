@@ -204,7 +204,16 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 	if components == 0 {
 		return "", false, true, nil
 	}
-	return result, trailingSlash, false, nil
+	// Defense-in-depth containment barrier: the loop above already rejects every
+	// ".." component, but re-assert that the materialized path resolves within dest
+	// using the canonical clean-and-prefix check so the guarantee is explicit at the
+	// point target is produced (and recognizable to static zip-slip analysis).
+	target = filepath.Clean(result)
+	cleanDest := filepath.Clean(dest)
+	if target != cleanDest && !strings.HasPrefix(target, cleanDest+string(filepath.Separator)) {
+		return "", false, false, escapeError(archivePath, name)
+	}
+	return target, trailingSlash, false, nil
 }
 
 func extractDir(archivePath, root, target, member string, mode os.FileMode) error {
