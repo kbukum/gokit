@@ -9,9 +9,7 @@ and checked against a permissive license allow-list by [`scripts/check-licenses.
 
 - **Least surface.** Core packages (root `go.mod`) stay dependency-light;
   heavy dependencies live behind their own sub-module `go.mod` so consumers only pull what they use.
-- **Permissive and weak-copyleft licenses only.** The license gate accepts Apache-2.0, MIT,
-  BSD-2/3-Clause, ISC, and similarly permissive terms, plus MPL-2.0 (weak, file-level copyleft)
-  and CC0-1.0 (public-domain dedication).
+- **Permissive and weak-copyleft licenses only.** The license gate accepts Apache-2.0, MIT, BSD-2/3-Clause, ISC, and similarly permissive terms, plus MPL-2.0 (weak, file-level copyleft) and CC0-1.0 (public-domain dedication).
   Strong copyleft (GPL/LGPL/AGPL) and unknown licenses fail CI.
   Adding an SPDX id to the allow-list in `scripts/check-licenses.sh` requires a maintainer sign-off recorded here.
 - **Maintained.** A direct dependency with no upstream release in over a year must carry a written rationale in this file

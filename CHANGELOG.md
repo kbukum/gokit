@@ -8,12 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Security — Go 1.26.6 toolchain, CC0-1.0 allow-list
-- Bump the pinned `toolchain` to `go1.26.6` across every module and
-  `go.work`, clearing the govulncheck stdlib findings (GO-2026-5942, 5972,
-  6088, 6089, 6090, 6091, 6218 and the idna advisory), all fixed in 1.26.6.
-- Allow the `CC0-1.0` public-domain dedication in the license gate so
-  `github.com/zeebo/blake3` (the core BLAKE3 content hasher) passes; the
-  sign-off is recorded in `docs/dependencies.md`.
+- Bump the pinned `toolchain` to `go1.26.6` across every module and `go.work`, clearing the govulncheck stdlib findings (GO-2026-5942, 5972, 6088, 6089, 6090, 6091, 6218 and the idna advisory), all fixed in 1.26.6.
+- Allow the `CC0-1.0` public-domain dedication in the license gate so `github.com/zeebo/blake3` (the core BLAKE3 content hasher) passes; the sign-off is recorded in `docs/dependencies.md`.
+
+### Fixed
+- **workload/docker**: `Manager.Wait` now returns `context.Canceled`/`DeadlineExceeded` deterministically when the context is already done, instead of racing the container-wait result; removes a flaky test under the Go 1.26.6 toolchain.
 
 ### Changed — MCP go-sdk 1.7.0 / SEP-2322 multi round-trip
 - **mcp**: bump `modelcontextprotocol/go-sdk` to 1.7.0. Its default
