@@ -9,15 +9,15 @@ Legend: ✅ present · ➖ absent.
 | Layer | Canonical concept | gokit | rskit | Note |
 |---|---|---|---|---|
 | L0 | errors | ✅ | ✅ | aligned |
-| L0 | util | ✅ | ✅ | rskit `util` broader (time/env/hash/template/backoff) |
-| L0 | version | ✅ | ✅ | build-info derived, immutable |
-| L0 | codec | ✅ | ✅ | framing/value/json/toml |
-| L0 | fs | ✅ | ✅ | safe paths, temp, atomic writes, permissions; watch is rskit-only |
-| L1 | config | ✅ | ✅ | depends on `logging` for `LoggingConfig` |
-| L1 | logging | ✅ | ✅ | aligned |
-| L1 | validation | ✅ | ✅ | generic `Validate` seam |
-| L1 | encryption | ✅ | ✅ | AES-GCM / ChaCha20 |
-| L1 | schema | ✅ | ✅ | generics + compiled validator + limits |
+| L0 | util | ✅ | ✅ | aligned: env/secret/sensitive/hash (streaming SHA-256)/timex/template/casing/bytes/glob/suggest/truncate; gokit keeps `files`/`merge` extras |
+| L0 | version | ✅ | ✅ | aligned: semver parse/requirement/match + `SupportedSchema`; gokit keeps build-info fields (GoVersion/BuildDate/IsDirty) |
+| L0 | codec | ✅ | ✅ | aligned: json/toml/yaml + framing/value canonical `Value` |
+| L0 | fs | ✅ | ✅ | aligned: safe paths + confinement, archive, watch, link, app-dirs, permissions; gokit keeps `ReadFileLimit`/`WriteAtomic*`/`TempFile` extras |
+| L1 | config | ✅ | ✅ | aligned: `AppConfig`, config sinks (file/in-memory), strict loader, profiles, `ConfigWatch`/`ConfigChange` change stream (channel-based); depends on `logging` for `LoggingConfig` |
+| L1 | logging | ✅ | ✅ | aligned: context/span helpers (`ComponentSpan`/`RequestSpan`/`ContextWith*`) + directive env-filter over injected logger |
+| L1 | validation | ✅ | ✅ | aligned: generic `Validate` seam + builder validator |
+| L1 | encryption | ✅ | ✅ | aligned: versioned envelope wire-compatible with rskit (AES-GCM / ChaCha20, PBKDF2-SHA256) |
+| L1 | schema | ✅ | ✅ | aligned: `SchemaDocument`, `ValidationOptions`, structured-output validation, generics + compiled validator + limits |
 | L2 | component / hook / provider / di | ✅ | ✅ | aligned lifecycle + 4 provider shapes |
 | L3 | observability / resilience / security | ✅ | ✅ | aligned |
 | L4 | bootstrap | ✅ | ✅ | aligned |

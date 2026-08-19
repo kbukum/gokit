@@ -6,7 +6,6 @@ import (
 	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"io"
 )
@@ -50,7 +49,9 @@ func newAESGCM(key []byte) (cipher.AEAD, error) {
 	return gcm, nil
 }
 
-func encryptWithAEAD(passphrase []byte, factory aeadFactory, plaintext string) (string, error) {
+// sealEnvelope derives a per-message key, seals the plaintext with the header as
+// AEAD associated data, and returns the base64-encoded versioned envelope.
+func sealEnvelope(passphrase []byte, alg Algorithm, factory aeadFactory, plaintext string) (string, error) {
 	salt := make([]byte, saltSize)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
@@ -65,33 +66,36 @@ func encryptWithAEAD(passphrase []byte, factory aeadFactory, plaintext string) (
 	if err != nil {
 		return "", err
 	}
+	if aead.NonceSize() != nonceSize {
+		return "", fmt.Errorf("unexpected nonce size %d", aead.NonceSize())
+	}
 
-	nonce := make([]byte, aead.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+	nonce := make([]byte, nonceSize)
+	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		return "", fmt.Errorf("generate nonce: %w", err)
 	}
 
-	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), nil)
-	payload := make([]byte, 0, len(salt)+len(nonce)+len(ciphertext))
-	payload = append(payload, salt...)
-	payload = append(payload, nonce...)
-	payload = append(payload, ciphertext...)
+	header, err := envelopeHeader(alg, salt, nonce)
+	if err != nil {
+		return "", err
+	}
 
-	return base64.StdEncoding.EncodeToString(payload), nil
+	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), header)
+	return encodeEnvelope(header, ciphertext), nil
 }
 
-func decryptWithAEAD(passphrase []byte, factory aeadFactory, ciphertext string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(ciphertext)
+// openEnvelope decodes the versioned envelope, verifies it was sealed by the
+// expected algorithm, and authenticates the header before decrypting.
+func openEnvelope(passphrase []byte, expected Algorithm, factory aeadFactory, ciphertext string) (string, error) {
+	env, err := decodeEnvelope(ciphertext)
 	if err != nil {
-		return "", fmt.Errorf("decode base64: %w", err)
+		return "", err
+	}
+	if env.algorithm() != expected {
+		return "", invalidEnvelope("ciphertext algorithm does not match encryptor")
 	}
 
-	if len(data) < saltSize {
-		return "", fmt.Errorf("ciphertext too short")
-	}
-
-	salt := data[:saltSize]
-	key, err := deriveKey(passphrase, salt)
+	key, err := deriveKey(passphrase, env.salt())
 	if err != nil {
 		return "", fmt.Errorf("derive key: %w", err)
 	}
@@ -101,26 +105,20 @@ func decryptWithAEAD(passphrase []byte, factory aeadFactory, ciphertext string) 
 		return "", err
 	}
 
-	nonceSize := aead.NonceSize()
-	if len(data) < saltSize+nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertextData := data[saltSize:saltSize+nonceSize], data[saltSize+nonceSize:]
-	plaintext, err := aead.Open(nil, nonce, ciphertextData, nil)
+	plaintext, err := aead.Open(nil, env.nonce(), env.ciphertext(), env.associatedData())
 	if err != nil {
-		return "", fmt.Errorf("decrypt: %w", err)
+		return "", invalidEnvelope("ciphertext authentication failed").WithCause(err)
 	}
 
 	return string(plaintext), nil
 }
 
-// Encrypt encrypts plaintext and returns base64(salt || nonce || ciphertext).
+// Encrypt encrypts plaintext and returns a base64-encoded versioned envelope.
 func (s *Service) Encrypt(plaintext string) (string, error) {
-	return encryptWithAEAD(s.passphrase, newAESGCM, plaintext)
+	return sealEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, plaintext)
 }
 
-// Decrypt decrypts a base64-encoded ciphertext.
+// Decrypt decrypts a base64-encoded ciphertext envelope.
 func (s *Service) Decrypt(ciphertext string) (string, error) {
-	return decryptWithAEAD(s.passphrase, newAESGCM, ciphertext)
+	return openEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, ciphertext)
 }

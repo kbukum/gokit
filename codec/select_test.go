@@ -36,8 +36,8 @@ func TestCodecForNameAndPath(t *testing.T) {
 
 func TestCodecForUnknownOrMissing(t *testing.T) {
 	t.Parallel()
-	if _, ok := codec.CodecForName("yaml"); ok {
-		t.Fatal("yaml should be unknown")
+	if _, ok := codec.CodecForName("xml"); ok {
+		t.Fatal("xml should be unknown")
 	}
 	if _, ok := codec.CodecForPath("config"); ok {
 		t.Fatal("extensionless path should be unknown")

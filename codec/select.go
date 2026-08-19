@@ -5,12 +5,14 @@ import (
 	"strings"
 )
 
-// CodecForName returns a codec for a format name (for example "toml", "json"),
+// CodecForName returns a codec for a format name (for example "toml", "yaml", "json"),
 // matched case-insensitively. The boolean is false when no codec matches.
 func CodecForName(name string) (Codec, bool) {
 	switch strings.ToLower(name) {
 	case "toml":
 		return NewTOMLCodec(), true
+	case "yaml", "yml":
+		return NewYAMLCodec(), true
 	case "json":
 		return PrettyJSON(), true
 	default:

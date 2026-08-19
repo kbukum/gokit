@@ -1,6 +1,6 @@
 # codec
 
-Pluggable structured-text codecs (JSON, TOML, …) over a single canonical in-memory model. Any package that reads or writes a config file, manifest, or document reuses these codecs instead of re-implementing "bounded read → parse → typed error" per format.
+Pluggable structured-text codecs (JSON, TOML, YAML, …) over a single canonical in-memory model. Any package that reads or writes a config file, manifest, or document reuses these codecs instead of re-implementing "bounded read → parse → typed error" per format.
 
 ## Install
 
@@ -49,6 +49,7 @@ func main() {
 | `Encode[T](codec, value)` / `Decode[T](codec, contents)` | Generic typed encode/decode |
 | `PrettyJSON()` / `CompactJSON()` | JSON codecs (multiline / single-line) |
 | `NewTOMLCodec()` | TOML codec |
+| `NewYAMLCodec()` | YAML codec |
 | `CodecForName(name)` / `CodecForPath(path)` | Runtime codec selection by format name or file path |
 
 ---

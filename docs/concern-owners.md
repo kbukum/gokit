@@ -7,7 +7,7 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Concern | Owner | Reuse this, not | Notes |
 |---|---|---|---|
 | Data formats (JSON/TOML/…) | `codec` | hand-rolled `encoding/json` / `BurntSushi/toml` wrappers, per-package marshal helpers | `codec/json.go`, `codec/toml.go`, `codec/framing`, `codec/value` |
-| Generic helpers (slices/maps/clock/copy/ensure-dir) | `util` + modern stdlib (`slices`/`maps`/`cmp`) | a fresh local helper, `sort.Slice` where `slices.SortFunc` fits | scoped foundation owner, not a dumping ground |
+| Generic helpers (slices/maps/clock/copy/casing/env/hashing/templates) | `util` + modern stdlib (`slices`/`maps`/`cmp`) | a fresh local helper, `sort.Slice` where `slices.SortFunc` fits | scoped foundation owner, not a dumping ground |
 | Filesystem / path safety / atomic writes | `fs` | raw `os` + `filepath.EvalSymlinks` + `Rel` escape checks, non-atomic `os.WriteFile` | path confinement, symlink-escape rejection, atomic writes |
 | Config loading / precedence | `config` | custom env/flag/file precedence logic | |
 | JSON Schema validation | `schema` | hand-rolled validation walks | |
@@ -18,7 +18,7 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Subprocess | `process` | bare `exec.Command` | argv-only, no shell |
 | Dependency injection | `di` | service-locator / string-keyed resolution | typed resolution |
 | Observability (traces/metrics) | `observability` | direct exporter wiring, package-global meters | injected tracer/meter |
-| Encryption / secrets | `encryption` / `security` | ad-hoc crypto, custom header sets | current algorithms only |
+| Encryption / secrets | `encryption` / `security` | ad-hoc crypto, custom header sets | current algorithms only; non-crypto secret redaction/masking lives in `util` (`SecretString`, `SecretKeyMatcher`) |
 | Git operations | `git` | bare `exec.Command("git", …)` | |
 | Validation | `validation` | inline boundary checks duplicated per package | |
 

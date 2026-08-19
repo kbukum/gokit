@@ -10,4 +10,11 @@
 //
 // Use GetVersionInfo for the full VersionInfo,
 // or GetShortVersion / GetFullVersion for formatted strings.
+//
+// # Semantic versions
+//
+// [ParseVersion], [ParseRequirement], and [MatchesRequirement] parse semantic versions
+// and constraint requirements (for example ">=1.2.0, <2.0.0") and test a version against them.
+// [SupportedSchema] validates a configured schema/format version against the one this build
+// supports, returning a typed error on mismatch.
 package version

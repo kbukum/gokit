@@ -57,6 +57,7 @@ func main() {
 | `CircuitBreaker` | Circuit breaker with closed/open/half-open states |
 | `RateLimiter` | Token bucket rate limiter |
 | `Bulkhead` | Concurrency limiter with semaphore pattern |
+| `CalculateBackoff()` / `CalculateJitteredBackoff()` / `BackoffCalculator` | Standalone exponential backoff with optional jitter |
 | `Default*Config()` | Sensible default configurations for each pattern |
 
 ---

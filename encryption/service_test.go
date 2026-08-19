@@ -165,8 +165,8 @@ func TestWrongKey_ErrorContainsDecryptHint(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected error decrypting with wrong key")
 			}
-			if !strings.Contains(err.Error(), "decrypt") {
-				t.Errorf("error should mention 'decrypt', got: %v", err)
+			if !strings.Contains(err.Error(), "authentication failed") {
+				t.Errorf("error should mention authentication failure, got: %v", err)
 			}
 		})
 	}
@@ -370,8 +370,8 @@ func TestDecryptRejectsPayloadWithoutNonce(t *testing.T) {
 				t.Fatalf("new encryptor: %v", err)
 			}
 			_, err = enc.Decrypt(ciphertext)
-			if err == nil || !strings.Contains(err.Error(), "ciphertext too short") {
-				t.Fatalf("Decrypt() error = %v, want ciphertext too short", err)
+			if err == nil || !strings.Contains(err.Error(), "too short") {
+				t.Fatalf("Decrypt() error = %v, want envelope too short", err)
 			}
 		})
 	}
@@ -401,7 +401,7 @@ func TestEncryptWithAEADPropagatesFactoryError(t *testing.T) {
 	t.Parallel()
 
 	want := errors.New("factory unavailable")
-	_, err := encryptWithAEAD([]byte("key"), func([]byte) (cipher.AEAD, error) {
+	_, err := sealEnvelope([]byte("key"), AlgorithmAESGCM, func([]byte) (cipher.AEAD, error) {
 		return nil, want
 	}, "secret")
 	if !errors.Is(err, want) {

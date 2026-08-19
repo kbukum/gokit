@@ -94,6 +94,26 @@ func Canonicalize(path string) (string, error) {
 	return filepath.Abs(resolved)
 }
 
+// ResolveRootRelativeTo canonicalizes root, interpreting a relative root under
+// baseDir and accepting an absolute root as-is. An empty root defaults to ".", so a
+// caller-omitted root resolves to baseDir. field names the configuration key for the
+// error message when resolution fails. The resolved path must exist.
+func ResolveRootRelativeTo(field, baseDir, root string) (string, error) {
+	if root == "" {
+		root = "."
+	}
+	resolved := root
+	if !filepath.IsAbs(root) {
+		resolved = filepath.Join(baseDir, root)
+	}
+	canonical, err := Canonicalize(resolved)
+	if err != nil {
+		return "", apperrors.InvalidInput(field,
+			fmt.Sprintf("failed to resolve %s '%s'", field, resolved)).WithCause(err)
+	}
+	return canonical, nil
+}
+
 // FindInAncestors searches start and each ancestor directory for a regular file named fileName,
 // returning the nearest match. A nested directory's file shadows one higher up.
 // The boolean is false when no ancestor contains the file.

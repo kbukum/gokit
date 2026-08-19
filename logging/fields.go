@@ -21,6 +21,8 @@ const (
 	FieldPhase         = "phase"
 	FieldContainerID   = "container_id"
 	FieldEmail         = "email"
+	FieldHTTPMethod    = "http.method"
+	FieldHTTPPath      = "http.path"
 
 	// Unified schema fields — consistent across gokit, rskit, and pykit.
 	FieldService     = "service"

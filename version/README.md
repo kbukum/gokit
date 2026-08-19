@@ -42,10 +42,13 @@ go build -ldflags "-X github.com/kbukum/gokit/version.buildVersion=1.2.3 \
 
 | Name | Description |
 |------|-------------|
-| `VersionInfo` | Struct with Version, GitCommit, GitBranch, BuildTime, GoVersion |
+| `VersionInfo` | Struct with Version, GitCommit, GitBranch, BuildTime, GoVersion, BuildDate, IsRelease, IsDirty |
 | `GetVersionInfo()` | Returns full `*VersionInfo` struct |
 | `GetShortVersion()` | Returns `version-commit` string |
 | `GetFullVersion()` | Returns detailed version string |
+| `ParseVersion(v)` / `ParseRequirement(req)` | Parse a semantic version or a constraint requirement |
+| `MatchesRequirement(v, req)` | Report whether a version satisfies a requirement (e.g. `">=1.2.0, <2.0.0"`) |
+| `SupportedSchema[T](field, configured, supported)` | Validate a configured schema/format version against this build's supported value |
 | `buildVersion` / `buildGitCommit` / `buildGitBranch` / `buildTime` | Unexported link-time override seam (no runtime mutation) |
 
 ---

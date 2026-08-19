@@ -46,6 +46,9 @@ func main() {
 | `Compile()` / `CompileWithLimits()` | Precompile a schema into a reusable `CompiledSchema` |
 | `CompiledSchema.Validate(value)` | Validate against a precompiled schema |
 | `ValidationLimits` / `DefaultLimits()` / `LimitError` | Depth / node-count / string-byte bounds |
+| `GenerateDocument[T]()` / `SchemaDocument` | Generate a schema wrapped in a validated document |
+| `ValidateStructuredOutput(schema, value)` | Validate a model's structured output, returning every failure in a `ValidationResult` |
+| `ValidationOptions` / `CompileWithOptions()` / `ValidateWithOptions()` | Validation with explicit options and limits |
 
 ---
 
