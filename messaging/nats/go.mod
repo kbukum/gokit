@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/messaging v0.2.0
-	github.com/nats-io/nats.go v1.52.0
+	github.com/nats-io/nats.go v1.53.1
 )
 
 require (
