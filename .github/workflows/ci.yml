@@ -31,7 +31,7 @@ permissions:
 # the same `command`-ecosystem task the Makefile uses (`toven run structure`).
 # Kept in lock-step with .github/workflows/toven-canary.yml; bump both together.
 env:
-  TOVEN_VERSION: v0.1.0-alpha.6
+  TOVEN_VERSION: v0.1.0-alpha.7
 
 # All third-party actions are pinned by 40-char SHA. Dependabot is configured
 # (see .github/dependabot.yml) to bump both the SHA and the trailing version
@@ -266,7 +266,7 @@ jobs:
         id: toven
         # Pinned by immutable commit SHA; `version` independently pins the
         # installed binary (dual pin, both required). Same pin as toven-canary.yml.
-        uses: kbukum/toven/.github/actions/toven@2efe3c7321a76a9e338656438f167ced87866815 # kbukum/toven install-and-run action
+        uses: kbukum/toven/.github/actions/toven@c74531b0745dec78fa4d82795d77ccd5e26a80cb # v0.1.0-alpha.7
         with:
           version: ${{ env.TOVEN_VERSION }}
 
