@@ -3,6 +3,17 @@ name = "gokit"
 root = "."
 base_ref = "origin/main"
 
+# Bound per-tool CPU parallelism during APPLY fan-out. gokit's `test`/`build`/
+# `lint` tasks fan out one `go` process per module (50 modules) across the
+# worker pool; left unbounded, every child defaults its own `GOMAXPROCS` to the
+# whole machine and peak thread pressure climbs toward cores², thrashing the
+# host. `auto` sizes a host-CPU budget and splits it across each concurrent
+# wave, injecting each child's share via `GOMAXPROCS` (never argv). This is the
+# default value; it is set explicitly here to document the intent. Use
+# `inherit` (or `0`) to opt out and restore unbounded per-tool parallelism.
+[toven]
+compute_budget = "auto"
+
 # Smart defaults fill in tasks, run strategy, and toolchain probes.
 # Uncomment to override, e.g.:
 #   run_strategy = "leaf-to-top"
