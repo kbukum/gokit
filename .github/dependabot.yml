@@ -13,6 +13,7 @@ updates:
     labels:
       - "dependencies"
       - "ci"
+    open-pull-requests-limit: 20
     groups:
       actions:
         patterns:
@@ -22,6 +23,17 @@ updates:
   # Dependabot does NOT read go.work; directories must be listed explicitly.
   # The wildcard globs below auto-discover modules at 1-level and 2-level depth
   # so new modules are picked up without editing this file.
+  #
+  # Grouping strategy — collapse the weekly PR fan-out:
+  #   * Semantic groups (golang-x, otel, grpc, google-cloud, aws, k8s) bundle a
+  #     vendor family into ONE PR that spans every directory it appears in.
+  #   * The `go-dependencies` catch-all bundles *everything else* (testify,
+  #     nats.go, …) into a single non-major PR across all modules, instead of
+  #     one PR per module. A dependency lands in the FIRST group it matches, so
+  #     the catch-all only sweeps up what the semantic groups leave behind.
+  #   * Major bumps fall through to individual PRs so a breaking change is
+  #     reviewed on its own.
+  #   * Security fixes ship immediately in their own fast-lane PR.
   - package-ecosystem: "gomod"
     directories:
       - "/"           # root module
@@ -38,32 +50,53 @@ updates:
     labels:
       - "dependencies"
       - "go"
-    open-pull-requests-limit: 15
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 3
       semver-major-days: 14
       semver-minor-days: 7
     groups:
+      # Security updates always ship in their own PR (fast lane).
+      security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
       golang-x:
+        applies-to: version-updates
         patterns:
           - "golang.org/x/*"
       otel:
+        applies-to: version-updates
         patterns:
           - "go.opentelemetry.io/*"
       grpc:
+        applies-to: version-updates
         patterns:
           - "google.golang.org/grpc"
           - "google.golang.org/grpc/*"
           - "google.golang.org/genproto/*"
           - "google.golang.org/protobuf"
+      google-cloud:
+        applies-to: version-updates
+        patterns:
+          - "cloud.google.com/go"
+          - "cloud.google.com/go/*"
+          - "google.golang.org/api"
       aws:
+        applies-to: version-updates
         patterns:
           - "github.com/aws/*"
       k8s:
+        applies-to: version-updates
         patterns:
           - "k8s.io/*"
-      # Security updates always ship in their own PR (fast lane).
-      security-updates:
-        applies-to: security-updates
+      # Catch-all: every remaining Go dependency (testify, nats.go, …) collapses
+      # into ONE grouped PR spanning all directories. Non-major only — majors get
+      # individual PRs for isolated review.
+      go-dependencies:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "*"
