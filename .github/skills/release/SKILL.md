@@ -47,13 +47,17 @@ toven release plan          # preview the version cascade and exact tag set (rea
 
 Use `docs/policy/SEMVER.md`. While in `0.x`: a breaking change in the `[Unreleased]` CHANGELOG section bumps **MINOR**; otherwise **PATCH**.
 
-**Always cross-check the Go module proxy — it is the immutable source of truth for "what version is already taken," and Toven does not consult it.** gokit declares no registry, so `toven release status`/`plan` anchor on *reachable git tags only*. If tags are ever deleted or diverge from the proxy, Toven can fail closed ("no reachable release tag") and let you pick a version that is **already permanently published** on the proxy — which downstream consumers have already resolved and which can never be reused or moved. Before choosing a version, confirm the highest published version and that your target is unused:
+**Always cross-check the Go module proxy — it is the immutable source of truth for "what version is already taken," and Toven does not consult it.** gokit declares no registry, so `toven release status`/`plan` anchor on *reachable git tags only*. If tags are ever deleted or diverge from the proxy, Toven can fail closed ("no reachable release tag") and let you pick a version that is **already permanently published** on the proxy — which downstream consumers have already resolved and which can never be reused or moved. A release tags **every discovered module** (root and each nested sub-module) in lock-step, and each module path is an **independent** proxy cache, so a deleted or divergent tag on any one sub-module can already occupy the target version even when the root returns 404. Before choosing a version, confirm the target `.info` returns 404 (unpublished) for **every** Toven-discovered module path, not just the root:
 
 ```bash
 # Highest published root version (the proxy caches these forever):
 curl -s https://proxy.golang.org/github.com/kbukum/gokit/@v/list | sort -V | tail -5
-# Your target must return 404 (not yet published):
-curl -s -o /dev/null -w '%{http_code}\n' https://proxy.golang.org/github.com/kbukum/gokit/@v/vX.Y.Z.info
+# Your target must return 404 (not yet published) for the root AND every sub-module path.
+# Toven prints the exact module paths it tags:
+for mod in $(toven release plan --format json | jq -r '.modules[].path'); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' "https://proxy.golang.org/${mod}/@v/vX.Y.Z.info")
+  echo "${code}  ${mod}"   # every line must read 404
+done
 ```
 
 The next version must be **strictly greater** than the highest proxy version — and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
