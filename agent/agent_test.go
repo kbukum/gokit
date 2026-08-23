@@ -203,24 +203,6 @@ func TestAgentSystemPromptTemplate(t *testing.T) {
 	}
 }
 
-func TestAgentStreamExposesLLMEvents(t *testing.T) {
-	p := newMockProvider(textResponse("ok"))
-	a := agent.New(agent.Config{Provider: p})
-	ch, err := a.Stream(context.Background(), []chat.Message{chat.User("hi")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	seen := false
-	for evt := range ch {
-		if _, ok := evt.(llm.MessageComplete); ok {
-			seen = true
-		}
-	}
-	if !seen {
-		t.Fatal("missing message.complete")
-	}
-}
-
 func TestHookTypes(t *testing.T) {
 	events := []interface{ Type() hook.EventType }{agent.StartEvent{}, agent.LLMRequestEvent{}, agent.LLMResponseEvent{}, agent.ToolCallEvent{}, agent.ToolResultEvent{}, agent.MCPRequestEvent{}, agent.MCPResultEvent{}, agent.StreamObservedEvent{}, agent.StepCompleteEvent{}, agent.ErrorEvent{}, agent.StopEvent{}, agent.ContextCompacted{}, agent.ModelSwitched{}, agent.MemoryLoaded{}}
 	for _, e := range events {

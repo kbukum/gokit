@@ -31,6 +31,7 @@ var (
 	ErrMaxToolCallsExceeded = ai.BudgetExceededError{Reason: ai.BudgetExceededCalls}
 	ErrMaxTokensExceeded    = ai.BudgetExceededError{Reason: ai.BudgetExceededTokens}
 	ErrMaxTurnsExceeded     = errors.New("agent: max turns exceeded")
+	ErrStreamIncomplete     = errors.New("agent: provider stream ended before completion")
 )
 
 // Result is the final outcome of an agent run.

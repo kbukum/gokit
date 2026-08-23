@@ -84,6 +84,32 @@ func main() {
 }
 ```
 
+## Streaming
+
+`Run` returns the final `Result`. `Stream` drives the same bounded loop and emits the turn lifecycle as a channel of `AgentEvent` values — `TurnStart`, `LLMDelta` (each provider token/tool-use delta), `ToolExecuting`/`ToolComplete`, `Compacted`, `TurnComplete`, and a terminal `RunComplete` carrying the final `Result`. The channel is bounded by `Config.StreamBuffer`; a canceled context or a stalled consumer stops the loop and closes the channel.
+
+```go
+events, err := runner.Stream(ctx, []chat.Message{chat.User("summarize the release")})
+if err != nil {
+	panic(err)
+}
+for evt := range events {
+	switch e := evt.(type) {
+	case agent.LLMDelta:
+		if td, ok := e.Event.(llm.TextDelta); ok {
+			fmt.Print(td.Text)
+		}
+	case agent.ToolExecuting:
+		fmt.Printf("\n[calling %s]\n", e.Name)
+	case agent.RunComplete:
+		if e.Err != nil {
+			panic(e.Err)
+		}
+		fmt.Println("\nstop:", e.Result.StopReason)
+	}
+}
+```
+
 ## When to use
 
 Use `agent` when you want the bounded turn loop, budgets, tool dispatch, hooks, and memory policy in one place instead of building an orchestration loop yourself.
