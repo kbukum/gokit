@@ -74,7 +74,7 @@ func Open(path string, opts ...Option) (*Repo, error) {
 
 // OpenWithAuth opens a git repository with explicit transport authentication.
 func OpenWithAuth(path string, transport auth.Transport, opts ...Option) (*Repo, error) {
-	return Open(path, append([]Option{WithTransport(transport)}, opts...)...)
+	return Open(path, append(append([]Option{}, opts...), WithTransport(transport))...)
 }
 
 // Discover finds a git repository by walking up from the given path.
@@ -89,7 +89,7 @@ func Discover(path string, opts ...Option) (*Repo, error) {
 
 // DiscoverWithAuth finds a git repository with explicit transport authentication.
 func DiscoverWithAuth(path string, transport auth.Transport, opts ...Option) (*Repo, error) {
-	return Discover(path, append([]Option{WithTransport(transport)}, opts...)...)
+	return Discover(path, append(append([]Option{}, opts...), WithTransport(transport))...)
 }
 
 // Clone clones a repository into path.
