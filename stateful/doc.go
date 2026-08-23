@@ -13,6 +13,10 @@
 // and Redis (durable, distributed).
 // Users can implement custom stores for any backend (Postgres, DynamoDB, filesystem, etc.).
 //
+// StateMachine - Typed state machine with guarded transitions, a monotonic version,
+// an audit log, and pluggable persistence hooks. Complements accumulation for workflows
+// that advance through named states (draft → submitted → shipped) rather than buffering values.
+//
 // # Use Cases
 //
 //   - Real-time event stream accumulation
