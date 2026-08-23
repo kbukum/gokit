@@ -35,10 +35,12 @@ type RetryConfig struct {
 	InitialBackoff time.Duration
 	// MaxBackoff is the maximum delay between retries.
 	MaxBackoff time.Duration
-	// MaxElapsedTime bounds the total wall-clock time budget for backoff waits across
-	// attempts. Zero means unbounded (only MaxAttempts bounds retries). When set, Retry
-	// stops before a backoff sleep that would exceed the budget instead of sleeping past
-	// it; it does not interrupt an attempt already in flight.
+	// MaxElapsedTime bounds the elapsed-time budget for retries. It is enforced at each
+	// attempt boundary (the loop stops before starting an attempt or a backoff sleep once
+	// the budget is spent) and returns the last attempt's error. Zero means unbounded (only
+	// MaxAttempts bounds retries). A single in-flight attempt is not interrupted, because
+	// the retried function receives no context; supply a context-aware function and derive a
+	// per-attempt deadline yourself if you need to cancel a running attempt.
 	MaxElapsedTime time.Duration
 	// Strategy controls how the delay grows between retries.
 	Strategy BackoffStrategy
@@ -88,8 +90,8 @@ func (c RetryConfig) Validate() error {
 	if c.BackoffFactor < 0 || math.IsNaN(c.BackoffFactor) || math.IsInf(c.BackoffFactor, 0) {
 		return apperr.InvalidInput("backoff_factor", "must be a finite non-negative number")
 	}
-	if c.Jitter < 0 || c.Jitter > 1 {
-		return apperr.InvalidInput("jitter", "must be within [0.0, 1.0]")
+	if c.Jitter < 0 || c.Jitter > 1 || math.IsNaN(c.Jitter) {
+		return apperr.InvalidInput("jitter", "must be a finite number within [0.0, 1.0]")
 	}
 	if c.MaxElapsedTime < 0 {
 		return apperr.InvalidInput("max_elapsed_time", "must not be negative")
@@ -112,6 +114,12 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 	start := time.Now()
 
 	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
+		// Stop before another attempt once the elapsed-time budget is spent, so a slow
+		// prior attempt cannot buy additional attempts beyond the budget.
+		if cfg.MaxElapsedTime > 0 && attempt > 1 && time.Since(start) >= cfg.MaxElapsedTime {
+			break
+		}
+
 		// Check context before each attempt
 		select {
 		case <-ctx.Done():

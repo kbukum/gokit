@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ func TestRetryConfigValidateGuards(t *testing.T) {
 		{"negative_initial", RetryConfig{MaxAttempts: 1, InitialBackoff: -1}, true},
 		{"max_lt_initial", RetryConfig{MaxAttempts: 1, InitialBackoff: 2 * time.Second, MaxBackoff: time.Second}, true},
 		{"jitter_out_of_range", RetryConfig{MaxAttempts: 1, Jitter: 1.5}, true},
+		{"jitter_nan", RetryConfig{MaxAttempts: 1, Jitter: math.NaN()}, true},
+		{"backoff_factor_inf", RetryConfig{MaxAttempts: 1, BackoffFactor: math.Inf(1)}, true},
 		{"negative_budget", RetryConfig{MaxAttempts: 1, MaxElapsedTime: -1}, true},
 	}
 	for _, tc := range cases {
@@ -56,6 +59,12 @@ func TestConfigValidateGuards(t *testing.T) {
 	}
 	if err := (RateLimiterConfig{Rate: 0, Burst: 1}).Validate(); err == nil {
 		t.Fatal("expected rate limiter guard error")
+	}
+	if err := (RateLimiterConfig{Rate: math.NaN(), Burst: 1}).Validate(); err == nil {
+		t.Fatal("expected rate limiter NaN guard error")
+	}
+	if err := (RateLimiterConfig{Rate: math.Inf(1), Burst: 1}).Validate(); err == nil {
+		t.Fatal("expected rate limiter Inf guard error")
 	}
 }
 

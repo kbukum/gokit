@@ -1,6 +1,8 @@
 package resilience
 
 import (
+	"math"
+
 	apperr "github.com/kbukum/gokit/errors"
 )
 
@@ -31,8 +33,8 @@ func (c BulkheadConfig) Validate() error {
 
 // Validate rejects an inconsistent rate-limiter configuration.
 func (c RateLimiterConfig) Validate() error {
-	if c.Rate <= 0 {
-		return apperr.InvalidInput("rate", "must be greater than 0")
+	if c.Rate <= 0 || math.IsNaN(c.Rate) || math.IsInf(c.Rate, 0) {
+		return apperr.InvalidInput("rate", "must be a finite number greater than 0")
 	}
 	if c.Burst < 1 {
 		return apperr.InvalidInput("burst", "must be at least 1")
