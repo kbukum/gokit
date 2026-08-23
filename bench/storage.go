@@ -130,19 +130,19 @@ func (fs *FileStorage) runPath(runID string) (string, error) {
 }
 
 func validateRunID(runID string) error {
-	switch {
-	case runID == "":
+	if runID == "" {
 		return invalidRunIDError(runID, gofs.ErrPathEmpty)
-	case strings.Contains(runID, ".."):
-		return invalidRunIDError(runID, gofs.ErrPathParentDir)
-	case strings.ContainsAny(runID, `/\`):
-		return invalidRunIDError(runID, ErrRunIDSeparator)
-	default:
-		if err := gofs.ValidateRelativePath(runID); err != nil {
-			return invalidRunIDError(runID, err)
-		}
-		return nil
 	}
+	// Validate for traversal first so a "../x" ID reports the parent-dir cause,
+	// then independently reject separators — harmless IDs like "release..candidate"
+	// (no "../" segment) stay loadable.
+	if err := gofs.ValidateRelativePath(runID); err != nil {
+		return invalidRunIDError(runID, err)
+	}
+	if strings.ContainsAny(runID, `/\`) {
+		return invalidRunIDError(runID, ErrRunIDSeparator)
+	}
+	return nil
 }
 
 func invalidRunIDError(runID string, cause error) error {

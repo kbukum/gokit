@@ -255,6 +255,24 @@ func TestResolveListOptionsDefaults(t *testing.T) {
 	}
 }
 
+func TestFileStorageAllowsDottedRunID(t *testing.T) {
+	t.Parallel()
+
+	storage := NewFileStorage(t.TempDir())
+	result := makeTestResult("release..candidate", "test", "dataset")
+
+	if _, err := storage.Save(context.Background(), result); err != nil {
+		t.Fatalf("Save(release..candidate) error: %v", err)
+	}
+	loaded, err := storage.Load(context.Background(), "release..candidate")
+	if err != nil {
+		t.Fatalf("Load(release..candidate) error: %v", err)
+	}
+	if loaded.ID != "release..candidate" {
+		t.Fatalf("loaded ID = %q, want %q", loaded.ID, "release..candidate")
+	}
+}
+
 func TestFileStorageRejectsTraversalRunID(t *testing.T) {
 	t.Parallel()
 
