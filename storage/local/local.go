@@ -140,6 +140,34 @@ func (s *Storage) URL(_ context.Context, path string) (string, error) {
 	return u.String(), nil
 }
 
+// Stat returns metadata for a single local file, implementing storage.StatProvider.
+func (s *Storage) Stat(_ context.Context, path string) (storage.FileInfo, error) {
+	fullPath, err := safePath(s.basePath, path)
+	if err != nil {
+		return storage.FileInfo{}, err
+	}
+	info, err := os.Stat(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return storage.FileInfo{}, fmt.Errorf("storage: file not found: %s", path)
+		}
+		return storage.FileInfo{}, fmt.Errorf("storage: stat file: %w", err)
+	}
+	if info.IsDir() {
+		return storage.FileInfo{}, fmt.Errorf("storage: not a file: %s", path)
+	}
+	ct := mime.TypeByExtension(filepath.Ext(fullPath))
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	return storage.FileInfo{
+		Path:         path,
+		Size:         info.Size(),
+		LastModified: info.ModTime(),
+		ContentType:  ct,
+	}, nil
+}
+
 // List returns metadata for all files whose relative path starts with prefix.
 func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, error) {
 	prefixPath, err := safePath(s.basePath, prefix)
@@ -190,4 +218,7 @@ func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, er
 }
 
 // compile-time check
-var _ storage.Storage = (*Storage)(nil)
+var (
+	_ storage.Storage      = (*Storage)(nil)
+	_ storage.StatProvider = (*Storage)(nil)
+)

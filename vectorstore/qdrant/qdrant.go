@@ -27,7 +27,12 @@ func Register(reg *vectorstore.FactoryRegistry, cfg Config) error {
 		if common.Metric != "" {
 			metric = common.Metric
 		}
-		return NewStore(Config{URL: c.URL, APIKey: c.APIKey, Metric: metric, Timeout: c.Timeout})
+		store, err := NewStore(Config{URL: c.URL, APIKey: c.APIKey, Metric: metric, Timeout: c.Timeout})
+		if err != nil {
+			return nil, err
+		}
+		store.limits = common.Limits
+		return store, nil
 	})
 }
 
@@ -36,6 +41,7 @@ type Store struct {
 	baseURL string
 	apiKey  string
 	metric  string
+	limits  vectorstore.VectorStoreLimits
 	client  *http.Client
 }
 
@@ -45,12 +51,15 @@ func NewStore(cfg Config) (*Store, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	return &Store{baseURL: strings.TrimRight(cfg.URL, "/"), apiKey: cfg.APIKey, metric: cfg.Metric, client: &http.Client{Timeout: cfg.Timeout}}, nil
+	return &Store{baseURL: strings.TrimRight(cfg.URL, "/"), apiKey: cfg.APIKey, metric: cfg.Metric, limits: vectorstore.DefaultLimits(), client: &http.Client{Timeout: cfg.Timeout}}, nil
 }
 
 // EnsureCollection ensures a collection exists, creating it if missing.
 func (s *Store) EnsureCollection(ctx context.Context, collection string, dimensions int) error {
 	if err := validateCollection(collection); err != nil {
+		return err
+	}
+	if err := s.limits.ValidateDimensions(dimensions); err != nil {
 		return err
 	}
 	distance, err := qdrantDistance(s.metric)
@@ -86,6 +95,9 @@ func (s *Store) Upsert(ctx context.Context, collection string, point vectorstore
 	if err != nil {
 		return err
 	}
+	if err := point.Payload.Validate(s.limits); err != nil {
+		return err
+	}
 	payloadJSON, err := payloadToJSON(point.Payload)
 	if err != nil {
 		return err
@@ -104,8 +116,11 @@ func (s *Store) Search(ctx context.Context, collection string, query vectorstore
 	if err := validateCollection(collection); err != nil {
 		return nil, err
 	}
-	if query.Limit < 0 {
-		return nil, fmt.Errorf("query limit must be non-negative, got %d", query.Limit)
+	if err := s.limits.ValidateSearchLimit(query.Limit); err != nil {
+		return nil, err
+	}
+	if err := query.Filter.Validate(s.limits); err != nil {
+		return nil, err
 	}
 	filterJSON, err := filterToJSON(query.Filter)
 	if err != nil {

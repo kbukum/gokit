@@ -22,9 +22,10 @@ const (
 
 // Config holds provider-agnostic vectorstore configuration.
 type Config struct {
-	Name     string `mapstructure:"name" json:"name" yaml:"name"`
-	Provider string `mapstructure:"provider" json:"provider" yaml:"provider"`
-	Metric   string `mapstructure:"metric" json:"metric" yaml:"metric"`
+	Name     string            `mapstructure:"name" json:"name" yaml:"name"`
+	Provider string            `mapstructure:"provider" json:"provider" yaml:"provider"`
+	Metric   string            `mapstructure:"metric" json:"metric" yaml:"metric"`
+	Limits   VectorStoreLimits `mapstructure:"limits" json:"limits" yaml:"limits"`
 }
 
 // ApplyDefaults fills zero-valued fields.
@@ -35,6 +36,7 @@ func (c *Config) ApplyDefaults() {
 	if c.Metric == "" {
 		c.Metric = DefaultMetric
 	}
+	c.Limits.ApplyDefaults()
 }
 
 // Validate checks provider-agnostic settings.
@@ -96,30 +98,27 @@ type SearchResult struct {
 	Payload *PointPayload `json:"payload"`
 }
 
+// FilterCondition is a single must-match equality condition on a payload field.
+// Value is a JSON-representable payload value (the documented opaque exception);
+// backends restrict it to supported scalar types where required.
+type FilterCondition struct {
+	Field string
+	Value any
+}
+
 // SearchFilter represents optional filters for search queries.
 type SearchFilter struct {
-	Must []struct {
-		Field string
-		Value any
-	}
+	Must []FilterCondition
 }
 
 // NewSearchFilter creates a new empty SearchFilter.
 func NewSearchFilter() *SearchFilter {
-	return &SearchFilter{
-		Must: []struct {
-			Field string
-			Value any
-		}{},
-	}
+	return &SearchFilter{Must: []FilterCondition{}}
 }
 
 // MustMatch adds a must-match condition to the filter.
 func (f *SearchFilter) MustMatch(field string, value any) *SearchFilter {
-	f.Must = append(f.Must, struct {
-		Field string
-		Value any
-	}{Field: field, Value: value})
+	f.Must = append(f.Must, FilterCondition{Field: field, Value: value})
 	return f
 }
 
