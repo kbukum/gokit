@@ -108,15 +108,9 @@ func (b *Backend) TreeHash(revision, path string) (model.TreeHash, error) {
 
 // FileAt returns the content of a file at the given revision and path.
 func (b *Backend) FileAt(revision, path string) ([]byte, error) {
-	commit, err := b.commitForRef(revision)
+	file, _, err := b.fileAt(revision, path)
 	if err != nil {
 		return nil, err
-	}
-
-	path = strings.ReplaceAll(path, "\\", "/")
-	file, err := commit.File(path)
-	if err != nil {
-		return nil, giterr.RefNotFound(fmt.Sprintf("%s:%s", revision, path))
 	}
 
 	content, err := file.Contents()
@@ -124,6 +118,39 @@ func (b *Backend) FileAt(revision, path string) ([]byte, error) {
 		return nil, giterr.Internal(err)
 	}
 	return []byte(content), nil
+}
+
+// FileAtBounded returns file content only when the blob fits maxBytes.
+func (b *Backend) FileAtBounded(revision, path string, maxBytes int64) ([]byte, error) {
+	if maxBytes < 0 {
+		return nil, giterr.InvalidArg("maxBytes", "maxBytes must be non-negative")
+	}
+	file, normalized, err := b.fileAt(revision, path)
+	if err != nil {
+		return nil, err
+	}
+	if file.Size > maxBytes {
+		return nil, giterr.FileTooLarge(normalized, revision, file.Size, maxBytes)
+	}
+	content, err := file.Contents()
+	if err != nil {
+		return nil, giterr.Internal(err)
+	}
+	return []byte(content), nil
+}
+
+func (b *Backend) fileAt(revision, path string) (*object.File, string, error) {
+	commit, err := b.commitForRef(revision)
+	if err != nil {
+		return nil, "", err
+	}
+
+	path = strings.ReplaceAll(path, "\\", "/")
+	file, err := commit.File(path)
+	if err != nil {
+		return nil, "", giterr.RefNotFound(fmt.Sprintf("%s:%s", revision, path))
+	}
+	return file, path, nil
 }
 
 // ListEntries returns the entries in a tree at the given revision and path.

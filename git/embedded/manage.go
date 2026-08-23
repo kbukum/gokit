@@ -143,6 +143,11 @@ func (b *Backend) CreateTag(name, target, message string) error {
 	return nil
 }
 
+// CreateSignedTag is unsupported by go-git; Repo routes signed tags to the CLI backend.
+func (b *Backend) CreateSignedTag(name, target, message string, opts model.SignOptions) error {
+	return giterr.SigningNotSupported()
+}
+
 // DeleteTag deletes a tag.
 func (b *Backend) DeleteTag(name string) error {
 	if err := b.repo.DeleteTag(name); err != nil {
@@ -216,7 +221,7 @@ func (b *Backend) Fetch(remote string, opts ...model.FetchOption) error {
 		case errors.Is(err, gogit.ErrRemoteNotFound):
 			return giterr.RemoteNotFound(remote)
 		default:
-			return giterr.Network(err)
+			return mapRemoteError(err)
 		}
 	}
 	return nil
@@ -249,7 +254,7 @@ func (b *Backend) Push(remote string, opts ...model.PushOption) error {
 		case errors.Is(err, gogit.ErrRemoteNotFound):
 			return giterr.RemoteNotFound(remote)
 		default:
-			return giterr.Network(err)
+			return mapPushError(err, options.Refspecs)
 		}
 	}
 	return nil

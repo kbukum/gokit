@@ -12,6 +12,8 @@ type RefManager interface {
 	DeleteBranch(name string) error
 	// CreateTag creates a lightweight or annotated tag at target.
 	CreateTag(name, target, message string) error
+	// CreateSignedTag creates a signed annotated tag at target using the git CLI.
+	CreateSignedTag(name, target, message string, opts SignOptions) error
 	// DeleteTag deletes a tag.
 	DeleteTag(name string) error
 }

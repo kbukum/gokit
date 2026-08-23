@@ -2,6 +2,9 @@ package model
 
 import "time"
 
+// DefaultBranch is the short branch name used for newly initialized repositories.
+const DefaultBranch = "main"
+
 // Oid represents a Git object ID (SHA-1 hash).
 type Oid [20]byte
 
@@ -202,6 +205,36 @@ const (
 	RemoteBranches
 	AllBranches
 )
+
+// SignFormat identifies the object-signing backend git should use.
+type SignFormat int
+
+const (
+	SignFormatDefault SignFormat = iota
+	SignFormatOpenPGP
+	SignFormatSSH
+	SignFormatX509
+)
+
+// GitConfig returns the value accepted by git's gpg.format configuration.
+func (f SignFormat) GitConfig() string {
+	switch f {
+	case SignFormatOpenPGP:
+		return "openpgp"
+	case SignFormatSSH:
+		return "ssh"
+	case SignFormatX509:
+		return "x509"
+	default:
+		return ""
+	}
+}
+
+// SignOptions controls signed tag creation.
+type SignOptions struct {
+	Format SignFormat
+	Key    string
+}
 
 // GrepMatch represents a single grep match.
 type GrepMatch struct {

@@ -4,7 +4,8 @@
 //
 //   - [Palette] — a semantic color set (success/error/warn/info/dim/bold) that honors the NO_COLOR standard and TTY detection.
 //   - [Glyphs] — a semantic symbol set (✓ ✗ ⚠ ℹ • → …) with a pure-ASCII fallback for terminals without UTF-8 support.
-//   - [Style] — the two bundled together, so renderers thread one value instead of a separate palette/glyphs pair.
+//   - [Style] — the palette and glyphs bundled together, so renderers thread one value instead of a separate palette/glyphs pair.
+//   - [Theme] — bold headings and right-aligned, Cargo-like action lines keyed by a semantic [Tone], rendered on a resolved [Palette].
 //
 // Both resolve from a single boolean so callers render identically regardless of terminal capability, and both expose an environment-free constructor ([NewPalette], [NewGlyphs]) for deterministic tests alongside the environment-driven resolvers ([ResolveColor], [GlyphsFromEnv]).
 package theme

@@ -18,8 +18,17 @@ func ErrInvalidLineRange(start, end int) *errors.AppError { return giterr.Invali
 func ErrInvalidPath(path string) *errors.AppError         { return giterr.InvalidPath(path) }
 func ErrInvalidConfigKey(key string) *errors.AppError     { return giterr.InvalidConfigKey(key) }
 func ErrSigningNotSupported() *errors.AppError            { return giterr.SigningNotSupported() }
-func ErrNetwork(cause error) *errors.AppError             { return giterr.Network(cause) }
-func ErrInternal(cause error) *errors.AppError            { return giterr.Internal(cause) }
+func ErrSigningKeyMissing(key string) *errors.AppError    { return giterr.SigningKeyMissing(key) }
+func ErrIdentityMissing(key string) *errors.AppError      { return giterr.IdentityMissing(key) }
+func ErrFileTooLarge(path, revision string, size, limit int64) *errors.AppError {
+	return giterr.FileTooLarge(path, revision, size, limit)
+}
+func ErrRemoteAuth(message string) *errors.AppError { return giterr.RemoteAuth(message) }
+func ErrPushRejected(refname, reason string) *errors.AppError {
+	return giterr.PushRejected(refname, reason)
+}
+func ErrNetwork(cause error) *errors.AppError  { return giterr.Network(cause) }
+func ErrInternal(cause error) *errors.AppError { return giterr.Internal(cause) }
 func ErrEmbeddedUnsupported(operation string) *errors.AppError {
 	return giterr.EmbeddedUnsupported(operation)
 }

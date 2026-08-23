@@ -26,7 +26,10 @@ func Init(path string, cfg *model.OpenOptions) (*Backend, error) {
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
-	repo, err := gogit.PlainInit(absPath, false)
+	repo, err := gogit.PlainInitWithOptions(absPath, &gogit.PlainInitOptions{
+		Bare:        false,
+		InitOptions: gogit.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName(model.DefaultBranch)},
+	})
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
@@ -39,7 +42,10 @@ func InitBare(path string, cfg *model.OpenOptions) (*Backend, error) {
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
-	repo, err := gogit.PlainInit(absPath, true)
+	repo, err := gogit.PlainInitWithOptions(absPath, &gogit.PlainInitOptions{
+		Bare:        true,
+		InitOptions: gogit.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName(model.DefaultBranch)},
+	})
 	if err != nil {
 		return nil, giterr.Internal(err)
 	}
@@ -104,7 +110,7 @@ func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
 
 	repo, err := gogit.PlainClone(absPath, false, &gogit.CloneOptions{URL: url, Auth: authMethod})
 	if err != nil {
-		return nil, giterr.Network(err)
+		return nil, mapRemoteError(err)
 	}
 
 	return &Backend{repo: repo, root: absPath, transport: transport}, nil

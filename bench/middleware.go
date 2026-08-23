@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"sync"
 	"time"
+
+	"github.com/kbukum/gokit/util"
 )
 
 // --- Timing Middleware ---
@@ -13,14 +15,36 @@ import (
 // TimingMiddleware wraps an evaluator and records per-sample execution times.
 type TimingMiddleware[L comparable] struct {
 	inner   Evaluator[L]
+	clock   util.Clock
 	mu      sync.Mutex
 	timings map[string]time.Duration // sampleID → duration
 }
 
+// TimingOption configures timing instrumentation.
+type TimingOption[L comparable] func(*timingConfig)
+
+type timingConfig struct {
+	clock util.Clock
+}
+
+// WithTimingClock configures the clock used by timing instrumentation.
+func WithTimingClock[L comparable](clock util.Clock) TimingOption[L] {
+	return func(c *timingConfig) {
+		if clock != nil {
+			c.clock = clock
+		}
+	}
+}
+
 // WithTiming wraps an evaluator with timing instrumentation.
-func WithTiming[L comparable](eval Evaluator[L]) *TimingMiddleware[L] {
+func WithTiming[L comparable](eval Evaluator[L], opts ...TimingOption[L]) *TimingMiddleware[L] {
+	cfg := timingConfig{clock: util.SystemClock{}}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	return &TimingMiddleware[L]{
 		inner:   eval,
+		clock:   cfg.clock,
 		timings: make(map[string]time.Duration),
 	}
 }
@@ -29,9 +53,9 @@ func (m *TimingMiddleware[L]) Name() string                         { return m.i
 func (m *TimingMiddleware[L]) IsAvailable(ctx context.Context) bool { return m.inner.IsAvailable(ctx) }
 
 func (m *TimingMiddleware[L]) Execute(ctx context.Context, input []byte) (Prediction[L], error) {
-	start := time.Now()
+	start := m.clock.Now()
 	pred, err := m.inner.Execute(ctx, input)
-	elapsed := time.Since(start)
+	elapsed := m.clock.Now().Sub(start)
 
 	// Use the prediction's SampleID as key; fall back to input hash.
 	key := pred.SampleID

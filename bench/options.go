@@ -1,6 +1,10 @@
 package bench
 
-import "time"
+import (
+	"time"
+
+	"github.com/kbukum/gokit/util"
+)
 
 // RunMetric computes evaluation scores from predictions vs ground truth.
 // This interface mirrors metric.Metric[L]
@@ -20,6 +24,7 @@ type runConfig[L comparable] struct {
 	concurrency      int
 	timeout          time.Duration
 	tag              string
+	clock            util.Clock
 	targets          map[string]float64
 	failOnRegression bool
 }
@@ -27,6 +32,7 @@ type runConfig[L comparable] struct {
 func defaultConfig[L comparable]() runConfig[L] {
 	return runConfig[L]{
 		concurrency: 1,
+		clock:       util.SystemClock{},
 	}
 }
 
@@ -66,6 +72,15 @@ func WithTimeout[L comparable](d time.Duration) RunOption[L] {
 func WithTag[L comparable](tag string) RunOption[L] {
 	return func(c *runConfig[L]) {
 		c.tag = tag
+	}
+}
+
+// WithClock configures the clock used for run timestamps, IDs, and duration measurement.
+func WithClock[L comparable](clock util.Clock) RunOption[L] {
+	return func(c *runConfig[L]) {
+		if clock != nil {
+			c.clock = clock
+		}
 	}
 }
 

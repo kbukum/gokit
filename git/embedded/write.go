@@ -88,6 +88,9 @@ func (b *Backend) Commit(message string, opts ...model.CommitOption) (model.Oid,
 	if cfg.Sign {
 		return model.Oid{}, giterr.SigningNotSupported()
 	}
+	if err := b.requireCommitIdentity(cfg); err != nil {
+		return model.Oid{}, err
+	}
 
 	wt, err := b.repo.Worktree()
 	if err != nil {
@@ -99,6 +102,23 @@ func (b *Backend) Commit(message string, opts ...model.CommitOption) (model.Oid,
 		return model.Oid{}, giterr.Internal(err)
 	}
 	return oidFromHash(hash), nil
+}
+
+func (b *Backend) requireCommitIdentity(opts model.CommitOptions) error {
+	if opts.Author != nil && opts.Committer != nil {
+		return nil
+	}
+	cfg, err := b.repo.Config()
+	if err != nil {
+		return giterr.Internal(err)
+	}
+	if strings.TrimSpace(cfg.User.Name) == "" {
+		return giterr.IdentityMissing("user.name")
+	}
+	if strings.TrimSpace(cfg.User.Email) == "" {
+		return giterr.IdentityMissing("user.email")
+	}
+	return nil
 }
 
 func stagedEntryState(fs *gogit.FileStatus) (model.EntryState, bool) {

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"github.com/kbukum/gokit/git/auth"
 	cliimpl "github.com/kbukum/gokit/git/cli"
 	"github.com/kbukum/gokit/git/embedded"
 	"github.com/kbukum/gokit/git/internal/model"
@@ -71,6 +72,11 @@ func Open(path string, opts ...Option) (*Repo, error) {
 	return newRepo(backend, cfg), nil
 }
 
+// OpenWithAuth opens a git repository with explicit transport authentication.
+func OpenWithAuth(path string, transport auth.Transport, opts ...Option) (*Repo, error) {
+	return Open(path, append([]Option{WithTransport(transport)}, opts...)...)
+}
+
 // Discover finds a git repository by walking up from the given path.
 func Discover(path string, opts ...Option) (*Repo, error) {
 	cfg := model.ApplyOptions(opts...)
@@ -79,6 +85,11 @@ func Discover(path string, opts ...Option) (*Repo, error) {
 		return nil, err
 	}
 	return newRepo(backend, cfg), nil
+}
+
+// DiscoverWithAuth finds a git repository with explicit transport authentication.
+func DiscoverWithAuth(path string, transport auth.Transport, opts ...Option) (*Repo, error) {
+	return Discover(path, append([]Option{WithTransport(transport)}, opts...)...)
 }
 
 // Clone clones a repository into path.
@@ -136,6 +147,10 @@ func (r *Repo) FileAt(revision, path string) ([]byte, error) {
 	return r.embedded.FileAt(revision, path)
 }
 
+func (r *Repo) FileAtBounded(revision, path string, maxBytes int64) ([]byte, error) {
+	return r.embedded.FileAtBounded(revision, path, maxBytes)
+}
+
 func (r *Repo) ListEntries(revision, path string) ([]TreeEntry, error) {
 	return r.embedded.ListEntries(revision, path)
 }
@@ -160,6 +175,10 @@ func (r *Repo) CreateBranch(name, target string) error { return r.embedded.Creat
 func (r *Repo) DeleteBranch(name string) error         { return r.embedded.DeleteBranch(name) }
 func (r *Repo) CreateTag(name, target, message string) error {
 	return r.embedded.CreateTag(name, target, message)
+}
+
+func (r *Repo) CreateSignedTag(name, target, message string, opts SignOptions) error {
+	return r.cli.CreateSignedTag(name, target, message, opts)
 }
 func (r *Repo) DeleteTag(name string) error    { return r.embedded.DeleteTag(name) }
 func (r *Repo) ListRemotes() ([]Remote, error) { return r.embedded.ListRemotes() }
