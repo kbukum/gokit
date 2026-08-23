@@ -179,7 +179,11 @@ func TestCommit(t *testing.T) {
 }
 
 func TestCommitReportsMissingIdentity(t *testing.T) {
-	t.Parallel()
+	// Isolate ambient git identity (system/global config) so go-git cannot resolve
+	// an author from the developer's or CI's environment; env mutation forbids t.Parallel.
+	empty := t.TempDir()
+	t.Setenv("HOME", empty)
+	t.Setenv("XDG_CONFIG_HOME", empty)
 	dir := t.TempDir()
 	repo, err := embedded.Init(dir, nil)
 	if err != nil {
