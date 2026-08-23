@@ -191,3 +191,16 @@ func TestServiceResolver_WithStrategyOption(t *testing.T) {
 		t.Errorf("got %q, want %q", url, "http://10.0.0.1:80")
 	}
 }
+
+func TestServiceResolver_RejectsLeastConn(t *testing.T) {
+	disc := &stubDiscoveryClient{
+		instances: map[string]ServiceInstance{
+			"svc": {Address: "10.0.0.1", Port: 80},
+		},
+	}
+	resolver := NewServiceResolver(disc, nil, WithStrategy(LeastConn))
+
+	if _, err := resolver.Resolve("svc"); err == nil {
+		t.Fatal("expected error resolving with least_conn on stateless resolver, got nil")
+	}
+}

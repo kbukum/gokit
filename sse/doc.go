@@ -7,13 +7,15 @@
 //
 //   - Hub: Central event router managing client subscriptions
 //   - Broadcaster: Sends best-effort events to connected clients
+//   - Bus: Typed, bounded multi-subscriber bus with event IDs and Last-Event-ID replay
 //   - ServeSSE: HTTP handler for SSE endpoints
 //
 // # Backpressure
 //
 // The hub uses bounded queues for both inbound broadcasts and per-client delivery.
 // Slow clients never block the hub: once a client's queue is full, new frames are dropped
-// and the sender receives false from SendFrame.
+// and the sender receives false from SendFrame. The Bus applies the same bounded,
+// best-effort model to its per-subscriber queues and replay buffer.
 //
 // # Usage
 //

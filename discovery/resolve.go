@@ -34,6 +34,11 @@ func WithScheme(scheme string) ResolverOption {
 }
 
 // WithStrategy sets the load balancing strategy (default: Random).
+//
+// StrategyLeastConn is not supported here: least-connections selection only
+// reflects real load when the caller brackets each request with
+// Client.Acquire/Release, which a stateless resolve-to-URL cannot do. Resolve
+// returns an error rather than silently always picking the first instance.
 func WithStrategy(strategy LoadBalancingStrategy) ResolverOption {
 	return func(r *ServiceResolver) {
 		r.strategy = strategy
@@ -76,6 +81,10 @@ func (r *ServiceResolver) Resolve(serviceName string) (string, error) {
 		if _, ok := r.services[serviceName]; !ok {
 			return "", fmt.Errorf("service %q is not configured as a discoverable dependency", serviceName)
 		}
+	}
+
+	if r.strategy == StrategyLeastConn {
+		return "", fmt.Errorf("service %q: least_conn is not supported by the stateless ServiceResolver; use discovery.Client with Acquire/Release for connection-aware balancing", serviceName)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)

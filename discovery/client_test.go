@@ -577,3 +577,42 @@ func TestClientAdditionalBranches(t *testing.T) {
 		t.Fatal("DiscoverAll required failure succeeded, want error")
 	}
 }
+
+func TestClient_LeastConn_AcquireSteersSelection(t *testing.T) {
+	t.Parallel()
+
+	a := makeInstance("a", "svc", "10.0.0.1", 8080)
+	b := makeInstance("b", "svc", "10.0.0.2", 8080)
+	mock := &mockDiscovery{instances: map[string][]ServiceInstance{"svc": {a, b}}}
+	client := NewClient(mock, ClientConfig{CacheTTL: time.Minute}, testLogger())
+	defer client.Close()
+
+	ctx := context.Background()
+	// With no in-flight requests the first instance (a) is chosen.
+	got, err := client.DiscoverOne(ctx, Query{ServiceName: "svc", Strategy: LeastConn})
+	if err != nil {
+		t.Fatalf("DiscoverOne: %v", err)
+	}
+	if got.ID != "a" {
+		t.Fatalf("initial pick = %q, want a", got.ID)
+	}
+
+	// Load up "a"; least-connections must now prefer "b".
+	client.Acquire("a")
+	client.Acquire("a")
+	got, err = client.DiscoverOne(ctx, Query{ServiceName: "svc", Strategy: LeastConn})
+	if err != nil {
+		t.Fatalf("DiscoverOne: %v", err)
+	}
+	if got.ID != "b" {
+		t.Fatalf("loaded pick = %q, want b", got.ID)
+	}
+
+	// Releasing "a" returns it to parity, and "a" wins ties again.
+	client.Release("a")
+	client.Release("a")
+	got, _ = client.DiscoverOne(ctx, Query{ServiceName: "svc", Strategy: LeastConn})
+	if got.ID != "a" {
+		t.Fatalf("released pick = %q, want a", got.ID)
+	}
+}

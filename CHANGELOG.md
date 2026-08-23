@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — L5 transport rskit parity
+- **discovery**: a canonical `Balancer` set (`RoundRobin`/`Random`/`Weighted`/`LeastConnections`) selected by `NewBalancer(strategy)`; the high-level `Client` now delegates every strategy to it (per-`service:protocol` round-robin state, shared random/weighted/least-connections) instead of carrying its own inline selection. `LeastConnectionsBalancer` tracks in-flight load via `Client.Acquire`/`Release`. Add a `DiscoveryServer` component wrapper that starts the inner component then registers, rolls back (stops inner) on registration failure, and deregisters before stop. `ServiceResolver` rejects `least_conn`, which a stateless resolve-to-URL cannot honor.
+- **grpc**: the lossless `AppErrorToStatus`/`StatusToAppError` mapping pair — the RFC 9457 ProblemDetail is embedded in the status details so a round trip preserves code, message, and extension members — alongside the `ErrorCodeToGRPCCode`/`GRPCCodeToErrorCode` code maps.
+- **sse**: a bounded, typed `Bus[T]` with monotonic event IDs and `Last-Event-ID` replay; live fan-out and the replay buffer are both capacity-bounded and a slow subscriber drops newer events rather than blocking the bus.
+
 ### Added — core patterns/crosscutting rskit parity
 - **component**: `RegistryConfig` with `NewRegistryWithConfig` — bounded-concurrency `StartAllConcurrent` plus per-component start/stop timeouts applied when the caller's context has no deadline. Add the `LazyComponent` factory wrapper that defers construction to first `Start` (rejecting a nil factory or nil-producing factory with a typed error), and `Healthy`/`Degraded`/`Unhealthy` `Health` constructors.
 - **resilience**: `RetryPreset` presets (`RetryFast`/`RetryStandard`/`RetryExternalService`), an elapsed-time retry budget (`RetryConfig.MaxElapsedTime`) enforced at each attempt boundary, and `Validate()` guards (rejecting non-finite floats) for the retry, circuit-breaker, bulkhead, and rate-limiter configs.
