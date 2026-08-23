@@ -3,7 +3,6 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -30,15 +29,21 @@ type ClientConfig struct {
 
 // Client is a high-level discovery client that adds caching, load balancing,
 // and optional static fallback on top of a Discovery backend.
+//
+// Load-balancing strategies are delegated to the canonical Balancer set: a
+// per-service RoundRobinBalancer, plus shared Random, Weighted, and
+// LeastConnections balancers. The client owns one source of selection logic.
 type Client struct {
-	discovery Discovery
-	fallback  map[string][]ServiceInstance
-	cache     *instanceCache
-	cfg       ClientConfig
-	log       *logging.Logger
-	r         *rand.Rand
-	mu        sync.Mutex
-	rrIndex   map[string]int
+	discovery  Discovery
+	fallback   map[string][]ServiceInstance
+	cache      *instanceCache
+	cfg        ClientConfig
+	log        *logging.Logger
+	random     *RandomBalancer
+	weighted   *WeightedBalancer
+	leastConn  *LeastConnectionsBalancer
+	mu         sync.Mutex
+	roundRobin map[string]*RoundRobinBalancer
 }
 
 // NewClient creates a Client that wraps the given Discovery backend.
@@ -74,13 +79,15 @@ func NewClient(disc Discovery, cfg ClientConfig, log *logging.Logger) *Client {
 	}
 
 	return &Client{
-		discovery: disc,
-		fallback:  fallback,
-		cache:     newInstanceCache(ttl),
-		cfg:       cfg,
-		log:       log,
-		r:         rand.New(rand.NewSource(time.Now().UnixNano())),
-		rrIndex:   make(map[string]int),
+		discovery:  disc,
+		fallback:   fallback,
+		cache:      newInstanceCache(ttl),
+		cfg:        cfg,
+		log:        log,
+		random:     NewRandomBalancer(),
+		weighted:   NewWeightedBalancer(),
+		leastConn:  NewLeastConnectionsBalancer(),
+		roundRobin: make(map[string]*RoundRobinBalancer),
 	}
 }
 
@@ -140,28 +147,45 @@ func (c *Client) DiscoverOne(ctx context.Context, query Query) (ServiceInstance,
 		return ServiceInstance{}, ErrNoHealthyEndpoints
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	switch query.Strategy {
 	case StrategyRoundRobin:
 		key := query.ServiceName + ":" + query.Protocol
-		idx := c.rrIndex[key]
-		inst := instances[idx%len(instances)]
-		c.rrIndex[key] = (idx + 1) % len(instances)
+		inst, _ := c.roundRobinFor(key).Pick(instances)
 		return inst, nil
 
 	case StrategyWeighted:
-		return c.selectWeighted(instances), nil
+		inst, _ := c.weighted.Pick(instances)
+		return inst, nil
+
+	case StrategyLeastConn:
+		// Pick the instance with the fewest in-flight requests. Callers bracket
+		// the returned instance with Acquire/Release to keep the counts live.
+		inst, _ := c.leastConn.Pick(instances)
+		return inst, nil
 
 	case StrategyRandom:
 		// Explicitly handle random strategy (same as default)
-		return instances[c.r.Intn(len(instances))], nil
+		inst, _ := c.random.Pick(instances)
+		return inst, nil
 
 	default:
 		// Default to random selection for any unrecognized strategy
-		return instances[c.r.Intn(len(instances))], nil
+		inst, _ := c.random.Pick(instances)
+		return inst, nil
 	}
+}
+
+// roundRobinFor returns the per-key round-robin balancer, creating it on first
+// use. Each service:protocol key keeps its own independent rotation.
+func (c *Client) roundRobinFor(key string) *RoundRobinBalancer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	b, ok := c.roundRobin[key]
+	if !ok {
+		b = NewRoundRobinBalancer()
+		c.roundRobin[key] = b
+	}
+	return b
 }
 
 // DiscoverAll returns instances for all configured services.
@@ -185,38 +209,23 @@ func (c *Client) Invalidate(serviceName string) {
 	c.cache.invalidate(serviceName)
 }
 
+// Acquire marks an instance as having one more in-flight request, informing the
+// least-connections strategy. Pair each Acquire with a Release when the request
+// completes. Safe to call regardless of the strategy in use.
+func (c *Client) Acquire(instanceID string) {
+	c.leastConn.Acquire(instanceID)
+}
+
+// Release marks an in-flight request against an instance as complete, informing
+// the least-connections strategy.
+func (c *Client) Release(instanceID string) {
+	c.leastConn.Release(instanceID)
+}
+
 // Close releases resources.
 func (c *Client) Close() error {
 	c.cache.clear()
 	return c.discovery.Close()
-}
-
-func (c *Client) selectWeighted(instances []ServiceInstance) ServiceInstance {
-	totalWeight := 0
-	for i := range instances {
-		w := instances[i].Weight
-		if w <= 0 {
-			w = 1
-		}
-		totalWeight += w
-	}
-
-	if totalWeight == 0 {
-		return instances[c.r.Intn(len(instances))]
-	}
-
-	r := c.r.Intn(totalWeight)
-	for i := range instances {
-		w := instances[i].Weight
-		if w <= 0 {
-			w = 1
-		}
-		r -= w
-		if r < 0 {
-			return instances[i]
-		}
-	}
-	return instances[0]
 }
 
 func filterByProtocol(instances []ServiceInstance, protocol string) []ServiceInstance {
