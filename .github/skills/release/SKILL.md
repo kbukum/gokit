@@ -54,9 +54,40 @@ Use `docs/policy/SEMVER.md`. While in `0.x`: a breaking change in the `[Unreleas
 # files Toven tags — these are the exact proxy paths, and each caches versions forever:
 mods=$(find . -name go.mod -not -path '*/vendor/*' \
   -exec sed -n 's/^module //p' {} \;)
-# Highest version published ANYWHERE — a sub-module may sit ahead of the root, so the
-# max must span every path, not just github.com/kbukum/gokit:
-for mod in $mods; do curl -s "https://proxy.golang.org/${mod}/@v/list"; done | sort -V | tail -5
+
+# Highest version published ANYWHERE — a sub-module may sit ahead of the root, so the max
+# must span every path. `sort -V` is NOT SemVer-aware (it orders v1.0.0-alpha *after*
+# v1.0.0, the reverse of SemVer), so compare with golang.org/x/mod/semver instead, and fail
+# closed (curl -fsS) on any proxy error rather than mistaking it for "nothing published":
+tmp=$(mktemp -d) && cat > "$tmp/main.go" <<'GO'
+package main
+
+import ("bufio"; "fmt"; "os"; "golang.org/x/mod/semver")
+
+func main() {
+	max := ""
+	sc := bufio.NewScanner(os.Stdin)
+	for sc.Scan() {
+		if v := sc.Text(); semver.IsValid(v) && (max == "" || semver.Compare(v, max) > 0) {
+			max = v
+		}
+	}
+	if max == "" {
+		fmt.Fprintln(os.Stderr, "no valid versions found on proxy")
+		os.Exit(1)
+	}
+	fmt.Println(max)
+}
+GO
+( cd "$tmp" && go mod init semvermax >/dev/null && go get golang.org/x/mod >/dev/null 2>&1 )
+highest=$(
+  for mod in $mods; do
+    curl -fsS "https://proxy.golang.org/${mod}/@v/list" \
+      || { echo "proxy fetch failed: $mod" >&2; exit 1; }
+  done | ( cd "$tmp" && go run . )
+) || exit 1
+echo "highest published across all modules: $highest"
+
 # Your target vX.Y.Z must also return 404 (not yet published) for EVERY module path:
 for mod in $mods; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "https://proxy.golang.org/${mod}/@v/vX.Y.Z.info")
@@ -64,7 +95,7 @@ for mod in $mods; do
 done
 ```
 
-The next version must be **strictly greater** than the highest version published across *every* module path (not just the root), and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
+The next version must be **strictly greater** (per `semver.Compare`) than `$highest` — and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
 
 **First-release caveat:** if gokit genuinely has no reachable tag *and* nothing on the proxy, `release status`/`plan` fail closed as expected. `--set-version` is a **`release tag`/`release publish` flag only** (not `release bump`), so supply the explicit first version to the Phase 2 mutating cut — `toven release publish --set-version go:gokit=X.Y.Z --yes` (or `toven release tag --set-version go:gokit=X.Y.Z --yes` to tag without the hosted Release). Toven never fabricates a synthetic `0.0.0` baseline. See `docs/VERSIONING.md`.
 

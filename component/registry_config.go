@@ -3,7 +3,8 @@ package component
 import "time"
 
 // DefaultStartTimeout bounds a single component's Start call when the caller-supplied
-// context has no deadline, so one stuck Start cannot block the boot sequence forever.
+// context has no deadline. The bound is cooperative — Start must return when its context is
+// canceled (see Component.Start); it caps a well-behaved Start, not one that ignores ctx.
 const DefaultStartTimeout = 30 * time.Second
 
 // RegistryConfig configures a component Registry: how many components may start in

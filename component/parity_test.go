@@ -224,6 +224,16 @@ func TestLazyComponentNilFactoryReturnsError(t *testing.T) {
 	if err := nilProduct.Start(context.Background()); err == nil {
 		t.Fatal("Start with factory returning nil = nil error, want rejection")
 	}
+	// A typed nil (a nil *mockComponent boxed in the Component interface) is non-nil under a
+	// plain == nil check; the reflection guard must still reject it rather than dispatch
+	// Start through the nil pointer and panic.
+	typedNil := NewLazyComponent("z", func() Component {
+		var c *mockComponent
+		return c
+	})
+	if err := typedNil.Start(context.Background()); err == nil {
+		t.Fatal("Start with factory returning a typed-nil Component = nil error, want rejection")
+	}
 	// Neither failure leaves a delegate, so Stop and Health stay safe no-ops.
 	if err := nilProduct.Stop(context.Background()); err != nil {
 		t.Fatalf("Stop after failed Start = %v, want nil", err)

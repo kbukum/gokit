@@ -97,9 +97,12 @@ func (r *Registry) State(name string) (State, bool) {
 // so readers (Get / All / HealthAll)
 // and concurrent Register calls are not blocked for the duration of the boot sequence.
 //
-// Each Component.Start is bounded by RegistryConfig.StartTimeout when the supplied
-// context carries no deadline, so one stuck component cannot block the boot sequence
-// forever; pass a context with an explicit deadline to override that bound.
+// Each Component.Start is given a context bounded by RegistryConfig.StartTimeout when the
+// supplied context carries no deadline; pass a context with an explicit deadline to override
+// that bound. The bound is cooperative: Start must observe its context and return when it is
+// canceled (see Component.Start). Go cannot interrupt a synchronous call that ignores its
+// context, so a component that never returns on cancellation can still stall the boot
+// sequence — the timeout bounds well-behaved components, it is not a hard kill.
 func (r *Registry) StartAll(ctx context.Context) error {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -276,12 +279,37 @@ launch:
 			break launch
 		}
 
+		// The slot send and runCtx.Done() can both be ready once a sibling has failed, and
+		// select may pick the send. Re-check cancellation here so a failed sibling reliably
+		// stops the loop instead of dispatching another Start.
+		if runCtx.Err() != nil {
+			<-sem
+			r.mu.Lock()
+			for _, e := range pending[i:] {
+				if e.state == StateStarting {
+					e.state = StateFailed
+				}
+			}
+			r.mu.Unlock()
+			setFirstErr(runCtx.Err())
+			break launch
+		}
+
 		wg.Add(1)
 		go func(entry *componentEntry) {
 			defer wg.Done()
 			defer func() { <-sem }()
 
 			name := entry.component.Name()
+			// Guard dispatch too: the slot may have been acquired just as a sibling failed,
+			// so skip the actual Start once runCtx is canceled.
+			if runCtx.Err() != nil {
+				r.mu.Lock()
+				entry.state = StateFailed
+				r.mu.Unlock()
+				setFirstErr(runCtx.Err())
+				return
+			}
 			logging.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
 			if err := r.startOne(runCtx, entry); err != nil {
 				r.mu.Lock()
