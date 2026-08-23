@@ -5,14 +5,16 @@ import (
 	"strings"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport"
 
 	giterr "github.com/kbukum/gokit/git/internal/giterr"
+	"github.com/kbukum/gokit/git/internal/redact"
 )
 
 func mapPushError(err error, refspecs []string) error {
-	message := redactURLCredentials(err.Error())
+	message := redact.URLCredentials(err.Error())
 	switch {
-	case isRemoteAuthError(message):
+	case isRemoteAuthError(err, message):
 		return giterr.RemoteAuth(message)
 	case isPushRejectedError(err, message):
 		return giterr.PushRejected(destinationRefs(refspecs), message)
@@ -22,8 +24,8 @@ func mapPushError(err error, refspecs []string) error {
 }
 
 func mapRemoteError(err error) error {
-	message := redactURLCredentials(err.Error())
-	if isRemoteAuthError(message) {
+	message := redact.URLCredentials(err.Error())
+	if isRemoteAuthError(err, message) {
 		return giterr.RemoteAuth(message)
 	}
 	return giterr.Network(errors.New(message))
@@ -39,14 +41,17 @@ func isPushRejectedError(err error, message string) bool {
 		strings.Contains(lower, "pre-receive hook declined")
 }
 
-func isRemoteAuthError(message string) bool {
+func isRemoteAuthError(err error, message string) bool {
+	if errors.Is(err, transport.ErrAuthenticationRequired) || errors.Is(err, transport.ErrAuthorizationFailed) {
+		return true
+	}
 	lower := strings.ToLower(message)
 	return strings.Contains(lower, "authentication") ||
 		strings.Contains(lower, "authorization") ||
 		strings.Contains(lower, "permission denied") ||
 		strings.Contains(lower, "access denied") ||
-		strings.Contains(lower, "401") ||
-		strings.Contains(lower, "403")
+		strings.Contains(lower, "401 unauthorized") ||
+		strings.Contains(lower, "403 forbidden")
 }
 
 func destinationRefs(refspecs []string) string {
@@ -63,33 +68,4 @@ func destinationRefs(refspecs []string) string {
 		}
 	}
 	return strings.Join(refs, ", ")
-}
-
-func redactURLCredentials(message string) string {
-	var out strings.Builder
-	rest := message
-	for {
-		idx := strings.Index(rest, "://")
-		if idx < 0 {
-			out.WriteString(rest)
-			return out.String()
-		}
-		afterScheme := idx + len("://")
-		out.WriteString(rest[:afterScheme])
-		tail := rest[afterScheme:]
-		authorityEnd := strings.IndexFunc(tail, func(r rune) bool {
-			return r == '/' || r == '?' || r == '#' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
-		})
-		if authorityEnd < 0 {
-			authorityEnd = len(tail)
-		}
-		authority := tail[:authorityEnd]
-		if at := strings.LastIndex(authority, "@"); at >= 0 {
-			out.WriteString("***@")
-			out.WriteString(authority[at+1:])
-		} else {
-			out.WriteString(authority)
-		}
-		rest = tail[authorityEnd:]
-	}
 }
