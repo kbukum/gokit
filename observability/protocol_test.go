@@ -11,14 +11,24 @@ func TestParseOTLPProtocol(t *testing.T) {
 		"http":          OTLPHTTP,
 		"http/protobuf": OTLPHTTP,
 		"":              OTLPHTTP,
-		"nonsense":      OTLPHTTP,
 	}
 	for in, want := range cases {
-		if got := ParseOTLPProtocol(in); got != want {
+		got, err := ParseOTLPProtocol(in)
+		if err != nil {
+			t.Errorf("ParseOTLPProtocol(%q) unexpected error: %v", in, err)
+		}
+		if got != want {
 			t.Errorf("ParseOTLPProtocol(%q) = %v, want %v", in, got, want)
 		}
 	}
+	// A typo must fail closed rather than silently selecting HTTP.
+	if _, err := ParseOTLPProtocol("grcp"); err == nil {
+		t.Fatal("ParseOTLPProtocol(grcp) = nil error, want rejection")
+	}
 	if OTLPGRPC.String() != "grpc" || OTLPHTTP.String() != "http" {
 		t.Fatalf("unexpected String(): %q %q", OTLPGRPC.String(), OTLPHTTP.String())
+	}
+	if err := OTLPProtocol(99).Validate(); err == nil {
+		t.Fatal("Validate(99) = nil, want rejection of unknown enum")
 	}
 }

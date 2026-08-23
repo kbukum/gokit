@@ -103,6 +103,9 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 
 // newTraceExporter builds the OTLP trace exporter for the configured protocol.
 func newTraceExporter(ctx context.Context, config *TracerConfig) (sdktrace.SpanExporter, error) {
+	if err := config.Protocol.Validate(); err != nil {
+		return nil, err
+	}
 	if config.Protocol == OTLPGRPC {
 		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(config.Endpoint)}
 		if config.Insecure {

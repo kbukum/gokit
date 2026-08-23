@@ -88,6 +88,9 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 
 // newMetricExporter builds the OTLP metric exporter for the configured protocol.
 func newMetricExporter(ctx context.Context, config *MeterConfig) (sdkmetric.Exporter, error) {
+	if err := config.Protocol.Validate(); err != nil {
+		return nil, err
+	}
 	if config.Protocol == OTLPGRPC {
 		opts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(config.Endpoint)}
 		if config.Insecure {
