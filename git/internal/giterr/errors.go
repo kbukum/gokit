@@ -6,6 +6,20 @@ import (
 	"github.com/kbukum/gokit/errors"
 )
 
+const (
+	DetailGitError = "gokit_git_error"
+
+	DetailFileTooLarge       = "file_too_large"
+	DetailSigningKeyMissing  = "signing_key_missing"
+	DetailIdentityMissing    = "identity_missing"
+	DetailRemoteAuth         = "remote_auth"
+	DetailPushRejected       = "push_rejected"
+	signingKeyMissingHint    = "Configure a signing key with git config user.signingkey <key>, then retry the signed tag."
+	identityMissingHint      = "Set it with git config user.name/user.email"
+	pushRejectedHint         = "Integrate remote changes, or land via PR and push tags only."
+	remoteAuthenticationHint = "Check remote credentials and token/key push permissions."
+)
+
 func RepoNotFound(path string) *errors.AppError   { return errors.NotFound("repository", path) }
 func RefNotFound(refname string) *errors.AppError { return errors.NotFound("ref", refname) }
 func RemoteNotFound(name string) *errors.AppError { return errors.NotFound("remote", name) }
@@ -39,7 +53,48 @@ func InvalidArg(field, detail string) *errors.AppError {
 }
 
 func SigningNotSupported() *errors.AppError {
-	return errors.InvalidInput("sign", "commit signing is not supported by the go-git backend")
+	return errors.InvalidInput("sign", "signing is not supported by the go-git backend")
+}
+
+func SigningKeyMissing(key string) *errors.AppError {
+	return errors.InvalidInput("sign", key+" is not configured").WithDetails(map[string]any{
+		DetailGitError: DetailSigningKeyMissing,
+		"key":          key,
+		"hint":         signingKeyMissingHint,
+	})
+}
+
+func IdentityMissing(key string) *errors.AppError {
+	return errors.InvalidInput("git identity", key+" is not configured").WithDetails(map[string]any{
+		DetailGitError: DetailIdentityMissing,
+		"key":          key,
+		"hint":         identityMissingHint,
+	})
+}
+
+func FileTooLarge(path, revision string, size, limit int64) *errors.AppError {
+	return errors.InvalidInput("path", fmt.Sprintf("file %q at %q is %d bytes, exceeding limit %d bytes", path, revision, size, limit)).WithDetails(map[string]any{
+		DetailGitError: DetailFileTooLarge,
+		"path":         path,
+		"revision":     revision,
+		"size":         size,
+		"max":          limit,
+	})
+}
+
+func RemoteAuth(message string) *errors.AppError {
+	return errors.Unauthorized("git remote authentication failed: " + message).WithDetails(map[string]any{
+		DetailGitError: DetailRemoteAuth,
+		"hint":         remoteAuthenticationHint,
+	})
+}
+
+func PushRejected(refname, reason string) *errors.AppError {
+	return errors.Conflict("remote rejected push to " + refname + ": " + reason).WithDetails(map[string]any{
+		DetailGitError: DetailPushRejected,
+		"refname":      refname,
+		"hint":         pushRejectedHint,
+	})
 }
 func Network(cause error) *errors.AppError  { return errors.ExternalServiceError("git", cause) }
 func Internal(cause error) *errors.AppError { return errors.Internal(cause) }

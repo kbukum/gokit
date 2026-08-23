@@ -1,6 +1,7 @@
 package embedded
 
 import (
+	"errors"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -96,6 +97,9 @@ func (b *Backend) Commit(message string, opts ...model.CommitOption) (model.Oid,
 	commitOpts := gogitCommitOptions(cfg)
 	hash, err := wt.Commit(message, &commitOpts)
 	if err != nil {
+		if errors.Is(err, gogit.ErrMissingAuthor) {
+			return model.Oid{}, giterr.IdentityMissing("user.name/user.email")
+		}
 		return model.Oid{}, giterr.Internal(err)
 	}
 	return oidFromHash(hash), nil

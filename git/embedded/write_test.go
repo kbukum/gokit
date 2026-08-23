@@ -1,9 +1,11 @@
 package embedded_test
 
 import (
+	stderrors "errors"
 	"testing"
 	"time"
 
+	goerrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/git"
 	"github.com/kbukum/gokit/git/embedded"
 )
@@ -173,6 +175,35 @@ func TestCommit(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCommitReportsMissingIdentity(t *testing.T) {
+	// Isolate ambient git identity (system/global config) so go-git cannot resolve
+	// an author from the developer's or CI's environment; env mutation forbids t.Parallel.
+	empty := t.TempDir()
+	t.Setenv("HOME", empty)
+	t.Setenv("XDG_CONFIG_HOME", empty)
+	dir := t.TempDir()
+	repo, err := embedded.Init(dir, nil)
+	if err != nil {
+		t.Fatalf("Init() error: %v", err)
+	}
+	writeFile(t, dir, "missing-identity.txt", "content")
+	if err := repo.Stage("missing-identity.txt"); err != nil {
+		t.Fatalf("Stage() error: %v", err)
+	}
+
+	_, err = repo.Commit("missing identity")
+	if err == nil {
+		t.Fatal("Commit() expected missing identity error")
+	}
+	var appErr *goerrors.AppError
+	if !stderrors.As(err, &appErr) {
+		t.Fatalf("error = %T %v, want AppError", err, err)
+	}
+	if appErr.Details["gokit_git_error"] != "identity_missing" {
+		t.Fatalf("gokit_git_error = %#v, want identity_missing", appErr.Details["gokit_git_error"])
 	}
 }
 

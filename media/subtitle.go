@@ -26,14 +26,20 @@ const maxCueFieldDigits = 10
 type SubtitleEntry struct {
 	Range TimeRange `json:"range"`
 	Text  string    `json:"text"`
+	// Style, when non-nil, overrides the track's default style for this cue.
+	Style *SubtitleStyle `json:"style,omitempty"`
 }
 
 // SubtitleTrack is an ordered collection of subtitle cues.
-// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns — parsing,
-// serialization, and time math — without renderer-specific styling.
+// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns —
+// parsing, serialization, and time math — plus a styling vocabulary
+// ([SubtitleStyle] via [SubtitleTrack.DefaultStyle] and [SubtitleEntry.Style]),
+// but no renderer: it does not rasterize or burn cues into frames.
 type SubtitleTrack struct {
 	Entries  []SubtitleEntry `json:"entries"`
 	Language string          `json:"language,omitempty"` // BCP 47 tag, optional
+	// DefaultStyle, when non-nil, applies to every cue that has no [SubtitleEntry.Style].
+	DefaultStyle *SubtitleStyle `json:"default_style,omitempty"`
 }
 
 // Add returns a copy of the track with the cue appended; the receiver is unchanged,
@@ -142,7 +148,7 @@ func (t *SubtitleTrack) Shift(offset time.Duration) {
 
 // InRange returns a new track containing only the cues overlapping r.
 func (t SubtitleTrack) InRange(r TimeRange) SubtitleTrack {
-	out := SubtitleTrack{Language: t.Language}
+	out := SubtitleTrack{Language: t.Language, DefaultStyle: t.DefaultStyle}
 	for _, e := range t.Entries {
 		if e.Range.Overlaps(r) {
 			out.Entries = append(out.Entries, e)

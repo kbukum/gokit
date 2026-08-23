@@ -16,6 +16,8 @@ type TreeReader interface {
 	TreeHash(revision, path string) (TreeHash, error)
 	// FileAt returns the content of a file at the given revision and path.
 	FileAt(revision, path string) ([]byte, error)
+	// FileAtBounded returns file content only when the blob fits maxBytes.
+	FileAtBounded(revision, path string, maxBytes int64) ([]byte, error)
 	// ListEntries returns the entries in a tree at the given revision and path.
 	ListEntries(revision, path string) ([]TreeEntry, error)
 }

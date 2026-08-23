@@ -3,14 +3,21 @@ package bench
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	apperrors "github.com/kbukum/gokit/errors"
+	gofs "github.com/kbukum/gokit/fs"
 	"github.com/kbukum/gokit/util"
 )
+
+// ErrRunIDSeparator means a run ID contains a path separator and cannot be safely mapped to one file.
+var ErrRunIDSeparator = errors.New("run ID must not contain path separators")
 
 // RunStorage persists benchmark results.
 type RunStorage interface {
@@ -84,7 +91,10 @@ func (fs *FileStorage) Save(_ context.Context, result *RunResult) (string, error
 	if err != nil {
 		return "", fmt.Errorf("bench: marshal result: %w", err)
 	}
-	path := filepath.Join(fs.dir, result.ID+".json")
+	path, err := fs.runPath(result.ID)
+	if err != nil {
+		return "", err
+	}
 	if err := util.WriteFile(path, data); err != nil {
 		return "", fmt.Errorf("bench: write result file: %w", err)
 	}
@@ -93,7 +103,10 @@ func (fs *FileStorage) Save(_ context.Context, result *RunResult) (string, error
 
 // Load reads a RunResult from disk by run ID.
 func (fs *FileStorage) Load(_ context.Context, runID string) (*RunResult, error) {
-	path := filepath.Join(fs.dir, runID+".json")
+	path, err := fs.runPath(runID)
+	if err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("bench: read result %s: %w", runID, err)
@@ -103,6 +116,38 @@ func (fs *FileStorage) Load(_ context.Context, runID string) (*RunResult, error)
 		return nil, fmt.Errorf("bench: parse result %s: %w", runID, err)
 	}
 	return &result, nil
+}
+
+func (fs *FileStorage) runPath(runID string) (string, error) {
+	if err := validateRunID(runID); err != nil {
+		return "", err
+	}
+	path, err := gofs.SafeJoin(fs.dir, runID+".json")
+	if err != nil {
+		return "", invalidRunIDError(runID, err)
+	}
+	return path, nil
+}
+
+func validateRunID(runID string) error {
+	if runID == "" {
+		return invalidRunIDError(runID, gofs.ErrPathEmpty)
+	}
+	// Validate for traversal first so a "../x" ID reports the parent-dir cause,
+	// then independently reject separators — harmless IDs like "release..candidate"
+	// (no "../" segment) stay loadable.
+	if err := gofs.ValidateRelativePath(runID); err != nil {
+		return invalidRunIDError(runID, err)
+	}
+	if strings.ContainsAny(runID, `/\`) {
+		return invalidRunIDError(runID, ErrRunIDSeparator)
+	}
+	return nil
+}
+
+func invalidRunIDError(runID string, cause error) error {
+	return apperrors.New(apperrors.ErrCodeInvalidInput,
+		fmt.Sprintf("invalid benchmark run ID %q", runID), http.StatusBadRequest).WithCause(cause)
 }
 
 // Latest returns the most recent RunResult by timestamp.

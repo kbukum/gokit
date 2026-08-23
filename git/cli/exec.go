@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	giterr "github.com/kbukum/gokit/git/internal/giterr"
+	"github.com/kbukum/gokit/git/internal/redact"
 	"github.com/kbukum/gokit/process"
 )
 
@@ -38,7 +39,7 @@ func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Resul
 }
 
 func (b *Backend) commandError(args []string, result *process.Result) error {
-	msg := redactCredentials(strings.TrimSpace(string(result.Stderr)))
+	msg := redact.URLCredentials(strings.TrimSpace(string(result.Stderr)))
 	if msg == "" {
 		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
 	}
@@ -58,7 +59,7 @@ var sensitiveArgKeys = []string{"extraheader", "authorization", "password", "tok
 // and the value of any `key=value` argument whose key names a secret, so raw extra
 // args do not leak auth headers or tokens into error messages.
 func redactArg(arg string) string {
-	arg = redactCredentials(arg)
+	arg = redact.URLCredentials(arg)
 	if key, value, ok := strings.Cut(arg, "="); ok && value != "" {
 		lower := strings.ToLower(key)
 		for _, name := range sensitiveArgKeys {
@@ -68,34 +69,4 @@ func redactArg(arg string) string {
 		}
 	}
 	return arg
-}
-
-// redactCredentials masks credentials in URLs to prevent leakage in error messages and logs.
-// Handles all http(s)://user:pass@host occurrences.
-func redactCredentials(s string) string {
-	result := s
-	for _, scheme := range []string{"https://", "http://"} {
-		var offset int
-		for {
-			idx := strings.Index(result[offset:], scheme)
-			if idx < 0 {
-				break
-			}
-			idx += offset
-			rest := result[idx+len(scheme):]
-			atIdx := strings.Index(rest, "@")
-			if atIdx < 0 {
-				break
-			}
-			userinfo := rest[:atIdx]
-			if user, _, ok := strings.Cut(userinfo, ":"); ok {
-				redacted := scheme + user + ":***@"
-				result = result[:idx] + redacted + rest[atIdx+1:]
-				offset = idx + len(redacted)
-			} else {
-				offset = idx + len(scheme)
-			}
-		}
-	}
-	return result
 }

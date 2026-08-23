@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/util"
 )
@@ -249,5 +250,67 @@ func TestBenchRunnerWithStorage(t *testing.T) {
 	}
 	if loaded.ID != result.ID {
 		t.Errorf("loaded ID = %q, want %q", loaded.ID, result.ID)
+	}
+}
+
+func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
+	t.Parallel()
+
+	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
+	loader := setupTestDataset(t)
+	runner := NewBenchRunner(
+		WithClock[string](clock),
+		WithTag[string]("deterministic"),
+	)
+	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
+		return Prediction[string]{Label: "positive", Score: 0.5}, nil
+	}))
+
+	result, err := runner.Run(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if result.ID != "deterministic_20260823-043054" {
+		t.Errorf("ID = %q, want %q", result.ID, "deterministic_20260823-043054")
+	}
+	if !result.Timestamp.Equal(clock.Now()) {
+		t.Errorf("Timestamp = %s, want %s", result.Timestamp, clock.Now())
+	}
+	if result.Duration != 0 {
+		t.Errorf("Duration = %s, want 0", result.Duration)
+	}
+	for _, sample := range result.Samples {
+		if sample.Duration != 0 {
+			t.Errorf("sample %s Duration = %s, want 0", sample.ID, sample.Duration)
+		}
+	}
+	for name, branch := range result.Branches {
+		if branch.Duration != 0 {
+			t.Errorf("branch %s Duration = %s, want 0", name, branch.Duration)
+		}
+	}
+}
+
+func TestBenchRunnerUntaggedRunIsDeterministicWithInjectedSources(t *testing.T) {
+	t.Parallel()
+
+	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
+	loader := setupTestDataset(t)
+	runner := NewBenchRunner(
+		WithClock[string](clock),
+		WithIDSuffix[string](func() string { return "fixedsfx" }),
+	)
+	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
+		return Prediction[string]{Label: "positive", Score: 0.5}, nil
+	}))
+
+	result, err := runner.Run(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if result.ID != "run_20260823-043054_fixedsfx" {
+		t.Errorf("ID = %q, want %q", result.ID, "run_20260823-043054_fixedsfx")
 	}
 }

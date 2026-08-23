@@ -2,8 +2,12 @@ package bench
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
+
+	apperrors "github.com/kbukum/gokit/errors"
+	gofs "github.com/kbukum/gokit/fs"
 )
 
 func makeTestResult(id, tag, dataset string) *RunResult {
@@ -248,5 +252,57 @@ func TestResolveListOptionsDefaults(t *testing.T) {
 	params := ResolveListOptions()
 	if params.Limit != 100 {
 		t.Errorf("default Limit = %d, want 100", params.Limit)
+	}
+}
+
+func TestFileStorageAllowsDottedRunID(t *testing.T) {
+	t.Parallel()
+
+	storage := NewFileStorage(t.TempDir())
+	result := makeTestResult("release..candidate", "test", "dataset")
+
+	if _, err := storage.Save(context.Background(), result); err != nil {
+		t.Fatalf("Save(release..candidate) error: %v", err)
+	}
+	loaded, err := storage.Load(context.Background(), "release..candidate")
+	if err != nil {
+		t.Fatalf("Load(release..candidate) error: %v", err)
+	}
+	if loaded.ID != "release..candidate" {
+		t.Fatalf("loaded ID = %q, want %q", loaded.ID, "release..candidate")
+	}
+}
+
+func TestFileStorageRejectsTraversalRunID(t *testing.T) {
+	t.Parallel()
+
+	storage := NewFileStorage(t.TempDir())
+	result := makeTestResult("../evil", "test", "dataset")
+
+	_, err := storage.Save(context.Background(), result)
+	if err == nil {
+		t.Fatal("expected error for traversal run ID")
+	}
+	var appErr *apperrors.AppError
+	if !errors.As(err, &appErr) || appErr.Code != apperrors.ErrCodeInvalidInput {
+		t.Fatalf("expected InvalidInput AppError, got %T: %v", err, err)
+	}
+	if !errors.Is(err, gofs.ErrPathParentDir) {
+		t.Fatalf("expected fs.ErrPathParentDir cause, got %v", err)
+	}
+}
+
+func TestFileStorageRejectsSeparatorRunID(t *testing.T) {
+	t.Parallel()
+
+	storage := NewFileStorage(t.TempDir())
+
+	_, err := storage.Load(context.Background(), "a/b")
+	if err == nil {
+		t.Fatal("expected error for run ID with separator")
+	}
+	var appErr *apperrors.AppError
+	if !errors.As(err, &appErr) || appErr.Code != apperrors.ErrCodeInvalidInput {
+		t.Fatalf("expected InvalidInput AppError, got %T: %v", err, err)
 	}
 }

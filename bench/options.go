@@ -1,6 +1,10 @@
 package bench
 
-import "time"
+import (
+	"time"
+
+	"github.com/kbukum/gokit/util"
+)
 
 // RunMetric computes evaluation scores from predictions vs ground truth.
 // This interface mirrors metric.Metric[L]
@@ -20,6 +24,8 @@ type runConfig[L comparable] struct {
 	concurrency      int
 	timeout          time.Duration
 	tag              string
+	clock            util.Clock
+	idSuffix         func() string
 	targets          map[string]float64
 	failOnRegression bool
 }
@@ -27,6 +33,8 @@ type runConfig[L comparable] struct {
 func defaultConfig[L comparable]() runConfig[L] {
 	return runConfig[L]{
 		concurrency: 1,
+		clock:       util.SystemClock{},
+		idSuffix:    randomIDSuffix,
 	}
 }
 
@@ -66,6 +74,26 @@ func WithTimeout[L comparable](d time.Duration) RunOption[L] {
 func WithTag[L comparable](tag string) RunOption[L] {
 	return func(c *runConfig[L]) {
 		c.tag = tag
+	}
+}
+
+// WithClock configures the clock used for run timestamps, IDs, and duration measurement.
+func WithClock[L comparable](clock util.Clock) RunOption[L] {
+	return func(c *runConfig[L]) {
+		if clock != nil {
+			c.clock = clock
+		}
+	}
+}
+
+// WithIDSuffix injects the suffix appended to untagged run IDs, making default
+// (untagged) runs reproducible under an injected clock. The production default is
+// a random UUID fragment; a nil source is ignored.
+func WithIDSuffix[L comparable](suffix func() string) RunOption[L] {
+	return func(c *runConfig[L]) {
+		if suffix != nil {
+			c.idSuffix = suffix
+		}
 	}
 }
 

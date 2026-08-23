@@ -20,11 +20,17 @@ type (
 	Remote       = model.Remote
 	BlameLine    = model.BlameLine
 	BranchFilter = model.BranchFilter
+	SignFormat   = model.SignFormat
+	SignOptions  = model.SignOptions
 	GrepMatch    = model.GrepMatch
 	ResetMode    = model.ResetMode
 	StashEntry   = model.StashEntry
 	MergeResult  = model.MergeResult
 	RebaseResult = model.RebaseResult
+)
+
+const (
+	DefaultBranch = model.DefaultBranch
 )
 
 const (
@@ -56,6 +62,13 @@ const (
 	LocalBranches  = model.LocalBranches
 	RemoteBranches = model.RemoteBranches
 	AllBranches    = model.AllBranches
+)
+
+const (
+	SignFormatDefault = model.SignFormatDefault
+	SignFormatOpenPGP = model.SignFormatOpenPGP
+	SignFormatSSH     = model.SignFormatSSH
+	SignFormatX509    = model.SignFormatX509
 )
 
 const (

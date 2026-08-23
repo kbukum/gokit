@@ -98,6 +98,16 @@ func TestExecMissingBinaryReportsInternalError(t *testing.T) {
 	}
 }
 
+func TestSignedTagArgsMapsFormatAndKey(t *testing.T) {
+	t.Parallel()
+
+	got := signedTagArgs("v1.2.3", "HEAD", "release", model.SignOptions{Format: model.SignFormatSSH, Key: "ssh-key"})
+	want := []string{"-c", "gpg.format=ssh", "-c", "user.signingkey=ssh-key", "tag", "-s", "-m", "release", "--", "v1.2.3", "HEAD"}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("signedTagArgs() = %#v, want %#v", got, want)
+	}
+}
+
 func TestInspectorOperations(t *testing.T) {
 	t.Parallel()
 

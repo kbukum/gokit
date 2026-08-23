@@ -1,11 +1,14 @@
 package git_test
 
 import (
+	stderrors "errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	goerrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/git"
+	"github.com/kbukum/gokit/git/auth"
 )
 
 func TestOpenDiscoverAndExec(t *testing.T) {
@@ -87,6 +90,91 @@ func TestInit(t *testing.T) {
 	if got := stringTrimSpace(string(out)); got != "true" {
 		t.Fatalf("Exec() = %q, want true", got)
 	}
+
+	head, err := repo.Exec("symbolic-ref", "HEAD")
+	if err != nil {
+		t.Fatalf("symbolic-ref HEAD error: %v", err)
+	}
+	if got := stringTrimSpace(string(head)); got != "refs/heads/"+git.DefaultBranch {
+		t.Fatalf("HEAD = %q, want refs/heads/%s", got, git.DefaultBranch)
+	}
+}
+
+func TestOpenWithAuthAppliesTransport(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	provider := &countingTokenProvider{token: "secret"}
+
+	repo, err := git.OpenWithAuth(dir, auth.Token{Provider: provider})
+	if err != nil {
+		t.Fatalf("OpenWithAuth() error: %v", err)
+	}
+
+	err = repo.Fetch("missing")
+	if err == nil {
+		t.Fatal("Fetch(missing) expected error")
+	}
+	if provider.calls != 1 {
+		t.Fatalf("token provider calls = %d, want 1", provider.calls)
+	}
+}
+
+func TestDiscoverWithAuthAppliesTransport(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	subdir := filepath.Join(dir, "sub")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	provider := &countingTokenProvider{token: "secret"}
+
+	repo, err := git.DiscoverWithAuth(subdir, auth.Token{Provider: provider})
+	if err != nil {
+		t.Fatalf("DiscoverWithAuth() error: %v", err)
+	}
+
+	err = repo.Fetch("missing")
+	if err == nil {
+		t.Fatal("Fetch(missing) expected error")
+	}
+	if provider.calls != 1 {
+		t.Fatalf("token provider calls = %d, want 1", provider.calls)
+	}
+}
+
+func TestCreateSignedTagWithoutConfiguredKey(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	fakeGit := filepath.Join(t.TempDir(), "fake-git")
+	if err := os.WriteFile(fakeGit, []byte("#!/bin/sh\nif [ \"$1\" = \"config\" ]; then exit 1; fi\necho unexpected git \"$@\" >&2\nexit 2\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile(fake-git): %v", err)
+	}
+	repo, err := git.Open(dir, git.WithCLIPath(fakeGit))
+	if err != nil {
+		t.Fatalf("Open() error: %v", err)
+	}
+
+	err = repo.CreateSignedTag("v1.0.0", "HEAD", "release", git.SignOptions{})
+	if err == nil {
+		t.Fatal("CreateSignedTag() expected error")
+	}
+	var appErr *goerrors.AppError
+	if !stderrors.As(err, &appErr) {
+		t.Fatalf("error = %T %v, want AppError", err, err)
+	}
+	if appErr.Details["gokit_git_error"] != "signing_key_missing" {
+		t.Fatalf("gokit_git_error = %#v, want signing_key_missing", appErr.Details["gokit_git_error"])
+	}
+}
+
+type countingTokenProvider struct {
+	token string
+	calls int
+}
+
+func (p *countingTokenProvider) Token() (string, error) {
+	p.calls++
+	return p.token, nil
 }
 
 func TestInitBare(t *testing.T) {

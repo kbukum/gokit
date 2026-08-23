@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/util"
 )
 
 // --- Timing Middleware ---
@@ -96,6 +98,25 @@ func TestTimingMiddlewareReturnsCopy(t *testing.T) {
 	t1["s1"] = 999 * time.Hour
 	if t2["s1"] == 999*time.Hour {
 		t.Error("Timings() should return independent copies")
+	}
+}
+
+func TestTimingMiddlewareWithClock(t *testing.T) {
+	t.Parallel()
+
+	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
+	inner := EvaluatorFunc("timed", func(ctx context.Context, input []byte) (Prediction[string], error) {
+		clock.Advance(25 * time.Millisecond)
+		return Prediction[string]{SampleID: "s1", Label: "ok"}, nil
+	})
+
+	timed := WithTiming(inner, WithTimingClock[string](clock))
+
+	if _, err := timed.Execute(context.Background(), []byte("s1")); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if got := timed.Timings()["s1"]; got != 25*time.Millisecond {
+		t.Errorf("timing = %s, want 25ms", got)
 	}
 }
 
