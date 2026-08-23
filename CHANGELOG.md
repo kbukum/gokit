@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — core patterns/crosscutting rskit parity
+- **component**: `RegistryConfig` with `NewRegistryWithConfig` — bounded-concurrency `StartAllConcurrent` plus per-component start/stop timeouts applied when the caller's context has no deadline (each sequential `StartAll` Start is now bounded by `StartTimeout`, default 30s). Add the `LazyComponent` factory wrapper that defers construction to first `Start`, and `Healthy`/`Degraded`/`Unhealthy` `Health` constructors.
+- **resilience**: `RetryPreset` presets (`RetryFast`/`RetryStandard`/`RetryExternalService`), a total elapsed-time retry budget (`RetryConfig.MaxElapsedTime`), and `Validate()` guards for the retry, circuit-breaker, bulkhead, and rate-limiter configs.
+- **observability**: OTLP wire-protocol selection (`OTLPProtocol`, `ParseOTLPProtocol`) so tracer/meter exporters can target HTTP or gRPC collectors.
+- **security**/**util**: canonical `BasicAuthScheme`/`BearerAuthScheme` header-scheme names (referenced by server auth middleware) and `util.ConstantTimeEqual` for constant-time byte comparison.
+
 ### Security — Go 1.26.6 toolchain, CC0-1.0 allow-list
 - Bump the pinned `toolchain` to `go1.26.6` across every module and `go.work`, clearing the govulncheck stdlib findings (GO-2026-5942, 5972, 6088, 6089, 6090, 6091, 6218 and the idna advisory), all fixed in 1.26.6.
 - Allow the `CC0-1.0` public-domain dedication in the license gate so `github.com/zeebo/blake3` (the core BLAKE3 content hasher) passes; the sign-off is recorded in `docs/dependencies.md`.

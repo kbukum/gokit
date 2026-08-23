@@ -114,3 +114,58 @@ func (b *BaseLazyComponent) WithCloser(fn func() error) *BaseLazyComponent {
 	b.closer = fn
 	return b
 }
+
+// LazyComponent wraps a component factory so the underlying Component is not constructed
+// until Start is first called. This defers expensive construction (opening connections,
+// allocating pools) out of registration and into the boot sequence, while still presenting
+// a normal Component to the Registry.
+//
+// It differs from BaseLazyComponent, which defers an initializer on an already-constructed
+// component; LazyComponent defers construction of the Component itself.
+type LazyComponent struct {
+	name    string
+	factory func() Component
+	mu      sync.Mutex
+	inner   Component
+}
+
+// NewLazyComponent returns a LazyComponent that builds its delegate via factory on first Start.
+func NewLazyComponent(name string, factory func() Component) *LazyComponent {
+	return &LazyComponent{name: name, factory: factory}
+}
+
+// Name returns the component name.
+func (l *LazyComponent) Name() string { return l.name }
+
+// Start constructs the delegate (once) and starts it.
+func (l *LazyComponent) Start(ctx context.Context) error {
+	l.mu.Lock()
+	if l.inner == nil {
+		l.inner = l.factory()
+	}
+	inner := l.inner
+	l.mu.Unlock()
+	return inner.Start(ctx)
+}
+
+// Stop stops the delegate if it was constructed; a never-started LazyComponent is a no-op.
+func (l *LazyComponent) Stop(ctx context.Context) error {
+	l.mu.Lock()
+	inner := l.inner
+	l.mu.Unlock()
+	if inner == nil {
+		return nil
+	}
+	return inner.Stop(ctx)
+}
+
+// Health reports the delegate's health, or a degraded "not started" report before first Start.
+func (l *LazyComponent) Health(ctx context.Context) Health {
+	l.mu.Lock()
+	inner := l.inner
+	l.mu.Unlock()
+	if inner == nil {
+		return Degraded(l.name, "not started")
+	}
+	return inner.Health(ctx)
+}

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/kbukum/gokit/security"
 )
 
 // TokenValidator validates a bearer token and returns the parsed claims. It is declared locally
@@ -175,7 +177,7 @@ func RequirePermission(checker PermissionChecker, required string, subjectExtrac
 }
 
 func buildAuthOptions(opts ...AuthOption) *authOptions {
-	o := &authOptions{headerName: "Authorization", scheme: "Bearer"}
+	o := &authOptions{headerName: "Authorization", scheme: security.BearerAuthScheme}
 	for _, opt := range opts {
 		opt(o)
 	}

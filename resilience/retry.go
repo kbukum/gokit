@@ -6,6 +6,8 @@ import (
 	"math"
 	"math/rand/v2"
 	"time"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
 // Common retry errors.
@@ -33,6 +35,11 @@ type RetryConfig struct {
 	InitialBackoff time.Duration
 	// MaxBackoff is the maximum delay between retries.
 	MaxBackoff time.Duration
+	// MaxElapsedTime bounds the total wall-clock time budget for backoff waits across
+	// attempts. Zero means unbounded (only MaxAttempts bounds retries). When set, Retry
+	// stops before a backoff sleep that would exceed the budget instead of sleeping past
+	// it; it does not interrupt an attempt already in flight.
+	MaxElapsedTime time.Duration
 	// Strategy controls how the delay grows between retries.
 	Strategy BackoffStrategy
 	// BackoffFactor is the multiplier for exponential backoff.
@@ -62,6 +69,34 @@ func DefaultRetryConfig() RetryConfig {
 	}
 }
 
+// Validate rejects an inconsistent retry configuration. Unlike the normalizing
+// constructors (which silently fill zero fields with defaults), Validate is the
+// explicit guard callers use to fail closed on invalid values before running work.
+func (c RetryConfig) Validate() error {
+	if c.MaxAttempts < 1 {
+		return apperr.InvalidInput("max_attempts", "must be at least 1")
+	}
+	if c.InitialBackoff < 0 {
+		return apperr.InvalidInput("initial_backoff", "must not be negative")
+	}
+	if c.MaxBackoff < 0 {
+		return apperr.InvalidInput("max_backoff", "must not be negative")
+	}
+	if c.MaxBackoff > 0 && c.InitialBackoff > c.MaxBackoff {
+		return apperr.InvalidInput("max_backoff", "must be >= initial_backoff")
+	}
+	if c.BackoffFactor < 0 || math.IsNaN(c.BackoffFactor) || math.IsInf(c.BackoffFactor, 0) {
+		return apperr.InvalidInput("backoff_factor", "must be a finite non-negative number")
+	}
+	if c.Jitter < 0 || c.Jitter > 1 {
+		return apperr.InvalidInput("jitter", "must be within [0.0, 1.0]")
+	}
+	if c.MaxElapsedTime < 0 {
+		return apperr.InvalidInput("max_elapsed_time", "must not be negative")
+	}
+	return nil
+}
+
 // DefaultRetryIf retries all errors except context cancellation.
 func DefaultRetryIf(err error) bool {
 	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
@@ -74,6 +109,7 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 	var lastErr error
 
 	cfg = normalizeRetryConfig(cfg)
+	start := time.Now()
 
 	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
 		// Check context before each attempt
@@ -101,6 +137,11 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		}
 
 		backoff := calculateBackoff(attempt, cfg)
+
+		// Refuse to sleep past the total elapsed-time budget.
+		if cfg.MaxElapsedTime > 0 && time.Since(start)+backoff > cfg.MaxElapsedTime {
+			break
+		}
 
 		if cfg.OnRetry != nil {
 			cfg.OnRetry(attempt, err, backoff)
