@@ -18,9 +18,12 @@ const (
 	AnchorCustom
 )
 
-// String returns the lowercase name of the anchor.
+// String returns the lowercase name of the anchor, or "unknown" for a value
+// outside the defined set (e.g. a malformed JSON payload or bad cast).
 func (a SubtitleAnchor) String() string {
 	switch a {
+	case AnchorBottom:
+		return "bottom"
 	case AnchorTop:
 		return "top"
 	case AnchorCenter:
@@ -28,7 +31,7 @@ func (a SubtitleAnchor) String() string {
 	case AnchorCustom:
 		return "custom"
 	default:
-		return "bottom"
+		return "unknown"
 	}
 }
 
@@ -53,7 +56,10 @@ func CustomPosition(x, y uint32) SubtitlePosition {
 // It is the light-kit parallel of rskit's SubtitleStyle: it carries the styling
 // vocabulary (font, colors, weight, position) without a renderer. Optional fields
 // use their zero value to mean "unset" — an empty font family or color and a zero
-// font size all defer to the renderer or an inherited style.
+// font size are renderer defaults. Style resolution ([SubtitleTrack.EffectiveStyle])
+// selects one whole style (the cue's own or the track default); it does not merge
+// fields, so a cue that sets only [SubtitleStyle.Color] does not inherit the track's
+// other settings.
 type SubtitleStyle struct {
 	FontFamily string           `json:"font_family,omitempty"`
 	FontSize   uint16           `json:"font_size,omitempty"`  // points; 0 means unset
@@ -82,9 +88,10 @@ func (t SubtitleTrack) AddStyled(r TimeRange, text string, style SubtitleStyle) 
 
 // EffectiveStyle resolves the style for the cue at index i: its own
 // [SubtitleEntry.Style] if set, otherwise the track [SubtitleTrack.DefaultStyle],
-// otherwise the zero style. The second result reports whether an explicit style
-// (entry or default) was found. It returns the zero style and false for an
-// out-of-range index rather than panicking.
+// otherwise the zero style. The chosen style is returned whole — fields are never
+// merged across the cue and track styles. The second result reports whether an
+// explicit style (entry or default) was found. It returns the zero style and false
+// for an out-of-range index rather than panicking.
 func (t SubtitleTrack) EffectiveStyle(i int) (SubtitleStyle, bool) {
 	if i < 0 || i >= len(t.Entries) {
 		return SubtitleStyle{}, false

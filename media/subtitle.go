@@ -31,8 +31,10 @@ type SubtitleEntry struct {
 }
 
 // SubtitleTrack is an ordered collection of subtitle cues.
-// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns — parsing,
-// serialization, and time math — without renderer-specific styling.
+// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns —
+// parsing, serialization, and time math — plus a styling vocabulary
+// ([SubtitleStyle] via [SubtitleTrack.DefaultStyle] and [SubtitleEntry.Style]),
+// but no renderer: it does not rasterize or burn cues into frames.
 type SubtitleTrack struct {
 	Entries  []SubtitleEntry `json:"entries"`
 	Language string          `json:"language,omitempty"` // BCP 47 tag, optional
