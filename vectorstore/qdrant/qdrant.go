@@ -95,8 +95,8 @@ func (s *Store) Upsert(ctx context.Context, collection string, point vectorstore
 	if err != nil {
 		return err
 	}
-	if err := point.Payload.Validate(s.limits); err != nil {
-		return err
+	if verr := point.Payload.Validate(s.limits); verr != nil {
+		return verr
 	}
 	payloadJSON, err := payloadToJSON(point.Payload)
 	if err != nil {

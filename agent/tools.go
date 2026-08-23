@@ -11,7 +11,7 @@ import (
 	"github.com/kbukum/gokit/tool"
 )
 
-func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Result, error) {
+func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock, emit emitFunc) (*tool.Result, error) {
 	if a.config.Tools == nil {
 		return nil, fmt.Errorf("tool %q not found: no tool registry", tc.Name)
 	}
@@ -19,6 +19,7 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 	if hookErr := a.emitHookErr(ctx, ToolCallEvent{ToolUseID: tc.ID, Name: tc.Name, Input: input}); hookErr != nil {
 		return nil, hookErr
 	}
+	_ = emit(ToolExecuting{ToolUseID: tc.ID, Name: tc.Name, Input: input})
 	callable, ok := a.config.Tools.Get(tc.Name)
 	if !ok {
 		return nil, fmt.Errorf("tool %q not found", tc.Name)
@@ -39,6 +40,7 @@ func (a *Agent) executeTool(ctx context.Context, tc ai.ToolUseBlock) (*tool.Resu
 		}
 	}
 	_ = a.emitHookErr(ctx, ToolResultEvent{ToolUseID: tc.ID, Name: tc.Name, Input: input, Result: result, Err: err})
+	_ = emit(ToolComplete{ToolUseID: tc.ID, Name: tc.Name, Result: result, Err: err})
 	return result, err
 }
 
@@ -51,7 +53,7 @@ func (a *Agent) toolPolicy(name string) *resilience.Policy {
 	return a.config.Policy
 }
 
-func (a *Agent) executeTools(ctx context.Context, calls []ai.ToolUseBlock) []chat.ToolResultMessage {
+func (a *Agent) executeTools(ctx context.Context, calls []ai.ToolUseBlock, emit emitFunc) []chat.ToolResultMessage {
 	results := make([]chat.ToolResultMessage, len(calls))
 	sem := make(chan struct{}, a.config.ToolConcurrency)
 	var wg sync.WaitGroup
@@ -61,7 +63,7 @@ func (a *Agent) executeTools(ctx context.Context, calls []ai.ToolUseBlock) []cha
 		go func(idx int, tc ai.ToolUseBlock) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r, err := a.executeTool(ctx, tc)
+			r, err := a.executeTool(ctx, tc, emit)
 			blk := tool.ResultBlock(tc.ID, r, err)
 			results[idx] = chat.ToolResultMsg(blk.ID, blk.Content, blk.IsError)
 		}(i, tc)
