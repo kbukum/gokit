@@ -15,7 +15,7 @@ const signingTimeout = 2 * time.Minute
 func (b *Backend) CreateSignedTag(name, target, message string, opts model.SignOptions) error {
 	if strings.TrimSpace(opts.Key) == "" {
 		if opts.Key != "" {
-			return giterr.SigningKeyMissing("user.signingkey")
+			return giterr.InvalidArg("key", "signing key must not be blank")
 		}
 		if err := b.requireSigningKey(); err != nil {
 			return err

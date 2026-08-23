@@ -53,7 +53,7 @@ func InvalidArg(field, detail string) *errors.AppError {
 }
 
 func SigningNotSupported() *errors.AppError {
-	return errors.InvalidInput("sign", "commit signing is not supported by the go-git backend")
+	return errors.InvalidInput("sign", "signing is not supported by the go-git backend")
 }
 
 func SigningKeyMissing(key string) *errors.AppError {
