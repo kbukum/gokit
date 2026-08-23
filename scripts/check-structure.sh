@@ -17,6 +17,12 @@
 #      declare-only doc.go). File count alone is not a verdict — a flat set of files that
 #      all serve one concern is legitimate; this only surfaces the candidate to judge.
 #      Reported as a warning, never a hard failure.
+#   4. Coverage-padding test file (ADVISORY): a `*_test.go` whose base name carries a
+#      coverage-padding suffix (`_edge`/`_extra`/`_more`/`_additional`/`_coverage`) instead
+#      of matching a source concern. The convention is `foo.go` -> `foo_test.go`; extend the
+#      existing test file or name a genuine new concern, don't pad with suffix files. See
+#      docs/TEST-LAYOUT.md and docs/naming-and-structure.md. Reported as a warning, never a
+#      hard failure.
 #
 # All checks are advisory (never gating). Vendored, testdata, and node_modules trees are skipped.
 set -euo pipefail
@@ -125,5 +131,21 @@ while IFS=$'\t' read -r count dir _; do
       "$count" "$dir" >&2
   fi
 done < <(package_counts_cmd)
+
+# 4. Coverage-padding test file (advisory): a *_test.go whose base name carries a
+#    coverage-padding suffix instead of matching a source concern. The convention is
+#    `foo.go` -> `foo_test.go`; extend the existing test file or name a genuine new concern.
+while IFS= read -r tst; do
+  [ -n "$tst" ] || continue
+  base="$(basename "$tst")"
+  case "$base" in
+    *_edge_test.go|*_extra_test.go|*_more_test.go|*_additional_test.go|*_coverage_test.go)
+      printf 'warning: coverage-padding test file name — use foo.go -> foo_test.go or name a genuine concern (see docs/TEST-LAYOUT.md): %s\n' \
+        "$tst" >&2
+      ;;
+  esac
+done < <(find . \
+    \( -path '*/vendor' -o -path '*/testdata' -o -path '*/node_modules' -o -path '*/.*' \) -prune \
+    -o -type f -name '*_test.go' -print | sort)
 
 exit 0
