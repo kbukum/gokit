@@ -2,11 +2,14 @@ package process
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
 	"time"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
 
 // StreamName identifies a subprocess output stream.
@@ -30,26 +33,17 @@ type StreamChunk struct {
 // a slow callback can still apply backpressure to subprocess pipe reads after the internal buffer fills.
 func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, error) {
 	if cmd.Binary == "" {
-		return nil, fmt.Errorf("process: binary is required")
+		return nil, goerrors.MissingField("binary")
 	}
 
-	gracePeriod := cmd.GracePeriod
-	if gracePeriod == 0 {
-		gracePeriod = 5 * time.Second
-	}
+	policy := resolveLifecycle(cmd)
 
 	c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 	c.Dir = cmd.Dir
 	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
-	if cmd.Stdin != nil {
-		c.Stdin = cmd.Stdin
-	}
+	applyInput(c, cmd)
 
-	configureSysProcAttr(c)
-	c.Cancel = func() error {
-		return terminateGracefully(c)
-	}
-	c.WaitDelay = gracePeriod
+	applyLifecycle(c, policy)
 
 	stdoutPipe, err := c.StdoutPipe()
 	if err != nil {
@@ -61,7 +55,7 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 	}
 
 	if err := c.Start(); err != nil {
-		return nil, fmt.Errorf("process: start %s: %w", cmd.Binary, err)
+		return nil, SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)
 	}
 
 	start := time.Now()
@@ -131,8 +125,13 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 		return result, fmt.Errorf("process: stream output: %w", copyErr)
 	}
 	if waitErr != nil {
-		if ctx.Err() != nil {
-			return result, fmt.Errorf("process: killed by context: %w", ctx.Err())
+		switch {
+		case stderrors.Is(ctx.Err(), context.DeadlineExceeded):
+			result.TimedOut = true
+			return result, goerrors.Timeout("process").WithCause(waitErr)
+		case stderrors.Is(ctx.Err(), context.Canceled):
+			result.Canceled = true
+			return result, goerrors.Canceled("process").WithCause(waitErr)
 		}
 		return result, fmt.Errorf("process: exit code %d: %w", result.ExitCode, waitErr)
 	}

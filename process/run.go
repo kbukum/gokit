@@ -2,46 +2,44 @@ package process
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"time"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
 
 // Run executes a subprocess and waits for it to complete. If the context is canceled,
 // the process group receives SIGTERM on Unix (or the process is killed on Windows),
-// then the runtime escalates to SIGKILL after GracePeriod via WaitDelay.
+// then the runtime escalates to SIGKILL after the grace period via WaitDelay. When
+// cmd.IO is IOInherited the child's stdout/stderr are wired to the parent terminal and
+// nothing is captured; otherwise stdout/stderr are captured into Result.
 func Run(ctx context.Context, cmd Command) (*Result, error) {
 	if cmd.Binary == "" {
-		return nil, fmt.Errorf("process: binary is required")
+		return nil, goerrors.MissingField("binary")
 	}
 
-	gracePeriod := cmd.GracePeriod
-	if gracePeriod == 0 {
-		gracePeriod = 5 * time.Second
-	}
+	policy := resolveLifecycle(cmd)
 
 	c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 	c.Dir = cmd.Dir
 	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+	applyInput(c, cmd)
 
-	stdout := newLimitedBuffer(cmd.MaxOutputBytes)
-	stderr := newLimitedBuffer(cmd.MaxOutputBytes)
-	c.Stdout = stdout
-	c.Stderr = stderr
-
-	if cmd.Stdin != nil {
-		c.Stdin = cmd.Stdin
+	var stdout, stderr *limitedBuffer
+	if cmd.IO == IOInherited {
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+	} else {
+		stdout = newLimitedBuffer(cmd.MaxOutputBytes)
+		stderr = newLimitedBuffer(cmd.MaxOutputBytes)
+		c.Stdout = stdout
+		c.Stderr = stderr
 	}
 
-	configureSysProcAttr(c)
-
-	// Don't let exec.CommandContext kill with SIGKILL immediately;
-	// graceful-terminate via platform-specific helper.
-	c.Cancel = func() error {
-		return terminateGracefully(c)
-	}
-	c.WaitDelay = gracePeriod
+	applyLifecycle(c, policy)
 
 	start := time.Now()
 	err := c.Run()
@@ -53,23 +51,57 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	}
 
 	result := &Result{
-		Stdout:          stdout.Bytes(),
-		StdoutTruncated: stdout.Truncated(),
-		Stderr:          stderr.Bytes(),
-		StderrTruncated: stderr.Truncated(),
-		ExitCode:        exitCode,
-		Duration:        duration,
+		ExitCode: exitCode,
+		Duration: duration,
+	}
+	if stdout != nil {
+		result.Stdout = stdout.Bytes()
+		result.StdoutTruncated = stdout.Truncated()
+		result.Stderr = stderr.Bytes()
+		result.StderrTruncated = stderr.Truncated()
 	}
 
 	if err != nil {
-		// Context cancellation is the expected way to kill a process
-		if ctx.Err() != nil {
-			return result, fmt.Errorf("process: killed by context: %w", ctx.Err())
-		}
-		return result, fmt.Errorf("process: exit code %d: %w", result.ExitCode, err)
+		return result, classifyRunError(ctx, cmd, result, err)
 	}
 
 	return result, nil
+}
+
+// classifyRunError maps a failed subprocess execution to a typed error and annotates the
+// result with timeout/cancellation state. Context cancellation is the expected way to kill
+// a process; a failure to start is classified via SpawnError.
+func classifyRunError(ctx context.Context, cmd Command, result *Result, err error) error {
+	switch {
+	case stderrors.Is(ctx.Err(), context.DeadlineExceeded):
+		result.TimedOut = true
+		return goerrors.Timeout("process").WithCause(err)
+	case stderrors.Is(ctx.Err(), context.Canceled):
+		result.Canceled = true
+		return goerrors.Canceled("process").WithCause(err)
+	}
+
+	var exitErr *exec.ExitError
+	if !stderrors.As(err, &exitErr) {
+		return SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)
+	}
+	return fmt.Errorf("process: exit code %d: %w", result.ExitCode, err)
+}
+
+// applyLifecycle configures process-group isolation and the graceful cancel path on c.
+func applyLifecycle(c *exec.Cmd, policy LifecyclePolicy) {
+	if policy.IsolateProcessGroup {
+		configureSysProcAttr(c)
+	}
+	c.Cancel = func() error {
+		if policy.targetsGroup() {
+			return terminateGracefully(c)
+		}
+		return c.Process.Kill()
+	}
+	if policy.KillAfterGrace {
+		c.WaitDelay = policy.grace()
+	}
 }
 
 // mergeEnv prepares the process environment.
