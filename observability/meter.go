@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -22,8 +23,10 @@ type MeterConfig struct {
 	ServiceVersion string
 	// Environment is the deployment environment (dev, staging, prod).
 	Environment string
-	// Endpoint is the OTLP HTTP endpoint host:port (e.g., "localhost:4318").
+	// Endpoint is the OTLP endpoint host:port (e.g., "localhost:4318" for HTTP, "localhost:4317" for gRPC).
 	Endpoint string
+	// Protocol selects the OTLP wire protocol (HTTP or gRPC). Defaults to HTTP.
+	Protocol OTLPProtocol
 	// Insecure allows insecure connections (for development).
 	Insecure bool
 	// Interval is the metric export interval.
@@ -49,14 +52,7 @@ func DefaultMeterConfig(serviceName string) MeterConfig {
 // InitMeter initializes the OpenTelemetry meter provider.
 // Returns a MeterProvider that should be shut down on application exit.
 func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvider, error) {
-	opts := []otlpmetrichttp.Option{
-		otlpmetrichttp.WithEndpoint(config.Endpoint),
-	}
-	if config.Insecure {
-		opts = append(opts, otlpmetrichttp.WithInsecure())
-	}
-
-	exporter, err := otlpmetrichttp.New(ctx, opts...)
+	exporter, err := newMetricExporter(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("creating metric exporter: %w", err)
 	}
@@ -83,10 +79,30 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 	logging.InfoCtx(ctx, "meter initialized", logging.Fields(
 		"service", config.ServiceName,
 		"endpoint", config.Endpoint,
+		"protocol", config.Protocol.String(),
 		"interval", config.Interval.String(),
 	))
 
 	return mp, nil
+}
+
+// newMetricExporter builds the OTLP metric exporter for the configured protocol.
+func newMetricExporter(ctx context.Context, config *MeterConfig) (sdkmetric.Exporter, error) {
+	if err := config.Protocol.Validate(); err != nil {
+		return nil, err
+	}
+	if config.Protocol == OTLPGRPC {
+		opts := []otlpmetricgrpc.Option{otlpmetricgrpc.WithEndpoint(config.Endpoint)}
+		if config.Insecure {
+			opts = append(opts, otlpmetricgrpc.WithInsecure())
+		}
+		return otlpmetricgrpc.New(ctx, opts...)
+	}
+	opts := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpoint(config.Endpoint)}
+	if config.Insecure {
+		opts = append(opts, otlpmetrichttp.WithInsecure())
+	}
+	return otlpmetrichttp.New(ctx, opts...)
 }
 
 // Meter returns a named meter from the global provider.

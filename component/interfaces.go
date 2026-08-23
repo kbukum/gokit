@@ -70,7 +70,11 @@ type Component interface {
 	// Name returns the unique name of the component for registration.
 	Name() string
 
-	// Start initializes and starts the component.
+	// Start initializes and starts the component. Implementations must honor ctx:
+	// return promptly when ctx is canceled or its deadline passes. The registry derives a
+	// bounded context for each Start (RegistryConfig.StartTimeout) and cancels peers when a
+	// sibling fails, but Go cannot interrupt a synchronous call that ignores its context, so
+	// a Start that blocks without observing ctx will stall the boot sequence.
 	Start(ctx context.Context) error
 
 	// Stop gracefully shuts down the component and releases resources.

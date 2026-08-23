@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -26,8 +27,10 @@ type TracerConfig struct {
 	ServiceVersion string
 	// Environment is the deployment environment (dev, staging, prod).
 	Environment string
-	// Endpoint is the OTLP HTTP endpoint host:port (e.g., "localhost:4318").
+	// Endpoint is the OTLP endpoint host:port (e.g., "localhost:4318" for HTTP, "localhost:4317" for gRPC).
 	Endpoint string
+	// Protocol selects the OTLP wire protocol (HTTP or gRPC). Defaults to HTTP.
+	Protocol OTLPProtocol
 	// Insecure allows insecure connections (for development).
 	Insecure bool
 	// SampleRate is the sampling rate (0.0 to 1.0).
@@ -55,14 +58,7 @@ func DefaultTracerConfig(serviceName string) TracerConfig {
 // InitTracer initializes the OpenTelemetry tracer provider.
 // Returns a TracerProvider that should be shut down on application exit.
 func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProvider, error) {
-	opts := []otlptracehttp.Option{
-		otlptracehttp.WithEndpoint(config.Endpoint),
-	}
-	if config.Insecure {
-		opts = append(opts, otlptracehttp.WithInsecure())
-	}
-
-	exporter, err := otlptracehttp.New(ctx, opts...)
+	exporter, err := newTraceExporter(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
@@ -103,6 +99,25 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 	))
 
 	return tp, nil
+}
+
+// newTraceExporter builds the OTLP trace exporter for the configured protocol.
+func newTraceExporter(ctx context.Context, config *TracerConfig) (sdktrace.SpanExporter, error) {
+	if err := config.Protocol.Validate(); err != nil {
+		return nil, err
+	}
+	if config.Protocol == OTLPGRPC {
+		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(config.Endpoint)}
+		if config.Insecure {
+			opts = append(opts, otlptracegrpc.WithInsecure())
+		}
+		return otlptracegrpc.New(ctx, opts...)
+	}
+	opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(config.Endpoint)}
+	if config.Insecure {
+		opts = append(opts, otlptracehttp.WithInsecure())
+	}
+	return otlptracehttp.New(ctx, opts...)
 }
 
 // newResource creates an OpenTelemetry resource with service metadata.

@@ -58,3 +58,26 @@ func TestSecretStringEqual(t *testing.T) {
 		t.Error("constant-time equality mismatch")
 	}
 }
+
+func TestConstantTimeEqual(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		a, b      []byte
+		wantEqual bool
+	}{
+		{"equal", []byte("token"), []byte("token"), true},
+		{"different_same_len", []byte("token"), []byte("other"), false},
+		{"length_mismatch", []byte("token"), []byte("token-longer"), false},
+		{"both_empty", []byte{}, []byte{}, true},
+		{"nil_and_empty", nil, []byte{}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ConstantTimeEqual(tc.a, tc.b); got != tc.wantEqual {
+				t.Errorf("ConstantTimeEqual(%q,%q) = %v, want %v", tc.a, tc.b, got, tc.wantEqual)
+			}
+		})
+	}
+}

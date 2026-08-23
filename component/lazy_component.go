@@ -3,8 +3,10 @@ package component
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 
+	apperr "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 )
 
@@ -113,4 +115,88 @@ func (b *BaseLazyComponent) WithHealthCheck(fn func(context.Context) error) *Bas
 func (b *BaseLazyComponent) WithCloser(fn func() error) *BaseLazyComponent {
 	b.closer = fn
 	return b
+}
+
+// LazyComponent wraps a component factory so the underlying Component is not constructed
+// until Start is first called. This defers expensive construction (opening connections,
+// allocating pools) out of registration and into the boot sequence, while still presenting
+// a normal Component to the Registry.
+//
+// It differs from BaseLazyComponent, which defers an initializer on an already-constructed
+// component; LazyComponent defers construction of the Component itself.
+type LazyComponent struct {
+	name    string
+	factory func() Component
+	mu      sync.Mutex
+	inner   Component
+}
+
+// NewLazyComponent returns a LazyComponent that builds its delegate via factory on first Start.
+func NewLazyComponent(name string, factory func() Component) *LazyComponent {
+	return &LazyComponent{name: name, factory: factory}
+}
+
+// Name returns the component name.
+func (l *LazyComponent) Name() string { return l.name }
+
+// Start constructs the delegate (once) and starts it. A nil factory, or a factory that
+// returns a nil Component — including a typed nil such as a nil *T stored in the interface,
+// which a plain == nil check misses — yields a typed error rather than a panic: Go interfaces
+// permit nil values that the Rust Arc<dyn Component> counterpart cannot, so this lifecycle
+// path guards them explicitly.
+func (l *LazyComponent) Start(ctx context.Context) error {
+	l.mu.Lock()
+	if l.inner == nil {
+		if l.factory == nil {
+			l.mu.Unlock()
+			return apperr.InvalidInput("factory", "must not be nil")
+		}
+		inner := l.factory()
+		if isNilComponent(inner) {
+			l.mu.Unlock()
+			return apperr.InvalidInput("factory", "must not return a nil Component")
+		}
+		l.inner = inner
+	}
+	inner := l.inner
+	l.mu.Unlock()
+	return inner.Start(ctx)
+}
+
+// isNilComponent reports whether c is nil, including a typed-nil interface value (e.g. a nil
+// *T stored in the interface) that a plain c == nil check misses and that would otherwise
+// panic when a method is dispatched through it.
+func isNilComponent(c Component) bool {
+	if c == nil {
+		return true
+	}
+	v := reflect.ValueOf(c)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan, reflect.Interface:
+		return v.IsNil()
+	default:
+		return false
+	}
+}
+
+// Stop stops the delegate if it was constructed; a never-started LazyComponent is a no-op.
+func (l *LazyComponent) Stop(ctx context.Context) error {
+	l.mu.Lock()
+	inner := l.inner
+	l.mu.Unlock()
+	if inner == nil {
+		return nil
+	}
+	return inner.Stop(ctx)
+}
+
+// Health reports the delegate's health, or a degraded "not started" report before first Start.
+func (l *LazyComponent) Health(ctx context.Context) Health {
+	l.mu.Lock()
+	inner := l.inner
+	l.mu.Unlock()
+	if inner == nil {
+		return Degraded(l.name, "not started")
+	}
+	return inner.Health(ctx)
 }

@@ -33,7 +33,14 @@ func (s SecretString) Len() int { return len(s.value) }
 
 // Equal compares two secrets in constant time, avoiding a timing side channel.
 func (s SecretString) Equal(other SecretString) bool {
-	return subtle.ConstantTimeCompare([]byte(s.value), []byte(other.value)) == 1
+	return ConstantTimeEqual([]byte(s.value), []byte(other.value))
+}
+
+// ConstantTimeEqual reports whether two byte slices are equal, comparing in constant
+// time to avoid a timing side channel. Length is not secret: a length mismatch returns
+// false quickly, so prefer fixed-length encodings for sensitive tokens.
+func ConstantTimeEqual(left, right []byte) bool {
+	return subtle.ConstantTimeCompare(left, right) == 1
 }
 
 // String renders the mask for a non-empty secret and an empty string otherwise, so
