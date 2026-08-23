@@ -30,6 +30,7 @@ type InMemoryStore struct {
 	mu          sync.RWMutex
 	collections map[string]*collection
 	metric      string
+	limits      VectorStoreLimits
 }
 
 // NewInMemoryStore creates a new empty in-memory vector store.
@@ -37,6 +38,7 @@ func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{
 		collections: make(map[string]*collection),
 		metric:      DefaultMetric,
+		limits:      DefaultLimits(),
 	}
 }
 
@@ -49,11 +51,16 @@ func NewInMemoryStoreWithConfig(cfg Config) (*InMemoryStore, error) {
 	return &InMemoryStore{
 		collections: make(map[string]*collection),
 		metric:      cfg.Metric,
+		limits:      cfg.Limits,
 	}, nil
 }
 
 // EnsureCollection ensures a collection exists, creating it if necessary.
 func (s *InMemoryStore) EnsureCollection(ctx context.Context, collectionName string, dimensions int) error {
+	if err := s.limits.ValidateDimensions(dimensions); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -70,6 +77,10 @@ func (s *InMemoryStore) EnsureCollection(ctx context.Context, collectionName str
 
 // Upsert inserts or updates a vector point.
 func (s *InMemoryStore) Upsert(ctx context.Context, collectionName string, point Point) error {
+	if err := point.Payload.Validate(s.limits); err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -112,8 +123,11 @@ func (s *InMemoryStore) Search(ctx context.Context, collectionName string, query
 	if len(query.Vector) != col.Dimensions {
 		return nil, fmt.Errorf("query vector dimensions mismatch: expected %d, got %d", col.Dimensions, len(query.Vector))
 	}
-	if query.Limit < 0 {
-		return nil, fmt.Errorf("query limit must be non-negative, got %d", query.Limit)
+	if err := s.limits.ValidateSearchLimit(query.Limit); err != nil {
+		return nil, err
+	}
+	if err := query.Filter.Validate(s.limits); err != nil {
+		return nil, err
 	}
 	if query.Limit == 0 {
 		return []SearchResult{}, nil

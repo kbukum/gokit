@@ -821,3 +821,43 @@ func TestRegister_RejectsMultipleConfigs(t *testing.T) {
 		t.Fatal("expected too-many-configs error")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Stat (storage.StatProvider)
+// ---------------------------------------------------------------------------
+
+func TestStat_ReturnsMetadata(t *testing.T) {
+	s := newTestStorage(t)
+	ctx := context.Background()
+	if err := s.Upload(ctx, "docs/note.txt", strings.NewReader("hello")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	info, err := s.Stat(ctx, "docs/note.txt")
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if info.Path != "docs/note.txt" {
+		t.Errorf("Path = %q, want %q", info.Path, "docs/note.txt")
+	}
+	if info.Size != 5 {
+		t.Errorf("Size = %d, want 5", info.Size)
+	}
+	if want := mime.TypeByExtension(".txt"); info.ContentType != want {
+		t.Errorf("ContentType = %q, want %q", info.ContentType, want)
+	}
+	if info.LastModified.IsZero() {
+		t.Error("LastModified is zero")
+	}
+}
+
+func TestStat_MissingFileErrors(t *testing.T) {
+	s := newTestStorage(t)
+	if _, err := s.Stat(context.Background(), "absent.txt"); err == nil {
+		t.Fatal("Stat for a missing file did not error")
+	}
+}
+
+func TestStat_SatisfiesStatProvider(t *testing.T) {
+	var _ storage.StatProvider = newTestStorage(t)
+}

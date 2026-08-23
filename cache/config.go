@@ -12,6 +12,9 @@ const (
 	// ProviderRedis is registered by the opt-in cache/redis adapter module.
 	ProviderRedis = "redis"
 
+	// ProviderFile is the filesystem-backed cache shipped by core.
+	ProviderFile = "fs"
+
 	DefaultProvider = ProviderMemory
 )
 
