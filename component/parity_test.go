@@ -162,32 +162,44 @@ func (g *gatedFailComponent) Health(context.Context) Health { return Healthy(g.n
 func TestStartAllConcurrentEnforcesLimit(t *testing.T) {
 	t.Parallel()
 	const limit = 2
+	// Four components (a multiple of limit) run as two full waves. The wave barrier only
+	// releases once exactly `limit` starts are in flight together, so the test proves the
+	// bound in both directions deterministically — with no sleeps:
+	//   - Upper bound: peak (recorded under the barrier) must never exceed limit, because
+	//     the semaphore admits at most `limit` concurrent Start calls.
+	//   - Lower bound: if the limit were enforced as anything smaller than `limit`, fewer
+	//     than `limit` starts would ever overlap, the width-`limit` barrier would never
+	//     release, and the bounded context would deadline the test instead of passing.
 	r := NewRegistryWithConfig(RegistryConfig{Concurrency: limit})
+	barrier := newWaveBarrier(limit)
 	var cur, peak atomic.Int32
-	for _, n := range []string{"a", "b", "c", "d", "e"} {
-		if err := r.Register(&peakComponent{name: n, cur: &cur, peak: &peak}); err != nil {
+	for _, n := range []string{"a", "b", "c", "d"} {
+		if err := r.Register(&peakComponent{name: n, cur: &cur, peak: &peak, barrier: barrier}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := r.StartAllConcurrent(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := r.StartAllConcurrent(ctx); err != nil {
 		t.Fatalf("StartAllConcurrent: %v", err)
 	}
-	// The peak-simultaneous-starts assertion is an upper bound, so it holds regardless of
-	// scheduling: a positive limit smaller than the pending set must never be exceeded.
-	if got := peak.Load(); got > limit {
-		t.Fatalf("peak concurrent starts = %d, want <= %d", got, limit)
+	if got := peak.Load(); got != limit {
+		t.Fatalf("peak concurrent starts = %d, want exactly %d", got, limit)
 	}
 }
 
-// peakComponent records the maximum number of Starts running simultaneously.
+// peakComponent records the number of Starts running simultaneously and blocks on a wave
+// barrier until exactly `width` peers are in flight, so the recorded peak is an exact,
+// scheduling-independent measurement rather than a timing sample.
 type peakComponent struct {
-	name string
-	cur  *atomic.Int32
-	peak *atomic.Int32
+	name    string
+	cur     *atomic.Int32
+	peak    *atomic.Int32
+	barrier *waveBarrier
 }
 
 func (p *peakComponent) Name() string { return p.name }
-func (p *peakComponent) Start(context.Context) error {
+func (p *peakComponent) Start(ctx context.Context) error {
 	n := p.cur.Add(1)
 	for {
 		m := p.peak.Load()
@@ -195,9 +207,9 @@ func (p *peakComponent) Start(context.Context) error {
 			break
 		}
 	}
-	time.Sleep(5 * time.Millisecond)
+	err := p.barrier.wait(ctx)
 	p.cur.Add(-1)
-	return nil
+	return err
 }
 func (p *peakComponent) Stop(context.Context) error    { return nil }
 func (p *peakComponent) Health(context.Context) Health { return Healthy(p.name) }
@@ -243,6 +255,43 @@ func (b *startBarrier) wait(ctx context.Context) error {
 	b.mu.Unlock()
 	select {
 	case <-b.released:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// waveBarrier releases callers in fixed-size waves: each wait blocks until exactly width
+// callers have arrived, at which point the whole wave proceeds and a fresh wave is armed.
+// It lets a test hold exactly width goroutines in a critical section at once and deadlocks
+// (surfaced via the caller's context deadline) if fewer than width ever overlap.
+type waveBarrier struct {
+	mu      sync.Mutex
+	width   int
+	count   int
+	release chan struct{}
+}
+
+func newWaveBarrier(width int) *waveBarrier {
+	return &waveBarrier{width: width, release: make(chan struct{})}
+}
+
+func (b *waveBarrier) wait(ctx context.Context) error {
+	b.mu.Lock()
+	b.count++
+	if b.count == b.width {
+		// This arrival completes the wave: release the peers waiting on the current channel
+		// and arm a fresh one for the next wave. The completing caller proceeds immediately.
+		close(b.release)
+		b.count = 0
+		b.release = make(chan struct{})
+		b.mu.Unlock()
+		return nil
+	}
+	ch := b.release
+	b.mu.Unlock()
+	select {
+	case <-ch:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

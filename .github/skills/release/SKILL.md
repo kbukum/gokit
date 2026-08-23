@@ -50,19 +50,23 @@ Use `docs/policy/SEMVER.md`. While in `0.x`: a breaking change in the `[Unreleas
 **Always cross-check the Go module proxy — it is the immutable source of truth for "what version is already taken," and Toven does not consult it.** gokit declares no registry, so `toven release status`/`plan` anchor on *reachable git tags only*. If tags are ever deleted or diverge from the proxy, Toven can fail closed ("no reachable release tag") and let you pick a version that is **already permanently published** on the proxy — which downstream consumers have already resolved and which can never be reused or moved. A release tags **every discovered module** (root and each nested sub-module) in lock-step, and each module path is an **independent** proxy cache, so a deleted or divergent tag on any one sub-module can already occupy the target version even when the root returns 404. Before choosing a version, confirm the target `.info` returns 404 (unpublished) for **every** Toven-discovered module path, not just the root:
 
 ```bash
-# Highest published root version (the proxy caches these forever):
-curl -s https://proxy.golang.org/github.com/kbukum/gokit/@v/list | sort -V | tail -5
-# Your target must return 404 (not yet published) for the root AND every sub-module path.
-# Toven prints the exact module paths it tags:
-for mod in $(toven release plan --format json | jq -r '.modules[].path'); do
+# Enumerate every published module path (root + sub-modules) straight from the go.mod
+# files Toven tags — these are the exact proxy paths, and each caches versions forever:
+mods=$(find . -name go.mod -not -path '*/vendor/*' \
+  -exec sed -n 's/^module //p' {} \;)
+# Highest version published ANYWHERE — a sub-module may sit ahead of the root, so the
+# max must span every path, not just github.com/kbukum/gokit:
+for mod in $mods; do curl -s "https://proxy.golang.org/${mod}/@v/list"; done | sort -V | tail -5
+# Your target vX.Y.Z must also return 404 (not yet published) for EVERY module path:
+for mod in $mods; do
   code=$(curl -s -o /dev/null -w '%{http_code}' "https://proxy.golang.org/${mod}/@v/vX.Y.Z.info")
   echo "${code}  ${mod}"   # every line must read 404
 done
 ```
 
-The next version must be **strictly greater** than the highest proxy version — and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
+The next version must be **strictly greater** than the highest version published across *every* module path (not just the root), and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
 
-**First-release caveat:** if gokit genuinely has no reachable tag *and* nothing on the proxy, `release status`/`plan` fail closed as expected. Supply the version explicitly to the mutating action with `--set-version` (e.g. `toven release bump --set-version go:gokit=X.Y.Z --yes`); Toven never fabricates a synthetic `0.0.0` baseline. See `docs/VERSIONING.md`.
+**First-release caveat:** if gokit genuinely has no reachable tag *and* nothing on the proxy, `release status`/`plan` fail closed as expected. `--set-version` is a **`release tag`/`release publish` flag only** (not `release bump`), so supply the explicit first version to the Phase 2 mutating cut — `toven release publish --set-version go:gokit=X.Y.Z --yes` (or `toven release tag --set-version go:gokit=X.Y.Z --yes` to tag without the hosted Release). Toven never fabricates a synthetic `0.0.0` baseline. See `docs/VERSIONING.md`.
 
 ## Step 3 — Update the CHANGELOG
 
@@ -77,7 +81,7 @@ The next version must be **strictly greater** than the highest proxy version —
 `toven release bump` rewrites every module's version and the inter-module dependency floors and **stages** the change — it never commits, tags, or pushes.
 
 ```bash
-toven release bump --yes                       # or --set-version go:gokit=X.Y.Z --yes on the first release
+toven release bump --yes                       # first release: nothing to bump — skip to Phase 2 with --set-version
 # Makefile wrapper: make release-bump
 ```
 
@@ -91,6 +95,8 @@ Run only from a clean checkout of the merged commit. Toven creates signed path-p
 toven release readiness          # fail-closed go/no-go checks (clean-tree)
 toven release publish --dry-run  # mutation-free tag + hosted-Release rehearsal
 toven release publish --yes      # cut and push signed tags, then create the hosted Release
+# First release only (no reachable tag): pin the explicit version here, e.g.
+# toven release publish --set-version go:gokit=X.Y.Z --yes
 ```
 
 `toven release tag --yes` cuts and pushes the signed tags without creating the Release; `toven release publish --yes` performs the full tag → push → hosted-Release sequence **idempotently** (safe to re-run to reconcile a partial push). Add `--no-push` to keep tags local for inspection. Makefile wrappers: `make release-readiness`, `make release-publish-dry-run`, `make release-tag`, `make release-publish`, `make list-tags`.

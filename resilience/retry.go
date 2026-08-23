@@ -146,8 +146,12 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 
 		backoff := calculateBackoff(attempt, cfg)
 
-		// Refuse to sleep past the total elapsed-time budget.
-		if cfg.MaxElapsedTime > 0 && time.Since(start)+backoff > cfg.MaxElapsedTime {
+		// Refuse to sleep past the total elapsed-time budget. Compare the backoff against
+		// the remaining budget rather than elapsed+backoff, so a large configured backoff
+		// cannot overflow the duration addition and wrap negative past the guard. Using >=
+		// also stops when the sleep would land exactly on the deadline, leaving no room for
+		// the next attempt to run.
+		if cfg.MaxElapsedTime > 0 && backoff >= cfg.MaxElapsedTime-time.Since(start) {
 			break
 		}
 

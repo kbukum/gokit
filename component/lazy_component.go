@@ -3,6 +3,7 @@ package component
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 
 	apperr "github.com/kbukum/gokit/errors"
@@ -139,9 +140,10 @@ func NewLazyComponent(name string, factory func() Component) *LazyComponent {
 func (l *LazyComponent) Name() string { return l.name }
 
 // Start constructs the delegate (once) and starts it. A nil factory, or a factory that
-// returns a nil Component, yields a typed error rather than a panic: Go interfaces permit
-// nil values that the Rust Arc<dyn Component> counterpart cannot, so this lifecycle path
-// guards them explicitly.
+// returns a nil Component — including a typed nil such as a nil *T stored in the interface,
+// which a plain == nil check misses — yields a typed error rather than a panic: Go interfaces
+// permit nil values that the Rust Arc<dyn Component> counterpart cannot, so this lifecycle
+// path guards them explicitly.
 func (l *LazyComponent) Start(ctx context.Context) error {
 	l.mu.Lock()
 	if l.inner == nil {
@@ -150,7 +152,7 @@ func (l *LazyComponent) Start(ctx context.Context) error {
 			return apperr.InvalidInput("factory", "must not be nil")
 		}
 		inner := l.factory()
-		if inner == nil {
+		if isNilComponent(inner) {
 			l.mu.Unlock()
 			return apperr.InvalidInput("factory", "must not return a nil Component")
 		}
@@ -159,6 +161,22 @@ func (l *LazyComponent) Start(ctx context.Context) error {
 	inner := l.inner
 	l.mu.Unlock()
 	return inner.Start(ctx)
+}
+
+// isNilComponent reports whether c is nil, including a typed-nil interface value (e.g. a nil
+// *T stored in the interface) that a plain c == nil check misses and that would otherwise
+// panic when a method is dispatched through it.
+func isNilComponent(c Component) bool {
+	if c == nil {
+		return true
+	}
+	v := reflect.ValueOf(c)
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan, reflect.Interface:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // Stop stops the delegate if it was constructed; a never-started LazyComponent is a no-op.

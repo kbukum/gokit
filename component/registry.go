@@ -229,6 +229,14 @@ func (r *Registry) StartAllConcurrent(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Mark every pending entry Starting up front so a caller observing state during the
+	// boot sees the transition even before a worker slot frees.
+	r.mu.Lock()
+	for _, entry := range pending {
+		entry.state = StateStarting
+	}
+	r.mu.Unlock()
+
 	sem := make(chan struct{}, limit)
 	var (
 		wg       sync.WaitGroup
@@ -237,28 +245,41 @@ func (r *Registry) StartAllConcurrent(ctx context.Context) error {
 		started  []*componentEntry
 	)
 
-	for _, entry := range pending {
-		r.mu.Lock()
-		entry.state = StateStarting
-		r.mu.Unlock()
+	setFirstErr := func(err error) {
+		mu.Lock()
+		if firstErr == nil {
+			firstErr = err
+		}
+		mu.Unlock()
+	}
+
+launch:
+	for i, entry := range pending {
+		// Acquire a worker slot BEFORE launching the goroutine, so at most `limit`
+		// goroutines exist at once. Launching a goroutine per pending component and then
+		// acquiring inside would let a large registry create an unbounded goroutine/memory
+		// spike even when Concurrency is small.
+		select {
+		case sem <- struct{}{}:
+		case <-runCtx.Done():
+			// A peer already failed (or the caller canceled ctx): the remaining components
+			// never start. Mark them Failed and record the cancellation as the first error
+			// if none was set yet.
+			r.mu.Lock()
+			for _, e := range pending[i:] {
+				if e.state == StateStarting {
+					e.state = StateFailed
+				}
+			}
+			r.mu.Unlock()
+			setFirstErr(runCtx.Err())
+			break launch
+		}
 
 		wg.Add(1)
 		go func(entry *componentEntry) {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-				defer func() { <-sem }()
-			case <-runCtx.Done():
-				r.mu.Lock()
-				entry.state = StateFailed
-				r.mu.Unlock()
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = runCtx.Err()
-				}
-				mu.Unlock()
-				return
-			}
+			defer func() { <-sem }()
 
 			name := entry.component.Name()
 			logging.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
@@ -270,11 +291,7 @@ func (r *Registry) StartAllConcurrent(ctx context.Context) error {
 					"component": name,
 					"error":     err.Error(),
 				})
-				mu.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("failed to start %s: %w", name, err)
-				}
-				mu.Unlock()
+				setFirstErr(fmt.Errorf("failed to start %s: %w", name, err))
 				cancel()
 				return
 			}
@@ -311,7 +328,12 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 		entry.state = StateStopping
 		r.mu.Unlock()
 
-		stopCtx, cancel := r.stopContext(ctx)
+		// Detach cancellation before stopping: rollback runs precisely because a start
+		// failed, and on the concurrent path (or when the caller's ctx is already canceled)
+		// a Stop derived from that dead ctx could not release resources. WithoutCancel keeps
+		// the values while stopContext restores the configured StopTimeout bound, matching
+		// startOne's cleanup path.
+		stopCtx, cancel := r.stopContext(context.WithoutCancel(ctx))
 		if err := entry.component.Stop(stopCtx); err != nil {
 			logging.ErrorCtx(ctx, "Rollback stop failed", map[string]any{
 				"component": name,
