@@ -11,5 +11,10 @@ func (r *BenchRunner[L]) generateID() string {
 	if r.cfg.tag != "" {
 		return fmt.Sprintf("%s_%s", r.cfg.tag, ts)
 	}
-	return fmt.Sprintf("run_%s_%s", ts, uuid.New().String()[:8])
+	return fmt.Sprintf("run_%s_%s", ts, r.cfg.idSuffix())
+}
+
+// randomIDSuffix is the production default suffix source for untagged run IDs.
+func randomIDSuffix() string {
+	return uuid.New().String()[:8]
 }

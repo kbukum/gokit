@@ -25,6 +25,7 @@ type runConfig[L comparable] struct {
 	timeout          time.Duration
 	tag              string
 	clock            util.Clock
+	idSuffix         func() string
 	targets          map[string]float64
 	failOnRegression bool
 }
@@ -33,6 +34,7 @@ func defaultConfig[L comparable]() runConfig[L] {
 	return runConfig[L]{
 		concurrency: 1,
 		clock:       util.SystemClock{},
+		idSuffix:    randomIDSuffix,
 	}
 }
 
@@ -80,6 +82,17 @@ func WithClock[L comparable](clock util.Clock) RunOption[L] {
 	return func(c *runConfig[L]) {
 		if clock != nil {
 			c.clock = clock
+		}
+	}
+}
+
+// WithIDSuffix injects the suffix appended to untagged run IDs, making default
+// (untagged) runs reproducible under an injected clock. The production default is
+// a random UUID fragment; a nil source is ignored.
+func WithIDSuffix[L comparable](suffix func() string) RunOption[L] {
+	return func(c *runConfig[L]) {
+		if suffix != nil {
+			c.idSuffix = suffix
 		}
 	}
 }

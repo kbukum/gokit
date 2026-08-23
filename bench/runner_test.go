@@ -291,3 +291,26 @@ func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func TestBenchRunnerUntaggedRunIsDeterministicWithInjectedSources(t *testing.T) {
+	t.Parallel()
+
+	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
+	loader := setupTestDataset(t)
+	runner := NewBenchRunner(
+		WithClock[string](clock),
+		WithIDSuffix[string](func() string { return "fixedsfx" }),
+	)
+	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
+		return Prediction[string]{Label: "positive", Score: 0.5}, nil
+	}))
+
+	result, err := runner.Run(context.Background(), loader)
+	if err != nil {
+		t.Fatalf("Run() error: %v", err)
+	}
+
+	if result.ID != "run_20260823-043054_fixedsfx" {
+		t.Errorf("ID = %q, want %q", result.ID, "run_20260823-043054_fixedsfx")
+	}
+}
