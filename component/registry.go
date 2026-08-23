@@ -172,7 +172,12 @@ func (r *Registry) startOne(ctx context.Context, entry *componentEntry) error {
 		return nil
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		stopCtx, stopCancel := r.stopContext(ctx)
+		// Detach cleanup from ctx: on the concurrent path ctx is the shared run context
+		// that a sibling failure has already canceled, so a cleanup Stop derived from it
+		// would be dead on arrival. WithoutCancel keeps the values while restoring the
+		// configured StopTimeout bound so a partially-initialized component can release
+		// resources before rollback.
+		stopCtx, stopCancel := r.stopContext(context.WithoutCancel(ctx))
 		if stopErr := entry.component.Stop(stopCtx); stopErr != nil {
 			logging.ErrorCtx(ctx, "Cleanup stop failed after start timeout", map[string]any{
 				"component": entry.component.Name(),

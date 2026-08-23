@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	apperr "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 )
 
@@ -137,11 +138,23 @@ func NewLazyComponent(name string, factory func() Component) *LazyComponent {
 // Name returns the component name.
 func (l *LazyComponent) Name() string { return l.name }
 
-// Start constructs the delegate (once) and starts it.
+// Start constructs the delegate (once) and starts it. A nil factory, or a factory that
+// returns a nil Component, yields a typed error rather than a panic: Go interfaces permit
+// nil values that the Rust Arc<dyn Component> counterpart cannot, so this lifecycle path
+// guards them explicitly.
 func (l *LazyComponent) Start(ctx context.Context) error {
 	l.mu.Lock()
 	if l.inner == nil {
-		l.inner = l.factory()
+		if l.factory == nil {
+			l.mu.Unlock()
+			return apperr.InvalidInput("factory", "must not be nil")
+		}
+		inner := l.factory()
+		if inner == nil {
+			l.mu.Unlock()
+			return apperr.InvalidInput("factory", "must not return a nil Component")
+		}
+		l.inner = inner
 	}
 	inner := l.inner
 	l.mu.Unlock()

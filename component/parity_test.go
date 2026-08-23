@@ -100,8 +100,12 @@ func TestStartAllConcurrentRunsInParallel(t *testing.T) {
 func TestStartAllConcurrentRollsBackOnFailure(t *testing.T) {
 	t.Parallel()
 	r := NewRegistryWithConfig(RegistryConfig{Concurrency: 2})
-	good := &mockComponent{name: "good", health: Healthy("good")}
-	bad := &blockingComponent{name: "bad", startErr: errors.New("boom")}
+	// good signals once it has started; bad waits for that signal before failing, so the
+	// failure deterministically happens after good reached Running — proving rollback (not
+	// a never-started shortcut) is what stops good.
+	started := make(chan struct{})
+	good := &signalComponent{name: "good", startedCh: started}
+	bad := &gatedFailComponent{name: "bad", gate: started, err: errors.New("boom")}
 	if err := r.Register(good); err != nil {
 		t.Fatal(err)
 	}
@@ -111,9 +115,109 @@ func TestStartAllConcurrentRollsBackOnFailure(t *testing.T) {
 	if err := r.StartAllConcurrent(context.Background()); err == nil {
 		t.Fatal("expected failure")
 	}
-	// good must have been rolled back to stopped.
-	if state, _ := r.State("good"); state != StateStopped && state != StateFailed {
-		t.Fatalf("good state = %v, want stopped/failed after rollback", state)
+	if !good.stopped.Load() {
+		t.Fatal("expected rollback to invoke good.Stop")
+	}
+	if state, _ := r.State("good"); state != StateStopped {
+		t.Fatalf("good state = %v, want stopped after rollback", state)
+	}
+}
+
+// signalComponent closes startedCh the first time Start runs and records whether Stop was
+// invoked, so a test can assert rollback stopped an already-started component.
+type signalComponent struct {
+	name      string
+	startedCh chan struct{}
+	stopped   atomic.Bool
+}
+
+func (s *signalComponent) Name() string { return s.name }
+func (s *signalComponent) Start(context.Context) error {
+	close(s.startedCh)
+	return nil
+}
+func (s *signalComponent) Stop(context.Context) error    { s.stopped.Store(true); return nil }
+func (s *signalComponent) Health(context.Context) Health { return Healthy(s.name) }
+
+// gatedFailComponent blocks in Start until gate is closed, then fails — used to sequence a
+// failure after a peer has started.
+type gatedFailComponent struct {
+	name string
+	gate chan struct{}
+	err  error
+}
+
+func (g *gatedFailComponent) Name() string { return g.name }
+func (g *gatedFailComponent) Start(ctx context.Context) error {
+	select {
+	case <-g.gate:
+		return g.err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (g *gatedFailComponent) Stop(context.Context) error    { return nil }
+func (g *gatedFailComponent) Health(context.Context) Health { return Healthy(g.name) }
+
+func TestStartAllConcurrentEnforcesLimit(t *testing.T) {
+	t.Parallel()
+	const limit = 2
+	r := NewRegistryWithConfig(RegistryConfig{Concurrency: limit})
+	var cur, peak atomic.Int32
+	for _, n := range []string{"a", "b", "c", "d", "e"} {
+		if err := r.Register(&peakComponent{name: n, cur: &cur, peak: &peak}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.StartAllConcurrent(context.Background()); err != nil {
+		t.Fatalf("StartAllConcurrent: %v", err)
+	}
+	// The peak-simultaneous-starts assertion is an upper bound, so it holds regardless of
+	// scheduling: a positive limit smaller than the pending set must never be exceeded.
+	if got := peak.Load(); got > limit {
+		t.Fatalf("peak concurrent starts = %d, want <= %d", got, limit)
+	}
+}
+
+// peakComponent records the maximum number of Starts running simultaneously.
+type peakComponent struct {
+	name string
+	cur  *atomic.Int32
+	peak *atomic.Int32
+}
+
+func (p *peakComponent) Name() string { return p.name }
+func (p *peakComponent) Start(context.Context) error {
+	n := p.cur.Add(1)
+	for {
+		m := p.peak.Load()
+		if n <= m || p.peak.CompareAndSwap(m, n) {
+			break
+		}
+	}
+	time.Sleep(5 * time.Millisecond)
+	p.cur.Add(-1)
+	return nil
+}
+func (p *peakComponent) Stop(context.Context) error    { return nil }
+func (p *peakComponent) Health(context.Context) Health { return Healthy(p.name) }
+
+func TestLazyComponentNilFactoryReturnsError(t *testing.T) {
+	t.Parallel()
+	nilFactory := NewLazyComponent("x", nil)
+	if err := nilFactory.Start(context.Background()); err == nil {
+		t.Fatal("Start with nil factory = nil error, want rejection")
+	}
+	nilProduct := NewLazyComponent("y", func() Component { return nil })
+	if err := nilProduct.Start(context.Background()); err == nil {
+		t.Fatal("Start with factory returning nil = nil error, want rejection")
+	}
+	// Neither failure leaves a delegate, so Stop and Health stay safe no-ops.
+	if err := nilProduct.Stop(context.Background()); err != nil {
+		t.Fatalf("Stop after failed Start = %v, want nil", err)
+	}
+	if h := nilProduct.Health(context.Background()); h.IsHealthy() {
+		t.Fatalf("Health after failed Start = %v, want not healthy", h.Status)
 	}
 }
 
