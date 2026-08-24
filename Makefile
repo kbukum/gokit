@@ -48,9 +48,11 @@ endif
 test-integration:
 	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M) $(_W)
 
-## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W= → native.
+## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W=/T= → native.
+## Toven's coverage gate has no `-run` selector, so a T=<pattern> request must take
+## the native branch that applies it rather than silently covering the whole workspace.
 test-coverage:
-ifeq ($(_FILTERED),)
+ifeq ($(strip $(_FILTERED)$(T)),)
 	@$(TOVEN) coverage
 else
 	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M) $(_W)
