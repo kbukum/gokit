@@ -184,7 +184,7 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 		waitCh: make(chan struct{}),
 	}
 
-	if err := c.Start(); err != nil {
+	if err := startWithETXTBSYRetry(c); err != nil {
 		return nil, withStartErrorKind(
 			goerrors.Wrap(SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)),
 			PersistentStartSpawnFailed,

@@ -54,7 +54,7 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 		return nil, fmt.Errorf("process: stderr pipe: %w", err)
 	}
 
-	if err := c.Start(); err != nil {
+	if err := startWithETXTBSYRetry(c); err != nil {
 		return nil, SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)
 	}
 
