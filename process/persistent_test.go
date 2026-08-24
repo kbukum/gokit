@@ -35,6 +35,47 @@ func TestStartPersistentReadyImmediate(t *testing.T) {
 	}
 }
 
+func TestStartPersistentReadyImmediateHonorsCanceledContext(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	run, err := process.StartPersistent(ctx, process.Command{
+		Binary: "sleep",
+		Args:   []string{"60"},
+	}, process.DefaultPersistentConfig())
+	if err == nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
+		defer shutdownCancel()
+		_, _ = run.Process.Shutdown(shutdownCtx)
+		t.Fatal("expected canceled context to abort persistent startup")
+	}
+	assertProcessAppErrorCode(t, err, goerrors.ErrCodeCanceled)
+}
+
+func TestStartPersistentReadyAfterDelayClassifiesContextDeadline(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+
+	_, err := process.StartPersistent(ctx, process.Command{
+		Binary: "sleep",
+		Args:   []string{"60"},
+	}, process.PersistentConfig{
+		Readiness:           process.ReadyAfterDelay,
+		ReadyDelay:          time.Second,
+		ReadinessTimeout:    time.Second,
+		ShutdownGracePeriod: 50 * time.Millisecond,
+		Lifecycle: process.LifecyclePolicy{
+			GracePeriod:          50 * time.Millisecond,
+			IsolateProcessGroup:  true,
+			TerminateDescendants: true,
+			KillAfterGrace:       true,
+		},
+	})
+	assertProcessAppErrorCode(t, err, goerrors.ErrCodeTimeout)
+}
+
 func TestStartPersistentReadyOnOutput(t *testing.T) {
 	t.Parallel()
 
@@ -154,5 +195,16 @@ func TestStartPersistentEmptyMarkerRejected(t *testing.T) {
 	}
 	if appErr, ok := goerrors.AsAppError(err); !ok || appErr.Code != goerrors.ErrCodeInvalidInput {
 		t.Fatalf("error = %v, want INVALID_INPUT", err)
+	}
+}
+
+func assertProcessAppErrorCode(t *testing.T, err error, want goerrors.ErrorCode) {
+	t.Helper()
+	appErr, ok := goerrors.AsAppError(err)
+	if !ok {
+		t.Fatalf("error = %T, want *errors.AppError", err)
+	}
+	if appErr.Code != want {
+		t.Fatalf("code = %s, want %s", appErr.Code, want)
 	}
 }

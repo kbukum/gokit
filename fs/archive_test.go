@@ -1,12 +1,13 @@
 package fs
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"os"
 	"path/filepath"
 	"testing"
+
+	goerrors "github.com/kbukum/gokit/errors"
+	fstestutil "github.com/kbukum/gokit/fs/testutil"
 )
 
 func writeSource(t *testing.T, dir, name, content string) string {
@@ -115,7 +116,7 @@ func TestTarGzMissingSourceErrors(t *testing.T) {
 func TestExtractTarGzRejectsSlip(t *testing.T) {
 	t.Parallel()
 	archivePath := filepath.Join(t.TempDir(), "evil.tar.gz")
-	writeMaliciousTarGz(t, archivePath, "../escape.txt")
+	fstestutil.WriteTarGz(t, archivePath, fstestutil.TarFile("../escape.txt", "pwn"))
 	if _, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits()); err == nil {
 		t.Fatal("expected tar-slip rejection")
 	}
@@ -124,10 +125,78 @@ func TestExtractTarGzRejectsSlip(t *testing.T) {
 func TestExtractTarGzRejectsSymlink(t *testing.T) {
 	t.Parallel()
 	archivePath := filepath.Join(t.TempDir(), "link.tar.gz")
-	writeSymlinkTarGz(t, archivePath)
+	fstestutil.WriteTarGz(t, archivePath, fstestutil.TarSymlink("link", "/etc/passwd"))
 	if _, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits()); err == nil {
 		t.Fatal("expected symlink rejection")
 	}
+}
+
+func TestExtractTarGzCreatesDirectoryMember(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "dir.tar.gz")
+	fstestutil.WriteTarGz(t, archivePath, fstestutil.TarDir("nested/"))
+
+	dest := t.TempDir()
+	if _, err := ExtractTarGz(archivePath, dest, DefaultExtractLimits()); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dest, "nested"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatal("expected extracted member to be a directory")
+	}
+}
+
+func TestExtractTarGzMalformedInputReturnsTypedInvalidInput(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "short.tar.gz")
+	if err := os.WriteFile(archivePath, []byte{0x1f, 0x8b}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits())
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+}
+
+func TestExtractZipMalformedInputReturnsTypedInvalidInput(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "malformed.zip")
+	if err := os.WriteFile(archivePath, []byte("not a zip archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ExtractZip(archivePath, t.TempDir(), DefaultExtractLimits())
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+}
+
+func TestExtractZipRejectsSlip(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "evil.zip")
+	fstestutil.WriteZip(t, archivePath, fstestutil.ZipFile("../escape.txt", "pwn"))
+
+	_, err := ExtractZip(archivePath, t.TempDir(), DefaultExtractLimits())
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+}
+
+func TestExtractZipRejectsSymlink(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "link.zip")
+	fstestutil.WriteZip(t, archivePath, fstestutil.ZipSymlink("link", "/etc/passwd"))
+
+	_, err := ExtractZip(archivePath, t.TempDir(), DefaultExtractLimits())
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+}
+
+func TestExtractZipEnforcesByteLimit(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "big.zip")
+	fstestutil.WriteZip(t, archivePath, fstestutil.ZipFile("big.txt", "0123456789"))
+	limits := DefaultExtractLimits().WithMaxTotalBytes(4)
+
+	_, err := ExtractZip(archivePath, t.TempDir(), limits)
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
 }
 
 func TestExtractTarGzEnforcesEntryLimit(t *testing.T) {
@@ -191,50 +260,13 @@ func TestExtractTarGzRejectsPreexistingLeafSymlink(t *testing.T) {
 	}
 }
 
-func writeMaliciousTarGz(t *testing.T, archivePath, memberName string) {
+func assertAppErrorCode(t *testing.T, err error, want goerrors.ErrorCode) {
 	t.Helper()
-	file, err := os.Create(archivePath)
-	if err != nil {
-		t.Fatal(err)
+	appErr, ok := goerrors.AsAppError(err)
+	if !ok {
+		t.Fatalf("error = %T, want *errors.AppError", err)
 	}
-	defer func() { _ = file.Close() }()
-	gz := gzip.NewWriter(file)
-	tw := tar.NewWriter(gz)
-	content := []byte("pwn")
-	if err := tw.WriteHeader(&tar.Header{
-		Name: memberName, Size: int64(len(content)), Mode: 0o644, Typeflag: tar.TypeReg,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tw.Write(content); err != nil {
-		t.Fatal(err)
-	}
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func writeSymlinkTarGz(t *testing.T, archivePath string) {
-	t.Helper()
-	file, err := os.Create(archivePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = file.Close() }()
-	gz := gzip.NewWriter(file)
-	tw := tar.NewWriter(gz)
-	if err := tw.WriteHeader(&tar.Header{
-		Name: "link", Linkname: "/etc/passwd", Typeflag: tar.TypeSymlink, Mode: 0o777,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := tw.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := gz.Close(); err != nil {
-		t.Fatal(err)
+	if appErr.Code != want {
+		t.Fatalf("code = %s, want %s", appErr.Code, want)
 	}
 }

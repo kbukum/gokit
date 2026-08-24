@@ -3,6 +3,7 @@ package process
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -151,6 +152,9 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 	if cfg.Readiness == ReadyOnOutput && cfg.OutputMarker == "" {
 		return nil, goerrors.InvalidInput("readiness.output_marker", "output readiness marker must not be empty")
 	}
+	if err := persistentStartupContextError(ctx); err != nil {
+		return nil, err
+	}
 
 	// The persistent lifecycle is owned by the returned handle (Wait/Shutdown), so the
 	// spawn context is detached from cancellation; readiness still honors ctx below.
@@ -266,7 +270,14 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 
 	switch cfg.Readiness {
 	case ReadyImmediate:
-		return nil
+		select {
+		case <-p.waitCh:
+			return p.exitedBeforeReadyErr()
+		case <-ctx.Done():
+			return persistentStartupContextError(ctx)
+		default:
+			return nil
+		}
 	case ReadyAfterDelay:
 		delay := time.NewTimer(cfg.ReadyDelay)
 		defer delay.Stop()
@@ -278,7 +289,7 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		case <-timeout.C:
 			return p.readinessTimedOutErr()
 		case <-ctx.Done():
-			return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+			return persistentStartupContextError(ctx)
 		}
 	default: // ReadyOnOutput
 		select {
@@ -302,8 +313,19 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		case <-timeout.C:
 			return p.readinessTimedOutErr()
 		case <-ctx.Done():
-			return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+			return persistentStartupContextError(ctx)
 		}
+	}
+}
+
+func persistentStartupContextError(ctx context.Context) error {
+	switch {
+	case stderrors.Is(ctx.Err(), context.DeadlineExceeded):
+		return goerrors.Timeout("persistent process startup").WithCause(ctx.Err())
+	case stderrors.Is(ctx.Err(), context.Canceled):
+		return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+	default:
+		return nil
 	}
 }
 
