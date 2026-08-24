@@ -1,7 +1,10 @@
 package fs
 
 import (
+	"archive/zip"
 	"bytes"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -158,6 +161,9 @@ func TestExtractTarGzMalformedInputReturnsTypedInvalidInput(t *testing.T) {
 
 	_, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits())
 	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected the underlying gzip cause to be preserved, got %v", err)
+	}
 }
 
 func TestExtractZipMalformedInputReturnsTypedInvalidInput(t *testing.T) {
@@ -169,6 +175,9 @@ func TestExtractZipMalformedInputReturnsTypedInvalidInput(t *testing.T) {
 
 	_, err := ExtractZip(archivePath, t.TempDir(), DefaultExtractLimits())
 	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+	if !errors.Is(err, zip.ErrFormat) {
+		t.Fatalf("expected the underlying zip cause to be preserved, got %v", err)
+	}
 }
 
 func TestExtractZipRejectsSlip(t *testing.T) {
