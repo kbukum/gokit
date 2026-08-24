@@ -210,6 +210,19 @@ func TestNewClient_WithKeepalive(t *testing.T) {
 	conn.Close()
 }
 
+func TestNewClient_WithTLSCredentials(t *testing.T) {
+	t.Parallel()
+
+	cfg := validInsecureConfig()
+	cfg.TLS = &security.TLSConfig{SkipVerify: true, ServerName: "orders.internal"}
+	log := testLogger()
+
+	conn, err := NewClient(cfg, log)
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	require.NoError(t, conn.Close())
+}
+
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
@@ -625,6 +638,19 @@ func TestClientOptionsBuilder_CustomUnaryRunsAfterResilience(t *testing.T) {
 
 	require.NoError(t, call(0, context.Background()))
 	assert.True(t, customSawDeadline, "custom interceptors should run after resilience applies timeout policy")
+}
+
+func TestClientOptionsBuilder_WithResiliencePolicy(t *testing.T) {
+	t.Parallel()
+
+	cfg := validInsecureConfig()
+	policy := resilience.NewPolicy().WithTimeout(3 * time.Second).WithRetry(*DefaultRetryPolicy())
+	builder := NewClientOptionsBuilder(&cfg).WithResiliencePolicy(policy)
+
+	opts, err := builder.Build()
+	require.NoError(t, err)
+	assert.NotEmpty(t, opts)
+	assert.Same(t, policy, builder.resiliencePolicy, "WithResiliencePolicy should replace the entire policy")
 }
 
 func TestClientOptionsBuilder_WithStreamInterceptor(t *testing.T) {

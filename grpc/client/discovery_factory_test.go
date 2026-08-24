@@ -9,6 +9,7 @@ import (
 
 	"github.com/kbukum/gokit/discovery"
 	grpccfg "github.com/kbukum/gokit/grpc"
+	"github.com/kbukum/gokit/security"
 )
 
 // MockDiscovery is a mock implementation of discovery.Discovery.
@@ -55,6 +56,87 @@ func (m *MockDiscovery) Watch(ctx context.Context, serviceName string) (<-chan [
 // Close is not implemented in this mock.
 func (m *MockDiscovery) Close() error {
 	return nil
+}
+
+// TestDiscoveryConnectionFactory_NewConn_Success proves the discovery dial path:
+// a discovered instance drives buildDialOptions/transportCredentials and yields a
+// usable (lazy) connection.
+func TestDiscoveryConnectionFactory_NewConn_Success(t *testing.T) {
+	log := testLogger()
+	mockDisc := NewMockDiscovery().WithService("orders", discovery.ServiceInstance{
+		ID:       "orders-1",
+		Name:     "orders",
+		Address:  "127.0.0.1",
+		Port:     50055,
+		Protocol: "grpc",
+		Health:   discovery.HealthHealthy,
+		Weight:   1,
+	})
+
+	cfg := grpccfg.Config{
+		Addr:           "localhost:50055",
+		MaxRecvMsgSize: 4 * 1024 * 1024,
+		MaxSendMsgSize: 4 * 1024 * 1024,
+	}
+	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
+	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
+
+	conn, err := factory.NewConn("orders")
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	require.NoError(t, conn.Close())
+}
+
+// TestDiscoveryConnectionFactory_NewConn_InvalidConfig proves that a config that
+// fails validation surfaces from buildDialOptions rather than returning a
+// success-shaped nil connection.
+func TestDiscoveryConnectionFactory_NewConn_InvalidConfig(t *testing.T) {
+	log := testLogger()
+	mockDisc := NewMockDiscovery().WithService("orders", discovery.ServiceInstance{
+		ID:      "orders-1",
+		Name:    "orders",
+		Address: "127.0.0.1",
+		Port:    50055,
+		Health:  discovery.HealthHealthy,
+		Weight:  1,
+	})
+
+	cfg := grpccfg.Config{MaxRecvMsgSize: -1}
+	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
+	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
+
+	conn, err := factory.NewConn("orders")
+	require.Error(t, err)
+	require.Nil(t, conn)
+	require.Contains(t, err.Error(), "max_recv_msg_size must be positive")
+}
+
+// TestDiscoveryConnectionFactory_NewConn_TLS covers the TLS transport-credentials
+// branch of the discovery dial path.
+func TestDiscoveryConnectionFactory_NewConn_TLS(t *testing.T) {
+	log := testLogger()
+	mockDisc := NewMockDiscovery().WithService("orders", discovery.ServiceInstance{
+		ID:      "orders-1",
+		Name:    "orders",
+		Address: "127.0.0.1",
+		Port:    50055,
+		Health:  discovery.HealthHealthy,
+		Weight:  1,
+	})
+
+	cfg := grpccfg.Config{
+		Addr:           "localhost:50055",
+		MaxRecvMsgSize: 4 * 1024 * 1024,
+		MaxSendMsgSize: 4 * 1024 * 1024,
+		TLS:            &security.TLSConfig{SkipVerify: true, ServerName: "orders.internal"},
+	}
+	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
+	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
+
+	conn, err := factory.NewConn("orders")
+	require.NoError(t, err)
+	require.NotNil(t, conn)
+	require.NoError(t, conn.Close())
 }
 
 // TestNewDiscoveryConnectionFactory tests factory creation.

@@ -84,6 +84,24 @@ This keeps logging around the whole RPC while letting resilience set deadlines a
 
 Set `MinVersion: tls.VersionTLS13` when a deployment must require TLS 1.3 only.
 
+## Testing
+
+`grpc/testutil` provides an in-process gRPC server for deterministic, network-free transport tests. It runs a real `grpc.Server` over an in-memory bufconn listener, so tests exercise the genuine client stack — dialing, interceptors, deadlines, cancellation, and status propagation — without binding a port.
+
+```go
+srv := testutil.NewServer()
+defer srv.Stop(ctx)
+
+srv.SetUnaryHandler(func(ctx context.Context) error {
+    return grpc.AppErrorToStatus(appErr).Err() // or nil, or block on ctx.Done()
+})
+
+conn, _ := srv.Dial()
+err := srv.Invoke(ctx, conn) // drive the client and assert the mapped error
+```
+
+`SetUnaryHandler` controls the response: return `nil` for success, a `status` error to prove client-side mapping, or block on `ctx.Done()` to model deadline and cancellation. `Server` also implements `component.Component`/`testutil.TestComponent`.
+
 ---
 
 [← Back to main gokit README](../README.md)
