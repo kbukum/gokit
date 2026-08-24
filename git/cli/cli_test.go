@@ -108,6 +108,89 @@ func TestSignedTagArgsMapsFormatAndKey(t *testing.T) {
 	}
 }
 
+// TestExecPassesArgsLiterallyNoShell proves the CLI backend runs git argv-only:
+// a metacharacter payload arrives as one literal argument, never shell-expanded.
+// This is the CLI trust boundary — a shell seam here would be a command-injection hole.
+func TestExecPassesArgsLiterallyNoShell(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "argv.txt")
+	// The fake git records each received argument on its own line, verbatim.
+	script := writeFakeGit(t, dir, "#!/bin/sh\n: > '"+argsFile+"'\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> '"+argsFile+"'; done\n")
+	backend := New(dir, &model.OpenOptions{CLIPath: script})
+
+	payloads := []string{"; rm -rf /", "$(touch pwned)", "`id`", "a && b", "name|evil"}
+	if _, err := backend.Exec(append([]string{"tag"}, payloads...)...); err != nil {
+		t.Fatalf("Exec() error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+		t.Fatal("command substitution executed: pwned file created")
+	}
+
+	data, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("ReadFile(argv): %v", err)
+	}
+	got := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	want := append([]string{"tag"}, payloads...)
+	if len(got) != len(want) {
+		t.Fatalf("recorded argv = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("argv[%d] = %q, want %q (shell interpolation would alter it)", i, got[i], want[i])
+		}
+	}
+}
+
+// TestCreateSignedTagSurfacesSigningFailure proves a signing failure is reported,
+// never silently swallowed into a success-shaped result.
+func TestCreateSignedTagSurfacesSigningFailure(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	script := writeFakeGit(t, dir, "#!/bin/sh\necho 'error: gpg failed to sign the data' >&2\nexit 1\n")
+	backend := New(dir, &model.OpenOptions{CLIPath: script})
+
+	err := backend.CreateSignedTag("v1.0.0", "HEAD", "release", model.SignOptions{Key: "ABC123"})
+	if err == nil {
+		t.Fatal("CreateSignedTag() expected signing failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "gpg failed to sign") {
+		t.Fatalf("CreateSignedTag() error = %v, want git signing stderr", err)
+	}
+}
+
+// TestCreateSignedTagMissingKeyDoesNotCreateUnsignedTag proves the security
+// property that an absent signing key is a hard failure — the backend must never
+// fall back to creating an unsigned tag.
+func TestCreateSignedTagMissingKeyDoesNotCreateUnsignedTag(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "argv.txt")
+	// user.signingkey lookup exits 1 (absent); every invocation is recorded so the
+	// test can assert `tag -s` was never attempted.
+	body := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> '" + argsFile + "'; done\n" +
+		"printf '\\n' >> '" + argsFile + "'\n" +
+		"case \"$*\" in\n*user.signingkey*) exit 1 ;;\n*) exit 0 ;;\nesac\n"
+	script := writeFakeGit(t, dir, body)
+	backend := New(dir, &model.OpenOptions{CLIPath: script})
+
+	err := backend.CreateSignedTag("v1.0.0", "HEAD", "release", model.SignOptions{})
+	if err == nil {
+		t.Fatal("CreateSignedTag() expected missing-key error, got nil")
+	}
+	if !strings.Contains(err.Error(), "user.signingkey") {
+		t.Fatalf("CreateSignedTag() error = %v, want SigningKeyMissing", err)
+	}
+	if data, readErr := os.ReadFile(argsFile); readErr == nil && strings.Contains(string(data), "tag") {
+		t.Fatalf("backend attempted a tag operation after key lookup failed: %q", data)
+	}
+}
+
 func TestInspectorOperations(t *testing.T) {
 	t.Parallel()
 

@@ -16,6 +16,9 @@ import (
 
 // Logs retrieves log output from a Docker container.
 func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	logOpts := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -50,6 +53,9 @@ func (m *Manager) Logs(ctx context.Context, id string, opts workload.LogOptions)
 
 // StreamLogs implements LogStreamer for real-time log streaming.
 func (m *Manager) StreamLogs(ctx context.Context, id string, opts workload.LogOptions) (io.ReadCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	logOpts := client.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,

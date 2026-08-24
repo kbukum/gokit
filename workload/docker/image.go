@@ -60,6 +60,9 @@ func WithPullProgress(fn func(ImagePullProgress)) ImagePullOption {
 
 // ImagePull pulls an image from a registry, optionally reporting progress.
 func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	o := &imagePullOptions{}
 	for _, opt := range opts {
 		opt(o)
@@ -104,12 +107,17 @@ func (m *Manager) ImagePull(ctx context.Context, ref string, opts ...ImagePullOp
 		return scanner.Err()
 	}
 
-	_, _ = io.Copy(io.Discard, reader)
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return fmt.Errorf("docker: read pull progress for %s: %w", ref, err)
+	}
 	return nil
 }
 
 // ImageList returns all local images.
 func (m *Manager) ImageList(ctx context.Context) ([]ImageInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	listResult, err := m.client.ImageList(ctx, client.ImageListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: list images: %w", err)
@@ -130,6 +138,9 @@ func (m *Manager) ImageList(ctx context.Context) ([]ImageInfo, error) {
 
 // ImageRemove removes a local image.
 func (m *Manager) ImageRemove(ctx context.Context, ref string, force bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	_, err := m.client.ImageRemove(ctx, ref, client.ImageRemoveOptions{Force: force, PruneChildren: true})
 	if err != nil {
 		return fmt.Errorf("docker: remove image %s: %w", ref, err)
@@ -139,6 +150,9 @@ func (m *Manager) ImageRemove(ctx context.Context, ref string, force bool) error
 
 // ImageExists checks if an image exists locally.
 func (m *Manager) ImageExists(ctx context.Context, ref string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	_, err := m.client.ImageInspect(ctx, ref)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {

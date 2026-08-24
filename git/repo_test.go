@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	stderrors "errors"
 	"os"
 	"path/filepath"
@@ -53,7 +54,7 @@ func TestClone(t *testing.T) {
 	remoteDir := createRemote(t, dir)
 	cloneDir := filepath.Join(t.TempDir(), "clone")
 
-	repo, err := git.Clone(remoteDir, cloneDir)
+	repo, err := git.Clone(context.Background(), remoteDir, cloneDir)
 	if err != nil {
 		t.Fatalf("Clone() error: %v", err)
 	}
@@ -110,7 +111,7 @@ func TestOpenWithAuthAppliesTransport(t *testing.T) {
 		t.Fatalf("OpenWithAuth() error: %v", err)
 	}
 
-	err = repo.Fetch("missing")
+	err = repo.Fetch(context.Background(), "missing")
 	if err == nil {
 		t.Fatal("Fetch(missing) expected error")
 	}
@@ -133,7 +134,7 @@ func TestDiscoverWithAuthAppliesTransport(t *testing.T) {
 		t.Fatalf("DiscoverWithAuth() error: %v", err)
 	}
 
-	err = repo.Fetch("missing")
+	err = repo.Fetch(context.Background(), "missing")
 	if err == nil {
 		t.Fatal("Fetch(missing) expected error")
 	}

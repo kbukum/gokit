@@ -15,6 +15,9 @@ import (
 
 // Exec executes a command inside a running container.
 func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.ExecResult, error) {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
+	}
 	execCfg := client.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdout: true,
@@ -24,6 +27,9 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 	execResp, err := m.client.ExecCreate(ctx, id, execCfg)
 	if err != nil {
 		return nil, fmt.Errorf("docker: exec create: %w", err)
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return nil, ctxErr
 	}
 
 	resp, err := m.client.ExecAttach(ctx, execResp.ID, client.ExecAttachOptions{})
@@ -51,6 +57,9 @@ func (m *Manager) Exec(ctx context.Context, id string, cmd []string) (*workload.
 
 // Stats returns resource usage statistics for a container.
 func (m *Manager) Stats(ctx context.Context, id string) (*workload.WorkloadStats, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	resp, err := m.client.ContainerStats(ctx, id, client.ContainerStatsOptions{Stream: false})
 	if err != nil {
 		return nil, fmt.Errorf("docker: stats: %w", err)

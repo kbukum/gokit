@@ -12,6 +12,9 @@ import (
 
 // WatchImageEvents streams image lifecycle events (pull, delete, tag, untag).
 func (m *Manager) WatchImageEvents(ctx context.Context, filter workload.ImageEventFilter) (<-chan workload.ImageEvent, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f := make(client.Filters)
 	f.Add("type", string(events.ImageEventType))
 	for _, action := range filter.Actions {

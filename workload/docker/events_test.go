@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -82,6 +83,33 @@ func TestWatchEventsClosesOnTransportError(t *testing.T) {
 	}
 }
 
+func TestWatchEventsClosesOnContextCancelWhileStreamIsOpen(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+		if dockerPath(req.URL.Path) != "/events" {
+			return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     http.StatusText(http.StatusOK),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       contextReadCloser{ctx: req.Context()},
+			Request:    req,
+		}, nil
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := manager.WatchEvents(ctx, workload.ListFilter{})
+	if err != nil {
+		t.Fatalf("watch events: %v", err)
+	}
+	cancel()
+	if _, ok := <-ch; ok {
+		t.Fatal("event channel should close after context cancellation")
+	}
+}
+
 func TestWatchImageEventsStreamsImageEvents(t *testing.T) {
 	t.Parallel()
 
@@ -106,6 +134,52 @@ func TestWatchImageEventsStreamsImageEvents(t *testing.T) {
 	if evt.Action != "pull" || evt.ImageID != "sha256:abc" || evt.ImageRef != "repo/app:1" || evt.Timestamp.Nanosecond() == 0 {
 		t.Fatalf("image event = %#v", evt)
 	}
+}
+
+func TestWatchImageEventsClosesOnErrorAndCancel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("daemon error", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(*http.Request) (int, string) {
+			return http.StatusInternalServerError, `{"message":"events failed"}`
+		})
+		ch, err := manager.WatchImageEvents(context.Background(), workload.ImageEventFilter{})
+		if err != nil {
+			t.Fatalf("watch image events: %v", err)
+		}
+		if _, ok := <-ch; ok {
+			t.Fatal("image event channel should close on stream error")
+		}
+	})
+
+	t.Run("context cancel", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+			if dockerPath(req.URL.Path) != "/events" {
+				return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     http.StatusText(http.StatusOK),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       contextReadCloser{ctx: req.Context()},
+				Request:    req,
+			}, nil
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := manager.WatchImageEvents(ctx, workload.ImageEventFilter{})
+		if err != nil {
+			t.Fatalf("watch image events: %v", err)
+		}
+		cancel()
+		if _, ok := <-ch; ok {
+			t.Fatal("image event channel should close after context cancellation")
+		}
+	})
 }
 
 func TestImageEventHelpersPreferSpecificFields(t *testing.T) {
@@ -141,5 +215,41 @@ func TestStaticAndFunctionResolvers(t *testing.T) {
 	resolver := HostResolverFunc(func(context.Context) (string, error) { return "", wantErr })
 	if _, err := resolver.ResolveHost(context.Background()); !errors.Is(err, wantErr) {
 		t.Fatalf("resolver error = %v", err)
+	}
+}
+
+func TestManagerPoolResolverErrorAndDefaultFallback(t *testing.T) {
+	t.Parallel()
+
+	cfg := &Config{Host: "http://docker.example"}
+	pool, err := NewManagerPool(cfg, nil, nil, WithHostResolver(HostResolverFunc(func(context.Context) (string, error) {
+		return "", errors.New("lookup failed")
+	})))
+	if err != nil {
+		t.Fatalf("new manager pool: %v", err)
+	}
+	defer func() {
+		if err := pool.Close(); err != nil {
+			t.Fatalf("close pool: %v", err)
+		}
+	}()
+
+	if _, err := pool.For(context.Background()); err == nil || !strings.Contains(err.Error(), "resolve host") {
+		t.Fatalf("expected resolver error, got %v", err)
+	}
+
+	fallback, err := NewManagerPool(&Config{Host: "http://docker.example"}, nil, nil, WithHostResolver(HostResolverFunc(func(context.Context) (string, error) {
+		return "", nil
+	})))
+	if err != nil {
+		t.Fatalf("new fallback pool: %v", err)
+	}
+	defer func() {
+		if err := fallback.Close(); err != nil {
+			t.Fatalf("close fallback pool: %v", err)
+		}
+	}()
+	if got, err := fallback.For(context.Background()); err != nil || got != fallback.Default() {
+		t.Fatalf("default fallback manager=%p default=%p err=%v", got, fallback.Default(), err)
 	}
 }
