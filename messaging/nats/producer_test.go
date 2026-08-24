@@ -104,6 +104,54 @@ func TestProducerSendBatchStopsOnErrorAndCloseDrains(t *testing.T) {
 	}
 }
 
+func TestProducerEnsureConnDialsLazilyAndCaches(t *testing.T) {
+	conn := &fakeNATSConn{}
+	p := &Producer{
+		cfg:           Config{PublishTimeout: "1s"},
+		connect:       func(string, ...natsgo.Option) (natsConn, error) { return conn, nil },
+		retryAttempts: 1,
+	}
+	if err := p.PublishBinary(context.Background(), "orders", "k", []byte("x")); err != nil {
+		t.Fatalf("PublishBinary via lazy connect: %v", err)
+	}
+	if p.conn != conn {
+		t.Fatal("lazy connect must cache the connection")
+	}
+	if len(conn.published) != 1 {
+		t.Fatalf("published %d, want 1", len(conn.published))
+	}
+}
+
+func TestProducerEnsureConnSurfacesConnectError(t *testing.T) {
+	connectErr := errors.New("dial refused")
+	p := &Producer{
+		cfg:           Config{URL: "nats://localhost:4222", PublishTimeout: "1s"},
+		connect:       func(string, ...natsgo.Option) (natsConn, error) { return nil, connectErr },
+		retryAttempts: 1,
+	}
+	err := p.PublishBinary(context.Background(), "orders", "k", []byte("x"))
+	if !errors.Is(err, connectErr) {
+		t.Fatalf("error = %v, want connect error", err)
+	}
+}
+
+func TestProducerCloseClosesConnectionEvenWhenDrainFails(t *testing.T) {
+	drainErr := errors.New("drain failed")
+	conn := &fakeNATSConn{drainErr: drainErr}
+	p := &Producer{cfg: Config{PublishTimeout: "1s"}, conn: conn, retryAttempts: 1}
+
+	err := p.Close()
+	if !errors.Is(err, drainErr) {
+		t.Fatalf("Close error = %v, want drain failure surfaced", err)
+	}
+	if !conn.closed {
+		t.Fatal("Close must close the connection even when Drain fails (no leak)")
+	}
+	if err := p.Close(); err != nil {
+		t.Fatalf("second Close should be a no-op: %v", err)
+	}
+}
+
 func TestProducerMapsPublishFlushAndContextErrors(t *testing.T) {
 	publishErr := errors.New("publish failed")
 	p := &Producer{cfg: Config{PublishTimeout: "1s"}, conn: &fakeNATSConn{publishErr: publishErr}, retryAttempts: 1}

@@ -67,3 +67,17 @@ func TestFromKafka_UnknownError(t *testing.T) {
 		t.Errorf("HTTPStatus = %d, want 500", appErr.HTTPStatus)
 	}
 }
+
+func TestKafkaErrorTranslatorTranslateDelegatesToFromKafka(t *testing.T) {
+	var translator KafkaErrorTranslator
+	appErr := translator.Translate(errors.New("connection refused"), "events")
+	if appErr == nil {
+		t.Fatal("Translate returned nil for a connection error")
+	}
+	if !appErr.Retryable {
+		t.Fatal("connection error should be retryable")
+	}
+	if translator.Translate(nil, "events") != nil {
+		t.Fatal("Translate(nil) must return nil")
+	}
+}

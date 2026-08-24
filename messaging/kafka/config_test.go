@@ -221,3 +221,41 @@ func TestParseDuration(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateCommonProducerRejectsUnsupportedSemantics(t *testing.T) {
+	if err := ValidateCommonProducer(messaging.Config{DeliveryGuarantee: messaging.DeliveryExactlyOnce}); err == nil {
+		t.Fatal("exactly-once producer: want error")
+	}
+	if err := ValidateCommonProducer(messaging.Config{DLQ: messaging.DLQPolicy{Enabled: true}}); err == nil {
+		t.Fatal("adapter-managed DLQ producer: want error")
+	}
+	if err := ValidateCommonProducer(messaging.Config{DeliveryGuarantee: messaging.DeliveryAtLeastOnce}); err != nil {
+		t.Fatalf("supported producer config: %v", err)
+	}
+}
+
+func TestValidateCommonConsumerEnforcesSupportedSemantics(t *testing.T) {
+	tests := map[string]struct {
+		cfg     messaging.Config
+		wantErr bool
+	}{
+		"dlq":               {messaging.Config{MaxInFlight: 1, DLQ: messaging.DLQPolicy{Enabled: true}}, true},
+		"max-in-flight":     {messaging.Config{MaxInFlight: 2}, true},
+		"at-least-once-ok":  {messaging.Config{MaxInFlight: 1, DeliveryGuarantee: messaging.DeliveryAtLeastOnce, CommitStrategy: messaging.CommitAfterHandlerSuccess}, false},
+		"at-least-once-bad": {messaging.Config{MaxInFlight: 1, DeliveryGuarantee: messaging.DeliveryAtLeastOnce, CommitStrategy: messaging.CommitAuto}, true},
+		"at-most-once-ok":   {messaging.Config{MaxInFlight: 1, DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAuto}, false},
+		"at-most-once-bad":  {messaging.Config{MaxInFlight: 1, DeliveryGuarantee: messaging.DeliveryAtMostOnce, CommitStrategy: messaging.CommitAfterHandlerSuccess}, true},
+		"exactly-once":      {messaging.Config{MaxInFlight: 1, DeliveryGuarantee: messaging.DeliveryExactlyOnce}, true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := ValidateCommonConsumer(tc.cfg)
+			if tc.wantErr && err == nil {
+				t.Fatal("want error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("want ok, got %v", err)
+			}
+		})
+	}
+}

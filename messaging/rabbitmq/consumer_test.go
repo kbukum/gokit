@@ -12,11 +12,76 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-type fakeAcknowledger struct{ acked, nacked int }
+type fakeAcknowledger struct {
+	acked, nacked int
+	nackErr       error
+}
 
-func (a *fakeAcknowledger) Ack(uint64, bool) error        { a.acked++; return nil }
-func (a *fakeAcknowledger) Nack(uint64, bool, bool) error { a.nacked++; return nil }
-func (a *fakeAcknowledger) Reject(uint64, bool) error     { return nil }
+func (a *fakeAcknowledger) Ack(uint64, bool) error { a.acked++; return nil }
+func (a *fakeAcknowledger) Nack(uint64, bool, bool) error {
+	a.nacked++
+	return a.nackErr
+}
+func (a *fakeAcknowledger) Reject(uint64, bool) error { return nil }
+
+func TestConsumerEnsureChannelJoinsCleanupOnQueueDeclareError(t *testing.T) {
+	queueErr := errors.New("queue declare failed")
+	ch := &fakeRabbitChannel{queueErr: queueErr}
+	conn := &fakeRabbitConn{ch: ch}
+	c := &Consumer{
+		cfg:   Config{},
+		dial:  func(Config) (rabbitConn, error) { return conn, nil },
+		topic: "orders",
+		queue: "orders",
+	}
+	err := c.Consume(context.Background(), func(context.Context, messaging.Message) error { return nil })
+	if !errors.Is(err, queueErr) {
+		t.Fatalf("error = %v, want queue declare error", err)
+	}
+	if !ch.closed || !conn.closed {
+		t.Fatalf("channel and connection must be closed on declare failure: ch=%v conn=%v", ch.closed, conn.closed)
+	}
+}
+
+func TestConsumerSurfacesNackFailureAlongsideHandlerError(t *testing.T) {
+	nackErr := errors.New("nack failed")
+	acks := &fakeAcknowledger{nackErr: nackErr}
+	deliveries := make(chan amqp.Delivery, 1)
+	deliveries <- amqp.Delivery{Acknowledger: acks, DeliveryTag: 1, Body: []byte("payload")}
+	ch := &fakeRabbitChannel{deliveries: deliveries}
+	handlerErr := errors.New("handler failed")
+	c := &Consumer{ch: ch, topic: "orders", queue: "orders"}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err := c.Consume(ctx, func(context.Context, messaging.Message) error { return handlerErr })
+	if !errors.Is(err, handlerErr) {
+		t.Fatalf("Consume error = %v, want handler error joined", err)
+	}
+	if !errors.Is(err, nackErr) {
+		t.Fatalf("Consume error = %v, want nack failure surfaced (not swallowed)", err)
+	}
+	if acks.nacked != 1 {
+		t.Fatalf("nacks = %d, want 1", acks.nacked)
+	}
+}
+
+func TestConsumerReportsUnexpectedDeliveryChannelClosure(t *testing.T) {
+	deliveries := make(chan amqp.Delivery)
+	ch := &fakeRabbitChannel{deliveries: deliveries}
+	c := &Consumer{ch: ch, topic: "orders", queue: "orders"}
+	// Close the delivery stream without canceling ctx or closing the consumer:
+	// an abnormal broker-side drop must surface as an error, not success-shaped nil.
+	close(deliveries)
+
+	err := c.Consume(context.Background(), func(context.Context, messaging.Message) error { return nil })
+	if !errors.Is(err, errDeliveriesClosed) {
+		t.Fatalf("Consume error = %v, want errDeliveriesClosed", err)
+	}
+	if !messaging.IsConnectionError(err) {
+		t.Fatalf("unexpected closure = %v, want classified as a connection error", err)
+	}
+}
 
 func TestConsumerConsumeAcksSuccessfulMessages(t *testing.T) {
 	acks := &fakeAcknowledger{}

@@ -171,3 +171,49 @@ func TestComponent_Health_NotRunning(t *testing.T) {
 func TestComponent_Interface(t *testing.T) {
 	var _ component.Component = (*Component)(nil)
 }
+
+func TestComponentHealthReportsNotStartedAndNoBrokers(t *testing.T) {
+	log := logging.New(&logging.Config{Level: "error"}, "test")
+
+	comp := NewComponent(Config{Brokers: []string{"127.0.0.1:1"}}, log)
+	if h := comp.Health(context.Background()); h.Status != component.StatusUnhealthy {
+		t.Fatalf("not-started health = %q, want unhealthy", h.Status)
+	}
+
+	noBrokers := NewComponent(Config{}, log)
+	if err := noBrokers.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = noBrokers.Stop(context.Background()) })
+	if h := noBrokers.Health(context.Background()); h.Status != component.StatusUnhealthy {
+		t.Fatalf("no-brokers health = %q, want unhealthy", h.Status)
+	}
+}
+
+func TestComponentHealthReportsUnreachableBroker(t *testing.T) {
+	log := logging.New(&logging.Config{Level: "error"}, "test")
+	comp := NewComponent(Config{Brokers: []string{"127.0.0.1:1"}, AllowInsecureDev: true}, log)
+	if err := comp.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = comp.Stop(context.Background()) })
+
+	h := comp.Health(context.Background())
+	if h.Status != component.StatusUnhealthy {
+		t.Fatalf("unreachable-broker health = %q, want unhealthy", h.Status)
+	}
+}
+
+func TestEnsureTopics(t *testing.T) {
+	log := logging.New(&logging.Config{Level: "error"}, "test")
+
+	comp := NewComponent(Config{Brokers: []string{"127.0.0.1:1"}, AllowInsecureDev: true}, log)
+	if err := comp.EnsureTopics(context.Background(), nil); err != nil {
+		t.Fatalf("EnsureTopics(nil) should be a no-op: %v", err)
+	}
+
+	err := comp.EnsureTopics(context.Background(), []TopicConfig{{Topic: "orders", NumPartitions: 1, ReplicationFactor: 1}})
+	if err == nil {
+		t.Fatal("EnsureTopics against an unreachable broker: want connect error")
+	}
+}

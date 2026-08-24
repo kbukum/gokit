@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -60,13 +61,10 @@ func (p *Producer) ensureChannelLocked() (rabbitChannel, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		_ = conn.Close()
-		return nil, redactError("rabbitmq producer channel", err)
+		return nil, errors.Join(redactError("rabbitmq producer channel", err), conn.Close())
 	}
 	if err := declareExchange(ch, p.cfg); err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, err
+		return nil, errors.Join(err, ch.Close(), conn.Close())
 	}
 	p.conn = conn
 	p.ch = ch
