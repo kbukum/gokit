@@ -147,9 +147,13 @@ list-tags:
 ## path; GoReleaser only attaches supply-chain artifacts to the Toven-created
 ## Release. Toven never fabricates a synthetic 0.0.0, so before the first version
 ## tag the release previews fail closed with "no reachable release tag" — that is
-## the expected outcome and is tolerated here. Once the first version tag exists
-## the previews succeed instead; that success is the expected steady state and is
-## reported as a pass. Only a failure for any other reason fails the canary.
+## the expected outcome and is tolerated here. Once a version tag exists the
+## previews succeed instead; that success is the expected steady state and is
+## reported as a pass. A whole-workspace `release plan` may still fail closed
+## because a not-yet-released module declares no version — Toven requires an
+## explicit first `--set-version` rather than inventing one. That is the same
+## expected pre-first-release posture and is tolerated too. Only a failure for
+## any other reason fails the canary.
 ## TOVEN selects the binary (see the TOVEN var).
 toven-canary:
 	@$(TOVEN) modules
@@ -161,6 +165,9 @@ toven-canary:
 	    echo "release $$verb now succeeds — a release tag is reachable"; \
 	  elif printf '%s\n' "$$out" | grep -q 'no reachable release tag'; then \
 	    echo "release $$verb fails closed as expected — no reachable release tag before the first Go release"; \
+	  elif printf '%s\n' "$$out" | grep -q 'has never been released and declares no version'; then \
+	    printf '%s\n' "$$out"; \
+	    echo "release $$verb fails closed as expected — a first-release module still needs an explicit --set-version"; \
 	  else \
 	    printf '%s\n' "$$out"; \
 	    echo "error: release $$verb failed for an unexpected reason" >&2; \
