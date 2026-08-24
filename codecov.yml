@@ -1,74 +1,667 @@
+# Coverage policy for the gokit multi-module monorepo.
+#
+# Enforced gates (blocking):
+#   - Per-package floor: every shipped package must hold >=80% line coverage.
+#     Each package is its own component; the floor is the default_rules status
+#     below, inherited by every shipped component. The TDD-hardening pass raised
+#     the whole tree over this bar, and the floor is blocking so it cannot
+#     silently regress.
+#   - Security-load-bearing set (errors, auth, authz, security, resilience,
+#     encryption) is held higher, at >=85%.
+#   - Patch: new and changed lines must be >=85% covered, so coverage cannot
+#     regress through untested edits independent of any legacy per-package debt.
+#   - Project: `auto` compares against the base commit; the 1% threshold bounds
+#     how far overall coverage may slip before the status turns red.
+#
+# Advisory (non-blocking):
+#   - 90% is the aspirational direction, reported repo-wide (the `aspirational`
+#     project status) but not gated: forcing it now would reward padding over
+#     behavioral tests.
+#   - Test-support packages -- the shipped `*/testutil` product and
+#     `security/tlstest` -- and build-time `scripts/**` carry an informational
+#     status only. A pure harness exists to support other packages' tests, not
+#     to be unit-tested to a shipped-code floor.
+#   - Declaration-only packages with no coverable statements (`embedding`,
+#     `git/auth` -- sealed-interface marker methods) report informational; they
+#     have nothing to cover.
+#
+# The individual_components list is the per-package floor and the source of
+# truth: a package is gated once it is listed here, so keep it in sync when
+# adding or removing packages.
+
 coverage:
-  # A coverage drop fails CI: `auto` compares against the base commit and the
-  # threshold bounds how far the whole project may slip before the status is red.
-  # The ≥80%-per-package floor is tracked as an advisory component status below
-  # while the remaining modules are backfilled (see tmp/release-parity-plan/FOLLOWUPS.md);
-  # security-load-bearing modules are already enforced at ≥85%.
   status:
     project:
       default:
         target: auto
         threshold: 1%
-    # New and changed lines must stay well covered so coverage cannot regress via
-    # untested edits, independent of legacy per-package debt.
+      # Aspirational 90% direction, surfaced on every PR but never blocking.
+      aspirational:
+        target: 90%
+        informational: true
+    # New and changed lines must stay well covered so coverage cannot regress
+    # via untested edits, independent of legacy per-package debt.
     patch:
       default:
         target: 85%
         threshold: 0%
 
-# Per-module coverage gates. Security-load-bearing modules are enforced at ≥85%
-# (blocking). Every other module carries an advisory ≥80% floor that reports but
-# does not block while the backfill in FOLLOWUPS.md lands.
+# Per-package coverage gates. Every shipped package is its own component and
+# inherits the blocking >=80% floor from default_rules. Security-load-bearing
+# packages override to >=85%. Test-support, script, and declaration-only
+# packages carry an informational (non-blocking) status.
 component_management:
   default_rules:
     statuses:
       - type: project
         target: 80%
         threshold: 1%
-        informational: true
+        informational: false
   individual_components:
-    - component_id: errors
-      name: errors
-      paths: [errors/**]
+    - component_id: agent
+      name: agent
+      paths: ["agent/**", "!agent/*/**"]
+    - component_id: agent_memory
+      name: agent/memory
+      paths: ["agent/memory/**", "!agent/memory/*/**"]
+    - component_id: ai
+      name: ai
+      paths: ["ai/**", "!ai/*/**"]
+    - component_id: ai_chat
+      name: ai/chat
+      paths: ["ai/chat/**", "!ai/chat/*/**"]
+    - component_id: ai_prompt
+      name: ai/prompt
+      paths: ["ai/prompt/**", "!ai/prompt/*/**"]
+    - component_id: ai_vector
+      name: ai/vector
+      paths: ["ai/vector/**", "!ai/vector/*/**"]
+    - component_id: auth
+      name: auth
+      paths: ["auth/**", "!auth/*/**"]
       statuses:
         - type: project
           target: 85%
           threshold: 0%
-    - component_id: auth
-      name: auth
-      paths: [auth/**]
+    - component_id: auth_apikey
+      name: auth/apikey
+      paths: ["auth/apikey/**", "!auth/apikey/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: auth_authctx
+      name: auth/authctx
+      paths: ["auth/authctx/**", "!auth/authctx/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: auth_jwt
+      name: auth/jwt
+      paths: ["auth/jwt/**", "!auth/jwt/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: auth_oidc
+      name: auth/oidc
+      paths: ["auth/oidc/**", "!auth/oidc/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: auth_oidc_providers
+      name: auth/oidc/providers
+      paths: ["auth/oidc/providers/**", "!auth/oidc/providers/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: auth_oidc_testutil
+      name: auth/oidc/testutil
+      paths: ["auth/oidc/testutil/**", "!auth/oidc/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: auth_password
+      name: auth/password
+      paths: ["auth/password/**", "!auth/password/*/**"]
       statuses:
         - type: project
           target: 85%
           threshold: 0%
     - component_id: authz
       name: authz
-      paths: [authz/**]
+      paths: ["authz/**", "!authz/*/**"]
       statuses:
         - type: project
           target: 85%
           threshold: 0%
-    - component_id: security
-      name: security
-      paths: [security/**]
+    - component_id: bench
+      name: bench
+      paths: ["bench/**", "!bench/*/**"]
+    - component_id: bench_metric
+      name: bench/metric
+      paths: ["bench/metric/**", "!bench/metric/*/**"]
+    - component_id: bench_report
+      name: bench/report
+      paths: ["bench/report/**", "!bench/report/*/**"]
+    - component_id: bench_storage
+      name: bench/storage
+      paths: ["bench/storage/**", "!bench/storage/*/**"]
+    - component_id: bench_viz
+      name: bench/viz
+      paths: ["bench/viz/**", "!bench/viz/*/**"]
+    - component_id: bootstrap
+      name: bootstrap
+      paths: ["bootstrap/**", "!bootstrap/*/**"]
+    - component_id: cache
+      name: cache
+      paths: ["cache/**", "!cache/*/**"]
+    - component_id: cache_redis
+      name: cache/redis
+      paths: ["cache/redis/**", "!cache/redis/*/**"]
+    - component_id: chain
+      name: chain
+      paths: ["chain/**", "!chain/*/**"]
+    - component_id: cli_live
+      name: cli/live
+      paths: ["cli/live/**", "!cli/live/*/**"]
+    - component_id: cli_progress
+      name: cli/progress
+      paths: ["cli/progress/**", "!cli/progress/*/**"]
+    - component_id: cli_prompt
+      name: cli/prompt
+      paths: ["cli/prompt/**", "!cli/prompt/*/**"]
+    - component_id: cli_render
+      name: cli/render
+      paths: ["cli/render/**", "!cli/render/*/**"]
+    - component_id: cli_signal
+      name: cli/signal
+      paths: ["cli/signal/**", "!cli/signal/*/**"]
+    - component_id: cli_theme
+      name: cli/theme
+      paths: ["cli/theme/**", "!cli/theme/*/**"]
+    - component_id: codec
+      name: codec
+      paths: ["codec/**", "!codec/*/**"]
+    - component_id: codec_framing
+      name: codec/framing
+      paths: ["codec/framing/**", "!codec/framing/*/**"]
+    - component_id: codec_value
+      name: codec/value
+      paths: ["codec/value/**", "!codec/value/*/**"]
+    - component_id: component
+      name: component
+      paths: ["component/**", "!component/*/**"]
+    - component_id: config
+      name: config
+      paths: ["config/**", "!config/*/**"]
+    - component_id: connect
+      name: connect
+      paths: ["connect/**", "!connect/*/**"]
+    - component_id: connect_client
+      name: connect/client
+      paths: ["connect/client/**", "!connect/client/*/**"]
+    - component_id: connect_testutil
+      name: connect/testutil
+      paths: ["connect/testutil/**", "!connect/testutil/*/**"]
       statuses:
         - type: project
-          target: 85%
-          threshold: 0%
-    - component_id: resilience
-      name: resilience
-      paths: [resilience/**]
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: dag
+      name: dag
+      paths: ["dag/**", "!dag/*/**"]
+    - component_id: dag_cascade
+      name: dag/cascade
+      paths: ["dag/cascade/**", "!dag/cascade/*/**"]
+    - component_id: dag_status
+      name: dag/status
+      paths: ["dag/status/**", "!dag/status/*/**"]
+    - component_id: dag_testutil
+      name: dag/testutil
+      paths: ["dag/testutil/**", "!dag/testutil/*/**"]
       statuses:
         - type: project
-          target: 85%
-          threshold: 0%
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: database
+      name: database
+      paths: ["database/**", "!database/*/**"]
+    - component_id: database_errors
+      name: database/errors
+      paths: ["database/errors/**", "!database/errors/*/**"]
+    - component_id: database_migration
+      name: database/migration
+      paths: ["database/migration/**", "!database/migration/*/**"]
+    - component_id: database_query
+      name: database/query
+      paths: ["database/query/**", "!database/query/*/**"]
+    - component_id: database_repository
+      name: database/repository
+      paths: ["database/repository/**", "!database/repository/*/**"]
+    - component_id: database_sqlite
+      name: database/sqlite
+      paths: ["database/sqlite/**", "!database/sqlite/*/**"]
+    - component_id: database_testutil
+      name: database/testutil
+      paths: ["database/testutil/**", "!database/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: database_types
+      name: database/types
+      paths: ["database/types/**", "!database/types/*/**"]
+    - component_id: dataset_collect
+      name: dataset/collect
+      paths: ["dataset/collect/**", "!dataset/collect/*/**"]
+    - component_id: dataset_manifest
+      name: dataset/manifest
+      paths: ["dataset/manifest/**", "!dataset/manifest/*/**"]
+    - component_id: dataset_payload
+      name: dataset/payload
+      paths: ["dataset/payload/**", "!dataset/payload/*/**"]
+    - component_id: dataset_record
+      name: dataset/record
+      paths: ["dataset/record/**", "!dataset/record/*/**"]
+    - component_id: dataset_sample
+      name: dataset/sample
+      paths: ["dataset/sample/**", "!dataset/sample/*/**"]
+    - component_id: dataset_schema
+      name: dataset/schema
+      paths: ["dataset/schema/**", "!dataset/schema/*/**"]
+    - component_id: dataset_stage
+      name: dataset/stage
+      paths: ["dataset/stage/**", "!dataset/stage/*/**"]
+    - component_id: di
+      name: di
+      paths: ["di/**", "!di/*/**"]
+    - component_id: discovery
+      name: discovery
+      paths: ["discovery/**", "!discovery/*/**"]
+    - component_id: discovery_consul
+      name: discovery/consul
+      paths: ["discovery/consul/**", "!discovery/consul/*/**"]
+    - component_id: discovery_static
+      name: discovery/static
+      paths: ["discovery/static/**", "!discovery/static/*/**"]
+    - component_id: discovery_testutil
+      name: discovery/testutil
+      paths: ["discovery/testutil/**", "!discovery/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: embedding
+      name: embedding
+      paths: ["embedding/**", "!embedding/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: embedding_inmem
+      name: embedding/inmem
+      paths: ["embedding/inmem/**", "!embedding/inmem/*/**"]
     - component_id: encryption
       name: encryption
-      paths: [encryption/**]
+      paths: ["encryption/**", "!encryption/*/**"]
       statuses:
         - type: project
           target: 85%
           threshold: 0%
+    - component_id: errors
+      name: errors
+      paths: ["errors/**", "!errors/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: fs
+      name: fs
+      paths: ["fs/**", "!fs/*/**"]
+    - component_id: fs_testutil
+      name: fs/testutil
+      paths: ["fs/testutil/**", "!fs/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: git
+      name: git
+      paths: ["git/**", "!git/*/**"]
+    - component_id: git_auth
+      name: git/auth
+      paths: ["git/auth/**", "!git/auth/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: git_cli
+      name: git/cli
+      paths: ["git/cli/**", "!git/cli/*/**"]
+    - component_id: git_embedded
+      name: git/embedded
+      paths: ["git/embedded/**", "!git/embedded/*/**"]
+    - component_id: git_internal_giterr
+      name: git/internal/giterr
+      paths: ["git/internal/giterr/**", "!git/internal/giterr/*/**"]
+    - component_id: git_internal_model
+      name: git/internal/model
+      paths: ["git/internal/model/**", "!git/internal/model/*/**"]
+    - component_id: git_internal_redact
+      name: git/internal/redact
+      paths: ["git/internal/redact/**", "!git/internal/redact/*/**"]
+    - component_id: git_testutil
+      name: git/testutil
+      paths: ["git/testutil/**", "!git/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: grpc
+      name: grpc
+      paths: ["grpc/**", "!grpc/*/**"]
+    - component_id: grpc_client
+      name: grpc/client
+      paths: ["grpc/client/**", "!grpc/client/*/**"]
+    - component_id: grpc_interceptor
+      name: grpc/interceptor
+      paths: ["grpc/interceptor/**", "!grpc/interceptor/*/**"]
+    - component_id: grpc_resolver_discovery
+      name: grpc/resolver/discovery
+      paths: ["grpc/resolver/discovery/**", "!grpc/resolver/discovery/*/**"]
+    - component_id: grpc_testutil
+      name: grpc/testutil
+      paths: ["grpc/testutil/**", "!grpc/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: hook
+      name: hook
+      paths: ["hook/**", "!hook/*/**"]
+    - component_id: httpclient
+      name: httpclient
+      paths: ["httpclient/**", "!httpclient/*/**"]
+    - component_id: httpclient_rest
+      name: httpclient/rest
+      paths: ["httpclient/rest/**", "!httpclient/rest/*/**"]
+    - component_id: httpclient_sse
+      name: httpclient/sse
+      paths: ["httpclient/sse/**", "!httpclient/sse/*/**"]
+    - component_id: inference
+      name: inference
+      paths: ["inference/**", "!inference/*/**"]
+    - component_id: inference_echo
+      name: inference/echo
+      paths: ["inference/echo/**", "!inference/echo/*/**"]
+    - component_id: inference_tgi
+      name: inference/tgi
+      paths: ["inference/tgi/**", "!inference/tgi/*/**"]
+    - component_id: inference_triton
+      name: inference/triton
+      paths: ["inference/triton/**", "!inference/triton/*/**"]
+    - component_id: inference_vllm
+      name: inference/vllm
+      paths: ["inference/vllm/**", "!inference/vllm/*/**"]
+    - component_id: llm
+      name: llm
+      paths: ["llm/**", "!llm/*/**"]
+    - component_id: llm_internal_streamwire
+      name: llm/internal/streamwire
+      paths: ["llm/internal/streamwire/**", "!llm/internal/streamwire/*/**"]
+    - component_id: llm_providers_anthropic
+      name: llm/providers/anthropic
+      paths: ["llm/providers/anthropic/**", "!llm/providers/anthropic/*/**"]
+    - component_id: llm_providers_gemini
+      name: llm/providers/gemini
+      paths: ["llm/providers/gemini/**", "!llm/providers/gemini/*/**"]
+    - component_id: llm_providers_internal_dialect
+      name: llm/providers/internal/dialect
+      paths: ["llm/providers/internal/dialect/**", "!llm/providers/internal/dialect/*/**"]
+    - component_id: llm_providers_ollama
+      name: llm/providers/ollama
+      paths: ["llm/providers/ollama/**", "!llm/providers/ollama/*/**"]
+    - component_id: llm_providers_openai
+      name: llm/providers/openai
+      paths: ["llm/providers/openai/**", "!llm/providers/openai/*/**"]
+    - component_id: llm_testutil
+      name: llm/testutil
+      paths: ["llm/testutil/**", "!llm/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: logging
+      name: logging
+      paths: ["logging/**", "!logging/*/**"]
+    - component_id: mcp
+      name: mcp
+      paths: ["mcp/**", "!mcp/*/**"]
+    - component_id: mcp_convert
+      name: mcp/convert
+      paths: ["mcp/convert/**", "!mcp/convert/*/**"]
+    - component_id: mcp_handlers
+      name: mcp/handlers
+      paths: ["mcp/handlers/**", "!mcp/handlers/*/**"]
+    - component_id: mcp_security
+      name: mcp/security
+      paths: ["mcp/security/**", "!mcp/security/*/**"]
+    - component_id: media
+      name: media
+      paths: ["media/**", "!media/*/**"]
+    - component_id: messaging
+      name: messaging
+      paths: ["messaging/**", "!messaging/*/**"]
+    - component_id: messaging_bridge
+      name: messaging/bridge
+      paths: ["messaging/bridge/**", "!messaging/bridge/*/**"]
+    - component_id: messaging_kafka
+      name: messaging/kafka
+      paths: ["messaging/kafka/**", "!messaging/kafka/*/**"]
+    - component_id: messaging_kafka_consumer
+      name: messaging/kafka/consumer
+      paths: ["messaging/kafka/consumer/**", "!messaging/kafka/consumer/*/**"]
+    - component_id: messaging_kafka_producer
+      name: messaging/kafka/producer
+      paths: ["messaging/kafka/producer/**", "!messaging/kafka/producer/*/**"]
+    - component_id: messaging_kafka_testutil
+      name: messaging/kafka/testutil
+      paths: ["messaging/kafka/testutil/**", "!messaging/kafka/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: messaging_memory
+      name: messaging/memory
+      paths: ["messaging/memory/**", "!messaging/memory/*/**"]
+    - component_id: messaging_middleware
+      name: messaging/middleware
+      paths: ["messaging/middleware/**", "!messaging/middleware/*/**"]
+    - component_id: messaging_nats
+      name: messaging/nats
+      paths: ["messaging/nats/**", "!messaging/nats/*/**"]
+    - component_id: messaging_rabbitmq
+      name: messaging/rabbitmq
+      paths: ["messaging/rabbitmq/**", "!messaging/rabbitmq/*/**"]
+    - component_id: messaging_testutil
+      name: messaging/testutil
+      paths: ["messaging/testutil/**", "!messaging/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: observability
+      name: observability
+      paths: ["observability/**", "!observability/*/**"]
+    - component_id: process
+      name: process
+      paths: ["process/**", "!process/*/**"]
+    - component_id: process_testutil
+      name: process/testutil
+      paths: ["process/testutil/**", "!process/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: provider
+      name: provider
+      paths: ["provider/**", "!provider/*/**"]
+    - component_id: provider_namedregistry
+      name: provider/namedregistry
+      paths: ["provider/namedregistry/**", "!provider/namedregistry/*/**"]
+    - component_id: resilience
+      name: resilience
+      paths: ["resilience/**", "!resilience/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: schema
+      name: schema
+      paths: ["schema/**", "!schema/*/**"]
+    - component_id: scripts_semver_max
+      name: scripts/semver-max
+      paths: ["scripts/semver-max/**", "!scripts/semver-max/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: security
+      name: security
+      paths: ["security/**", "!security/*/**"]
+      statuses:
+        - type: project
+          target: 85%
+          threshold: 0%
+    - component_id: security_tlstest
+      name: security/tlstest
+      paths: ["security/tlstest/**", "!security/tlstest/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: server
+      name: server
+      paths: ["server/**", "!server/*/**"]
+    - component_id: server_endpoint
+      name: server/endpoint
+      paths: ["server/endpoint/**", "!server/endpoint/*/**"]
+    - component_id: server_httpx
+      name: server/httpx
+      paths: ["server/httpx/**", "!server/httpx/*/**"]
+    - component_id: server_middleware
+      name: server/middleware
+      paths: ["server/middleware/**", "!server/middleware/*/**"]
+    - component_id: server_testutil
+      name: server/testutil
+      paths: ["server/testutil/**", "!server/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: skill
+      name: skill
+      paths: ["skill/**", "!skill/*/**"]
+    - component_id: sse
+      name: sse
+      paths: ["sse/**", "!sse/*/**"]
+    - component_id: stateful
+      name: stateful
+      paths: ["stateful/**", "!stateful/*/**"]
+    - component_id: storage
+      name: storage
+      paths: ["storage/**", "!storage/*/**"]
+    - component_id: storage_gcs
+      name: storage/gcs
+      paths: ["storage/gcs/**", "!storage/gcs/*/**"]
+    - component_id: storage_local
+      name: storage/local
+      paths: ["storage/local/**", "!storage/local/*/**"]
+    - component_id: storage_s3
+      name: storage/s3
+      paths: ["storage/s3/**", "!storage/s3/*/**"]
+    - component_id: storage_supabase
+      name: storage/supabase
+      paths: ["storage/supabase/**", "!storage/supabase/*/**"]
+    - component_id: storage_testutil
+      name: storage/testutil
+      paths: ["storage/testutil/**", "!storage/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: stream
+      name: stream
+      paths: ["stream/**", "!stream/*/**"]
+    - component_id: testutil
+      name: testutil
+      paths: ["testutil/**", "!testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: tool
+      name: tool
+      paths: ["tool/**", "!tool/*/**"]
+    - component_id: util
+      name: util
+      paths: ["util/**", "!util/*/**"]
+    - component_id: validation
+      name: validation
+      paths: ["validation/**", "!validation/*/**"]
+    - component_id: vectorstore
+      name: vectorstore
+      paths: ["vectorstore/**", "!vectorstore/*/**"]
+    - component_id: vectorstore_qdrant
+      name: vectorstore/qdrant
+      paths: ["vectorstore/qdrant/**", "!vectorstore/qdrant/*/**"]
+    - component_id: version
+      name: version
+      paths: ["version/**", "!version/*/**"]
+    - component_id: worker
+      name: worker
+      paths: ["worker/**", "!worker/*/**"]
+    - component_id: workload
+      name: workload
+      paths: ["workload/**", "!workload/*/**"]
+    - component_id: workload_docker
+      name: workload/docker
+      paths: ["workload/docker/**", "!workload/docker/*/**"]
+    - component_id: workload_kubernetes
+      name: workload/kubernetes
+      paths: ["workload/kubernetes/**", "!workload/kubernetes/*/**"]
+    - component_id: workload_testutil
+      name: workload/testutil
+      paths: ["workload/testutil/**", "!workload/testutil/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
 
 comment:
   layout: "reach,diff,flags,components,files"
