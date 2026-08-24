@@ -51,7 +51,7 @@ test-integration:
 ## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W= → native.
 test-coverage:
 ifeq ($(_FILTERED),)
-	@$(TOVEN) coverage -- -race -covermode=atomic $(if $(T),-run $(T))
+	@$(TOVEN) coverage
 else
 	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M) $(_W)
 endif
