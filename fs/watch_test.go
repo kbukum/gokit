@@ -44,6 +44,21 @@ func TestWatchEmptyRootsErrors(t *testing.T) {
 	}
 }
 
+func TestWatchWithBufferClampsToAtLeastOne(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	changes, err := NewFsWatcher(50*time.Millisecond).WithBuffer(0).Watch(ctx, []string{root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap(changes) != 1 {
+		t.Fatalf("watch buffer cap = %d, want 1", cap(changes))
+	}
+}
+
 func TestWatchMissingRootErrors(t *testing.T) {
 	t.Parallel()
 	missing := filepath.Join(t.TempDir(), "does-not-exist")
@@ -74,5 +89,26 @@ func TestWatchDeliversBatchOnWrite(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for change batch")
+	}
+}
+
+func TestWatchCancelClosesChannelPromptly(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	changes, err := NewFsWatcher(50*time.Millisecond).Watch(ctx, []string{root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+
+	select {
+	case _, ok := <-changes:
+		if ok {
+			t.Fatal("expected closed change channel after cancellation")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watcher did not close after cancellation")
 	}
 }

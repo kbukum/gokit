@@ -67,3 +67,10 @@ func terminateGracefully(c *exec.Cmd) error { return TerminateGracefully(c) }
 func signalErrIsGone(err error) bool {
 	return stderrors.Is(err, syscall.ESRCH)
 }
+
+// isTextFileBusy reports whether err is a transient ETXTBSY ("text file busy") from
+// exec: a just-written executable is briefly held open for writing by a concurrent
+// fork, so the exec races that descriptor's close.
+func isTextFileBusy(err error) bool {
+	return stderrors.Is(err, syscall.ETXTBSY)
+}

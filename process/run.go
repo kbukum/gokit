@@ -42,7 +42,12 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	applyLifecycle(c, policy)
 
 	start := time.Now()
-	err := c.Run()
+	// c.Run() is Start()+Wait(); split so the start races on ETXTBSY are retried
+	// while a just-written executable's writable descriptor closes.
+	err := startWithETXTBSYRetry(c)
+	if err == nil {
+		err = c.Wait()
+	}
 	duration := time.Since(start)
 
 	exitCode := -1

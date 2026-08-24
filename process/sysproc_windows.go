@@ -51,3 +51,7 @@ func terminateGracefully(c *exec.Cmd) error { return TerminateGracefully(c) }
 // Windows teardown goes through os.Process.Kill, which reports os.ErrProcessDone (handled
 // by the shared caller), so there is no additional platform errno to recognize here.
 func signalErrIsGone(error) bool { return false }
+
+// isTextFileBusy reports whether err is a transient ETXTBSY. Windows has no ETXTBSY
+// analogue for exec, so a start failure there is never treated as transiently busy.
+func isTextFileBusy(error) bool { return false }

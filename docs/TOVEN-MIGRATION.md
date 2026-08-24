@@ -31,7 +31,7 @@ These CI steps run native today; each has a direct Toven equivalent (declared in
 | per-module `go test -race … ./...` (check matrix) | `toven test` (per-module fan-out) |
 | per-module `golangci-lint run ./...` (lint job) | `toven lint` |
 | per-module `govulncheck ./...` (security job) | `toven vuln` |
-| per-module coverage merge (check job) | `toven coverage` |
+| per-module coverage merge (check job) | `toven coverage` — Migrated: single whole-workspace run over `github.com/kbukum/gokit/...` covers every module (go.work crosses `go.mod` boundaries that `./...` cannot), gated at the `go:gokit` aggregate |
 | `scripts/affected-domains.sh` (change → domain shard) | no direct equivalent — see gap 2 |
 
 The Go build/vet/test/lint/security matrix stays native for the same reason rskit keeps its cargo gates native: CI shards work by a Go version matrix and per-module groups that Toven does not yet model as first-class task variants.

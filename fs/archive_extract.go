@@ -65,7 +65,7 @@ func ExtractTarGz(archivePath, dest string, limits ExtractLimits) ([]string, err
 
 	gz, err := gzip.NewReader(file)
 	if err != nil {
-		return nil, extractIOError(archivePath, "open gzip stream", err)
+		return nil, archiveFormatError(archivePath, "open gzip stream", err)
 	}
 	defer func() { _ = gz.Close() }()
 	reader := tar.NewReader(gz)
@@ -84,7 +84,7 @@ func ExtractTarGz(archivePath, dest string, limits ExtractLimits) ([]string, err
 			break
 		}
 		if err != nil {
-			return nil, extractIOError(archivePath, "read tar member", err)
+			return nil, archiveReadError(archivePath, "read tar member", err)
 		}
 		if index >= limits.MaxEntries {
 			return nil, tooManyEntriesError(archivePath, limits.MaxEntries)
@@ -129,7 +129,7 @@ func ExtractZip(archivePath, dest string, limits ExtractLimits) ([]string, error
 			return nil, apperrors.InvalidInput("archive",
 				fmt.Sprintf("cannot open archive '%s': %v", archivePath, err)).WithCause(err)
 		}
-		return nil, extractIOError(archivePath, "open zip archive", err)
+		return nil, archiveFormatError(archivePath, "open zip archive", err)
 	}
 	defer func() { _ = reader.Close() }()
 
@@ -163,7 +163,7 @@ func ExtractZip(archivePath, dest string, limits ExtractLimits) ([]string, error
 		}
 		rc, err := member.Open()
 		if err != nil {
-			return nil, extractIOError(archivePath, "read zip member", err)
+			return nil, archiveReadError(archivePath, "read zip member", err)
 		}
 		err = extractFile(archivePath, root, target, member.Name, rc, limits, &written, mode)
 		_ = rc.Close()
@@ -202,10 +202,12 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 	if components == 0 {
 		return "", false, true, nil
 	}
-	// Containment barrier: resolve the member against dest through the sanitizer
-	// helper, whose positive HasPrefix guard clears the tainted member name before
-	// the resulting path reaches any filesystem sink. The component loop above
-	// already rejects "..", absolute, and drive-prefixed members.
+	// Defense-in-depth containment barrier: the component loop above already
+	// guarantees containment (it rejects "..", absolute, and drive-prefixed
+	// members, so filepath.Join under dest cannot escape), but the member name is
+	// still tainted input flowing to a filesystem sink. Re-resolving it through
+	// sanitizeArchivePath re-establishes the invariant at the boundary rather than
+	// trusting the loop by proximity.
 	target, err = sanitizeArchivePath(dest, cleaned)
 	if err != nil {
 		return "", false, false, escapeError(archivePath, name)
@@ -214,15 +216,17 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 }
 
 // sanitizeArchivePath joins a member name under dest and returns the result only when
-// it stays within dest. It follows the canonical zip-slip remediation exactly — a
-// single filepath.Join guarded by a positive filepath.Clean + strings.HasPrefix check
-// — so static analysis recognizes it as the sanitizer that clears the tainted archive
-// member name before the path reaches any filesystem operation. Because Join always
-// inserts a separator after the non-empty member name, the prefix check cannot be
-// satisfied by a sibling directory.
+// it stays within dest. It is a defense-in-depth barrier at the filesystem boundary:
+// callers (memberTarget) already reject traversal components, so in normal operation
+// this never rejects. The component-aware filepath.Rel guard is deliberately used
+// instead of a raw string-prefix check because a prefix check would admit a
+// sibling-prefix escape (dest "/out" vs "/output") should a future caller ever reach
+// here without the component loop.
 func sanitizeArchivePath(dest, name string) (target string, err error) {
-	target = filepath.Join(dest, name)
-	if strings.HasPrefix(target, filepath.Clean(dest)) {
+	root := filepath.Clean(dest)
+	target = filepath.Join(root, name)
+	rel, err := filepath.Rel(root, target)
+	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return target, nil
 	}
 	return "", fmt.Errorf("archive member %q escapes destination %q", name, dest)
@@ -375,4 +379,23 @@ func tooManyEntriesError(archivePath string, maxEntries int) error {
 func extractIOError(archivePath, action string, err error) error {
 	return apperrors.New(apperrors.ErrCodeInternal,
 		fmt.Sprintf("cannot %s for '%s': %v", action, archivePath, err), 500).WithCause(err)
+}
+
+func archiveFormatError(archivePath, action string, err error) error {
+	return apperrors.InvalidInput("archive",
+		fmt.Sprintf("cannot %s for '%s': %v", action, archivePath, err)).WithCause(err)
+}
+
+// archiveReadError classifies a failure encountered while reading a member from an
+// already-opened archive stream. A malformed or corrupt stream is caller-supplied
+// invalid input (400 InvalidInput), but an underlying filesystem failure — an
+// *os.PathError such as EIO from the archive file — is an operational I/O error (500
+// Internal) that must retain its retry/incident semantics rather than be reshaped into
+// a bad-request error.
+func archiveReadError(archivePath, action string, err error) error {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return extractIOError(archivePath, action, err)
+	}
+	return archiveFormatError(archivePath, action, err)
 }

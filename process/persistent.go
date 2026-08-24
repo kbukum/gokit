@@ -3,6 +3,7 @@ package process
 import (
 	"bytes"
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -151,6 +152,9 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 	if cfg.Readiness == ReadyOnOutput && cfg.OutputMarker == "" {
 		return nil, goerrors.InvalidInput("readiness.output_marker", "output readiness marker must not be empty")
 	}
+	if err := persistentStartupContextError(ctx); err != nil {
+		return nil, err
+	}
 
 	// The persistent lifecycle is owned by the returned handle (Wait/Shutdown), so the
 	// spawn context is detached from cancellation; readiness still honors ctx below.
@@ -180,7 +184,7 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 		waitCh: make(chan struct{}),
 	}
 
-	if err := c.Start(); err != nil {
+	if err := startWithETXTBSYRetry(c); err != nil {
 		return nil, withStartErrorKind(
 			goerrors.Wrap(SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)),
 			PersistentStartSpawnFailed,
@@ -266,6 +270,13 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 
 	switch cfg.Readiness {
 	case ReadyImmediate:
+		// Readiness is defined as a successful spawn: the process started, so it is
+		// ready. Peeking at waitCh here to catch an early exit would be
+		// scheduler-dependent — the waiter closes waitCh asynchronously, so the same
+		// short-lived child could observe either the exit or success on this path.
+		// Observing an early exit deterministically is exactly what ReadyAfterDelay
+		// (a stabilization window) and ReadyOnOutput (a startup handshake) provide;
+		// ReadyImmediate promises only that the spawn succeeded.
 		return nil
 	case ReadyAfterDelay:
 		delay := time.NewTimer(cfg.ReadyDelay)
@@ -278,7 +289,7 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		case <-timeout.C:
 			return p.readinessTimedOutErr()
 		case <-ctx.Done():
-			return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+			return persistentStartupContextError(ctx)
 		}
 	default: // ReadyOnOutput
 		select {
@@ -302,8 +313,19 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		case <-timeout.C:
 			return p.readinessTimedOutErr()
 		case <-ctx.Done():
-			return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+			return persistentStartupContextError(ctx)
 		}
+	}
+}
+
+func persistentStartupContextError(ctx context.Context) error {
+	switch {
+	case stderrors.Is(ctx.Err(), context.DeadlineExceeded):
+		return goerrors.Timeout("persistent process startup").WithCause(ctx.Err())
+	case stderrors.Is(ctx.Err(), context.Canceled):
+		return goerrors.Canceled("persistent process startup").WithCause(ctx.Err())
+	default:
+		return nil
 	}
 }
 

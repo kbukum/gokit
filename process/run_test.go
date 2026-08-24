@@ -5,12 +5,14 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kbukum/gokit/process"
+	processtestutil "github.com/kbukum/gokit/process/testutil"
 )
 
 func TestRunEcho(t *testing.T) {
@@ -339,20 +341,18 @@ func TestRunNoShellInjection(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	sentinel := filepath.Join(tmpDir, "shell-injection-sentinel.txt")
+	payload := "$(touch " + sentinel + ")"
 
-	// Use echo which is universally available on all platforms.
-	// The shell-injection payload is passed as a literal argument.
-	result, err := process.Run(context.Background(), process.Command{
-		Binary: "echo",
-		Args:   []string{"$(touch " + sentinel + ")"},
-	})
+	recorder := processtestutil.NewArgvRecorder(t)
+	result, err := process.Run(context.Background(), recorder.Command(payload))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// echo should output the literal string, not execute the subcommand.
-	expected := "$(touch " + sentinel + ")\n"
-	if got := string(result.Stdout); got != expected {
-		t.Fatalf("stdout = %q, want %q", got, expected)
+	if result.ExitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", result.ExitCode)
+	}
+	if got := recorder.Args(t); !slices.Equal(got, []string{payload}) {
+		t.Fatalf("recorded argv = %#v, want literal payload", got)
 	}
 	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
 		t.Fatalf("expected sentinel to be absent (shell injection occurred), stat err=%v", err)

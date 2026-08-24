@@ -76,9 +76,23 @@ selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.coverage]
-argv = ["go", "test", "-coverprofile=target/toven/coverage/go-{module.name}.out", "{args}", "./..."]
+# `go test ./...` from the repo root only walks the root module's packages: with
+# a `go.work`, `./...` never crosses into the sub-modules (auth, database, …),
+# which each own a `go.mod`. The workspace-wide import-path pattern
+# `github.com/kbukum/gokit/...` does cross those boundaries (go.work resolves it
+# to every member package), so a single whole-workspace run measures the entire
+# codebase in one invocation. Toven attributes every emitted path to the root
+# `go:gokit` module (its `.` root prefixes them all) and gates the aggregate
+# against `[ecosystems.go.coverage]`. `-covermode=atomic` matches CI's coverage
+# mode; the coverage verb takes no `{args}` passthrough (measurement flags live
+# here, not in the Makefile).
+argv = ["go", "test", "-covermode=atomic", "-coverprofile=target/toven/coverage/go-{module.name}.out", "{args}", "github.com/kbukum/gokit/..."]
 cacheable = false
 fan_out = "whole-workspace"
+# `go test github.com/kbukum/gokit/...` resolves the whole workspace atomically
+# through go.work, so it carries its own cross-module closure. Matches the Go
+# adapter default for this task.
+workspace_closure = true
 kind = "coverage"
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
