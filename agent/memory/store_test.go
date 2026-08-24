@@ -2,6 +2,7 @@ package memory_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -265,5 +266,64 @@ func TestSlidingWindowStore_Clear(t *testing.T) {
 	loaded, _ := sw.Load(ctx, "s1")
 	if loaded != nil {
 		t.Errorf("expected nil after clear, got %v", loaded)
+	}
+}
+
+// TestMapStore_DeepCopyToolCallsAndVariants proves Save/Load deep-copy the raw
+// JSON of assistant tool-call arguments and tool-use content blocks, so a later
+// mutation of the caller's bytes cannot corrupt stored history, and that system
+// and tool-result message variants survive the round trip.
+func TestMapStore_DeepCopyToolCallsAndVariants(t *testing.T) {
+	store := memory.NewMapStore()
+	ctx := context.Background()
+
+	input := json.RawMessage(`{"q":"go"}`)
+	original := []chat.Message{
+		chat.System("system prompt"),
+		chat.AssistantMessage{
+			Content:   []ai.ContentPart{ai.ToolUseBlock{ID: "c1", Name: "search", Input: json.RawMessage(`{"c":1}`)}},
+			ToolCalls: []ai.ToolUseBlock{{ID: "c1", Name: "search", Input: input}},
+			Usage:     &ai.Usage{InputTokens: 5},
+		},
+		chat.ToolResultMsg("c1", "result body", false),
+	}
+	if err := store.Save(ctx, "s1", original); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	// Mutate the caller's argument bytes after saving; stored copy must be intact.
+	for i := range input {
+		input[i] = 'X'
+	}
+
+	loaded, err := store.Load(ctx, "s1")
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(loaded) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(loaded))
+	}
+	if _, ok := loaded[0].(chat.SystemMessage); !ok {
+		t.Errorf("msg[0] = %T, want SystemMessage", loaded[0])
+	}
+	asst, ok := loaded[1].(chat.AssistantMessage)
+	if !ok {
+		t.Fatalf("msg[1] = %T, want AssistantMessage", loaded[1])
+	}
+	if got := string(asst.ToolCalls[0].Input); got != `{"q":"go"}` {
+		t.Errorf("tool-call input aliased caller bytes: got %q", got)
+	}
+	if got := string(asst.Content[0].(ai.ToolUseBlock).Input); got != `{"c":1}` {
+		t.Errorf("tool-use content block not preserved: got %q", got)
+	}
+	if asst.Usage == nil || asst.Usage.InputTokens != 5 {
+		t.Errorf("usage not copied: %#v", asst.Usage)
+	}
+	// The copied usage pointer must be distinct from the original.
+	if asst.Usage == original[1].(chat.AssistantMessage).Usage {
+		t.Error("usage pointer was aliased, not deep-copied")
+	}
+	if tr, ok := loaded[2].(chat.ToolResultMessage); !ok || tr.Content != "result body" {
+		t.Errorf("msg[2] = %#v, want ToolResultMessage", loaded[2])
 	}
 }
