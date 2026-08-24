@@ -270,14 +270,14 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 
 	switch cfg.Readiness {
 	case ReadyImmediate:
-		select {
-		case <-p.waitCh:
-			return p.exitedBeforeReadyErr()
-		case <-ctx.Done():
-			return persistentStartupContextError(ctx)
-		default:
-			return nil
-		}
+		// Readiness is defined as a successful spawn: the process started, so it is
+		// ready. Peeking at waitCh here to catch an early exit would be
+		// scheduler-dependent — the waiter closes waitCh asynchronously, so the same
+		// short-lived child could observe either the exit or success on this path.
+		// Observing an early exit deterministically is exactly what ReadyAfterDelay
+		// (a stabilization window) and ReadyOnOutput (a startup handshake) provide;
+		// ReadyImmediate promises only that the spawn succeeded.
+		return nil
 	case ReadyAfterDelay:
 		delay := time.NewTimer(cfg.ReadyDelay)
 		defer delay.Stop()
