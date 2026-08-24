@@ -51,4 +51,19 @@
 //	AssertRowCount(t, db.DB(), "users", 2)
 //
 // See the README for more examples and best practices.
+//
+// # Migration Driver
+//
+// MigrationDriver is an in-memory golang-migrate driver fake for exercising migration
+// orchestration (Up/Down/Steps/Reset/Version) without a real database backend. It records the
+// applied version and run count and can be told to fail specific operations, so failure and
+// rollback paths are provable deterministically:
+//
+//	driver := testutil.NewMigrationDriver()
+//	cfg := migration.Config{DB: db, FS: fs, Path: "migrations", Driver: driver.DriverFunc()}
+//	if err := cfg.Up(); err != nil { ... }
+//
+//	// Prove a failing rollback is surfaced, not swallowed:
+//	driver.FailRun()
+//	err := cfg.Down() // wrapped "migrate down" error
 package testutil

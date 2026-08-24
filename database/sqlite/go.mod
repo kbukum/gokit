@@ -8,6 +8,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/kbukum/gokit v0.2.0
 	github.com/kbukum/gokit/database v0.2.0
+	github.com/kbukum/gokit/database/testutil v0.2.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
@@ -22,6 +23,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kbukum/gokit/testutil v0.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
@@ -61,4 +63,5 @@ require (
 replace (
 	github.com/kbukum/gokit => ../../
 	github.com/kbukum/gokit/database => ../
+	github.com/kbukum/gokit/database/testutil => ../testutil
 )
