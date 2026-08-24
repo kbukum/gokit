@@ -2,11 +2,19 @@ package rabbitmq
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/kbukum/gokit/messaging"
 )
+
+// errDeliveriesClosed reports that the broker closed the delivery stream while
+// the consumer was neither canceled nor closed — an abnormal channel/connection
+// drop that must not be reported as a clean, success-shaped termination. Its
+// message includes "connection closed" so messaging.IsConnectionError classifies
+// it as a retryable connection failure.
+var errDeliveriesClosed = errors.New("rabbitmq: consume connection closed")
 
 // Consumer consumes messages from RabbitMQ.
 type Consumer struct {
@@ -52,23 +60,16 @@ func (c *Consumer) ensureChannel() (rabbitChannel, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		_ = conn.Close()
-		return nil, redactError("rabbitmq consumer channel", err)
+		return nil, errors.Join(redactError("rabbitmq consumer channel", err), conn.Close())
 	}
 	if err := declareExchange(ch, c.cfg); err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, err
+		return nil, errors.Join(err, ch.Close(), conn.Close())
 	}
 	if _, err := ch.QueueDeclare(c.queue, c.cfg.QueueDurable, false, false, false, nil); err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, fmt.Errorf("rabbitmq declare queue: %w", err)
+		return nil, errors.Join(fmt.Errorf("rabbitmq declare queue: %w", err), ch.Close(), conn.Close())
 	}
 	if err := bindQueue(ch, c.cfg, c.queue, routingKey(c.cfg, c.topic)); err != nil {
-		_ = ch.Close()
-		_ = conn.Close()
-		return nil, err
+		return nil, errors.Join(err, ch.Close(), conn.Close())
 	}
 	c.conn = conn
 	c.ch = ch
@@ -107,7 +108,9 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 		}
 		if err := handler(ctx, domain); err != nil {
 			if !c.cfg.AutoAck {
-				_ = delivery.Nack(false, false)
+				if nackErr := delivery.Nack(false, false); nackErr != nil {
+					return errors.Join(err, fmt.Errorf("rabbitmq nack: %w", nackErr))
+				}
 			}
 			return err
 		}
@@ -123,7 +126,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 	if c.isClosed() {
 		return messaging.ErrClosed
 	}
-	return nil
+	return fmt.Errorf("rabbitmq consume: %w", errDeliveriesClosed)
 }
 
 // Topic returns the subscribed topic.

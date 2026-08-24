@@ -196,7 +196,8 @@ func (p *Producer) Flush(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// Close drains the NATS connection.
+// Close drains the NATS connection, always closing the underlying connection
+// even when draining fails so a drain error cannot leak the connection.
 func (p *Producer) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -207,11 +208,13 @@ func (p *Producer) Close() error {
 	if p.conn == nil {
 		return nil
 	}
-	if err := p.conn.Drain(); err != nil {
-		return fmt.Errorf("nats drain: %w", err)
-	}
-	p.conn.Close()
+	conn := p.conn
 	p.conn = nil
+	drainErr := conn.Drain()
+	conn.Close()
+	if drainErr != nil {
+		return fmt.Errorf("nats drain: %w", drainErr)
+	}
 	return nil
 }
 

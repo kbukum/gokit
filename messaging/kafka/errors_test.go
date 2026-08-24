@@ -88,3 +88,16 @@ func TestIsNonRetryableError(t *testing.T) {
 		})
 	}
 }
+
+func TestKafkaErrorClassifierDelegates(t *testing.T) {
+	var classifier KafkaErrorClassifier
+	if !classifier.IsConnectionError(errors.New("broker not available")) {
+		t.Fatal("kafka-specific connection pattern should classify as connection error")
+	}
+	if !classifier.IsRetryableError(errors.New("not enough replicas")) {
+		t.Fatal("kafka-specific retryable pattern should classify as retryable")
+	}
+	if classifier.IsConnectionError(nil) || classifier.IsRetryableError(nil) {
+		t.Fatal("nil error must not classify as connection/retryable")
+	}
+}

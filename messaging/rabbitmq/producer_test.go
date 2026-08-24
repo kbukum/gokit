@@ -35,6 +35,7 @@ type fakeRabbitChannel struct {
 	closed         bool
 	queueErr       error
 	bindErr        error
+	exchangeErr    error
 	publishErr     error
 	consumeErr     error
 	qosErr         error
@@ -47,7 +48,7 @@ type rabbitPublish struct {
 }
 
 func (ch *fakeRabbitChannel) ExchangeDeclare(string, string, bool, bool, bool, bool, amqp.Table) error {
-	return nil
+	return ch.exchangeErr
 }
 
 func (ch *fakeRabbitChannel) QueueDeclare(name string, _ bool, _ bool, _ bool, _ bool, _ amqp.Table) (amqp.Queue, error) {
@@ -103,6 +104,63 @@ func (ch *fakeRabbitChannel) ConsumeWithContext(ctx context.Context, _ string, _
 	return out, nil
 }
 func (ch *fakeRabbitChannel) Close() error { ch.closed = true; return ch.closeErr }
+
+func TestProducerEnsureChannelDialsDeclaresAndPublishes(t *testing.T) {
+	ch := &fakeRabbitChannel{}
+	conn := &fakeRabbitConn{ch: ch}
+	p := &Producer{
+		cfg:           Config{Exchange: "ex", ExchangeType: "topic", PublishTimeout: "1s"},
+		dial:          func(Config) (rabbitConn, error) { return conn, nil },
+		retryAttempts: 1,
+		declared:      map[string]struct{}{},
+	}
+	if err := p.PublishBinary(context.Background(), "orders", "k", []byte("x")); err != nil {
+		t.Fatalf("PublishBinary via lazy dial: %v", err)
+	}
+	if len(ch.published) != 1 {
+		t.Fatalf("published %d, want 1", len(ch.published))
+	}
+	if p.conn != conn || p.ch != ch {
+		t.Fatal("lazy dial must cache the connection and channel")
+	}
+}
+
+func TestProducerEnsureChannelJoinsCleanupOnChannelError(t *testing.T) {
+	channelErr := errors.New("channel open failed")
+	conn := &fakeRabbitConn{channelErr: channelErr}
+	p := &Producer{
+		cfg:           Config{PublishTimeout: "1s"},
+		dial:          func(Config) (rabbitConn, error) { return conn, nil },
+		retryAttempts: 1,
+		declared:      map[string]struct{}{},
+	}
+	err := p.PublishBinary(context.Background(), "orders", "k", []byte("x"))
+	if !errors.Is(err, channelErr) {
+		t.Fatalf("error = %v, want channel error", err)
+	}
+	if !conn.closed {
+		t.Fatal("connection must be closed when channel open fails (no leak)")
+	}
+}
+
+func TestProducerEnsureChannelJoinsCleanupOnExchangeError(t *testing.T) {
+	exchangeErr := errors.New("exchange declare failed")
+	ch := &fakeRabbitChannel{exchangeErr: exchangeErr}
+	conn := &fakeRabbitConn{ch: ch}
+	p := &Producer{
+		cfg:           Config{Exchange: "ex", ExchangeType: "topic", PublishTimeout: "1s"},
+		dial:          func(Config) (rabbitConn, error) { return conn, nil },
+		retryAttempts: 1,
+		declared:      map[string]struct{}{},
+	}
+	err := p.PublishBinary(context.Background(), "orders", "k", []byte("x"))
+	if !errors.Is(err, exchangeErr) {
+		t.Fatalf("error = %v, want exchange error", err)
+	}
+	if !ch.closed || !conn.closed {
+		t.Fatalf("channel and connection must be closed on declare failure: ch=%v conn=%v", ch.closed, conn.closed)
+	}
+}
 
 func TestProducerPublishMethodsDeclareQueueAndPublish(t *testing.T) {
 	ch := &fakeRabbitChannel{}
