@@ -8,6 +8,7 @@ and fixture helpers.
 - **TestComponent**: In-memory SQLite database with full TestComponent lifecycle support
 - **State Management**: Reset, Snapshot, and Restore capabilities for test isolation
 - **Fixture Helpers**: Load test data, truncate tables, assert row counts
+- **Migration Driver**: In-memory `golang-migrate` driver fake for proving migration orchestration
 - **Auto-Migration**: Optional model auto-migration on startup
 - **Zero Configuration**: Works out of the box with sensible defaults
 
@@ -235,6 +236,29 @@ func TestIntegration(t *testing.T) {
     // Run integration tests...
 }
 ```
+
+## Migration Driver
+
+`MigrationDriver` is an in-memory [golang-migrate](https://github.com/golang-migrate/migrate) driver fake for proving migration orchestration (`Up`/`Down`/`Steps`/`Reset`/`Version`) without a real database backend. It records the applied version and run count and can be told to fail specific operations, so failure and rollback paths are provable deterministically — reuse it instead of hand-rolling a fake driver per adapter.
+
+```go
+func TestMigrations(t *testing.T) {
+    driver := dbtestutil.NewMigrationDriver()
+    cfg := migration.Config{DB: db, FS: migrationsFS, Path: "migrations", Driver: driver.DriverFunc()}
+
+    if err := cfg.Up(); err != nil {
+        t.Fatalf("Up: %v", err)
+    }
+
+    // Prove a failing rollback is surfaced, not swallowed.
+    driver.FailRun()
+    if err := cfg.Down(); err == nil {
+        t.Fatal("expected wrapped 'migrate down' error")
+    }
+}
+```
+
+`FailRun`, `FailSetVersion`, and `FailDrop` inject failures into the corresponding driver operations; `Runs` reports how many statements have been applied.
 
 ## Best Practices
 
