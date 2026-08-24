@@ -50,9 +50,14 @@ func (r *ArgvRecorder) Args(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("read argv recorder output: %v", err)
 	}
-	text := strings.TrimSuffix(string(data), "\n")
-	if text == "" {
+	// The recorder writes one line-terminated record per argv value, so an empty
+	// file means no arguments were passed, whereas a lone "\n" is a single empty
+	// argument. Distinguishing the two before stripping the terminator preserves
+	// the recorder's exact-argv contract: a single empty argument must round-trip
+	// as [""], not as no arguments at all.
+	if len(data) == 0 {
 		return nil
 	}
+	text := strings.TrimSuffix(string(data), "\n")
 	return strings.Split(text, "\n")
 }
