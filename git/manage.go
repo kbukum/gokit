@@ -1,5 +1,7 @@
 package git
 
+import "context"
+
 // RefManager provides branch and tag CRUD operations.
 type RefManager interface {
 	// ListBranches lists repository branches matching filter.
@@ -22,10 +24,10 @@ type RefManager interface {
 type RemoteManager interface {
 	// ListRemotes lists configured remotes.
 	ListRemotes() ([]Remote, error)
-	// Fetch fetches updates from a remote.
-	Fetch(remote string, opts ...FetchOption) error
-	// Push pushes updates to a remote.
-	Push(remote string, opts ...PushOption) error
+	// Fetch fetches updates from a remote. The context bounds the remote transfer.
+	Fetch(ctx context.Context, remote string, opts ...FetchOption) error
+	// Push pushes updates to a remote. The context bounds the remote transfer.
+	Push(ctx context.Context, remote string, opts ...PushOption) error
 	// TrackingBranch returns the configured upstream for a local branch.
 	TrackingBranch(branch string) (string, error)
 }

@@ -1,6 +1,7 @@
 package embedded
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -95,8 +96,8 @@ func Discover(path string, cfg *model.OpenOptions) (*Backend, error) {
 	return &Backend{repo: repo, root: root, transport: transportFrom(cfg)}, nil
 }
 
-// Clone clones a repository into path.
-func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
+// Clone clones a repository into path. The context bounds the remote transfer.
+func Clone(ctx context.Context, url, path string, cfg *model.OpenOptions) (*Backend, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, giterr.Internal(err)
@@ -108,7 +109,7 @@ func Clone(url, path string, cfg *model.OpenOptions) (*Backend, error) {
 		return nil, err
 	}
 
-	repo, err := gogit.PlainClone(absPath, false, &gogit.CloneOptions{URL: url, Auth: authMethod})
+	repo, err := gogit.PlainCloneContext(ctx, absPath, false, &gogit.CloneOptions{URL: url, Auth: authMethod})
 	if err != nil {
 		return nil, mapRemoteError(err)
 	}

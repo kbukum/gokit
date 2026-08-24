@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -129,9 +130,15 @@ func (m *Manager) buildContainerConfig(req workload.DeployRequest) (*container.C
 
 // ensureImage pulls the image if not present locally.
 func (m *Manager) ensureImage(ctx context.Context, imageName, platform string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	_, err := m.client.ImageInspect(ctx, imageName)
 	if err == nil {
 		return nil
+	}
+	if !cerrdefs.IsNotFound(err) {
+		return fmt.Errorf("inspect image %s: %w", imageName, err)
 	}
 
 	m.log.InfoCtx(ctx, "pulling image", map[string]any{"image": imageName})
@@ -153,7 +160,9 @@ func (m *Manager) ensureImage(ctx context.Context, imageName, platform string) e
 		return fmt.Errorf("pull %s: %w", imageName, err)
 	}
 	defer reader.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
-	_, _ = io.Copy(io.Discard, reader)
+	if _, err := io.Copy(io.Discard, reader); err != nil {
+		return fmt.Errorf("read pull progress for %s: %w", imageName, err)
+	}
 	return nil
 }
 

@@ -2,7 +2,9 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/moby/moby/api/types/container"
@@ -71,6 +73,45 @@ func TestDiskUsageAggregatesDaemonUsage(t *testing.T) {
 	}
 	if usage.ImagesSize != 100 || len(usage.Images) != 1 || usage.Images[0].Size != 80 || usage.ContainersSize != 30 || usage.VolumesSize != 40 || usage.BuildCacheSize != 50 || usage.DataRootPath != "/remote/docker" || usage.DataRootTotal != 0 {
 		t.Fatalf("disk usage = %#v", usage)
+	}
+}
+
+func TestSystemInfoAndDiskUsageSurfaceDockerErrors(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/info":
+			return http.StatusInternalServerError, `{"message":"info failed"}`
+		case "/system/df":
+			return http.StatusInternalServerError, `{"message":"disk usage failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	if _, err := manager.SystemInfo(context.Background()); err == nil || !strings.Contains(err.Error(), "system info") {
+		t.Fatalf("expected system info error, got %v", err)
+	}
+	if _, err := manager.DiskUsage(context.Background()); err == nil || !strings.Contains(err.Error(), "disk usage") {
+		t.Fatalf("expected disk usage error, got %v", err)
+	}
+}
+
+func TestSystemInfoAndDiskUsageHonorCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{}`
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := manager.SystemInfo(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled system info error, got %v", err)
+	}
+	if _, err := manager.DiskUsage(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled disk usage error, got %v", err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package git_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -195,10 +196,10 @@ func TestRepoRefRemoteAndConfigOperations(t *testing.T) {
 	}
 
 	commitFile(t, dir, "local.txt", "local\n", "local change")
-	if err := repo.Push("origin", git.WithPushRefspecs("refs/heads/"+branch+":refs/heads/"+branch)); err != nil {
+	if err := repo.Push(context.Background(), "origin", git.WithPushRefspecs("refs/heads/"+branch+":refs/heads/"+branch)); err != nil {
 		t.Fatalf("Push() error: %v", err)
 	}
-	if err := repo.Fetch("origin", git.WithFetchRefspecs("+refs/heads/"+branch+":refs/remotes/origin/"+branch)); err != nil {
+	if err := repo.Fetch(context.Background(), "origin", git.WithFetchRefspecs("+refs/heads/"+branch+":refs/remotes/origin/"+branch)); err != nil {
 		t.Fatalf("Fetch() error: %v", err)
 	}
 }
@@ -355,4 +356,34 @@ func hasTag(tags []git.Tag, name string) bool {
 		}
 	}
 	return false
+}
+
+// TestRepoFileAtBounded proves the bounded read enforces its byte limit: content
+// within the limit is returned, and an oversized blob is rejected rather than
+// read into memory unbounded.
+func TestRepoFileAtBounded(t *testing.T) {
+	t.Parallel()
+
+	dir := initTestRepo(t)
+	commitFile(t, dir, "small.txt", "hello\n", "add small")
+	repo, err := git.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := repo.FileAtBounded("HEAD", "small.txt", 64)
+	if err != nil {
+		t.Fatalf("FileAtBounded(within limit) error: %v", err)
+	}
+	if string(content) != "hello\n" {
+		t.Fatalf("FileAtBounded() = %q, want %q", content, "hello\n")
+	}
+
+	if _, err := repo.FileAtBounded("HEAD", "small.txt", 2); err == nil {
+		t.Fatal("FileAtBounded(exceeds limit) expected error, got nil")
+	}
+
+	if _, err := repo.FileAtBounded("HEAD", "small.txt", -1); err == nil {
+		t.Fatal("FileAtBounded(negative limit) expected error, got nil")
+	}
 }

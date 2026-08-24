@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -60,6 +61,64 @@ func TestImagePullDrainsStreamWithoutProgress(t *testing.T) {
 	})
 	if err := manager.ImagePull(context.Background(), "alpine:latest"); err != nil {
 		t.Fatalf("pull: %v", err)
+	}
+}
+
+func TestImagePullSurfacesPullAndDrainErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("daemon rejects pull", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/images/create" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusInternalServerError, `{"message":"pull denied"}`
+		})
+
+		err := manager.ImagePull(context.Background(), "registry.example/app:1")
+		if err == nil || !strings.Contains(err.Error(), "pull denied") {
+			t.Fatalf("expected pull failure, got %v", err)
+		}
+	})
+
+	t.Run("progress stream read fails", func(t *testing.T) {
+		t.Parallel()
+
+		readErr := errors.New("stream failed")
+		manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+			if dockerPath(req.URL.Path) != "/images/create" {
+				return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     http.StatusText(http.StatusOK),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       failingReadCloser{err: readErr},
+				Request:    req,
+			}, nil
+		})
+
+		err := manager.ImagePull(context.Background(), "registry.example/app:1")
+		if !errors.Is(err, readErr) {
+			t.Fatalf("expected stream error, got %v", err)
+		}
+	})
+}
+
+func TestImagePullHonorsCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{"status":"late"}` + "\n"
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := manager.ImagePull(ctx, "registry.example/app:1")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled pull error, got %v", err)
 	}
 }
 
@@ -122,6 +181,51 @@ func TestImageListRemoveExistsAndInspect(t *testing.T) {
 	}
 }
 
+func TestImageOperationsSurfaceDockerErrors(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/images/json":
+			return http.StatusInternalServerError, `{"message":"list images failed"}`
+		case "/images/app:1":
+			return http.StatusInternalServerError, `{"message":"remove image failed"}`
+		case "/images/app:1/json":
+			return http.StatusInternalServerError, `{"message":"inspect image failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	if _, err := manager.ImageList(context.Background()); err == nil || !strings.Contains(err.Error(), "list images") {
+		t.Fatalf("expected list error, got %v", err)
+	}
+	if err := manager.ImageRemove(context.Background(), "app:1", true); err == nil || !strings.Contains(err.Error(), "remove image") {
+		t.Fatalf("expected remove error, got %v", err)
+	}
+	if exists, err := manager.ImageExists(context.Background(), "app:1"); err == nil || exists {
+		t.Fatalf("expected exists inspect error, exists=%v err=%v", exists, err)
+	}
+	if _, err := manager.ImageInspect(context.Background(), "app:1"); err == nil || !strings.Contains(err.Error(), "inspect image") {
+		t.Fatalf("expected inspect error, got %v", err)
+	}
+}
+
+func TestImageInspectHonorsCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(*http.Request) (int, string) {
+		return http.StatusOK, `{}`
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := manager.ImageInspect(ctx, "app:1")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled inspect error, got %v", err)
+	}
+}
+
 func TestEnsureImagePullsWhenImageIsMissing(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +253,62 @@ func TestEnsureImagePullsWhenImageIsMissing(t *testing.T) {
 	}
 }
 
+func TestEnsureImageSurfacesInspectAndPullStreamErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("inspect error", func(t *testing.T) {
+		t.Parallel()
+
+		var pulled bool
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			switch dockerPath(req.URL.Path) {
+			case "/images/app:1/json":
+				return http.StatusInternalServerError, `{"message":"inspect failed"}`
+			case "/images/create":
+				pulled = true
+				return http.StatusOK, `{"status":"ok"}` + "\n"
+			default:
+				return http.StatusNotFound, `{}`
+			}
+		})
+
+		err := manager.ensureImage(context.Background(), "app:1", "")
+		if err == nil || !strings.Contains(err.Error(), "inspect image") {
+			t.Fatalf("expected inspect error, got %v", err)
+		}
+		if pulled {
+			t.Fatal("inspect error must not trigger a pull")
+		}
+	})
+
+	t.Run("pull stream error", func(t *testing.T) {
+		t.Parallel()
+
+		readErr := errors.New("pull stream failed")
+		manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+			switch dockerPath(req.URL.Path) {
+			case "/images/app:1/json":
+				return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{"message":"missing"}`)), Request: req}, nil
+			case "/images/create":
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     http.StatusText(http.StatusOK),
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       failingReadCloser{err: readErr},
+					Request:    req,
+				}, nil
+			default:
+				return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+			}
+		})
+
+		err := manager.ensureImage(context.Background(), "app:1", "")
+		if !errors.Is(err, readErr) {
+			t.Fatalf("expected pull stream error, got %v", err)
+		}
+	})
+}
+
 func TestStatsComputesResourceUsage(t *testing.T) {
 	t.Parallel()
 
@@ -172,6 +332,42 @@ func TestStatsComputesResourceUsage(t *testing.T) {
 	if stats.CPUPercent != 80 || stats.MemoryUsage != 256 || stats.MemoryLimit != 1024 || stats.NetworkRxBytes != 11 || stats.NetworkTxBytes != 22 || stats.PIDs != 4 {
 		t.Fatalf("stats = %#v", stats)
 	}
+}
+
+func TestStatsSurfacesDockerAndDecodeErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("daemon error", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/containers/id/stats" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusInternalServerError, `{"message":"stats failed"}`
+		})
+
+		_, err := manager.Stats(context.Background(), "id")
+		if err == nil || !strings.Contains(err.Error(), "stats failed") {
+			t.Fatalf("expected stats error, got %v", err)
+		}
+	})
+
+	t.Run("decode error", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/containers/id/stats" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusOK, `not-json`
+		})
+
+		_, err := manager.Stats(context.Background(), "id")
+		if err == nil || !strings.Contains(err.Error(), "decode stats") {
+			t.Fatalf("expected decode error, got %v", err)
+		}
+	})
 }
 
 func TestEncodeAuthRoundTripsRegistryConfig(t *testing.T) {

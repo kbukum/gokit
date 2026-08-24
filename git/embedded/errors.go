@@ -1,6 +1,7 @@
 package embedded
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -12,6 +13,9 @@ import (
 )
 
 func mapPushError(err error, refspecs []string) error {
+	if ctxErr := contextCause(err); ctxErr != nil {
+		return giterr.Network(ctxErr)
+	}
 	message := redact.URLCredentials(err.Error())
 	switch {
 	case isRemoteAuthError(err, message):
@@ -24,11 +28,29 @@ func mapPushError(err error, refspecs []string) error {
 }
 
 func mapRemoteError(err error) error {
+	if ctxErr := contextCause(err); ctxErr != nil {
+		return giterr.Network(ctxErr)
+	}
 	message := redact.URLCredentials(err.Error())
 	if isRemoteAuthError(err, message) {
 		return giterr.RemoteAuth(message)
 	}
 	return giterr.Network(errors.New(message))
+}
+
+// contextCause returns the context sentinel (Canceled or DeadlineExceeded) when
+// err was produced by a canceled or timed-out remote call, and nil otherwise.
+// The sentinel is preserved as the error cause so callers can detect cancellation
+// with errors.Is; context sentinels carry no credentials, so no redaction is lost.
+func contextCause(err error) error {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return context.Canceled
+	case errors.Is(err, context.DeadlineExceeded):
+		return context.DeadlineExceeded
+	default:
+		return nil
+	}
 }
 
 func isPushRejectedError(err error, message string) bool {

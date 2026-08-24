@@ -1,6 +1,7 @@
 package embedded_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -65,7 +66,7 @@ func TestClone(t *testing.T) {
 	remote := createRemote(t, source)
 	cloneDir := filepath.Join(t.TempDir(), "clone")
 
-	repo, err := embedded.Clone(remote, cloneDir, nil)
+	repo, err := embedded.Clone(context.Background(), remote, cloneDir, nil)
 	if err != nil {
 		t.Fatalf("Clone() error: %v", err)
 	}

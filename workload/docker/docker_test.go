@@ -25,21 +25,43 @@ func (f dockerRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error
 	return f(req)
 }
 
-func newTestManager(t *testing.T, fn func(*http.Request) (int, string)) *Manager {
+type failingReadCloser struct {
+	err error
+}
+
+func (r failingReadCloser) Read([]byte) (int, error) { return 0, r.err }
+
+func (r failingReadCloser) Close() error { return nil }
+
+type contextReadCloser struct {
+	ctx context.Context
+}
+
+func (r contextReadCloser) Read([]byte) (int, error) {
+	<-r.ctx.Done()
+	return 0, r.ctx.Err()
+}
+
+func (r contextReadCloser) Close() error { return nil }
+
+type cancelAfterReadCloser struct {
+	body   *strings.Reader
+	cancel context.CancelFunc
+}
+
+func (r *cancelAfterReadCloser) Read(p []byte) (int, error) {
+	n, err := r.body.Read(p)
+	if n > 0 {
+		r.cancel()
+	}
+	return n, err
+}
+
+func (r *cancelAfterReadCloser) Close() error { return nil }
+
+func newTestManagerHTTP(t *testing.T, fn dockerRoundTripFunc) *Manager {
 	t.Helper()
-	httpClient := &http.Client{Transport: dockerRoundTripFunc(func(req *http.Request) (*http.Response, error) {
-		status, body := fn(req)
-		if status == 0 {
-			status = http.StatusOK
-		}
-		return &http.Response{
-			StatusCode: status,
-			Status:     http.StatusText(status),
-			Header:     http.Header{"Content-Type": []string{"application/json"}},
-			Body:       io.NopCloser(strings.NewReader(body)),
-			Request:    req,
-		}, nil
-	})}
+	httpClient := &http.Client{Transport: fn}
 	cli, err := client.New(
 		client.WithHost("http://docker.example"),
 		client.WithAPIVersion("1.55"),
@@ -54,6 +76,23 @@ func newTestManager(t *testing.T, fn func(*http.Request) (int, string)) *Manager
 		defaultLabels: map[string]string{"team": "platform"},
 		log:           logging.NewDefault("docker-test"),
 	}
+}
+
+func newTestManager(t *testing.T, fn func(*http.Request) (int, string)) *Manager {
+	t.Helper()
+	return newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+		status, body := fn(req)
+		if status == 0 {
+			status = http.StatusOK
+		}
+		return &http.Response{
+			StatusCode: status,
+			Status:     http.StatusText(status),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Request:    req,
+		}, nil
+	})
 }
 
 func jsonBody(t *testing.T, v any) string {
@@ -280,6 +319,139 @@ func TestDeployRemovesContainerWhenStartFails(t *testing.T) {
 	}
 }
 
+func TestDeploySurfacesImageAndCreateFailures(t *testing.T) {
+	t.Parallel()
+
+	t.Run("image inspect failure does not pull", func(t *testing.T) {
+		t.Parallel()
+
+		var pulled bool
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			switch dockerPath(req.URL.Path) {
+			case "/images/example/worker:1/json":
+				return http.StatusInternalServerError, `{"message":"registry unavailable"}`
+			case "/images/create":
+				pulled = true
+				return http.StatusOK, `{"status":"pulled"}` + "\n"
+			default:
+				return http.StatusNotFound, `{}`
+			}
+		})
+
+		_, err := manager.Deploy(context.Background(), workload.DeployRequest{Name: "worker", Image: "example/worker:1"})
+		if err == nil || !strings.Contains(err.Error(), "inspect image") {
+			t.Fatalf("expected inspect failure, got %v", err)
+		}
+		if pulled {
+			t.Fatal("inspect failure must not be treated as a missing image pull")
+		}
+	})
+
+	t.Run("image pull failure", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			switch dockerPath(req.URL.Path) {
+			case "/images/example/worker:1/json":
+				return http.StatusNotFound, `{"message":"missing"}`
+			case "/images/create":
+				return http.StatusInternalServerError, `{"message":"pull denied"}`
+			default:
+				return http.StatusNotFound, `{}`
+			}
+		})
+
+		_, err := manager.Deploy(context.Background(), workload.DeployRequest{Name: "worker", Image: "example/worker:1"})
+		if err == nil || !strings.Contains(err.Error(), "pull image") {
+			t.Fatalf("expected pull failure, got %v", err)
+		}
+	})
+
+	t.Run("container create failure", func(t *testing.T) {
+		t.Parallel()
+
+		var started bool
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			switch dockerPath(req.URL.Path) {
+			case "/images/example/worker:1/json":
+				return http.StatusOK, `{}`
+			case "/containers/create":
+				return http.StatusInternalServerError, `{"message":"create failed"}`
+			case "/containers/container-id/start":
+				started = true
+				return http.StatusNoContent, ``
+			default:
+				return http.StatusNotFound, `{}`
+			}
+		})
+
+		_, err := manager.Deploy(context.Background(), workload.DeployRequest{Name: "worker", Image: "example/worker:1"})
+		if err == nil || !strings.Contains(err.Error(), "create container") {
+			t.Fatalf("expected create failure, got %v", err)
+		}
+		if started {
+			t.Fatal("start must not be called after create failure")
+		}
+	})
+}
+
+func TestDeployKeepsStartErrorWhenRollbackRemoveFails(t *testing.T) {
+	t.Parallel()
+
+	var removed bool
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/images/example/worker:1/json":
+			return http.StatusOK, `{}`
+		case "/containers/create":
+			return http.StatusCreated, `{"Id":"container-id"}`
+		case "/containers/container-id/start":
+			return http.StatusInternalServerError, `{"message":"start failed"}`
+		case "/containers/container-id":
+			removed = true
+			return http.StatusInternalServerError, `{"message":"remove failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	_, err := manager.Deploy(context.Background(), workload.DeployRequest{Name: "worker", Image: "example/worker:1"})
+	if err == nil || !strings.Contains(err.Error(), "start container") || strings.Contains(err.Error(), "remove failed") {
+		t.Fatalf("expected primary start failure only, got %v", err)
+	}
+	if !removed {
+		t.Fatal("failed start should attempt best-effort cleanup")
+	}
+}
+
+func TestLifecycleMethodsSurfaceDockerErrors(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/containers/id/stop", "/containers/id/restart", "/containers/id":
+			return http.StatusInternalServerError, `{"message":"daemon failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	for name, fn := range map[string]func(context.Context, string) error{
+		"stop":    manager.Stop,
+		"remove":  manager.Remove,
+		"restart": manager.Restart,
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := fn(context.Background(), "id")
+			if err == nil || !strings.Contains(err.Error(), "daemon failed") {
+				t.Fatalf("expected daemon error, got %v", err)
+			}
+		})
+	}
+}
+
 func TestWaitReturnsContainerExitStatusAndErrors(t *testing.T) {
 	t.Parallel()
 
@@ -302,6 +474,65 @@ func TestWaitReturnsContainerExitStatusAndErrors(t *testing.T) {
 	_, err = manager.Wait(ctx, "id")
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled wait error = %v", err)
+	}
+}
+
+func TestWaitSurfacesTransportAndDecodeErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("daemon error response", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/containers/id/wait" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusInternalServerError, `{"message":"wait failed"}`
+		})
+
+		_, err := manager.Wait(context.Background(), "id")
+		if err == nil || !strings.Contains(err.Error(), "wait failed") {
+			t.Fatalf("expected wait failure, got %v", err)
+		}
+	})
+
+	t.Run("malformed wait body", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/containers/id/wait" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusOK, `not-json`
+		})
+
+		_, err := manager.Wait(context.Background(), "id")
+		if err == nil || !strings.Contains(err.Error(), "docker: wait") {
+			t.Fatalf("expected wait decode failure, got %v", err)
+		}
+	})
+}
+
+func TestWaitPrefersContextCancellationOverLateResult(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+		if dockerPath(req.URL.Path) != "/containers/id/wait" {
+			return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Status:     http.StatusText(http.StatusOK),
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       &cancelAfterReadCloser{body: strings.NewReader(`{"StatusCode":0}`), cancel: cancel},
+			Request:    req,
+		}, nil
+	})
+
+	_, err := manager.Wait(ctx, "id")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation to win over late result, got %v", err)
 	}
 }
 
@@ -358,6 +589,39 @@ func TestStatusMapsDockerContainerState(t *testing.T) {
 	}
 }
 
+func TestStatusHandlesNilStateAndInspectFailure(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/containers/no-state/json":
+			return http.StatusOK, jsonBody(t, map[string]any{
+				"Id":           "no-state",
+				"Name":         "/created",
+				"RestartCount": 3,
+				"Config":       map[string]any{"Image": "alpine"},
+			})
+		case "/containers/bad/json":
+			return http.StatusInternalServerError, `{"message":"inspect failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	status, err := manager.Status(context.Background(), "no-state")
+	if err != nil {
+		t.Fatalf("nil-state status: %v", err)
+	}
+	if status.Status != workload.StatusStopped || status.Restarts != 3 || status.Image != "alpine" {
+		t.Fatalf("nil-state status = %#v", status)
+	}
+
+	_, err = manager.Status(context.Background(), "bad")
+	if err == nil || !strings.Contains(err.Error(), "inspect container") {
+		t.Fatalf("expected inspect failure, got %v", err)
+	}
+}
+
 func TestListAndHealthCheckUseFilters(t *testing.T) {
 	t.Parallel()
 
@@ -384,6 +648,28 @@ func TestListAndHealthCheckUseFilters(t *testing.T) {
 	}
 	if err := manager.HealthCheck(context.Background()); err != nil {
 		t.Fatalf("health: %v", err)
+	}
+}
+
+func TestListAndHealthCheckSurfaceDockerErrors(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(req *http.Request) (int, string) {
+		switch dockerPath(req.URL.Path) {
+		case "/containers/json":
+			return http.StatusInternalServerError, `{"message":"list failed"}`
+		case "/_ping":
+			return http.StatusInternalServerError, `{"message":"ping failed"}`
+		default:
+			return http.StatusNotFound, `{}`
+		}
+	})
+
+	if _, err := manager.List(context.Background(), workload.ListFilter{}); err == nil || !strings.Contains(err.Error(), "list containers") {
+		t.Fatalf("expected list failure, got %v", err)
+	}
+	if err := manager.HealthCheck(context.Background()); err == nil || !strings.Contains(err.Error(), "health check failed") {
+		t.Fatalf("expected health failure, got %v", err)
 	}
 }
 
@@ -415,6 +701,72 @@ func TestLogsStripDockerHeadersAndStream(t *testing.T) {
 	body, err := io.ReadAll(stream)
 	if err != nil || !bytes.Contains(body, []byte("hello")) {
 		t.Fatalf("stream body %q err %v", body, err)
+	}
+}
+
+func TestLogsSurfaceDockerAndReadErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("daemon error", func(t *testing.T) {
+		t.Parallel()
+
+		manager := newTestManager(t, func(req *http.Request) (int, string) {
+			if dockerPath(req.URL.Path) != "/containers/id/logs" {
+				return http.StatusNotFound, `{}`
+			}
+			return http.StatusInternalServerError, `{"message":"logs failed"}`
+		})
+
+		if _, err := manager.Logs(context.Background(), "id", workload.LogOptions{}); err == nil || !strings.Contains(err.Error(), "get logs") {
+			t.Fatalf("expected logs error, got %v", err)
+		}
+		if stream, err := manager.StreamLogs(context.Background(), "id", workload.LogOptions{}); err == nil {
+			_ = stream.Close()
+			t.Fatal("expected stream logs error")
+		}
+	})
+
+	t.Run("reader error", func(t *testing.T) {
+		t.Parallel()
+
+		readErr := errors.New("log stream failed")
+		manager := newTestManagerHTTP(t, func(req *http.Request) (*http.Response, error) {
+			if dockerPath(req.URL.Path) != "/containers/id/logs" {
+				return &http.Response{StatusCode: http.StatusNotFound, Status: http.StatusText(http.StatusNotFound), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Status:     http.StatusText(http.StatusOK),
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       failingReadCloser{err: readErr},
+				Request:    req,
+			}, nil
+		})
+
+		_, err := manager.Logs(context.Background(), "id", workload.LogOptions{})
+		if !errors.Is(err, readErr) {
+			t.Fatalf("expected reader error, got %v", err)
+		}
+	})
+}
+
+func TestLogsHonorCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	manager := newTestManager(t, func(*http.Request) (int, string) {
+		return http.StatusOK, "12345678late\n"
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := manager.Logs(ctx, "id", workload.LogOptions{}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled logs error, got %v", err)
+	}
+	if stream, err := manager.StreamLogs(ctx, "id", workload.LogOptions{}); !errors.Is(err, context.Canceled) {
+		if stream != nil {
+			_ = stream.Close()
+		}
+		t.Fatalf("expected canceled stream logs error, got %v", err)
 	}
 }
 

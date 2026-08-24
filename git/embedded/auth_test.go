@@ -1,6 +1,7 @@
 package embedded_test
 
 import (
+	"context"
 	stderrors "errors"
 	"path/filepath"
 	"testing"
@@ -39,7 +40,7 @@ func TestCloneAcceptsHTTPAuthConfigurationsForLocalRemote(t *testing.T) {
 			t.Parallel()
 
 			cloneDir := filepath.Join(t.TempDir(), "clone")
-			repo, err := embedded.Clone(remote, cloneDir, &model.OpenOptions{Transport: tc.transport})
+			repo, err := embedded.Clone(context.Background(), remote, cloneDir, &model.OpenOptions{Transport: tc.transport})
 			if err != nil {
 				t.Fatalf("Clone() error: %v", err)
 			}
@@ -71,7 +72,7 @@ func TestTransportAuthConfigurationErrors(t *testing.T) {
 			t.Parallel()
 
 			cloneDir := filepath.Join(t.TempDir(), "clone")
-			if _, err := embedded.Clone(remote, cloneDir, &model.OpenOptions{Transport: tc.transport}); err == nil {
+			if _, err := embedded.Clone(context.Background(), remote, cloneDir, &model.OpenOptions{Transport: tc.transport}); err == nil {
 				t.Fatal("Clone() expected transport configuration error")
 			}
 		})

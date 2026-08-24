@@ -14,6 +14,9 @@ import (
 
 // SystemInfo returns host-level system information from the Docker daemon.
 func (m *Manager) SystemInfo(ctx context.Context) (*workload.SystemInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	infoResult, err := m.client.Info(ctx, client.InfoOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("docker: system info: %w", err)
@@ -46,6 +49,9 @@ func (m *Manager) SystemInfo(ctx context.Context) (*workload.SystemInfo, error) 
 
 // DiskUsage returns Docker disk usage broken down by category.
 func (m *Manager) DiskUsage(ctx context.Context) (*workload.DiskUsage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	du, err := m.client.DiskUsage(ctx, client.DiskUsageOptions{
 		Images:     true,
 		Containers: true,

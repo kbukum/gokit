@@ -12,6 +12,9 @@ import (
 
 // ImageInspect returns detailed metadata for a specific image.
 func (m *Manager) ImageInspect(ctx context.Context, ref string) (*workload.ImageDetail, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	raw, err := m.client.ImageInspect(ctx, ref)
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {

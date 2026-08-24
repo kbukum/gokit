@@ -1,6 +1,8 @@
 package git
 
 import (
+	"context"
+
 	"github.com/kbukum/gokit/git/auth"
 	cliimpl "github.com/kbukum/gokit/git/cli"
 	"github.com/kbukum/gokit/git/embedded"
@@ -92,10 +94,10 @@ func DiscoverWithAuth(path string, transport auth.Transport, opts ...Option) (*R
 	return Discover(path, append(append([]Option{}, opts...), WithTransport(transport))...)
 }
 
-// Clone clones a repository into path.
-func Clone(url, path string, opts ...Option) (*Repo, error) {
+// Clone clones a repository into path. The context bounds the remote transfer.
+func Clone(ctx context.Context, url, path string, opts ...Option) (*Repo, error) {
 	cfg := model.ApplyOptions(opts...)
-	backend, err := embedded.Clone(url, path, cfg)
+	backend, err := embedded.Clone(ctx, url, path, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -182,10 +184,14 @@ func (r *Repo) CreateSignedTag(name, target, message string, opts SignOptions) e
 }
 func (r *Repo) DeleteTag(name string) error    { return r.embedded.DeleteTag(name) }
 func (r *Repo) ListRemotes() ([]Remote, error) { return r.embedded.ListRemotes() }
-func (r *Repo) Fetch(remote string, opts ...FetchOption) error {
-	return r.embedded.Fetch(remote, opts...)
+func (r *Repo) Fetch(ctx context.Context, remote string, opts ...FetchOption) error {
+	return r.embedded.Fetch(ctx, remote, opts...)
 }
-func (r *Repo) Push(remote string, opts ...PushOption) error { return r.embedded.Push(remote, opts...) }
+
+func (r *Repo) Push(ctx context.Context, remote string, opts ...PushOption) error {
+	return r.embedded.Push(ctx, remote, opts...)
+}
+
 func (r *Repo) TrackingBranch(branch string) (string, error) {
 	return r.embedded.TrackingBranch(branch)
 }

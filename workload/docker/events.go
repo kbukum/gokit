@@ -13,6 +13,9 @@ import (
 
 // WatchEvents watches Docker container lifecycle events and emits WorkloadEvents.
 func (m *Manager) WatchEvents(ctx context.Context, filter workload.ListFilter) (<-chan workload.WorkloadEvent, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	f := make(client.Filters)
 	f.Add("type", string(events.ContainerEventType))
 	for k, v := range filter.Labels {
