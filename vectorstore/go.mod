@@ -6,4 +6,4 @@ toolchain go1.26.6
 
 replace github.com/kbukum/gokit => ../
 
-require github.com/kbukum/gokit v0.2.0
+require github.com/kbukum/gokit v0.3.0-alpha.1

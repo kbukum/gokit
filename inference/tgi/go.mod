@@ -5,10 +5,10 @@ go 1.26.0
 toolchain go1.26.6
 
 require (
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/ai v0.2.0
-	github.com/kbukum/gokit/httpclient v0.2.0
-	github.com/kbukum/gokit/inference v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/ai v0.3.0-alpha.1
+	github.com/kbukum/gokit/httpclient v0.3.0-alpha.1
+	github.com/kbukum/gokit/inference v0.3.0-alpha.1
 )
 
 require (
@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/kbukum/gokit/schema v0.2.0 // indirect
+	github.com/kbukum/gokit/schema v0.3.0-alpha.1 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

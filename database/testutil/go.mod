@@ -6,9 +6,9 @@ toolchain go1.26.6
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/database v0.2.0
-	github.com/kbukum/gokit/testutil v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/database v0.3.0-alpha.1
+	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )

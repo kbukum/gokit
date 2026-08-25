@@ -5,9 +5,9 @@ go 1.26.0
 toolchain go1.26.6
 
 require (
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/discovery v0.2.0
-	github.com/kbukum/gokit/testutil v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/discovery v0.3.0-alpha.1
+	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	github.com/stretchr/testify v1.12.0
 	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
@@ -57,3 +57,5 @@ replace (
 	github.com/kbukum/gokit => ../
 	github.com/kbukum/gokit/discovery => ../discovery
 )
+
+replace github.com/kbukum/gokit/testutil => ../testutil

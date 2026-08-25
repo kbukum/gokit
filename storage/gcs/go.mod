@@ -7,8 +7,8 @@ toolchain go1.26.6
 require (
 	cloud.google.com/go/auth v0.23.1
 	cloud.google.com/go/storage v1.64.0
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/storage v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/storage v0.3.0-alpha.1
 	google.golang.org/api v0.293.0
 )
 

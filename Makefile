@@ -1,4 +1,5 @@
 .PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
+       replace-sync replace-check \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
        check-media check-infra check-devtools clean help release-plan release-status release-readiness release-tag \
        release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump
@@ -95,6 +96,15 @@ endif
 ## Update dependencies (M=<module>, W=core|contrib)
 update:
 	@$(GOMOD) update $(_M) $(_W)
+
+## Sync intra-repo replace directives so every gokit require resolves locally.
+## Keeps `go mod tidy` working against unpublished versions during a release bump.
+replace-sync:
+	@$(GOMOD) replace-sync
+
+## Verify the intra-repo replace graph is complete (read-only; used by CI).
+replace-check:
+	@$(GOMOD) replace-sync --check
 
 ## Update Go version across modules (usage: make update-go VERSION=1.26.0 [W=core|contrib])
 update-go:
@@ -355,6 +365,8 @@ help:
 	@echo "  make vet      [M=] [W=]       Run go vet"
 	@echo "  make fmt      [M=]            Format code"
 	@echo "  make tidy     [M=] [W=]       Run go mod tidy"
+	@echo "  make replace-sync             Sync intra-repo replace directives"
+	@echo "  make replace-check            Verify intra-repo replace graph (read-only)"
 	@echo "  make update   [M=] [W=]       Update dependencies"
 	@echo "  make check-fast [M=] [W=]     Build + vet + lint"
 	@echo "  make check    [M=] [W=]       Build + vet + test"

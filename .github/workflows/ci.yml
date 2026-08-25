@@ -112,6 +112,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify intra-repo replace graph is complete
+        run: ./gomod.sh replace-sync --check
+
       - name: Verify modules are tidy
         run: |
           ./gomod.sh tidy
