@@ -1,0 +1,76 @@
+name: Release artifacts
+
+# Supply-chain artifact stage: a root v* tag push triggers GoReleaser, which
+# attaches the source archive, checksums, SBOM, cosign signatures, and SLSA
+# provenance to the already-existing Toven-created GitHub Release.
+#
+# Toven owns the authoritative release. The `Release (publish)` workflow
+# (release.yml, workflow_dispatch) runs `toven release publish`, which cuts and
+# pushes the lock-step tags and creates the hosted Release with commit-derived
+# notes. The pushed root v* tag then triggers this workflow, which runs
+# GoReleaser in keep-existing mode to attach the artifacts to that existing
+# Release without recreating it or replacing Toven's notes. Per-submodule tags
+# (e.g. messaging/kafka/v0.2.0-alpha.1) do not trigger this workflow.
+
+on:
+  push:
+    tags:
+    - "v*"
+
+permissions:
+  contents: write   # publish release assets
+  id-token: write   # cosign keyless signing via OIDC
+  attestations: write   # SLSA build provenance attestation
+
+jobs:
+  goreleaser:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install cyclonedx-gomod (SBOM generator)
+        run: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.7.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d7d6e057b6926d9aa9e7a5a76a40450a05beb073 # v3.7.0
+        with:
+          cosign-release: "v2.4.1"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          distribution: goreleaser
+          version: "v2.11.2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify cosign signature (keyless)
+        run: |
+          set -euo pipefail
+          cosign verify-blob \
+            --certificate dist/checksums.txt.pem \
+            --signature dist/checksums.txt.sig \
+            --certificate-identity-regexp '^https://github.com/kbukum/gokit/\.github/workflows/release-artifacts\.yml@.*' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            dist/checksums.txt
+          echo "cosign verify-blob succeeded ✓"
+
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*-source.tar.gz
+            dist/checksums.txt
+            dist/*.cdx.json

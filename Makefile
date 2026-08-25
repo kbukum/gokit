@@ -138,7 +138,8 @@ release-publish-dry-run:
 	@$(TOVEN) release publish --dry-run $(if $(SET_VERSION),--set-version $(SET_VERSION))
 
 ## Authoritative release: tag, push, and create the hosted GitHub Release; the pushed tag then
-## triggers .github/workflows/release.yml (GoReleaser) to attach source archive + SBOM + signatures.
+## triggers .github/workflows/release-artifacts.yml (GoReleaser) to attach source archive + SBOM + signatures.
+## Canonical publish is the `Release (publish)` Actions workflow (release.yml, workflow_dispatch); this is the local fallback.
 ## (usage: make release-publish [SET_VERSION=0.3.0-alpha.1])
 release-publish:
 	@$(TOVEN) release publish $(if $(SET_VERSION),--set-version $(SET_VERSION)) --yes

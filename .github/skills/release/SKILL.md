@@ -104,21 +104,28 @@ Then, on the branch: rotate the CHANGELOG (Step 3) if not already done, commit t
 
 ## Step 5 — Phase 2: cut the tags and hosted Release (after the bump PR merges)
 
-Run only from a clean checkout of the merged commit. Toven creates signed path-prefixed tags for the root and every sub-module in lock-step and the hosted GitHub Release with commit-derived notes.
+The canonical publish runs in CI through the **`Release (publish)`** workflow (`.github/workflows/release.yml`, `workflow_dispatch`), modeled on Toven's own pipeline. From the **Actions** tab, dispatch it against `main`:
+
+1. First dispatch with `dry_run` **checked** — the `preview` job runs `toven-canary` + `release publish --dry-run` and uploads the plan as the `release-preview` artifact. Nothing is pushed and no approval is requested.
+2. Review the preview, then dispatch again with `dry_run` **unchecked** — the `publish` job is gated by the protected `release` environment; a required reviewer approves it, then Toven cuts and pushes the lock-step tags and creates the hosted Release. For the first Go release, set the `set_version` input to `0.3.0-alpha.1` (no `v` prefix); leave it empty once every module carries a tag.
+
+CI cuts annotated tags under the `github-actions[bot]` identity — integrity is the `release` environment approval plus the cosign/SLSA artifacts from `release-artifacts.yml`, not GPG-signed tags.
+
+**Local fallback** (from a clean checkout of the merged commit; cuts GPG-signed tags when git config provides a key):
 
 ```bash
 toven release readiness          # fail-closed go/no-go checks (clean-tree)
 toven release publish --dry-run --set-version 0.3.0-alpha.1  # mutation-free rehearsal (verified: 50 modules → 0.3.0-alpha.1, tag-only)
-toven release publish --set-version 0.3.0-alpha.1 --yes      # cut and push signed tags, then create the hosted Release
+toven release publish --set-version 0.3.0-alpha.1 --yes      # cut and push tags, then create the hosted Release
 # --set-version carries no `v` prefix and is accepted on bump/tag/publish. Once every
 # module carries the new tag, later releases drop --set-version and auto-bump from history.
 ```
 
-`toven release tag --yes` cuts and pushes the signed tags without creating the Release; `toven release publish --yes` performs the full tag → push → hosted-Release sequence **idempotently** (safe to re-run to reconcile a partial push). Add `--no-push` to keep tags local for inspection. Makefile wrappers: `make release-readiness`, `make release-publish-dry-run`, `make release-tag`, `make release-publish`, `make list-tags`.
+`toven release tag --yes` cuts and pushes the tags without creating the Release; `toven release publish --yes` performs the full tag → push → hosted-Release sequence **idempotently** (safe to re-run to reconcile a partial push). Add `--no-push` to keep tags local for inspection. Makefile wrappers: `make release-readiness`, `make release-publish-dry-run`, `make release-tag`, `make release-publish`, `make list-tags`.
 
 ## Step 6 — Supply-chain artifacts (automated)
 
-Pushing the root `vX.Y.Z` tag triggers `.github/workflows/release.yml`, where GoReleaser (in `keep-existing` mode) attaches the source archive, checksums, SBOM, cosign signatures, and SLSA provenance to the Toven-created Release. Do not create a second Release by hand. CI actions must be SHA-pinned; artifacts signed. See `docs/RELEASING.md`.
+Pushing the root `vX.Y.Z` tag triggers `.github/workflows/release-artifacts.yml`, where GoReleaser (in `keep-existing` mode) attaches the source archive, checksums, SBOM, cosign signatures, and SLSA provenance to the Toven-created Release. Do not create a second Release by hand. CI actions must be SHA-pinned; artifacts signed. See `docs/RELEASING.md`.
 
 ## Guardrails
 

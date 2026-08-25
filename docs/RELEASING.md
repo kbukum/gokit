@@ -11,7 +11,8 @@ see [`TOVEN-MIGRATION.md`](TOVEN-MIGRATION.md).
 - You are listed in `MAINTAINERS.md` and have push access to `kbukum/gokit`.
 - Your local clone is on `main` with no uncommitted changes.
 - `git`, `gh`, and `go` are on your `$PATH`.
-- Your commits are GPG-signed (`git config commit.gpgsign true`) — release tags must be signed.
+- Your commits are GPG-signed (`git config commit.gpgsign true`). The canonical Phase 2 publish runs in CI (see below), where tags are annotated under the `github-actions[bot]` identity and the protected `release` environment is the integrity gate; a local fallback publish cuts GPG-signed tags when your git config provides a signing key.
+- To dispatch the release from Actions you need access to run `Release (publish)` and to be a required reviewer of the protected `release` environment.
 
 ## 1. Decide the version
 
@@ -72,30 +73,60 @@ no `v` prefix) or per module (`--set-version go:media=0.3.0-alpha.1`), per
 
 ## 4. Cut the tags and hosted Release (Phase 2)
 
-Run this only after the Phase 1 bump PR has merged into `main`, from a clean
-checkout of the merged commit. Toven owns tagging and the hosted GitHub Release:
-it discovers every `go.mod`, cuts path-prefixed signed tags in lock-step, and
-creates the Release with commit-derived notes.
+Run this only after the Phase 1 bump PR has merged into `main`. Toven owns
+tagging and the hosted GitHub Release: it discovers every `go.mod`, cuts
+path-prefixed tags in lock-step, and creates the Release with commit-derived
+notes.
+
+### Canonical path — dispatch from Actions
+
+The authoritative publish runs in CI through the **`Release (publish)`**
+workflow (`.github/workflows/release.yml`), modeled on Toven's own release
+pipeline. From the repository **Actions** tab, run the workflow against `main`:
+
+1. Leave `dry_run` checked and dispatch once. The `preview` job runs the
+   mutation-free rehearsal (`toven-canary` + `release publish --dry-run`) and
+   uploads the plan as the `release-preview` artifact. No approval is requested
+   and nothing is pushed.
+2. Review the preview, then dispatch again with `dry_run` unchecked. The
+   `publish` job is gated by the protected `release` environment — a required
+   reviewer approves it, then Toven cuts and pushes the lock-step tags and
+   creates the hosted Release. The pushed root `v*` tag triggers
+   `release-artifacts.yml` (step 5).
+
+For the first Go release (modules added since v0.2.0 carry no tag), set the
+`set_version` input to `0.3.0-alpha.1` (no `v` prefix). Leave it empty once every
+module carries a tag and history alone drives the bump.
+
+CI cuts annotated tags under the `github-actions[bot]` identity; integrity comes
+from the `release` environment approval plus the cosign signatures and SLSA
+provenance that `release-artifacts.yml` attaches, not from GPG-signed tags.
+
+### Local fallback
+
+If you must publish from a workstation, use a clean checkout of the merged
+commit. This cuts GPG-signed tags when your git config provides a signing key.
 
 ```sh
 make release-plan               # preview the exact version cascade and tag set
 make release-publish-dry-run    # mutation-free registry + hosted-Release rehearsal
-make release-publish            # cut and push signed tags, then create the hosted Release
+make release-publish            # cut and push tags, then create the hosted Release
 ```
 
-`make release-tag` is available if you want to create and push the signed tags
-before creating the Release; `make release-publish` performs the full tag → push
-→ hosted-Release sequence idempotently.
+`make release-tag` is available if you want to create and push the tags before
+creating the Release; `make release-publish` performs the full tag → push →
+hosted-Release sequence idempotently. Pass `SET_VERSION=0.3.0-alpha.1` for the
+first release, exactly as the CI `set_version` input does.
 
-Toven will:
+Either path, Toven will:
 - Refuse to run with a dirty working tree (the clean-tree guardrail has no bypass).
 - Refuse a partial or divergent existing tag set, failing closed with forward-fix guidance.
-- Create signed annotated tags (`gpg.format` / signing key inherited from git config, or set via `[…release] sign_format` / `signing_key`) for the root and every sub-module in lock-step.
+- Create annotated tags for the root and every sub-module in lock-step (GPG-signed when git config provides a key, or `[…release] sign_format` / `signing_key`).
 - Create the hosted GitHub Release with notes derived from each module's commit range.
 
 ## 5. Attach the supply-chain artifacts
 
-Pushing the root tag starts `.github/workflows/release.yml`. GoReleaser runs in `keep-existing` mode and attaches the source archive, checksums, SBOM, signatures, and provenance to the Release Toven already created — it does not recreate the Release or replace Toven's notes. Do not create a second release manually with `gh`.
+Pushing the root tag starts `.github/workflows/release-artifacts.yml`. GoReleaser runs in `keep-existing` mode and attaches the source archive, checksums, SBOM, signatures, and provenance to the Release Toven already created — it does not recreate the Release or replace Toven's notes. Do not create a second release manually with `gh`.
 
 GitHub Releases are mandatory; downstream tooling (`go install`, Dependabot,
 and pkg.go.dev) only surface release signal when both the tag and release exist.
@@ -154,12 +185,12 @@ make list-tags         # every version tag currently on the remote
 ```
 
 - **Partial tag push (some module tags pushed, others not).** `toven release publish` is idempotent and lock-step: re-run `make release-publish` to reconcile the remaining tags and the hosted Release. It skips tags that already exist rather than failing, so a rerun is safe.
-- **Tags pushed but the hosted Release or its artifacts are missing.** The pushed root tag re-triggers `.github/workflows/release.yml`; re-run that workflow (`gh workflow run release.yml` is not needed — dispatch the failed run from the Actions tab) so GoReleaser re-attaches the source archive, SBOM, and signatures in `keep-existing` mode. Do not create a second Release by hand.
+- **Tags pushed but the hosted Release or its artifacts are missing.** The pushed root tag re-triggers `.github/workflows/release-artifacts.yml`; re-run that workflow (dispatch the failed run from the Actions tab) so GoReleaser re-attaches the source archive, SBOM, and signatures in `keep-existing` mode. Do not create a second Release by hand.
 - **A bad version was published.** Do not retag. Cut a new forward-fix version: rotate `CHANGELOG.md`, then `make release-tag` followed by `make release-publish` for the next `vX.Y.Z`. Downstream consumers move forward to the corrected version.
 
 ## Supply-chain artifacts (automated)
 
-Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.3.0-alpha.1`) triggers `.github/workflows/release.yml`,
+Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.3.0-alpha.1`) triggers `.github/workflows/release-artifacts.yml`,
 which runs GoReleaser in library mode and produces, for every release:
 
 - a reproducible source archive (`gokit-<version>-source.tar.gz`) and a `checksums.txt`;
