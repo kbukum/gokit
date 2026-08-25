@@ -8,8 +8,8 @@ require (
 	github.com/MarceloPetrucio/go-scalar-api-reference v0.0.0-20240521013641-ce5d2efe0e06
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/discovery v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/discovery v0.3.0-alpha.1
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.12.0
 	go.opentelemetry.io/otel v1.45.0

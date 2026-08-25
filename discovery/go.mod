@@ -7,7 +7,7 @@ toolchain go1.26.6
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/hashicorp/consul/api v1.34.4
-	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
 )
 
 require (

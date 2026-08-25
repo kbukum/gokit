@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/containerd/errdefs v1.0.0
-	github.com/kbukum/gokit v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.1
 	github.com/opencontainers/image-spec v1.1.1

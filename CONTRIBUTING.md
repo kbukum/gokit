@@ -114,7 +114,12 @@ You never maintain a hardcoded module list:
 2. Add a `doc.go` with package-level documentation
 3. If the module wraps an infrastructure component,
    implement `component.Component` for lifecycle management
-4. Add tests — the module is automatically discovered by `gomod.sh`, CI, and all `make` targets
+4. If the module depends on another gokit sub-module (e.g. `.../testutil`), add a
+   local `replace` for it too — run `make replace-sync` to derive them from the
+   module graph, or `make replace-check` to verify. These keep `go mod tidy`
+   working against not-yet-published versions during a release bump and are
+   enforced in CI.
+5. Add tests — the module is automatically discovered by `gomod.sh`, CI, and all `make` targets
 
 ## Coding Standards
 

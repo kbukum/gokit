@@ -6,8 +6,8 @@ toolchain go1.26.6
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/testutil v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/sdk/metric v1.45.0
@@ -51,3 +51,5 @@ require (
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 )
+
+replace github.com/kbukum/gokit/testutil => ../testutil

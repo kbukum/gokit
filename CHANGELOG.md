@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0-alpha.1] - 2026-08-25
+
 ### Added — L5 transport rskit parity
 - **discovery**: a canonical `Balancer` set (`RoundRobin`/`Random`/`Weighted`/`LeastConnections`) selected by `NewBalancer(strategy)`; the high-level `Client` now delegates every strategy to it (per-`service:protocol` round-robin state, shared random/weighted/least-connections) instead of carrying its own inline selection. `LeastConnectionsBalancer` tracks in-flight load via `Client.Acquire`/`Release`. Add a `DiscoveryServer` component wrapper that starts the inner component then registers, rolls back (stops inner) on registration failure, and deregisters before stop. `ServiceResolver` rejects `least_conn`, which a stateless resolve-to-URL cannot honor.
 - **grpc**: the lossless `AppErrorToStatus`/`StatusToAppError` mapping pair — the RFC 9457 ProblemDetail is embedded in the status details so a round trip preserves code, message, and extension members — alongside the `ErrorCodeToGRPCCode`/`GRPCCodeToErrorCode` code maps.

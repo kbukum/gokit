@@ -209,6 +209,16 @@ cmd_update_go() {
   done < <(find_modules)
 }
 
+cmd_replace_sync() {
+  local script="$ROOT_DIR/scripts/module-replaces.py"
+  if [[ ! -f "$script" ]]; then
+    echo -e "${RED}Error: $script not found${NC}"
+    exit 1
+  fi
+  python3 "$script" "$@"
+  exit $?
+}
+
 cmd_custom() {
   local command="$1"
   local target="$2"
@@ -283,12 +293,14 @@ parse_module_flag "$@"
 
 case "$ACTION" in
   tidy)        cmd_tidy "$MODULE_TARGET" ;;
+  replace-sync) cmd_replace_sync "${REMAINING_ARGS[@]}" ;;
   update)      cmd_update "$MODULE_TARGET" ;;
   update-go)   cmd_update_go "${REMAINING_ARGS[0]}" ;;
   cmd)         cmd_custom "${REMAINING_ARGS[0]}" "$MODULE_TARGET" ;;
   *)
     echo "Usage:"
     echo "  ./gomod.sh tidy [-m module] [-w workspace]          # go mod tidy"
+    echo "  ./gomod.sh replace-sync [--check]                   # sync/verify intra-repo replaces"
     echo "  ./gomod.sh update [-m module] [-w workspace]        # go get -u ./..."
     echo "  ./gomod.sh update-go <version> [-w workspace]       # update go version in all go.mod"
     echo "  ./gomod.sh cmd \"<command>\" [-m mod] [-w workspace] # run command in module(s)"

@@ -5,12 +5,12 @@ go 1.26.0
 toolchain go1.26.6
 
 require (
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/ai v0.2.0
-	github.com/kbukum/gokit/authz v0.2.0
-	github.com/kbukum/gokit/schema v0.2.0
-	github.com/kbukum/gokit/skill v0.2.0
-	github.com/kbukum/gokit/tool v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/ai v0.3.0-alpha.1
+	github.com/kbukum/gokit/authz v0.3.0-alpha.1
+	github.com/kbukum/gokit/schema v0.3.0-alpha.1
+	github.com/kbukum/gokit/skill v0.3.0-alpha.1
+	github.com/kbukum/gokit/tool v0.3.0-alpha.1
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 )
 

@@ -6,9 +6,9 @@ toolchain go1.26.6
 
 require (
 	github.com/gin-gonic/gin v1.12.0
-	github.com/kbukum/gokit v0.2.0
-	github.com/kbukum/gokit/server v0.2.0
-	github.com/kbukum/gokit/testutil v0.2.0
+	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/server v0.3.0-alpha.1
+	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 )
 
 require (
@@ -33,7 +33,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kbukum/gokit/discovery v0.2.0 // indirect
+	github.com/kbukum/gokit/discovery v0.3.0-alpha.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect

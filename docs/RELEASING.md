@@ -45,6 +45,17 @@ dependency floors — the `require github.com/kbukum/gokit/<mod> vX.Y.Z` lines t
 let a published consumer resolve one gokit module's dependency on another. Toven
 stages that rewrite for review; it never commits, tags, or pushes here.
 
+Because the bump moves those floors to a version that is not published yet, `go
+mod tidy` would try (and fail) to fetch it from the proxy — except every
+intra-repo dependency also carries a local `replace github.com/kbukum/gokit/<mod>
+=> ../<path>` directive that resolves it from the working tree instead. Those
+directives are maintained by `make replace-sync` (derived from the module graph,
+not by hand) and enforced in CI preflight via `make replace-check`, so the set
+stays complete as modules are added. If a bump-then-`tidy` ever fails downloading
+a `github.com/kbukum/gokit/...` module, run `make replace-sync` and commit the
+result. The directives are ignored by downstream consumers, so committing local
+relative paths is safe.
+
 `release bump` computes the versions from `main`'s baseline (reachable tags plus
 Conventional-Commit history), but the mutation lands in your working tree — so
 branch off a clean `main` first, then run the bump on the branch. There is no
