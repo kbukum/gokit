@@ -44,25 +44,31 @@ dependency floors — the `require github.com/kbukum/gokit/<mod> vX.Y.Z` lines t
 let a published consumer resolve one gokit module's dependency on another. Toven
 stages that rewrite for review; it never commits, tags, or pushes here.
 
-From a clean `main`:
+`release bump` computes the versions from `main`'s baseline (reachable tags plus
+Conventional-Commit history), but the mutation lands in your working tree — so
+branch off a clean `main` first, then run the bump on the branch. There is no
+need to stage on `main` and carry the change over.
 
 ```sh
-make release-bump   # toven release bump --yes
+git switch -c release/vX.Y.Z                       # branch off clean main
+make release-bump SET_VERSION=0.3.0-alpha.1         # omit SET_VERSION once every module carries a tag
 ```
 
-Toven rewrites each module's version and dependency floors and stages the
-change. Then, still on `main`:
+Then, on the branch:
 
 1. Rotate the CHANGELOG as in step 2 (if not already done) and stage it.
-2. Cut a `release/vX.Y.Z` branch carrying the staged bump.
+2. Commit the staged bump + CHANGELOG.
 3. Open a pull request and merge it into `main` after review.
 
 The bump lands through a reviewed PR so `main` stays the source of truth; the
-signed tags are cut only after the PR merges (Phase 2). This is a first-release
-caveat: gokit has no reachable tag yet, so `release status` / `release plan`
-fail closed ("no reachable release tag") until the first version is cut — supply
-that first version explicitly to the mutating action, per
-[`VERSIONING.md`](VERSIONING.md); Toven never fabricates a synthetic `0.0.0`.
+signed tags are cut only after the PR merges (Phase 2). The last published line
+is `v0.2.0`, so `release status` / `release plan` work: modules carrying a
+`v0.2.0` tag auto-bump from their Conventional-Commit history. Modules added
+since v0.2.0 (media, agent, ai, …) carry no tag, so supply the first version to
+the mutating action with `--set-version` — accepted on `release bump`,
+`release tag`, and `release publish`, workspace-wide (`--set-version 0.3.0-alpha.1`,
+no `v` prefix) or per module (`--set-version go:media=0.3.0-alpha.1`), per
+[`VERSIONING.md`](VERSIONING.md). Toven never fabricates a synthetic `0.0.0`.
 
 ## 4. Cut the tags and hosted Release (Phase 2)
 
@@ -153,7 +159,7 @@ make list-tags         # every version tag currently on the remote
 
 ## Supply-chain artifacts (automated)
 
-Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.2.0-alpha.1`) triggers `.github/workflows/release.yml`,
+Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.3.0-alpha.1`) triggers `.github/workflows/release.yml`,
 which runs GoReleaser in library mode and produces, for every release:
 
 - a reproducible source archive (`gokit-<version>-source.tar.gz`) and a `checksums.txt`;

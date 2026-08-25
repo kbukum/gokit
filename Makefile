@@ -120,23 +120,28 @@ release-readiness:
 ## the maintainer rotates the `[Unreleased]` CHANGELOG heading, cuts a
 ## `release/vX.Y.Z` branch carrying the staged bump, and opens a PR. The signed
 ## tags are cut by `release-tag` only after that PR merges into `main`.
+## Pass SET_VERSION for modules with no prior tag (added since v0.2.0) — it maps
+## to `--set-version` (no `v` prefix), e.g. `make release-bump SET_VERSION=0.3.0-alpha.1`
+## (workspace-wide) or `SET_VERSION=go:media=0.3.0-alpha.1` (per module).
 release-bump:
-	@$(TOVEN) release bump --yes
+	@$(TOVEN) release bump $(if $(SET_VERSION),--set-version $(SET_VERSION)) --yes
 
 ## Phase 2 — tag (run only after the release-bump PR merges into `main`): create and
 ## push the signed lock-step module tags on the merged commit. Toven owns tagging
-## and commit-derived release notes. (usage: make release-tag)
+## and commit-derived release notes. (usage: make release-tag [SET_VERSION=0.3.0-alpha.1])
 release-tag:
-	@$(TOVEN) release tag --yes
+	@$(TOVEN) release tag $(if $(SET_VERSION),--set-version $(SET_VERSION)) --yes
 
 ## Mutation-free registry + hosted-Release rehearsal (read-only)
+## (usage: make release-publish-dry-run [SET_VERSION=0.3.0-alpha.1])
 release-publish-dry-run:
-	@$(TOVEN) release publish --dry-run
+	@$(TOVEN) release publish --dry-run $(if $(SET_VERSION),--set-version $(SET_VERSION))
 
 ## Authoritative release: tag, push, and create the hosted GitHub Release; the pushed tag then
 ## triggers .github/workflows/release.yml (GoReleaser) to attach source archive + SBOM + signatures.
+## (usage: make release-publish [SET_VERSION=0.3.0-alpha.1])
 release-publish:
-	@$(TOVEN) release publish --yes
+	@$(TOVEN) release publish $(if $(SET_VERSION),--set-version $(SET_VERSION)) --yes
 
 ## List all version tags
 list-tags:
@@ -147,14 +152,12 @@ list-tags:
 ## graph, then exercise the mutation-free release previews (status + plan) with
 ## the candidate Toven binary. Toven owns the authoritative release tag/publish
 ## path; GoReleaser only attaches supply-chain artifacts to the Toven-created
-## Release. Toven never fabricates a synthetic 0.0.0, so before the first version
-## tag the release previews fail closed with "no reachable release tag" — that is
-## the expected outcome and is tolerated here. Once a version tag exists the
-## previews succeed instead; that success is the expected steady state and is
-## reported as a pass. A whole-workspace `release plan` may still fail closed
-## because a not-yet-released module declares no version — Toven requires an
-## explicit first `--set-version` rather than inventing one. That is the same
-## expected pre-first-release posture and is tolerated too. Only a failure for
+## Release. The last published line is v0.2.0, so `release status` succeeds and
+## `release plan` bumps tagged modules from history; but modules added since
+## v0.2.0 declare no version, so a whole-workspace `release plan` fails closed on
+## them ("has never been released and declares no version") until an explicit
+## `--set-version` is supplied — Toven never invents one. Both that fail-closed
+## posture and a fully-succeeding preview are tolerated here; only a failure for
 ## any other reason fails the canary.
 ## TOVEN selects the binary (see the TOVEN var).
 toven-canary:

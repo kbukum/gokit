@@ -41,11 +41,20 @@ line = 80.0
 # not the absence of a mechanism. The Go tag grammar is fixed (Toven rejects a
 # `tag_format` override).
 #
-# First-release note — gokit has no reachable release tags yet, so the version
-# is tag-derived from none and the mutation-free previews (`release status` /
-# `plan`) fail closed ("no reachable release tag") until the first version is
-# cut. That first version is supplied explicitly to the mutating `release tag`
-# action in step 04/05; Toven never fabricates a synthetic `0.0.0` baseline.
+# Version baseline — the last published line is `v0.2.0` (immutable on the Go
+# module proxy for the root and every module that existed then). Toven anchors
+# on reachable git tags, so `release status` / `release plan` work: modules that
+# carry a `v0.2.0` tag auto-bump from their Conventional-Commit history (e.g.
+# `authz 0.2.0 → 0.2.1`). Modules added since v0.2.0 (media, agent, ai, …) have
+# no tag and no declared version, so `release plan` fails closed on them until a
+# first version is supplied. Cross-check the proxy before choosing a version:
+# gokit's remote currently carries no `v*` tags even though the proxy has cached
+# up to `v0.2.0`, so the next version must be strictly greater than everything
+# published on every module path. Supply the version to the mutating action —
+# `--set-version <version>` (workspace-wide) or `--set-version go:<mod>=<version>`
+# is accepted on `release bump`, `release tag`, and `release publish`, and the
+# version carries no `v` prefix (e.g. `--set-version 0.3.0-alpha.1`). Toven never
+# fabricates a synthetic `0.0.0` baseline.
 [ecosystems.go.release]
 readiness = ["clean-tree"]
 
