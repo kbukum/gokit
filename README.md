@@ -11,8 +11,9 @@
 > breaking changes are documented in [`CHANGELOG.md`](CHANGELOG.md).
 > See [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md).
 >
-> **Current development line — `v0.2.0-alpha.1`.** This is a prerelease for
-> evaluation and integration testing; APIs may change before `v0.2.0`.
+> **Latest release — `v0.2.0`.** The next development line being prepared is
+> `v0.3.0-alpha.1`, a prerelease for evaluation and integration testing; APIs
+> may change before the stable `v0.3.0`.
 
 > **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python).
 > Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are evaluated for parity across all three.

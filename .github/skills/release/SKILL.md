@@ -77,7 +77,9 @@ done
 
 The next version must be **strictly greater** than `$highest` — and note a prerelease sorts *below* its release (`X.Y.Z-alpha.N < X.Y.Z`), so it must still exceed everything already published. The CHANGELOG can lag or list versions that were never actually pushed; trust the proxy over the CHANGELOG for immutability.
 
-**First-release caveat:** if gokit genuinely has no reachable tag *and* nothing on the proxy, `release status`/`plan` fail closed as expected. `--set-version` is a **`release tag`/`release publish` flag only** (not `release bump`), so supply the explicit first version to the Phase 2 mutating cut — `toven release publish --set-version go:gokit=X.Y.Z --yes` (or `toven release tag --set-version go:gokit=X.Y.Z --yes` to tag without the hosted Release). Toven never fabricates a synthetic `0.0.0` baseline. See `docs/VERSIONING.md`.
+**Version baseline (gokit today):** the last published line is `v0.2.0`, immutable on the Go module proxy for the root and every module that existed then. Toven anchors on reachable git tags, so `release status`/`plan` **work** — a module carrying a `v0.2.0` tag auto-bumps from its Conventional-Commit history (e.g. `authz 0.2.0 → 0.2.1`). Only modules added since v0.2.0 (media, agent, ai, …) have no tag and no declared version, so `release plan` fails closed on them until you supply a first version. Note gokit's remote currently carries **no `v*` tags** even though the proxy cached up to `v0.2.0` — exactly the tags-diverge-from-proxy case above — so trust the proxy for immutability and pick a version strictly greater than everything published on every path.
+
+**Supplying versions with `--set-version`:** `--set-version <version>` (workspace-wide) or `--set-version go:<mod>=<version>` (per module) is accepted on `release bump`, `release tag`, **and** `release publish`. The version carries **no `v` prefix** — e.g. `--set-version 0.3.0-alpha.1`. A workspace-wide `--set-version 0.3.0-alpha.1` cuts every discovered module to that version in lock-step (one hosted prerelease `v0.3.0-alpha.1`). Toven never fabricates a synthetic `0.0.0` baseline. See `docs/VERSIONING.md`.
 
 ## Step 3 — Update the CHANGELOG
 
@@ -89,14 +91,16 @@ The next version must be **strictly greater** than `$highest` — and note a pre
 
 ## Step 4 — Phase 1: stage the version bump through a PR
 
-`toven release bump` rewrites every module's version and the inter-module dependency floors and **stages** the change — it never commits, tags, or pushes.
+`toven release bump` rewrites every module's version and the inter-module dependency floors and **stages** the change — it never commits, tags, or pushes. It computes versions from `main`'s baseline but writes into the working tree, so **branch off a clean `main` first, then run the bump on the branch** (no need to stage on `main` and carry it over). Because gokit has modules with no prior tag (added since v0.2.0), pass the workspace-wide first version so every module bumps in lock-step:
 
 ```bash
-toven release bump --yes                       # first release: nothing to bump — skip to Phase 2 with --set-version
-# Makefile wrapper: make release-bump
+git switch -c release/v0.3.0-alpha.1
+toven release bump --set-version 0.3.0-alpha.1 --yes   # no `v` prefix; workspace-wide
+# Or, if only specific new modules need a floor: --set-version go:media=0.3.0-alpha.1 (repeatable)
+# Makefile wrapper: make release-bump SET_VERSION=0.3.0-alpha.1
 ```
 
-Then, still on `main`: rotate the CHANGELOG (Step 3) if not already done, cut a `release/vX.Y.Z` branch carrying the staged bump, open a PR, and merge it after review.
+Then, on the branch: rotate the CHANGELOG (Step 3) if not already done, commit the staged bump, open a PR, and merge it into `main` after review.
 
 ## Step 5 — Phase 2: cut the tags and hosted Release (after the bump PR merges)
 
@@ -104,10 +108,10 @@ Run only from a clean checkout of the merged commit. Toven creates signed path-p
 
 ```bash
 toven release readiness          # fail-closed go/no-go checks (clean-tree)
-toven release publish --dry-run  # mutation-free tag + hosted-Release rehearsal
-toven release publish --yes      # cut and push signed tags, then create the hosted Release
-# First release only (no reachable tag): pin the explicit version here, e.g.
-# toven release publish --set-version go:gokit=X.Y.Z --yes
+toven release publish --dry-run --set-version 0.3.0-alpha.1  # mutation-free rehearsal (verified: 50 modules → 0.3.0-alpha.1, tag-only)
+toven release publish --set-version 0.3.0-alpha.1 --yes      # cut and push signed tags, then create the hosted Release
+# --set-version carries no `v` prefix and is accepted on bump/tag/publish. Once every
+# module carries the new tag, later releases drop --set-version and auto-bump from history.
 ```
 
 `toven release tag --yes` cuts and pushes the signed tags without creating the Release; `toven release publish --yes` performs the full tag → push → hosted-Release sequence **idempotently** (safe to re-run to reconcile a partial push). Add `--no-push` to keep tags local for inspection. Makefile wrappers: `make release-readiness`, `make release-publish-dry-run`, `make release-tag`, `make release-publish`, `make list-tags`.

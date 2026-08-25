@@ -9,7 +9,7 @@ This file is the bird's-eye index.
 
 | Go version | gokit version |
 |------------|---------------|
-| 1.26+      | v0.2.0-alpha.1+ |
+| 1.26+      | v0.2.0+ |
 
 ## Core Packages
 
@@ -132,9 +132,9 @@ See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) fo
 Core and sub-modules are tagged in lock-step. Each sub-module has its own `go.mod` and path-scoped release tag:
 
 ```
-v0.2.0-alpha.1                  ← core module
-server/v0.2.0-alpha.1           ← server sub-module
-database/sqlite/v0.2.0-alpha.1  ← nested sub-module
+v0.3.0-alpha.1                  ← core module
+server/v0.3.0-alpha.1           ← server sub-module
+database/sqlite/v0.3.0-alpha.1  ← nested sub-module
 ```
 
 - Consumers pin only the modules they import.
