@@ -85,13 +85,13 @@ jobs:
           set -euo pipefail
           make TOVEN="${{ steps.toven.outputs.toven }}" \
             SET_VERSION="${{ inputs.set_version }}" \
-            release-publish-dry-run | tee release-preview.txt
+            release-publish-dry-run | tee "$RUNNER_TEMP/release-preview.txt"
 
       - name: Upload preview evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-preview
-          path: release-preview.txt
+          path: ${{ runner.temp }}/release-preview.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -164,12 +164,12 @@ jobs:
           set -euo pipefail
           make TOVEN="${{ steps.toven.outputs.toven }}" \
             SET_VERSION="${{ inputs.set_version }}" \
-            release-publish | tee release-publish.txt
+            release-publish | tee "$RUNNER_TEMP/release-publish.txt"
 
       - name: Upload publish record
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-publish-record
-          path: release-publish.txt
+          path: ${{ runner.temp }}/release-publish.txt
           if-no-files-found: error
           retention-days: 90
