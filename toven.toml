@@ -57,6 +57,13 @@ line = 80.0
 # fabricates a synthetic `0.0.0` baseline.
 [ecosystems.go.release]
 readiness = ["clean-tree"]
+# gokit's release branch (`main`) is protected: it rejects any non-PR push to
+# `refs/heads/main`. Toven's default publish pushes the release commit's branch
+# alongside the tags, which that protection declines. gokit publishes Go module
+# tags only, and the version bump already lands on `main` through the Phase-1
+# bump PR, so the release needs no branch push: tag `main`'s merged HEAD and push
+# the tags alone. `push_branch = false` selects that tags-only mode.
+push_branch = false
 
 [ecosystems.go.release.prerelease]
 channels = ["alpha"]
