@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **workload/docker**: `Manager.Wait` now returns `context.Canceled`/`DeadlineExceeded` deterministically when the context is already done, instead of racing the container-wait result; removes a flaky test under the Go 1.26.6 toolchain.
+- **release**: the `Release (publish)` workflow no longer reports success when a release actually fails — both `make … | tee` steps now run under `set -euo pipefail` (`shell: bash`), so a failed `toven release publish` fails the job instead of being masked by `tee`'s zero exit code. Pin the release toolchain to the repo's declared Go via `actions/setup-go` (`go-version-file: go.mod`) on the preview and publish jobs so publishing no longer inherits the runner's incidental Go and cannot dirty the tree before Toven's clean-tree guard, add a pre-publish clean-tree assertion that prints `git status`/`diff --stat` when the tree is not pristine, and bump the pinned Toven to `v0.1.0-alpha.10` (whose clean-tree guard now names the offending paths) across `release.yml`, `ci.yml`, and `toven-canary.yml`.
 
 ### Changed — MCP go-sdk 1.7.0 / SEP-2322 multi round-trip
 - **mcp**: bump `modelcontextprotocol/go-sdk` to 1.7.0. Its default
