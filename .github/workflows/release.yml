@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TOVEN_VERSION: v0.1.0-alpha.9
+  TOVEN_VERSION: v0.1.0-alpha.10
 
 jobs:
   # Mutation-free rehearsal: the exact plan a real publish would use, preserved
@@ -58,11 +58,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Pin the release toolchain to the repo's declared Go (go.mod), matching
+      # ci.yml, so the release never inherits the runner's incidental Go — a
+      # mismatch against the `toolchain` directive can otherwise perturb the
+      # module graph and leave the tree dirty before Toven's clean-tree guard.
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6.0.0
+        with:
+          go-version-file: go.mod
+
       - name: Install the pinned Toven release
         id: toven
         # Pinned by immutable commit SHA; `version` independently pins the
         # installed binary (dual pin, both required). Same pin as ci.yml.
-        uses: kbukum/toven/.github/actions/toven@725f880affda10f0db823275802ce554b82a4e97 # v0.1.0-alpha.9
+        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
         with:
           version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"
@@ -71,7 +80,9 @@ jobs:
         run: make TOVEN="${{ steps.toven.outputs.toven }}" toven-canary
 
       - name: Rehearse the publish (mutation-free)
+        shell: bash
         run: |
+          set -euo pipefail
           make TOVEN="${{ steps.toven.outputs.toven }}" \
             SET_VERSION="${{ inputs.set_version }}" \
             release-publish-dry-run | tee release-preview.txt
@@ -103,6 +114,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Pin the release toolchain to the repo's declared Go (go.mod), matching
+      # ci.yml and the preview job, so publish never inherits the runner's
+      # incidental Go — a mismatch against the `toolchain` directive can perturb
+      # the module graph and dirty the tree before Toven's clean-tree guard.
+      - name: Set up Go from go.mod
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6.0.0
+        with:
+          go-version-file: go.mod
+
       # Toven cuts annotated tags through the embedded git backend, which builds
       # the tagger/committer signature from git config. actions/checkout sets the
       # auth token but no identity, so without this the tag creation aborts. Use
@@ -114,18 +134,34 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@725f880affda10f0db823275802ce554b82a4e97 # v0.1.0-alpha.9
+        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
         with:
           version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"
 
+      # Publish requires a pristine tree (Toven's clean-tree guard). Surface any
+      # residual working-tree change in the log before the guard trips, so a
+      # CI-only dirty file is diagnosable directly from this run.
+      - name: Assert a clean working tree before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::working tree is not clean before publish:"
+            git status --porcelain
+            git --no-pager diff --stat
+            exit 1
+          fi
+
       - name: Publish the release
+        shell: bash
         env:
           # Toven's embedded git backend reads whichever of these is set to
           # authenticate the tag push and to create the hosted Release.
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           make TOVEN="${{ steps.toven.outputs.toven }}" \
             SET_VERSION="${{ inputs.set_version }}" \
             release-publish | tee release-publish.txt
