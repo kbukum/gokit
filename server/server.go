@@ -39,8 +39,15 @@ type MountedHandler struct {
 // New creates a new Server. The Gin engine is created but no middleware is applied yet —
 // call ApplyDefaults on the config first if needed.
 func New(cfg *Config, log *logging.Logger) *Server {
+	// Default the logger once so the server, request context, recovery, and
+	// request-logging middleware all share the same instance and New(cfg, nil)
+	// never panics on a nil logger.
+	if log == nil {
+		log = logging.NewDefault("server")
+	}
+
 	// Set Gin mode based on the injected logger's level.
-	if log != nil && log.Level() <= slog.LevelDebug {
+	if log.Level() <= slog.LevelDebug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -252,8 +259,6 @@ func (s *Server) ApplyMiddleware() {
 //   - GET /readyz   — readiness probe (component-aware)
 //   - GET /info     — build/runtime info
 //   - GET /metrics  — Prometheus exposition
-//
-// Closes F-060 (no /healthz//readyz handler shipped despite full Health taxonomy in observability/).
 func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.HealthChecker) {
 	healthHandler := endpoint.Health(serviceName, checker)
 	s.engine.GET("/health", healthHandler)
@@ -266,8 +271,6 @@ func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.H
 
 // RegisterPprof mounts net/http/pprof handlers under /debug/pprof.
 // Only enable in non-public environments (the handlers expose runtime state).
-//
-// Closes F-070 sub-finding: no net/http/pprof integration.
 func (s *Server) RegisterPprof() {
 	pprofGroup := s.engine.Group("/debug/pprof")
 	pprofGroup.GET("/", gin.WrapF(pprof.Index))

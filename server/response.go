@@ -28,12 +28,7 @@ type Meta struct {
 // and structured body are derived automatically; otherwise a generic 500 is sent.
 // The response uses Content-Type: application/problem+json per RFC 9457.
 //
-// 5xx responses are logged at Error level (with method, path, status, and the underlying error chain)
-// so operators have a server-side trail even when the client only sees a generic problem detail.
-// Closes F-082 sub-finding. The logger is taken from the request context (injected by the server's
-// InjectLogger middleware); when absent — e.g. the helper is used outside a gokit Server — the extra
-// error log is skipped rather than reaching for a package global. 4xx responses are not logged here —
-// that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
+// 5xx responses are logged at Error level (with method, path, status, and the underlying error chain) so operators have a server-side trail even when the client only sees a generic problem detail. The logger is taken from the request context (injected by the server's InjectLogger middleware); when absent — e.g. the helper is used outside a gokit Server — the extra error log is skipped rather than reaching for a package global. 4xx responses are not logged here — that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
 func RespondWithError(c *gin.Context, err error) {
 	var appErr *apperrors.AppError
 	if !errors.As(err, &appErr) {

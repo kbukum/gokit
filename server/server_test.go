@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/server"
 )
 
 // healthyCheck is a minimal endpoint.HealthChecker for endpoint registration tests.
@@ -21,6 +22,18 @@ func TestListenAddrAndConfig(t *testing.T) {
 	}
 	if !s.Config().Enabled {
 		t.Fatalf("Config().Enabled should be true")
+	}
+}
+
+// TestNewWithNilLogger verifies the constructor defaults a nil logger instead of
+// panicking when the server tags its component logger.
+func TestNewWithNilLogger(t *testing.T) {
+	s := server.New(newTestConfig(), nil)
+	if s == nil {
+		t.Fatal("New(cfg, nil) returned nil")
+	}
+	if s.Logger() == nil {
+		t.Fatal("server logger should be defaulted, not nil")
 	}
 }
 
