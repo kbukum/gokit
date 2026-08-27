@@ -218,25 +218,22 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 // sanitizeArchivePath joins a member name under dest and returns the result only when
 // it stays within dest. It is a defense-in-depth barrier at the filesystem boundary:
 // callers (memberTarget) already reject traversal components, so in normal operation
-// this never rejects. Containment is enforced twice — a prefix check against
-// dest+separator (which, unlike a bare prefix check, cannot admit a sibling-prefix
-// escape such as "/out" vs "/output") and a component-aware filepath.Rel guard — so a
-// future caller reaching here without the component loop is still contained.
+// this never rejects. Containment is enforced with a component-aware filepath.Rel
+// guard, which — unlike a string-prefix check against dest+separator — correctly
+// admits the destination root itself and destinations whose cleaned form already ends
+// in a separator, while still rejecting a sibling-prefix escape ("/out" vs "/output").
 func sanitizeArchivePath(dest, name string) (target string, err error) {
 	root := filepath.Clean(dest)
 	target = filepath.Join(root, name)
 	// Explicit containment barrier at the filesystem boundary: the cleaned join must
-	// stay strictly within root's subtree. The trailing separator rejects a
-	// sibling-prefix escape (root "/out" vs a member resolving to "/output"), and the
-	// component-aware filepath.Rel check below re-confirms containment.
-	if !strings.HasPrefix(target, root+string(filepath.Separator)) {
+	// stay within root's subtree. filepath.Rel compares whole path components, so it
+	// neither admits a sibling-prefix escape nor rejects legitimate destinations that
+	// a naive string-prefix check would.
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("archive member %q escapes destination %q", name, dest)
 	}
-	rel, err := filepath.Rel(root, target)
-	if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return target, nil
-	}
-	return "", fmt.Errorf("archive member %q escapes destination %q", name, dest)
+	return target, nil
 }
 
 func extractDir(archivePath, root, target, member string, mode os.FileMode) error {
