@@ -50,11 +50,19 @@ func (h *consoleHandler) Handle(_ context.Context, rec slog.Record) error {
 	b.WriteByte(' ')
 	b.WriteString(sanitizeConsole(rec.Message))
 
+	// Bound attrs were already group-qualified when WithAttrs captured them, so
+	// they are written verbatim; record attrs are qualified here against the
+	// currently open groups. Re-prefixing bound attrs would double the group
+	// (db.db.host) and pull attrs bound before a group into it.
 	for _, a := range h.attrs {
-		h.writeAttr(&b, a)
+		h.writeAttr(&b, a.Key, a)
+	}
+	prefix := ""
+	if len(h.groups) > 0 {
+		prefix = strings.Join(h.groups, ".") + "."
 	}
 	rec.Attrs(func(a slog.Attr) bool {
-		h.writeAttr(&b, a)
+		h.writeAttr(&b, prefix+a.Key, a)
 		return true
 	})
 	b.WriteByte('\n')
@@ -93,13 +101,9 @@ func (h *consoleHandler) qualify(attrs []slog.Attr) []slog.Attr {
 	return out
 }
 
-func (h *consoleHandler) writeAttr(b *strings.Builder, a slog.Attr) {
+func (h *consoleHandler) writeAttr(b *strings.Builder, key string, a slog.Attr) {
 	if a.Equal(slog.Attr{}) {
 		return
-	}
-	key := a.Key
-	if len(h.groups) > 0 {
-		key = strings.Join(h.groups, ".") + "." + key
 	}
 	fmt.Fprintf(b, " %s=%s", key, sanitizeConsole(fmt.Sprintf("%v", a.Value.Resolve().Any())))
 }

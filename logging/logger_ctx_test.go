@@ -3,9 +3,6 @@ package logging
 import (
 	"bytes"
 	"context"
-	"errors"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 )
@@ -50,22 +47,24 @@ func levelWord(short string) string {
 	return short
 }
 
-// TestFatalExits runs Fatal in a subprocess and asserts a non-zero exit,
-// the standard pattern for exercising an os.Exit path.
-func TestFatalExits(t *testing.T) {
-	if os.Getenv("GOKIT_LOG_FATAL_CHILD") == "1" {
-		NewDefault("svc").Fatal("fatal boom")
-		return // unreachable; Fatal calls os.Exit(1)
-	}
+// TestFatalDoesNotExit verifies that Fatal logs at the fatal level and returns
+// to the caller rather than terminating the process — the library leaves the
+// exit decision to the application entry point.
+func TestFatalDoesNotExit(t *testing.T) {
+	t.Parallel()
 
-	cmd := exec.Command(os.Args[0], "-test.run=TestFatalExits")
-	cmd.Env = append(os.Environ(), "GOKIT_LOG_FATAL_CHILD=1")
-	err := cmd.Run()
-	if err == nil {
-		t.Fatal("expected non-zero exit from Fatal")
+	var buf bytes.Buffer
+	l := newBufferedLogger(&buf, "trace", "json")
+	l.Fatal("fatal boom", map[string]any{"reason": "shutdown"})
+
+	m := decodeLine(t, &buf)
+	if !strings.EqualFold(m[FieldLevel].(string), "fatal") {
+		t.Errorf("level = %v, want fatal", m[FieldLevel])
 	}
-	var ee *exec.ExitError
-	if !errors.As(err, &ee) || ee.ExitCode() != 1 {
-		t.Fatalf("expected exit code 1, got %v", err)
+	if m[FieldMessage] != "fatal boom" {
+		t.Errorf("message = %v, want %q", m[FieldMessage], "fatal boom")
+	}
+	if m["reason"] != "shutdown" {
+		t.Errorf("reason field missing: %v", m)
 	}
 }

@@ -18,6 +18,11 @@ func TestConfigValidate(t *testing.T) {
 	if err := (&Config{Level: "info", Format: "bogus"}).Validate(); err == nil {
 		t.Error("invalid format should be rejected")
 	}
+	for _, format := range []string{"json", "console", "text", FormatPretty} {
+		if err := (&Config{Level: "info", Format: format}).Validate(); err != nil {
+			t.Errorf("format %q should be accepted: %v", format, err)
+		}
+	}
 }
 
 func TestConfigApplyDefaults(t *testing.T) {

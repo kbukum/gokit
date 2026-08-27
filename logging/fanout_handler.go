@@ -40,15 +40,20 @@ func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return false
 }
 
-// Handle forwards the record to every downstream handler, joining their errors
-// so one failing sink neither hides the others nor drops their output. It does
-// not re-check per-branch Enabled: the emit decision was already made at the top
-// of the chain (base level plus any per-module override), so re-filtering here
-// would drop records a more-verbose module override deliberately let through and
-// make the multi-sink path diverge from the single-sink path.
+// Handle forwards the record to every downstream handler whose own Enabled
+// contract admits the record's level, joining their errors so one failing sink
+// neither hides the others nor drops their output. Re-checking each branch's
+// Enabled is what keeps a more-verbose branch (a debug-enabled consumer handler,
+// or a module override on a governed sink) from forcing its records onto the
+// other branches: the top-of-chain Enabled is the OR across branches, so a
+// record only reaches here because at least one branch wants it, and this filter
+// ensures the others still honor their configured level.
 func (h *fanoutHandler) Handle(ctx context.Context, rec slog.Record) error {
 	var errs []error
 	for _, next := range h.handlers {
+		if !next.Enabled(ctx, rec.Level) {
+			continue
+		}
 		if err := next.Handle(ctx, rec.Clone()); err != nil {
 			errs = append(errs, err)
 		}

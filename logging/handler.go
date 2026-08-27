@@ -16,12 +16,16 @@ type pipeline struct {
 
 // buildPipeline composes the handler chain for cfg and opts:
 //
-//	moduleLevel → sampling → masking → context → fanout{ sink, otlp, extra…, or BYO base }
+//	sampling → context → masking → fanout{ moduleGate(sink), moduleGate(otlp), BYO handlers… }
 //
-// The middleware layers (module-level gating, sampling, masking, context
-// enrichment) wrap the fanout so their policy applies to every downstream sink,
-// including consumer-supplied handlers. Bring-your-own handlers are added as
-// fanout branches (opts.handlers) or fully replace the default sink
+// Context enrichment runs before masking so identifiers folded from the context
+// (which may themselves carry sensitive values) are redacted like any other
+// attribute. Sampling and masking wrap the fanout so their policy applies to
+// every branch. Per-module level overrides gate gokit's own governed sinks (the
+// default/base sink and the OTLP branch) from inside the fanout, so a
+// consumer-supplied handler keeps its own Enabled contract while the fanout
+// still honors each branch's level individually. Bring-your-own handlers are
+// added as fanout branches (opts.handlers) or fully replace the default sink
 // (opts.baseSink); OTLP is one more branch when enabled.
 func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, error) {
 	level, _ := ParseLevel(cfg.Level)
@@ -33,11 +37,17 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 		writer = outputWriter(cfg.Output)
 	}
 
+	var manager *ModuleLevelManager
+	if len(cfg.ModuleLevels) > 0 {
+		manager = NewModuleLevelManager(cfg.ModuleLevels)
+	}
+
 	var branches []slog.Handler
 	if opts.baseSink != nil {
-		branches = append(branches, opts.baseSink)
+		branches = append(branches, newModuleLevelHandler(opts.baseSink, manager))
 	} else {
-		branches = append(branches, newSink(cfg, serviceName, lv, writer))
+		sink := newSink(cfg, serviceName, lv, writer)
+		branches = append(branches, newModuleLevelHandler(sink, manager))
 	}
 
 	var provider *OTLPProvider
@@ -52,13 +62,11 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 			return pipeline{}, err
 		}
 		provider = p
-		branches = append(branches, newOTLPHandler(provider, lv))
+		branches = append(branches, newModuleLevelHandler(newOTLPHandler(provider, lv), manager))
 	}
 	branches = append(branches, opts.handlers...)
 
 	h := newFanout(branches...)
-	h = newContextHandler(h)
-
 	if cfg.Masking.Enabled || opts.masker != nil {
 		masker := opts.masker
 		if masker == nil {
@@ -66,11 +74,9 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 		}
 		h = newMaskingHandler(h, masker)
 	}
+	h = newContextHandler(h)
 	if cfg.Sampling.Enabled {
 		h = newSamplingHandler(h, cfg.Sampling, opts.now)
-	}
-	if len(cfg.ModuleLevels) > 0 {
-		h = newModuleLevelHandler(h, NewModuleLevelManager(cfg.ModuleLevels))
 	}
 
 	return pipeline{handler: h, level: lv, otlp: provider}, nil

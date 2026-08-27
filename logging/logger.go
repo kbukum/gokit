@@ -5,7 +5,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"time"
 )
+
+// otlpShutdownTimeout bounds how long Close waits for the OTLP exporter to
+// flush and shut down, so an unreachable collector cannot stall process
+// shutdown indefinitely.
+const otlpShutdownTimeout = 5 * time.Second
 
 // Logger is the injected logging handle for gokit consumers. It is a thin
 // ergonomic facade over the standard library's [log/slog]: the value-add
@@ -58,9 +64,11 @@ func MustNew(cfg *Config, serviceName string, opts ...Option) *Logger {
 
 // NewDefault builds a Logger with a sane console configuration. It never
 // enables OTLP, so it cannot fail and returns a single value for ergonomic
-// nil-fallback wiring inside the kit.
+// nil-fallback wiring inside the kit. Defaults are applied so the secure
+// baseline — including value masking — is in effect.
 func NewDefault(serviceName string) *Logger {
 	cfg := &Config{Level: "info", Format: "console", Output: "stdout", Timestamp: true}
+	cfg.ApplyDefaults()
 	l, _ := New(cfg, serviceName) //nolint:errcheck // OTLP disabled, so New cannot error here
 	return l
 }
@@ -74,6 +82,7 @@ func NewFromEnv(serviceName string) (*Logger, error) {
 		NoColor:   getEnvOrDefault("LOG_NO_COLOR", "false") == BooleanTrue,
 		Timestamp: getEnvOrDefault("LOG_TIMESTAMP", "true") == BooleanTrue,
 	}
+	cfg.ApplyDefaults()
 	return New(cfg, serviceName)
 }
 
@@ -101,12 +110,15 @@ func (l *Logger) Level() slog.Level {
 }
 
 // Close shuts down the OTLP exporter, flushing pending logs. It is a no-op on
-// derived loggers and when OTLP is disabled.
+// derived loggers and when OTLP is disabled. The flush is bounded by
+// [otlpShutdownTimeout] so an unavailable collector cannot stall shutdown.
 func (l *Logger) Close() error {
 	if l.otlp == nil {
 		return nil
 	}
-	return l.otlp.Shutdown(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
+	defer cancel()
+	return l.otlp.Shutdown(ctx)
 }
 
 // derive returns a Logger backed by a new *slog.Logger, sharing the level var
@@ -199,19 +211,18 @@ func (l *Logger) TraceCtx(ctx context.Context, msg string, fields ...map[string]
 	l.slog.Log(ctx, LevelTrace, msg, fieldsToArgs(fields...)...)
 }
 
-// Fatal logs at fatal level and terminates the process with a non-zero status.
-// It is intended for unrecoverable startup failures on the process's main path.
+// Fatal logs at the fatal level. It does NOT terminate the process: whether to
+// exit — and running deferred cleanup beforehand — is the application entry
+// point's decision, not the library's. Callers that must abort should return
+// or propagate an error and let main choose the exit policy.
 func (l *Logger) Fatal(msg string, fields ...map[string]any) {
 	l.FatalCtx(context.Background(), msg, fields...)
 }
 
-// FatalCtx logs at fatal level, propagating ctx, then terminates the process.
+// FatalCtx logs at the fatal level, propagating ctx for correlation and export.
+// Like [Logger.Fatal], it does not terminate the process.
 func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]any) {
 	l.slog.Log(ctx, LevelFatal, msg, fieldsToArgs(fields...)...)
-	// Close flushes with a fresh context on purpose: the caller's ctx may already
-	// be canceled, but the final fatal record must still be exported before exit.
-	_ = l.Close() //nolint:contextcheck // deliberate background flush on the fatal exit path
-	os.Exit(1)
 }
 
 // fieldsToArgs flattens field maps into slog attribute arguments.

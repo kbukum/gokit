@@ -81,7 +81,7 @@ func (c *Config) Validate() error {
 	if !contains(validLevels, c.Level) {
 		return fmt.Errorf("logging.level must be one of %v (got: %s)", validLevels, c.Level)
 	}
-	validFormats := []string{"json", "console", "text"}
+	validFormats := []string{"json", "console", "text", FormatPretty}
 	if !contains(validFormats, c.Format) {
 		return fmt.Errorf("logging.format must be one of %v (got: %s)", validFormats, c.Format)
 	}

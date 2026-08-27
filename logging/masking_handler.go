@@ -48,21 +48,25 @@ func (h *maskingHandler) WithGroup(name string) slog.Handler {
 	return &maskingHandler{next: h.next.WithGroup(name), masker: h.masker}
 }
 
-// maskAttr redacts a single attribute. Group attributes are masked recursively
-// so nested sensitive fields are covered.
+// maskAttr redacts a single attribute. The value is resolved first so a
+// [slog.LogValuer] that yields a group is masked recursively; checking the kind
+// before resolving would treat such a value as an opaque scalar and could
+// forward nested sensitive fields unmasked. Group attributes are masked
+// recursively so nested sensitive fields are covered.
 func (h *maskingHandler) maskAttr(a slog.Attr) slog.Attr {
-	if a.Value.Kind() == slog.KindGroup {
-		group := a.Value.Group()
+	v := a.Value.Resolve()
+	if v.Kind() == slog.KindGroup {
+		group := v.Group()
 		out := make([]slog.Attr, len(group))
 		for i, g := range group {
 			out[i] = h.maskAttr(g)
 		}
 		return slog.Attr{Key: a.Key, Value: slog.GroupValue(out...)}
 	}
-	original := a.Value.Resolve().String()
+	original := v.String()
 	masked := h.masker.MaskValue(a.Key, original)
 	if masked == original {
-		return a
+		return slog.Attr{Key: a.Key, Value: v}
 	}
 	return slog.String(a.Key, masked)
 }
