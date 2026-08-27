@@ -419,7 +419,8 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 | `WithError(err)` | Add error field |
 | `SetLevel(level)` / `Level()` | Get/set the base level at runtime |
 | `Close()` | Flush OTLP and shut down |
-| `Debug` / `Info` / `Warn` / `Error` / `Trace` / `Fatal` (+ `*Ctx` variants) | Log at level |
+| `Debug` / `Info` / `Warn` / `Error` / `Trace` (+ `*Ctx` variants) | Log at level |
+| `Fatal` / `FatalCtx` | Log at fatal level (does **not** exit the process) |
 
 ---
 

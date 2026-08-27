@@ -11,7 +11,9 @@ import (
 const (
 	// LevelTrace is more verbose than [slog.LevelDebug].
 	LevelTrace = slog.Level(-8)
-	// LevelFatal is more severe than [slog.LevelError] and, at the facade, terminates the process.
+	// LevelFatal is more severe than [slog.LevelError]. The facade records it
+	// but does not terminate the process — whether to exit is the application
+	// entry point's decision, not the library's (see [Logger.Fatal]).
 	LevelFatal = slog.Level(12)
 )
 

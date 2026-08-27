@@ -149,6 +149,38 @@ func TestModuleOverrideStillReachesSinks(t *testing.T) {
 	}
 }
 
+// TestModuleOverrideGatesCustomHandler verifies a per-module level override
+// applies to consumer-supplied handlers too: a component pinned to warn must
+// not emit a debug record to a debug-enabled custom sink, matching the
+// documented "still governed by module-level policy" guarantee.
+func TestModuleOverrideGatesCustomHandler(t *testing.T) {
+	t.Parallel()
+
+	var defaultSink bytes.Buffer
+	consumer := &capturingHandler{level: slog.LevelDebug}
+	cfg := &Config{
+		Level:        "debug",
+		Format:       "json",
+		Output:       "stdout",
+		Timestamp:    true,
+		ModuleLevels: map[string]string{"quiet": "warn"},
+	}
+	l, err := New(cfg, "test", WithWriter(&defaultSink), WithHandler(consumer))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	l.WithComponent("quiet").Debug("suppressed")
+	if consumer.count != 0 {
+		t.Errorf("warn-pinned component should not reach the debug custom handler, got %d records", consumer.count)
+	}
+
+	l.WithComponent("loud").Debug("delivered")
+	if consumer.count == 0 {
+		t.Error("non-overridden component at debug should reach the custom handler")
+	}
+}
+
 // capturingHandler is a minimal slog.Handler that counts records at or above
 // its level, used to assert per-branch Enabled semantics.
 type capturingHandler struct {

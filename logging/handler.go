@@ -64,7 +64,9 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 		provider = p
 		branches = append(branches, newModuleLevelHandler(newOTLPHandler(provider, lv), manager))
 	}
-	branches = append(branches, opts.handlers...)
+	for _, extra := range opts.handlers {
+		branches = append(branches, newModuleLevelHandler(extra, manager))
+	}
 
 	h := newFanout(branches...)
 	if cfg.Masking.Enabled || opts.masker != nil {
