@@ -3,6 +3,7 @@ package sse
 import (
 	"path"
 	"sync"
+	"sync/atomic"
 
 	"github.com/kbukum/gokit/logging"
 )
@@ -41,10 +42,10 @@ type Frame struct {
 
 // Client represents a connected SSE client.
 type Client struct {
-	id       string            // Unique client ID
-	metadata map[string]string // Optional metadata (userID, sessionID, etc.)
-	events   chan Frame        // Channel for sending events to client
-	log      *logging.Logger   // Set by the hub at registration; nil before then
+	id       string                         // Unique client ID
+	metadata map[string]string              // Optional metadata (userID, sessionID, etc.)
+	events   chan Frame                     // Channel for sending events to client
+	log      atomic.Pointer[logging.Logger] // Published by the hub at registration; nil before then
 }
 
 // ClientOption configures a Client.
@@ -130,8 +131,8 @@ func (c *Client) SendFrame(frame Frame) bool {
 		return true
 	default:
 		// Channel full, client is too slow
-		if c.log != nil {
-			c.log.Warn("[SSE] Client channel full, dropping message", map[string]any{
+		if lg := c.log.Load(); lg != nil {
+			lg.Warn("[SSE] Client channel full, dropping message", map[string]any{
 				"client_id": c.id,
 			})
 		}
@@ -249,10 +250,11 @@ func (h *Hub) closeAllClients() {
 }
 
 // Register adds a client to the hub. Returns immediately if the hub has been stopped.
-// The hub's logger is assigned to the client before it is published to the hub loop,
-// so a concurrent SendFrame reading client.log never races with registration.
+// The hub's logger is published to the client through an atomic pointer before it is
+// handed to the hub loop, so a concurrent SendFrame loading client.log never races
+// with registration.
 func (h *Hub) Register(client *Client) {
-	client.log = h.log
+	client.log.Store(h.log)
 	select {
 	case h.register <- client:
 	case <-h.done:
