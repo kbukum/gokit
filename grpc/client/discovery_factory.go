@@ -32,7 +32,7 @@ type DiscoveryConnectionFactory struct {
 //   - discoveryClient: The discovery client to use for resolving service addresses.
 //     This client handles caching, load balancing, and fallback endpoints.
 //   - gRPCCfg: Base gRPC configuration for TLS, keepalive, message sizes, and timeouts.
-//   - log: Optional logger; if nil, uses the global logging.
+//   - log: Optional logger; if nil, a default logger is used.
 //   - opts: Additional gRPC dial options to apply when creating connections.
 //
 // The factory will use the discovery client's load balancing strategy to select among healthy service endpoints.
@@ -43,6 +43,9 @@ func NewDiscoveryConnectionFactory(
 	log *logging.Logger,
 	opts ...grpc.DialOption,
 ) *DiscoveryConnectionFactory {
+	if log == nil {
+		log = logging.NewDefault("grpc-client")
+	}
 	return &DiscoveryConnectionFactory{
 		discoveryClient: discoveryClient,
 		gRPCCfg:         gRPCCfg,
@@ -168,19 +171,11 @@ func (f *DiscoveryConnectionFactory) transportCredentials() (credentials.Transpo
 }
 
 func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]any) {
-	if f.log != nil {
-		f.log.Debug(msg, fields...)
-	} else {
-		logging.NewDefault("grpc-client").Debug(msg, fields...)
-	}
+	f.log.Debug(msg, fields...)
 }
 
 func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]any) {
-	if f.log != nil {
-		f.log.Error(msg, fields...)
-	} else {
-		logging.NewDefault("grpc-client").Error(msg, fields...)
-	}
+	f.log.Error(msg, fields...)
 }
 
 // Compile-time check that DiscoveryConnectionFactory implements ConnectionFactory.

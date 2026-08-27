@@ -43,7 +43,7 @@ type LazyClient[T any] struct {
 //   - factory: The connection factory to use for creating connections
 //   - createClient: Function to create the typed client from a connection
 //     (usually the generated New*Client function from protobuf)
-//   - log: Optional logger instance; if nil, uses the global logger
+//   - log: Optional logger instance; if omitted or nil, a default logger is used
 func NewLazyClient[T any](
 	serviceName string,
 	factory ConnectionFactory,
@@ -54,6 +54,7 @@ func NewLazyClient[T any](
 		serviceName:  serviceName,
 		factory:      factory,
 		createClient: createClient,
+		log:          logging.NewDefault("grpc-client"),
 	}
 	if len(log) > 0 && log[0] != nil {
 		lc.log = log[0]
@@ -185,25 +186,13 @@ func (c *LazyClient[T]) GetConnection() *grpc.ClientConn {
 }
 
 func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]any) {
-	if c.log != nil {
-		c.log.Debug(msg, fields...)
-	} else {
-		logging.NewDefault("grpc-client").Debug(msg, fields...)
-	}
+	c.log.Debug(msg, fields...)
 }
 
 func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]any) {
-	if c.log != nil {
-		c.log.Info(msg, fields...)
-	} else {
-		logging.NewDefault("grpc-client").Info(msg, fields...)
-	}
+	c.log.Info(msg, fields...)
 }
 
 func (c *LazyClient[T]) logError(msg string, fields ...map[string]any) {
-	if c.log != nil {
-		c.log.Error(msg, fields...)
-	} else {
-		logging.NewDefault("grpc-client").Error(msg, fields...)
-	}
+	c.log.Error(msg, fields...)
 }
