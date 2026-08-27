@@ -86,7 +86,7 @@ func (c *Component) Start(_ context.Context) error {
 	}
 
 	// Apply middleware and get the final handler
-	c.srv.ApplyMiddleware()
+	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
 	c.ts = httptest.NewServer(c.srv.Handler())
 	c.started = true
 	return nil
@@ -134,7 +134,7 @@ func (c *Component) Reset(ctx context.Context) error {
 	cfg.ApplyDefaults()
 	c.srv = server.New(cfg, c.log)
 
-	c.srv.ApplyMiddleware()
+	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
 	c.ts = httptest.NewServer(c.srv.Handler())
 	return nil
 }
