@@ -201,7 +201,6 @@ func (h *Hub) Run() {
 
 		case client := <-h.register:
 			h.mu.Lock()
-			client.log = h.log
 			h.clients[client.id] = client
 			h.mu.Unlock()
 			h.log.Debug("[SSE_HUB] Client registered", map[string]any{
@@ -250,7 +249,10 @@ func (h *Hub) closeAllClients() {
 }
 
 // Register adds a client to the hub. Returns immediately if the hub has been stopped.
+// The hub's logger is assigned to the client before it is published to the hub loop,
+// so a concurrent SendFrame reading client.log never races with registration.
 func (h *Hub) Register(client *Client) {
+	client.log = h.log
 	select {
 	case h.register <- client:
 	case <-h.done:

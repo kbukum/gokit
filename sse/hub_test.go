@@ -107,6 +107,31 @@ func TestHub_RegisterUnregister(t *testing.T) {
 	}
 }
 
+func TestHub_RegisterThenConcurrentSend(t *testing.T) {
+	// Registering a client publishes it to the hub loop, which may dispatch to it
+	// immediately; a caller can also SendFrame right after Register returns. The
+	// client's logger must be assigned before publication so those two paths do
+	// not race on client.log. Run under -race to catch a regression.
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		client := NewClient(fmt.Sprintf("race:%d", i))
+		hub.Register(client)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// Fill the client's queue to exercise the drop path that reads client.log.
+			for j := 0; j < DefaultClientBufferSize+2; j++ {
+				client.SendFrame(Frame{Data: []byte("x")})
+			}
+		}()
+	}
+	wg.Wait()
+}
+
 func TestHub_GetClientIDs(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
