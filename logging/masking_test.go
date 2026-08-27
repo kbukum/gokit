@@ -2,12 +2,9 @@ package logging
 
 import (
 	"bytes"
-	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/rs/zerolog"
 )
 
 func newTestMasker() *DefaultMasker {
@@ -321,115 +318,77 @@ func TestMaskFields_Nil(t *testing.T) {
 	}
 }
 
-func TestMaskingDisabled(t *testing.T) {
+func TestMaskingDisabledPassesThrough(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
 	cfg := &Config{
-		Level:  "debug",
-		Format: "json",
-		Output: "stdout",
-		Masking: MaskingConfig{
-			Enabled: false,
-		},
+		Level:   "info",
+		Format:  "json",
+		Output:  "stdout",
+		Masking: MaskingConfig{Enabled: false},
 	}
-	l := New(cfg, "test")
-	if l.masker != nil {
-		t.Error("expected masker to be nil when masking is disabled")
+	l, err := New(cfg, "test", WithWriter(&buf))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	l.Info("login", map[string]any{"password": "secret123"})
+
+	if !strings.Contains(buf.String(), "secret123") {
+		t.Errorf("masking disabled should pass value through, got %q", buf.String())
 	}
 }
 
-func TestMaskingEnabled_Integration(t *testing.T) {
+func TestMaskingEnabledRedactsInOutput(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
-	zl := zerolog.New(&buf).Level(zerolog.DebugLevel)
-
-	cfg := MaskingConfig{
-		Enabled:     true,
-		Replacement: "***REDACTED***",
+	cfg := &Config{
+		Level:   "info",
+		Format:  "json",
+		Output:  "stdout",
+		Masking: MaskingConfig{Enabled: true, Replacement: "***REDACTED***"},
 	}
-	m := NewDefaultMasker(cfg)
-
-	l := &Logger{
-		logger:  zl,
-		service: "test",
-		masker:  m,
+	l, err := New(cfg, "test", WithWriter(&buf))
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
-
 	l.Info("login attempt", map[string]any{
 		"username": "alice",
 		"password": "secret123",
 		"email":    "alice@example.com",
 	})
 
-	var entry map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
-		t.Fatalf("failed to parse log output: %v", err)
+	m := decodeLine(t, &buf)
+	if m["password"] != "***REDACTED***" {
+		t.Errorf("password should be masked, got %v", m["password"])
 	}
-
-	if entry["password"] != "***REDACTED***" {
-		t.Errorf("password should be masked in log, got %v", entry["password"])
+	if m["username"] != "alice" {
+		t.Errorf("username should pass through, got %v", m["username"])
 	}
-	if entry["username"] != "alice" {
-		t.Errorf("username should pass through, got %v", entry["username"])
-	}
-	if entry["email"] != "***@***.***" {
-		t.Errorf("email should be masked in log, got %v", entry["email"])
+	if m["email"] != "***@***.***" {
+		t.Errorf("email should be masked, got %v", m["email"])
 	}
 }
 
-func TestWithMasker(t *testing.T) {
-	l := NewDefault("test")
-	if l.masker == nil {
-		// ApplyDefaults enables masking, but NewDefault doesn't call ApplyDefaults.
-		// Just create a logger without masking to test WithMasker.
-		cfg := &Config{
-			Level:  "info",
-			Format: "json",
-			Output: "stdout",
-			Masking: MaskingConfig{
-				Enabled: false,
-			},
-		}
-		l = New(cfg, "test")
-	}
+func TestWithMaskerEnablesMasking(t *testing.T) {
+	t.Parallel()
 
-	m := newTestMasker()
-	l2 := l.WithMasker(m)
-
-	if l2.masker == nil {
-		t.Error("expected masker to be set via WithMasker")
+	var buf bytes.Buffer
+	// Config leaves masking disabled; WithMasker turns it on as a first-class seam.
+	cfg := &Config{Level: "info", Format: "json", Output: "stdout"}
+	l, err := New(cfg, "test", WithWriter(&buf), WithMasker(newTestMasker()))
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
-	if l2.service != l.service {
-		t.Error("expected service to be preserved")
-	}
-}
+	l.Info("op", map[string]any{"password": "hunter2", "name": "bob"})
 
-func TestMaskerPropagation(t *testing.T) {
-	m := newTestMasker()
-	cfg := &Config{
-		Level:  "info",
-		Format: "json",
-		Output: "stdout",
-		Masking: MaskingConfig{
-			Enabled: false,
-		},
+	m := decodeLine(t, &buf)
+	if m["password"] == "hunter2" {
+		t.Error("WithMasker should have masked the password")
 	}
-	l := New(cfg, "test")
-	l = l.WithMasker(m)
-
-	// WithComponent should propagate masker
-	cl := l.WithComponent("handler")
-	if cl.masker == nil {
-		t.Error("expected masker to propagate through WithComponent")
-	}
-
-	// WithFields should propagate masker
-	fl := l.WithFields(map[string]any{"key": "val"})
-	if fl.masker == nil {
-		t.Error("expected masker to propagate through WithFields")
-	}
-
-	// WithError should propagate masker
-	el := l.WithError(nil)
-	if el.masker == nil {
-		t.Error("expected masker to propagate through WithError")
+	if m["name"] != "bob" {
+		t.Errorf("non-sensitive field should pass through, got %v", m["name"])
 	}
 }
 

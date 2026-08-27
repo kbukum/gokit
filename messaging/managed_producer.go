@@ -36,12 +36,12 @@ type ManagedProducerConfig struct {
 }
 
 // NewManagedProducer creates a managed producer with lifecycle support. The producer
-// must already be created and configured. A nil Log falls back to the process default
-// logger so construction never panics.
+// must already be created and configured. A nil Log falls back to a freshly constructed
+// default logger so construction never panics.
 func NewManagedProducer(cfg ManagedProducerConfig) *ManagedProducer {
 	log := cfg.Log
 	if log == nil {
-		log = logging.Default()
+		log = logging.NewDefault("messaging")
 	}
 	return &ManagedProducer{
 		producer: cfg.Producer,

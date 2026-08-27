@@ -14,8 +14,12 @@ import (
 )
 
 // Recovery returns middleware that recovers from panics
-// and returns a 500 Problem Details error response.
+// and returns a 500 Problem Details error response. A nil logger falls back to a
+// per-middleware default so the constructor never reaches for a package global.
 func Recovery(log *logging.Logger) Middleware {
+	if log == nil {
+		log = logging.NewDefault("middleware")
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() { //nolint:contextcheck // panic recovery closure passes r.Context() to the panic logger explicitly
@@ -34,15 +38,15 @@ func Recovery(log *logging.Logger) Middleware {
 	}
 }
 
-// GinRecovery returns a Gin middleware that recovers from panics.
+// GinRecovery returns a Gin middleware that recovers from panics using the injected logger.
 // Prefer using Recovery() at the server level via ApplyMiddleware() which covers all routes.
 // Use this only when you need recovery on the Gin engine directly.
-func GinRecovery() gin.HandlerFunc {
-	return GinWrap(Recovery(nil))
+func GinRecovery(log *logging.Logger) gin.HandlerFunc {
+	return GinWrap(Recovery(log))
 }
 
-// logRecoveredPanic logs a recovered panic with stack trace. If log is nil,
-// the global logger is used.
+// logRecoveredPanic logs a recovered panic with stack trace. The logger must be
+// non-nil (Recovery defaults it).
 func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, r *http.Request) {
 	fields := map[string]any{
 		"error":     fmt.Sprintf("%v", err),
@@ -51,9 +55,5 @@ func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, r *htt
 		"method":    r.Method,
 		"remote_ip": r.RemoteAddr,
 	}
-	if log != nil {
-		log.ErrorCtx(ctx, "Panic recovered", fields)
-	} else {
-		logging.ErrorCtx(ctx, "Panic recovered", fields)
-	}
+	log.ErrorCtx(ctx, "Panic recovered", fields)
 }

@@ -209,11 +209,15 @@ func (s *Store) do(ctx context.Context, method, path string, body io.Reader) (*h
 	return resp, nil
 }
 
+// maxErrorBodyBytes bounds how much of a non-2xx response body is read for error
+// diagnostics, so a misbehaving or hostile endpoint cannot exhaust memory.
+const maxErrorBodyBytes = 8 << 10
+
 func expectStatus(resp *http.Response, op string) error {
 	if resp.StatusCode < 400 {
 		return nil
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 	if err != nil {
 		return fmt.Errorf("qdrant: %s failed with status %d and unreadable body: %w", op, resp.StatusCode, err)
 	}

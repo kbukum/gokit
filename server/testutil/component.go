@@ -15,10 +15,6 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-func init() {
-	gin.SetMode(gin.TestMode)
-}
-
 // Component is a test server component backed by httptest.Server.
 // It implements both component.Component and testutil.TestComponent.
 type Component struct {
@@ -36,6 +32,7 @@ var (
 
 // NewComponent creates a new test server component.
 func NewComponent() *Component {
+	gin.SetMode(gin.TestMode)
 	log := logging.NewDefault("server-test")
 	cfg := &server.Config{
 		Host:    "127.0.0.1",

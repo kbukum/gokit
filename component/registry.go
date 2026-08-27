@@ -34,6 +34,7 @@ type Registry struct {
 	// but does NOT block concurrent reads (Get/All/HealthAll) or new Register calls.
 	lifecycleMu sync.Mutex
 	config      RegistryConfig
+	log         *logging.Logger
 }
 
 // NewRegistry creates a new component registry with default configuration.
@@ -44,10 +45,12 @@ func NewRegistry() *Registry {
 // NewRegistryWithConfig creates a component registry with the given configuration.
 // Zero fields fall back to the registry defaults.
 func NewRegistryWithConfig(cfg RegistryConfig) *Registry {
+	cfg = cfg.withDefaults()
 	return &Registry{
 		entries: make([]*componentEntry, 0),
 		lookup:  make(map[string]*componentEntry),
-		config:  cfg.withDefaults(),
+		config:  cfg,
+		log:     cfg.Logger,
 	}
 }
 
@@ -66,7 +69,7 @@ func (r *Registry) Register(c Component) error {
 	r.entries = append(r.entries, entry)
 	r.lookup[name] = entry
 
-	logging.Debug("Component registered", map[string]any{
+	r.log.Debug("Component registered", map[string]any{
 		"component": name,
 	})
 	return nil
@@ -122,7 +125,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		return nil
 	}
 
-	logging.DebugCtx(ctx, "Starting components", map[string]any{
+	r.log.DebugCtx(ctx, "Starting components", map[string]any{
 		"pending": len(pending),
 		"total":   total,
 	})
@@ -137,13 +140,13 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		entry.state = StateStarting
 		r.mu.Unlock()
 
-		logging.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
+		r.log.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
 		if err := r.startOne(ctx, entry); err != nil {
 			r.mu.Lock()
 			entry.state = StateFailed
 			r.mu.Unlock()
 
-			logging.ErrorCtx(ctx, "Component start failed", map[string]any{
+			r.log.ErrorCtx(ctx, "Component start failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -156,10 +159,10 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		r.mu.Unlock()
 		startedThisCall = append(startedThisCall, entry)
 
-		logging.DebugCtx(ctx, "Component started", map[string]any{"component": name})
+		r.log.DebugCtx(ctx, "Component started", map[string]any{"component": name})
 	}
 
-	logging.InfoCtx(ctx, "All components started successfully")
+	r.log.InfoCtx(ctx, "All components started successfully")
 	return nil
 }
 
@@ -182,7 +185,7 @@ func (r *Registry) startOne(ctx context.Context, entry *componentEntry) error {
 		// resources before rollback.
 		stopCtx, stopCancel := r.stopContext(context.WithoutCancel(ctx))
 		if stopErr := entry.component.Stop(stopCtx); stopErr != nil {
-			logging.ErrorCtx(ctx, "Cleanup stop failed after start timeout", map[string]any{
+			r.log.ErrorCtx(ctx, "Cleanup stop failed after start timeout", map[string]any{
 				"component": entry.component.Name(),
 				"error":     stopErr.Error(),
 			})
@@ -310,12 +313,12 @@ launch:
 				setFirstErr(runCtx.Err())
 				return
 			}
-			logging.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
+			r.log.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
 			if err := r.startOne(runCtx, entry); err != nil {
 				r.mu.Lock()
 				entry.state = StateFailed
 				r.mu.Unlock()
-				logging.ErrorCtx(ctx, "Component start failed", map[string]any{
+				r.log.ErrorCtx(ctx, "Component start failed", map[string]any{
 					"component": name,
 					"error":     err.Error(),
 				})
@@ -329,7 +332,7 @@ launch:
 			mu.Lock()
 			started = append(started, entry)
 			mu.Unlock()
-			logging.DebugCtx(ctx, "Component started", map[string]any{"component": name})
+			r.log.DebugCtx(ctx, "Component started", map[string]any{"component": name})
 		}(entry)
 	}
 
@@ -340,7 +343,7 @@ launch:
 		return firstErr
 	}
 
-	logging.InfoCtx(ctx, "All components started successfully")
+	r.log.InfoCtx(ctx, "All components started successfully")
 	return nil
 }
 
@@ -363,7 +366,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 		// startOne's cleanup path.
 		stopCtx, cancel := r.stopContext(context.WithoutCancel(ctx))
 		if err := entry.component.Stop(stopCtx); err != nil {
-			logging.ErrorCtx(ctx, "Rollback stop failed", map[string]any{
+			r.log.ErrorCtx(ctx, "Rollback stop failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
@@ -396,7 +399,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 	}
 	r.mu.RUnlock()
 
-	logging.InfoCtx(ctx, "Stopping all components")
+	r.log.InfoCtx(ctx, "Stopping all components")
 
 	var errs []error
 	for _, entry := range toStop {
@@ -406,17 +409,17 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		entry.state = StateStopping
 		r.mu.Unlock()
 
-		logging.DebugCtx(ctx, "Stopping component", map[string]any{"component": name})
+		r.log.DebugCtx(ctx, "Stopping component", map[string]any{"component": name})
 
 		stopCtx, cancel := r.stopContext(ctx)
 		if err := entry.component.Stop(stopCtx); err != nil {
 			errs = append(errs, fmt.Errorf("failed to stop %s: %w", name, err))
-			logging.ErrorCtx(ctx, "Component stop failed", map[string]any{
+			r.log.ErrorCtx(ctx, "Component stop failed", map[string]any{
 				"component": name,
 				"error":     err.Error(),
 			})
 		} else {
-			logging.InfoCtx(ctx, "Component stopped", map[string]any{"component": name})
+			r.log.InfoCtx(ctx, "Component stopped", map[string]any{"component": name})
 		}
 		cancel()
 
@@ -429,7 +432,7 @@ func (r *Registry) StopAll(ctx context.Context) error {
 		return errors.Join(errs...)
 	}
 
-	logging.InfoCtx(ctx, "All components stopped successfully")
+	r.log.InfoCtx(ctx, "All components stopped successfully")
 	return nil
 }
 

@@ -53,7 +53,7 @@ func TestRecovery_NoPanicPassesThrough(t *testing.T) {
 func TestGinRecovery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(middleware.GinRecovery())
+	r.Use(middleware.GinRecovery(nil))
 	r.GET("/", func(c *gin.Context) { panic("boom") })
 
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)

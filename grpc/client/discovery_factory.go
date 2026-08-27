@@ -171,7 +171,7 @@ func (f *DiscoveryConnectionFactory) logDebug(msg string, fields ...map[string]a
 	if f.log != nil {
 		f.log.Debug(msg, fields...)
 	} else {
-		logging.Debug(msg, fields...)
+		logging.NewDefault("grpc-client").Debug(msg, fields...)
 	}
 }
 
@@ -179,7 +179,7 @@ func (f *DiscoveryConnectionFactory) logError(msg string, fields ...map[string]a
 	if f.log != nil {
 		f.log.Error(msg, fields...)
 	} else {
-		logging.Error(msg, fields...)
+		logging.NewDefault("grpc-client").Error(msg, fields...)
 	}
 }
 

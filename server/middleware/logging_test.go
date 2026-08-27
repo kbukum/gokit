@@ -12,7 +12,7 @@ import (
 func TestGinRequestLogger(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(GinRequestLogger())
+	r.Use(GinRequestLogger(nil))
 	r.GET("/api/x", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.GET("/health", func(c *gin.Context) { c.Status(http.StatusOK) })
 	r.GET("/err", func(c *gin.Context) { c.Status(http.StatusInternalServerError) })

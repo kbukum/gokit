@@ -111,7 +111,7 @@ func waitFor(t *testing.T, cond func() bool, msg string) {
 	t.Fatalf("timed out waiting for: %s", msg)
 }
 
-func testLogger() *logging.Logger { return logging.Default() }
+func testLogger() *logging.Logger { return logging.NewDefault("test") }
 
 // ─── ResolverBuilder ───────────────────────────────────────────────────────
 

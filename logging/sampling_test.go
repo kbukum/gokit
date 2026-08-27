@@ -2,146 +2,89 @@ package logging
 
 import (
 	"bytes"
-	"strings"
 	"testing"
-
-	"github.com/rs/zerolog"
+	"time"
 )
 
-func TestNewSampler_ReturnsNonNil(t *testing.T) {
-	cfg := SamplingConfig{
-		Enabled:        true,
-		InitialRate:    10,
-		ThereafterRate: 5,
-	}
-	s := NewSampler(cfg)
-	if s == nil {
-		t.Fatal("expected non-nil sampler")
-	}
-}
+func TestSamplingBurstThenThereafter(t *testing.T) {
+	t.Parallel()
 
-func TestNewSampler_BurstSamplerConfig(t *testing.T) {
-	cfg := SamplingConfig{
-		Enabled:        true,
-		InitialRate:    50,
-		ThereafterRate: 10,
-	}
-	s := NewSampler(cfg)
+	now := time.Unix(0, 0)
+	clock := func() time.Time { return now }
 
-	bs, ok := s.(*zerolog.BurstSampler)
-	if !ok {
-		t.Fatal("expected *zerolog.BurstSampler")
-	}
-	if bs.Burst != 50 {
-		t.Errorf("expected Burst=50, got %d", bs.Burst)
-	}
-	basic, ok := bs.NextSampler.(*zerolog.BasicSampler)
-	if !ok {
-		t.Fatal("expected NextSampler to be *zerolog.BasicSampler")
-	}
-	if basic.N != 10 {
-		t.Errorf("expected BasicSampler.N=10, got %d", basic.N)
-	}
-}
-
-func TestSampling_AppliedWhenEnabled(t *testing.T) {
+	var buf bytes.Buffer
 	cfg := &Config{
-		Level:  "debug",
-		Format: "json",
-		Output: "stdout",
-		Sampling: SamplingConfig{
-			Enabled:        true,
-			InitialRate:    1, // allow 1 burst per second
-			ThereafterRate: 1, // then log every 1st (all)
-		},
-		Masking: MaskingConfig{Enabled: false},
+		Level:    "info",
+		Format:   "json",
+		Output:   "stdout",
+		Sampling: SamplingConfig{Enabled: true, InitialRate: 2, ThereafterRate: 3},
 	}
-	l := New(cfg, "test")
-	if l == nil {
-		t.Fatal("expected non-nil logger")
+	l, err := New(cfg, "svc", WithWriter(&buf), WithClock(clock))
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
 
-	// Verify sampling is active by writing enough messages
-	// and checking that at least some are output. With InitialRate=1
-	// and ThereafterRate=1, all messages should still appear.
-	var buf bytes.Buffer
-	zl := zerolog.New(&buf).Level(zerolog.DebugLevel).Sample(NewSampler(cfg.Sampling))
-	sampled := &Logger{logger: zl, service: "test"}
-
+	// Same instant: admit first 2 (burst), then every 3rd → counts 1,2,5,8.
 	for i := 0; i < 10; i++ {
-		sampled.Info("msg")
+		l.Info("tick")
+	}
+	if got := len(decodeLines(t, &buf)); got != 4 {
+		t.Fatalf("within one period admitted %d, want 4", got)
 	}
 
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) < 1 {
-		t.Error("expected at least one log line with sampling enabled")
+	// New period resets the counter.
+	buf.Reset()
+	now = now.Add(time.Second)
+	l.Info("next-period")
+	if got := len(decodeLines(t, &buf)); got != 1 {
+		t.Fatalf("new period admitted %d, want 1", got)
 	}
 }
 
-func TestSampling_NotAppliedWhenDisabled(t *testing.T) {
+func TestSamplingDisabledPassesEverything(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	l := newBufferedLogger(&buf, "info", "json")
+	for i := 0; i < 50; i++ {
+		l.Info("all")
+	}
+	if got := len(decodeLines(t, &buf)); got != 50 {
+		t.Errorf("admitted %d, want 50 when sampling disabled", got)
+	}
+}
+
+func TestSamplingBudgetSharedAcrossDerivedLoggers(t *testing.T) {
+	t.Parallel()
+
+	now := time.Unix(0, 0)
+	clock := func() time.Time { return now }
+
+	var buf bytes.Buffer
 	cfg := &Config{
-		Level:  "debug",
-		Format: "json",
-		Output: "stdout",
-		Sampling: SamplingConfig{
-			Enabled: false,
-		},
-		Masking: MaskingConfig{Enabled: false},
+		Level:    "info",
+		Format:   "json",
+		Output:   "stdout",
+		Sampling: SamplingConfig{Enabled: true, InitialRate: 2, ThereafterRate: 0},
 	}
-	l := New(cfg, "test")
-	if l == nil {
-		t.Fatal("expected non-nil logger")
+	root, err := New(cfg, "svc", WithWriter(&buf), WithClock(clock))
+	if err != nil {
+		t.Fatalf("New: %v", err)
 	}
 
-	// All messages should be output
-	var buf bytes.Buffer
-	zl := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	unsampled := &Logger{logger: zl, service: "test"}
+	// Derived loggers must draw from the same burst budget as the root, not get
+	// a fresh allowance each — otherwise the global rate limit would not hold.
+	a := root.WithComponent("a")
+	b := root.WithFields(map[string]any{"k": "v"})
 
-	for i := 0; i < 10; i++ {
-		unsampled.Info("msg")
-	}
+	root.Info("r")
+	a.Info("a")
+	b.Info("b")
+	root.Info("r2")
 
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 10 {
-		t.Errorf("expected 10 log lines without sampling, got %d", len(lines))
-	}
-}
-
-func TestSampling_BurstThenThereafter(t *testing.T) {
-	// Use a very restrictive thereafter rate to verify sampling actually drops messages.
-	// InitialRate=2 burst per second, then log every 100th message.
-	var buf bytes.Buffer
-	cfg := SamplingConfig{
-		Enabled:        true,
-		InitialRate:    2,
-		ThereafterRate: 100,
-	}
-	zl := zerolog.New(&buf).Level(zerolog.DebugLevel).Sample(NewSampler(cfg))
-
-	for i := 0; i < 200; i++ {
-		zl.Info().Msg("tick")
-	}
-
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	// Should have burst (2) + at most 2 from thereafter (200-2=198, 198/100=1..2)
-	// Total should be significantly less than 200.
-	if len(lines) >= 200 {
-		t.Errorf("expected sampling to reduce messages, got %d lines", len(lines))
-	}
-	if len(lines) < 2 {
-		t.Errorf("expected at least the burst messages, got %d lines", len(lines))
-	}
-}
-
-func TestSampling_DefaultConfig(t *testing.T) {
-	cfg := Config{}
-	cfg.ApplyDefaults()
-
-	if cfg.Sampling.InitialRate != 100 {
-		t.Errorf("expected default InitialRate=100, got %d", cfg.Sampling.InitialRate)
-	}
-	if cfg.Sampling.ThereafterRate != 100 {
-		t.Errorf("expected default ThereafterRate=100, got %d", cfg.Sampling.ThereafterRate)
+	// Burst of 2 within the single period, ThereafterRate 0 drops the rest, so
+	// exactly 2 records survive across all three loggers combined.
+	if got := len(decodeLines(t, &buf)); got != 2 {
+		t.Fatalf("shared budget admitted %d across derived loggers, want 2", got)
 	}
 }

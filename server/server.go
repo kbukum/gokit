@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
 
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/endpoint"
@@ -39,8 +39,8 @@ type MountedHandler struct {
 // New creates a new Server. The Gin engine is created but no middleware is applied yet —
 // call ApplyDefaults on the config first if needed.
 func New(cfg *Config, log *logging.Logger) *Server {
-	// Set Gin mode based on global zerolog level.
-	if zerolog.GlobalLevel() <= zerolog.DebugLevel {
+	// Set Gin mode based on the injected logger's level.
+	if log != nil && log.Level() <= slog.LevelDebug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -115,6 +115,12 @@ func New(cfg *Config, log *logging.Logger) *Server {
 // GinEngine returns the underlying Gin engine for route registration.
 func (s *Server) GinEngine() *gin.Engine {
 	return s.engine
+}
+
+// Logger returns the server's injected logger, for callers that mount routes or
+// docs directly (e.g. [MountDocs]) and need to share the server's logging.
+func (s *Server) Logger() *logging.Logger {
+	return s.log
 }
 
 // Handle mounts an http.Handler at the given pattern on the root ServeMux.
@@ -221,6 +227,7 @@ func readSpecFile(path string) ([]byte, error) {
 // so it covers ALL routes — both Gin REST endpoints and ConnectRPC services mounted via Handle().
 func (s *Server) ApplyMiddleware() {
 	stack := []middleware.Middleware{
+		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
 	}
@@ -320,7 +327,7 @@ func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
 
 	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	MountDocs(s.engine, APIDoc{
+	MountDocs(s.engine, s.log, APIDoc{
 		Title:    dc.Title,
 		SpecPath: dc.SpecPath,
 		Spec:     spec,

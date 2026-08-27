@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/kbukum/gokit/logging"
 )
 
 const DefaultKeepAliveInterval = 30 * time.Second
@@ -25,7 +23,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	// Check SSE support (requires http.Flusher interface)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		logging.ErrorCtx(r.Context(), "[SSE] Streaming not supported", map[string]any{
+		hub.log.ErrorCtx(r.Context(), "[SSE] Streaming not supported", map[string]any{
 			"client_id": clientID,
 		})
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
@@ -37,7 +35,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	// and shouldn't be terminated by the server's WriteTimeout setting.
 	rc := http.NewResponseController(w)
 	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		logging.WarnCtx(r.Context(), "[SSE] Could not disable write deadline", map[string]any{
+		hub.log.WarnCtx(r.Context(), "[SSE] Could not disable write deadline", map[string]any{
 			"client_id": clientID,
 			"error":     err.Error(),
 		})
@@ -69,7 +67,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	_, _ = fmt.Fprintf(w, "data: %s\n\n", connectedData)
 	flusher.Flush()
 
-	logging.DebugCtx(r.Context(), "[SSE] Client connected", map[string]any{
+	hub.log.DebugCtx(r.Context(), "[SSE] Client connected", map[string]any{
 		"client_id":   clientID,
 		"user_id":     client.UserID(),
 		"session_id":  client.SessionID(),
@@ -85,7 +83,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		select {
 		case <-ctx.Done():
 			// Client disconnected (browser closed, network issue, etc.)
-			logging.DebugCtx(ctx, "[SSE] Client disconnected", map[string]any{
+			hub.log.DebugCtx(ctx, "[SSE] Client disconnected", map[string]any{
 				"client_id": clientID,
 				"reason":    ctx.Err().Error(),
 			})
@@ -94,7 +92,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		case frame, ok := <-client.Events():
 			if !ok {
 				// Channel closed, client unregistered
-				logging.DebugCtx(ctx, "[SSE] Events channel closed", map[string]any{
+				hub.log.DebugCtx(ctx, "[SSE] Events channel closed", map[string]any{
 					"client_id": clientID,
 				})
 				return
@@ -106,7 +104,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			}
 			_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
 			flusher.Flush()
-			logging.DebugCtx(ctx, "[SSE] Event sent", map[string]any{
+			hub.log.DebugCtx(ctx, "[SSE] Event sent", map[string]any{
 				"client_id": clientID,
 				"event":     frame.Event,
 				"data_size": len(frame.Data),
@@ -117,7 +115,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 			// and load balancers
 			_, _ = fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
 			flusher.Flush()
-			logging.DebugCtx(ctx, "[SSE] Keep-alive sent", map[string]any{
+			hub.log.DebugCtx(ctx, "[SSE] Keep-alive sent", map[string]any{
 				"client_id": clientID,
 			})
 		}

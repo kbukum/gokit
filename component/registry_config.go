@@ -1,6 +1,10 @@
 package component
 
-import "time"
+import (
+	"time"
+
+	"github.com/kbukum/gokit/logging"
+)
 
 // DefaultStartTimeout bounds a single component's Start call when the caller-supplied
 // context has no deadline. The bound is cooperative — Start must return when its context is
@@ -21,6 +25,11 @@ type RegistryConfig struct {
 
 	// StopTimeout bounds each component's Stop call when ctx has no deadline.
 	StopTimeout time.Duration
+
+	// Logger records registry lifecycle diagnostics (component registered/started/stopped).
+	// A nil logger is defaulted to a console logger so the registry never reaches for a
+	// package global; inject one to route these logs.
+	Logger *logging.Logger
 }
 
 // DefaultRegistryConfig returns the registry defaults: sequential start (Concurrency 1)
@@ -44,6 +53,9 @@ func (c RegistryConfig) withDefaults() RegistryConfig {
 	}
 	if c.StopTimeout <= 0 {
 		c.StopTimeout = DefaultStopTimeout
+	}
+	if c.Logger == nil {
+		c.Logger = logging.NewDefault("component")
 	}
 	return c
 }

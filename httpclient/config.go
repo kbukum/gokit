@@ -10,6 +10,12 @@ import (
 
 const (
 	defaultTimeout = 30 * time.Second
+	// defaultMaxResponseBytes bounds how much of a buffered (non-streaming)
+	// response body the adapter reads into memory. A remote endpoint is a trust
+	// boundary; capping the read stops a hostile or misbehaving server from
+	// exhausting memory with an unbounded body. Streaming requests (DoStream)
+	// are not buffered and so are not subject to this cap.
+	defaultMaxResponseBytes = 10 << 20 // 10 MiB
 )
 
 // Config configures the HTTP adapter.
@@ -42,12 +48,19 @@ type Config struct {
 
 	// RateLimiter configures rate limiting. Nil disables it.
 	RateLimiter *resilience.RateLimiterConfig `yaml:"-" mapstructure:"-"`
+
+	// MaxResponseBytes bounds the buffered response body read into memory by Do.
+	// Defaults to 10 MiB. Streaming responses (DoStream) are not affected.
+	MaxResponseBytes int64 `yaml:"max_response_bytes" mapstructure:"max_response_bytes"`
 }
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
 	if c.Timeout <= 0 {
 		c.Timeout = defaultTimeout
+	}
+	if c.MaxResponseBytes <= 0 {
+		c.MaxResponseBytes = defaultMaxResponseBytes
 	}
 }
 

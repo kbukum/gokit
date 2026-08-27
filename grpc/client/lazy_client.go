@@ -188,7 +188,7 @@ func (c *LazyClient[T]) logDebug(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Debug(msg, fields...)
 	} else {
-		logging.Debug(msg, fields...)
+		logging.NewDefault("grpc-client").Debug(msg, fields...)
 	}
 }
 
@@ -196,7 +196,7 @@ func (c *LazyClient[T]) logInfo(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Info(msg, fields...)
 	} else {
-		logging.Info(msg, fields...)
+		logging.NewDefault("grpc-client").Info(msg, fields...)
 	}
 }
 
@@ -204,6 +204,6 @@ func (c *LazyClient[T]) logError(msg string, fields ...map[string]any) {
 	if c.log != nil {
 		c.log.Error(msg, fields...)
 	} else {
-		logging.Error(msg, fields...)
+		logging.NewDefault("grpc-client").Error(msg, fields...)
 	}
 }

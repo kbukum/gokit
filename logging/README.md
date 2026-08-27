@@ -1,12 +1,15 @@
 # gokit/logging
 
-Production-ready structured logging built on [zerolog](https://github.com/rs/zerolog).
+Production-ready structured logging built on the standard library's [`log/slog`](https://pkg.go.dev/log/slog).
+
+The `Logger` is a thin ergonomic facade over `*slog.Logger`. All the value-add behavior — masking, sampling, per-module levels, context enrichment, OTLP export — lives in a composable `slog.Handler` middleware chain, so the logging engine is never baked into your code. You inject a `*logging.Logger` at the composition root; there is no process-global logger on the consumer path. When you need stdlib-native slog, `Logger.Slog()` hands you the underlying `*slog.Logger` with the same governed handler chain attached, and you can bring your own sink with `WithHandler` / `WithBaseSink` without editing the kit.
 
 ## Features
 
-- Structured JSON / console output
+- Structured JSON / console output over `log/slog`
+- Bring-your-own `slog.Handler` sink — pluggable, no kit edits (see [Logging port](#bring-your-own-sink--logging-port))
 - Sensitive data masking (**on by default**)
-- Rate-based log sampling (burst + thereafter)
+- Rate-based log sampling (burst + thereafter), clock-injectable for deterministic tests
 - Per-module log level overrides
 - OpenTelemetry Logs bridge (OTLP export)
 - Unified log schema (consistent across gokit, pykit, rskit)
@@ -20,22 +23,85 @@ package main
 import "github.com/kbukum/gokit/logging"
 
 func main() {
-    // Default logger — masking enabled, console format, info level
+    // Default logger — masking enabled, console format, info level.
+    // NewDefault never enables OTLP, so it cannot fail and returns a single value.
     log := logging.NewDefault("my-service")
     log.Info("server started", logging.Fields("port", 8080))
 
-    // Component-scoped logger
+    // Component-scoped logger (applies any per-module level override)
     dbLog := log.WithComponent("database")
     dbLog.Debug("query executed", logging.DurationFields("select", elapsed))
 
-    // Package-level functions use the immutable process default (logging.Default())
-    logging.Info("using package-level default logger")
+    // Inject the logger everywhere — there is no package-level global.
+    // Need stdlib-native slog? Reach through the escape hatch:
+    slogger := log.Slog() // *slog.Logger with the full governed handler chain
+    _ = slogger
 
     // Sensitive data is automatically redacted
     log.Info("user login", logging.Fields("password", "hunter2"))
     // output: password=***REDACTED***
 }
 ```
+
+`New` returns `(*Logger, error)` — construction fails only when an enabled OTLP exporter cannot
+initialize, so handle it at the composition root:
+
+```go
+cfg := &logging.Config{Level: "info", Format: "json", ServiceName: "my-service"}
+log, err := logging.New(cfg, "my-service")
+if err != nil {
+    return err
+}
+defer log.Close()
+```
+
+For configurations known-good at author time (no OTLP, or a config validated elsewhere) and for
+tests, use `MustNew` — the sanctioned Must-twin that panics instead of returning an error, mirroring
+`regexp.MustCompile`. Do not use it on runtime or user-supplied config paths.
+
+```go
+log := logging.MustNew(&logging.Config{Level: "debug", Format: "console"}, "my-service")
+```
+
+## Bring Your Own Sink / Logging Port
+
+The logging engine is not baked into gokit. `Logger` is a facade over `*slog.Logger`, and every
+value-add feature is a `slog.Handler` in a middleware chain:
+
+```
+moduleLevel → sampling → masking → context → fanout{ default sink, OTLP, your handler(s)… }
+```
+
+Out of the box you get the default sink (console in dev, JSON in prod) with masking on — zero config.
+When you need something else, four constructor options and one escape hatch cover it, and none of
+them require editing the kit:
+
+| Seam | What it does |
+|------|--------------|
+| `Logger.Slog()` | Escape hatch: the underlying `*slog.Logger`, carrying the full governed handler chain. Hand it to any code that speaks stdlib slog. |
+| `WithHandler(h slog.Handler)` | **Add** a sink alongside the default. Your handler still sits behind masking/sampling/module-levels, so policy stays enforced. Bridge to zerolog/zap or a custom backend here. Pass it multiple times to fan out. |
+| `WithBaseSink(h slog.Handler)` | **Replace** the default JSON/console sink entirely while keeping gokit's middleware in front. Use it to own the terminal output format. |
+| `WithWriter(w io.Writer)` | Point the default sink at any `io.Writer` (a file, a buffer, a test sink) instead of the configured stdout/stderr. No effect when `WithBaseSink` supplies a custom sink. |
+| `WithMasker(m Masker)` | Supply a custom `Masker` as a first-class seam. Passing one **enables masking even when the config leaves it disabled** (see [Custom Masker](#custom-masker)). |
+| `WithClock(now func() time.Time)` | Inject the clock the sampler reads, for deterministic tests. |
+
+```go
+// Bring your own sink — records are still masked, sampled, and module-gated:
+zapBridge := myslogzap.NewHandler(zapLogger)          // any slog.Handler
+log := logging.MustNew(cfg, "my-service", logging.WithHandler(zapBridge))
+
+// Or fully own the terminal format while keeping the middleware chain:
+log = logging.MustNew(cfg, "my-service",
+    logging.WithBaseSink(slog.NewJSONHandler(os.Stdout, nil)))
+
+// Or just redirect the default sink to a buffer in a test:
+var buf bytes.Buffer
+log = logging.MustNew(cfg, "my-service", logging.WithWriter(&buf))
+```
+
+Because the middleware wraps the fanout, masking and sampling apply uniformly to the default sink,
+the OTLP branch, and every consumer-supplied handler — you cannot accidentally bypass redaction by
+bringing your own backend.
 
 ## Configuration
 
@@ -47,14 +113,7 @@ logging:
   no_color: false
   timestamp: true
   caller: false
-  stacktrace: false
   service_name: my-service
-
-  # File rotation (optional)
-  max_size: 100            # megabytes
-  max_backups: 3
-  max_age: 28              # days
-  compress: false
 
   # Sensitive data masking
   masking:
@@ -92,6 +151,8 @@ logging:
 
 Masking is **enabled by default**.
 Every log field is checked against sensitive field names (case-insensitive) and value patterns (regex). If a match is found, the value is replaced before it reaches any output sink.
+
+Masking applies to structured attribute **values**, not to the free-text log message. Keep dynamic data in fields (`logger.Fields(...)`), never interpolated into the message string, so it can be redacted.
 
 ### Default Masked Fields
 
@@ -167,15 +228,15 @@ sampling:
 > **When to use:** Enable sampling on hot-path services producing thousands of log lines per second.
 > Leave disabled for low-volume services or during debugging.
 
-Sampling uses zerolog's `BurstSampler` under the hood:
+Sampling is implemented as a pure-Go `slog.Handler` decorator (`samplingHandler`) — no third-party
+sampler. Each one-second window is tracked with an injected clock, so behavior is deterministic under
+test. Inject the clock with `logging.WithClock(func() time.Time { ... })` when you need to drive the
+window from a fake clock; it defaults to `time.Now`.
 
 ```go
-// Equivalent to:
-&zerolog.BurstSampler{
-    Burst:       100,
-    Period:      time.Second,
-    NextSampler: &zerolog.BasicSampler{N: 100},
-}
+// Deterministic sampling in a test:
+now := fakeClock.Now
+log := logging.MustNew(cfg, "svc", logging.WithClock(now))
 ```
 
 ## Module Levels
@@ -193,7 +254,7 @@ logging:
 
 ```go
 // Programmatic usage
-log := logging.New(cfg, "my-service")
+log := logging.MustNew(cfg, "my-service")
 
 // WithComponent applies the module-level override automatically
 dbLog := log.WithComponent("database")   // → debug level
@@ -232,7 +293,10 @@ cfg := &logging.Config{
         Insecure: true,
     },
 }
-log := logging.New(cfg, "my-service")
+log, err := logging.New(cfg, "my-service")
+if err != nil {
+    return err
+}
 defer log.Close()  // flush pending OTLP logs on shutdown
 
 log.Info("order created", logging.Fields("order_id", "abc-123"))
@@ -243,7 +307,10 @@ log.Info("order created", logging.Fields("order_id", "abc-123"))
 Always call `Close()` before process exit to flush buffered log records:
 
 ```go
-log := logging.New(cfg, "my-service")
+log, err := logging.New(cfg, "my-service")
+if err != nil {
+    return err
+}
 defer log.Close()
 ```
 
@@ -305,9 +372,13 @@ Implement the `Masker` interface to provide your own masking logic:
 
 ```go
 type Masker interface {
-    MaskValue(key string, value string) string
+    MaskValue(key, value string) string
 }
 ```
+
+Masking is applied as a `slog.Handler` in the chain, not as a mutable field on the logger. Supply
+your masker at construction with the `WithMasker` option — passing one also turns masking on even if
+the config leaves it disabled:
 
 ```go
 type MyMasker struct{}
@@ -319,8 +390,7 @@ func (m *MyMasker) MaskValue(key, value string) string {
     return value
 }
 
-log := logging.New(cfg, "my-service")
-log = log.WithMasker(&MyMasker{})
+log := logging.MustNew(cfg, "my-service", logging.WithMasker(&MyMasker{}))
 log.Info("event", logging.Fields("internal_id", "secret-123"))
 // → internal_id=***
 ```
@@ -329,10 +399,17 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 
 | Function / Type | Description |
 |----------------|-------------|
-| `New(cfg, name)` | Create logger from config |
-| `NewDefault(name)` | Create logger with defaults |
-| `NewFromEnv(name)` | Create logger from `LOG_LEVEL`, `LOG_FORMAT` env vars |
-| `Default()` | Access the process-wide default logger (immutable) |
+| `New(cfg, name, ...Option)` | Create logger from config; returns `(*Logger, error)` (errors only on OTLP init) |
+| `MustNew(cfg, name, ...Option)` | Like `New` but panics on error — for compile-safe/test configs |
+| `NewDefault(name)` | Create a console logger with defaults; single return, never fails |
+| `NewFromEnv(name)` | Create logger from `LOG_LEVEL`, `LOG_FORMAT`, … env vars; returns `(*Logger, error)` |
+| `WithHandler(h)` | Option: add a BYO `slog.Handler` sink behind masking/sampling/module-levels |
+| `WithBaseSink(h)` | Option: replace the default sink, keep the middleware chain |
+| `WithWriter(w)` | Option: direct the default sink to any `io.Writer` |
+| `WithMasker(m)` | Option: supply a custom `Masker` (also enables masking) |
+| `WithClock(now)` | Option: inject the sampler clock for deterministic tests |
+| `Logger.Slog()` | Escape hatch: the underlying `*slog.Logger` |
+| `Logger.Handler()` | The root `slog.Handler` backing the logger |
 | `WithContext(ctx)` | Enrich with trace/span/request IDs from context |
 | `ContextWith*(ctx, id)` | Inject trace/span/request/user/correlation ID into a context |
 | `ComponentSpan(ctx, name)` | Component-tagged logger enriched from context |
@@ -340,10 +417,9 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 | `WithComponent(name)` | Tag with component + apply module level |
 | `WithFields(map)` | Add structured fields |
 | `WithError(err)` | Add error field |
-| `WithMasker(m)` | Set custom masker |
-| `WithOTLP(provider)` | Attach OTLP provider |
+| `SetLevel(level)` / `Level()` | Get/set the base level at runtime |
 | `Close()` | Flush OTLP and shut down |
-| `Debug` / `Info` / `Warn` / `Error` / `Fatal` | Log at level |
+| `Debug` / `Info` / `Warn` / `Error` / `Trace` / `Fatal` (+ `*Ctx` variants) | Log at level |
 
 ---
 

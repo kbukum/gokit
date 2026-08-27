@@ -150,7 +150,7 @@ func (m *mockManager) HealthCheck(_ context.Context) error {
 
 func testLogger() *logging.Logger {
 	cfg := &logging.Config{Level: "error", Format: "json"}
-	return logging.New(cfg, "workload-test")
+	return logging.MustNew(cfg, "workload-test")
 }
 
 // ===========================================================================

@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+// maxRefreshResponseBytes bounds how much of the token endpoint's refresh
+// response is read, so a hostile or misbehaving IdP cannot exhaust memory with
+// an unbounded body. 1 MiB comfortably fits any token response.
+const maxRefreshResponseBytes = 1 << 20
+
 // RefreshConfig holds the parameters for a token refresh request.
 type RefreshConfig struct {
 	// TokenEndpoint is the OAuth2 token endpoint URL (e.g., "https://oauth2.googleapis.com/token").
@@ -82,7 +87,7 @@ func RefreshToken(ctx context.Context, cfg RefreshConfig) (*TokenResult, error) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRefreshResponseBytes))
 	if err != nil {
 		return nil, fmt.Errorf("oidc: reading refresh response: %w", err)
 	}

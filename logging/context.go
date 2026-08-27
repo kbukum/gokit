@@ -2,6 +2,31 @@ package logging
 
 import "context"
 
+// contextKey is an unexported context key type, avoiding collisions with keys
+// defined in other packages.
+type contextKey string
+
+// loggerCtxKey is a distinct unexported key type for carrying a *Logger on a
+// context, kept separate from the string-based identifier keys.
+type loggerCtxKey struct{}
+
+// ContextWithLogger returns a context carrying log, so request-scoped helpers
+// and free functions can retrieve an injected logger with [LoggerFromContext]
+// instead of reaching for a package global. A nil logger is not stored.
+func ContextWithLogger(ctx context.Context, log *Logger) context.Context {
+	if log == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, loggerCtxKey{}, log)
+}
+
+// LoggerFromContext returns the logger carried by ctx and whether one was
+// present. It never returns a nil logger together with ok=true.
+func LoggerFromContext(ctx context.Context) (*Logger, bool) {
+	log, ok := ctx.Value(loggerCtxKey{}).(*Logger)
+	return log, ok && log != nil
+}
+
 // Span-level context helpers — the gokit equivalent of rskit-logging's
 // context module (component tagging, request enrichment, identifier injection).
 //
@@ -57,14 +82,4 @@ func (l *Logger) RequestSpan(ctx context.Context, method, path, requestID string
 		FieldHTTPPath:   path,
 		FieldRequestID:  requestID,
 	})
-}
-
-// ComponentSpan returns a component-tagged logger from the default logger.
-func ComponentSpan(ctx context.Context, name string) *Logger {
-	return Default().ComponentSpan(ctx, name)
-}
-
-// RequestSpan returns a request-enriched logger from the default logger.
-func RequestSpan(ctx context.Context, method, path, requestID string) *Logger {
-	return Default().RequestSpan(ctx, method, path, requestID)
 }

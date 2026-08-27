@@ -21,7 +21,7 @@
 //
 // Or mount docs directly with [MountDocs] for full control:
 //
-//	server.MountDocs(engine, server.APIDoc{
+//	server.MountDocs(engine, log, server.APIDoc{
 //	    Title:    "My API",
 //	    SpecPath: "/docs/openapi.json",
 //	    Spec:     specBytes,

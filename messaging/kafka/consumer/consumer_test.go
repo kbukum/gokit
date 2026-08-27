@@ -63,7 +63,7 @@ func newTestConsumer(r kafkaReader, strategy messaging.CommitStrategy) *Consumer
 	return &Consumer{
 		reader:         r,
 		topic:          "orders",
-		log:            logging.New(&logging.Config{Level: "error"}, "test").WithComponent("kafka.consumer"),
+		log:            logging.MustNew(&logging.Config{Level: "error"}, "test").WithComponent("kafka.consumer"),
 		errCount:       &errCount,
 		commitStrategy: strategy,
 	}
@@ -193,7 +193,7 @@ func TestNewManagedConsumerExposesGroupID(t *testing.T) {
 		Config:  kafka.Config{Brokers: []string{"127.0.0.1:1"}},
 		Topic:   "events",
 		Handler: func(context.Context, messaging.Message) error { return nil },
-		Log:     logging.New(&logging.Config{Level: "error"}, "test"),
+		Log:     logging.MustNew(&logging.Config{Level: "error"}, "test"),
 	})
 	if err != nil {
 		t.Fatalf("NewManagedConsumer: %v", err)

@@ -134,7 +134,7 @@ func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, e
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes))
 	if err != nil {
 		return nil, NewConnectionError(fmt.Errorf("read response body: %w", err))
 	}
@@ -175,7 +175,7 @@ func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, e
 
 	// Check for error status before starting to stream
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes))
 		_ = resp.Body.Close()
 		return nil, ClassifyStatusCode(resp.StatusCode, body)
 	}

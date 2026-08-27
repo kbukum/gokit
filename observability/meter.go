@@ -11,8 +11,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-
-	"github.com/kbukum/gokit/logging"
 )
 
 // MeterConfig configures the OpenTelemetry meter provider.
@@ -75,13 +73,6 @@ func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvid
 	if !config.SkipGlobalRegistration {
 		otel.SetMeterProvider(mp)
 	}
-
-	logging.InfoCtx(ctx, "meter initialized", logging.Fields(
-		"service", config.ServiceName,
-		"endpoint", config.Endpoint,
-		"protocol", config.Protocol.String(),
-		"interval", config.Interval.String(),
-	))
 
 	return mp, nil
 }
