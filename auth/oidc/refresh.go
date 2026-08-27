@@ -17,6 +17,26 @@ import (
 // an unbounded body. 1 MiB comfortably fits any token response.
 const maxRefreshResponseBytes = 1 << 20
 
+// errRefreshResponseTooLarge is returned when a refresh response exceeds
+// [maxRefreshResponseBytes]. The whole response is rejected rather than parsed
+// from a truncated prefix, since a silently cut body can still be valid JSON
+// and would otherwise be accepted.
+var errRefreshResponseTooLarge = fmt.Errorf("oidc: refresh response exceeds %d bytes", maxRefreshResponseBytes)
+
+// readRefreshBody reads at most [maxRefreshResponseBytes] from r, returning
+// [errRefreshResponseTooLarge] when the body is larger. It reads one extra byte
+// so oversize is detected explicitly instead of truncating to a valid prefix.
+func readRefreshBody(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxRefreshResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxRefreshResponseBytes {
+		return nil, errRefreshResponseTooLarge
+	}
+	return body, nil
+}
+
 // RefreshConfig holds the parameters for a token refresh request.
 type RefreshConfig struct {
 	// TokenEndpoint is the OAuth2 token endpoint URL (e.g., "https://oauth2.googleapis.com/token").
@@ -87,7 +107,7 @@ func RefreshToken(ctx context.Context, cfg RefreshConfig) (*TokenResult, error) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRefreshResponseBytes))
+	body, err := readRefreshBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("oidc: reading refresh response: %w", err)
 	}

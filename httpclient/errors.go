@@ -23,6 +23,9 @@ const (
 	ErrCodeValidation
 	// ErrCodeServer indicates a server-side error (5xx).
 	ErrCodeServer
+	// ErrCodeResponseTooLarge indicates the response body exceeded the
+	// configured maximum size (see Config.MaxResponseBytes).
+	ErrCodeResponseTooLarge
 )
 
 // String returns the error code name.
@@ -42,6 +45,8 @@ func (c ErrorCode) String() string {
 		return "validation"
 	case ErrCodeServer:
 		return "server"
+	case ErrCodeResponseTooLarge:
+		return "response_too_large"
 	default:
 		return "unknown"
 	}
@@ -138,6 +143,17 @@ func NewValidationError(msg string) *Error {
 	}
 }
 
+// NewResponseTooLargeError creates a non-retryable error for a response body
+// that exceeded the configured maximum size. Retrying would only reproduce the
+// oversized response, so it is not retryable.
+func NewResponseTooLargeError(maxBytes int64) *Error {
+	return &Error{
+		Code:      ErrCodeResponseTooLarge,
+		Message:   fmt.Sprintf("response body exceeds %d bytes", maxBytes),
+		Retryable: false,
+	}
+}
+
 // NewServerError creates a server error.
 func NewServerError(statusCode int, body []byte) *Error {
 	return &Error{
@@ -216,6 +232,12 @@ func IsRateLimit(err error) bool {
 func IsServerError(err error) bool {
 	var e *Error
 	return errors.As(err, &e) && e.Code == ErrCodeServer
+}
+
+// IsResponseTooLarge checks if an error is a response-size-limit error.
+func IsResponseTooLarge(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Code == ErrCodeResponseTooLarge
 }
 
 // IsRetryable checks if an error is retryable.

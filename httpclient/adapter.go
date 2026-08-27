@@ -134,9 +134,14 @@ func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, e
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes))
+	// Read one byte past the cap so an oversized body is rejected explicitly
+	// rather than silently truncated to a shorter, possibly still-decodable one.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes+1))
 	if err != nil {
 		return nil, NewConnectionError(fmt.Errorf("read response body: %w", err))
+	}
+	if int64(len(body)) > c.config.MaxResponseBytes {
+		return nil, NewResponseTooLargeError(c.config.MaxResponseBytes)
 	}
 
 	result := &Response{
