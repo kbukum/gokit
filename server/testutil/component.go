@@ -132,7 +132,7 @@ func (c *Component) Reset(ctx context.Context) error {
 	// Recreate server
 	cfg := &server.Config{Host: "127.0.0.1", Port: 0, Enabled: true}
 	cfg.ApplyDefaults()
-	c.srv = server.New(cfg, c.log)
+	c.srv = server.New(cfg, c.log) //nolint:contextcheck // default logger construction has no request-scoped operation
 
 	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
 	c.ts = httptest.NewServer(c.srv.Handler())
