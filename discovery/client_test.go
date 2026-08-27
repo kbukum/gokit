@@ -57,7 +57,7 @@ func (m *mockDiscovery) Close() error { return nil }
 
 // testLogger creates a minimal logger for testing.
 func testLogger() *logging.Logger {
-	return logging.New(&logging.Config{Level: "error", Format: "json"}, "test")
+	return logging.MustNew(&logging.Config{Level: "error", Format: "json"}, "test")
 }
 
 // ── Client and cache behavior ───────────────────────────────────────

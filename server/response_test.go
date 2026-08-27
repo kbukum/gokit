@@ -1,15 +1,18 @@
 package server_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 )
 
@@ -105,5 +108,53 @@ func TestRespondWithError_UsesAppErrorStatus(t *testing.T) {
 	}
 	if w.Body.Len() == 0 {
 		t.Fatal("expected problem detail body")
+	}
+}
+
+func TestRespondWithError_LogsServerErrorViaContextLogger(t *testing.T) {
+	var buf bytes.Buffer
+	log, err := logging.New(
+		&logging.Config{Level: "error", Format: "json", Timestamp: false},
+		"server-test",
+		logging.WithWriter(&buf),
+	)
+	if err != nil {
+		t.Fatalf("build logger: %v", err)
+	}
+
+	c, w := newRespCtx()
+	c.Request = c.Request.WithContext(logging.ContextWithLogger(c.Request.Context(), log))
+
+	server.RespondWithError(c, errors.New("boom"))
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", w.Code)
+	}
+	if !strings.Contains(buf.String(), "HTTP error response") {
+		t.Fatalf("expected server-side 5xx log, got %q", buf.String())
+	}
+}
+
+func TestRespondWithError_ClientErrorDoesNotLog(t *testing.T) {
+	var buf bytes.Buffer
+	log, err := logging.New(
+		&logging.Config{Level: "error", Format: "json", Timestamp: false},
+		"server-test",
+		logging.WithWriter(&buf),
+	)
+	if err != nil {
+		t.Fatalf("build logger: %v", err)
+	}
+
+	c, w := newRespCtx()
+	c.Request = c.Request.WithContext(logging.ContextWithLogger(c.Request.Context(), log))
+
+	server.RespondWithError(c, apperrors.NotFound("widget", "42"))
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", w.Code)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("expected no server-side log for a 4xx, got %q", buf.String())
 	}
 }

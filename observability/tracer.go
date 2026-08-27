@@ -13,8 +13,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/kbukum/gokit/logging"
 )
 
 const defaultTracerName = "github.com/kbukum/gokit/observability"
@@ -91,12 +89,6 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 			propagation.Baggage{},
 		))
 	}
-
-	logging.InfoCtx(ctx, "tracer initialized", logging.Fields(
-		"service", config.ServiceName,
-		"endpoint", config.Endpoint,
-		"sample_rate", config.SampleRate,
-	))
 
 	return tp, nil
 }

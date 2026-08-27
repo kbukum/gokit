@@ -15,10 +15,6 @@ import (
 	"github.com/kbukum/gokit/testutil"
 )
 
-func init() {
-	gin.SetMode(gin.TestMode)
-}
-
 // Component is a test server component backed by httptest.Server.
 // It implements both component.Component and testutil.TestComponent.
 type Component struct {
@@ -36,6 +32,7 @@ var (
 
 // NewComponent creates a new test server component.
 func NewComponent() *Component {
+	gin.SetMode(gin.TestMode)
 	log := logging.NewDefault("server-test")
 	cfg := &server.Config{
 		Host:    "127.0.0.1",
@@ -89,7 +86,7 @@ func (c *Component) Start(_ context.Context) error {
 	}
 
 	// Apply middleware and get the final handler
-	c.srv.ApplyMiddleware()
+	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
 	c.ts = httptest.NewServer(c.srv.Handler())
 	c.started = true
 	return nil
@@ -135,9 +132,9 @@ func (c *Component) Reset(ctx context.Context) error {
 	// Recreate server
 	cfg := &server.Config{Host: "127.0.0.1", Port: 0, Enabled: true}
 	cfg.ApplyDefaults()
-	c.srv = server.New(cfg, c.log)
+	c.srv = server.New(cfg, c.log) //nolint:contextcheck // default logger construction has no request-scoped operation
 
-	c.srv.ApplyMiddleware()
+	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
 	c.ts = httptest.NewServer(c.srv.Handler())
 	return nil
 }

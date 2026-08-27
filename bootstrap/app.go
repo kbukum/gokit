@@ -74,7 +74,11 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.logger != nil {
 		app.Logger = o.logger
 	} else {
-		app.Logger = logging.New(&base.Logging, base.Name)
+		l, err := logging.New(&base.Logging, base.Name)
+		if err != nil {
+			return nil, fmt.Errorf("initialize logger: %w", err)
+		}
+		app.Logger = l
 	}
 
 	app.Summary = NewSummary(base.Name, base.Version)

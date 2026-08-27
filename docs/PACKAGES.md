@@ -17,7 +17,7 @@ This file is the bird's-eye index.
 |---|---|---|
 | `errors` | `gokit/errors` | Structured errors with codes, HTTP status mapping, RFC 9457 |
 | `config` | `gokit/config` | Configuration loading & validation with `Environment` type, strict mode, change watching, and sinks |
-| `logging` | `gokit/logging` | Structured logging via zerolog with context/span helpers and directive filtering |
+| `logging` | `gokit/logging` | Structured logging on `log/slog`: pluggable handler chain (masking, sampling, per-module levels, context enrichment, OTLP) with a bring-your-own-sink port and context/span helpers |
 | `util` | `gokit/util` | Generic helpers — collections, casing, env, hashing, secret redaction, templates |
 | `codec` | `gokit/codec` | Pluggable structured-text codecs (JSON, TOML, YAML, …) over a shared value tree |
 | `fs` | `gokit/fs` | Local filesystem primitives — safe paths, atomic writes, archives, watching, links, app dirs |

@@ -19,6 +19,7 @@ type BaseLazyComponent struct {
 	initializer func(ctx context.Context) error
 	healthCheck func(ctx context.Context) error
 	closer      func() error
+	log         *logging.Logger
 }
 
 // NewBaseLazyComponent creates a lazy component with the given initializer.
@@ -26,6 +27,7 @@ func NewBaseLazyComponent(name string, initializer func(context.Context) error) 
 	return &BaseLazyComponent{
 		name:        name,
 		initializer: initializer,
+		log:         logging.NewDefault("component"),
 	}
 }
 
@@ -55,7 +57,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 		return fmt.Errorf("no initializer for component: %s", b.name)
 	}
 
-	logging.DebugCtx(ctx, "Initializing lazy component", map[string]any{
+	b.log.DebugCtx(ctx, "Initializing lazy component", map[string]any{
 		"component": b.name,
 	})
 
@@ -67,7 +69,7 @@ func (b *BaseLazyComponent) Initialize(ctx context.Context) error {
 	b.initialized = true
 	b.lastError = nil
 
-	logging.DebugCtx(ctx, "Lazy component initialized", map[string]any{
+	b.log.DebugCtx(ctx, "Lazy component initialized", map[string]any{
 		"component": b.name,
 	})
 	return nil
@@ -114,6 +116,16 @@ func (b *BaseLazyComponent) WithHealthCheck(fn func(context.Context) error) *Bas
 // WithCloser sets a custom close function.
 func (b *BaseLazyComponent) WithCloser(fn func() error) *BaseLazyComponent {
 	b.closer = fn
+	return b
+}
+
+// WithLogger injects the logger used for lazy-init diagnostics, replacing the
+// default console logger. A nil logger is ignored so the component keeps a
+// usable, non-global default.
+func (b *BaseLazyComponent) WithLogger(log *logging.Logger) *BaseLazyComponent {
+	if log != nil {
+		b.log = log
+	}
 	return b
 }
 

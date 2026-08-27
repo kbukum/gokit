@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -70,7 +69,7 @@ func ExchangeCode(ctx context.Context, req ExchangeRequest) (*tokenResponse, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read token response: %w", err)
 	}
@@ -130,7 +129,10 @@ func ExchangeJSON(ctx context.Context, req ExchangeRequest) (*tokenResponse, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read token response: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("token exchange failed (HTTP %d): %s", resp.StatusCode, string(body))
 	}

@@ -2,6 +2,12 @@ package logging
 
 import "fmt"
 
+// FormatPretty is an alias for the colored console output format.
+const FormatPretty = "pretty"
+
+// BooleanTrue is the string form of a true boolean environment value.
+const BooleanTrue = "true"
+
 // Config contains logging configuration.
 type Config struct {
 	Level        string            `yaml:"level" mapstructure:"level"`
@@ -10,12 +16,6 @@ type Config struct {
 	NoColor      bool              `yaml:"no_color" mapstructure:"no_color"`
 	Timestamp    bool              `yaml:"timestamp" mapstructure:"timestamp"`
 	Caller       bool              `yaml:"caller" mapstructure:"caller"`
-	Stacktrace   bool              `yaml:"stacktrace" mapstructure:"stacktrace"`
-	MaxSize      int               `yaml:"max_size" mapstructure:"max_size"`       // megabytes
-	MaxBackups   int               `yaml:"max_backups" mapstructure:"max_backups"` // number of backups
-	MaxAge       int               `yaml:"max_age" mapstructure:"max_age"`         // days
-	Compress     bool              `yaml:"compress" mapstructure:"compress"`
-	LocalTime    bool              `yaml:"local_time" mapstructure:"local_time"`
 	ServiceName  string            `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
 	Environment  string            `yaml:"environment" mapstructure:"environment"`   // deployment environment (e.g. development, staging, production)
 	Version      string            `yaml:"version" mapstructure:"version"`           // service version (e.g. 1.0.0)
@@ -52,15 +52,6 @@ func (c *Config) ApplyDefaults() {
 	if c.Output == "" {
 		c.Output = "stdout"
 	}
-	if c.MaxSize == 0 {
-		c.MaxSize = 100
-	}
-	if c.MaxBackups == 0 {
-		c.MaxBackups = 3
-	}
-	if c.MaxAge == 0 {
-		c.MaxAge = 28
-	}
 	if !c.Timestamp {
 		c.Timestamp = true
 	}
@@ -90,7 +81,7 @@ func (c *Config) Validate() error {
 	if !contains(validLevels, c.Level) {
 		return fmt.Errorf("logging.level must be one of %v (got: %s)", validLevels, c.Level)
 	}
-	validFormats := []string{"json", "console", "text"}
+	validFormats := []string{"json", "console", "text", FormatPretty}
 	if !contains(validFormats, c.Format) {
 		return fmt.Errorf("logging.format must be one of %v (got: %s)", validFormats, c.Format)
 	}

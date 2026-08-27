@@ -85,3 +85,36 @@ func TestRequestSpan(t *testing.T) {
 		t.Errorf("correlation_id = %q, want %q", got, "corr-2")
 	}
 }
+
+func TestContextWithLoggerRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	want := newBufferedLogger(&buf, "info", "json")
+
+	ctx := ContextWithLogger(context.Background(), want)
+	got, ok := LoggerFromContext(ctx)
+	if !ok {
+		t.Fatal("LoggerFromContext returned ok=false for an injected logger")
+	}
+	if got != want {
+		t.Errorf("LoggerFromContext returned a different logger than was injected")
+	}
+}
+
+func TestContextWithLoggerNilIsNotStored(t *testing.T) {
+	t.Parallel()
+
+	ctx := ContextWithLogger(context.Background(), nil)
+	if _, ok := LoggerFromContext(ctx); ok {
+		t.Error("LoggerFromContext reported ok=true after injecting a nil logger")
+	}
+}
+
+func TestLoggerFromContextEmpty(t *testing.T) {
+	t.Parallel()
+
+	if log, ok := LoggerFromContext(context.Background()); ok || log != nil {
+		t.Errorf("LoggerFromContext(empty) = (%v, %v), want (nil, false)", log, ok)
+	}
+}

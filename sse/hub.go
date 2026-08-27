@@ -3,9 +3,24 @@ package sse
 import (
 	"path"
 	"sync"
+	"sync/atomic"
 
 	"github.com/kbukum/gokit/logging"
 )
+
+// HubOption configures a Hub.
+type HubOption func(*Hub)
+
+// WithHubLogger injects the logger the hub uses for its internal diagnostics,
+// replacing the default console logger. Injecting at construction keeps the
+// logger immutable and avoids any package-global logging state.
+func WithHubLogger(log *logging.Logger) HubOption {
+	return func(h *Hub) {
+		if log != nil {
+			h.log = log
+		}
+	}
+}
 
 const (
 	// DefaultClientBufferSize bounds each client's pending frame queue. When the queue is full,
@@ -27,9 +42,10 @@ type Frame struct {
 
 // Client represents a connected SSE client.
 type Client struct {
-	id       string            // Unique client ID
-	metadata map[string]string // Optional metadata (userID, sessionID, etc.)
-	events   chan Frame        // Channel for sending events to client
+	id       string                         // Unique client ID
+	metadata map[string]string              // Optional metadata (userID, sessionID, etc.)
+	events   chan Frame                     // Channel for sending events to client
+	log      atomic.Pointer[logging.Logger] // Published by the hub at registration; nil before then
 }
 
 // ClientOption configures a Client.
@@ -115,9 +131,11 @@ func (c *Client) SendFrame(frame Frame) bool {
 		return true
 	default:
 		// Channel full, client is too slow
-		logging.Warn("[SSE] Client channel full, dropping message", map[string]any{
-			"client_id": c.id,
-		})
+		if lg := c.log.Load(); lg != nil {
+			lg.Warn("[SSE] Client channel full, dropping message", map[string]any{
+				"client_id": c.id,
+			})
+		}
 		return false
 	}
 }
@@ -136,6 +154,7 @@ type Hub struct {
 	done       chan struct{}      // Signals the hub to stop
 	stopped    bool               // Whether the hub has been stopped
 	mu         sync.RWMutex       // Protects clients map for reads during matching
+	log        *logging.Logger    // Injected logger for hub diagnostics; never nil after NewHub
 }
 
 // Message represents a message to broadcast.
@@ -153,15 +172,23 @@ type Message struct {
 	Data    []byte
 }
 
-// NewHub creates a new SSE hub.
-func NewHub() *Hub {
-	return &Hub{
+// NewHub creates a new SSE hub. By default it logs internal diagnostics through a
+// console logger; inject a logger with [WithHubLogger] to route them elsewhere.
+func NewHub(opts ...HubOption) *Hub {
+	h := &Hub{
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *Message, DefaultBroadcastBufferSize),
 		done:       make(chan struct{}),
 	}
+	for _, opt := range opts {
+		opt(h)
+	}
+	if h.log == nil {
+		h.log = logging.NewDefault("sse")
+	}
+	return h
 }
 
 // Run starts the hub's main event loop. It blocks until Stop is called or the context is canceled.
@@ -177,7 +204,7 @@ func (h *Hub) Run() {
 			h.mu.Lock()
 			h.clients[client.id] = client
 			h.mu.Unlock()
-			logging.Debug("[SSE_HUB] Client registered", map[string]any{
+			h.log.Debug("[SSE_HUB] Client registered", map[string]any{
 				"client_id":     client.id,
 				"total_clients": len(h.clients),
 			})
@@ -189,7 +216,7 @@ func (h *Hub) Run() {
 				client.Close()
 			}
 			h.mu.Unlock()
-			logging.Debug("[SSE_HUB] Client unregistered", map[string]any{
+			h.log.Debug("[SSE_HUB] Client unregistered", map[string]any{
 				"client_id":     client.id,
 				"total_clients": len(h.clients),
 			})
@@ -219,11 +246,15 @@ func (h *Hub) closeAllClients() {
 		client.Close()
 		delete(h.clients, id)
 	}
-	logging.Debug("[SSE_HUB] All clients closed during shutdown")
+	h.log.Debug("[SSE_HUB] All clients closed during shutdown")
 }
 
 // Register adds a client to the hub. Returns immediately if the hub has been stopped.
+// The hub's logger is published to the client through an atomic pointer before it is
+// handed to the hub loop, so a concurrent SendFrame loading client.log never races
+// with registration.
 func (h *Hub) Register(client *Client) {
+	client.log.Store(h.log)
 	select {
 	case h.register <- client:
 	case <-h.done:
@@ -290,7 +321,7 @@ func (h *Hub) dispatch(msg *Message) {
 	for clientID, client := range h.clients {
 		matched, err := path.Match(msg.Pattern, clientID)
 		if err != nil {
-			logging.Error("[SSE_HUB] Pattern match error", map[string]any{
+			h.log.Error("[SSE_HUB] Pattern match error", map[string]any{
 				"pattern": msg.Pattern,
 				"error":   err.Error(),
 			})
@@ -304,7 +335,7 @@ func (h *Hub) dispatch(msg *Message) {
 	}
 
 	if matchCount > 0 {
-		logging.Debug("[SSE_HUB] Broadcast sent",
+		h.log.Debug("[SSE_HUB] Broadcast sent",
 			map[string]any{
 				"pattern":     msg.Pattern,
 				"event":       msg.Event,
@@ -313,7 +344,7 @@ func (h *Hub) dispatch(msg *Message) {
 			},
 		)
 	} else {
-		logging.Debug("[SSE_HUB] No clients matched pattern",
+		h.log.Debug("[SSE_HUB] No clients matched pattern",
 			map[string]any{
 				"pattern":       msg.Pattern,
 				"event":         msg.Event,

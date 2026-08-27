@@ -279,3 +279,51 @@ func assertAppErrorCode(t *testing.T, err error, want goerrors.ErrorCode) {
 		t.Fatalf("code = %s, want %s", appErr.Code, want)
 	}
 }
+
+// TestSanitizeArchivePath verifies the component-aware containment guard admits
+// legitimate destinations (including a root ending in a separator and a member
+// resolving to the destination itself) while still rejecting sibling-prefix and
+// traversal escapes.
+func TestSanitizeArchivePath(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := t.TempDir()
+
+	tests := []struct {
+		name    string
+		dest    string
+		member  string
+		wantErr bool
+	}{
+		{"plain file", root, "file.txt", false},
+		{"nested file", root, filepath.Join("a", "b.txt"), false},
+		{"member equals root", root, ".", false},
+		{"dest with trailing separator", root + sep, "file.txt", false},
+		{"traversal escape", root, filepath.Join("..", "evil"), true},
+		{"absolute escape", root, sep + "etc", false}, // Join cleans a leading sep under root
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := sanitizeArchivePath(tc.dest, tc.member)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for member %q under %q, got %q", tc.member, tc.dest, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for member %q under %q: %v", tc.member, tc.dest, err)
+			}
+		})
+	}
+}
+
+// TestSanitizeArchivePathRejectsSiblingPrefix guards the "/out" vs "/output"
+// sibling-prefix case that a naive string-prefix check would let through.
+func TestSanitizeArchivePathRejectsSiblingPrefix(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "out")
+	// A member crafted to resolve into a sibling directory sharing the prefix.
+	if _, err := sanitizeArchivePath(root, filepath.Join("..", "output", "x")); err == nil {
+		t.Fatal("expected sibling-prefix escape to be rejected")
+	}
+}

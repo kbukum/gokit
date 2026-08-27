@@ -46,9 +46,12 @@ type APIDoc struct {
 // or BasePath are set, the embedded spec is patched at startup
 // so documentation always reflects the running environment.
 //
+// The injected logger records a render failure for a doc that is skipped; a nil logger
+// skips that diagnostic rather than reaching for a package global.
+//
 // Example:
 //
-//	server.MountDocs(engine, server.APIDoc{
+//	server.MountDocs(engine, log, server.APIDoc{
 //	    Title:    "My Service API",
 //	    SpecPath: "/api-spec.json",
 //	    Spec:     specJSON,
@@ -57,7 +60,7 @@ type APIDoc struct {
 //	    BasePath: "/api/v1",
 //	    HideAI:   true,
 //	})
-func MountDocs(engine *gin.Engine, docs ...APIDoc) {
+func MountDocs(engine *gin.Engine, log *logging.Logger, docs ...APIDoc) {
 	for i := range docs {
 		d := &docs[i]
 
@@ -104,20 +107,18 @@ func MountDocs(engine *gin.Engine, docs ...APIDoc) {
 
 		htmlContent, err := scalar.ApiReferenceHTML(opts)
 		if err != nil {
-			logging.Error("failed to render API docs", map[string]any{
-				"path":  d.UIPath,
-				"error": err.Error(),
-			})
+			if log != nil {
+				log.Error("failed to render API docs", map[string]any{
+					"path":  d.UIPath,
+					"error": err.Error(),
+				})
+			}
 			continue
 		}
 
 		html := []byte(htmlContent)
 		engine.GET(d.UIPath, func(c *gin.Context) {
 			c.Data(http.StatusOK, "text/html; charset=utf-8", html)
-		})
-
-		logging.Debug("API docs mounted", map[string]any{
-			"ui": d.UIPath, "spec": d.SpecPath,
 		})
 	}
 }

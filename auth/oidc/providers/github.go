@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/kbukum/gokit/auth/oidc"
@@ -85,7 +84,7 @@ func fetchGitHubPrimaryEmail(ctx context.Context, endpoint, accessToken string) 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp.Body)
 	if err != nil {
 		return "", false, err
 	}

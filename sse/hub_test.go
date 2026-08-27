@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/logging"
 )
 
 func TestClient_NewClient(t *testing.T) {
@@ -103,6 +105,35 @@ func TestHub_RegisterUnregister(t *testing.T) {
 	if hub.GetClientCount() != 0 {
 		t.Errorf("expected 0 clients after unregister, got %d", hub.GetClientCount())
 	}
+}
+
+func TestHub_RegisterThenConcurrentSend(t *testing.T) {
+	// A caller may hold a Client and call SendFrame concurrently with Register,
+	// so the read of client.log in the drop path overlaps the write in Register.
+	// The logger is published through an atomic pointer to make that safe; run
+	// under -race to catch a regression. Sending starts before Register returns.
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		client := NewClient(fmt.Sprintf("race:%d", i))
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			hub.Register(client)
+		}()
+		go func() {
+			defer wg.Done()
+			// Fill the client's queue to exercise the drop path that reads client.log,
+			// concurrently with Register publishing the logger.
+			for j := 0; j < DefaultClientBufferSize+2; j++ {
+				client.SendFrame(Frame{Data: []byte("x")})
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestHub_GetClientIDs(t *testing.T) {
@@ -1204,5 +1235,27 @@ func TestEdge_ManySimultaneousBroadcasts(t *testing.T) {
 		if count == 0 {
 			t.Errorf("client %s received 0 messages", c.ID())
 		}
+	}
+}
+
+func TestWithHubLoggerInjectsLogger(t *testing.T) {
+	log := logging.NewDefault("sse-test")
+	hub := NewHub(WithHubLogger(log))
+	if hub.log != log {
+		t.Fatal("WithHubLogger must inject the provided logger")
+	}
+}
+
+func TestNewHubDefaultsLogger(t *testing.T) {
+	hub := NewHub()
+	if hub.log == nil {
+		t.Fatal("NewHub must default a non-nil logger instead of a nil global")
+	}
+}
+
+func TestWithHubLoggerNilKeepsDefault(t *testing.T) {
+	hub := NewHub(WithHubLogger(nil))
+	if hub.log == nil {
+		t.Fatal("WithHubLogger(nil) must not clear the default logger")
 	}
 }

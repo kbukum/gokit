@@ -35,7 +35,7 @@ func NewDiscoveryServer(name string, inner component.Component, registry Registr
 		return nil, fmt.Errorf("discovery server: service instance must not be nil")
 	}
 	if log == nil {
-		log = logging.Default()
+		log = logging.NewDefault(name)
 	}
 	return &DiscoveryServer{
 		name:     name,

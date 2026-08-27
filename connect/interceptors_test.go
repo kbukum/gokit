@@ -166,7 +166,7 @@ func TestErrorInterceptor(t *testing.T) {
 }
 
 func TestLoggingInterceptor(t *testing.T) {
-	log := logging.New(&logging.Config{Level: "debug", Format: "json", Output: "stdout"}, "connect-test")
+	log := logging.MustNew(&logging.Config{Level: "debug", Format: "json", Output: "stdout"}, "connect-test")
 	req := connectrpc.NewRequest(&struct{}{})
 	wantResp := connectrpc.NewResponse(&struct{}{})
 

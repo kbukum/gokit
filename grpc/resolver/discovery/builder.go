@@ -35,7 +35,7 @@ func NewResolverBuilder(disc discovery.Discovery, log *logging.Logger, opts ...O
 		opt(o)
 	}
 	if log == nil {
-		log = logging.Default()
+		log = logging.NewDefault("resolver")
 	}
 	return &ResolverBuilder{
 		discovery: disc,

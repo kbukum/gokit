@@ -15,10 +15,10 @@ type Registry struct {
 }
 
 // NewRegistry creates a Registry backed by base.
-// When base is nil the process default logger is used so the registry is always usable.
+// When base is nil a fresh default logger is constructed so the registry is always usable.
 func NewRegistry(base *Logger) *Registry {
 	if base == nil {
-		base = Default()
+		base = NewDefault("default")
 	}
 	return &Registry{
 		base:    base,

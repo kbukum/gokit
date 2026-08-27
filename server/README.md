@@ -40,7 +40,7 @@ defer comp.Stop(ctx)
 | `New(cfg, log)` | Create a server instance |
 | `(*Server) GinEngine()` | Access the underlying `*gin.Engine` |
 | `RespondOK(c, data)` | JSON 200 response |
-| `MountDocs(engine, ...APIDoc)` | Mount interactive API docs (powered by [Scalar](https://github.com/scalar/scalar)) |
+| `MountDocs(engine, log, ...APIDoc)` | Mount interactive API docs (powered by [Scalar](https://github.com/scalar/scalar)) |
 | `APIDoc` | Spec definition: Title, Spec, UIPath, Host, BasePath, HideAI, Theme |
 
 ### API Documentation
@@ -53,7 +53,7 @@ Each `APIDoc` registers two routes: a raw spec endpoint and a rendered docs page
 var specJSON []byte
 
 if srv.Config().Docs.Enabled {
-    server.MountDocs(srv.GinEngine(), server.APIDoc{
+    server.MountDocs(srv.GinEngine(), srv.Logger(), server.APIDoc{
         Title:    "My Service API",
         SpecPath: "/api-spec.json",
         Spec:     specJSON,
@@ -92,7 +92,7 @@ server:   # or http:
 Multiple specs can be mounted for services with multiple APIs:
 
 ```go
-server.MountDocs(engine,
+server.MountDocs(engine, log,
     server.APIDoc{Title: "Users API", SpecPath: "/api-specs/users.yaml", Spec: usersSpec, UIPath: "/docs", ContentType: "application/yaml"},
     server.APIDoc{Title: "Admin API", SpecPath: "/api-specs/admin.yaml", Spec: adminSpec, UIPath: "/docs/admin", ContentType: "application/yaml"},
 )

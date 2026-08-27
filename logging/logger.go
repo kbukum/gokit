@@ -3,106 +3,78 @@ package logging
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
-	"strings"
-	"sync"
-
-	"github.com/rs/zerolog"
+	"time"
 )
 
-const (
-	FormatPretty = "pretty"
-	BooleanTrue  = "true"
-)
+// otlpShutdownTimeout bounds how long Close waits for the OTLP exporter to
+// flush and shut down, so an unreachable collector cannot stall process
+// shutdown indefinitely.
+const otlpShutdownTimeout = 5 * time.Second
 
-// Logger wraps zerolog.Logger with additional context.
+// Logger is the injected logging handle for gokit consumers. It is a thin
+// ergonomic facade over the standard library's [log/slog]: the value-add
+// behavior (masking, sampling, per-module levels, context enrichment, OTLP
+// export) lives in a composable [slog.Handler] chain, and the underlying
+// *slog.Logger is always reachable via [Logger.Slog] for stdlib-native use or
+// interop. There is no process-global logger on the consumer path; construct
+// one and inject it.
 type Logger struct {
-	logger       zerolog.Logger
-	service      string
-	masker       Masker
-	moduleLevels *ModuleLevelManager
-	otlpProvider *OTLPProvider
+	slog    *slog.Logger
+	service string
+	level   *slog.LevelVar
+	// otlp is non-nil only on the root logger returned by a constructor, so
+	// Close shuts the exporter down exactly once.
+	otlp *OTLPProvider
 }
 
-// New creates a new logger instance with configuration.
-func New(cfg *Config, serviceName string) *Logger {
-	level, err := zerolog.ParseLevel(cfg.Level)
+// New builds a Logger from cfg for the named service. Options customize the
+// sink and middleware — see [WithHandler], [WithBaseSink], [WithMasker].
+// It returns an error only when an enabled OTLP exporter fails to initialize.
+func New(cfg *Config, serviceName string, opts ...Option) (*Logger, error) {
+	var o options
+	for _, fn := range opts {
+		fn(&o)
+	}
+	p, err := buildPipeline(cfg, serviceName, o)
 	if err != nil {
-		level = zerolog.InfoLevel
+		return nil, err
 	}
-
-	output := outputWriter(cfg.Output)
-
-	var zl zerolog.Logger
-	if strings.EqualFold(cfg.Format, "console") || strings.EqualFold(cfg.Format, FormatPretty) {
-		zl = newConsoleLogger(cfg, serviceName)
-	} else {
-		zl = zerolog.New(output)
-	}
-
-	if cfg.Timestamp {
-		zl = zl.With().Timestamp().Logger()
-	}
-	if cfg.Caller {
-		zl = zl.With().Caller().Logger()
-	}
-	if cfg.Stacktrace {
-		zl = zl.With().Stack().Logger()
-	}
-
-	zl = zl.Level(level)
-
-	// Apply sampling when enabled.
-	if cfg.Sampling.Enabled {
-		zl = zl.Sample(NewSampler(cfg.Sampling))
-	}
-
-	l := &Logger{
-		logger:  zl,
+	return &Logger{
+		slog:    slog.New(p.handler),
 		service: serviceName,
-	}
+		level:   p.level,
+		otlp:    p.otlp,
+	}, nil
+}
 
-	if cfg.Masking.Enabled {
-		l.masker = NewDefaultMasker(cfg.Masking)
+// MustNew is like [New] but panics if construction fails. It is the sanctioned
+// Must-twin for configurations known good at author time (no OTLP, or a config
+// validated elsewhere) and for tests, mirroring the standard library's
+// regexp.MustCompile. Do not use it on runtime or user-supplied configuration
+// paths — call [New] and handle the error there.
+func MustNew(cfg *Config, serviceName string, opts ...Option) *Logger {
+	l, err := New(cfg, serviceName, opts...)
+	if err != nil {
+		panic(fmt.Sprintf("logging: MustNew: %v", err))
 	}
-
-	// Create module-level manager when overrides are configured.
-	if len(cfg.ModuleLevels) > 0 {
-		l.moduleLevels = NewModuleLevelManager(cfg.ModuleLevels)
-	}
-
-	// Initialize OTLP log bridge when enabled.
-	if cfg.OTLP.Enabled {
-		provider, err := NewOTLPProvider(OTLPProviderConfig{
-			Exporter:    cfg.OTLP,
-			ServiceName: serviceName,
-			Environment: cfg.Environment,
-			Version:     cfg.Version,
-		})
-		if err != nil {
-			l.logger.Warn().Err(err).Msg("failed to initialize OTLP log provider")
-		} else {
-			l.otlpProvider = provider
-		}
-	}
-
 	return l
 }
 
-// NewDefault creates a logger with default configuration.
+// NewDefault builds a Logger with a sane console configuration. It never
+// enables OTLP, so it cannot fail and returns a single value for ergonomic
+// nil-fallback wiring inside the kit. Defaults are applied so the secure
+// baseline — including value masking — is in effect.
 func NewDefault(serviceName string) *Logger {
-	cfg := &Config{
-		Level:     "info",
-		Format:    "console",
-		Output:    "stdout",
-		NoColor:   false,
-		Timestamp: true,
-	}
-	return New(cfg, serviceName)
+	cfg := &Config{Level: "info", Format: "console", Output: "stdout", Timestamp: true}
+	cfg.ApplyDefaults()
+	l, _ := New(cfg, serviceName) //nolint:errcheck // OTLP disabled, so New cannot error here
+	return l
 }
 
-// NewFromEnv creates a logger configured from environment variables.
-func NewFromEnv(serviceName string) *Logger {
+// NewFromEnv builds a Logger configured from LOG_* environment variables.
+func NewFromEnv(serviceName string) (*Logger, error) {
 	cfg := &Config{
 		Level:     getEnvOrDefault("LOG_LEVEL", "info"),
 		Format:    getEnvOrDefault("LOG_FORMAT", "console"),
@@ -110,299 +82,158 @@ func NewFromEnv(serviceName string) *Logger {
 		NoColor:   getEnvOrDefault("LOG_NO_COLOR", "false") == BooleanTrue,
 		Timestamp: getEnvOrDefault("LOG_TIMESTAMP", "true") == BooleanTrue,
 	}
+	cfg.ApplyDefaults()
 	return New(cfg, serviceName)
 }
 
-// WithContext returns a logger enriched with trace/span/request IDs from context.
-func (l *Logger) WithContext(ctx context.Context) *Logger {
-	zc := l.logger.With()
+// Slog returns the underlying *slog.Logger — the idiomatic escape hatch for
+// stdlib-native logging and for passing gokit's governed handler chain to code
+// that speaks slog directly.
+func (l *Logger) Slog() *slog.Logger { return l.slog }
 
-	if v := ctx.Value(contextKey("trace_id")); v != nil {
-		zc = zc.Str(FieldTraceID, fmt.Sprintf("%v", v))
-	}
-	if v := ctx.Value(contextKey("span_id")); v != nil {
-		zc = zc.Str(FieldSpanID, fmt.Sprintf("%v", v))
-	}
-	if v := ctx.Value(contextKey("request_id")); v != nil {
-		zc = zc.Str(FieldRequestID, fmt.Sprintf("%v", v))
-	}
-	if v := ctx.Value(contextKey("user_id")); v != nil {
-		zc = zc.Str(FieldUserID, fmt.Sprintf("%v", v))
-	}
-	if v := ctx.Value(contextKey("correlation_id")); v != nil {
-		zc = zc.Str(FieldCorrelationID, fmt.Sprintf("%v", v))
-	}
+// Handler returns the root slog.Handler backing the logger.
+func (l *Logger) Handler() slog.Handler { return l.slog.Handler() }
 
-	return &Logger{logger: zc.Logger(), service: l.service, masker: l.masker, moduleLevels: l.moduleLevels, otlpProvider: l.otlpProvider}
-}
-
-// contextKey is an unexported type for context keys to avoid collisions.
-type contextKey string
-
-// WithComponent returns a logger tagged with a component name.
-// If a per-module log level override exists for the component, it is applied.
-func (l *Logger) WithComponent(name string) *Logger {
-	zl := l.logger.With().Str(FieldComponent, name).Logger()
-
-	// Apply per-module level override when available.
-	if l.moduleLevels != nil {
-		if lvl, ok := l.moduleLevels.Level(name); ok {
-			zl = zl.Level(lvl)
-		}
-	}
-
-	return &Logger{
-		logger:       zl,
-		service:      l.service,
-		masker:       l.masker,
-		moduleLevels: l.moduleLevels,
-		otlpProvider: l.otlpProvider,
+// SetLevel updates the base level at runtime. Unrecognized values are ignored.
+func (l *Logger) SetLevel(level string) {
+	if parsed, ok := ParseLevel(level); ok && l.level != nil {
+		l.level.Set(parsed)
 	}
 }
 
-// WithFields returns a logger with additional fields.
-func (l *Logger) WithFields(fields map[string]any) *Logger {
-	zc := l.logger.With()
-	for k, v := range fields {
-		zc = zc.Interface(k, v)
+// Level reports the current base level.
+func (l *Logger) Level() slog.Level {
+	if l.level == nil {
+		return slog.LevelInfo
 	}
-	return &Logger{logger: zc.Logger(), service: l.service, masker: l.masker, moduleLevels: l.moduleLevels, otlpProvider: l.otlpProvider}
+	return l.level.Level()
 }
 
-// WithError returns a logger with an error field.
-func (l *Logger) WithError(err error) *Logger {
-	return &Logger{
-		logger:       l.logger.With().Err(err).Logger(),
-		service:      l.service,
-		masker:       l.masker,
-		moduleLevels: l.moduleLevels,
-		otlpProvider: l.otlpProvider,
-	}
-}
-
-// WithMasker returns a new Logger with the given Masker applied.
-func (l *Logger) WithMasker(m Masker) *Logger {
-	return &Logger{
-		logger:       l.logger,
-		service:      l.service,
-		masker:       m,
-		moduleLevels: l.moduleLevels,
-		otlpProvider: l.otlpProvider,
-	}
-}
-
-// WithOTLP returns a new Logger with the given OTLPProvider attached.
-func (l *Logger) WithOTLP(provider *OTLPProvider) *Logger {
-	return &Logger{
-		logger:       l.logger,
-		service:      l.service,
-		masker:       l.masker,
-		moduleLevels: l.moduleLevels,
-		otlpProvider: provider,
-	}
-}
-
-// Close gracefully shuts down the OTLP provider, flushing pending logs.
+// Close shuts down the OTLP exporter, flushing pending logs. It is a no-op on
+// derived loggers and when OTLP is disabled. The flush is bounded by
+// [otlpShutdownTimeout] so an unavailable collector cannot stall shutdown.
 func (l *Logger) Close() error {
-	if l.otlpProvider != nil {
-		return l.otlpProvider.Shutdown(context.Background())
+	if l.otlp == nil {
+		return nil
 	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
+	defer cancel()
+	return l.otlp.Shutdown(ctx)
 }
 
-// GetLogger returns the underlying zerolog.Logger.
-func (l *Logger) GetLogger() zerolog.Logger {
-	return l.logger
+// derive returns a Logger backed by a new *slog.Logger, sharing the level var
+// but not the OTLP ownership (Close stays bound to the constructed root).
+func (l *Logger) derive(s *slog.Logger) *Logger {
+	return &Logger{slog: s, service: l.service, level: l.level}
 }
 
-// Debug logs a debug message.
-//
-// For request- or operation-scoped logging that should propagate cancellation
-// and trace correlation to OTLP, prefer DebugCtx.
+// WithComponent returns a logger tagged with a component name. Any per-module
+// level override configured for that component then applies.
+func (l *Logger) WithComponent(name string) *Logger {
+	return l.derive(l.slog.With(slog.String(FieldComponent, name)))
+}
+
+// WithFields returns a logger carrying the given fields on every record.
+func (l *Logger) WithFields(fields map[string]any) *Logger {
+	return l.derive(l.slog.With(fieldsToArgs(fields)...))
+}
+
+// WithError returns a logger carrying an error field.
+func (l *Logger) WithError(err error) *Logger {
+	if err == nil {
+		return l
+	}
+	return l.derive(l.slog.With(slog.String(FieldError, err.Error())))
+}
+
+// WithContext returns a logger enriched with correlation identifiers already
+// present on ctx. Prefer the *Ctx logging methods, which enrich automatically.
+func (l *Logger) WithContext(ctx context.Context) *Logger {
+	var args []any
+	for _, key := range contextIDs {
+		if v, ok := ctx.Value(contextKey(key)).(string); ok && v != "" {
+			args = append(args, slog.String(key, v))
+		}
+	}
+	if len(args) == 0 {
+		return l
+	}
+	return l.derive(l.slog.With(args...))
+}
+
+// Debug logs at debug level. Prefer DebugCtx when a context is in scope.
 func (l *Logger) Debug(msg string, fields ...map[string]any) {
-	l.DebugCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API; callers with a ctx in scope should use DebugCtx
+	l.slog.Debug(msg, fieldsToArgs(fields...)...)
 }
 
-// DebugCtx logs a debug message and propagates ctx to the OTLP exporter.
+// DebugCtx logs at debug level, propagating ctx for correlation and export.
 func (l *Logger) DebugCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	event := l.logger.Debug()
-	l.addFields(event, fields...)
-	event.Msg(msg)
-	l.emitOTLP(ctx, "debug", msg, fields...)
+	l.slog.DebugContext(ctx, msg, fieldsToArgs(fields...)...)
 }
 
-// Info logs an info message. Prefer InfoCtx when a context is in scope.
+// Info logs at info level. Prefer InfoCtx when a context is in scope.
 func (l *Logger) Info(msg string, fields ...map[string]any) {
-	l.InfoCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+	l.slog.Info(msg, fieldsToArgs(fields...)...)
 }
 
-// InfoCtx logs an info message and propagates ctx to the OTLP exporter.
+// InfoCtx logs at info level, propagating ctx for correlation and export.
 func (l *Logger) InfoCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	event := l.logger.Info()
-	l.addFields(event, fields...)
-	event.Msg(msg)
-	l.emitOTLP(ctx, "info", msg, fields...)
+	l.slog.InfoContext(ctx, msg, fieldsToArgs(fields...)...)
 }
 
-// Warn logs a warning message. Prefer WarnCtx when a context is in scope.
+// Warn logs at warn level. Prefer WarnCtx when a context is in scope.
 func (l *Logger) Warn(msg string, fields ...map[string]any) {
-	l.WarnCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+	l.slog.Warn(msg, fieldsToArgs(fields...)...)
 }
 
-// WarnCtx logs a warning message and propagates ctx to the OTLP exporter.
+// WarnCtx logs at warn level, propagating ctx for correlation and export.
 func (l *Logger) WarnCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	event := l.logger.Warn()
-	l.addFields(event, fields...)
-	event.Msg(msg)
-	l.emitOTLP(ctx, "warn", msg, fields...)
+	l.slog.WarnContext(ctx, msg, fieldsToArgs(fields...)...)
 }
 
-// Error logs an error message. Prefer ErrorCtx when a context is in scope.
+// Error logs at error level. Prefer ErrorCtx when a context is in scope.
 func (l *Logger) Error(msg string, fields ...map[string]any) {
-	l.ErrorCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+	l.slog.Error(msg, fieldsToArgs(fields...)...)
 }
 
-// ErrorCtx logs an error message and propagates ctx to the OTLP exporter.
+// ErrorCtx logs at error level, propagating ctx for correlation and export.
 func (l *Logger) ErrorCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	event := l.logger.Error()
-	l.addFields(event, fields...)
-	event.Msg(msg)
-	l.emitOTLP(ctx, "error", msg, fields...)
+	l.slog.ErrorContext(ctx, msg, fieldsToArgs(fields...)...)
 }
 
-// Fatal logs a fatal message and exits. Prefer FatalCtx when a context is in scope.
+// Trace logs at trace level (more verbose than debug).
+func (l *Logger) Trace(msg string, fields ...map[string]any) {
+	l.slog.Log(context.Background(), LevelTrace, msg, fieldsToArgs(fields...)...)
+}
+
+// TraceCtx logs at trace level, propagating ctx for correlation and export.
+func (l *Logger) TraceCtx(ctx context.Context, msg string, fields ...map[string]any) {
+	l.slog.Log(ctx, LevelTrace, msg, fieldsToArgs(fields...)...)
+}
+
+// Fatal logs at the fatal level. It does NOT terminate the process: whether to
+// exit — and running deferred cleanup beforehand — is the application entry
+// point's decision, not the library's. Callers that must abort should return
+// or propagate an error and let main choose the exit policy.
 func (l *Logger) Fatal(msg string, fields ...map[string]any) {
-	l.FatalCtx(context.Background(), msg, fields...) //nolint:contextcheck // background ctx is intentional for the no-context API
+	l.FatalCtx(context.Background(), msg, fields...)
 }
 
-// FatalCtx logs a fatal message and exits, propagating ctx to the OTLP exporter.
+// FatalCtx logs at the fatal level, propagating ctx for correlation and export.
+// Like [Logger.Fatal], it does not terminate the process.
 func (l *Logger) FatalCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	l.emitOTLP(ctx, "fatal", msg, fields...)
-	event := l.logger.Fatal()
-	l.addFields(event, fields...)
-	event.Msg(msg)
+	l.slog.Log(ctx, LevelFatal, msg, fieldsToArgs(fields...)...)
 }
 
-// --- Process default logger ---
-
-// defaultLogger lazily constructs the process default logger exactly once. It is immutable:
-// there is no setter, so package-level convenience helpers and registries derive from a stable,
-// race-free instance instead of a mutable global that can be reassigned at runtime.
-var defaultLogger = sync.OnceValue(func() *Logger {
-	return NewDefault("default")
-})
-
-// Default returns the process default logger, constructing it on first use.
-// Prefer injecting an explicit *Logger;
-// use Default only for incidental logging where threading a logger through the call site adds no value.
-func Default() *Logger {
-	return defaultLogger()
-}
-
-// GetLoggerZ returns the underlying zerolog.Logger from the default logger.
-func GetLoggerZ() zerolog.Logger {
-	return Default().GetLogger()
-}
-
-// Package-level convenience functions delegate to the default logger.
-
-func Debug(msg string, fields ...map[string]any) {
-	Default().Debug(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
-}
-
-func DebugCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	Default().DebugCtx(ctx, msg, fields...)
-}
-
-func Info(msg string, fields ...map[string]any) {
-	Default().Info(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
-}
-
-func InfoCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	Default().InfoCtx(ctx, msg, fields...)
-}
-
-func Warn(msg string, fields ...map[string]any) {
-	Default().Warn(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
-}
-
-func WarnCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	Default().WarnCtx(ctx, msg, fields...)
-}
-
-func Error(msg string, fields ...map[string]any) {
-	Default().Error(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
-}
-
-func ErrorCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	Default().ErrorCtx(ctx, msg, fields...)
-}
-
-func Fatal(msg string, fields ...map[string]any) {
-	Default().Fatal(msg, fields...) //nolint:contextcheck // package-level helper for callers without a context in scope
-}
-
-func FatalCtx(ctx context.Context, msg string, fields ...map[string]any) {
-	Default().FatalCtx(ctx, msg, fields...)
-}
-
-// WithContext returns a context-enriched logger from the default logger.
-func WithContext(ctx context.Context) *Logger {
-	return Default().WithContext(ctx)
-}
-
-// WithComponent returns a component-tagged logger from the default logger.
-func WithComponent(name string) *Logger {
-	return Default().WithComponent(name)
-}
-
-// --- internal helpers ---
-
-func (l *Logger) emitOTLP(ctx context.Context, level, msg string, fields ...map[string]any) {
-	if l.otlpProvider == nil {
-		return
-	}
-	merged := make(map[string]any)
+// fieldsToArgs flattens field maps into slog attribute arguments.
+func fieldsToArgs(fields ...map[string]any) []any {
+	var args []any
 	for _, fm := range fields {
 		for k, v := range fm {
-			merged[k] = v
+			args = append(args, slog.Any(k, v))
 		}
 	}
-	l.otlpProvider.EmitLog(ctx, level, msg, merged)
-}
-
-func (l *Logger) addFields(event *zerolog.Event, fields ...map[string]any) {
-	if l.masker != nil {
-		for _, fm := range fields {
-			for k, v := range fm {
-				str, isStr := v.(string)
-				if !isStr {
-					str = fmt.Sprintf("%v", v)
-				}
-				masked := l.masker.MaskValue(k, str)
-				if masked != str {
-					event.Str(k, masked)
-				} else {
-					event.Interface(k, v)
-				}
-			}
-		}
-		return
-	}
-	for _, fm := range fields {
-		for k, v := range fm {
-			event.Interface(k, v)
-		}
-	}
-}
-
-func outputWriter(output string) *os.File {
-	switch strings.ToLower(output) {
-	case "stderr":
-		return os.Stderr
-	default:
-		return os.Stdout
-	}
+	return args
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
@@ -410,70 +241,4 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return v
 	}
 	return defaultValue
-}
-
-func newConsoleLogger(cfg *Config, serviceName string) zerolog.Logger {
-	output := outputWriter(cfg.Output)
-	return zerolog.New(zerolog.ConsoleWriter{
-		Out:        output,
-		TimeFormat: "15:04:05",
-		NoColor:    cfg.NoColor,
-		FormatLevel: func(i any) string {
-			lvl := strings.ToUpper(fmt.Sprintf("%s", i))
-			if !cfg.NoColor {
-				switch lvl {
-				case "DEBUG":
-					lvl = "\033[36m[DBG]\033[0m"
-				case "INFO":
-					lvl = "\033[32m[INF]\033[0m"
-				case "WARN":
-					lvl = "\033[33m[WRN]\033[0m"
-				case "ERROR":
-					lvl = "\033[31m[ERR]\033[0m"
-				case "FATAL":
-					lvl = "\033[35m[FTL]\033[0m"
-				default:
-					lvl = fmt.Sprintf("[%s]", lvl)
-				}
-			} else {
-				switch lvl {
-				case "DEBUG":
-					lvl = "[DBG]"
-				case "INFO":
-					lvl = "[INF]"
-				case "WARN":
-					lvl = "[WRN]"
-				case "ERROR":
-					lvl = "[ERR]"
-				case "FATAL":
-					lvl = "[FTL]"
-				default:
-					lvl = fmt.Sprintf("[%s]", lvl)
-				}
-			}
-			if serviceName != "" && serviceName != "default" && len(serviceName) >= 3 {
-				tag := strings.ToUpper(serviceName[:3])
-				if !cfg.NoColor {
-					return fmt.Sprintf("\033[34m[%s]\033[0m%s", tag, lvl)
-				}
-				return fmt.Sprintf("[%s]%s", tag, lvl)
-			}
-			return lvl
-		},
-		FormatMessage: func(i any) string {
-			if i == nil {
-				return ""
-			}
-			return fmt.Sprintf("%s", i)
-		},
-		FormatFieldName: func(i any) string {
-			return fmt.Sprintf("%s:", i)
-		},
-		FormatFieldValue: func(i any) string {
-			if i == nil {
-				return ""
-			}
-			return fmt.Sprintf("%s", i)
-		},
-	}).With().Timestamp().Logger()
 }

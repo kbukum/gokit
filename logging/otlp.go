@@ -3,8 +3,8 @@ package logging
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
-	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
@@ -18,13 +18,14 @@ import (
 
 const otlpLoggerName = "github.com/kbukum/gokit/logging"
 
-// OTLPProvider manages the OpenTelemetry LoggerProvider for OTLP export.
+// OTLPProvider owns the OpenTelemetry LoggerProvider used by the OTLP sink and
+// exposes its lifecycle so the facade can flush and shut it down.
 type OTLPProvider struct {
 	provider *sdklog.LoggerProvider
 	logger   otellog.Logger
 }
 
-// OTLPProviderConfig configures an OTLP log provider and its service resource attributes.
+// OTLPProviderConfig configures an OTLP log provider and its resource attributes.
 type OTLPProviderConfig struct {
 	Exporter    OTLPConfig
 	ServiceName string
@@ -40,25 +41,22 @@ func NewOTLPProvider(cfg OTLPProviderConfig) (*OTLPProvider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating OTLP log exporter: %w", err)
 	}
-
 	res, err := newLogResource(cfg.ServiceName, cfg.Environment, cfg.Version)
 	if err != nil {
 		return nil, fmt.Errorf("creating OTLP log resource: %w", err)
 	}
 
-	processor := sdklog.NewBatchProcessor(exporter)
 	provider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(processor),
+		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 		sdklog.WithResource(res),
 	)
-
 	return &OTLPProvider{
 		provider: provider,
 		logger:   provider.Logger(otlpLoggerName),
 	}, nil
 }
 
-// Shutdown gracefully shuts down the OTLP provider, flushing pending logs.
+// Shutdown flushes and stops the provider.
 func (p *OTLPProvider) Shutdown(ctx context.Context) error {
 	if p == nil || p.provider == nil {
 		return nil
@@ -66,44 +64,98 @@ func (p *OTLPProvider) Shutdown(ctx context.Context) error {
 	return p.provider.Shutdown(ctx)
 }
 
-// EmitLog sends a log record to the OTLP collector.
-//
-// ctx is propagated to the OTel exporter so that cancellation, deadlines, and
-// trace correlation flow through to telemetry. Pass context.Background() only
-// for emit sites where no request-scoped context is available (e.g. startup
-// banners, signal handlers).
-func (p *OTLPProvider) EmitLog(ctx context.Context, level, message string, fields map[string]any) {
-	if p == nil || p.logger == nil {
-		return
-	}
-
-	var rec otellog.Record
-	rec.SetTimestamp(time.Now())
-	rec.SetSeverity(mapSeverity(level))
-	rec.SetSeverityText(strings.ToUpper(level))
-	rec.SetBody(attribute.StringValue(message))
-
-	if len(fields) > 0 {
-		attrs := make([]attribute.KeyValue, 0, len(fields))
-		for k, v := range fields {
-			attrs = append(attrs, toOTLPKeyValue(k, v))
-		}
-		rec.AddAttributes(attrs...)
-	}
-
-	p.logger.Emit(ctx, rec)
+// otlpHandler is an [slog.Handler] that emits records to the OTLP collector. It
+// is one branch of the fanout, so OTLP export is a first-class sink rather than
+// a side channel bolted onto the primary writer.
+type otlpHandler struct {
+	provider *OTLPProvider
+	lv       slog.Leveler
+	attrs    []slog.Attr
+	groups   []string
 }
 
-// mapSeverity converts a log level string to an OTel Severity.
-func mapSeverity(level string) otellog.Severity {
-	switch strings.ToLower(level) {
+// newOTLPHandler wraps an OTLP provider as a level-gated slog sink.
+func newOTLPHandler(provider *OTLPProvider, lv slog.Leveler) slog.Handler {
+	return &otlpHandler{provider: provider, lv: lv}
+}
+
+func (h *otlpHandler) Enabled(_ context.Context, level slog.Level) bool {
+	if h.provider == nil || h.provider.logger == nil {
+		return false
+	}
+	return level >= h.lv.Level()
+}
+
+func (h *otlpHandler) Handle(ctx context.Context, rec slog.Record) error {
+	var out otellog.Record
+	out.SetTimestamp(rec.Time)
+	out.SetSeverity(mapSeverity(rec.Level))
+	out.SetSeverityText(strings.ToUpper(LevelName(rec.Level)))
+	out.SetBody(attribute.StringValue(rec.Message))
+
+	// Bound attrs were already group-qualified when WithAttrs captured them;
+	// record attrs are qualified here against the currently open groups.
+	for _, a := range h.attrs {
+		out.AddAttributes(toOTLPKeyValue(a.Key, a.Value.Resolve().Any()))
+	}
+	prefix := h.groupPrefix()
+	rec.Attrs(func(a slog.Attr) bool {
+		out.AddAttributes(toOTLPKeyValue(prefix+a.Key, a.Value.Resolve().Any()))
+		return true
+	})
+
+	h.provider.logger.Emit(ctx, out)
+	return nil
+}
+
+func (h *otlpHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	next := *h
+	next.attrs = append(append([]slog.Attr(nil), h.attrs...), h.qualify(attrs)...)
+	return &next
+}
+
+func (h *otlpHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
+	next := *h
+	next.groups = append(append([]string(nil), h.groups...), name)
+	return &next
+}
+
+// groupPrefix is the dotted prefix for the currently open groups, or "" when
+// no group is open.
+func (h *otlpHandler) groupPrefix() string {
+	if len(h.groups) == 0 {
+		return ""
+	}
+	return strings.Join(h.groups, ".") + "."
+}
+
+// qualify prefixes attribute keys with the currently open groups, so attributes
+// bound under a group export with the same dotted keys as the other sinks.
+func (h *otlpHandler) qualify(attrs []slog.Attr) []slog.Attr {
+	prefix := h.groupPrefix()
+	if prefix == "" {
+		return attrs
+	}
+	out := make([]slog.Attr, len(attrs))
+	for i, a := range attrs {
+		out[i] = slog.Attr{Key: prefix + a.Key, Value: a.Value}
+	}
+	return out
+}
+
+// mapSeverity converts a level to an OTel severity.
+func mapSeverity(level slog.Level) otellog.Severity {
+	switch LevelName(level) {
 	case "trace":
 		return otellog.SeverityTrace
 	case "debug":
 		return otellog.SeverityDebug
 	case "info":
 		return otellog.SeverityInfo
-	case "warn", "warning":
+	case "warn":
 		return otellog.SeverityWarn
 	case "error":
 		return otellog.SeverityError
@@ -114,7 +166,7 @@ func mapSeverity(level string) otellog.Severity {
 	}
 }
 
-// toOTLPKeyValue converts an arbitrary key-value pair to an OTel log attribute.
+// toOTLPKeyValue converts a key/value pair to an OTel attribute KeyValue.
 func toOTLPKeyValue(key string, value any) attribute.KeyValue {
 	switch v := value.(type) {
 	case string:
@@ -127,27 +179,20 @@ func toOTLPKeyValue(key string, value any) attribute.KeyValue {
 		return attribute.Int64(key, v)
 	case float64:
 		return attribute.Float64(key, v)
-	case []byte:
-		return attribute.ByteSlice(key, v)
 	default:
 		return attribute.String(key, fmt.Sprintf("%v", v))
 	}
 }
 
-// newLogExporter creates a gRPC or HTTP OTLP log exporter based on config.
 func newLogExporter(ctx context.Context, cfg OTLPConfig) (sdklog.Exporter, error) {
-	switch strings.ToLower(cfg.Protocol) {
-	case "http":
+	if strings.EqualFold(cfg.Protocol, "http") {
 		return newHTTPLogExporter(ctx, cfg)
-	default:
-		return newGRPCLogExporter(ctx, cfg)
 	}
+	return newGRPCLogExporter(ctx, cfg)
 }
 
 func newGRPCLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploggrpc.Exporter, error) {
-	opts := []otlploggrpc.Option{
-		otlploggrpc.WithEndpoint(cfg.Endpoint),
-	}
+	opts := []otlploggrpc.Option{otlploggrpc.WithEndpoint(cfg.Endpoint)}
 	if cfg.Insecure {
 		opts = append(opts, otlploggrpc.WithInsecure())
 	}
@@ -158,9 +203,7 @@ func newGRPCLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploggrpc.Expor
 }
 
 func newHTTPLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploghttp.Exporter, error) {
-	opts := []otlploghttp.Option{
-		otlploghttp.WithEndpoint(cfg.Endpoint),
-	}
+	opts := []otlploghttp.Option{otlploghttp.WithEndpoint(cfg.Endpoint)}
 	if cfg.Insecure {
 		opts = append(opts, otlploghttp.WithInsecure())
 	}

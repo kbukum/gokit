@@ -1,6 +1,7 @@
 package component
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/logging"
 )
 
 // mockComponent implements Component for testing.
@@ -1424,5 +1427,34 @@ func TestRestartAfterStop(t *testing.T) {
 	state, _ := r.State("restartable")
 	if state != StateRunning {
 		t.Errorf("expected Running after restart, got %v", state)
+	}
+}
+
+func TestBaseLazyComponentWithLoggerCapturesInit(t *testing.T) {
+	var buf bytes.Buffer
+	log, err := logging.New(
+		&logging.Config{Level: "debug", Format: "json", Timestamp: false},
+		"component-test",
+		logging.WithWriter(&buf),
+	)
+	if err != nil {
+		t.Fatalf("build logger: %v", err)
+	}
+
+	lc := NewBaseLazyComponent("lazy-injected", func(ctx context.Context) error { return nil }).
+		WithLogger(log)
+
+	if err := lc.Initialize(context.Background()); err != nil {
+		t.Fatalf("EnsureInitialized: %v", err)
+	}
+	if !strings.Contains(buf.String(), "lazy-injected") {
+		t.Fatalf("expected injected logger to capture lazy-init log, got %q", buf.String())
+	}
+}
+
+func TestBaseLazyComponentWithLoggerNilKeepsDefault(t *testing.T) {
+	lc := NewBaseLazyComponent("svc", func(ctx context.Context) error { return nil }).WithLogger(nil)
+	if lc.log == nil {
+		t.Fatal("WithLogger(nil) must not clear the default logger")
 	}
 }

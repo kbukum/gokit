@@ -15,6 +15,17 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
+// maxErrorBodyBytes bounds how much of a non-2xx response body is read for error
+// diagnostics, so a misbehaving or hostile endpoint cannot exhaust memory.
+const maxErrorBodyBytes = 8 << 10
+
+// readErrorBody reads at most [maxErrorBodyBytes] from a response body for use
+// in an error message.
+func readErrorBody(r io.Reader) []byte {
+	b, _ := io.ReadAll(io.LimitReader(r, maxErrorBodyBytes))
+	return b
+}
+
 // Register registers a configured Supabase storage provider into the given registry.
 func Register(reg *storage.FactoryRegistry, cfg Config) error {
 	if reg == nil {
@@ -87,7 +98,7 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body := readErrorBody(resp.Body)
 		return fmt.Errorf("storage: supabase upload failed (status %d): %s", resp.StatusCode, string(body))
 	}
 	return nil
@@ -113,7 +124,7 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 		return nil, fmt.Errorf("storage: file not found: %s", path)
 	}
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body := readErrorBody(resp.Body)
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("storage: supabase download failed (status %d): %s", resp.StatusCode, string(body))
 	}
@@ -137,7 +148,7 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 && resp.StatusCode != http.StatusNotFound {
-		body, _ := io.ReadAll(resp.Body)
+		body := readErrorBody(resp.Body)
 		return fmt.Errorf("storage: supabase delete failed (status %d): %s", resp.StatusCode, string(body))
 	}
 	return nil
@@ -215,7 +226,7 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
+		body := readErrorBody(resp.Body)
 		return nil, fmt.Errorf("storage: supabase list failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -276,7 +287,7 @@ func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Durati
 	defer resp.Body.Close() //nolint:errcheck // Error on close is safe to ignore for read operations
 
 	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody := readErrorBody(resp.Body)
 		return "", fmt.Errorf("storage: supabase sign failed (status %d): %s", resp.StatusCode, string(respBody))
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog"
 
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/endpoint"
@@ -39,8 +39,15 @@ type MountedHandler struct {
 // New creates a new Server. The Gin engine is created but no middleware is applied yet —
 // call ApplyDefaults on the config first if needed.
 func New(cfg *Config, log *logging.Logger) *Server {
-	// Set Gin mode based on global zerolog level.
-	if zerolog.GlobalLevel() <= zerolog.DebugLevel {
+	// Default the logger once so the server, request context, recovery, and
+	// request-logging middleware all share the same instance and New(cfg, nil)
+	// never panics on a nil logger.
+	if log == nil {
+		log = logging.NewDefault("server")
+	}
+
+	// Set Gin mode based on the injected logger's level.
+	if log.Level() <= slog.LevelDebug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -115,6 +122,12 @@ func New(cfg *Config, log *logging.Logger) *Server {
 // GinEngine returns the underlying Gin engine for route registration.
 func (s *Server) GinEngine() *gin.Engine {
 	return s.engine
+}
+
+// Logger returns the server's injected logger, for callers that mount routes or
+// docs directly (e.g. [MountDocs]) and need to share the server's logging.
+func (s *Server) Logger() *logging.Logger {
+	return s.log
 }
 
 // Handle mounts an http.Handler at the given pattern on the root ServeMux.
@@ -221,6 +234,7 @@ func readSpecFile(path string) ([]byte, error) {
 // so it covers ALL routes — both Gin REST endpoints and ConnectRPC services mounted via Handle().
 func (s *Server) ApplyMiddleware() {
 	stack := []middleware.Middleware{
+		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
 	}
@@ -245,8 +259,6 @@ func (s *Server) ApplyMiddleware() {
 //   - GET /readyz   — readiness probe (component-aware)
 //   - GET /info     — build/runtime info
 //   - GET /metrics  — Prometheus exposition
-//
-// Closes F-060 (no /healthz//readyz handler shipped despite full Health taxonomy in observability/).
 func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.HealthChecker) {
 	healthHandler := endpoint.Health(serviceName, checker)
 	s.engine.GET("/health", healthHandler)
@@ -259,8 +271,6 @@ func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.H
 
 // RegisterPprof mounts net/http/pprof handlers under /debug/pprof.
 // Only enable in non-public environments (the handlers expose runtime state).
-//
-// Closes F-070 sub-finding: no net/http/pprof integration.
 func (s *Server) RegisterPprof() {
 	pprofGroup := s.engine.Group("/debug/pprof")
 	pprofGroup.GET("/", gin.WrapF(pprof.Index))
@@ -320,7 +330,7 @@ func (s *Server) MountDocsFromConfig(specJSON ...[]byte) {
 
 	host := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
-	MountDocs(s.engine, APIDoc{
+	MountDocs(s.engine, s.log, APIDoc{
 		Title:    dc.Title,
 		SpecPath: dc.SpecPath,
 		Spec:     spec,

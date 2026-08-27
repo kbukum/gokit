@@ -11,8 +11,12 @@ import (
 )
 
 // RequestLogger returns middleware that logs every request with method, path, status code,
-// and duration. Health-check paths are silently skipped.
+// and duration. Health-check paths are silently skipped. A nil logger falls back to a
+// per-middleware default so the constructor never reaches for a package global.
 func RequestLogger(log *logging.Logger) Middleware {
+	if log == nil {
+		log = logging.NewDefault("middleware")
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if isHealthEndpoint(r.URL.Path) {
@@ -40,10 +44,14 @@ func RequestLogger(log *logging.Logger) Middleware {
 	}
 }
 
-// GinRequestLogger returns a Gin middleware for request logging.
-// Prefer using RequestLogger() at the server level via ApplyMiddleware() which covers all routes.
-// Use this only when you need logging on the Gin engine directly.
-func GinRequestLogger() gin.HandlerFunc {
+// GinRequestLogger returns a Gin middleware for request logging using the injected logger.
+// A nil logger falls back to a per-middleware default. Prefer using RequestLogger() at the
+// server level via ApplyMiddleware() which covers all routes; use this only when you need
+// logging on the Gin engine directly.
+func GinRequestLogger(log *logging.Logger) gin.HandlerFunc {
+	if log == nil {
+		log = logging.NewDefault("middleware")
+	}
 	return func(c *gin.Context) {
 		if isHealthEndpoint(c.Request.URL.Path) {
 			c.Next()
@@ -74,7 +82,7 @@ func GinRequestLogger() gin.HandlerFunc {
 		if latency > 500*time.Millisecond {
 			fields["slow"] = true
 		}
-		logByStatus(nil, fields, status)
+		logByStatus(log, fields, status)
 	}
 }
 
@@ -99,24 +107,15 @@ func isHealthEndpoint(path string) bool {
 }
 
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
-// If log is nil, the global logger is used. Shared by both Gin
-// and net/http request logger middleware.
+// The logger must be non-nil (constructors default it). Shared by both Gin and net/http
+// request logger middleware.
 func logByStatus(log *logging.Logger, fields map[string]any, status int) {
-	logErr := logging.Error
-	logWarn := logging.Warn
-	logDebug := logging.Debug
-	if log != nil {
-		logErr = log.Error
-		logWarn = log.Warn
-		logDebug = log.Debug
-	}
-
 	switch {
 	case status >= 500:
-		logErr("Request completed", fields)
+		log.Error("Request completed", fields)
 	case status >= 400:
-		logWarn("Request completed", fields)
+		log.Warn("Request completed", fields)
 	default:
-		logDebug("Request completed", fields)
+		log.Debug("Request completed", fields)
 	}
 }

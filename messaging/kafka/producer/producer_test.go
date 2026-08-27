@@ -39,7 +39,7 @@ func newTestProducer(w kafkaWriter, attempts int, backoff time.Duration) *Produc
 		writer:        w,
 		retryAttempts: attempts,
 		retryBackoff:  backoff,
-		log:           logging.New(&logging.Config{Level: "error"}, "test").WithComponent("kafka.producer"),
+		log:           logging.MustNew(&logging.Config{Level: "error"}, "test").WithComponent("kafka.producer"),
 	}
 }
 
@@ -144,7 +144,7 @@ func TestProducerConvenienceMethodsRouteThroughWriter(t *testing.T) {
 }
 
 func TestNewProducerEagerlyInitializesWriter(t *testing.T) {
-	log := logging.New(&logging.Config{Level: "error"}, "test")
+	log := logging.MustNew(&logging.Config{Level: "error"}, "test")
 	p, err := NewProducer(
 		messaging.Config{Adapter: "kafka", Name: "events"},
 		kafka.Config{Brokers: []string{"127.0.0.1:1"}, AllowInsecureDev: true},

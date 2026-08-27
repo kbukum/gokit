@@ -669,7 +669,7 @@ func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
 		ServiceName: "test-svc",
 	}
 
-	log := logging.New(cfg, "integration-test")
+	log := logging.MustNew(cfg, "integration-test")
 	if log == nil {
 		t.Fatal("logger should not be nil")
 	}
@@ -695,7 +695,7 @@ func TestIntegration_Logger_Config_LoggerWithContext(t *testing.T) {
 		Format:      "json",
 		ServiceName: "ctx-test",
 	}
-	log := logging.New(cfg, "ctx-test")
+	log := logging.MustNew(cfg, "ctx-test")
 	enriched := log.WithComponent("database").WithFields(map[string]any{
 		"connection_pool": 10,
 	})
