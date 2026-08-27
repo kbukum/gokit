@@ -48,7 +48,7 @@ func (h *consoleHandler) Handle(_ context.Context, rec slog.Record) error {
 	}
 	b.WriteString(h.levelTag(rec.Level))
 	b.WriteByte(' ')
-	b.WriteString(rec.Message)
+	b.WriteString(sanitizeConsole(rec.Message))
 
 	for _, a := range h.attrs {
 		h.writeAttr(&b, a)
@@ -101,7 +101,45 @@ func (h *consoleHandler) writeAttr(b *strings.Builder, a slog.Attr) {
 	if len(h.groups) > 0 {
 		key = strings.Join(h.groups, ".") + "." + key
 	}
-	fmt.Fprintf(b, " %s=%v", key, a.Value.Resolve().Any())
+	fmt.Fprintf(b, " %s=%s", key, sanitizeConsole(fmt.Sprintf("%v", a.Value.Resolve().Any())))
+}
+
+// sanitizeConsole neutralizes C0 control characters and DEL in untrusted message or
+// attribute content so a value carrying CR/LF or ANSI escape (ESC) sequences cannot
+// forge extra log lines or drive the terminal when rendered to the human-readable
+// console sink. Tabs are preserved for alignment. The color/level tags this handler
+// emits itself are applied to trusted, handler-controlled text and are unaffected.
+// Structured sinks (JSON, OTLP) carry the raw value and are escaped by their encoder,
+// so sanitization stays in the presentation layer rather than the logging facade.
+func sanitizeConsole(s string) string {
+	if strings.IndexFunc(s, isForgingRune) < 0 {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch r {
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteByte('\t')
+		default:
+			if isForgingRune(r) {
+				fmt.Fprintf(&b, `\x%02x`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
+// isForgingRune reports whether r is a C0 control character (except tab) or DEL — the
+// runes that can forge log lines or inject terminal escape sequences.
+func isForgingRune(r rune) bool {
+	return (r < 0x20 && r != '\t') || r == 0x7f
 }
 
 // levelTag renders the colored level tag, prefixed with a 3-letter service tag

@@ -63,3 +63,25 @@ func TestConsoleLevelTags(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleNeutralizesLogForging(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	l := newConsoleLogger(&buf, "svc", true)
+	l.Info("login\n[INF] forged", map[string]any{"user": "a\r\nb", "ansi": "x\x1b[31mred"})
+
+	out := buf.String()
+	if lines := strings.Count(strings.TrimRight(out, "\n"), "\n"); lines != 0 {
+		t.Errorf("forged newlines produced extra log lines: %q", out)
+	}
+	if strings.ContainsAny(out, "\r\x1b") {
+		t.Errorf("expected control characters neutralized, got %q", out)
+	}
+	if !strings.Contains(out, `login\n[INF] forged`) || !strings.Contains(out, `user=a\r\nb`) {
+		t.Errorf("expected escaped forms, got %q", out)
+	}
+	if !strings.Contains(out, `ansi=x\x1b[31mred`) {
+		t.Errorf("expected escaped ANSI escape, got %q", out)
+	}
+}
