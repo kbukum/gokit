@@ -199,3 +199,76 @@ func TestRunDiffHasRegressionNoChanges(t *testing.T) {
 		t.Error("HasRegression() = true for empty diff")
 	}
 }
+
+func TestRunComparatorSkipsDescriptiveMetrics(t *testing.T) {
+	t.Parallel()
+
+	// A descriptive metric whose value changes must appear in the diff for
+	// visibility, but remain neutral for regression classification.
+	base := &RunResult{
+		ID: "base",
+		Metrics: []MetricResult{
+			{
+				Name:        "token_stats[heuristic]",
+				Value:       100,
+				Descriptive: true,
+				Values:      map[string]float64{"predicted_tokens_total": 100},
+			},
+		},
+	}
+	target := &RunResult{
+		ID: "target",
+		Metrics: []MetricResult{
+			{
+				Name:        "token_stats[heuristic]",
+				Value:       10,
+				Descriptive: true,
+				Values:      map[string]float64{"predicted_tokens_total": 10},
+			},
+		},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+
+	if len(diff.Changes) != 2 {
+		t.Fatalf("len(Changes) = %d, want 2 (metric + subvalue)", len(diff.Changes))
+	}
+	for _, ch := range diff.Changes {
+		if !ch.Neutral {
+			t.Errorf("change %q is not neutral", ch.Name)
+		}
+	}
+	if diff.HasRegression() {
+		t.Error("HasRegression() = true, want false (descriptive metric neutral)")
+	}
+}
+
+func TestRunComparatorDoesNotCrossCompareMetricSubvalues(t *testing.T) {
+	t.Parallel()
+
+	base := &RunResult{
+		ID: "base",
+		Metrics: []MetricResult{
+			{
+				Name:   "token_stats[heuristic]",
+				Value:  1,
+				Values: map[string]float64{"predicted_tokens_total": 100},
+			},
+		},
+	}
+	target := &RunResult{
+		ID: "target",
+		Metrics: []MetricResult{
+			{
+				Name:   "token_stats[tiktoken:cl100k_base]",
+				Value:  1,
+				Values: map[string]float64{"predicted_tokens_total": 120},
+			},
+		},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+	if len(diff.Changes) != 0 {
+		t.Fatalf("len(Changes) = %d, want 0 for incompatible metric identities", len(diff.Changes))
+	}
+}

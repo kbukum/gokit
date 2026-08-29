@@ -3,6 +3,8 @@ package bench
 import (
 	"context"
 	"fmt"
+
+	"github.com/kbukum/gokit/version"
 )
 
 // BenchRunner orchestrates evaluation runs.
@@ -64,6 +66,11 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 	if len(samples) == 0 {
 		return nil, fmt.Errorf("bench: dataset is empty")
 	}
+
+	// Hash the dataset before evaluation: evaluators receive each sample's Input
+	// and are not contractually required to treat it as read-only, so hashing
+	// afterward could digest an evaluator's mutation rather than the loaded data.
+	datasetDigest := datasetHash(samples)
 
 	manifest, err := dataset.Manifest()
 	if err != nil {
@@ -128,6 +135,29 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 		}
 	}
 
+	branchNames := make([]string, len(r.branches))
+	for i, b := range r.branches {
+		branchNames[i] = b.name
+	}
+	metricNames := make([]string, len(metrics))
+	for i, m := range metrics {
+		metricNames[i] = m.Name
+	}
+	provenance := RunProvenance{
+		Seed:           r.cfg.seed,
+		RNGAlgorithm:   RNGAlgorithm,
+		GitCommit:      r.cfg.probe.GitCommit(),
+		ToolVersion:    version.GetShortVersion(),
+		Host:           r.cfg.probe.Host(),
+		OS:             r.cfg.probe.OS(),
+		Arch:           r.cfg.probe.Arch(),
+		DatasetHash:    datasetDigest,
+		DatasetName:    manifest.Name,
+		DatasetVersion: manifest.Version,
+		Branches:       branchNames,
+		Metrics:        metricNames,
+	}
+
 	result := &RunResult{
 		ID:        runID,
 		Schema:    SchemaVersion,
@@ -140,9 +170,10 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 			SampleCount:       len(samples),
 			LabelDistribution: labelDist,
 		},
-		Metrics:  metrics,
-		Branches: branches,
-		Samples:  sampleResults,
+		Metrics:    metrics,
+		Branches:   branches,
+		Samples:    sampleResults,
+		Provenance: provenance,
 	}
 
 	if r.cfg.storage != nil {

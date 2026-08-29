@@ -27,14 +27,15 @@ func (r *jsonReporter) Generate(w io.Writer, result *bench.RunResult) error {
 
 // jsonReport mirrors the desired JSON output format with $schema and version at top level.
 type jsonReport struct {
-	Schema  string         `json:"$schema"`
-	Version string         `json:"version"`
-	Run     jsonRun        `json:"run"`
-	Dataset jsonDataset    `json:"dataset"`
-	Metrics []jsonMetric   `json:"metrics"`
-	Curves  map[string]any `json:"curves,omitempty"`
-	Branch  []jsonBranch   `json:"branches,omitempty"`
-	Samples []jsonSample   `json:"samples,omitempty"`
+	Schema     string              `json:"$schema"`
+	Version    string              `json:"version"`
+	Run        jsonRun             `json:"run"`
+	Dataset    jsonDataset         `json:"dataset"`
+	Metrics    []jsonMetric        `json:"metrics"`
+	Provenance bench.RunProvenance `json:"provenance,omitempty"`
+	Curves     map[string]any      `json:"curves,omitempty"`
+	Branch     []jsonBranch        `json:"branches,omitempty"`
+	Samples    []jsonSample        `json:"samples,omitempty"`
 }
 
 type jsonRun struct {
@@ -52,10 +53,11 @@ type jsonDataset struct {
 }
 
 type jsonMetric struct {
-	Name   string             `json:"name"`
-	Value  float64            `json:"value"`
-	Values map[string]float64 `json:"values,omitempty"`
-	Detail any                `json:"detail,omitempty"`
+	Name        string             `json:"name"`
+	Value       float64            `json:"value"`
+	Values      map[string]float64 `json:"values,omitempty"`
+	Detail      any                `json:"detail,omitempty"`
+	Descriptive bool               `json:"descriptive,omitempty"`
 }
 
 type jsonBranch struct {
@@ -83,10 +85,11 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 	metrics := make([]jsonMetric, len(result.Metrics))
 	for i, m := range result.Metrics {
 		metrics[i] = jsonMetric{
-			Name:   m.Name,
-			Value:  m.Value,
-			Values: m.Values,
-			Detail: m.Detail,
+			Name:        m.Name,
+			Value:       m.Value,
+			Values:      m.Values,
+			Detail:      m.Detail,
+			Descriptive: m.Descriptive,
 		}
 	}
 
@@ -142,9 +145,10 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 			SampleCount:       result.Dataset.SampleCount,
 			LabelDistribution: result.Dataset.LabelDistribution,
 		},
-		Metrics: metrics,
-		Curves:  result.Curves,
-		Branch:  branches,
-		Samples: samples,
+		Metrics:    metrics,
+		Provenance: result.Provenance,
+		Curves:     result.Curves,
+		Branch:     branches,
+		Samples:    samples,
 	}
 }

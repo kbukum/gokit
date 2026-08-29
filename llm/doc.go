@@ -55,4 +55,20 @@
 //	}
 //
 // See the Dialect interface documentation for details on each method.
+//
+// # Token counting
+//
+// [TokenCounter] is the string-level token-counting port consumed by metrics and
+// cost/length estimators. Count is fallible — an exact tokenizer can surface an
+// encode error at call time — so it returns (int, error) rather than a
+// success-shaped count. [HeuristicTokenCounter] is the dependency-free default:
+// it shares the chars/4 approximation with ai/chat, so estimates stay consistent
+// across gokit and no divergent rule is introduced, and it never errors. For
+// exact counts, inject a contrib counter built on a real tokenizer:
+//
+//   - github.com/kbukum/gokit/llm/tokenizer/tiktoken — OpenAI BPE (offline vocab)
+//   - github.com/kbukum/gokit/llm/tokenizer/huggingface — any tokenizer.json
+//
+// Both live in their own sub-modules so their tokenizer dependencies stay out of
+// core; construct one explicitly and pass it wherever a [TokenCounter] is needed.
 package llm

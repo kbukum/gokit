@@ -24,14 +24,21 @@ func sampleRunResult() *bench.RunResult {
 		},
 		Metrics: []bench.MetricResult{
 			{
-				Name:  "classification",
-				Value: 0.85,
+				Name:        "classification",
+				Value:       0.85,
+				Descriptive: true,
 				Values: map[string]float64{
 					"precision": 0.9,
 					"recall":    0.8,
 					"f1":        0.85,
 				},
 			},
+		},
+		Provenance: bench.RunProvenance{
+			Seed:         99,
+			RNGAlgorithm: bench.RNGAlgorithm,
+			DatasetHash:  "deadbeef",
+			Metrics:      []string{"classification"},
 		},
 		Branches: map[string]bench.BranchResult{
 			"main": {
@@ -133,6 +140,22 @@ func TestJSONReporterRoundTrip(t *testing.T) {
 	}
 	if len(metrics) != 1 {
 		t.Errorf("len(metrics) = %d, want 1", len(metrics))
+	}
+	metric, ok := metrics[0].(map[string]any)
+	if !ok {
+		t.Fatal("metrics[0] is not an object")
+	}
+	if descriptive, ok := metric["descriptive"].(bool); !ok || !descriptive {
+		t.Errorf("metrics[0].descriptive = %v (present=%v), want true", metric["descriptive"], ok)
+	}
+
+	// Verify provenance is preserved by JSON reporter projection.
+	prov, ok := parsed["provenance"].(map[string]any)
+	if !ok {
+		t.Fatal("missing 'provenance' section")
+	}
+	if got := prov["seed"]; got != float64(99) {
+		t.Errorf("provenance.seed = %v, want 99", got)
 	}
 
 	// Verify samples section.

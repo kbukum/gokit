@@ -14,6 +14,10 @@ type Result struct {
 	Value  float64            `json:"value"`
 	Values map[string]float64 `json:"values,omitempty"`
 	Detail any                `json:"detail,omitempty"`
+	// Descriptive marks a metric that summarizes a run (for example token usage)
+	// rather than measuring quality. Run comparison skips descriptive metrics when
+	// classifying regressions, since higher or lower is neither better nor worse.
+	Descriptive bool `json:"descriptive,omitempty"`
 }
 
 // Suite groups multiple metrics for batch evaluation.
