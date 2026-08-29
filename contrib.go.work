@@ -10,6 +10,8 @@ use (
 	./inference/triton
 	./inference/vllm
 	./llm/providers
+	./llm/tokenizer/huggingface
+	./llm/tokenizer/tiktoken
 	./messaging/kafka
 	./messaging/nats
 	./messaging/rabbitmq

@@ -45,6 +45,12 @@
 //   - [ExactMatch] — fraction of exact label matches
 //   - [FuzzyMatch] — Levenshtein-based string similarity
 //
+// Token usage:
+//   - [TokenStats] — total / average token count of predictions and references
+//     via an injected [llm.TokenCounter]; constructed fallibly (rejects a nil
+//     counter) and marked descriptive so run comparison excludes it from
+//     regression classification
+//
 // Composite:
 //   - [Weighted] — weighted combination of multiple metrics
 //

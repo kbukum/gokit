@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+func metricValueKey(metricName, valueName string) string {
+	return metricName + "\x1f" + valueName
+}
+
 // RunComparator compares two benchmark runs.
 type RunComparator struct {
 	threshold float64
@@ -44,6 +48,7 @@ type MetricChange struct {
 	NewValue    float64
 	Delta       float64
 	Improved    bool
+	Neutral     bool
 	Significant bool // above threshold
 }
 
@@ -59,25 +64,27 @@ func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 	for _, m := range base.Metrics {
 		baseMetrics[m.Name] = m.Value
 		for k, v := range m.Values {
-			baseMetrics[k] = v
+			baseMetrics[metricValueKey(m.Name, k)] = v
 		}
 	}
 
 	seen := make(map[string]bool)
 	for _, m := range target.Metrics {
+		neutral := m.Descriptive
 		// Compare top-level value.
 		if oldVal, ok := baseMetrics[m.Name]; ok && !seen[m.Name] {
-			diff.Changes = append(diff.Changes, c.metricChange(m.Name, oldVal, m.Value))
+			diff.Changes = append(diff.Changes, c.metricChange(m.Name, oldVal, m.Value, neutral))
 			seen[m.Name] = true
 		}
 		// Compare per-key values.
 		for k, v := range m.Values {
-			if seen[k] {
+			lookupKey := metricValueKey(m.Name, k)
+			if seen[lookupKey] {
 				continue
 			}
-			if oldVal, ok := baseMetrics[k]; ok {
-				diff.Changes = append(diff.Changes, c.metricChange(k, oldVal, v))
-				seen[k] = true
+			if oldVal, ok := baseMetrics[lookupKey]; ok {
+				diff.Changes = append(diff.Changes, c.metricChange(m.Name+"."+k, oldVal, v, neutral))
+				seen[lookupKey] = true
 			}
 		}
 	}
@@ -103,14 +110,19 @@ func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 	return diff
 }
 
-func (c *RunComparator) metricChange(name string, oldVal, newVal float64) MetricChange {
+func (c *RunComparator) metricChange(name string, oldVal, newVal float64, neutral bool) MetricChange {
 	delta := newVal - oldVal
+	improved := delta > 0
+	if neutral {
+		improved = false
+	}
 	return MetricChange{
 		Name:        name,
 		OldValue:    oldVal,
 		NewValue:    newVal,
 		Delta:       delta,
-		Improved:    delta > 0,
+		Improved:    improved,
+		Neutral:     neutral,
 		Significant: math.Abs(delta) >= c.threshold,
 	}
 }
@@ -121,11 +133,13 @@ func (d *RunDiff) Summary() string {
 
 	for _, ch := range d.Changes {
 		icon := "✅"
-		if ch.Delta < 0 {
+		if ch.Neutral {
+			icon = "ℹ️ "
+		} else if ch.Delta < 0 {
 			icon = "⚠️ "
 		}
 		sign := "+"
-		if ch.Delta < 0 {
+		if ch.Delta < 0 || ch.Neutral {
 			sign = ""
 		}
 		fmt.Fprintf(&b, "%s %s: %.4f → %.4f (%s%.4f)\n", icon, ch.Name, ch.OldValue, ch.NewValue, sign, ch.Delta)
@@ -141,7 +155,7 @@ func (d *RunDiff) Summary() string {
 // HasRegression returns true if any metric decreased significantly.
 func (d *RunDiff) HasRegression() bool {
 	for _, ch := range d.Changes {
-		if ch.Significant && !ch.Improved {
+		if ch.Significant && !ch.Improved && !ch.Neutral {
 			return true
 		}
 	}

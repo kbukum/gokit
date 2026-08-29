@@ -32,6 +32,8 @@ use (
 	./inference/vllm
 	./llm
 	./llm/providers
+	./llm/tokenizer/huggingface
+	./llm/tokenizer/tiktoken
 	./mcp
 	./media
 	./messaging

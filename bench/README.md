@@ -23,6 +23,7 @@ datasets flow through **pipelines**, and metrics are fully pluggable.
   gate CI on thresholds
 - **CLI helpers** — `CLIRunner` wires up run → store → compare → print in a few lines
 - **Concurrent evaluation** — fan out across evaluators with configurable concurrency and per-sample timeouts
+- **Reproducible runs** — every `RunResult` carries a `RunProvenance` record (seed, git commit, tool/host/os/arch, and an order-independent dataset hash); inject a `ProvenanceProbe` and a run seed for deterministic, auditable runs
 
 ## Install
 
@@ -107,7 +108,10 @@ func main() {
 | `DatasetLoader[L]` | struct | Reads a manifest directory into `[]Sample[L]` or a `stream.Pipeline` |
 | `LabelMapper[L]` | func | `func(string) (L, error)` — converts manifest string labels to typed `L` |
 | `BenchRunner[L]` | struct | Orchestrates evaluation: load → evaluate → compute metrics → store |
-| `RunResult` | struct | Full benchmark output — metrics, branch results, per-sample details, curves |
+| `RunResult` | struct | Full benchmark output — metrics, branch results, per-sample details, curves, provenance |
+| `RunProvenance` | struct | Reproducibility record on every `RunResult` — seed, RNG algorithm, git commit, tool/host/os/arch, order-independent dataset hash, branch and metric names |
+| `ProvenanceProbe` | interface | Injected source of host and git-commit provenance — `GitCommit`/`Host`/`OS`/`Arch` |
+| `SystemProvenanceProbe` | struct | Default probe — host/os/arch from the runtime, git commit best-effort from CI env vars |
 | `RunComparator` | struct | Diffs two `RunResult`s, reports metric changes & sample regressions |
 | `CLIRunner` | struct | Convenience wrapper: run, compare, list, show — writes to `io.Writer` |
 | `FileStorage` | struct | Stores `RunResult` as JSON files on disk |
@@ -121,6 +125,21 @@ func main() {
 | [`bench/report`](report/) | Output-format reporters — JSON, Markdown, CSV, Table, JUnit, Vega-Lite, HTML |
 | [`bench/viz`](viz/) | Pure-Go SVG visualisation generation — ROC, confusion matrix, calibration, distribution, comparison |
 | [`bench/storage`](storage/) | Cloud-storage adapter for bench results — wraps `gokit/storage` |
+| [`bench/testutil`](testutil/) | Deterministic test doubles — `FixedProvenanceProbe` for offline, reproducible provenance |
+
+## Reproducibility
+
+Every run records a `RunProvenance` on its `RunResult`: the deterministic seed and RNG algorithm, the source-control commit, the tool and host identity, and an order-independent content hash of the evaluated dataset (folded from each sample's id, input, and label). Provenance is gathered through an injected `ProvenanceProbe`, so runs are reproducible and auditable, and unit tests stay offline and deterministic.
+
+```go
+runner := bench.NewBenchRunner[string](
+    bench.WithSeed[string](42),
+    bench.WithClock[string](clock),           // deterministic timestamps & IDs
+    bench.WithProvenanceProbe[string](probe), // host/os/arch + git commit
+)
+```
+
+The default `SystemProvenanceProbe` reads host/os/arch from the runtime and resolves the git commit best-effort from CI environment variables (`GITHUB_SHA` → `GIT_COMMIT` → `CI_COMMIT_SHA` → `SOURCE_COMMIT`), taking no dependency on a git library. Tests inject `testutil.FixedProvenanceProbe` for fixed, offline values — with a fixed clock, fixed probe, and seed, a run's JSON is byte-identical across executions.
 
 ## Available Metrics
 

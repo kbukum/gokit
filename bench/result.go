@@ -14,6 +14,9 @@ type RunResult struct {
 	Branches  map[string]BranchResult `json:"branches"`
 	Samples   []SampleResult          `json:"samples"`
 	Curves    map[string]any          `json:"curves,omitempty"`
+	// Provenance records reproducibility metadata: seed, source commit, tool/host
+	// identity, and an order-independent dataset content hash.
+	Provenance RunProvenance `json:"provenance"`
 }
 
 // DatasetInfo holds summary info about the dataset used.
@@ -30,6 +33,10 @@ type MetricResult struct {
 	Value  float64            `json:"value"`
 	Values map[string]float64 `json:"values,omitempty"`
 	Detail any                `json:"detail,omitempty"`
+	// Descriptive marks a metric that summarizes a run (for example token usage)
+	// rather than measuring quality. RunComparator skips descriptive metrics when
+	// classifying regressions, since higher or lower is neither better nor worse.
+	Descriptive bool `json:"descriptive,omitempty"`
 }
 
 // BranchResult holds results for a single evaluator branch.

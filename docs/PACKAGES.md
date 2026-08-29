@@ -82,6 +82,8 @@ This file is the bird's-eye index.
 | `cache/redis` | `gokit/cache/redis` | Redis cache adapter |
 | `database/sqlite` | `gokit/database/sqlite` | SQLite database driver |
 | `llm/providers` | `gokit/llm/providers` | LLM provider adapters |
+| `llm/tokenizer/tiktoken` | `gokit/llm/tokenizer/tiktoken` | OpenAI BPE token counter (offline vocab) |
+| `llm/tokenizer/huggingface` | `gokit/llm/tokenizer/huggingface` | Hugging Face `tokenizer.json` token counter |
 | `messaging/kafka` | `gokit/messaging/kafka` | Kafka messaging adapter |
 | `messaging/nats` | `gokit/messaging/nats` | NATS messaging adapter |
 | `messaging/rabbitmq` | `gokit/messaging/rabbitmq` | RabbitMQ messaging adapter |
