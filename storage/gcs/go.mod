@@ -5,8 +5,8 @@ go 1.26.0
 toolchain go1.26.6
 
 require (
-	cloud.google.com/go/auth v0.23.1
-	cloud.google.com/go/storage v1.64.0
+	cloud.google.com/go/auth v0.23.2
+	cloud.google.com/go/storage v1.65.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
 	google.golang.org/api v0.293.0
