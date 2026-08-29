@@ -9,8 +9,8 @@ require (
 	github.com/kbukum/gokit/discovery v0.3.0-alpha.1
 	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	github.com/stretchr/testify v1.12.1
-	google.golang.org/grpc v1.83.0
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/grpc v1.83.2
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
