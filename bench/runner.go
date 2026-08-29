@@ -116,9 +116,21 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 	primaryBranch := r.branches[0]
 	scored := branchResults[primaryBranch.name].scored
 
-	metrics := make([]MetricResult, 0, len(r.cfg.metrics))
+	metrics := make([]MetricResult, 0, len(r.cfg.metrics)+len(r.cfg.contextMetrics))
 	for _, m := range r.cfg.metrics {
 		metrics = append(metrics, m.Compute(scored))
+	}
+	// Context metrics run after the pure metrics, in registration order. The run
+	// context is forwarded for cancellation; each context metric is responsible
+	// for bounding its own remote calls (SemanticSimilarity does so via a
+	// resilience.Policy), since the runner imposes no per-metric timeout. A
+	// failure fails the run rather than silently dropping the metric.
+	for _, cm := range r.cfg.contextMetrics {
+		mr, err := cm.Compute(ctx, scored)
+		if err != nil {
+			return nil, fmt.Errorf("bench: context metric %q: %w", cm.Name(), err)
+		}
+		metrics = append(metrics, mr)
 	}
 
 	branches := make(map[string]BranchResult, len(r.branches))

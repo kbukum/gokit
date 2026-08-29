@@ -1,8 +1,6 @@
 // Package metric provides pluggable evaluation metrics for the bench framework.
 //
-// Metrics consume slices of [bench.ScoredSample] (ground-truth / prediction pairs)
-// and return a [Result] containing scalar values
-// and optional structured detail (confusion matrices, ROC curves, calibration data, etc.).
+// Metrics consume slices of [bench.ScoredSample] (ground-truth / prediction pairs) and return a [Result] containing scalar values and optional structured detail (confusion matrices, ROC curves, calibration data, etc.).
 //
 // # Metric Interface
 //
@@ -14,6 +12,17 @@
 //	}
 //
 // Use [NewSuite] to group metrics and evaluate them in a single call.
+//
+// # Context metrics
+//
+// I/O-backed metrics — those that embed text or call an LLM judge — implement [ContextMetric][L] instead, taking a [context.Context] for cancellation and returning an error:
+//
+//	type ContextMetric[L comparable] interface {
+//	    Name()    string
+//	    Compute(context.Context, []bench.ScoredSample[L]) (Result, error)
+//	}
+//
+// The runner computes pure [Metric]s first, then [ContextMetric]s, via [bench.WithContextMetrics] and the [AsRunContextMetric] adapter. A resolved context-metric result can be surfaced as a pure [Metric] with [AsSync] (the precompute path), so both offline and I/O-backed results can share a [Suite].
 //
 // # Available Metrics
 //
@@ -51,13 +60,18 @@
 //     counter) and marked descriptive so run comparison excludes it from
 //     regression classification
 //
+// Semantic (context metric, I/O-backed):
+//   - [SemanticSimilarity] — mean embedding cosine similarity of prediction vs
+//     reference via an injected [embedding.Provider] and [vector.CosineSimilarity],
+//     with a threshold match rate; constructed fallibly (rejects a nil provider),
+//     every embedding call bounded by a timeout and honoring cancellation
+//
 // Composite:
 //   - [Weighted] — weighted combination of multiple metrics
 //
 // # Adapter
 //
-// [AsRunMetric]
-// and [AsRunMetrics] convert metric.Metric[L] values into bench.RunMetric[L] for use with [bench.BenchRunner]:
+// [AsRunMetric] and [AsRunMetrics] convert metric.Metric[L] values into bench.RunMetric[L] for use with [bench.BenchRunner]:
 //
 //	runner := bench.NewBenchRunner(
 //	    bench.WithMetrics(metric.AsRunMetrics(

@@ -7,6 +7,8 @@ toolchain go1.26.6
 require (
 	github.com/google/uuid v1.6.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/ai v0.3.0-alpha.1
+	github.com/kbukum/gokit/embedding v0.3.0-alpha.1
 	github.com/kbukum/gokit/llm v0.3.0-alpha.1
 )
 
@@ -22,7 +24,6 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
-	github.com/kbukum/gokit/ai v0.3.0-alpha.1 // indirect
 	github.com/kbukum/gokit/httpclient v0.3.0-alpha.1 // indirect
 	github.com/kbukum/gokit/schema v0.3.0-alpha.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
@@ -63,6 +64,7 @@ require (
 replace (
 	github.com/kbukum/gokit => ../
 	github.com/kbukum/gokit/ai => ../ai
+	github.com/kbukum/gokit/embedding => ../embedding
 	github.com/kbukum/gokit/httpclient => ../httpclient
 	github.com/kbukum/gokit/llm => ../llm
 	github.com/kbukum/gokit/schema => ../schema

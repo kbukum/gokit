@@ -1,11 +1,14 @@
 // Package bench provides a pluggable evaluation framework for benchmarking providers against labeled datasets.
 //
-// The framework bridges gokit's provider
-// and pipeline packages to create a composable evaluation workflow:
+// The framework bridges gokit's provider and pipeline packages to create a composable evaluation workflow:
 //
 //   - Evaluator = provider.RequestResponse[[]byte, Prediction[L]]
 //   - Dataset   = stream.Iterator[Sample[L]], loaded from manifest files
 //   - Metrics   = pluggable scorers that consume (ground-truth, prediction) pairs
+//
+// # Metric phases
+//
+// A run computes pure, deterministic metrics ([RunMetric], typically adapted from metric.Metric) first, then I/O-backed context metrics ([RunContextMetric], adapted from metric.ContextMetric via metric.AsRunContextMetric) registered with [WithContextMetrics]. Context metrics — semantic similarity, an LLM judge — receive the run context for cancellation and are responsible for bounding their own remote calls; they may fail the run. Results merge deterministically: pure metrics in registration order, then context metrics in registration order.
 //
 // # Architecture
 //
@@ -13,12 +16,7 @@
 //
 //	Dataset → Evaluator → ScoredSample → Metrics → Results
 //
-// Datasets are loaded lazily through stream.Iterator, so arbitrarily large
-// datasets stream through memory without loading everything at once.
-// Evaluators wrap any provider.RequestResponse via the FromProvider adapter,
-// or use EvaluatorFunc for quick inline definitions.
-// Metrics are stateless functions that receive a slice of ScoredSample and
-// return scalar or structured results.
+// Datasets are loaded lazily through stream.Iterator, so arbitrarily large datasets stream through memory without loading everything at once. Evaluators wrap any provider.RequestResponse via the FromProvider adapter, or use EvaluatorFunc for quick inline definitions. Metrics are stateless functions that receive a slice of ScoredSample and return scalar or structured results.
 //
 // # Quick Start
 //
@@ -43,17 +41,7 @@
 //
 // # Reproducibility
 //
-// Every run records a [RunProvenance] on its [RunResult]: the deterministic seed
-// and RNG algorithm, the source-control commit, the tool and host identity, and
-// an order-independent content hash of the evaluated dataset. Provenance is
-// gathered through an injected [ProvenanceProbe] — the default
-// [SystemProvenanceProbe] reads host/os/arch from the runtime and the git commit
-// best-effort from CI environment variables, while a fixed probe (see
-// bench/testutil) supplies deterministic values for offline tests. Set the run
-// seed with [WithSeed] and the probe with [WithProvenanceProbe]; with a fixed
-// clock, fixed probe, seed, and a deterministic run ID (a fixed [WithTag] or an
-// injected [WithIDSuffix] — untagged runs use a random suffix) a run's JSON is
-// byte-identical across executions.
+// Every run records a [RunProvenance] on its [RunResult]: the deterministic seed and RNG algorithm, the source-control commit, the tool and host identity, and an order-independent content hash of the evaluated dataset. Provenance is gathered through an injected [ProvenanceProbe] — the default [SystemProvenanceProbe] reads host/os/arch from the runtime and the git commit best-effort from CI environment variables, while a fixed probe (see bench/testutil) supplies deterministic values for offline tests. Set the run seed with [WithSeed] and the probe with [WithProvenanceProbe]; with a fixed clock, fixed probe, seed, and a deterministic run ID (a fixed [WithTag] or an injected [WithIDSuffix] — untagged runs use a random suffix) a run's JSON is byte-identical across executions.
 //
 // # Sub-packages
 //

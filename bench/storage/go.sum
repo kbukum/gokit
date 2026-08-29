@@ -29,6 +29,8 @@ github.com/invopop/jsonschema v0.14.0 h1:MHQqLhvpNUZfw+hM3AZDYK7jxO8FZoQeQM77g8i
 github.com/invopop/jsonschema v0.14.0/go.mod h1:ygm6C2EaVNMBDPpaPlnOA2pFAxBnxGjFlMZABxm9n2I=
 github.com/kbukum/gokit/ai v0.3.0-alpha.1 h1:ajcoWMGiliuDARhHhL7MivobCFoLmm8fQ34TYHO3qgM=
 github.com/kbukum/gokit/ai v0.3.0-alpha.1/go.mod h1:nmPO4VEV06EE9sKWwp9Y6cy8I0NbflIjS2ugTZMF3wc=
+github.com/kbukum/gokit/embedding v0.3.0-alpha.1 h1:xKHnRtKu1dj37BnX1oKy7MJkzWFdQINPjyiv7TCOHV0=
+github.com/kbukum/gokit/embedding v0.3.0-alpha.1/go.mod h1:qCI08fiva2oSAkXi7BbZGg1vIvRMTM1mXcK79mxT/e4=
 github.com/kbukum/gokit/httpclient v0.3.0-alpha.1 h1:HZVmk1sKYLCZq52X+droNqTgUuFtNprcAZXx0PYgZSI=
 github.com/kbukum/gokit/httpclient v0.3.0-alpha.1/go.mod h1:MQLnv7wSmx+qccD7UWlDPaEC/TNEHROAhItQs9tvjjE=
 github.com/kbukum/gokit/llm v0.3.0-alpha.1 h1:mToTNpwdHSvcHsKGv4UXsNsh96L0kS6OeaIMD7IxEto=

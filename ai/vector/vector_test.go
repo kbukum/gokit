@@ -1,6 +1,7 @@
 package vector
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -301,5 +302,57 @@ func TestNormalize(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPairwiseRejectsNonFiniteComponents(t *testing.T) {
+	nan := float32(math.NaN())
+	inf := float32(math.Inf(1))
+	for _, tc := range []struct {
+		name string
+		a, b []float32
+	}{
+		{"nan in a", []float32{nan, 0}, []float32{1, 0}},
+		{"inf in b", []float32{1, 0}, []float32{inf, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for name, fn := range map[string]func(a, b []float32) (float32, error){
+				"CosineSimilarity":  CosineSimilarity,
+				"EuclideanDistance": EuclideanDistance,
+				"DotProduct":        DotProduct,
+			} {
+				if _, err := fn(tc.a, tc.b); !errors.Is(err, ErrNonFinite) {
+					t.Errorf("%s: error = %v, want ErrNonFinite", name, err)
+				}
+			}
+		})
+	}
+}
+
+func TestPairwiseDimensionMismatchIsSentinel(t *testing.T) {
+	for name, fn := range map[string]func(a, b []float32) (float32, error){
+		"CosineSimilarity":  CosineSimilarity,
+		"EuclideanDistance": EuclideanDistance,
+		"DotProduct":        DotProduct,
+	} {
+		if _, err := fn([]float32{1}, []float32{1, 2}); !errors.Is(err, ErrDimensionMismatch) {
+			t.Errorf("%s: error = %v, want ErrDimensionMismatch", name, err)
+		}
+	}
+}
+
+func TestPairwiseRejectsFloat32OverflowResult(t *testing.T) {
+	// Finite components whose products overflow float32 must be rejected, not
+	// returned as Inf/NaN: DotProduct of two MaxFloat32 vectors is ~1e76.
+	big := []float32{math.MaxFloat32, math.MaxFloat32}
+	if _, err := DotProduct(big, big); !errors.Is(err, ErrNonFinite) {
+		t.Errorf("DotProduct overflow: error = %v, want ErrNonFinite", err)
+	}
+	if _, err := EuclideanDistance(big, []float32{-math.MaxFloat32, -math.MaxFloat32}); !errors.Is(err, ErrNonFinite) {
+		t.Errorf("EuclideanDistance overflow: error = %v, want ErrNonFinite", err)
+	}
+	// Cosine normalizes to [-1,1], so the same large finite inputs stay finite.
+	if got, err := CosineSimilarity(big, big); err != nil || got < 0.999 {
+		t.Errorf("CosineSimilarity(big, big) = %v, %v; want ~1.0, nil", got, err)
 	}
 }

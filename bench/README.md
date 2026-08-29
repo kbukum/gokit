@@ -121,7 +121,7 @@ func main() {
 
 | Package | Description |
 |---------|-------------|
-| [`bench/metric`](metric/) | Metric implementations — classification, probability, ranking, regression, matching |
+| [`bench/metric`](metric/) | Metric implementations — classification, probability, ranking, regression, matching, token usage, and semantic similarity (context metric) |
 | [`bench/report`](report/) | Output-format reporters — JSON, Markdown, CSV, Table, JUnit, Vega-Lite, HTML |
 | [`bench/viz`](viz/) | Pure-Go SVG visualisation generation — ROC, confusion matrix, calibration, distribution, comparison |
 | [`bench/storage`](storage/) | Cloud-storage adapter for bench results — wraps `gokit/storage` |
@@ -193,6 +193,35 @@ The default `SystemProvenanceProbe` reads host/os/arch from the runtime and reso
 | `Weighted[L](weights)` | Weighted combination of multiple metrics |
 
 Use `metric.AsRunMetric` / `metric.AsRunMetrics` to pass any `Metric[L]` into `bench.WithMetrics`.
+
+### Token usage
+
+| Constructor | Description |
+|-------------|-------------|
+| `TokenStats[L](counter)` | Total / average predicted and reference token count via an injected `llm.TokenCounter`; descriptive, so run comparison excludes it from regression classification |
+
+### Semantic (context metric)
+
+`SemanticSimilarity` is a **context metric**: it performs I/O (embedding text), so it takes a `context.Context` and may fail, rather than the pure `Metric` contract. Register context metrics with `bench.WithContextMetrics` (adapted via `metric.AsRunContextMetric`); the runner computes pure metrics first, then context metrics, each bounded by a timeout and honoring cancellation.
+
+Each batch is embedded in its own provider call routed through the canonical `resilience.Policy` (default: a per-call 30s timeout, no retries — embedding is idempotent, so callers may add bounded retries), so a large run is not scored against a single dataset-wide deadline, and each response is validated to be a well-formed index permutation of its batch before use. A provider timeout or cancellation surfaces as a typed timeout/canceled `AppError`; a malformed or non-finite response as an external-service error. The metric name embeds a stable, escaped model identity built from provider, name, and version — for example `semantic_similarity[openai/text-embedding-3-small@v1]` — so runs scored by different models or versions never join as compatible by name alone; the provider name is used only when the model carries no identity metadata.
+
+| Constructor | Description |
+|-------------|-------------|
+| `SemanticSimilarity[L](provider, model, opts...)` | Mean embedding cosine similarity of prediction vs reference via an injected `embedding.Provider` and `ai/vector.CosineSimilarity`, plus a threshold match rate |
+
+Options: `WithSemanticThreshold` (must be a finite value in `[-1, 1]`), `WithSemanticTimeout` (per-call timeout on the policy), `WithSemanticPolicy` (full `resilience.Policy`), `WithSemanticBatchSize`, `WithSemanticExtractor`. A resolved context-metric `Result` can be surfaced as a pure `Metric` with `metric.AsSync` (the precompute path).
+
+```go
+semantic, err := metric.SemanticSimilarity[string](provider, model)
+if err != nil {
+	return err
+}
+runner := bench.NewBenchRunner(
+	bench.WithMetrics(metric.AsRunMetric(metric.BinaryClassification[string]("positive"))),
+	bench.WithContextMetrics(metric.AsRunContextMetric(semantic)),
+)
+```
 
 ## Reporters
 
