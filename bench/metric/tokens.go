@@ -34,8 +34,8 @@ const tokenStatsBaseName = "token_stats"
 // Averages are taken over the samples that counted successfully.
 //
 // TokenStats is descriptive: its counts summarize usage rather than measure
-// quality, so [Result.Descriptive] is set and run comparison skips it for
-// regression classification.
+// quality, so [Result.Direction] is [bench.Neutral] and run comparison skips it
+// for regression classification.
 //
 // TokenStats returns an error if counter is nil (including a typed-nil interface
 // value), since a metric with no counter cannot produce meaningful counts.
@@ -115,7 +115,7 @@ func (m *tokenStats[L]) result(predictedTotal, referenceTotal, counted, errors i
 			"reference_tokens_avg":   referenceAvg,
 			"counter_errors":         float64(errors),
 		},
-		Detail:      detail,
-		Descriptive: true,
+		Detail:    detail,
+		Direction: bench.Neutral,
 	}
 }

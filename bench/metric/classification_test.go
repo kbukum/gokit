@@ -9,6 +9,41 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
+func TestBinaryClassificationSubvalueDirections(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[string]{
+		{Sample: bench.Sample[string]{Label: "pos"}, Prediction: bench.Prediction[string]{Label: "pos", Score: 0.9}},
+		{Sample: bench.Sample[string]{Label: "neg"}, Prediction: bench.Prediction[string]{Label: "neg", Score: 0.2}},
+	}
+
+	m, err := BinaryClassification[string]("pos")
+	if err != nil {
+		t.Fatalf("BinaryClassification: %v", err)
+	}
+	r := m.Compute(scored)
+	if r.Direction != bench.HigherIsBetter {
+		t.Errorf("classification Direction = %v, want HigherIsBetter", r.Direction)
+	}
+	lower := []string{"fpr", "fp", "fn"}
+	for _, k := range lower {
+		if got := r.Directions[k]; got != bench.LowerIsBetter {
+			t.Errorf("%s Direction = %v, want LowerIsBetter", k, got)
+		}
+	}
+	for _, k := range []string{"tp", "tn"} {
+		if got := r.Directions[k]; got != bench.Neutral {
+			t.Errorf("%s Direction = %v, want Neutral", k, got)
+		}
+	}
+	// Headline values inherit the top-level direction (absent from Directions).
+	for _, k := range []string{"f1", "precision", "recall", "accuracy"} {
+		if _, ok := r.Directions[k]; ok {
+			t.Errorf("%s should inherit top-level direction, not be overridden", k)
+		}
+	}
+}
+
 func TestBinaryClassificationKnownValues(t *testing.T) {
 	t.Parallel()
 

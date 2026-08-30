@@ -94,7 +94,7 @@ func (m *brierScore[L]) Name() string { return "brier_score" }
 
 func (m *brierScore[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "brier_score", Value: 0}
+		return Result{Name: "brier_score", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	sum := 0.0
@@ -108,8 +108,9 @@ func (m *brierScore[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 
 	return Result{
-		Name:  "brier_score",
-		Value: sum / float64(len(scored)),
+		Name:      "brier_score",
+		Value:     sum / float64(len(scored)),
+		Direction: bench.LowerIsBetter,
 	}
 }
 
@@ -126,7 +127,7 @@ func (m *logLoss[L]) Name() string { return "log_loss" }
 
 func (m *logLoss[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "log_loss", Value: 0}
+		return Result{Name: "log_loss", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	const epsilon = 1e-15
@@ -141,8 +142,9 @@ func (m *logLoss[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 
 	return Result{
-		Name:  "log_loss",
-		Value: -sum / float64(len(scored)),
+		Name:      "log_loss",
+		Value:     -sum / float64(len(scored)),
+		Direction: bench.LowerIsBetter,
 	}
 }
 
@@ -164,7 +166,7 @@ func (m *calibration[L]) Name() string { return "calibration" }
 
 func (m *calibration[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "calibration", Value: 0}
+		return Result{Name: "calibration", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	binWidth := 1.0 / float64(m.bins)
@@ -201,8 +203,9 @@ func (m *calibration[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 
 	return Result{
-		Name:  "calibration",
-		Value: ece,
+		Name:      "calibration",
+		Value:     ece,
+		Direction: bench.LowerIsBetter,
 		Detail: bench.CalibrationCurve{
 			PredictedProbability: predictedProb,
 			ActualFrequency:      actualFreq,

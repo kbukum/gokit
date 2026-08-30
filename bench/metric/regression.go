@@ -17,7 +17,7 @@ func (m *mae) Name() string { return "mae" }
 
 func (m *mae) Compute(scored []bench.ScoredSample[float64]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "mae", Value: 0}
+		return Result{Name: "mae", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	sum := 0.0
@@ -26,8 +26,9 @@ func (m *mae) Compute(scored []bench.ScoredSample[float64]) Result {
 	}
 
 	return Result{
-		Name:  "mae",
-		Value: sum / float64(len(scored)),
+		Name:      "mae",
+		Value:     sum / float64(len(scored)),
+		Direction: bench.LowerIsBetter,
 	}
 }
 
@@ -42,7 +43,7 @@ func (m *mse) Name() string { return "mse" }
 
 func (m *mse) Compute(scored []bench.ScoredSample[float64]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "mse", Value: 0}
+		return Result{Name: "mse", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	sum := 0.0
@@ -52,8 +53,9 @@ func (m *mse) Compute(scored []bench.ScoredSample[float64]) Result {
 	}
 
 	return Result{
-		Name:  "mse",
-		Value: sum / float64(len(scored)),
+		Name:      "mse",
+		Value:     sum / float64(len(scored)),
+		Direction: bench.LowerIsBetter,
 	}
 }
 
@@ -68,7 +70,7 @@ func (m *rmse) Name() string { return "rmse" }
 
 func (m *rmse) Compute(scored []bench.ScoredSample[float64]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "rmse", Value: 0}
+		return Result{Name: "rmse", Value: 0, Direction: bench.LowerIsBetter}
 	}
 
 	sum := 0.0
@@ -78,8 +80,9 @@ func (m *rmse) Compute(scored []bench.ScoredSample[float64]) Result {
 	}
 
 	return Result{
-		Name:  "rmse",
-		Value: math.Sqrt(sum / float64(len(scored))),
+		Name:      "rmse",
+		Value:     math.Sqrt(sum / float64(len(scored))),
+		Direction: bench.LowerIsBetter,
 	}
 }
 
@@ -123,6 +126,12 @@ func (m *rSquared) Compute(scored []bench.ScoredSample[float64]) Result {
 		Values: map[string]float64{
 			"ss_res": ssRes,
 			"ss_tot": ssTot,
+		},
+		// R² itself is higher-is-better; a lower residual sum of squares is better,
+		// while the total sum of squares is a descriptive property of the data.
+		Directions: map[string]bench.Direction{
+			"ss_res": bench.LowerIsBetter,
+			"ss_tot": bench.Neutral,
 		},
 	}
 }

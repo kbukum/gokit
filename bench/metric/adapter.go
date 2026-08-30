@@ -29,10 +29,11 @@ func (a *runMetricAdapter[L]) Name() string {
 func (a *runMetricAdapter[L]) Compute(scored []bench.ScoredSample[L]) bench.MetricResult {
 	r := a.m.Compute(scored)
 	return bench.MetricResult{
-		Name:        r.Name,
-		Value:       r.Value,
-		Values:      r.Values,
-		Detail:      r.Detail,
-		Descriptive: r.Descriptive,
+		Name:       r.Name,
+		Value:      r.Value,
+		Values:     r.Values,
+		Detail:     r.Detail,
+		Direction:  r.Direction,
+		Directions: r.Directions,
 	}
 }

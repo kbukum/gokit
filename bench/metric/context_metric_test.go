@@ -47,14 +47,14 @@ func TestAsSyncEqualsContextMetricResult(t *testing.T) {
 func TestAsRunContextMetricPropagatesResult(t *testing.T) {
 	t.Parallel()
 
-	cm := &staticContextMetric{name: "semantic", result: metric.Result{Name: "semantic", Value: 0.5, Descriptive: true}}
+	cm := &staticContextMetric{name: "semantic", result: metric.Result{Name: "semantic", Value: 0.5, Direction: bench.Neutral}}
 	rm := metric.AsRunContextMetric[string](cm)
 
 	out, err := rm.Compute(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if out.Name != "semantic" || out.Value != 0.5 || !out.Descriptive {
-		t.Errorf("RunContextMetric Result = %+v, want name=semantic value=0.5 descriptive=true", out)
+	if out.Name != "semantic" || out.Value != 0.5 || out.Direction != bench.Neutral {
+		t.Errorf("RunContextMetric Result = %+v, want name=semantic value=0.5 direction=neutral", out)
 	}
 }

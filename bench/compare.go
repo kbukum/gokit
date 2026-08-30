@@ -61,10 +61,15 @@ type JudgeIncompatibility struct {
 
 // MetricChange represents a change in a metric between two runs.
 type MetricChange struct {
-	Name        string
-	OldValue    float64
-	NewValue    float64
-	Delta       float64
+	Name     string
+	OldValue float64
+	NewValue float64
+	Delta    float64
+	// Direction is the optimization direction resolved for this change: the
+	// metric's top-level direction, or its per-key override for a dotted subvalue.
+	Direction Direction
+	// Improved reports whether the change moved in the metric's better direction.
+	// Always false for a Neutral metric.
 	Improved    bool
 	Neutral     bool
 	Significant bool // above threshold
@@ -88,20 +93,25 @@ func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 
 	seen := make(map[string]bool)
 	for _, m := range target.Metrics {
-		neutral := m.Descriptive
 		// Compare top-level value.
 		if oldVal, ok := baseMetrics[m.Name]; ok && !seen[m.Name] {
-			diff.Changes = append(diff.Changes, c.metricChange(m.Name, oldVal, m.Value, neutral))
+			diff.Changes = append(diff.Changes, c.metricChange(m.Name, oldVal, m.Value, m.Direction))
 			seen[m.Name] = true
 		}
-		// Compare per-key values.
+		// Compare per-key values. Each subvalue resolves its own direction: a
+		// heterogeneous metric (higher-is-better headline, lower-is-better
+		// diagnostics) overrides the inherited direction per key in Directions.
 		for k, v := range m.Values {
 			lookupKey := metricValueKey(m.Name, k)
 			if seen[lookupKey] {
 				continue
 			}
 			if oldVal, ok := baseMetrics[lookupKey]; ok {
-				diff.Changes = append(diff.Changes, c.metricChange(m.Name+"."+k, oldVal, v, neutral))
+				keyDir := m.Direction
+				if d, ok := m.Directions[k]; ok {
+					keyDir = d
+				}
+				diff.Changes = append(diff.Changes, c.metricChange(m.Name+"."+k, oldVal, v, keyDir))
 				seen[lookupKey] = true
 			}
 		}
@@ -163,19 +173,16 @@ func judgeIncompatibilities(base, target []JudgeProvenance) []JudgeIncompatibili
 	return out
 }
 
-func (c *RunComparator) metricChange(name string, oldVal, newVal float64, neutral bool) MetricChange {
+func (c *RunComparator) metricChange(name string, oldVal, newVal float64, dir Direction) MetricChange {
 	delta := newVal - oldVal
-	improved := delta > 0
-	if neutral {
-		improved = false
-	}
 	return MetricChange{
 		Name:        name,
 		OldValue:    oldVal,
 		NewValue:    newVal,
 		Delta:       delta,
-		Improved:    improved,
-		Neutral:     neutral,
+		Direction:   dir,
+		Improved:    dir.IsImprovement(delta),
+		Neutral:     dir == Neutral,
 		Significant: math.Abs(delta) >= c.threshold,
 	}
 }
@@ -185,14 +192,17 @@ func (d *RunDiff) Summary() string {
 	var b strings.Builder
 
 	for _, ch := range d.Changes {
-		icon := "✅"
-		if ch.Neutral {
+		icon := "➖"
+		switch {
+		case ch.Neutral:
 			icon = "ℹ️ "
-		} else if ch.Delta < 0 {
+		case ch.Improved:
+			icon = "✅"
+		case ch.Direction.IsRegression(ch.Delta):
 			icon = "⚠️ "
 		}
 		sign := "+"
-		if ch.Delta < 0 || ch.Neutral {
+		if ch.Delta < 0 {
 			sign = ""
 		}
 		fmt.Fprintf(&b, "%s %s: %.4f → %.4f (%s%.4f)\n", icon, ch.Name, ch.OldValue, ch.NewValue, sign, ch.Delta)
@@ -210,18 +220,21 @@ func (d *RunDiff) Summary() string {
 	return b.String()
 }
 
-// HasRegression returns true if any metric decreased significantly. Judge metrics
-// flagged as incompatible — the two runs resolved the same requested model/prompt
-// to different backend judges — are excluded (along with their per-key subvalues),
-// so a non-like-for-like judge delta is never treated as a real regression by an
-// automated gate. Their deltas are still reported in [RunDiff.Changes] for display.
+// HasRegression returns true if any metric changed significantly in its worse
+// direction — a decrease for a higher-is-better metric, an increase for a
+// lower-is-better metric; a neutral metric never regresses. Judge metrics
+// flagged as incompatible — the two runs resolved the same requested
+// model/prompt to different backend judges — are excluded (along with their
+// per-key subvalues), so a non-like-for-like judge delta is never treated as a
+// real regression by an automated gate. Their deltas are still reported in
+// [RunDiff.Changes] for display.
 func (d *RunDiff) HasRegression() bool {
 	incompatible := make(map[string]struct{}, len(d.Incompatible))
 	for _, inc := range d.Incompatible {
 		incompatible[inc.Metric] = struct{}{}
 	}
 	for _, ch := range d.Changes {
-		if ch.Significant && !ch.Improved && !ch.Neutral && !isIncompatibleChange(ch.Name, incompatible) {
+		if ch.Significant && ch.Direction.IsRegression(ch.Delta) && !isIncompatibleChange(ch.Name, incompatible) {
 			return true
 		}
 	}

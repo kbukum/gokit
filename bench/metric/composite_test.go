@@ -134,6 +134,49 @@ func TestWeightedEmpty(t *testing.T) {
 	assertCompositeClose(t, "weighted (empty)", result.Value, 0)
 }
 
+func TestWeightedDirection(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[float64]{
+		{Sample: bench.Sample[float64]{Label: 1.0}, Prediction: bench.Prediction[float64]{Score: 1.1}},
+		{Sample: bench.Sample[float64]{Label: 2.0}, Prediction: bench.Prediction[float64]{Score: 1.7}},
+	}
+
+	// Two lower-is-better error metrics with positive weights → composite is
+	// lower-is-better, and each component keeps its own direction.
+	lowerOnly := Weighted[float64](map[Metric[float64]]float64{
+		MAE(): 0.5,
+		MSE(): 0.5,
+	}).Compute(scored)
+	if lowerOnly.Direction != bench.LowerIsBetter {
+		t.Errorf("lower+lower Direction = %v, want LowerIsBetter", lowerOnly.Direction)
+	}
+	if got := lowerOnly.Directions["mae"]; got != bench.LowerIsBetter {
+		t.Errorf("component mae Direction = %v, want LowerIsBetter", got)
+	}
+
+	// A negative weight flips a lower-is-better component to a higher-is-better
+	// contribution; mixed with a positive lower-is-better term the sum has no
+	// single direction → neutral.
+	mixed := Weighted[float64](map[Metric[float64]]float64{
+		MAE(): -0.5,
+		MSE(): 0.5,
+	}).Compute(scored)
+	if mixed.Direction != bench.Neutral {
+		t.Errorf("negative-weight mix Direction = %v, want Neutral", mixed.Direction)
+	}
+
+	// Two lower-is-better metrics, one with a negative weight, still disagree →
+	// but two negatives would agree. Both negative → higher-is-better sum.
+	bothNeg := Weighted[float64](map[Metric[float64]]float64{
+		MAE(): -0.5,
+		MSE(): -0.5,
+	}).Compute(scored)
+	if bothNeg.Direction != bench.HigherIsBetter {
+		t.Errorf("both-negative lower-is-better Direction = %v, want HigherIsBetter", bothNeg.Direction)
+	}
+}
+
 func assertCompositeClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-6 {

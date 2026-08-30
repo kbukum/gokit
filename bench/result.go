@@ -33,10 +33,20 @@ type MetricResult struct {
 	Value  float64            `json:"value"`
 	Values map[string]float64 `json:"values,omitempty"`
 	Detail any                `json:"detail,omitempty"`
-	// Descriptive marks a metric that summarizes a run (for example token usage)
-	// rather than measuring quality. RunComparator skips descriptive metrics when
-	// classifying regressions, since higher or lower is neither better nor worse.
-	Descriptive bool `json:"descriptive,omitempty"`
+	// Direction is the optimization direction of Value and of every entry in
+	// Values not overridden in Directions: whether higher or lower is better, or
+	// whether the metric is purely descriptive. RunComparator uses it to classify
+	// a change as an improvement or a regression. The zero value is HigherIsBetter,
+	// so accuracy-style metrics need not set it explicitly.
+	Direction Direction `json:"direction"`
+	// Directions overrides the optimization direction of individual Values
+	// entries whose direction differs from the metric's top-level Direction. A key
+	// absent from this map inherits Direction. RunComparator resolves each
+	// subvalue's direction through it, so a heterogeneous metric — a
+	// higher-is-better headline (F1, R²) alongside lower-is-better diagnostics
+	// (false-positive rate, residual sum of squares) — classifies every subvalue
+	// correctly instead of inheriting one direction for the whole map.
+	Directions map[string]Direction `json:"directions,omitempty"`
 }
 
 // BranchResult holds results for a single evaluator branch.

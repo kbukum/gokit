@@ -229,6 +229,181 @@ func TestRunDiffHasRegressionNoChanges(t *testing.T) {
 	}
 }
 
+// TestRunComparatorClassifiesByDirection verifies that improvement and
+// regression are classified by each metric's optimization direction rather than
+// by the raw sign of the delta.
+func TestRunComparatorClassifiesByDirection(t *testing.T) {
+	t.Parallel()
+
+	runWith := func(id string, value float64, dir Direction) *RunResult {
+		return &RunResult{
+			ID:      id,
+			Metrics: []MetricResult{{Name: "m", Value: value, Direction: dir}},
+		}
+	}
+
+	tests := []struct {
+		name          string
+		base, target  float64
+		direction     Direction
+		wantImproved  bool
+		wantNeutral   bool
+		wantRegressed bool
+	}{
+		{"lower_is_better decrease improves", 0.30, 0.20, LowerIsBetter, true, false, false},
+		{"lower_is_better increase regresses", 0.20, 0.30, LowerIsBetter, false, false, true},
+		{"higher_is_better increase improves", 0.80, 0.90, HigherIsBetter, true, false, false},
+		{"higher_is_better decrease regresses", 0.90, 0.70, HigherIsBetter, false, false, true},
+		{"neutral increase is neither", 1000, 2000, Neutral, false, true, false},
+		{"neutral decrease is neither", 2000, 500, Neutral, false, true, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			diff := NewRunComparator().Compare(
+				runWith("base", tc.base, tc.direction),
+				runWith("target", tc.target, tc.direction),
+			)
+			if len(diff.Changes) != 1 {
+				t.Fatalf("len(Changes) = %d, want 1", len(diff.Changes))
+			}
+			ch := diff.Changes[0]
+			if ch.Direction != tc.direction {
+				t.Errorf("Direction = %v, want %v", ch.Direction, tc.direction)
+			}
+			if ch.Improved != tc.wantImproved {
+				t.Errorf("Improved = %v, want %v", ch.Improved, tc.wantImproved)
+			}
+			if ch.Neutral != tc.wantNeutral {
+				t.Errorf("Neutral = %v, want %v", ch.Neutral, tc.wantNeutral)
+			}
+			if got := diff.HasRegression(); got != tc.wantRegressed {
+				t.Errorf("HasRegression() = %v, want %v", got, tc.wantRegressed)
+			}
+		})
+	}
+}
+
+// TestRunComparatorSubvaluesInheritDirection verifies that per-key subvalue
+// changes inherit their parent metric's direction, so a lower-is-better
+// subvalue that increases is flagged as a regression.
+func TestRunComparatorSubvaluesInheritDirection(t *testing.T) {
+	t.Parallel()
+
+	base := &RunResult{
+		ID: "base",
+		Metrics: []MetricResult{{
+			Name:      "mae",
+			Value:     0.20,
+			Direction: LowerIsBetter,
+			Values:    map[string]float64{"per_label": 0.10},
+		}},
+	}
+	target := &RunResult{
+		ID: "target",
+		Metrics: []MetricResult{{
+			Name:      "mae",
+			Value:     0.20,
+			Direction: LowerIsBetter,
+			Values:    map[string]float64{"per_label": 0.30},
+		}},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+	var sub *MetricChange
+	for i := range diff.Changes {
+		if diff.Changes[i].Name == "mae.per_label" {
+			sub = &diff.Changes[i]
+		}
+	}
+	if sub == nil {
+		t.Fatal("missing mae.per_label change")
+	}
+	if sub.Direction != LowerIsBetter {
+		t.Errorf("subvalue Direction = %v, want LowerIsBetter", sub.Direction)
+	}
+	if sub.Improved {
+		t.Error("subvalue Improved = true, want false (lower-is-better increased)")
+	}
+	if !diff.HasRegression() {
+		t.Error("HasRegression() = false, want true (lower-is-better subvalue increased)")
+	}
+}
+
+// TestRunComparatorSubvalueDirectionOverride verifies that a subvalue with its
+// own direction in Directions is classified by that override, not by the
+// metric's top-level direction — so a lower-is-better diagnostic under a
+// higher-is-better headline that worsens is flagged as a regression.
+func TestRunComparatorSubvalueDirectionOverride(t *testing.T) {
+	t.Parallel()
+
+	base := &RunResult{
+		ID: "base",
+		Metrics: []MetricResult{{
+			Name:       "classification",
+			Value:      0.80,
+			Direction:  HigherIsBetter,
+			Values:     map[string]float64{"f1": 0.80, "fpr": 0.10},
+			Directions: map[string]Direction{"fpr": LowerIsBetter},
+		}},
+	}
+	target := &RunResult{
+		ID: "target",
+		Metrics: []MetricResult{{
+			Name:       "classification",
+			Value:      0.80,
+			Direction:  HigherIsBetter,
+			Values:     map[string]float64{"f1": 0.80, "fpr": 0.30},
+			Directions: map[string]Direction{"fpr": LowerIsBetter},
+		}},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+	var fpr *MetricChange
+	for i := range diff.Changes {
+		if diff.Changes[i].Name == "classification.fpr" {
+			fpr = &diff.Changes[i]
+		}
+	}
+	if fpr == nil {
+		t.Fatal("missing classification.fpr change")
+	}
+	if fpr.Direction != LowerIsBetter {
+		t.Errorf("fpr Direction = %v, want LowerIsBetter (override)", fpr.Direction)
+	}
+	if fpr.Improved {
+		t.Error("fpr Improved = true, want false (false-positive rate rose)")
+	}
+	if !diff.HasRegression() {
+		t.Error("HasRegression() = false, want true (fpr rose under a higher-is-better metric)")
+	}
+}
+
+// TestRunDiffSummaryUnchangedIsNotWarning verifies that a directional metric
+// with a zero delta renders neither an improvement nor a warning icon.
+func TestRunDiffSummaryUnchangedIsNotWarning(t *testing.T) {
+	t.Parallel()
+
+	base := &RunResult{
+		ID:      "base",
+		Metrics: []MetricResult{{Name: "f1", Value: 0.80, Direction: HigherIsBetter}},
+	}
+	target := &RunResult{
+		ID:      "target",
+		Metrics: []MetricResult{{Name: "f1", Value: 0.80, Direction: HigherIsBetter}},
+	}
+
+	summary := NewRunComparator().Compare(base, target).Summary()
+	if strings.Contains(summary, "⚠️") {
+		t.Errorf("Summary marked an unchanged metric as a warning:\n%s", summary)
+	}
+	if strings.Contains(summary, "✅") {
+		t.Errorf("Summary marked an unchanged metric as an improvement:\n%s", summary)
+	}
+}
+
 func TestRunComparatorSkipsDescriptiveMetrics(t *testing.T) {
 	t.Parallel()
 
@@ -238,10 +413,10 @@ func TestRunComparatorSkipsDescriptiveMetrics(t *testing.T) {
 		ID: "base",
 		Metrics: []MetricResult{
 			{
-				Name:        "token_stats[heuristic]",
-				Value:       100,
-				Descriptive: true,
-				Values:      map[string]float64{"predicted_tokens_total": 100},
+				Name:      "token_stats[heuristic]",
+				Value:     100,
+				Direction: Neutral,
+				Values:    map[string]float64{"predicted_tokens_total": 100},
 			},
 		},
 	}
@@ -249,10 +424,10 @@ func TestRunComparatorSkipsDescriptiveMetrics(t *testing.T) {
 		ID: "target",
 		Metrics: []MetricResult{
 			{
-				Name:        "token_stats[heuristic]",
-				Value:       10,
-				Descriptive: true,
-				Values:      map[string]float64{"predicted_tokens_total": 10},
+				Name:      "token_stats[heuristic]",
+				Value:     10,
+				Direction: Neutral,
+				Values:    map[string]float64{"predicted_tokens_total": 10},
 			},
 		},
 	}

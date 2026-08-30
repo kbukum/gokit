@@ -1,6 +1,7 @@
 package metric
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 
@@ -180,5 +181,67 @@ func assertProbClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-4 {
 		t.Errorf("%s = %.6f, want %.6f", name, got, want)
+	}
+}
+
+// TestProbabilityMetricDirections asserts each probability metric declares the
+// optimization direction that run comparison classifies against: aucroc is
+// higher-is-better, brier_score/log_loss/calibration are lower-is-better.
+func TestProbabilityMetricDirections(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[string]{
+		{Sample: bench.Sample[string]{Label: "pos"}, Prediction: bench.Prediction[string]{Score: 0.9}},
+		{Sample: bench.Sample[string]{Label: "neg"}, Prediction: bench.Prediction[string]{Score: 0.1}},
+	}
+
+	tests := []struct {
+		name   string
+		metric Metric[string]
+		want   bench.Direction
+	}{
+		{"aucroc", AUCROC[string]("pos"), bench.HigherIsBetter},
+		{"brier_score", BrierScore[string]("pos"), bench.LowerIsBetter},
+		{"log_loss", LogLoss[string]("pos"), bench.LowerIsBetter},
+		{"calibration", Calibration[string]("pos", 10), bench.LowerIsBetter},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.metric.Compute(scored).Direction; got != tc.want {
+				t.Errorf("%s Direction = %v, want %v", tc.name, got, tc.want)
+			}
+			if got := tc.metric.Compute(nil).Direction; got != tc.want {
+				t.Errorf("%s empty Direction = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestMetricResultSerializesDirection asserts a lower-is-better metric result
+// serializes direction as its snake_case string and emits no legacy
+// descriptive field.
+func TestMetricResultSerializesDirection(t *testing.T) {
+	t.Parallel()
+
+	res := MAE().Compute([]bench.ScoredSample[float64]{
+		{Sample: bench.Sample[float64]{Label: 1.0}, Prediction: bench.Prediction[float64]{Score: 0.5}},
+	})
+
+	data, err := json.Marshal(res)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got := m["direction"]; got != "lower_is_better" {
+		t.Errorf("direction = %v, want %q", got, "lower_is_better")
+	}
+	if _, ok := m["descriptive"]; ok {
+		t.Errorf("descriptive present in %s, want it removed", data)
 	}
 }

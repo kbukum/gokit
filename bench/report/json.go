@@ -3,7 +3,6 @@ package report
 import (
 	"encoding/json"
 	"io"
-	"sort"
 
 	"github.com/kbukum/gokit/bench"
 )
@@ -27,22 +26,18 @@ func (r *jsonReporter) Generate(w io.Writer, result *bench.RunResult) error {
 
 // jsonReport mirrors the desired JSON output format with $schema and version at top level.
 type jsonReport struct {
-	Schema     string              `json:"$schema"`
-	Version    string              `json:"version"`
-	Run        jsonRun             `json:"run"`
-	Dataset    jsonDataset         `json:"dataset"`
-	Metrics    []jsonMetric        `json:"metrics"`
-	Provenance bench.RunProvenance `json:"provenance,omitempty"`
-	Curves     map[string]any      `json:"curves,omitempty"`
-	Branch     []jsonBranch        `json:"branches,omitempty"`
-	Samples    []jsonSample        `json:"samples,omitempty"`
-}
-
-type jsonRun struct {
-	ID         string `json:"id"`
-	Timestamp  string `json:"timestamp"`
-	Tag        string `json:"tag,omitempty"`
-	DurationMs int64  `json:"duration_ms"`
+	Schema     string                `json:"$schema"`
+	Version    string                `json:"version"`
+	ID         string                `json:"id"`
+	Timestamp  string                `json:"timestamp"`
+	Tag        string                `json:"tag,omitempty"`
+	DurationMs int64                 `json:"duration_ms"`
+	Dataset    jsonDataset           `json:"dataset"`
+	Metrics    []jsonMetric          `json:"metrics"`
+	Provenance bench.RunProvenance   `json:"provenance,omitempty"`
+	Curves     map[string]any        `json:"curves,omitempty"`
+	Branches   map[string]jsonBranch `json:"branches,omitempty"`
+	Samples    []jsonSample          `json:"samples,omitempty"`
 }
 
 type jsonDataset struct {
@@ -53,11 +48,12 @@ type jsonDataset struct {
 }
 
 type jsonMetric struct {
-	Name        string             `json:"name"`
-	Value       float64            `json:"value"`
-	Values      map[string]float64 `json:"values,omitempty"`
-	Detail      any                `json:"detail,omitempty"`
-	Descriptive bool               `json:"descriptive,omitempty"`
+	Name       string                     `json:"name"`
+	Value      float64                    `json:"value"`
+	Values     map[string]float64         `json:"values,omitempty"`
+	Detail     any                        `json:"detail,omitempty"`
+	Direction  bench.Direction            `json:"direction"`
+	Directions map[string]bench.Direction `json:"directions,omitempty"`
 }
 
 type jsonBranch struct {
@@ -85,26 +81,22 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 	metrics := make([]jsonMetric, len(result.Metrics))
 	for i, m := range result.Metrics {
 		metrics[i] = jsonMetric{
-			Name:        m.Name,
-			Value:       m.Value,
-			Values:      m.Values,
-			Detail:      m.Detail,
-			Descriptive: m.Descriptive,
+			Name:       m.Name,
+			Value:      m.Value,
+			Values:     m.Values,
+			Detail:     m.Detail,
+			Direction:  m.Direction,
+			Directions: m.Directions,
 		}
 	}
 
-	// Sort branches by name for deterministic output.
-	var branches []jsonBranch
+	// Branches serialize as a map keyed by name; encoding/json emits map keys in
+	// sorted order, so the output stays deterministic without an explicit sort.
+	var branches map[string]jsonBranch
 	if len(result.Branches) > 0 {
-		names := make([]string, 0, len(result.Branches))
-		for name := range result.Branches {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		branches = make([]jsonBranch, 0, len(names))
-		for _, name := range names {
-			b := result.Branches[name]
-			branches = append(branches, jsonBranch{
+		branches = make(map[string]jsonBranch, len(result.Branches))
+		for name, b := range result.Branches {
+			branches[name] = jsonBranch{
 				Name:             b.Name,
 				Tier:             b.Tier,
 				Metrics:          b.Metrics,
@@ -112,7 +104,7 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 				AvgScoreNegative: b.AvgScoreNegative,
 				DurationMs:       b.Duration.Milliseconds(),
 				Errors:           b.Errors,
-			})
+			}
 		}
 	}
 
@@ -131,14 +123,12 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 	}
 
 	return jsonReport{
-		Schema:  bench.SchemaURL,
-		Version: bench.SchemaVersion,
-		Run: jsonRun{
-			ID:         result.ID,
-			Timestamp:  result.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
-			Tag:        result.Tag,
-			DurationMs: result.Duration.Milliseconds(),
-		},
+		Schema:     bench.SchemaURL,
+		Version:    bench.SchemaVersion,
+		ID:         result.ID,
+		Timestamp:  result.Timestamp.Format("2006-01-02T15:04:05Z07:00"),
+		Tag:        result.Tag,
+		DurationMs: result.Duration.Milliseconds(),
 		Dataset: jsonDataset{
 			Name:              result.Dataset.Name,
 			Version:           result.Dataset.Version,
@@ -148,7 +138,7 @@ func (r *jsonReporter) buildReport(result *bench.RunResult) jsonReport {
 		Metrics:    metrics,
 		Provenance: result.Provenance,
 		Curves:     result.Curves,
-		Branch:     branches,
+		Branches:   branches,
 		Samples:    samples,
 	}
 }

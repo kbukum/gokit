@@ -107,8 +107,8 @@ func TestTokenStatsCountsPredictedAndReference(t *testing.T) {
 	if res.Value != res.Values["predicted_tokens_avg"] {
 		t.Errorf("Value = %v, want it to equal predicted_tokens_avg %v", res.Value, res.Values["predicted_tokens_avg"])
 	}
-	if !res.Descriptive {
-		t.Error("Descriptive = false, want true (TokenStats summarizes usage)")
+	if res.Direction != bench.Neutral {
+		t.Errorf("Direction = %v, want Neutral (TokenStats summarizes usage)", res.Direction)
 	}
 	if detail, ok := res.Detail.(map[string]string); !ok || detail["counter"] != "heuristic" {
 		t.Errorf("Detail = %v, want counter=heuristic", res.Detail)
@@ -163,7 +163,7 @@ func TestTokenStatsAdaptsToRunMetric(t *testing.T) {
 	if out.Name != "token_stats[heuristic]" {
 		t.Errorf("RunMetric name = %q", out.Name)
 	}
-	if !out.Descriptive {
-		t.Error("RunMetric Descriptive = false, want true (propagated from Result)")
+	if out.Direction != bench.Neutral {
+		t.Errorf("RunMetric Direction = %v, want Neutral (propagated from Result)", out.Direction)
 	}
 }
