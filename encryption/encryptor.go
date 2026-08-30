@@ -35,7 +35,7 @@ func WithAlgorithm(alg Algorithm) Option {
 //
 // The passphrase is stretched with PBKDF2-SHA256 and each ciphertext is a
 // base64-encoded versioned envelope: version || algorithm || salt || nonce || ciphertext,
-// with the header authenticated as AEAD associated data (wire-compatible with rskit).
+// with the header authenticated as AEAD associated data (wire-compatible with the shared encryption envelope format).
 func New(key string, opts ...Option) (Encryptor, error) {
 	o := &options{algorithm: AlgorithmAESGCM}
 	for _, opt := range opts {

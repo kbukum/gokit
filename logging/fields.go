@@ -24,7 +24,7 @@ const (
 	FieldHTTPMethod    = "http.method"
 	FieldHTTPPath      = "http.path"
 
-	// Unified schema fields — consistent across gokit, rskit, and pykit.
+	// Unified structured-log schema fields (stable field names).
 	FieldService     = "service"
 	FieldEnvironment = "environment"
 	FieldTimestamp   = "timestamp"
@@ -86,7 +86,7 @@ func MergeWithDuration(fields map[string]any, d time.Duration) map[string]any {
 }
 
 // ServiceFields creates the standard service identification fields
-// for the unified log schema (consistent across gokit, rskit, and pykit).
+// for the unified log schema (stable field names).
 func ServiceFields(service, environment, version string) map[string]any {
 	return map[string]any{
 		FieldService:     service,

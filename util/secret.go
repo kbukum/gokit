@@ -10,8 +10,8 @@ const secretMask = "***"
 // SecretString wraps a string so it does not leak through logging, formatting, or
 // JSON serialization. The plaintext is reachable only through Expose, marshals as
 // the mask "***", and unmarshals from plaintext so a SecretString can be populated
-// from config. Go provides no guaranteed in-memory zeroization, so unlike the rskit
-// counterpart the backing bytes are not scrubbed on drop; treat process memory as a
+// from config. Go provides no guaranteed in-memory zeroization, so the backing
+// bytes are not scrubbed on drop; treat process memory as a
 // separate trust boundary.
 type SecretString struct {
 	value string

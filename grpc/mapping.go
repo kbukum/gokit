@@ -12,8 +12,7 @@ import (
 )
 
 // This file holds the canonical, lossless AppError <-> gRPC status mapping pair
-// (the cross-kit parity surface, equivalent to rskit's app_error_to_status /
-// status_to_app_error). It embeds the RFC 9457 ProblemDetail in the status
+// (the stable error-to-status mapping surface). It embeds the RFC 9457 ProblemDetail in the status
 // details so a round trip preserves the error code, message, and extension
 // members. The user-facing convenience helpers FromGRPC / ToGRPCStatus in
 // errors.go remap to friendlier client messages and are a separate concern.

@@ -7,7 +7,7 @@ import (
 
 // Custom slog levels extending the four stdlib levels
 // ([slog.LevelDebug], [slog.LevelInfo], [slog.LevelWarn], [slog.LevelError])
-// with the trace and fatal levels the unified gokit/rskit/pykit schema uses.
+// with the trace and fatal levels the unified log schema uses.
 const (
 	// LevelTrace is more verbose than [slog.LevelDebug].
 	LevelTrace = slog.Level(-8)

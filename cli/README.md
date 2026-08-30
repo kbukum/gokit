@@ -2,7 +2,7 @@
 
 A parser-agnostic terminal-UX toolkit for gokit command-line programs. It is not a flag parser; it owns the presentation, input, and cancellation concerns a CLI shares, so every gokit CLI renders and behaves consistently.
 
-`cli` lives in the root module (`github.com/kbukum/gokit/cli`) and leans on the standard library, with `go.yaml.in/yaml/v3` (for `render`'s YAML output) as its only external dependency. It is the **light** Go mirror of rskit's `rskit-cli`: theming, structured output, progress, prompts, signals, and a bounded live console. Heavy raw-mode rich widgets (arrow-key radio/checkbox lists) stay rskit-only by design.
+`cli` lives in the root module (`github.com/kbukum/gokit/cli`) and leans on the standard library, with `go.yaml.in/yaml/v3` (for `render`'s YAML output) as its only external dependency. It is a **light** Go CLI toolkit: theming, structured output, progress, prompts, signals, and a bounded live console. Heavy raw-mode rich widgets (arrow-key radio/checkbox lists) are out of scope by design.
 
 > This is the one gokit module where writing to stdout/stderr is expected.
 > Every renderer takes an injected `io.Writer`; every other module uses the injected logger.
@@ -58,4 +58,4 @@ Everything is testable without a real terminal:
 
 ## Capability split (light by design)
 
-gokit `cli` mirrors rskit's *surface* idiomatically but stays light: it lands theme/render/progress/prompt/signal plus a bounded live console. A full raw-mode rich TUI (live arrow-key navigation via a terminal driver dependency) stays rskit-only — the line-driven prompt path is always available and dependency-free.
+gokit `cli` stays light: it lands theme/render/progress/prompt/signal plus a bounded live console. A full raw-mode rich TUI (live arrow-key navigation via a terminal driver dependency) is out of scope by design — the line-driven prompt path is always available and dependency-free.

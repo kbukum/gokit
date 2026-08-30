@@ -22,8 +22,8 @@ const (
 
 // InputPolicy selects how a subprocess's standard input is wired.
 //
-// When Command.Stdin is non-nil it always takes precedence (the Bytes policy in
-// rskit terms): the reader is fed to the child and then closed. Otherwise the
+// When Command.Stdin is non-nil it always takes precedence (the Bytes
+// policy): the reader is fed to the child and then closed. Otherwise the
 // policy chooses between a closed stdin and inheriting the parent's stdin.
 type InputPolicy int
 

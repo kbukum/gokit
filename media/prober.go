@@ -9,8 +9,7 @@ var ErrUnsupported = errors.New("media: unsupported content for prober")
 // Metadata is the enriched result of probing content:
 // the detection [Info] plus any lightweight properties a backend could extract without full processing.
 //
-// It is the light-kit parallel of rskit's media metadata;
-// the light surface carries only cheaply derivable fields (currently image/frame dimensions).
+// The light surface carries only cheaply derivable fields (currently image/frame dimensions).
 type Metadata struct {
 	Info
 	// Resolution is the pixel dimensions for images or video frames,
@@ -20,8 +19,7 @@ type Metadata struct {
 
 // Prober inspects the leading bytes of content
 // and enriches its detection with lightweight properties (e.g. pixel dimensions) for the formats it understands.
-// It is the light-kit parallel of rskit's MediaProbe abstraction —
-// a typed seam that backends implement,
+// It is a typed seam that backends implement,
 // injected into a [Registry] rather than registered through package globals.
 //
 // A [Registry] treats signature detection as authoritative for classification:

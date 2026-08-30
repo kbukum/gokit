@@ -27,11 +27,10 @@ func LoggerFromContext(ctx context.Context) (*Logger, bool) {
 	return log, ok && log != nil
 }
 
-// Span-level context helpers — the gokit equivalent of rskit-logging's
-// context module (component tagging, request enrichment, identifier injection).
+// Span-level context helpers for component tagging, request enrichment, and
+// identifier injection.
 //
-// rskit records identifiers onto the current tracing span, which nested spans
-// inherit automatically. Go contexts are immutable and gokit's Logger reads
+// Go contexts are immutable and gokit's Logger reads
 // identifiers back out of the context (see (*Logger).WithContext), so each
 // ContextWith* helper returns a derived context carrying the identifier and the
 // *Span helpers fold those identifiers into structured log fields.
@@ -67,15 +66,13 @@ func ContextWithCorrelationID(ctx context.Context, id string) context.Context {
 }
 
 // ComponentSpan returns a logger tagged with the component name and enriched
-// with any identifiers already present in ctx — the gokit equivalent of
-// rskit-logging's component_span.
+// with any identifiers already present in ctx.
 func (l *Logger) ComponentSpan(ctx context.Context, name string) *Logger {
 	return l.WithContext(ctx).WithComponent(name)
 }
 
 // RequestSpan returns a logger enriched with HTTP request metadata and any
-// identifiers already present in ctx — the gokit equivalent of rskit-logging's
-// request_span.
+// identifiers already present in ctx.
 func (l *Logger) RequestSpan(ctx context.Context, method, path, requestID string) *Logger {
 	return l.WithContext(ctx).WithFields(map[string]any{
 		FieldHTTPMethod: method,

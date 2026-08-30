@@ -2,7 +2,7 @@
 
 Light, dependency-free media handling for Go: byte-signature type/format detection, container metadata reads, cheap pure-Go image ops, pure-Go time/spatial vocabulary, and subtitle (SRT/WebVTT) parsing. Zero external dependencies.
 
-`media` is a standalone module (`github.com/kbukum/gokit/media`). It is the **light** mirror of rskit's media capability: Go handles metadata, format and container inspection, cheap image ops, time/spatial math, and subtitle parsing; **heavy audio/video/matrix/DSP processing stays rskit-only by design**. This is a capability decision, not a parity gap — see [Capability split](#capability-split-light-by-design).
+`media` is a standalone module (`github.com/kbukum/gokit/media`). It is deliberately **light**: Go handles metadata, format and container inspection, cheap image ops, time/spatial math, and subtitle parsing; **heavy audio/video/matrix/DSP processing is out of scope by design**. This is a capability decision, not a parity gap — see [Capability split](#capability-split-light-by-design).
 
 ## Install
 
@@ -81,7 +81,7 @@ thumb := media.Thumbnail(img, 256, 256)       // nearest-neighbor, never upscale
 view := media.Crop(img, image.Rect(0, 0, 100, 100))
 ```
 
-Formats outside the stdlib decoders (WebP, TIFF, HEIF, AVIF) are **detected** but not decoded here; decoding/processing those is rskit's or an external service's job. `Decode` reads the header first and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
+Formats outside the stdlib decoders (WebP, TIFF, HEIF, AVIF) are **detected** but not decoded here; decoding/processing those is an external service's job. `Decode` reads the header first and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
 
 ## Time & spatial types (pure Go)
 
@@ -112,7 +112,7 @@ vtt := clip.VTT()                         // convert SRT → WebVTT
 
 ## Capability split (light by design)
 
-| Capability | gokit `media` | rskit `media` |
+| Capability | gokit `media` | Heavy path (external) |
 |---|---|---|
 | Type/format detection (magic bytes) | ✅ | ✅ |
 | Container/metadata read (dimensions) | ✅ (stdlib image) | ✅ |
@@ -124,7 +124,7 @@ vtt := clip.VTT()                         // convert SRT → WebVTT
 | Matrix/DSP, scene detection, waveforms | ➖ (by design) | ✅ |
 | Codec/color/pipeline/output executor vocabulary | ➖ (backend-only) | ✅ |
 
-The heavy path is **rskit or an external service**, never a Go reimplementation. gokit deliberately has **no cgo, no ffmpeg, and no Go DSP/matrix code**. Backend-only vocabulary (codec, color, filter graphs, pipeline/output configs) is intentionally omitted: without a transcoding executor it would be dead surface.
+The heavy path is **an external service**, never a Go reimplementation. gokit deliberately has **no cgo, no ffmpeg, and no Go DSP/matrix code**. Backend-only vocabulary (codec, color, filter graphs, pipeline/output configs) is intentionally omitted: without a transcoding executor it would be dead surface.
 
 ## Supported formats (detection)
 

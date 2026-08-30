@@ -1,7 +1,7 @@
 package payload
 
 // DefaultMaxInMemoryBytes is the default cap on a single in-memory payload
-// or bounded file read (8 MiB), mirroring rskit's dataset limits.
+// or bounded file read (8 MiB).
 const DefaultMaxInMemoryBytes int64 = 8 * 1024 * 1024
 
 // DefaultStreamBuffer is the default bound on a stage's in-flight buffer.

@@ -7,7 +7,7 @@ import (
 	"github.com/kbukum/gokit/ai/chat"
 )
 
-// EchoName is the provider name advertised by [Echo], mirroring rskit's ECHO_NAME.
+// EchoName is the provider name advertised by [Echo].
 const EchoName = "echo"
 
 // Echo is a deterministic, dependency-free [Provider] that replies with the text of the most recent user message.

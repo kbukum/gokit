@@ -22,6 +22,5 @@
 //
 //	out, err := c.Execute(ctx, "21", nil) // out == 42
 //
-// Mirrors rskit-chain (Rust) and pykit-chain (Python):
-// the same typed Step / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
+// Provides typed Step / builder / cleanup-on-failure semantics, expressed idiomatically in Go.
 package chain

@@ -2,12 +2,12 @@
 // byte-signature type/format detection, container metadata reads, cheap pure-Go image ops,
 // and pure-Go time/spatial vocabulary plus subtitle (SRT/WebVTT) parsing and serialization.
 //
-// It is the light mirror of rskit's media capability. The surface concepts read in parallel —
+// It deliberately covers only the light surface —
 // [Type]/[Info], the [Format]/[FormatInfo] catalog, an injected [Registry],
 // the [Prober] abstraction, [Timestamp]/[TimeRange]/[Resolution], and [SubtitleTrack] —
-// but heavy audio/video/matrix/DSP processing (transcoding, filters, resampling) is rskit-only by design:
+// while heavy audio/video/matrix/DSP processing (transcoding, filters, resampling) stays out of scope by design:
 // a capability decision, not a parity gap. gokit ships no cgo, no ffmpeg,
-// and no Go DSP/matrix code; the heavy path is rskit or an external service,
+// and no Go DSP/matrix code; the heavy path belongs to an external service,
 // never a Go reimplementation.
 //
 // The zero-value entry points classify content without decoding it:

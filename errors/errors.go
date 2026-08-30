@@ -21,7 +21,7 @@ type AppError struct {
 	// Details carries RFC 9457 problem-detail extension members. These are, by definition,
 	// arbitrary JSON and cannot be given a closed type without losing that openness,
 	// so map[string]any is a deliberate,
-	// documented opaque-value exception to the no-any rule (parity with rskit's HashMap<String, Value>).
+	// documented opaque-value exception to the no-any rule.
 	// Values should be JSON-encodable.
 	Details map[string]any `json:"details,omitempty"`
 	// Cause is the underlying error that caused this error.

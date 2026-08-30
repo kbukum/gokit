@@ -7,7 +7,7 @@ import (
 )
 
 // Registry is an application-owned knowledge base of known [Format]s plus a set of injected [Prober] backends.
-// It is the light-kit parallel of rskit's media registry:
+// It is
 // constructed explicitly with functional options, never mutated through package globals
 // and never populated by init side effects.
 //

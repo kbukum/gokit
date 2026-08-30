@@ -3,8 +3,7 @@ package middleware
 // MissingTokenPolicy governs how the auth middleware treats a request that carries no credentials.
 // It never affects invalid credentials: a token that is present
 // but fails validation is always rejected with 401, regardless of policy.
-// This mirrors rskit's MissingCredentialPolicy
-// so both kits express the AcceptMissing / reject-invalid split identically.
+// It expresses the AcceptMissing / reject-invalid split explicitly.
 type MissingTokenPolicy int
 
 const (

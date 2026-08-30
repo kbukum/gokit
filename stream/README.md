@@ -4,7 +4,7 @@
 
 `stream` provides lazy, backpressure-aware data processing for Go. Pipelines pull values on demand — no work happens until you call `Collect`, `Drain`, or `ForEach`. This design naturally handles flow control without buffering or blocking. For the genuinely push-shaped "one source, many observers" case, `Broadcaster` fans events out to independent subscribers with bounded, drop-on-overflow buffers.
 
-gokit converges on the [`rskit-stream`](https://github.com/kbukum/rskit/tree/main/core/rskit-stream) operator vocabulary (`map`/`filter`/`fan_out`/`window`/`batch`/`parallel`/`merge`/`partition`/…) and its `Broadcaster`, expressed idiomatically in Go: a pull iterator for transformation pipelines and a bounded channel bus for fan-out. No operator buffers without bound.
+gokit provides a stream operator vocabulary (`map`/`filter`/`fan_out`/`window`/`batch`/`parallel`/`merge`/`partition`/…) and a `Broadcaster`, expressed idiomatically in Go: a pull iterator for transformation pipelines and a bounded channel bus for fan-out. No operator buffers without bound.
 
 ## Features
 

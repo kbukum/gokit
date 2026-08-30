@@ -1,6 +1,6 @@
 # dataset
 
-A streaming dataset-collection framework: bounded sources feed typed transforms and targets, with fail-closed schema validation, a manifest/cache layer, and spill-to-file for oversized payloads. It is the cross-kit Go mirror of rskit's `rskit-dataset`, kept **light**: heavy image/media transforms stay rskit-only by design.
+A streaming dataset-collection framework: bounded sources feed typed transforms and targets, with fail-closed schema validation, a manifest/cache layer, and spill-to-file for oversized payloads. It is kept **light**: heavy image/media transforms are out of scope by design.
 
 `dataset` is a sub-module (`github.com/kbukum/gokit/dataset`) so it can reuse the `schema` sub-module. It builds on gokit's canonical owners rather than a parallel stack — record streams are [`stream`](../stream) pipelines, bounded file reads go through [`fs`](../fs), and validation reuses [`schema`](../schema).
 

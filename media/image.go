@@ -9,7 +9,7 @@ import (
 	// Register the stdlib image decoders
 	// so DecodeConfig/Decode recognize the pure-Go formats the light kit supports.
 	// Heavier formats (webp, tiff, heif) are detected but intentionally not decoded here —
-	// that stays rskit-only.
+	// decoding them is out of scope by design.
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -96,7 +96,7 @@ func Crop(src image.Image, r image.Rectangle) image.Image {
 // Thumbnail downscales src to fit within maxW×maxH while preserving aspect ratio,
 // using nearest-neighbor sampling. It never upscales:
 // sources already within the bounds are returned unchanged.
-// It is a deliberately cheap pure-Go operation; high-quality resampling belongs in rskit.
+// It is a deliberately cheap pure-Go operation; high-quality resampling is out of scope.
 func Thumbnail(src image.Image, maxW, maxH int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -122,7 +122,7 @@ func Thumbnail(src image.Image, maxW, maxH int) image.Image {
 	return dst
 }
 
-// stdlibFormat maps an image/... decoder name to the light-kit [Format].
+// stdlibFormat maps an image/... decoder name to the supported [Format].
 func stdlibFormat(name string) Format {
 	switch name {
 	case "jpeg":
