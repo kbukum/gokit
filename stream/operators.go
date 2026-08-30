@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -110,10 +111,19 @@ func (it *mapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err error
 func (it *mapIter[I, O]) Close() error { return it.source.Close() }
 
 type flatMapIter[I, O any] struct {
-	source  Iterator[I]
-	fn      func(context.Context, I) (Iterator[O], error)
-	current Iterator[O]
+	source        Iterator[I]
+	fn            func(context.Context, I) (Iterator[O], error)
+	current       Iterator[O]
+	closeErr      error
+	closeErrCount int
 }
+
+// maxRetainedInnerCloseErrors bounds how many exhausted-inner Close failures a
+// flatMapIter retains. Without a cap, a large or unbounded FlatMap whose inner
+// iterators systematically fail to close would join errors for the lifetime of
+// the stream and grow memory without bound. Beyond the cap, further inner close
+// failures are dropped; the retained errors are surfaced on Close.
+const maxRetainedInnerCloseErrors = 8
 
 func (it *flatMapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err error) {
 	for {
@@ -126,7 +136,10 @@ func (it *flatMapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err e
 			if ok {
 				return val, true, nil
 			}
-			_ = it.current.Close()
+			if cerr := it.current.Close(); cerr != nil && it.closeErrCount < maxRetainedInnerCloseErrors {
+				it.closeErr = errors.Join(it.closeErr, cerr)
+				it.closeErrCount++
+			}
 			it.current = nil
 		}
 		in, ok, err := it.source.Next(ctx)
@@ -144,10 +157,11 @@ func (it *flatMapIter[I, O]) Next(ctx context.Context) (result O, ok bool, err e
 }
 
 func (it *flatMapIter[I, O]) Close() error {
+	err := it.closeErr
 	if it.current != nil {
-		_ = it.current.Close()
+		err = errors.Join(err, it.current.Close())
 	}
-	return it.source.Close()
+	return errors.Join(err, it.source.Close())
 }
 
 type filterIter[T any] struct {

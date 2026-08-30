@@ -2,7 +2,9 @@ package stateful
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -293,3 +295,316 @@ func TestManager_Operations(t *testing.T) {
 }
 
 // Test concurrent appends
+
+// countingStore wraps MemoryStore to count Close calls, locking the
+// close-once semantics of GetOrCreate losers, Delete, Cleanup, and Close.
+type countingStore[V any] struct {
+	*MemoryStore[V]
+	closes *atomic.Int64
+}
+
+func (s *countingStore[V]) Close() error {
+	s.closes.Add(1)
+	return s.MemoryStore.Close()
+}
+
+func TestManager_AccumulatorsClosedExactlyOnce(t *testing.T) {
+	var closes atomic.Int64
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator[int](
+				&countingStore[int]{MemoryStore: NewMemoryStore[int](), closes: &closes},
+				Config[int]{},
+			)
+		},
+		5*time.Minute,
+	)
+
+	const n = 8
+	for i := 0; i < n; i++ {
+		mgr.GetOrCreate("key-" + string(rune('A'+i)))
+	}
+
+	// Delete closes exactly one accumulator, once.
+	if !mgr.Delete("key-A") {
+		t.Fatal("Delete(key-A) = false, want true")
+	}
+	if got := closes.Load(); got != 1 {
+		t.Fatalf("Delete closed %d times, want 1", got)
+	}
+
+	// Close drains the remaining accumulators, each closed exactly once.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	if got := closes.Load(); got != int64(n) {
+		t.Fatalf("total closes = %d, want %d (each accumulator once)", got, n)
+	}
+
+	// Close is idempotent — no double close.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("second Close() = %v", err)
+	}
+	if got := closes.Load(); got != int64(n) {
+		t.Fatalf("closes after second Close = %d, want %d", got, n)
+	}
+}
+
+// failingCloseStore wraps MemoryStore and returns a sentinel error from Close,
+// while still counting closes, to verify Manager surfaces store close errors.
+type failingCloseStore[V any] struct {
+	*MemoryStore[V]
+	err    error
+	closes *atomic.Int64
+}
+
+func (s *failingCloseStore[V]) Close() error {
+	if s.closes != nil {
+		s.closes.Add(1)
+	}
+	_ = s.MemoryStore.Close()
+	return s.err
+}
+
+// blockingCloseStore signals when its Close is entered and blocks there until
+// released, letting a test hold an in-flight cleanup open to observe shutdown
+// ordering deterministically instead of racing a sleep.
+type blockingCloseStore[V any] struct {
+	*MemoryStore[V]
+	entered  chan struct{}
+	release  chan struct{}
+	signaler sync.Once
+}
+
+func (s *blockingCloseStore[V]) Close() error {
+	s.signaler.Do(func() { close(s.entered) })
+	<-s.release
+	return s.MemoryStore.Close()
+}
+
+// Close blocks until an in-flight cleanup finishes rather than racing it; a
+// post-Close Cleanup is then a no-op.
+func TestManager_Close_WaitsForInFlightCleanup(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator[int](
+				&blockingCloseStore[int]{
+					MemoryStore: NewMemoryStore[int](),
+					entered:     entered,
+					release:     release,
+				},
+				Config[int]{TTL: 20 * time.Millisecond},
+			)
+		},
+		20*time.Millisecond,
+	)
+
+	if err := mgr.Append(context.Background(), "k", 1); err != nil {
+		t.Fatalf("Append() = %v", err)
+	}
+
+	// Wait until the cleanup goroutine has entered the accumulator's Close.
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cleanup did not start within timeout")
+	}
+
+	// Close must not return while that cleanup is still in flight.
+	closed := make(chan struct{})
+	go func() {
+		_ = mgr.Close()
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+		t.Fatal("Close returned while cleanup was still in flight")
+	case <-time.After(50 * time.Millisecond):
+		// Expected: Close is blocked on the in-flight cleanup.
+	}
+
+	// Release the cleanup and confirm shutdown completes.
+	close(release)
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close did not return after cleanup was released")
+	}
+
+	// The cleanup goroutine has been drained; nothing remains to clean.
+	if n := mgr.Cleanup(); n != 0 {
+		t.Fatalf("Cleanup() after Close = %d, want 0", n)
+	}
+}
+
+// Close invoked reentrantly from within an OnExpire callback (which runs on the
+// cleanup goroutine) must not self-deadlock joining that goroutine.
+func TestManager_Close_ReentrantFromOnExpire(t *testing.T) {
+	done := make(chan struct{})
+	var mgr *Manager[string, int]
+	mgr = NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator(NewMemoryStore[int](), Config[int]{
+				TTL: 20 * time.Millisecond,
+				OnExpire: func(_ context.Context, _ string) {
+					_ = mgr.Close()
+					close(done)
+				},
+			})
+		},
+		20*time.Millisecond,
+	)
+
+	if err := mgr.Append(context.Background(), "k", 1); err != nil {
+		t.Fatalf("Append() = %v", err)
+	}
+
+	select {
+	case <-done:
+		// Reentrant Close returned without deadlocking.
+	case <-time.After(2 * time.Second):
+		t.Fatal("reentrant Close from OnExpire deadlocked")
+	}
+
+	// A subsequent external Close remains safe and idempotent.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("external Close() = %v", err)
+	}
+}
+
+// GetOrCreate racing Close must never orphan an unclosed accumulator. The
+// factory blocks mid-flight so a GetOrCreate is provably in progress when Close
+// runs; on release it must close its just-created accumulator rather than
+// storing it, without relying on a second Close to sweep it.
+func TestManager_GetOrCreateRacingClose_NoOrphan(t *testing.T) {
+	var closes, created atomic.Int64
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			created.Add(1)
+			close(entered)
+			<-release
+			return NewAccumulator[int](
+				&countingStore[int]{MemoryStore: NewMemoryStore[int](), closes: &closes},
+				Config[int]{},
+			)
+		},
+		5*time.Minute,
+	)
+
+	// Drive a single GetOrCreate and wait until it is blocked inside the factory.
+	got := make(chan *Accumulator[int], 1)
+	go func() { got <- mgr.GetOrCreate("k") }()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("factory was not entered")
+	}
+
+	// Close while the create is in flight, then let the factory finish.
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	close(release)
+	<-got
+
+	if cr, c := created.Load(), closes.Load(); cr != 1 || c != 1 {
+		t.Fatalf("created = %d, closes = %d; want 1 and 1 (created accumulator closed, not orphaned)", cr, c)
+	}
+	if acc := mgr.Get("k"); acc != nil {
+		t.Fatalf("Get(k) = %v, want nil (nothing stored after Close)", acc)
+	}
+}
+
+// Close aggregates and returns store close errors via errors.Join,
+// while still closing every accumulator.
+func TestManager_Close_ReturnsJoinedCloseErrors(t *testing.T) {
+	errClose := errors.New("store close failed")
+	var closes atomic.Int64
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator[int](
+				&failingCloseStore[int]{MemoryStore: NewMemoryStore[int](), err: errClose, closes: &closes},
+				Config[int]{},
+			)
+		},
+		5*time.Minute,
+	)
+
+	const n = 4
+	for i := 0; i < n; i++ {
+		mgr.GetOrCreate("key-" + string(rune('A'+i)))
+	}
+
+	err := mgr.Close()
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Close() = %v, want it to surface errClose", err)
+	}
+	if got := closes.Load(); got != int64(n) {
+		t.Fatalf("closes = %d, want %d (every accumulator closed despite errors)", got, n)
+	}
+}
+
+// Delete's accumulator close error is captured and surfaced through Close.
+func TestManager_Delete_CloseErrorSurfacedByClose(t *testing.T) {
+	errClose := errors.New("store close failed")
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator[int](
+				&failingCloseStore[int]{MemoryStore: NewMemoryStore[int](), err: errClose},
+				Config[int]{},
+			)
+		},
+		5*time.Minute,
+	)
+
+	mgr.GetOrCreate("doomed")
+	if !mgr.Delete("doomed") {
+		t.Fatal("Delete(doomed) = false, want true")
+	}
+
+	if err := mgr.Close(); !errors.Is(err, errClose) {
+		t.Fatalf("Close() = %v, want it to surface the Delete close error", err)
+	}
+}
+
+// Happy-path Close returns nil.
+func TestManager_Close_NilOnCleanClose(t *testing.T) {
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator(NewMemoryStore[int](), Config[int]{})
+		},
+		5*time.Minute,
+	)
+	mgr.GetOrCreate("a")
+	mgr.GetOrCreate("b")
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close() = %v, want nil", err)
+	}
+}
+
+// After Close, Append must fail with ErrAccumulatorClosed rather than silently
+// succeeding into an untracked accumulator whose store Close only released
+// resources without rejecting later writes.
+func TestManager_Append_AfterCloseFails(t *testing.T) {
+	mgr := NewManager(
+		func(key string) *Accumulator[int] {
+			return NewAccumulator(NewMemoryStore[int](), Config[int]{})
+		},
+		5*time.Minute,
+	)
+	if err := mgr.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+
+	if err := mgr.Append(context.Background(), "k", 1); !errors.Is(err, ErrAccumulatorClosed) {
+		t.Fatalf("Append() after Close = %v, want ErrAccumulatorClosed", err)
+	}
+	if acc := mgr.Get("k"); acc != nil {
+		t.Fatalf("Get(k) after Close = %v, want nil (nothing orphaned)", acc)
+	}
+}

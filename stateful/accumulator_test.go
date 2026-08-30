@@ -872,3 +872,50 @@ func TestAccumulator_ZeroTTL_NeverExpires(t *testing.T) {
 		t.Error("should never expire with TTL=0")
 	}
 }
+
+// After Close, mutating operations must report the closed state instead of
+// writing into a released store, and a second Close must return the same error.
+func TestAccumulator_ClosedStateContract(t *testing.T) {
+	ctx := context.Background()
+	acc := NewAccumulator[int](NewMemoryStore[int](), Config[int]{KeepAlive: true})
+
+	if err := acc.Close(); err != nil {
+		t.Fatalf("Close() = %v", err)
+	}
+	if err := acc.Close(); err != nil {
+		t.Fatalf("second Close() = %v, want same nil error", err)
+	}
+
+	if err := acc.Append(ctx, 1); !errors.Is(err, ErrAccumulatorClosed) {
+		t.Errorf("Append after Close = %v, want ErrAccumulatorClosed", err)
+	}
+	if err := acc.Touch(ctx); !errors.Is(err, ErrAccumulatorClosed) {
+		t.Errorf("Touch after Close = %v, want ErrAccumulatorClosed", err)
+	}
+	if _, err := acc.Flush(ctx); !errors.Is(err, ErrAccumulatorClosed) {
+		t.Errorf("Flush after Close = %v, want ErrAccumulatorClosed", err)
+	}
+}
+
+// Concurrent Append and Close must be race-clean: Append either succeeds or
+// observes the closed state, never touching the store across the close boundary.
+func TestAccumulator_ConcurrentAppendAndClose(t *testing.T) {
+	ctx := context.Background()
+	acc := NewAccumulator[int](NewMemoryStore[int](), Config[int]{})
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if err := acc.Append(ctx, 1); err != nil && !errors.Is(err, ErrAccumulatorClosed) {
+			t.Errorf("Append = %v, want nil or ErrAccumulatorClosed", err)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if err := acc.Close(); err != nil {
+			t.Errorf("Close() = %v", err)
+		}
+	}()
+	wg.Wait()
+}

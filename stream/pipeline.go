@@ -1,6 +1,9 @@
 package stream
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // Iterator provides pull-based sequential access to a stream of values.
 // Structurally compatible with provider.Iterator[T].
@@ -91,19 +94,19 @@ func FromFunc[T any](fn func(ctx context.Context) Iterator[T]) *Pipeline[T] {
 // Drain creates a Runnable that pulls all values and sends each to sink.
 func Drain[T any](p *Pipeline[T], sink func(context.Context, T) error) *Runnable {
 	return &Runnable{
-		run: func(ctx context.Context) error {
+		run: func(ctx context.Context) (err error) {
 			iter := p.create(ctx)
-			defer func() { _ = iter.Close() }()
+			defer func() { err = errors.Join(err, iter.Close()) }()
 			for {
-				val, ok, err := iter.Next(ctx)
-				if err != nil {
-					return err
+				val, ok, nextErr := iter.Next(ctx)
+				if nextErr != nil {
+					return nextErr
 				}
 				if !ok {
 					return nil
 				}
-				if err := sink(ctx, val); err != nil {
-					return err
+				if sinkErr := sink(ctx, val); sinkErr != nil {
+					return sinkErr
 				}
 			}
 		},
@@ -111,14 +114,13 @@ func Drain[T any](p *Pipeline[T], sink func(context.Context, T) error) *Runnable
 }
 
 // Collect runs the pipeline and returns all values as a slice.
-func Collect[T any](ctx context.Context, p *Pipeline[T]) ([]T, error) {
+func Collect[T any](ctx context.Context, p *Pipeline[T]) (result []T, err error) {
 	iter := p.create(ctx)
-	defer func() { _ = iter.Close() }()
-	var result []T
+	defer func() { err = errors.Join(err, iter.Close()) }()
 	for {
-		val, ok, err := iter.Next(ctx)
-		if err != nil {
-			return result, err
+		val, ok, nextErr := iter.Next(ctx)
+		if nextErr != nil {
+			return result, nextErr
 		}
 		if !ok {
 			return result, nil

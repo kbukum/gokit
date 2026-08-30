@@ -444,6 +444,114 @@ func TestFanOut_TapEach_Pipeline(t *testing.T) {
 	}
 }
 
+// --- Terminal Close() error propagation (errCloseIter defined in operators_test.go) ---
+
+func TestCollect_SurfacesIteratorCloseError(t *testing.T) {
+	t.Parallel()
+
+	errClose := errors.New("iterator close failed")
+	src := &errCloseIter[int]{items: []int{1, 2, 3}, closeErr: errClose}
+	p := From[int](src)
+
+	got, err := Collect(context.Background(), p)
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Collect() error = %v, want it to surface errClose", err)
+	}
+	if !intSliceEqual(got, []int{1, 2, 3}) {
+		t.Fatalf("Collect() values = %v, want [1 2 3] (values must survive close error)", got)
+	}
+}
+
+func TestDrain_SurfacesIteratorCloseError(t *testing.T) {
+	t.Parallel()
+
+	errClose := errors.New("iterator close failed")
+	src := &errCloseIter[int]{items: []int{1, 2, 3}, closeErr: errClose}
+	p := From[int](src)
+
+	var got []int
+	err := Drain(p, func(_ context.Context, v int) error {
+		got = append(got, v)
+		return nil
+	}).Run(context.Background())
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Drain.Run() error = %v, want it to surface errClose", err)
+	}
+	if !intSliceEqual(got, []int{1, 2, 3}) {
+		t.Fatalf("Drain sink values = %v, want [1 2 3]", got)
+	}
+}
+
+func TestForEach_SurfacesIteratorCloseError(t *testing.T) {
+	t.Parallel()
+
+	errClose := errors.New("iterator close failed")
+	src := &errCloseIter[int]{items: []int{1, 2}, closeErr: errClose}
+	p := From[int](src)
+
+	var got []int
+	err := ForEach(context.Background(), p, func(_ context.Context, v int) error {
+		got = append(got, v)
+		return nil
+	})
+	if !errors.Is(err, errClose) {
+		t.Fatalf("ForEach() error = %v, want it to surface errClose", err)
+	}
+	if !intSliceEqual(got, []int{1, 2}) {
+		t.Fatalf("ForEach values = %v, want [1 2]", got)
+	}
+}
+
+func TestCollect_DataErrorNotMaskedByCloseError(t *testing.T) {
+	t.Parallel()
+
+	errData := errors.New("mid-stream data error")
+	errClose := errors.New("iterator close failed")
+	src := &errCloseIter[int]{items: []int{1}, nextErr: errData, closeErr: errClose}
+	p := From[int](src)
+
+	got, err := Collect(context.Background(), p)
+	if !errors.Is(err, errData) {
+		t.Fatalf("Collect() error = %v, want the data error to remain detectable", err)
+	}
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Collect() error = %v, want the close error joined too", err)
+	}
+	if !intSliceEqual(got, []int{1}) {
+		t.Fatalf("Collect() values = %v, want [1] (already-collected values returned)", got)
+	}
+}
+
+func TestDrain_DataErrorNotMaskedByCloseError(t *testing.T) {
+	t.Parallel()
+
+	errData := errors.New("mid-stream data error")
+	errClose := errors.New("iterator close failed")
+	src := &errCloseIter[int]{items: []int{1}, nextErr: errData, closeErr: errClose}
+	p := From[int](src)
+
+	err := Drain(p, func(_ context.Context, _ int) error { return nil }).Run(context.Background())
+	if !errors.Is(err, errData) {
+		t.Fatalf("Drain.Run() error = %v, want the data error to remain detectable", err)
+	}
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Drain.Run() error = %v, want the close error joined too", err)
+	}
+}
+
+func TestCollect_NoCloseErrorReturnsNil(t *testing.T) {
+	t.Parallel()
+
+	src := &errCloseIter[int]{items: []int{1, 2, 3}}
+	if _, err := Collect(context.Background(), From[int](src)); err != nil {
+		t.Fatalf("Collect() error = %v, want nil on the happy path", err)
+	}
+	if err := Drain(From[int](&errCloseIter[int]{items: []int{1}}),
+		func(_ context.Context, _ int) error { return nil }).Run(context.Background()); err != nil {
+		t.Fatalf("Drain.Run() error = %v, want nil on the happy path", err)
+	}
+}
+
 // --- helpers ---
 
 func intSliceEqual(a, b []int) bool {
@@ -468,4 +576,46 @@ func strSliceEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// Drain joins a sink failure with the iterator Close error so both remain
+// detectable; neither masks the other.
+func TestDrain_JoinsSinkAndIteratorCloseErrors(t *testing.T) {
+	errSink := errors.New("sink failed")
+	errClose := errors.New("iterator close failed")
+
+	iter := &errCloseIter[int]{items: []int{1, 2, 3}, closeErr: errClose}
+	p := From[int](iter)
+
+	err := Drain(p, func(_ context.Context, _ int) error {
+		return errSink
+	}).Run(context.Background())
+
+	if !errors.Is(err, errSink) {
+		t.Fatalf("Run() = %v, want it to surface the sink error", err)
+	}
+	if !errors.Is(err, errClose) {
+		t.Fatalf("Run() = %v, want it to surface the iterator close error", err)
+	}
+	if iter.closed != 1 {
+		t.Fatalf("iterator Close called %d times, want 1", iter.closed)
+	}
+}
+
+// ForEach (a Drain wrapper) surfaces both the sink failure and the iterator
+// Close error.
+func TestForEach_JoinsSinkAndIteratorCloseErrors(t *testing.T) {
+	errSink := errors.New("sink failed")
+	errClose := errors.New("iterator close failed")
+
+	iter := &errCloseIter[int]{items: []int{1}, closeErr: errClose}
+	p := From[int](iter)
+
+	err := ForEach(context.Background(), p, func(_ context.Context, _ int) error {
+		return errSink
+	})
+
+	if !errors.Is(err, errSink) || !errors.Is(err, errClose) {
+		t.Fatalf("ForEach() = %v, want both sink and close errors", err)
+	}
 }
