@@ -115,8 +115,8 @@ func TestSemanticSimilarityIdenticalTextsScoreOne(t *testing.T) {
 	if got := res.Detail.(map[string]any)["samples"]; got != 2 {
 		t.Errorf("Detail[samples] = %v, want 2", got)
 	}
-	if res.Descriptive {
-		t.Error("Descriptive = true, want false (semantic similarity measures quality)")
+	if res.Direction != bench.HigherIsBetter {
+		t.Errorf("Direction = %v, want HigherIsBetter (semantic similarity measures quality)", res.Direction)
 	}
 }
 

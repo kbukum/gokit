@@ -109,6 +109,17 @@ func (m *binaryClassification[L]) Compute(scored []bench.ScoredSample[L]) Result
 		Name:   m.name,
 		Value:  f1,
 		Values: values,
+		// f1/precision/recall/accuracy inherit the metric's higher-is-better
+		// direction; the confusion-derived diagnostics have their own directions:
+		// a lower false-positive rate (and fewer false positives/negatives) is
+		// better, while the raw tp/tn counts are descriptive.
+		Directions: map[string]bench.Direction{
+			"fpr": bench.LowerIsBetter,
+			"fp":  bench.LowerIsBetter,
+			"fn":  bench.LowerIsBetter,
+			"tp":  bench.Neutral,
+			"tn":  bench.Neutral,
+		},
 		// The threshold is a configuration input, not a quality signal, so it lives
 		// in the confusion-matrix detail rather than Values, where RunComparator
 		// would score a threshold change as an improvement or regression. It is

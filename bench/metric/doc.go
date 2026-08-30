@@ -57,8 +57,8 @@
 // Token usage:
 //   - [TokenStats] — total / average token count of predictions and references
 //     via an injected [llm.TokenCounter]; constructed fallibly (rejects a nil
-//     counter) and marked descriptive so run comparison excludes it from
-//     regression classification
+//     counter) and marked with the neutral [bench.Direction] so run comparison
+//     excludes it from regression classification
 //
 // Semantic (context metric, I/O-backed):
 //   - [SemanticSimilarity] — mean embedding cosine similarity of prediction vs

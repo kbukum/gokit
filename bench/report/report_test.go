@@ -166,16 +166,12 @@ func TestJSONReporter(t *testing.T) {
 		t.Errorf("version = %v, want %q", parsed["version"], bench.SchemaVersion)
 	}
 
-	// Run section
-	run, ok := parsed["run"].(map[string]any)
-	if !ok {
-		t.Fatal("missing 'run' section")
+	// Run identity is flat at the top level.
+	if parsed["id"] != "run-abc-123" {
+		t.Errorf("id = %v, want run-abc-123", parsed["id"])
 	}
-	if run["id"] != "run-abc-123" {
-		t.Errorf("run.id = %v, want run-abc-123", run["id"])
-	}
-	if run["tag"] != "nightly" {
-		t.Errorf("run.tag = %v, want nightly", run["tag"])
+	if parsed["tag"] != "nightly" {
+		t.Errorf("tag = %v, want nightly", parsed["tag"])
 	}
 
 	// Metrics
@@ -184,8 +180,8 @@ func TestJSONReporter(t *testing.T) {
 		t.Errorf("expected 2 metrics, got %v", metrics)
 	}
 
-	// Branches
-	branches, ok := parsed["branches"].([]any)
+	// Branches serialize as a map keyed by name.
+	branches, ok := parsed["branches"].(map[string]any)
 	if !ok || len(branches) != 2 {
 		t.Errorf("expected 2 branches, got %v", branches)
 	}
@@ -926,14 +922,24 @@ func TestJSONBranchSorting(t *testing.T) {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
-	var parsed map[string]any
-	json.Unmarshal(buf.Bytes(), &parsed)
+	// Branches serialize as a map; encoding/json emits map keys in sorted order,
+	// so the raw output is deterministic. Assert the keys appear sorted.
+	raw := buf.String()
+	keyword := strings.Index(raw, `"keyword"`)
+	semantic := strings.Index(raw, `"semantic"`)
+	if keyword < 0 || semantic < 0 {
+		t.Fatalf("expected both branch keys in output, got keyword=%d semantic=%d", keyword, semantic)
+	}
+	if keyword > semantic {
+		t.Errorf("branch keys not sorted: keyword at %d after semantic at %d", keyword, semantic)
+	}
 
-	branches := parsed["branches"].([]any)
-	first := branches[0].(map[string]any)["name"].(string)
-	second := branches[1].(map[string]any)["name"].(string)
-
-	if first > second {
-		t.Errorf("branches not sorted: %q before %q", first, second)
+	// The output is stable across repeated generation.
+	var buf2 bytes.Buffer
+	if err := r.Generate(&buf2, result); err != nil {
+		t.Fatalf("Generate() error: %v", err)
+	}
+	if raw != buf2.String() {
+		t.Error("JSON output is not deterministic across repeated generation")
 	}
 }

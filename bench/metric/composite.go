@@ -36,20 +36,73 @@ func (m *weightedMetric[L]) Name() string {
 
 func (m *weightedMetric[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	values := make(map[string]float64)
+	directions := make(map[string]bench.Direction)
 	details := make([]Result, 0, len(m.entries))
 	composite := 0.0
 
+	// effective collects each nonzero-weight component's contribution direction —
+	// its own direction, flipped when the weight is negative — to derive the
+	// composite's headline direction after the sum.
+	effective := make([]bench.Direction, 0, len(m.entries))
 	for _, e := range m.entries {
 		r := e.metric.Compute(scored)
 		composite += r.Value * e.weight
 		values[r.Name] = r.Value
+		directions[r.Name] = r.Direction
 		details = append(details, r)
+		if e.weight != 0 {
+			eff := r.Direction
+			if e.weight < 0 {
+				eff = flipDirection(eff)
+			}
+			effective = append(effective, eff)
+		}
 	}
 
 	return Result{
-		Name:   m.Name(),
-		Value:  composite,
-		Values: values,
-		Detail: details,
+		Name:  m.Name(),
+		Value: composite,
+		// Each constituent value keeps its own direction; the composite's headline
+		// direction is derived from how the weighted sum moves.
+		Direction:  compositeDirection(effective),
+		Values:     values,
+		Directions: directions,
+		Detail:     details,
+	}
+}
+
+// compositeDirection derives the optimization direction of a weighted sum from
+// the contribution directions of its nonzero-weight components. If any component
+// is descriptive, or the components disagree on direction, the sum has no single
+// optimization direction and is [bench.Neutral].
+func compositeDirection(effective []bench.Direction) bench.Direction {
+	var resolved bench.Direction
+	seen := false
+	for _, eff := range effective {
+		if eff == bench.Neutral {
+			return bench.Neutral
+		}
+		if !seen {
+			resolved = eff
+			seen = true
+			continue
+		}
+		if eff != resolved {
+			return bench.Neutral
+		}
+	}
+	return resolved
+}
+
+// flipDirection swaps higher-is-better and lower-is-better; a neutral direction
+// is unchanged.
+func flipDirection(d bench.Direction) bench.Direction {
+	switch d {
+	case bench.HigherIsBetter:
+		return bench.LowerIsBetter
+	case bench.LowerIsBetter:
+		return bench.HigherIsBetter
+	default:
+		return d
 	}
 }

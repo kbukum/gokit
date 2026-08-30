@@ -127,8 +127,8 @@ func TestLLMJudgeValidVerdictScored(t *testing.T) {
 	if res.Values["avg_score"] != 0.8 || res.Values["pass_rate"] != 1.0 {
 		t.Errorf("Values = %v, want avg_score 0.8 pass_rate 1.0", res.Values)
 	}
-	if res.Descriptive {
-		t.Error("Descriptive = true, want false (judge measures quality)")
+	if res.Direction != bench.HigherIsBetter {
+		t.Errorf("Direction = %v, want HigherIsBetter (judge measures quality)", res.Direction)
 	}
 }
 

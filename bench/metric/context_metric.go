@@ -43,11 +43,11 @@ func (a *runContextMetricAdapter[L]) Compute(ctx context.Context, scored []bench
 		return bench.MetricResult{}, err
 	}
 	return bench.MetricResult{
-		Name:        r.Name,
-		Value:       r.Value,
-		Values:      r.Values,
-		Detail:      r.Detail,
-		Descriptive: r.Descriptive,
+		Name:      r.Name,
+		Value:     r.Value,
+		Values:    r.Values,
+		Detail:    r.Detail,
+		Direction: r.Direction,
 	}, nil
 }
 

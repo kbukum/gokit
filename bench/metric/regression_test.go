@@ -171,9 +171,66 @@ func TestRSquaredHasSSValues(t *testing.T) {
 	}
 }
 
+func TestRSquaredSubvalueDirections(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[float64]{
+		{Sample: bench.Sample[float64]{Label: 1.0}, Prediction: bench.Prediction[float64]{Score: 1.2}},
+		{Sample: bench.Sample[float64]{Label: 2.0}, Prediction: bench.Prediction[float64]{Score: 1.8}},
+	}
+
+	r := RSquared().Compute(scored)
+	if r.Direction != bench.HigherIsBetter {
+		t.Errorf("r_squared Direction = %v, want HigherIsBetter", r.Direction)
+	}
+	if got := r.Directions["ss_res"]; got != bench.LowerIsBetter {
+		t.Errorf("ss_res Direction = %v, want LowerIsBetter", got)
+	}
+	if got := r.Directions["ss_tot"]; got != bench.Neutral {
+		t.Errorf("ss_tot Direction = %v, want Neutral", got)
+	}
+}
+
 func assertRegClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-6 {
 		t.Errorf("%s = %.6f, want %.6f", name, got, want)
+	}
+}
+
+// TestRegressionMetricDirections asserts each regression metric declares the
+// optimization direction that run comparison classifies against: mae/mse/rmse
+// are lower-is-better, r_squared is higher-is-better.
+func TestRegressionMetricDirections(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[float64]{
+		{Sample: bench.Sample[float64]{Label: 1.0}, Prediction: bench.Prediction[float64]{Score: 0.8}},
+		{Sample: bench.Sample[float64]{Label: 0.0}, Prediction: bench.Prediction[float64]{Score: 0.2}},
+	}
+
+	tests := []struct {
+		name   string
+		metric Metric[float64]
+		want   bench.Direction
+	}{
+		{"mae", MAE(), bench.LowerIsBetter},
+		{"mse", MSE(), bench.LowerIsBetter},
+		{"rmse", RMSE(), bench.LowerIsBetter},
+		{"r_squared", RSquared(), bench.HigherIsBetter},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := tc.metric.Compute(scored).Direction; got != tc.want {
+				t.Errorf("%s Direction = %v, want %v", tc.name, got, tc.want)
+			}
+			// An empty input must carry the same direction as a populated one.
+			if got := tc.metric.Compute(nil).Direction; got != tc.want {
+				t.Errorf("%s empty Direction = %v, want %v", tc.name, got, tc.want)
+			}
+		})
 	}
 }
