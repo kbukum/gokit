@@ -7,7 +7,7 @@ import (
 )
 
 func newConsoleLogger(buf *bytes.Buffer, service string, noColor bool) *Logger {
-	cfg := &Config{Level: "trace", Format: "console", Output: "stdout", NoColor: noColor, Timestamp: false}
+	cfg := &Config{Level: "trace", Format: "console", Output: OutputStdout(), NoColor: noColor, Timestamp: false}
 	l, err := New(cfg, service, WithWriter(buf))
 	if err != nil {
 		panic(err)

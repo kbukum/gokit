@@ -12,7 +12,7 @@ import (
 // the full pipeline (sink, schema normalization, middleware) rather than a
 // stand-in fake.
 func newBufferedLogger(buf *bytes.Buffer, level, format string) *Logger {
-	cfg := &Config{Level: level, Format: format, Output: "stdout", Timestamp: true}
+	cfg := &Config{Level: level, Format: format, Output: OutputStdout(), Timestamp: true}
 	l, err := New(cfg, "test", WithWriter(buf))
 	if err != nil {
 		panic(err)

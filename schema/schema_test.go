@@ -2,6 +2,8 @@ package schema_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -172,7 +174,7 @@ func TestValidate_MissingRequired(t *testing.T) {
 	}
 	found := false
 	for _, e := range vr.Errors {
-		if e.Path == "query" {
+		if e.Path == "/query" {
 			found = true
 		}
 	}
@@ -215,6 +217,110 @@ func TestValidate_EnumValue(t *testing.T) {
 	vr = schema.Validate(s, map[string]any{"color": "purple"})
 	if vr.Valid {
 		t.Error("expected invalid for enum value 'purple'")
+	}
+}
+
+func TestValidate_JSONSchema202012KeywordCoverage(t *testing.T) {
+	t.Parallel()
+
+	s := schema.JSON{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"required": []any{
+			"query",
+			"mode",
+			"contact",
+		},
+		"properties": map[string]any{
+			"query": map[string]any{
+				"type":      "string",
+				"minLength": float64(3),
+			},
+			"mode": map[string]any{
+				"oneOf": []any{
+					map[string]any{"const": "fast"},
+					map[string]any{"const": "accurate"},
+				},
+			},
+			"contact": map[string]any{
+				"type":   "string",
+				"format": "email",
+			},
+			"filter": map[string]any{
+				"anyOf": []any{
+					map[string]any{"type": "string"},
+					map[string]any{
+						"type":     "array",
+						"minItems": float64(1),
+						"items":    map[string]any{"type": "string"},
+					},
+				},
+			},
+		},
+		"additionalProperties": false,
+	}
+
+	valid := schema.Validate(s, map[string]any{
+		"query":   "golang",
+		"mode":    "fast",
+		"contact": "dev@example.com",
+		"filter":  []any{"go", "rust"},
+	})
+	if !valid.Valid {
+		t.Fatalf("expected valid JSON-Schema 2020-12 input, got %v", valid.Errors)
+	}
+
+	invalid := schema.Validate(s, map[string]any{
+		"mode":    "slow",
+		"contact": "not-an-email",
+		"filter":  []any{},
+		"extra":   true,
+	})
+	if invalid.Valid {
+		t.Fatal("expected invalid input")
+	}
+	for _, path := range []string{"/query", "/mode", "/contact", "/filter", "/extra"} {
+		if !hasValidationPath(invalid.Errors, path) {
+			t.Fatalf("expected validation path %q in %#v", path, invalid.Errors)
+		}
+	}
+}
+
+func hasValidationPath(errors []schema.ValidationError, path string) bool {
+	for _, err := range errors {
+		if err.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func TestValidate_NestedPropertyPaths(t *testing.T) {
+	s := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"user": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id": map[string]any{"type": "string"},
+				},
+				"required":             []any{"id"},
+				"additionalProperties": false,
+			},
+		},
+		"required": []any{"user"},
+	}
+
+	invalid := schema.Validate(s, map[string]any{
+		"user": map[string]any{"extra": true},
+	})
+	if invalid.Valid {
+		t.Fatal("expected invalid nested input")
+	}
+	for _, path := range []string{"/user/id", "/user/extra"} {
+		if !hasValidationPath(invalid.Errors, path) {
+			t.Fatalf("expected nested validation path %q in %#v", path, invalid.Errors)
+		}
 	}
 }
 
@@ -342,5 +448,23 @@ func TestAdditionalSchemaOptionsAndValidationErrors(t *testing.T) {
 	vr = schema.Validate(schema.JSON{"type": "array", "minItems": float64(2), "maxItems": float64(2)}, []byte(`[1]`))
 	if vr.Valid {
 		t.Fatal("minItems should fail")
+	}
+}
+
+func TestValidate_RejectsExternalFileReference(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret.json")
+	if err := os.WriteFile(secret, []byte(`{"type":"string"}`), 0o600); err != nil {
+		t.Fatalf("write ref target: %v", err)
+	}
+
+	s := schema.JSON{"$ref": "file://" + secret}
+	if _, err := schema.Compile(s); err == nil {
+		t.Fatal("expected compile to reject external file $ref")
+	}
+
+	vr := schema.Validate(s, map[string]any{"any": "value"})
+	if vr.Valid {
+		t.Fatal("external file $ref must not resolve to a valid schema")
 	}
 }

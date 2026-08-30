@@ -423,6 +423,152 @@ logging:
 	}
 }
 
+func TestLoadConfigLoggingOutputYAMLForms(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want logging.Output
+	}{
+		{
+			name: "stdout shorthand",
+			yaml: `name: yaml-service
+environment: staging
+logging:
+  level: info
+  format: json
+  output: stdout
+`,
+			want: logging.OutputStdout(),
+		},
+		{
+			name: "stderr shorthand",
+			yaml: `name: yaml-service
+environment: staging
+logging:
+  level: info
+  format: json
+  output: stderr
+`,
+			want: logging.OutputStderr(),
+		},
+		{
+			name: "file tagged",
+			yaml: `name: yaml-service
+environment: staging
+logging:
+  level: info
+  format: json
+  output:
+    type: file
+    path: /p.log
+`,
+			want: logging.OutputFile("/p.log"),
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			cfgPath := filepath.Join(dir, "config.yml")
+			if err := util.WriteFile(cfgPath, []byte(tc.yaml)); err != nil {
+				t.Fatal(err)
+			}
+
+			var cfg ServiceConfig
+			if err := LoadConfig("yaml-service", &cfg, WithConfigFile(cfgPath)); err != nil {
+				t.Fatalf("LoadConfig failed: %v", err)
+			}
+			if cfg.Logging.Output != tc.want {
+				t.Fatalf("Logging.Output = %+v, want %+v", cfg.Logging.Output, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadConfigExplicitTOML(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+
+	toml := `name = "toml-service"
+environment = "production"
+version = "2.1.0"
+
+[logging]
+level = "debug"
+format = "json"
+output = "stderr"
+caller = true
+`
+	if err := util.WriteFile(cfgPath, []byte(toml)); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg ServiceConfig
+	if err := LoadConfig("toml-service", &cfg, WithConfigFile(cfgPath)); err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.Name != "toml-service" || cfg.Environment != "production" || cfg.Version != "2.1.0" {
+		t.Fatalf("TOML core fields = %+v", cfg)
+	}
+	if cfg.Logging.Output != logging.OutputStderr() {
+		t.Fatalf("Logging.Output = %q, want %q", cfg.Logging.Output, logging.OutputStderr())
+	}
+	if !cfg.Logging.Caller {
+		t.Fatal("logging.caller should load from explicit TOML")
+	}
+}
+
+func TestLoadConfigExplicitTOMLTaggedFileOutput(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.toml")
+
+	toml := `name = "toml-service"
+
+[logging]
+level = "info"
+format = "json"
+
+[logging.output]
+type = "file"
+path = "/var/log/toml-service.log"
+`
+	if err := util.WriteFile(cfgPath, []byte(toml)); err != nil {
+		t.Fatal(err)
+	}
+
+	var cfg ServiceConfig
+	if err := LoadConfig("toml-service", &cfg, WithConfigFile(cfgPath)); err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if want := logging.OutputFile("/var/log/toml-service.log"); cfg.Logging.Output != want {
+		t.Fatalf("Logging.Output = %+v, want %+v", cfg.Logging.Output, want)
+	}
+}
+
+func TestLoggingCallerKeyIsCallerFromEnv(t *testing.T) {
+	t.Setenv("LOGGING_CALLER", "true")
+	t.Setenv("LOGGING_WITH_CALLER", "false")
+
+	var cfg ServiceConfig
+	if err := LoadConfig("svc", &cfg); err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if !cfg.Logging.Caller {
+		t.Fatal("LOGGING_CALLER should set logging.caller")
+	}
+}
+
+func TestLoggingWithCallerEnvKeyDoesNotReplaceCaller(t *testing.T) {
+	t.Setenv("LOGGING_WITH_CALLER", "true")
+
+	var cfg ServiceConfig
+	if err := LoadConfig("svc", &cfg); err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+	if cfg.Logging.Caller {
+		t.Fatal("LOGGING_WITH_CALLER must not set logging.caller; the shared key is caller")
+	}
+}
+
 func TestLoadConfigEnvVarOverridesYAML(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
@@ -757,6 +903,28 @@ func TestResolverPriorityCmdOverConfig(t *testing.T) {
 	}
 }
 
+func TestResolverFindConfigFileSearchPrecedence(t *testing.T) {
+	fs := &mockFS{files: map[string]bool{
+		"./cmd/my-svc/config.yml":     true,
+		"./cmd/svc/config.yml":        true,
+		"../cmd/my-svc/config.yml":    true,
+		"../cmd/svc/config.yml":       true,
+		"../../cmd/my-svc/config.yml": true,
+		"../../cmd/svc/config.yml":    true,
+		"./config/config.yml":         true,
+		"../config/config.yml":        true,
+		"./config.yml":                true,
+		"./cmd/my-svc/config.toml":    true,
+		"./config/config.toml":        true,
+		"./config/config.yaml":        true,
+	}}
+	r := &Resolver{FileSystem: fs}
+	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	if files.ConfigFile != "./cmd/my-svc/config.yml" {
+		t.Fatalf("ConfigFile = %q, want first YAML search path ./cmd/my-svc/config.yml", files.ConfigFile)
+	}
+}
+
 func TestResolverShortNameFallback(t *testing.T) {
 	// For "platform-api", shortName = "api"
 	fs := &mockFS{files: map[string]bool{
@@ -1048,11 +1216,37 @@ func TestGenerateEnvKeyVariants(t *testing.T) {
 						break
 					}
 				}
+
 				if !found {
 					t.Errorf("variants for %q should contain %q, got %v", tc.input, want, variants)
 				}
 			}
 		})
+	}
+}
+
+func TestGenerateEnvKeyVariantsExactDerivation(t *testing.T) {
+	got := generateEnvKeyVariants("LOGGING_OTLP_ENDPOINT_URL")
+	want := []string{
+		"logging_otlp_endpoint_url",
+		"logging.otlp.endpoint.url",
+		"logging.otlp_endpoint_url",
+		"logging.otlp.endpoint_url",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("generateEnvKeyVariants returned %d unique variants: %v", len(got), got)
+	}
+	for _, w := range want {
+		found := false
+		for _, g := range got {
+			if g == w {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("generateEnvKeyVariants missing %q in %v", w, got)
+		}
 	}
 }
 

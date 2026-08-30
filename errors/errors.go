@@ -251,7 +251,7 @@ func ExternalServiceError(service string, cause error) *AppError {
 func Canceled(operation string) *AppError {
 	return &AppError{
 		Code: ErrCodeCanceled, Message: fmt.Sprintf("The %s operation was canceled.", operation),
-		HTTPStatus: 499, Retryable: false,
+		HTTPStatus: http.StatusRequestTimeout, Retryable: false,
 		Details: map[string]any{"operation": operation},
 	}
 }

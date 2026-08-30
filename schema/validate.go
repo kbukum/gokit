@@ -2,7 +2,12 @@ package schema
 
 import (
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"strings"
+
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/santhosh-tekuri/jsonschema/v6/kind"
 )
 
 // ValidationError describes a single validation failure.
@@ -33,8 +38,9 @@ func invalidResult(message string) ValidationResult {
 // CompiledSchema is a JSON Schema document that has been checked against structural limits
 // and is ready to validate values repeatedly without re-inspecting the schema itself.
 type CompiledSchema struct {
-	schema JSON
-	limits ValidationLimits
+	schema   JSON
+	limits   ValidationLimits
+	compiled *jsonschema.Schema
 }
 
 // Compile validates a schema document against the default structural limits
@@ -51,6 +57,11 @@ func CompileWithLimits(s JSON, limits ValidationLimits) (*CompiledSchema, error)
 		if err := limits.check("schema", s); err != nil {
 			return nil, err
 		}
+		compiled, err := compileJSONSchema(s)
+		if err != nil {
+			return nil, err
+		}
+		return &CompiledSchema{schema: s, limits: limits, compiled: compiled}, nil
 	}
 	return &CompiledSchema{schema: s, limits: limits}, nil
 }
@@ -77,9 +88,91 @@ func (c *CompiledSchema) Validate(value any) ValidationResult {
 		return invalidResult(err.Error())
 	}
 
+	if err := c.compiled.Validate(data); err != nil {
+		return validationResultFromError(err)
+	}
+	return ValidationResult{Valid: true}
+}
+
+func compileJSONSchema(s JSON) (*jsonschema.Schema, error) {
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft2020)
+	compiler.AssertFormat()
+	compiler.UseLoader(noExternalLoader{})
+	if err := compiler.AddResource("gokit://schema.json", s); err != nil {
+		return nil, err
+	}
+	return compiler.Compile("gokit://schema.json")
+}
+
+// noExternalLoader refuses every external schema reference. The compiler only
+// consults a URLLoader for a $ref/$schema URL that was not explicitly added as
+// a resource, so untrusted schemas cannot read local files (file://) or reach
+// out over the network; the added root and the built-in draft metaschemas are
+// resolved without it.
+type noExternalLoader struct{}
+
+func (noExternalLoader) Load(url string) (any, error) {
+	return nil, fmt.Errorf("schema: external reference %q is not permitted", url)
+}
+
+func validationResultFromError(err error) ValidationResult {
+	var validationErr *jsonschema.ValidationError
+	if !stderrors.As(err, &validationErr) {
+		return invalidResult(err.Error())
+	}
+
 	var errs []ValidationError
-	validateValue(c.schema, data, "", &errs)
+	collectOutputErrors(validationErr.DetailedOutput(), &errs)
 	return ValidationResult{Valid: len(errs) == 0, Errors: errs}
+}
+
+func collectOutputErrors(unit *jsonschema.OutputUnit, errs *[]ValidationError) {
+	if unit == nil {
+		return
+	}
+	for i := range unit.Errors {
+		collectOutputErrors(&unit.Errors[i], errs)
+	}
+	if unit.Error == nil {
+		return
+	}
+	message := unit.Error.String()
+	// Prefer the typed error kind over parsing the localized message so nested
+	// required/additionalProperties failures report the exact child pointer,
+	// independent of message wording, escaping, or locale.
+	switch k := unit.Error.Kind.(type) {
+	case *kind.Required:
+		for _, name := range k.Missing {
+			*errs = append(*errs, ValidationError{
+				Path:    childPointer(unit.InstanceLocation, name),
+				Message: message,
+			})
+		}
+	case *kind.AdditionalProperties:
+		for _, name := range k.Properties {
+			*errs = append(*errs, ValidationError{
+				Path:    childPointer(unit.InstanceLocation, name),
+				Message: message,
+			})
+		}
+	default:
+		*errs = append(*errs, ValidationError{
+			Path:    unit.InstanceLocation,
+			Message: message,
+		})
+	}
+}
+
+// childPointer appends a property name to an RFC 6901 JSON pointer, escaping the
+// token so names containing '/' or '~' produce a valid pointer.
+func childPointer(parent, name string) string {
+	return parent + "/" + escapeJSONPointerToken(name)
+}
+
+func escapeJSONPointerToken(token string) string {
+	token = strings.ReplaceAll(token, "~", "~0")
+	return strings.ReplaceAll(token, "/", "~1")
 }
 
 // Validate checks a value against a JSON Schema and returns validation results.
@@ -120,118 +213,4 @@ func normalize(value any) (any, error) {
 		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 	return data, nil
-}
-
-// validateValue recursively validates a value against a schema.
-func validateValue(s JSON, value any, path string, errs *[]ValidationError) {
-	schemaType, _ := s["type"].(string)
-
-	switch schemaType {
-	case "object":
-		validateObject(s, value, path, errs)
-	case "array":
-		validateArray(s, value, path, errs)
-	case "string":
-		validateString(s, value, path, errs)
-	case "number", "integer":
-		validateNumber(s, value, path, errs)
-	case "boolean":
-		if _, ok := value.(bool); !ok {
-			*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected boolean, got %T", value)})
-		}
-	}
-}
-
-func validateObject(s JSON, value any, path string, errs *[]ValidationError) {
-	obj, ok := value.(map[string]any)
-	if !ok {
-		if value == nil {
-			obj = map[string]any{}
-		} else {
-			*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected object, got %T", value)})
-			return
-		}
-	}
-
-	if required, ok := s["required"].([]any); ok {
-		for _, r := range required {
-			name, _ := r.(string)
-			if _, exists := obj[name]; !exists {
-				fieldPath := name
-				if path != "" {
-					fieldPath = path + "/" + name
-				}
-				*errs = append(*errs, ValidationError{Path: fieldPath, Message: "required field missing"})
-			}
-		}
-	}
-
-	if properties, ok := s["properties"].(map[string]any); ok {
-		for key, propSchema := range properties {
-			if ps, ok := propSchema.(map[string]any); ok {
-				if val, exists := obj[key]; exists {
-					validateValue(ps, val, path+"/"+key, errs)
-				}
-			}
-		}
-	}
-}
-
-func validateArray(s JSON, value any, path string, errs *[]ValidationError) {
-	arr, ok := value.([]any)
-	if !ok {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected array, got %T", value)})
-		return
-	}
-	if items, ok := s["items"].(map[string]any); ok {
-		for i, item := range arr {
-			validateValue(items, item, fmt.Sprintf("%s/%d", path, i), errs)
-		}
-	}
-	if minItems, ok := s["minItems"].(float64); ok && float64(len(arr)) < minItems {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("array has %d items, minimum is %d", len(arr), int(minItems))})
-	}
-	if maxItems, ok := s["maxItems"].(float64); ok && float64(len(arr)) > maxItems {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("array has %d items, maximum is %d", len(arr), int(maxItems))})
-	}
-}
-
-func validateString(s JSON, value any, path string, errs *[]ValidationError) {
-	str, ok := value.(string)
-	if !ok {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected string, got %T", value)})
-		return
-	}
-	if minLen, ok := s["minLength"].(float64); ok && float64(len(str)) < minLen {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("string length %d is less than minimum %d", len(str), int(minLen))})
-	}
-	if maxLen, ok := s["maxLength"].(float64); ok && float64(len(str)) > maxLen {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("string length %d exceeds maximum %d", len(str), int(maxLen))})
-	}
-	if enum, ok := s["enum"].([]any); ok {
-		for _, e := range enum {
-			if e == str {
-				return
-			}
-		}
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("value %q is not in enum %v", str, enum)})
-	}
-}
-
-func validateNumber(s JSON, value any, path string, errs *[]ValidationError) {
-	schemaType, _ := s["type"].(string)
-	num, ok := value.(float64)
-	if !ok {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected number, got %T", value)})
-		return
-	}
-	if schemaType == "integer" && num != float64(int64(num)) {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("expected integer, got %v", num)})
-	}
-	if minimum, ok := s["minimum"].(float64); ok && num < minimum {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("value %v is less than minimum %v", num, minimum)})
-	}
-	if maximum, ok := s["maximum"].(float64); ok && num > maximum {
-		*errs = append(*errs, ValidationError{Path: path, Message: fmt.Sprintf("value %v exceeds maximum %v", num, maximum)})
-	}
 }

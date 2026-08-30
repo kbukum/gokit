@@ -15,8 +15,8 @@
 > `v0.3.0-alpha.1`, a prerelease for evaluation and integration testing; APIs
 > may change before the stable `v0.3.0`.
 
-> **Sibling projects.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust) · [**pykit**](https://github.com/kbukum/pykit) (Python).
-> Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are evaluated for parity across all three.
+> **Sibling project.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust).
+> Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are evaluated for parity across both.
 
 ## Browse by Domain
 
@@ -46,7 +46,7 @@ CI still runs full-workspace validation; on pull requests the `changes` job also
 - **Production resilience** — circuit breakers, retries with backoff + jitter, bulkheads, rate limiting, OpenTelemetry tracing & metrics.
 - **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`, and `Duplex` traits with composable middleware and sink combinators.
 - **Per-module versioning** — every module has its own matching tag, while normal releases are cut in lock-step for convenience. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
-- **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust) and [pykit](https://github.com/kbukum/pykit) (Python).
+- **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust).
 
 ## Install
 

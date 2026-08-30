@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/kbukum/gokit/contracttest/golden"
 )
 
 func TestAppError_New_Success(t *testing.T) {
@@ -229,6 +231,7 @@ func TestAppError_Constructors_Table(t *testing.T) {
 		{"DatabaseError", DatabaseError(nil), ErrCodeDatabaseError, http.StatusInternalServerError, false},
 		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusInternalServerError, true},
 		{"Validation", Validation("bad input"), ErrCodeInvalidInput, http.StatusUnprocessableEntity, false},
+		{"Canceled", Canceled("search"), ErrCodeCanceled, http.StatusRequestTimeout, false},
 	}
 
 	for _, tc := range tests {
@@ -409,6 +412,7 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 		{ErrCodeInternal, http.StatusInternalServerError},
 		{ErrCodeDatabaseError, http.StatusInternalServerError},
 		{ErrCodeExternalService, http.StatusInternalServerError},
+		{ErrCodeCanceled, http.StatusRequestTimeout},
 	}
 
 	constructorForCode := map[ErrorCode]func() *AppError{
@@ -429,6 +433,7 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 		ErrCodeInternal:           func() *AppError { return Internal(nil) },
 		ErrCodeDatabaseError:      func() *AppError { return DatabaseError(nil) },
 		ErrCodeExternalService:    func() *AppError { return ExternalServiceError("ext", nil) },
+		ErrCodeCanceled:           func() *AppError { return Canceled("op") },
 	}
 
 	for _, tc := range tests {
@@ -473,6 +478,7 @@ func TestIsRetryableCode_Exhaustive(t *testing.T) {
 		{ErrCodeInvalidToken, false},
 		{ErrCodeInternal, false},
 		{ErrCodeDatabaseError, false},
+		{ErrCodeCanceled, false},
 	}
 
 	for _, tc := range tests {
@@ -518,6 +524,7 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		{ErrCodeForbidden, "https://gokit.dev/errors/forbidden", http.StatusForbidden},
 		{ErrCodeTokenExpired, "https://gokit.dev/errors/token-expired", http.StatusUnauthorized},
 		{ErrCodeInvalidToken, "https://gokit.dev/errors/invalid-token", http.StatusUnauthorized},
+		{ErrCodeCanceled, "https://gokit.dev/errors/canceled", http.StatusRequestTimeout},
 		{ErrCodeInternal, "https://gokit.dev/errors/internal-error", http.StatusInternalServerError},
 		{ErrCodeDatabaseError, "https://gokit.dev/errors/database-error", http.StatusInternalServerError},
 		{ErrCodeExternalService, "https://gokit.dev/errors/external-service-error", http.StatusInternalServerError},
@@ -538,6 +545,7 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 		ErrCodeForbidden:          func() *AppError { return Forbidden("") },
 		ErrCodeTokenExpired:       TokenExpired,
 		ErrCodeInvalidToken:       InvalidToken,
+		ErrCodeCanceled:           func() *AppError { return Canceled("op") },
 		ErrCodeInternal:           func() *AppError { return Internal(nil) },
 		ErrCodeDatabaseError:      func() *AppError { return DatabaseError(nil) },
 		ErrCodeExternalService:    func() *AppError { return ExternalServiceError("ext", nil) },
@@ -563,6 +571,36 @@ func TestToProblemDetail_AllCodes(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCanceledGoldenJSON(t *testing.T) {
+	t.Parallel()
+
+	err := Canceled("search")
+	appErrJSON, marshalErr := json.Marshal(err)
+	if marshalErr != nil {
+		t.Fatalf("marshal AppError: %v", marshalErr)
+	}
+	golden.AssertJSON(t, appErrJSON, `{
+		"code": "CANCELED",
+		"message": "The search operation was canceled.",
+		"retryable": false,
+		"details": {"operation": "search"}
+	}`)
+
+	problemJSON, marshalErr := json.Marshal(err.ToProblemDetail())
+	if marshalErr != nil {
+		t.Fatalf("marshal ProblemDetail: %v", marshalErr)
+	}
+	golden.AssertJSON(t, problemJSON, `{
+		"type": "https://gokit.dev/errors/canceled",
+		"title": "Canceled",
+		"status": 408,
+		"detail": "The search operation was canceled.",
+		"code": "CANCELED",
+		"retryable": false,
+		"details": {"operation": "search"}
+	}`)
 }
 
 func TestToProblemDetail_Detail(t *testing.T) {

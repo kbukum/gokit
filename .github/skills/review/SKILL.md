@@ -11,7 +11,7 @@ user-invocable: true
 
 # Reviewing gokit against its engineering baseline
 
-gokit is shared foundation infrastructure: a defect in a core package propagates to every sub-module, every adapter, and every downstream consumer (rskit/pykit parity repos and services that import gokit). The bar is correspondingly high. This skill encodes gokit's permanent review baseline as eight focused passes plus three orchestrators.
+gokit is shared foundation infrastructure: a defect in a core package propagates to every sub-module, every adapter, and every downstream consumer (rskit parity repo and services that import gokit). The bar is correspondingly high. This skill encodes gokit's permanent review baseline as eight focused passes plus three orchestrators.
 
 The authoritative baseline lives in [`.github/copilot-instructions.md`](../../copilot-instructions.md).
 A plan, issue, or roadmap may be passed in **as a scope checklist only** — it defines intended scope, never excuses a baseline violation. If the code diverges from the plan, report the divergence; the baseline wins.

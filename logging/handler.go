@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"io"
 	"log/slog"
 	"time"
@@ -12,6 +13,7 @@ type pipeline struct {
 	handler slog.Handler
 	level   *slog.LevelVar
 	otlp    *OTLPProvider
+	closers []io.Closer
 }
 
 // buildPipeline composes the handler chain for cfg and opts:
@@ -33,8 +35,17 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 	lv.Set(level)
 
 	writer := opts.writer
-	if writer == nil {
-		writer = outputWriter(cfg.Output)
+	var closers []io.Closer
+	if writer == nil && opts.baseSink == nil {
+		var closer io.Closer
+		var err error
+		writer, closer, err = outputSink(cfg.Output)
+		if err != nil {
+			return pipeline{}, err
+		}
+		if closer != nil {
+			closers = append(closers, closer)
+		}
 	}
 
 	var manager *ModuleLevelManager
@@ -59,7 +70,7 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 			Version:     cfg.Version,
 		})
 		if err != nil {
-			return pipeline{}, err
+			return pipeline{}, errors.Join(err, closeAll(closers))
 		}
 		provider = p
 		branches = append(branches, newModuleLevelHandler(newOTLPHandler(provider, lv), manager))
@@ -81,7 +92,17 @@ func buildPipeline(cfg *Config, serviceName string, opts options) (pipeline, err
 		h = newSamplingHandler(h, cfg.Sampling, opts.now)
 	}
 
-	return pipeline{handler: h, level: lv, otlp: provider}, nil
+	return pipeline{handler: h, level: lv, otlp: provider, closers: closers}, nil
+}
+
+func closeAll(closers []io.Closer) error {
+	var errs []error
+	for _, closer := range closers {
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // options holds the constructor configuration set through the Option functions.

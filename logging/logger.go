@@ -2,7 +2,9 @@ package logging
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"time"
@@ -26,12 +28,14 @@ type Logger struct {
 	level   *slog.LevelVar
 	// otlp is non-nil only on the root logger returned by a constructor, so
 	// Close shuts the exporter down exactly once.
-	otlp *OTLPProvider
+	otlp    *OTLPProvider
+	closers []io.Closer
 }
 
 // New builds a Logger from cfg for the named service. Options customize the
 // sink and middleware — see [WithHandler], [WithBaseSink], [WithMasker].
-// It returns an error only when an enabled OTLP exporter fails to initialize.
+// It returns an error when a configured file output cannot be opened or when an
+// enabled OTLP exporter fails to initialize.
 func New(cfg *Config, serviceName string, opts ...Option) (*Logger, error) {
 	var o options
 	for _, fn := range opts {
@@ -46,6 +50,7 @@ func New(cfg *Config, serviceName string, opts ...Option) (*Logger, error) {
 		service: serviceName,
 		level:   p.level,
 		otlp:    p.otlp,
+		closers: p.closers,
 	}, nil
 }
 
@@ -67,7 +72,7 @@ func MustNew(cfg *Config, serviceName string, opts ...Option) *Logger {
 // nil-fallback wiring inside the kit. Defaults are applied so the secure
 // baseline — including value masking — is in effect.
 func NewDefault(serviceName string) *Logger {
-	cfg := &Config{Level: "info", Format: "console", Output: "stdout", Timestamp: true}
+	cfg := &Config{Level: "info", Format: "console", Output: OutputStdout(), Timestamp: true}
 	cfg.ApplyDefaults()
 	l, _ := New(cfg, serviceName) //nolint:errcheck // OTLP disabled, so New cannot error here
 	return l
@@ -75,10 +80,14 @@ func NewDefault(serviceName string) *Logger {
 
 // NewFromEnv builds a Logger configured from LOG_* environment variables.
 func NewFromEnv(serviceName string) (*Logger, error) {
+	output, err := parseOutputString(getEnvOrDefault("LOG_OUTPUT", string(OutputTypeStdout)))
+	if err != nil {
+		return nil, err
+	}
 	cfg := &Config{
 		Level:     getEnvOrDefault("LOG_LEVEL", "info"),
 		Format:    getEnvOrDefault("LOG_FORMAT", "console"),
-		Output:    getEnvOrDefault("LOG_OUTPUT", "stdout"),
+		Output:    output,
 		NoColor:   getEnvOrDefault("LOG_NO_COLOR", "false") == BooleanTrue,
 		Timestamp: getEnvOrDefault("LOG_TIMESTAMP", "true") == BooleanTrue,
 	}
@@ -109,16 +118,22 @@ func (l *Logger) Level() slog.Level {
 	return l.level.Level()
 }
 
-// Close shuts down the OTLP exporter, flushing pending logs. It is a no-op on
-// derived loggers and when OTLP is disabled. The flush is bounded by
-// [otlpShutdownTimeout] so an unavailable collector cannot stall shutdown.
+// Close shuts down owned sinks and the OTLP exporter, flushing pending logs. The OTLP flush is bounded by [otlpShutdownTimeout] so an unavailable collector cannot stall shutdown.
 func (l *Logger) Close() error {
-	if l.otlp == nil {
-		return nil
+	var errs []error
+	if l.otlp != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
+		defer cancel()
+		if err := l.otlp.Shutdown(ctx); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
-	defer cancel()
-	return l.otlp.Shutdown(ctx)
+	for _, closer := range l.closers {
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return stderrors.Join(errs...)
 }
 
 // derive returns a Logger backed by a new *slog.Logger, sharing the level var

@@ -13,7 +13,7 @@ Standing, re-runnable review of a **change set** in this repository — a branch
 ## Pass 0 — Scope and context
 
 - Get the actual diff: `git diff <base>...HEAD --stat`, then per file. Review only what changed plus its affected area; do not audit the whole repo (that is [`review-project.md`](./review-project.md)).
-- gokit is a foundation toolkit: a change to a core package's public surface fans out to every sub-module, nested adapter, and downstream repo (rskit/pykit parity, consuming services). List that affected area before reviewing.
+- gokit is a foundation toolkit: a change to a core package's public surface fans out to every sub-module, nested adapter, and downstream repo (rskit parity, consuming services). List that affected area before reviewing.
 - Note whether the change belongs in the **root module**, a **sub-module** (own `go.mod`), or a **nested adapter** (e.g. `storage/s3`), and whether it belongs in *this* package at all.
 
 ## Passes — run in order, stop early on a structural failure

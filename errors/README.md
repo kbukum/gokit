@@ -90,7 +90,7 @@ The `ErrorCode` type defines all machine-readable error categories:
 | `CONNECTION_FAILED` | 502 | Yes |
 | `TIMEOUT` | 504 | Yes |
 | `RATE_LIMITED` | 429 | Yes |
-| `CANCELED` | 499 | No |
+| `CANCELED` | 408 | No |
 
 ### Builder Methods
 

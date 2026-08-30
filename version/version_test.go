@@ -5,7 +5,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"testing"
-	"time"
 )
 
 // src builds a source with no embedded build info, giving deterministic,
@@ -29,8 +28,8 @@ func TestComputeDefaults(t *testing.T) {
 	if info.IsRelease {
 		t.Error("dev should not be a release")
 	}
-	if !info.BuildDate.IsZero() {
-		t.Errorf("expected zero BuildDate for dev build, got %v", info.BuildDate)
+	if info.BuildDate != "" {
+		t.Errorf("expected empty BuildDate for dev build, got %q", info.BuildDate)
 	}
 }
 
@@ -49,8 +48,8 @@ func TestComputeWithBuildTime(t *testing.T) {
 	if info.GoVersion != "go1.22.0" {
 		t.Errorf("expected 'go1.22.0', got %q", info.GoVersion)
 	}
-	if info.BuildDate.Year() != 2024 {
-		t.Errorf("expected build year 2024, got %d", info.BuildDate.Year())
+	if info.BuildDate != "2024-01-15" {
+		t.Errorf("expected build date 2024-01-15, got %q", info.BuildDate)
 	}
 }
 
@@ -60,8 +59,8 @@ func TestComputeInvalidBuildTime(t *testing.T) {
 	if info.Version != "1.0.0" {
 		t.Errorf("expected '1.0.0', got %q", info.Version)
 	}
-	if !info.BuildDate.IsZero() {
-		t.Errorf("invalid build time must leave BuildDate zero, got %v", info.BuildDate)
+	if info.BuildDate != "" {
+		t.Errorf("invalid build time must leave BuildDate empty, got %q", info.BuildDate)
 	}
 }
 
@@ -115,8 +114,8 @@ func TestApplyBuildInfoFillsUnsetFields(t *testing.T) {
 	if !info.IsDirty {
 		t.Error("expected IsDirty true from vcs.modified")
 	}
-	if info.BuildDate.Year() != 2025 {
-		t.Errorf("expected BuildDate from vcs.time, got %v", info.BuildDate)
+	if info.BuildDate != "2025-02-03" {
+		t.Errorf("expected BuildDate from vcs.time, got %q", info.BuildDate)
 	}
 	if info.BuildTime != "2025-02-03T04:05:06Z" {
 		t.Errorf("expected BuildTime from vcs.time, got %q", info.BuildTime)
@@ -270,8 +269,24 @@ func TestPackageAccessors(t *testing.T) {
 func TestBuildDateFarFuture(t *testing.T) {
 	t.Parallel()
 	info := compute(src("1.0.0", "ddd4444", "", "2099-12-31T23:59:59Z", "go1.22"))
-	want, _ := time.Parse(time.RFC3339, "2099-12-31T23:59:59Z")
-	if !info.BuildDate.Equal(want) {
-		t.Errorf("expected BuildDate %v, got %v", want, info.BuildDate)
+	if info.BuildDate != "2099-12-31" {
+		t.Errorf("expected BuildDate 2099-12-31, got %q", info.BuildDate)
+	}
+}
+
+// A dirty working tree is never a release, even when the version string is clean.
+func TestIsReleaseDirtyTreeIsNotRelease(t *testing.T) {
+	t.Parallel()
+	bi := &debug.BuildInfo{
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.modified", Value: "true"},
+		},
+	}
+	info := compute(source{version: "1.0.0", buildInfo: bi})
+	if !info.IsDirty {
+		t.Fatal("expected IsDirty true from vcs.modified")
+	}
+	if info.IsRelease {
+		t.Error("dirty build of a clean version must not be a release")
 	}
 }

@@ -49,5 +49,6 @@ docs/testutil*.md
 .secrets
 .env
 
-# Temporary / planning files
-tmp/
+# Plan scratch — gitignored working area (keep the folder, ignore contents)
+/tmp/*
+!/tmp/.keep

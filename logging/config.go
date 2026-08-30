@@ -10,11 +10,12 @@ const BooleanTrue = "true"
 
 // Config contains logging configuration.
 type Config struct {
-	Level        string            `yaml:"level" mapstructure:"level"`
-	Format       string            `yaml:"format" mapstructure:"format"`
-	Output       string            `yaml:"output" mapstructure:"output"`
-	NoColor      bool              `yaml:"no_color" mapstructure:"no_color"`
-	Timestamp    bool              `yaml:"timestamp" mapstructure:"timestamp"`
+	Level     string `yaml:"level" mapstructure:"level"`
+	Format    string `yaml:"format" mapstructure:"format"`
+	Output    Output `yaml:"output" mapstructure:"output"`
+	NoColor   bool   `yaml:"no_color" mapstructure:"no_color"`
+	Timestamp bool   `yaml:"timestamp" mapstructure:"timestamp"`
+	// Caller loads from the shared cross-kit wire key "caller"; rskit serializes the same key via #[serde(rename = "caller")].
 	Caller       bool              `yaml:"caller" mapstructure:"caller"`
 	ServiceName  string            `yaml:"service_name" mapstructure:"service_name"` // used as tag in log output
 	Environment  string            `yaml:"environment" mapstructure:"environment"`   // deployment environment (e.g. development, staging, production)
@@ -28,9 +29,9 @@ type Config struct {
 // OTLPConfig configures the OpenTelemetry OTLP log export bridge.
 type OTLPConfig struct {
 	Enabled  bool              `yaml:"enabled" mapstructure:"enabled"`   // Default: false
-	Endpoint string            `yaml:"endpoint" mapstructure:"endpoint"` // e.g., "localhost:4317"
+	Endpoint string            `yaml:"endpoint" mapstructure:"endpoint"` // collector endpoint; a scheme-less value takes its scheme from Insecure, an explicit scheme must match it
 	Protocol string            `yaml:"protocol" mapstructure:"protocol"` // "grpc" or "http" (default: "grpc")
-	Insecure bool              `yaml:"insecure" mapstructure:"insecure"` // Skip TLS (for dev)
+	Insecure bool              `yaml:"insecure" mapstructure:"insecure"` // permit plaintext http:// transport; secure https:// by default
 	Headers  map[string]string `yaml:"headers" mapstructure:"headers"`   // Auth headers
 }
 
@@ -49,8 +50,8 @@ func (c *Config) ApplyDefaults() {
 	if c.Format == "" {
 		c.Format = "console"
 	}
-	if c.Output == "" {
-		c.Output = "stdout"
+	if c.Output.IsZero() {
+		c.Output = OutputStdout()
 	}
 	if !c.Timestamp {
 		c.Timestamp = true
@@ -59,7 +60,7 @@ func (c *Config) ApplyDefaults() {
 		c.Masking.Enabled = true
 	}
 	if c.Masking.Replacement == "" {
-		c.Masking.Replacement = "***REDACTED***"
+		c.Masking.Replacement = "[REDACTED]"
 	}
 	if c.Sampling.InitialRate == 0 {
 		c.Sampling.InitialRate = 100
@@ -84,6 +85,9 @@ func (c *Config) Validate() error {
 	validFormats := []string{"json", "console", "text", FormatPretty}
 	if !contains(validFormats, c.Format) {
 		return fmt.Errorf("logging.format must be one of %v (got: %s)", validFormats, c.Format)
+	}
+	if err := c.Output.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

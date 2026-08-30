@@ -19,7 +19,7 @@ func TestContextValueIsMasked(t *testing.T) {
 	cfg := &Config{
 		Level:   "info",
 		Format:  "json",
-		Output:  "stdout",
+		Output:  OutputStdout(),
 		Masking: MaskingConfig{Enabled: true, Replacement: "***REDACTED***"},
 	}
 	l, err := New(cfg, "test", WithWriter(&buf))
@@ -46,7 +46,7 @@ func TestNewDefaultMasks(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	cfg := &Config{Level: "info", Format: "json", Output: "stdout", Timestamp: true}
+	cfg := &Config{Level: "info", Format: "json", Output: OutputStdout(), Timestamp: true}
 	cfg.ApplyDefaults() // the step NewDefault performs to enable the secure baseline
 	l, err := New(cfg, "svc", WithWriter(&buf))
 	if err != nil {
@@ -58,7 +58,7 @@ func TestNewDefaultMasks(t *testing.T) {
 		t.Errorf("NewDefault config should mask secrets, got %q", buf.String())
 	}
 	m := decodeLine(t, &buf)
-	if m["password"] != "***REDACTED***" {
+	if m["password"] != "[REDACTED]" {
 		t.Errorf("password should be masked, got %v", m["password"])
 	}
 }
@@ -72,7 +72,7 @@ func TestMaskLogValuerGroup(t *testing.T) {
 	cfg := &Config{
 		Level:   "info",
 		Format:  "json",
-		Output:  "stdout",
+		Output:  OutputStdout(),
 		Masking: MaskingConfig{Enabled: true, Replacement: "***REDACTED***"},
 	}
 	l, err := New(cfg, "test", WithWriter(&buf))
@@ -102,7 +102,7 @@ func TestFanoutHonorsBranchEnabled(t *testing.T) {
 
 	var defaultSink bytes.Buffer
 	consumer := &capturingHandler{level: slog.LevelDebug}
-	cfg := &Config{Level: "info", Format: "json", Output: "stdout", Timestamp: true}
+	cfg := &Config{Level: "info", Format: "json", Output: OutputStdout(), Timestamp: true}
 	l, err := New(cfg, "test", WithWriter(&defaultSink), WithHandler(consumer))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -128,7 +128,7 @@ func TestModuleOverrideStillReachesSinks(t *testing.T) {
 	cfg := &Config{
 		Level:        "info",
 		Format:       "json",
-		Output:       "stdout",
+		Output:       OutputStdout(),
 		Timestamp:    true,
 		ModuleLevels: map[string]string{"db": "debug"},
 	}
@@ -161,7 +161,7 @@ func TestModuleOverrideGatesCustomHandler(t *testing.T) {
 	cfg := &Config{
 		Level:        "debug",
 		Format:       "json",
-		Output:       "stdout",
+		Output:       OutputStdout(),
 		Timestamp:    true,
 		ModuleLevels: map[string]string{"quiet": "warn"},
 	}
@@ -206,7 +206,7 @@ func TestConsoleGroupedBoundAttrKey(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	cfg := &Config{Level: "info", Format: "console", Output: "stdout", NoColor: true}
+	cfg := &Config{Level: "info", Format: "console", Output: OutputStdout(), NoColor: true}
 	l, err := New(cfg, "test", WithWriter(&buf))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -229,7 +229,7 @@ func TestConsoleAttrBeforeGroupNotMoved(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	cfg := &Config{Level: "info", Format: "console", Output: "stdout", NoColor: true}
+	cfg := &Config{Level: "info", Format: "console", Output: OutputStdout(), NoColor: true}
 	l, err := New(cfg, "test", WithWriter(&buf))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -256,7 +256,7 @@ func TestSamplingPerLevelBudget(t *testing.T) {
 	cfg := &Config{
 		Level:     "debug",
 		Format:    "json",
-		Output:    "stdout",
+		Output:    OutputStdout(),
 		Timestamp: true,
 		Sampling:  SamplingConfig{Enabled: true, InitialRate: 2, ThereafterRate: 0},
 	}

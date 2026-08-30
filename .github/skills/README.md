@@ -22,7 +22,7 @@ and drive tasks through [`toven`](../../toven.toml), the repo's argv-first task 
 | [`review`](review/SKILL.md) | Run the eight-pass engineering-baseline review over a diff, module, or the tree. |
 | [`new-module`](new-module/SKILL.md) | Scaffold a new package/module — placement, go.mod, doc.go, domains.toml, go.work. |
 | [`new-backend`](new-backend/SKILL.md) | Add a storage/vectorstore/messaging/cache/llm adapter as a typed-registry contrib sub-module. |
-| [`parity`](parity/SKILL.md) | Align a capability with its sibling kits — mirror whichever kit is strongest in that scope, keep gokit idiomatic Go, and keep the parity matrix accurate. |
+| [`parity`](parity/SKILL.md) | Align a capability with its sibling kit rskit — mirror whichever kit is strongest in that scope, keep gokit idiomatic Go, and keep the parity matrix accurate. |
 | [`release`](release/SKILL.md) | Cut a release — semver bump, CHANGELOG, full gates, per-module tags. |
 | [`docs`](docs/SKILL.md) | Review/update docs to the repo's standards (flowing paragraphs without hard column wrapping) and up-to-date accuracy (commands, module structure, examples match the code). |
 

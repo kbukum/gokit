@@ -43,8 +43,7 @@ func main() {
 }
 ```
 
-`New` returns `(*Logger, error)` — construction fails only when an enabled OTLP exporter cannot
-initialize, so handle it at the composition root:
+`New` returns `(*Logger, error)` — construction fails when a configured file output cannot be opened or when an enabled OTLP exporter cannot initialize, so handle it at the composition root:
 
 ```go
 cfg := &logging.Config{Level: "info", Format: "json", ServiceName: "my-service"}
@@ -109,7 +108,7 @@ bringing your own backend.
 logging:
   level: info              # debug | info | warn | error | fatal | trace
   format: json             # json | console | text
-  output: stdout           # stdout | stderr
+  output: stdout           # stdout | stderr | { type: file, path: ... }
   no_color: false
   timestamp: true
   caller: false
@@ -122,7 +121,7 @@ logging:
       - my_secret_field
     value_patterns:          # additional regex patterns
       - 'MYSECRET_[A-Z0-9]{20}'
-    replacement: "***REDACTED***"
+    replacement: "[REDACTED]"   # default token substituted for redacted values
     preserve_last: 0         # preserve last N chars (0 = full redaction)
 
   # Rate-based sampling
@@ -209,7 +208,7 @@ masking:
   preserve_last: 4
 ```
 
-This turns `"password": "hunter2"` into `"password": "***REDACTED***ter2"`.
+This turns `"password": "hunter2"` into `"password": "[REDACTED]ter2"`.
 
 ## Sampling
 
@@ -399,7 +398,7 @@ log.Info("event", logging.Fields("internal_id", "secret-123"))
 
 | Function / Type | Description |
 |----------------|-------------|
-| `New(cfg, name, ...Option)` | Create logger from config; returns `(*Logger, error)` (errors only on OTLP init) |
+| `New(cfg, name, ...Option)` | Create logger from config; returns `(*Logger, error)` (errors on file-sink open or OTLP init) |
 | `MustNew(cfg, name, ...Option)` | Like `New` but panics on error — for compile-safe/test configs |
 | `NewDefault(name)` | Create a console logger with defaults; single return, never fails |
 | `NewFromEnv(name)` | Create logger from `LOG_LEVEL`, `LOG_FORMAT`, … env vars; returns `(*Logger, error)` |

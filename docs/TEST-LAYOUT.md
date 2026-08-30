@@ -1,6 +1,6 @@
 # Test layout
 
-The single source of truth for **where tests live** in gokit and **how they are named**. It describes gokit as it already is, so the convention can be applied consistently as packages are hardened. This is the Go-idiomatic sibling of rskit's `docs/TEST-LAYOUT.md` and pykit's equivalent: the same three tiers, expressed the Go way.
+The single source of truth for **where tests live** in gokit and **how they are named**. It describes gokit as it already is, so the convention can be applied consistently as packages are hardened. This is the Go-idiomatic sibling of rskit's `docs/TEST-LAYOUT.md`: the same three tiers, expressed the Go way.
 
 The reuse rule for shared test tooling — fakes, clocks, harnesses, assertions belong in the owning `testutil`, never inline — is governed together with the production concern owners in [`concern-owners.md`](concern-owners.md). Naming and file-organization rules for source live in [`naming-and-structure.md`](naming-and-structure.md); this document covers test placement only.
 
