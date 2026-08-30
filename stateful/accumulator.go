@@ -2,19 +2,38 @@ package stateful
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
+// ErrAccumulatorClosed is returned by write operations (Append, Touch) invoked
+// after the accumulator has been closed. It lets callers detect a closed
+// accumulator instead of silently writing into a store whose Close only
+// released resources without rejecting later use.
+var ErrAccumulatorClosed = errors.New("stateful: accumulator closed")
+
 // Accumulator accumulates values of type V with configurable flushing.
 // Thread-safe for concurrent Append operations.
+//
+// After Close, the accumulator enforces a closed-state contract: mutating
+// operations (Append, Flush, Touch) return [ErrAccumulatorClosed] and never
+// touch the released store. Close holds the accumulator lock across the
+// underlying store close and mutating operations take that same lock, so no
+// mutating operation crosses the shutdown boundary and a concurrent second
+// Close blocks until the first completes and then returns the same error. Read
+// operations (Size, Measure, IsExpired) are lock-free and best-effort: after
+// Close they observe whatever the closed store reports (typically empty) rather
+// than failing.
 type Accumulator[V any] struct {
 	store     Store[V]
 	config    Config[V]
 	measurer  Measurer[V]
 	created   time.Time
 	lastFlush time.Time
+	closed    bool
+	closeErr  error
 	mu        sync.RWMutex
 }
 
@@ -52,6 +71,12 @@ func WithMeasurer[V any](m Measurer[V]) Option[V] {
 //
 // If KeepAlive is enabled, this resets the TTL.
 func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return ErrAccumulatorClosed
+	}
+
 	// Handle keep-alive
 	if a.config.KeepAlive {
 		if err := a.store.Touch(ctx); err != nil {
@@ -75,7 +100,7 @@ func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
 	}
 
 	// Check triggers and flush if needed
-	return a.checkAndFlush(ctx)
+	return a.checkAndFlushLocked(ctx)
 }
 
 // Flush manually flushes the accumulator, returning all values. This bypasses trigger checks
@@ -83,6 +108,9 @@ func (a *Accumulator[V]) Append(ctx context.Context, value V) error {
 func (a *Accumulator[V]) Flush(ctx context.Context) ([]V, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.closed {
+		return nil, ErrAccumulatorClosed
+	}
 
 	values, err := a.store.Flush(ctx)
 	if err != nil {
@@ -145,20 +173,33 @@ func (a *Accumulator[V]) IsExpired(ctx context.Context) bool {
 
 // Touch updates the last activity time. Only useful when KeepAlive is enabled.
 func (a *Accumulator[V]) Touch(ctx context.Context) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.closed {
+		return ErrAccumulatorClosed
+	}
 	return a.store.Touch(ctx)
 }
 
-// Close releases resources held by the accumulator.
+// Close releases resources held by the accumulator. It is idempotent and holds
+// the accumulator lock across the underlying store close: in-flight mutating
+// operations complete or observe the closed state rather than crossing the
+// shutdown boundary, and a concurrent second Close blocks until the first
+// finishes and then returns the same close error.
 func (a *Accumulator[V]) Close() error {
-	return a.store.Close()
-}
-
-// checkAndFlush checks triggers and flushes if conditions are met.
-// Respects MinInterval rate limiting.
-func (a *Accumulator[V]) checkAndFlush(ctx context.Context) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.closed {
+		return a.closeErr
+	}
+	a.closed = true
+	a.closeErr = a.store.Close()
+	return a.closeErr
+}
 
+// checkAndFlushLocked checks triggers and flushes if conditions are met.
+// Respects MinInterval rate limiting. The caller must hold mu.Lock.
+func (a *Accumulator[V]) checkAndFlushLocked(ctx context.Context) error {
 	// Check rate limiting
 	if a.config.MinInterval > 0 && !a.lastFlush.IsZero() {
 		if time.Since(a.lastFlush) < a.config.MinInterval {

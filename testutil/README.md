@@ -377,6 +377,47 @@ All TestManager operations are thread-safe and can be called concurrently. Indiv
 
 - See module-specific testutil packages for database, Redis, Kafka, etc.
 
+## In-Process HTTP Server Harness
+
+`FakeHTTPServer` is a bounded, single-request loopback HTTP server built on the standard `net/http/httptest`. It lets HTTP-client, discovery, and adapter tests exercise real request/response wire behavior with no network dependency and no per-test hand-rolled listener.
+
+It serves one programmed `FakeResponse`, captures the request for assertions, and drains on `Close`. Any request beyond the single-request budget is answered deterministically with 409 Conflict (override with `WithExhaustedStatus`) rather than hanging or re-serving. Request bodies are bounded (override with `WithMaxBodyBytes`); an oversized body gets 413 Request Entity Too Large instead of being buffered without limit.
+
+```go
+func TestClientSendsAuthHeader(t *testing.T) {
+    srv := testutil.NewFakeHTTPServer(
+        testutil.NewFakeResponse(
+            http.StatusOK,
+            testutil.WithHeader("Content-Type", "application/json"),
+            testutil.WithBodyString(`{"ok":true}`),
+        ),
+    )
+    defer srv.Close()
+
+    // Drive the client under test against srv.URL(), setting the header it is
+    // expected to send.
+    req, err := http.NewRequest(http.MethodGet, srv.URL()+"/v1/health", nil)
+    if err != nil {
+        t.Fatal(err)
+    }
+    req.Header.Set("Authorization", "Bearer token")
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        t.Fatal(err)
+    }
+    _ = resp.Body.Close()
+
+    // Assert on the captured request.
+    got := srv.CapturedRequest()
+    if got.Path != "/v1/health" {
+        t.Fatalf("path = %q", got.Path)
+    }
+    if got.HeaderValue("Authorization") == "" {
+        t.Fatal("missing Authorization header")
+    }
+}
+```
+
 ## Contributing
 
 When adding new test components:
