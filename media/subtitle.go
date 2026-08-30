@@ -31,7 +31,7 @@ type SubtitleEntry struct {
 }
 
 // SubtitleTrack is an ordered collection of subtitle cues.
-// It is the light-kit parallel of rskit's SubtitleTrack, covering the pure-Go concerns —
+// It covers the pure-Go concerns —
 // parsing, serialization, and time math — plus a styling vocabulary
 // ([SubtitleStyle] via [SubtitleTrack.DefaultStyle] and [SubtitleEntry.Style]),
 // but no renderer: it does not rasterize or burn cues into frames.

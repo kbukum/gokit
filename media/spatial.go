@@ -5,8 +5,7 @@ import (
 	"math"
 )
 
-// Resolution is a width × height in pixels.
-// It is the light-kit parallel of rskit's media Resolution and is used to enrich probe [Metadata].
+// Resolution is a width × height in pixels, used to enrich probe [Metadata].
 type Resolution struct {
 	Width  int `json:"width"`
 	Height int `json:"height"`

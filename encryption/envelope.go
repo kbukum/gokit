@@ -14,7 +14,7 @@ import (
 //
 // The header (version, algorithm id, salt, nonce) is authenticated as AEAD
 // associated data, binding the algorithm and key-derivation inputs to the
-// sealed body. This format is wire-compatible with rskit's encryption envelope.
+// sealed body. This format is wire-compatible with the shared encryption envelope format.
 const (
 	envelopeVersion    byte = 1
 	nonceSize               = 12

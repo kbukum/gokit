@@ -51,8 +51,8 @@ func CalculateJitteredBackoff(attempt int, minDelay, maxDelay time.Duration, jit
 
 // BackoffCalculator is a reusable, immutable exponential-backoff configuration over
 // CalculateBackoff and CalculateJitteredBackoff. It is the stateless-math counterpart
-// to the RetryConfig-driven Retry loop; the type is named BackoffCalculator rather
-// than mirroring rskit's ExponentialBackoff because ExponentialBackoff is already the
+// to the RetryConfig-driven Retry loop; the type is named BackoffCalculator to avoid
+// colliding with ExponentialBackoff, which is already the
 // name of a BackoffStrategy constant in this package.
 type BackoffCalculator struct {
 	minDelay time.Duration

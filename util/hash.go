@@ -13,8 +13,8 @@ import (
 // digest, backed by BLAKE3. Feed bytes with Update (raw) or UpdateFramed
 // (domain-separated), then read the digest with FinalizeHex. Finalizing does not
 // consume the hasher, so it may be reused. BLAKE3 is the canonical content hash for
-// cache keys, change detection, and deduplication; the digest identity matches the
-// rskit and pykit content hashers.
+// cache keys, change detection, and deduplication; the digest identity is a stable
+// content-hash format.
 type ContentHasher struct {
 	inner *blake3.Hasher
 }

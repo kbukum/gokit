@@ -12,7 +12,7 @@ The `Logger` is a thin ergonomic facade over `*slog.Logger`. All the value-add b
 - Rate-based log sampling (burst + thereafter), clock-injectable for deterministic tests
 - Per-module log level overrides
 - OpenTelemetry Logs bridge (OTLP export)
-- Unified log schema (consistent across gokit, pykit, rskit)
+- Unified log schema (stable structured field names)
 - Context propagation (trace ID, span ID, correlation ID)
 
 ## Quick Start
@@ -316,7 +316,7 @@ defer log.Close()
 
 ## Unified Schema
 
-All three kits (gokit, pykit, rskit) share the same structured field names:
+The structured field names are stable across releases:
 
 | Field | Constant | Description |
 |-------|----------|-------------|

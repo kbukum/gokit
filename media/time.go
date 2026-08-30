@@ -12,8 +12,6 @@ import (
 // and codec formats, avoiding precision loss during conversion. A Timestamp is never negative:
 // constructors and arithmetic clamp at zero
 // and saturate at the maximum representable value on overflow.
-//
-// It is the light-kit parallel of rskit's media Timestamp.
 type Timestamp int64
 
 // TimestampFromMillis builds a [Timestamp] from a millisecond value.
@@ -155,7 +153,6 @@ func (r TimeRange) Shift(offset time.Duration) TimeRange {
 }
 
 // Segment is a labeled time range, useful for chapters, scenes, or detected spans.
-// It is the light-kit parallel of rskit's media Segment, without the backend-specific metadata bag.
 type Segment struct {
 	Range TimeRange `json:"range"`
 	// Label is an optional human-readable name (e.g. "intro", "chorus").

@@ -28,8 +28,7 @@ type ConfigChange struct {
 
 // ConfigWatch is the contract for configuration backends that emit change
 // notifications — a watched file, a remote config service, or an in-memory
-// store. It is the Go-idiomatic equivalent of rskit-config's ConfigWatch trait:
-// the returned channel is the bounded, owned change stream.
+// store. The returned channel is the bounded, owned change stream.
 //
 // The channel is buffered and best-effort; a consumer that cannot keep up may
 // miss events and should treat any received change as a signal to reload. The

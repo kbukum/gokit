@@ -37,7 +37,7 @@ func (a SubtitleAnchor) String() string {
 
 // SubtitlePosition is where a cue is displayed on screen.
 //
-// It is the light-kit parallel of rskit's SubtitlePosition. The zero value is the
+// The zero value is the
 // bottom anchor; X and Y are pixel coordinates that apply only when Anchor is
 // [AnchorCustom] (they are ignored otherwise).
 type SubtitlePosition struct {
@@ -53,7 +53,7 @@ func CustomPosition(x, y uint32) SubtitlePosition {
 
 // SubtitleStyle is the visual styling applied to a cue.
 //
-// It is the light-kit parallel of rskit's SubtitleStyle: it carries the styling
+// It carries the styling
 // vocabulary (font, colors, weight, position) without a renderer. Optional fields
 // use their zero value to mean "unset" — an empty font family or color and a zero
 // font size are renderer defaults. Style resolution ([SubtitleTrack.EffectiveStyle])

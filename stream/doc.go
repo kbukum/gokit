@@ -3,14 +3,14 @@
 //
 // # Canonical shape
 //
-// gokit converges on the rskit-stream operator vocabulary (map/filter/fan_out/window/batch/parallel/merge/partition/…)
-// but keeps an idiomatic Go pull-iterator model for transformation pipelines: pipelines are lazy —
+// The operator vocabulary (map/filter/fan_out/window/batch/parallel/merge/partition/…)
+// uses an idiomatic Go pull-iterator model for transformation pipelines: pipelines are lazy —
 // no work happens until values are pulled via Collect, Drain, or ForEach,
 // and each stage pulls from the previous stage on demand. Pull gives natural,
 // allocation-free backpressure without an explicit flow-control protocol.
 //
 // The genuinely push-shaped concern — fanning one source out to many independent observers —
-// is served by Broadcaster, mirroring rskit's Broadcaster<T>.
+// is served by Broadcaster.
 // Every subscriber owns a private bounded channel;
 // a subscriber that lags beyond its buffer drops overflow (backpressure by drop)
 // but never blocks the broadcaster or its peers.
