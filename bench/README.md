@@ -65,11 +65,15 @@ func main() {
 	)
 
 	// 2. Create a runner with metrics.
+	clf, err := metric.BinaryClassification[string]("positive")
+	if err != nil {
+		return err
+	}
 	runner := bench.NewBenchRunner(
 		bench.WithTag[string]("v1.0"),
 		bench.WithConcurrency[string](8),
 		bench.WithMetrics(
-			metric.AsRunMetric(metric.BinaryClassification[string]("positive")),
+			metric.AsRunMetric(clf),
 			metric.AsRunMetric(metric.AUCROC[string]("positive")),
 			metric.AsRunMetric(metric.BrierScore[string]("positive")),
 		),
@@ -109,7 +113,7 @@ func main() {
 | `LabelMapper[L]` | func | `func(string) (L, error)` — converts manifest string labels to typed `L` |
 | `BenchRunner[L]` | struct | Orchestrates evaluation: load → evaluate → compute metrics → store |
 | `RunResult` | struct | Full benchmark output — metrics, branch results, per-sample details, curves, provenance |
-| `RunProvenance` | struct | Reproducibility record on every `RunResult` — seed, RNG algorithm, git commit, tool/host/os/arch, order-independent dataset hash, branch and metric names |
+| `RunProvenance` | struct | Reproducibility record on every `RunResult` — seed, RNG algorithm, git commit, tool/host/os/arch, order-independent dataset hash, branch and metric names, and (when judge metrics scored the run) a `Judges` list recording each judge's model, resolved backend model, prompt version, and rubric fingerprint |
 | `ProvenanceProbe` | interface | Injected source of host and git-commit provenance — `GitCommit`/`Host`/`OS`/`Arch` |
 | `SystemProvenanceProbe` | struct | Default probe — host/os/arch from the runtime, git commit best-effort from CI env vars |
 | `RunComparator` | struct | Diffs two `RunResult`s, reports metric changes & sample regressions |
@@ -121,7 +125,7 @@ func main() {
 
 | Package | Description |
 |---------|-------------|
-| [`bench/metric`](metric/) | Metric implementations — classification, probability, ranking, regression, matching, token usage, and semantic similarity (context metric) |
+| [`bench/metric`](metric/) | Metric implementations — classification, probability, ranking, regression, matching, token usage, semantic similarity, and LLM judge (context metrics) |
 | [`bench/report`](report/) | Output-format reporters — JSON, Markdown, CSV, Table, JUnit, Vega-Lite, HTML |
 | [`bench/viz`](viz/) | Pure-Go SVG visualisation generation — ROC, confusion matrix, calibration, distribution, comparison |
 | [`bench/storage`](storage/) | Cloud-storage adapter for bench results — wraps `gokit/storage` |
@@ -147,7 +151,7 @@ The default `SystemProvenanceProbe` reads host/os/arch from the runtime and reso
 
 | Constructor | Description |
 |-------------|-------------|
-| `BinaryClassification[L](positiveLabel, ...ClassificationOption)` | Precision, recall, F1, accuracy, FPR + confusion counts |
+| `BinaryClassification[L](positiveLabel, ...ClassificationOption)` | Precision, recall, F1, accuracy, FPR + confusion counts. Folds the decision threshold into the metric name (`classification[t0.5]`) and returns an error for a non-finite or out-of-`[0, 1]` threshold |
 | `ConfusionMatrix[L](labels)` | Full N×N confusion matrix |
 | `ThresholdSweep[L](positiveLabel, thresholds)` | Metrics at each threshold (default 0.1–0.9) |
 | `MultiClassClassification[L](labels)` | Macro / micro / weighted precision, recall, F1 |
@@ -184,7 +188,7 @@ The default `SystemProvenanceProbe` reads host/os/arch from the runtime and reso
 | Constructor | Description |
 |-------------|-------------|
 | `ExactMatch[L]()` | Fraction of exact label matches |
-| `FuzzyMatch(threshold)` | Levenshtein-based string similarity (`Metric[string]`) |
+| `FuzzyMatch(threshold)` | Levenshtein-based string similarity (`Metric[string]`). Folds the threshold into the metric name (`fuzzy_match[t0.8]`) and returns an error for a non-finite or out-of-`[0, 1]` threshold |
 
 ### Composite
 
@@ -204,7 +208,7 @@ Use `metric.AsRunMetric` / `metric.AsRunMetrics` to pass any `Metric[L]` into `b
 
 `SemanticSimilarity` is a **context metric**: it performs I/O (embedding text), so it takes a `context.Context` and may fail, rather than the pure `Metric` contract. Register context metrics with `bench.WithContextMetrics` (adapted via `metric.AsRunContextMetric`); the runner computes pure metrics first, then context metrics, each bounded by a timeout and honoring cancellation.
 
-Each batch is embedded in its own provider call routed through the canonical `resilience.Policy` (default: a per-call 30s timeout, no retries — embedding is idempotent, so callers may add bounded retries), so a large run is not scored against a single dataset-wide deadline, and each response is validated to be a well-formed index permutation of its batch before use. A provider timeout or cancellation surfaces as a typed timeout/canceled `AppError`; a malformed or non-finite response as an external-service error. The metric name embeds a stable, escaped model identity built from provider, name, and version — for example `semantic_similarity[openai/text-embedding-3-small@v1]` — so runs scored by different models or versions never join as compatible by name alone; the provider name is used only when the model carries no identity metadata.
+Each batch is embedded in its own provider call routed through the canonical `resilience.Policy` (default: a per-call 30s timeout, no retries — embedding is idempotent, so callers may add bounded retries), so a large run is not scored against a single dataset-wide deadline, and each response is validated to be a well-formed index permutation of its batch before use. A provider timeout or cancellation surfaces as a typed timeout/canceled `AppError`; a malformed or non-finite response as an external-service error. The metric name embeds a stable, escaped model identity built from provider, name, and version, together with the configured threshold — for example `semantic_similarity[openai/text-embedding-3-small@v1:t0.8]` — so runs scored by different models, versions, or thresholds never join as compatible by name alone (`match_rate` is a fraction at a fixed cutoff, so comparing it across thresholds would be unsound); the provider name is used only when the model carries no identity metadata.
 
 | Constructor | Description |
 |-------------|-------------|
@@ -217,9 +221,37 @@ semantic, err := metric.SemanticSimilarity[string](provider, model)
 if err != nil {
 	return err
 }
+clf, err := metric.BinaryClassification[string]("positive")
+if err != nil {
+	return err
+}
 runner := bench.NewBenchRunner(
-	bench.WithMetrics(metric.AsRunMetric(metric.BinaryClassification[string]("positive"))),
+	bench.WithMetrics(metric.AsRunMetric(clf)),
 	bench.WithContextMetrics(metric.AsRunContextMetric(semantic)),
+)
+```
+
+### LLM judge (context metric)
+
+`LLMJudge` is a **context metric** that grades each prediction against its reference by asking an injected `llm.Provider` to score the pair, using a **versioned** `JudgePrompt` so a run records exactly which prompt produced its scores. It reports the mean judge score as the primary value and a threshold pass rate; the judge model and prompt identity are recorded in the result detail and lifted into `RunProvenance`.
+
+Model output is treated as **untrusted**: the judge is asked for a JSON object, and the reply is parsed into a typed `JudgeVerdict` with shape and range validation. A malformed or non-JSON reply, an out-of-range or missing score, a completion that did not finish normally (truncated by the token cap, stopped by a content filter, ended by a provider error), or an over-long reply surfaces as a typed external-service `AppError` (the untrusted model returned an unusable response) — never a fabricated success-shaped score and never a panic. This parser is the trust boundary on reply shape, not a prompt-injection detector; the injection defense is the data-only framing in the prompt's system instruction. Every provider call is bounded by the canonical `resilience.Policy` (default: a per-call 30s timeout, and an injected policy must itself carry a positive timeout) and calls fan out with bounded concurrency (default 4), never an unbounded goroutine fan-out; the first sample failure cancels a derived context and stops scheduling the rest, so one bad reply does not bill every remaining call. A `JudgePrompt` version must be a strict semver, so a run's judge provenance is always a comparable identity. When a provider resolves the request to a single backend model that differs from the one requested, that resolved id is recorded in provenance; a run whose samples resolve to more than one model is rejected as incomparable. The metric name embeds the model and prompt identity, including a fingerprint of the rubric (template body + system instruction) — for example `llm_judge[openai/gpt-4o-mini@gokit.builtin.judge@1.0.0#a1b2c3d4e5f6:t0.5]` — so runs scored by a different judge model, prompt, rubric, or threshold never join as compatible by name alone; editing the rubric without bumping the version still changes the fingerprint and thus the identity.
+
+| Constructor | Description |
+|-------------|-------------|
+| `LLMJudge[L](provider, model, prompt, opts...)` | Mean LLM-judge score of prediction vs reference via an injected `llm.Provider` and a versioned `JudgePrompt`, plus a threshold pass rate |
+| `ParseJudgePrompt(id, version, template)` | Parses a custom judge prompt, requiring exactly `{reference}` and `{prediction}` placeholders |
+| `DefaultJudgePrompt()` | The built-in judge rubric with a defensive JSON-only system instruction |
+
+Options: `WithJudgeThreshold` (finite value in `[0, 1]`), `WithJudgeTimeout` (per-call timeout on the policy), `WithJudgePolicy` (full `resilience.Policy`), `WithJudgeConcurrency` (bounded fan-out, must be positive), `WithJudgeMaxTokens`, `WithJudgeExtractor`.
+
+```go
+judge, err := metric.LLMJudge[string](provider, "gpt-4o-mini", metric.DefaultJudgePrompt())
+if err != nil {
+	return err
+}
+runner := bench.NewBenchRunner(
+	bench.WithContextMetrics(metric.AsRunContextMetric(judge)),
 )
 ```
 
@@ -287,11 +319,15 @@ runner.Register("my-provider", eval)
 ```go
 targets := map[string]float64{"f1": 0.90, "accuracy": 0.85}
 
+clf, err := metric.BinaryClassification[string]("positive")
+if err != nil {
+	return err
+}
 runner := bench.NewBenchRunner(
 	bench.WithTargets[string](targets),
 	bench.WithFailOnRegression[string](true),
 	bench.WithMetrics(
-		metric.AsRunMetric(metric.BinaryClassification[string]("positive")),
+		metric.AsRunMetric(clf),
 	),
 )
 

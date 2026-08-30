@@ -20,22 +20,43 @@ func WithThreshold(t float64) ClassificationOption {
 
 // BinaryClassification computes precision, recall, F1, accuracy, and FPR
 // for binary classification. positiveLabel is the label considered "positive".
-func BinaryClassification[L comparable](positiveLabel L, opts ...ClassificationOption) Metric[L] {
+//
+// The metric name folds in the configured decision threshold — for example
+// classification[t0.7] — so runs scored at different cutoffs stay distinct in
+// provenance and are never joined as compatible by name alone: F1 is computed at
+// a fixed threshold, so comparing it across thresholds would be unsound. The
+// threshold is also recorded in the confusion-matrix [Result.Detail] as
+// provenance rather than in [Result.Values]: it is a configuration input, not a
+// quality signal, and would otherwise be scored by [bench.RunComparator] as an
+// improvement or regression when it changes between runs.
+//
+// The configured threshold must be a finite decision score in [0, 1];
+// BinaryClassification returns an invalid-input error otherwise.
+func BinaryClassification[L comparable](positiveLabel L, opts ...ClassificationOption) (Metric[L], error) {
 	cfg := classificationConfig{threshold: 0.5}
 	for _, o := range opts {
 		o(&cfg)
 	}
-	return &binaryClassification[L]{positive: positiveLabel, threshold: cfg.threshold}
+	if err := validateThresholdRange(classificationBaseName, cfg.threshold, 0, 1); err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("%s[t%s]", classificationBaseName, formatThreshold(cfg.threshold))
+	return &binaryClassification[L]{positive: positiveLabel, threshold: cfg.threshold, name: name}, nil
 }
+
+// classificationBaseName is the metric name stem; the threshold identity is appended.
+const classificationBaseName = "classification"
 
 type binaryClassification[L comparable] struct {
 	positive  L
 	threshold float64
+	name      string
 }
 
-func (m *binaryClassification[L]) Name() string { return "classification" }
+func (m *binaryClassification[L]) Name() string { return m.name }
 
 func (m *binaryClassification[L]) Compute(scored []bench.ScoredSample[L]) Result {
+	threshold := m.threshold
 	var tp, fp, tn, fn int
 	for _, s := range scored {
 		actual := s.Sample.Label == m.positive
@@ -82,17 +103,22 @@ func (m *binaryClassification[L]) Compute(scored []bench.ScoredSample[L]) Result
 		"fp":        float64(fp),
 		"tn":        float64(tn),
 		"fn":        float64(fn),
-		"threshold": m.threshold,
 	}
 
 	return Result{
-		Name:   "classification",
+		Name:   m.name,
 		Value:  f1,
 		Values: values,
+		// The threshold is a configuration input, not a quality signal, so it lives
+		// in the confusion-matrix detail rather than Values, where RunComparator
+		// would score a threshold change as an improvement or regression. It is
+		// copied into the detail (not aliased to the metric's field) so a consumer
+		// cannot mutate the metric through the result.
 		Detail: bench.ConfusionMatrixDetail{
 			Labels:      labels,
 			Matrix:      matrix,
 			Orientation: "row=actual, col=predicted",
+			Threshold:   &threshold,
 		},
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"math"
+	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -42,21 +44,55 @@ func TestSemanticSimilarityNameEmbedsModel(t *testing.T) {
 	t.Parallel()
 
 	m := newSemantic(t, inmem.New(8))
-	if got, want := m.Name(), "semantic_similarity[test-embed]"; got != want {
+	if got, want := m.Name(), "semantic_similarity[test-embed:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
+	}
+}
+
+// The threshold is folded into the metric name so match_rate — a fraction at a
+// fixed cutoff — is never compared across runs that used different thresholds.
+func TestSemanticSimilarityThresholdChangesIdentity(t *testing.T) {
+	t.Parallel()
+
+	a := newSemantic(t, inmem.New(8), metric.WithSemanticThreshold[string](0.7))
+	b := newSemantic(t, inmem.New(8), metric.WithSemanticThreshold[string](0.9))
+	if a.Name() == b.Name() {
+		t.Errorf("names must differ by threshold, both = %q", a.Name())
+	}
+	if !strings.Contains(a.Name(), ":t0.7]") {
+		t.Errorf("Name() = %q, want threshold t0.7 in identity", a.Name())
 	}
 }
 
 func TestSemanticSimilarityRejectsNilProvider(t *testing.T) {
 	t.Parallel()
 
-	if _, err := metric.SemanticSimilarity[string](nil, ai.Model{}); err == nil {
+	assertInvalidInput := func(t *testing.T, err error) {
+		t.Helper()
+		appErr, ok := apperrors.AsAppError(err)
+		if !ok {
+			t.Fatalf("error is not an *apperrors.AppError: %v", err)
+		}
+		if appErr.Code != apperrors.ErrCodeInvalidInput {
+			t.Errorf("Code = %q, want %q", appErr.Code, apperrors.ErrCodeInvalidInput)
+		}
+		if appErr.HTTPStatus != http.StatusBadRequest {
+			t.Errorf("HTTPStatus = %d, want %d", appErr.HTTPStatus, http.StatusBadRequest)
+		}
+	}
+
+	_, err := metric.SemanticSimilarity[string](nil, ai.Model{})
+	if err == nil {
 		t.Fatal("expected error for nil provider, got nil")
 	}
+	assertInvalidInput(t, err)
+
 	var typedNil *inmem.Provider
-	if _, err := metric.SemanticSimilarity[string](typedNil, ai.Model{}); err == nil {
+	_, err = metric.SemanticSimilarity[string](typedNil, ai.Model{})
+	if err == nil {
 		t.Fatal("expected error for typed-nil provider, got nil")
 	}
+	assertInvalidInput(t, err)
 }
 
 func TestSemanticSimilarityIdenticalTextsScoreOne(t *testing.T) {
@@ -233,7 +269,7 @@ func TestSemanticSimilarityAdaptsToRunContextMetric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if out.Name != "semantic_similarity[test-embed]" {
+	if out.Name != "semantic_similarity[test-embed:t0.8]" {
 		t.Errorf("RunContextMetric name = %q", out.Name)
 	}
 }
@@ -276,7 +312,7 @@ func TestSemanticSimilarityIdentityIncludesProviderAndVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), "semantic_similarity[openai/text-embedding-3-small@v1]"; got != want {
+	if got, want := m.Name(), "semantic_similarity[openai/text-embedding-3-small@v1:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -290,7 +326,7 @@ func TestSemanticSimilarityIdentityEscapesSeparators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), `semantic_similarity[a\/b\@c\]]`; got != want {
+	if got, want := m.Name(), `semantic_similarity[a\/b\@c\]:t0.8]`; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -304,7 +340,7 @@ func TestSemanticSimilarityIdentityFallsBackToProviderName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), "semantic_similarity[embed-fake]"; got != want {
+	if got, want := m.Name(), "semantic_similarity[embed-fake:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }

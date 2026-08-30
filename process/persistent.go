@@ -158,21 +158,39 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 
 	// The persistent lifecycle is owned by the returned handle (Wait/Shutdown), so the
 	// spawn context is detached from cancellation; readiness still honors ctx below.
-	c := exec.CommandContext(context.WithoutCancel(ctx), cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
-	c.Dir = cmd.Dir
-	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
-	applyInput(c, cmd)
-	if cfg.Lifecycle.IsolateProcessGroup {
-		configureSysProcAttr(c)
+	// A fresh command is built on every start attempt: an ETXTBSY retry cannot reuse a
+	// Cmd whose Start already failed, so the pipes are recreated per attempt and captured
+	// once a start succeeds.
+	spawnCtx := context.WithoutCancel(ctx)
+	var (
+		c                      *exec.Cmd
+		stdoutPipe, stderrPipe io.ReadCloser
+		pipeErr                error
+	)
+	startErr := startWithETXTBSYRetry(func() error {
+		c = exec.CommandContext(spawnCtx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
+		c.Dir = cmd.Dir
+		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		applyInput(c, cmd)
+		if cfg.Lifecycle.IsolateProcessGroup {
+			configureSysProcAttr(c)
+		}
+		if stdoutPipe, pipeErr = c.StdoutPipe(); pipeErr != nil {
+			return pipeErr
+		}
+		if stderrPipe, pipeErr = c.StderrPipe(); pipeErr != nil {
+			return pipeErr
+		}
+		return c.Start()
+	})
+	if pipeErr != nil {
+		return nil, fmt.Errorf("process: pipe: %w", pipeErr)
 	}
-
-	stdoutPipe, err := c.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("process: stdout pipe: %w", err)
-	}
-	stderrPipe, err := c.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("process: stderr pipe: %w", err)
+	if startErr != nil {
+		return nil, withStartErrorKind(
+			goerrors.Wrap(SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), startErr)),
+			PersistentStartSpawnFailed,
+		)
 	}
 
 	p := &PersistentProcess{
@@ -182,13 +200,6 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 		stdout: newGuardedBuffer(cfg.MaxCaptureBytes),
 		stderr: newGuardedBuffer(cfg.MaxCaptureBytes),
 		waitCh: make(chan struct{}),
-	}
-
-	if err := startWithETXTBSYRetry(c); err != nil {
-		return nil, withStartErrorKind(
-			goerrors.Wrap(SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)),
-			PersistentStartSpawnFailed,
-		)
 	}
 	p.start = time.Now()
 

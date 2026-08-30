@@ -17,6 +17,17 @@ import (
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
+// mustBinaryClassification builds a classification metric, failing the test if
+// the threshold is invalid.
+func mustBinaryClassification[L comparable](t *testing.T, positive L, opts ...metric.ClassificationOption) metric.Metric[L] {
+	t.Helper()
+	m, err := metric.BinaryClassification[L](positive, opts...)
+	if err != nil {
+		t.Fatalf("BinaryClassification: unexpected error: %v", err)
+	}
+	return m
+}
+
 // createDataset writes a manifest.json and 10 sample files to dir.
 // 5 samples are labeled "ai_generated", 5 are "human_created".
 func createDataset(t *testing.T, dir string) {
@@ -161,7 +172,7 @@ func TestEndToEnd(t *testing.T) {
 	storage := bench.NewFileStorage(storageDir)
 	runner1 := bench.NewBenchRunner(
 		bench.WithMetrics(metric.AsRunMetrics(
-			metric.BinaryClassification("ai_generated"),
+			mustBinaryClassification[string](t, "ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
 		bench.WithStorage[string](storage),
@@ -243,7 +254,7 @@ func TestEndToEnd(t *testing.T) {
 
 	runner2 := bench.NewBenchRunner(
 		bench.WithMetrics(metric.AsRunMetrics(
-			metric.BinaryClassification("ai_generated"),
+			mustBinaryClassification[string](t, "ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
 		bench.WithStorage[string](storage),
@@ -467,7 +478,7 @@ func TestEndToEndWithRegression(t *testing.T) {
 	})
 
 	metrics := metric.AsRunMetrics(
-		metric.BinaryClassification("ai_generated"),
+		mustBinaryClassification[string](t, "ai_generated"),
 		metric.ExactMatch[string](),
 	)
 

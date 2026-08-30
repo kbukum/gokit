@@ -12,7 +12,7 @@ user-invocable: true
 
 # Reviewing and updating gokit's docs
 
-Documentation goes stale in two ways: it stops following the **style rules** (arbitrary source line breaks, history narration, dead links), and it becomes **outdated** (commands, module lists, package structure, and examples that no longer match the code). This skill sweeps both. gokit mirrors rskit capability by capability, so a stale doc misleads consumers and parity work alike — keep it accurate. Run it over the whole `docs/` tree, a single file, or the docs touched by a change set.
+Documentation goes stale in two ways: it stops following the **style rules** (arbitrary source line breaks, history narration, dead links), and it becomes **outdated** (commands, module lists, package structure, and examples that no longer match the code). This skill sweeps both. gokit aligns with its sibling kits capability by capability, so a stale doc misleads consumers and parity work alike — keep it accurate. Run it over the whole `docs/` tree, a single file, or the docs touched by a change set.
 
 The authoritative doc policy lives in the Documentation section of [`.github/copilot-instructions.md`](../../copilot-instructions.md). The baseline wins over any local habit.
 

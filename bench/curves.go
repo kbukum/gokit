@@ -27,6 +27,12 @@ type ConfusionMatrixDetail struct {
 	Labels      []string
 	Matrix      [][]int
 	Orientation string // "row=actual, col=predicted"
+	// Threshold is the decision threshold a binary classification used, recorded
+	// as provenance (a configuration input) rather than a scored quality signal.
+	// It is a pointer so presence is explicit: a binary classification sets it
+	// (including a legitimate 0), while a multi-label confusion matrix leaves it
+	// nil, and the two never collapse to the same serialized absence.
+	Threshold *float64 `json:"threshold,omitempty"`
 }
 
 // ScoreDistribution holds a histogram of scores for a label.

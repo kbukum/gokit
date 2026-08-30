@@ -66,6 +66,19 @@
 //     with a threshold match rate; constructed fallibly (rejects a nil provider),
 //     every embedding call bounded by a timeout and honoring cancellation
 //
+// LLM judge (context metric, I/O-backed):
+//   - [LLMJudge] — grades prediction vs reference with an injected [llm.Provider]
+//     and a versioned [JudgePrompt], reporting mean judge score and a threshold
+//     pass rate. Model output is treated as untrusted: the reply is parsed into a
+//     typed [JudgeVerdict] with shape and range validation, so a malformed,
+//     out-of-range, truncated, or over-long reply is a typed external-service
+//     error rather than a fabricated score. Every provider call is bounded by a
+//     [resilience.Policy] (default: a per-call timeout; an injected policy must
+//     carry one) and calls fan out with bounded concurrency, stopping on the first
+//     failure; the judge model and prompt identity are recorded in [Result.Detail]
+//     and lifted into the run's [bench.RunProvenance]. Evals should gate any prompt
+//     or model change on a re-run rather than comparing scores across versions.
+//
 // Composite:
 //   - [Weighted] — weighted combination of multiple metrics
 //
@@ -73,17 +86,25 @@
 //
 // [AsRunMetric] and [AsRunMetrics] convert metric.Metric[L] values into bench.RunMetric[L] for use with [bench.BenchRunner]:
 //
+//	clf, err := metric.BinaryClassification[string]("positive")
+//	if err != nil {
+//	    return err
+//	}
 //	runner := bench.NewBenchRunner(
 //	    bench.WithMetrics(metric.AsRunMetrics(
-//	        metric.BinaryClassification[string]("positive"),
+//	        clf,
 //	        metric.AUCROC[string]("positive"),
 //	    )...),
 //	)
 //
 // # Usage
 //
+//	clf, err := metric.BinaryClassification[string]("positive")
+//	if err != nil {
+//	    return err
+//	}
 //	suite := metric.NewSuite(
-//	    metric.BinaryClassification[string]("positive"),
+//	    clf,
 //	    metric.AUCROC[string]("positive"),
 //	    metric.BrierScore[string]("positive"),
 //	)

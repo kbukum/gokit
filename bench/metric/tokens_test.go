@@ -2,9 +2,11 @@ package metric
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/kbukum/gokit/bench"
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 )
 
@@ -36,15 +38,34 @@ func TestTokenStatsNameEmbedsCounter(t *testing.T) {
 func TestTokenStatsRejectsNilCounter(t *testing.T) {
 	t.Parallel()
 
-	if _, err := TokenStats[string](nil); err == nil {
+	assertInvalidInput := func(t *testing.T, err error) {
+		t.Helper()
+		appErr, ok := apperrors.AsAppError(err)
+		if !ok {
+			t.Fatalf("error is not an *apperrors.AppError: %v", err)
+		}
+		if appErr.Code != apperrors.ErrCodeInvalidInput {
+			t.Errorf("Code = %q, want %q", appErr.Code, apperrors.ErrCodeInvalidInput)
+		}
+		if appErr.HTTPStatus != http.StatusBadRequest {
+			t.Errorf("HTTPStatus = %d, want %d", appErr.HTTPStatus, http.StatusBadRequest)
+		}
+	}
+
+	_, err := TokenStats[string](nil)
+	if err == nil {
 		t.Fatal("expected error for nil counter, got nil")
 	}
+	assertInvalidInput(t, err)
+
 	// A typed-nil interface value must also be rejected, not stored and later
 	// dispatched through (which would panic in Compute).
 	var typedNil *failingCounter
-	if _, err := TokenStats[string](typedNil); err == nil {
+	_, err = TokenStats[string](typedNil)
+	if err == nil {
 		t.Fatal("expected error for typed-nil counter, got nil")
 	}
+	assertInvalidInput(t, err)
 }
 
 func TestTokenStatsEmptyInputIsZeroed(t *testing.T) {

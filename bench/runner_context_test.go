@@ -52,7 +52,7 @@ func TestRunnerRunsContextMetricsAfterSyncMetrics(t *testing.T) {
 	}
 
 	runner := bench.NewBenchRunner(
-		bench.WithMetrics(metric.AsRunMetric[string](metric.BinaryClassification[string]("positive"))),
+		bench.WithMetrics(metric.AsRunMetric[string](mustBinaryClassification[string](t, "positive"))),
 		bench.WithContextMetrics(metric.AsRunContextMetric[string](semantic)),
 	)
 	runner.Register("model", bench.EvaluatorFunc("m", func(_ context.Context, _ []byte) (bench.Prediction[string], error) {
@@ -68,13 +68,13 @@ func TestRunnerRunsContextMetricsAfterSyncMetrics(t *testing.T) {
 		t.Fatalf("len(Metrics) = %d, want 2", len(result.Metrics))
 	}
 	// Sync metric first in registration order, context metric after.
-	if result.Metrics[len(result.Metrics)-1].Name != "semantic_similarity[test-embed]" {
-		t.Errorf("last metric = %q, want semantic_similarity[test-embed] (context metric runs after sync)", result.Metrics[len(result.Metrics)-1].Name)
+	if result.Metrics[len(result.Metrics)-1].Name != "semantic_similarity[test-embed:t0.8]" {
+		t.Errorf("last metric = %q, want semantic_similarity[test-embed:t0.8] (context metric runs after sync)", result.Metrics[len(result.Metrics)-1].Name)
 	}
 	// Provenance metric names include both phases.
 	found := false
 	for _, n := range result.Provenance.Metrics {
-		if n == "semantic_similarity[test-embed]" {
+		if n == "semantic_similarity[test-embed:t0.8]" {
 			found = true
 		}
 	}

@@ -2,9 +2,11 @@ package metric
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
 
 	"github.com/kbukum/gokit/bench"
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/llm"
 )
 
@@ -39,7 +41,9 @@ const tokenStatsBaseName = "token_stats"
 // value), since a metric with no counter cannot produce meaningful counts.
 func TokenStats[L comparable](counter llm.TokenCounter) (Metric[L], error) {
 	if isNilCounter(counter) {
-		return nil, fmt.Errorf("metric: TokenStats requires a non-nil llm.TokenCounter")
+		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
+			"token_stats: TokenStats requires a non-nil llm.TokenCounter",
+			http.StatusBadRequest)
 	}
 	name := fmt.Sprintf("%s[%s]", tokenStatsBaseName, counter.Name())
 	return &tokenStats[L]{counter: counter, name: name}, nil

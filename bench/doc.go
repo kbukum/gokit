@@ -36,12 +36,18 @@
 //	    scored = append(scored, bench.ScoredSample[string]{Sample: s, Prediction: pred})
 //	}
 //
-//	suite := metric.NewSuite(metric.BinaryClassification("positive"))
+//	clf, err := metric.BinaryClassification("positive")
+//	if err != nil {
+//	    return err
+//	}
+//	suite := metric.NewSuite(clf)
 //	results := suite.Compute(scored)
 //
 // # Reproducibility
 //
 // Every run records a [RunProvenance] on its [RunResult]: the deterministic seed and RNG algorithm, the source-control commit, the tool and host identity, and an order-independent content hash of the evaluated dataset. Provenance is gathered through an injected [ProvenanceProbe] — the default [SystemProvenanceProbe] reads host/os/arch from the runtime and the git commit best-effort from CI environment variables, while a fixed probe (see bench/testutil) supplies deterministic values for offline tests. Set the run seed with [WithSeed] and the probe with [WithProvenanceProbe]; with a fixed clock, fixed probe, seed, and a deterministic run ID (a fixed [WithTag] or an injected [WithIDSuffix] — untagged runs use a random suffix) a run's JSON is byte-identical across executions.
+//
+// When LLM-judge context metrics (metric.LLMJudge) score the run, provenance also records a Judges list — one entry per judge metric, in suite order, with its model, resolved backend model, prompt version, and rubric fingerprint — so a run that mixes several judges maps each judge's scores to the exact model and versioned prompt that produced them and is never silently compared across revisions or across a different resolved backend.
 //
 // # Sub-packages
 //

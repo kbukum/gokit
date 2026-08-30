@@ -38,23 +38,33 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 
 	policy := resolveLifecycle(cmd)
 
-	c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
-	c.Dir = cmd.Dir
-	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
-	applyInput(c, cmd)
+	// A fresh command is built on every start attempt: an ETXTBSY retry cannot reuse a
+	// Cmd whose Start already failed. The pipes are recreated per attempt and captured
+	// for the reader goroutines below once a start succeeds.
+	var (
+		c                      *exec.Cmd
+		stdoutPipe, stderrPipe io.ReadCloser
+	)
+	var buildErr error
+	err := startWithETXTBSYRetry(func() error {
+		c = exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
+		c.Dir = cmd.Dir
+		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		applyInput(c, cmd)
+		applyLifecycle(c, policy)
 
-	applyLifecycle(c, policy)
-
-	stdoutPipe, err := c.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("process: stdout pipe: %w", err)
+		if stdoutPipe, buildErr = c.StdoutPipe(); buildErr != nil {
+			return buildErr
+		}
+		if stderrPipe, buildErr = c.StderrPipe(); buildErr != nil {
+			return buildErr
+		}
+		return c.Start()
+	})
+	if buildErr != nil {
+		return nil, fmt.Errorf("process: pipe: %w", buildErr)
 	}
-	stderrPipe, err := c.StderrPipe()
 	if err != nil {
-		return nil, fmt.Errorf("process: stderr pipe: %w", err)
-	}
-
-	if err := startWithETXTBSYRetry(c); err != nil {
 		return nil, SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)
 	}
 

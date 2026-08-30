@@ -155,6 +155,7 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 	for i, m := range metrics {
 		metricNames[i] = m.Name
 	}
+	judges := judgeProvenance(metrics)
 	provenance := RunProvenance{
 		Seed:           r.cfg.seed,
 		RNGAlgorithm:   RNGAlgorithm,
@@ -168,6 +169,7 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 		DatasetVersion: manifest.Version,
 		Branches:       branchNames,
 		Metrics:        metricNames,
+		Judges:         judges,
 	}
 
 	result := &RunResult{
