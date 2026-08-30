@@ -23,28 +23,39 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 
 	policy := resolveLifecycle(cmd)
 
-	c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
-	c.Dir = cmd.Dir
-	c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
-	applyInput(c, cmd)
-
 	var stdout, stderr *limitedBuffer
-	if cmd.IO == IOInherited {
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
-	} else {
+	if cmd.IO != IOInherited {
 		stdout = newLimitedBuffer(cmd.MaxOutputBytes)
 		stderr = newLimitedBuffer(cmd.MaxOutputBytes)
-		c.Stdout = stdout
-		c.Stderr = stderr
 	}
 
-	applyLifecycle(c, policy)
+	// A fresh command is built on every start attempt: an ETXTBSY retry cannot reuse a
+	// Cmd whose Start already failed, because Cmd refuses a second Start. The capture
+	// buffers are stable across attempts since a failed start writes nothing to them.
+	newCmd := func() *exec.Cmd {
+		c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
+		c.Dir = cmd.Dir
+		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		applyInput(c, cmd)
+		if cmd.IO == IOInherited {
+			c.Stdout = os.Stdout
+			c.Stderr = os.Stderr
+		} else {
+			c.Stdout = stdout
+			c.Stderr = stderr
+		}
+		applyLifecycle(c, policy)
+		return c
+	}
 
 	start := time.Now()
 	// c.Run() is Start()+Wait(); split so the start races on ETXTBSY are retried
 	// while a just-written executable's writable descriptor closes.
-	err := startWithETXTBSYRetry(c)
+	var c *exec.Cmd
+	err := startWithETXTBSYRetry(func() error {
+		c = newCmd()
+		return c.Start()
+	})
 	if err == nil {
 		err = c.Wait()
 	}

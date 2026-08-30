@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/ai"
@@ -38,12 +36,14 @@ const (
 //
 // Texts are drawn from each label via the extractor (default: fmt %v) and embedded one batch per provider call via [embedding.Provider.Execute], each routed through the canonical [resilience.Policy] (default: a per-call timeout) so a large run is not scored against a single dataset-wide deadline; every call honors cancellation. Each response is validated: its embeddings must form an index permutation of the batch, so a reordered or malformed response is rejected rather than silently mispairing vectors. Failures are typed, never panics: a malformed or non-finite response surfaces as an external-service [apperrors.AppError], a per-call timeout or cancellation as a timeout/canceled AppError, and a dimension mismatch as an invalid-input AppError — all preserving the cause. Empty input yields a zeroed result without calling the provider.
 //
-// The metric name embeds the model identity built from provider, name, and version — for example semantic_similarity[openai/text-embedding-3-small] — so runs scored by different embedding models or versions stay distinct in provenance and are never joined as compatible by name alone. The provider name is used only when the model carries no identity metadata.
+// The metric name embeds the model identity built from provider, name, and version, and the configured threshold — for example semantic_similarity[openai/text-embedding-3-small:t0.8] — so runs scored by different embedding models, versions, or thresholds stay distinct in provenance and are never joined as compatible by name alone: match_rate is a fraction at a fixed cutoff, so comparing it across thresholds would be unsound. The provider name is used only when the model carries no identity metadata.
 //
 // The configured threshold must be a finite cosine similarity in [-1, 1]; SemanticSimilarity returns an invalid-input error otherwise. It also returns an error if provider is nil (including a typed-nil interface value), since a semantic metric with no provider cannot score.
 func SemanticSimilarity[L comparable](provider embedding.Provider, model ai.Model, opts ...SemanticOption[L]) (ContextMetric[L], error) {
 	if isNilProvider(provider) {
-		return nil, fmt.Errorf("metric: SemanticSimilarity requires a non-nil embedding.Provider")
+		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
+			"semantic_similarity: SemanticSimilarity requires a non-nil embedding.Provider",
+			http.StatusBadRequest)
 	}
 	m := &semanticSimilarity[L]{
 		provider:  provider,
@@ -59,18 +59,13 @@ func SemanticSimilarity[L comparable](provider embedding.Provider, model ai.Mode
 	if err := validateThreshold(m.threshold); err != nil {
 		return nil, err
 	}
-	m.name = fmt.Sprintf("%s[%s]", semanticBaseName, modelIdentity(model, provider))
+	m.name = fmt.Sprintf("%s[%s:t%s]", semanticBaseName, modelIdentity(model, provider), formatThreshold(m.threshold))
 	return m, nil
 }
 
 // validateThreshold rejects a threshold that is not a finite cosine similarity in [-1, 1]. A non-finite threshold would be copied into [Result.Values] and break JSON persistence and comparison, so it is caught at construction as a typed invalid-input error.
 func validateThreshold(threshold float64) error {
-	if math.IsNaN(threshold) || math.IsInf(threshold, 0) || threshold < -1 || threshold > 1 {
-		return apperrors.New(apperrors.ErrCodeInvalidInput,
-			fmt.Sprintf("semantic_similarity: threshold %v must be a finite value within [-1, 1]", threshold),
-			http.StatusBadRequest)
-	}
-	return nil
+	return validateThresholdRange(semanticBaseName, threshold, -1, 1)
 }
 
 // SemanticOption configures a [SemanticSimilarity] metric.
@@ -298,11 +293,6 @@ func modelIdentity(model ai.Model, provider embedding.Provider) string {
 	}
 	return id
 }
-
-// identityEscaper escapes the separator characters that structure a model identity and the metric name, so a value containing them cannot forge or collide with another identity.
-var identityEscaper = strings.NewReplacer(`\`, `\\`, `/`, `\/`, `@`, `\@`, `[`, `\[`, `]`, `\]`)
-
-func escapeIdentity(s string) string { return identityEscaper.Replace(s) }
 
 // isNilProvider reports whether provider is nil, including a typed-nil interface value (a nil *T stored in the interface) that a plain provider == nil check misses and that would otherwise panic when Compute dispatches through it.
 func isNilProvider(provider embedding.Provider) bool {

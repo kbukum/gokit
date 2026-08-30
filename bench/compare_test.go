@@ -63,6 +63,35 @@ func TestRunComparatorImprovement(t *testing.T) {
 	}
 }
 
+func TestRunComparatorDoesNotJoinDifferentThresholdIdentities(t *testing.T) {
+	t.Parallel()
+
+	// A threshold-dependent metric folds its cutoff into the name, so two runs
+	// scored at different thresholds carry distinct names and must never be joined
+	// as comparable: the F1/match rate at one cutoff is not the same quantity at
+	// another, so reporting a delta between them would be an incomparable diff.
+	base := &RunResult{
+		ID: "base",
+		Metrics: []MetricResult{
+			{Name: "classification[t0.3]", Value: 0.90},
+			{Name: "fuzzy_match[t0.5]", Value: 0.80},
+		},
+	}
+	target := &RunResult{
+		ID: "target",
+		Metrics: []MetricResult{
+			{Name: "classification[t0.7]", Value: 0.60},
+			{Name: "fuzzy_match[t0.9]", Value: 0.40},
+		},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+
+	if len(diff.Changes) != 0 {
+		t.Errorf("Changes = %v, want none: differently-thresholded metrics must not join", diff.Changes)
+	}
+}
+
 func TestRunComparatorRegression(t *testing.T) {
 	t.Parallel()
 
@@ -270,5 +299,96 @@ func TestRunComparatorDoesNotCrossCompareMetricSubvalues(t *testing.T) {
 	diff := NewRunComparator().Compare(base, target)
 	if len(diff.Changes) != 0 {
 		t.Fatalf("len(Changes) = %d, want 0 for incompatible metric identities", len(diff.Changes))
+	}
+}
+
+// Two runs that computed the same judge metric name but resolved it to different
+// backend models are flagged as incompatible: the metric names match, yet the
+// scores were produced by different judges, so their delta is not like-for-like.
+func TestRunComparatorFlagsIncompatibleJudges(t *testing.T) {
+	t.Parallel()
+
+	const judge = "llm_judge[openai/gpt-4o-mini@id@1.0.0#abc:t0.5]"
+	base := &RunResult{
+		ID:      "base-run",
+		Metrics: []MetricResult{{Name: judge, Value: 0.80}},
+		Provenance: RunProvenance{
+			Judges: []JudgeProvenance{{Metric: judge, Model: "gpt-4o-mini", ResolvedModel: "gpt-4o-mini-2024-05"}},
+		},
+	}
+	target := &RunResult{
+		ID:      "target-run",
+		Metrics: []MetricResult{{Name: judge, Value: 0.90}},
+		Provenance: RunProvenance{
+			Judges: []JudgeProvenance{{Metric: judge, Model: "gpt-4o-mini", ResolvedModel: "gpt-4o-mini-2024-11"}},
+		},
+	}
+
+	diff := NewRunComparator().Compare(base, target)
+	if len(diff.Incompatible) != 1 {
+		t.Fatalf("Incompatible = %d entries, want 1", len(diff.Incompatible))
+	}
+	inc := diff.Incompatible[0]
+	if inc.Metric != judge {
+		t.Errorf("Incompatible[0].Metric = %q, want %q", inc.Metric, judge)
+	}
+	if inc.BaseResolvedModel != "gpt-4o-mini-2024-05" || inc.TargetResolvedModel != "gpt-4o-mini-2024-11" {
+		t.Errorf("resolved models = %q/%q, want gpt-4o-mini-2024-05/gpt-4o-mini-2024-11",
+			inc.BaseResolvedModel, inc.TargetResolvedModel)
+	}
+	if !strings.Contains(diff.Summary(), "judges differ") {
+		t.Errorf("Summary() = %q, want it to warn that judges differ", diff.Summary())
+	}
+}
+
+// A judge metric whose two runs resolved to different backend models is not a
+// like-for-like comparison, so its decreased score (and per-key subvalues, whose
+// names extend the dot-containing metric name) must not be classified as a
+// regression by an automated gate, even though the delta is still reported.
+func TestRunComparatorExcludesIncompatibleJudgeFromRegression(t *testing.T) {
+	t.Parallel()
+
+	const judge = "llm_judge[openai/gpt-4o-mini@id@1.0.0#abc:t0.5]"
+	prov := func(resolved string) RunProvenance {
+		return RunProvenance{
+			Judges: []JudgeProvenance{{Metric: judge, Model: "gpt-4o-mini", ResolvedModel: resolved}},
+		}
+	}
+	metrics := func(v float64) []MetricResult {
+		return []MetricResult{{Name: judge, Value: v, Values: map[string]float64{"pass_rate": v}}}
+	}
+	base := &RunResult{ID: "base", Metrics: metrics(0.90), Provenance: prov("gpt-4o-mini-2024-05")}
+	target := &RunResult{ID: "target", Metrics: metrics(0.50), Provenance: prov("gpt-4o-mini-2024-11")}
+
+	diff := NewRunComparator().Compare(base, target)
+	if len(diff.Incompatible) != 1 {
+		t.Fatalf("Incompatible = %d entries, want 1", len(diff.Incompatible))
+	}
+	if diff.HasRegression() {
+		t.Error("HasRegression() = true, want false for an incompatible judge's decreased score")
+	}
+
+	// The same decrease between judges that resolved identically is a real regression.
+	same := &RunResult{ID: "same", Metrics: metrics(0.50), Provenance: prov("gpt-4o-mini-2024-05")}
+	compatibleBase := &RunResult{ID: "base2", Metrics: metrics(0.90), Provenance: prov("gpt-4o-mini-2024-05")}
+	if diff := NewRunComparator().Compare(compatibleBase, same); !diff.HasRegression() {
+		t.Error("HasRegression() = false, want true for a like-for-like judge decrease")
+	}
+}
+
+// Two runs whose judge metric resolved to the same backend model are comparable
+// and raise no incompatibility flag.
+func TestRunComparatorAllowsMatchingJudges(t *testing.T) {
+	t.Parallel()
+
+	const judge = "llm_judge[openai/gpt-4o-mini@id@1.0.0#abc:t0.5]"
+	prov := RunProvenance{
+		Judges: []JudgeProvenance{{Metric: judge, Model: "gpt-4o-mini", ResolvedModel: "gpt-4o-mini-2024-05"}},
+	}
+	base := &RunResult{ID: "base", Metrics: []MetricResult{{Name: judge, Value: 0.8}}, Provenance: prov}
+	target := &RunResult{ID: "target", Metrics: []MetricResult{{Name: judge, Value: 0.9}}, Provenance: prov}
+
+	if diff := NewRunComparator().Compare(base, target); len(diff.Incompatible) != 0 {
+		t.Errorf("Incompatible = %v, want none for matching resolved judges", diff.Incompatible)
 	}
 }

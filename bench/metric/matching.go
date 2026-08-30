@@ -1,6 +1,10 @@
 package metric
 
-import "github.com/kbukum/gokit/bench"
+import (
+	"fmt"
+
+	"github.com/kbukum/gokit/bench"
+)
 
 // ExactMatch computes the fraction of exact label matches.
 func ExactMatch[L comparable]() Metric[L] {
@@ -31,19 +35,42 @@ func (m *exactMatch[L]) Compute(scored []bench.ScoredSample[L]) Result {
 
 // FuzzyMatch computes string similarity using a Levenshtein distance ratio.
 // threshold is the minimum similarity (0-1) to count as a match.
-func FuzzyMatch(threshold float64) Metric[string] {
-	return &fuzzyMatch{threshold: threshold}
+//
+// The metric name folds in the configured threshold — for example
+// fuzzy_match[t0.8] — so runs scored at different cutoffs stay distinct in
+// provenance and are never joined as compatible by name alone: the match rate is
+// computed at a fixed threshold, so comparing it across thresholds would be
+// unsound. The threshold is also recorded in [Result.Detail] as provenance
+// rather than in [Result.Values]: it is a configuration input, not a quality
+// signal, and would otherwise be scored by [bench.RunComparator] as an
+// improvement or regression when it changes between runs.
+//
+// The threshold must be a finite similarity in [0, 1]; FuzzyMatch returns an
+// invalid-input error otherwise.
+func FuzzyMatch(threshold float64) (Metric[string], error) {
+	if err := validateThresholdRange(fuzzyMatchBaseName, threshold, 0, 1); err != nil {
+		return nil, err
+	}
+	name := fmt.Sprintf("%s[t%s]", fuzzyMatchBaseName, formatThreshold(threshold))
+	return &fuzzyMatch{threshold: threshold, name: name}, nil
 }
+
+// fuzzyMatchBaseName is the metric name stem; the threshold identity is appended.
+const fuzzyMatchBaseName = "fuzzy_match"
 
 type fuzzyMatch struct {
 	threshold float64
+	name      string
 }
 
-func (m *fuzzyMatch) Name() string { return "fuzzy_match" }
+func (m *fuzzyMatch) Name() string { return m.name }
 
 func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 	if len(scored) == 0 {
-		return Result{Name: "fuzzy_match", Value: 0}
+		// The empty path still carries the threshold-bearing name and threshold
+		// provenance, so an empty run stays distinct by cutoff and never drops the
+		// configuration input the comparator relies on to keep runs comparable.
+		return Result{Name: m.name, Value: 0, Detail: map[string]any{"threshold": m.threshold}}
 	}
 
 	matches := 0
@@ -57,12 +84,15 @@ func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 	}
 
 	return Result{
-		Name:  "fuzzy_match",
+		Name:  m.name,
 		Value: float64(matches) / float64(len(scored)),
 		Values: map[string]float64{
 			"mean_similarity": sumSimilarity / float64(len(scored)),
-			"threshold":       m.threshold,
 		},
+		// The threshold is a configuration input, not a quality signal, so it lives
+		// in provenance detail rather than Values, where RunComparator would score a
+		// threshold change as an improvement or regression.
+		Detail: map[string]any{"threshold": m.threshold},
 	}
 }
 

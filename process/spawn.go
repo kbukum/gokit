@@ -10,8 +10,8 @@ import (
 	goerrors "github.com/kbukum/gokit/errors"
 )
 
-// startWithETXTBSYRetry starts c, retrying a transient ETXTBSY ("text file busy")
-// failure with bounded exponential backoff.
+// startWithETXTBSYRetry starts a command, retrying a transient ETXTBSY ("text file
+// busy") failure with bounded exponential backoff.
 //
 // Executing a file that was just written races against concurrent fork/exec on other
 // threads: a peer that forked while this process still held a writable descriptor to
@@ -19,8 +19,13 @@ import (
 // reports ETXTBSY on our exec. The window is microseconds and closes on its own, so a
 // bounded backoff turns the spurious failure into a successful start. A missing or
 // non-executable binary surfaces on the first attempt and is never masked.
-func startWithETXTBSYRetry(c *exec.Cmd) error {
-	return startRetryingETXTBSY(c.Start, time.Sleep)
+//
+// start must build and start a fresh [*exec.Cmd] on every call: a Cmd records that Start
+// was invoked and refuses a second Start with "exec: already started" even when the first
+// attempt failed before creating a process, so a retried start has to run against a newly
+// constructed Cmd rather than the busy one.
+func startWithETXTBSYRetry(start func() error) error {
+	return startRetryingETXTBSY(start, time.Sleep)
 }
 
 // startRetryingETXTBSY runs start, retrying only transient ETXTBSY failures. It is split

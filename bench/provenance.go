@@ -51,6 +51,91 @@ type RunProvenance struct {
 	Branches []string `json:"branches,omitempty"`
 	// Metrics lists metric names computed for the run, in suite order.
 	Metrics []string `json:"metrics,omitempty"`
+	// Judges records the identity of every LLM-judge metric that scored the run,
+	// in suite order, so a run that mixes several judge model/prompt pairs maps
+	// each score set to the exact judge that produced it rather than collapsing to
+	// a single identity. Empty when no judge metric ran.
+	Judges []JudgeProvenance `json:"judges,omitempty"`
+}
+
+// JudgeProvenance is the recorded identity of one LLM-judge metric in a run: the
+// full metric name (the comparison key), the provider and requested model, the
+// provider-resolved backend model when it differed, and the versioned prompt
+// identity. It is lifted from the metric's [MetricResult.Detail] so scores are
+// reproducible and two runs are never silently compared across different judges.
+type JudgeProvenance struct {
+	// Metric is the full judge metric name, the identity two runs are joined on.
+	Metric string `json:"metric"`
+	// Provider is the judge provider name.
+	Provider string `json:"provider,omitempty"`
+	// Model is the requested judge model id.
+	Model string `json:"model"`
+	// ResolvedModel is the provider-resolved backend model id, present only when it
+	// differs from Model (a provider resolved an alias or routed to a backend).
+	ResolvedModel string `json:"resolved_model,omitempty"`
+	// PromptID is the versioned judge prompt id.
+	PromptID string `json:"prompt_id,omitempty"`
+	// PromptVersion is the semver prompt version that produced the scores.
+	PromptVersion string `json:"prompt_version,omitempty"`
+	// PromptFingerprint is a content hash of the judge rubric (template body +
+	// system instruction), so a rubric edited without a version bump stays visible.
+	PromptFingerprint string `json:"prompt_fingerprint,omitempty"`
+}
+
+// Detail keys a judge metric records in its [MetricResult.Detail], read back by
+// the runner to lift judge identity into [RunProvenance]. They live in bench (the
+// lower package) so the metric package can reference them without a back-edge
+// while the runner reads them without importing metric.
+const (
+	// DetailJudgeModel is the [MetricResult.Detail] key holding the judge model id.
+	DetailJudgeModel = "judge_model"
+	// DetailJudgeProvider is the [MetricResult.Detail] key holding the judge provider name.
+	DetailJudgeProvider = "judge_provider"
+	// DetailJudgeResolvedModel is the [MetricResult.Detail] key holding the
+	// provider-resolved backend model id, present only when it differs from the
+	// requested model.
+	DetailJudgeResolvedModel = "judge_resolved_model"
+	// DetailJudgePromptID is the [MetricResult.Detail] key holding the judge prompt id.
+	DetailJudgePromptID = "judge_prompt_id"
+	// DetailJudgePromptVersion is the [MetricResult.Detail] key holding the judge prompt version.
+	DetailJudgePromptVersion = "judge_prompt_version"
+	// DetailJudgePromptFingerprint is the [MetricResult.Detail] key holding the judge rubric fingerprint.
+	DetailJudgePromptFingerprint = "judge_prompt_fingerprint"
+)
+
+// judgeProvenance collects the identity of every judge metric in results, in
+// result order, so a run that mixes several judge model/prompt pairs preserves
+// each one rather than dropping all but the first. A judge metric is identified
+// by the [DetailJudgeModel] and [DetailJudgePromptVersion] keys it writes into
+// [MetricResult.Detail]; the metric name is the comparison key. Returns nil when
+// no judge metric ran.
+func judgeProvenance(results []MetricResult) []JudgeProvenance {
+	var judges []JudgeProvenance
+	for _, r := range results {
+		detail, ok := r.Detail.(map[string]any)
+		if !ok {
+			continue
+		}
+		model, mOK := detail[DetailJudgeModel].(string)
+		promptVersion, vOK := detail[DetailJudgePromptVersion].(string)
+		if !mOK || !vOK || model == "" {
+			continue
+		}
+		provider, _ := detail[DetailJudgeProvider].(string)
+		resolved, _ := detail[DetailJudgeResolvedModel].(string)
+		promptID, _ := detail[DetailJudgePromptID].(string)
+		fingerprint, _ := detail[DetailJudgePromptFingerprint].(string)
+		judges = append(judges, JudgeProvenance{
+			Metric:            r.Name,
+			Provider:          provider,
+			Model:             model,
+			ResolvedModel:     resolved,
+			PromptID:          promptID,
+			PromptVersion:     promptVersion,
+			PromptFingerprint: fingerprint,
+		})
+	}
+	return judges
 }
 
 // ProvenanceProbe gathers host and source-control provenance for a benchmark run.

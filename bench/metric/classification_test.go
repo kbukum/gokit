@@ -1,10 +1,12 @@
 package metric
 
 import (
+	"errors"
 	"math"
 	"testing"
 
 	"github.com/kbukum/gokit/bench"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 func TestBinaryClassificationKnownValues(t *testing.T) {
@@ -32,11 +34,11 @@ func TestBinaryClassificationKnownValues(t *testing.T) {
 	// f1 = 0.75
 	// accuracy = 4/6 ≈ 0.6667
 
-	m := BinaryClassification[string]("pos")
+	m := mustBinaryClassification[string](t, "pos")
 	r := m.Compute(scored)
 
-	if r.Name != "classification" {
-		t.Errorf("Name = %q, want %q", r.Name, "classification")
+	if r.Name != "classification[t0.5]" {
+		t.Errorf("Name = %q, want %q", r.Name, "classification[t0.5]")
 	}
 
 	assertClose(t, "precision", r.Values["precision"], 0.75)
@@ -49,6 +51,33 @@ func TestBinaryClassificationKnownValues(t *testing.T) {
 	assertClose(t, "fn", r.Values["fn"], 1)
 }
 
+// The decision threshold is a configuration input, not a quality signal, so it
+// must live in the confusion-matrix detail (provenance) rather than in Values,
+// where the run comparator would score a threshold change as a regression.
+func TestBinaryClassificationThresholdIsProvenanceNotValue(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[string]{
+		{Sample: bench.Sample[string]{Label: "pos"}, Prediction: bench.Prediction[string]{Label: "pos", Score: 0.9}},
+		{Sample: bench.Sample[string]{Label: "neg"}, Prediction: bench.Prediction[string]{Label: "neg", Score: 0.2}},
+	}
+	r := mustBinaryClassification[string](t, "pos", WithThreshold(0.7)).Compute(scored)
+
+	if _, ok := r.Values["threshold"]; ok {
+		t.Error("threshold must not appear in Values: it is a configuration input, not a quality signal")
+	}
+	detail, ok := r.Detail.(bench.ConfusionMatrixDetail)
+	if !ok {
+		t.Fatalf("Detail type = %T, want bench.ConfusionMatrixDetail", r.Detail)
+	}
+	if detail.Threshold == nil {
+		t.Fatal("Detail.Threshold = nil, want a recorded 0.7")
+	}
+	if *detail.Threshold != 0.7 {
+		t.Errorf("Detail.Threshold = %v, want 0.7", *detail.Threshold)
+	}
+}
+
 func TestBinaryClassificationPerfect(t *testing.T) {
 	t.Parallel()
 
@@ -57,7 +86,7 @@ func TestBinaryClassificationPerfect(t *testing.T) {
 		{Sample: bench.Sample[string]{Label: "neg"}, Prediction: bench.Prediction[string]{Score: 0.1}},
 	}
 
-	m := BinaryClassification[string]("pos")
+	m := mustBinaryClassification[string](t, "pos")
 	r := m.Compute(scored)
 
 	assertClose(t, "precision", r.Values["precision"], 1.0)
@@ -75,7 +104,7 @@ func TestBinaryClassificationCustomThreshold(t *testing.T) {
 	}
 
 	// With threshold 0.7, score 0.6 < 0.7 → predicted neg → FN
-	m := BinaryClassification[string]("pos", WithThreshold(0.7))
+	m := mustBinaryClassification[string](t, "pos", WithThreshold(0.7))
 	r := m.Compute(scored)
 
 	assertClose(t, "fn", r.Values["fn"], 1)
@@ -85,7 +114,7 @@ func TestBinaryClassificationCustomThreshold(t *testing.T) {
 func TestBinaryClassificationEmpty(t *testing.T) {
 	t.Parallel()
 
-	m := BinaryClassification[string]("pos")
+	m := mustBinaryClassification[string](t, "pos")
 	r := m.Compute(nil)
 
 	assertClose(t, "f1", r.Value, 0)
@@ -191,6 +220,9 @@ func TestConfusionMatrix(t *testing.T) {
 	if !ok {
 		t.Fatalf("Detail is not ConfusionMatrixDetail, got %T", r.Detail)
 	}
+	if cm.Threshold != nil {
+		t.Errorf("multi-label confusion matrix Threshold = %v, want nil (no threshold)", *cm.Threshold)
+	}
 	// Expected: cat→cat=1, cat→dog=1, dog→cat=0, dog→dog=2
 	if cm.Matrix[0][0] != 1 {
 		t.Errorf("matrix[cat][cat] = %d, want 1", cm.Matrix[0][0])
@@ -210,5 +242,65 @@ func assertClose(t *testing.T, name string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-6 {
 		t.Errorf("%s = %.6f, want %.6f", name, got, want)
+	}
+}
+
+func mustBinaryClassification[L comparable](t *testing.T, positive L, opts ...ClassificationOption) Metric[L] {
+	t.Helper()
+	m, err := BinaryClassification[L](positive, opts...)
+	if err != nil {
+		t.Fatalf("BinaryClassification: unexpected error: %v", err)
+	}
+	return m
+}
+
+// A threshold-dependent metric folds its cutoff into the identity name so runs
+// scored at different thresholds stay distinct and are never joined by the
+// comparator as comparable — the F1 at one cutoff is not the F1 at another.
+func TestBinaryClassificationThresholdIdentity(t *testing.T) {
+	t.Parallel()
+
+	scored := []bench.ScoredSample[string]{
+		{Sample: bench.Sample[string]{Label: "pos"}, Prediction: bench.Prediction[string]{Label: "pos", Score: 0.9}},
+		{Sample: bench.Sample[string]{Label: "neg"}, Prediction: bench.Prediction[string]{Label: "neg", Score: 0.2}},
+	}
+	lo := mustBinaryClassification[string](t, "pos", WithThreshold(0.3))
+	hi := mustBinaryClassification[string](t, "pos", WithThreshold(0.7))
+
+	if lo.Name() != "classification[t0.3]" {
+		t.Errorf("low Name = %q, want %q", lo.Name(), "classification[t0.3]")
+	}
+	if hi.Name() != "classification[t0.7]" {
+		t.Errorf("high Name = %q, want %q", hi.Name(), "classification[t0.7]")
+	}
+	if lo.Compute(scored).Name == hi.Compute(scored).Name {
+		t.Error("runs at different thresholds must not share a Result.Name")
+	}
+}
+
+func TestBinaryClassificationRejectsInvalidThreshold(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		threshold float64
+	}{
+		{"nan", math.NaN()},
+		{"pos_inf", math.Inf(1)},
+		{"neg_inf", math.Inf(-1)},
+		{"below_zero", -0.1},
+		{"above_one", 1.1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := BinaryClassification[string]("pos", WithThreshold(tc.threshold))
+			if err == nil {
+				t.Fatalf("threshold %v: expected error, got nil", tc.threshold)
+			}
+			var appErr *apperrors.AppError
+			if !errors.As(err, &appErr) || appErr.Code != apperrors.ErrCodeInvalidInput {
+				t.Errorf("error = %v, want AppError %s", err, apperrors.ErrCodeInvalidInput)
+			}
+		})
 	}
 }
