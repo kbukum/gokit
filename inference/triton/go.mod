@@ -14,6 +14,7 @@ require (
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/kbukum/gokit/schema v0.3.0-alpha.1 // indirect
