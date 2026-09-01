@@ -94,7 +94,7 @@ func TestRunTaskErrorTakesPriorityOverStopError(t *testing.T) {
 
 	taskErr := fmt.Errorf("task failed")
 
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		return fmt.Errorf("stop also failed")
 	})
 
@@ -115,7 +115,7 @@ func TestGracefulTimeoutDuringStop(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg, WithGracefulTimeout(100*time.Millisecond))
 
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -223,7 +223,7 @@ func TestMultipleShutdownErrors(t *testing.T) {
 	container := containerWithFailingClose(fmt.Errorf("container close error"))
 	app, _ := NewApp(cfg, WithContainer(container))
 
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		return fmt.Errorf("stop hook error")
 	})
 	app.RegisterComponent(&mockComponent{
@@ -284,8 +284,12 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 	app.RegisterComponent(comp)
 
-	app.OnStart(func(ctx context.Context) error {
-		order = append(order, "onStart")
+	app.OnBeforeStart(func(ctx context.Context) error {
+		order = append(order, "onBeforeStart")
+		return nil
+	})
+	app.OnAfterStart(func(ctx context.Context) error {
+		order = append(order, "onAfterStart")
 		return nil
 	})
 	app.OnConfigure(func(ctx context.Context, a *App[*testConfig]) error {
@@ -296,8 +300,12 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 		order = append(order, "onReady")
 		return nil
 	})
-	app.OnStop(func(ctx context.Context) error {
-		order = append(order, "onStop")
+	app.OnBeforeStop(func(ctx context.Context) error {
+		order = append(order, "onBeforeStop")
+		return nil
+	})
+	app.OnAfterStop(func(ctx context.Context) error {
+		order = append(order, "onAfterStop")
 		return nil
 	})
 
@@ -310,13 +318,15 @@ func TestRunTaskFullLifecycleOrder(t *testing.T) {
 	}
 
 	expected := []string{
-		"onConfigure", // Phase 1: configure (may register app components)
-		"db:start",    // Phase 2: single-pass StartAll
-		"onStart",     // OnStart hooks
-		"onReady",     // Ready hooks
-		"task",        // Task execution
-		"onStop",      // Stop hooks
-		"db:stop",     // Components stop (reverse order)
+		"onConfigure",   // configure phase (may register app components)
+		"onBeforeStart", // before_start hooks
+		"db:start",      // single-pass StartAll
+		"onAfterStart",  // after_start hooks
+		"onReady",       // ready hooks
+		"task",          // task execution
+		"onBeforeStop",  // before_stop hooks
+		"db:stop",       // components stop (reverse order)
+		"onAfterStop",   // after_stop hooks
 	}
 
 	if len(order) != len(expected) {
@@ -412,12 +422,40 @@ func TestStartupFailureSkipsTaskAndStopsComponents(t *testing.T) {
 	}
 }
 
+func TestFatalStartupHookRollsBackStartedComponents(t *testing.T) {
+	cfg := newTestConfig("test", "1.0")
+	app, _ := NewApp(cfg)
+
+	comp := &mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	app.RegisterComponent(comp)
+
+	// A fatal after_start hook fails once all components have already started; startup must
+	// tear the started components back down instead of leaving them running.
+	app.OnAfterStart(func(ctx context.Context) error {
+		return fmt.Errorf("wiring failed")
+	})
+
+	err := app.RunTask(context.Background(), func(ctx context.Context) error { return nil })
+	if err == nil {
+		t.Fatal("expected startup error from fatal after_start hook")
+	}
+	if !comp.started {
+		t.Error("component should have started before the hook failed")
+	}
+	if !comp.stopped {
+		t.Error("component should be stopped when startup rolls back")
+	}
+}
+
 func TestHookContextAvailability(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 
 	var hookCtx context.Context
-	app.OnStart(func(ctx context.Context) error {
+	app.OnAfterStart(func(ctx context.Context) error {
 		hookCtx = ctx
 		return nil
 	})

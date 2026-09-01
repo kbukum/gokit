@@ -41,10 +41,10 @@ func (b *Backend) Grep(pattern string, paths ...string) ([]model.GrepMatch, erro
 	if err != nil {
 		return nil, err
 	}
-	if result.ExitCode == 1 {
+	if result.ExitCodeOr(-1) == 1 {
 		return nil, nil
 	}
-	if result.ExitCode != 0 {
+	if result.ExitCodeOr(-1) != 0 {
 		return nil, giterr.Internal(b.commandError(args, result))
 	}
 	out := result.Stdout

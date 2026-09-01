@@ -25,6 +25,33 @@ func TestFormatDuration(t *testing.T) {
 	}
 }
 
+func TestFormatDurationExact(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   time.Duration
+		want string
+	}{
+		{0, "0s"},
+		{2 * time.Hour, "2h"},
+		{3601 * time.Second, "3601s"},
+		{90 * time.Second, "90s"},
+		{1500 * time.Millisecond, "1500ms"},
+		{500 * time.Microsecond, "500us"},
+		{42 * time.Nanosecond, "42ns"},
+	}
+	for _, c := range cases {
+		got := FormatDurationExact(c.in)
+		if got != c.want {
+			t.Errorf("FormatDurationExact(%v) = %q, want %q", c.in, got, c.want)
+		}
+		if c.in != 0 {
+			if back, ok := ParseDuration(got); !ok || back != c.in {
+				t.Errorf("round-trip %q parsed to (%v, %v), want %v", got, back, ok, c.in)
+			}
+		}
+	}
+}
+
 func TestParseDuration(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

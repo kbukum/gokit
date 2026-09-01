@@ -73,8 +73,8 @@ func TestStreamNonzeroExitReturnsResult(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected result with nonzero exit")
 	}
-	if result.ExitCode != 7 {
-		t.Fatalf("ExitCode = %d want 7", result.ExitCode)
+	if result.ExitCodeOr(-1) != 7 {
+		t.Fatalf("ExitCode = %d want 7", result.ExitCodeOr(-1))
 	}
 	if got := string(result.Stdout); got != "before-fail" {
 		t.Fatalf("Stdout = %q want before-fail", got)

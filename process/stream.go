@@ -49,7 +49,7 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 	err := startWithETXTBSYRetry(func() error {
 		c = exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 		c.Dir = cmd.Dir
-		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		c.Env = mergeEnv(cmd.Env, cmd.EnvPolicy)
 		applyInput(c, cmd)
 		applyLifecycle(c, policy)
 
@@ -117,17 +117,12 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 	}
 	duration := time.Since(start)
 
-	exitCode := -1
-	if c.ProcessState != nil {
-		exitCode = c.ProcessState.ExitCode()
-	}
-
 	result := &Result{
 		Stdout:          stdout.Bytes(),
 		StdoutTruncated: stdout.Truncated(),
 		Stderr:          stderr.Bytes(),
 		StderrTruncated: stderr.Truncated(),
-		ExitCode:        exitCode,
+		ExitCode:        exitCodeOf(c.ProcessState),
 		Duration:        duration,
 	}
 
@@ -143,7 +138,9 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 			result.Canceled = true
 			return result, goerrors.Canceled("process").WithCause(waitErr)
 		}
-		return result, fmt.Errorf("process: exit code %d: %w", result.ExitCode, waitErr)
+		return result, goerrors.Internal(
+			fmt.Errorf("process: exit code %s: %w", exitCodeLabel(result.ExitCode), waitErr),
+		).WithDetail("exit_code", result.ExitCodeOr(-1))
 	}
 
 	return result, nil

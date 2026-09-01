@@ -165,16 +165,16 @@ func TestRegisterComponentDuplicate(t *testing.T) {
 	}
 }
 
-func TestOnStartHook(t *testing.T) {
+func TestOnAfterStartHook(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 	called := false
-	app.OnStart(func(ctx context.Context) error {
+	app.OnAfterStart(func(ctx context.Context) error {
 		called = true
 		return nil
 	})
 
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
+	err := app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
 	}
@@ -205,12 +205,12 @@ func TestOnStopHook(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 	called := false
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		called = true
 		return nil
 	})
 
-	err := app.emitLifecycleHooks(context.Background(), EventStop)
+	err := app.emitLifecycleHooks(context.Background(), EventBeforeStop)
 	if err != nil {
 		t.Fatalf("hook failed: %v", err)
 	}
@@ -223,12 +223,12 @@ func TestMultipleHooks(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 	order := []string{}
-	app.OnStart(
+	app.OnAfterStart(
 		func(ctx context.Context) error { order = append(order, "first"); return nil },
 		func(ctx context.Context) error { order = append(order, "second"); return nil },
 	)
 
-	app.emitLifecycleHooks(context.Background(), EventStart)
+	app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if len(order) != 2 || order[0] != "first" || order[1] != "second" {
 		t.Errorf("expected [first, second], got %v", order)
 	}
@@ -237,8 +237,8 @@ func TestMultipleHooks(t *testing.T) {
 func TestHookError(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	app.OnStart(func(ctx context.Context) error { return fmt.Errorf("hook failed") })
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
+	app.OnAfterStart(func(ctx context.Context) error { return fmt.Errorf("hook failed") })
+	err := app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if err == nil {
 		t.Error("expected error from failing hook")
 	}
@@ -248,11 +248,11 @@ func TestHookErrorStopsExecution(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 	secondCalled := false
-	app.OnStart(
+	app.OnAfterStart(
 		func(ctx context.Context) error { return fmt.Errorf("fail") },
 		func(ctx context.Context) error { secondCalled = true; return nil },
 	)
-	app.emitLifecycleHooks(context.Background(), EventStart)
+	app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if secondCalled {
 		t.Error("expected second hook not to be called after first fails (abort)")
 	}
@@ -333,14 +333,8 @@ func TestOnConfigure(t *testing.T) {
 		return nil
 	})
 
-	if len(app.onConfigure) != 1 {
-		t.Errorf("expected 1 configure callback, got %d", len(app.onConfigure))
-	}
-
-	for _, fn := range app.onConfigure {
-		if err := fn(context.Background(), app); err != nil {
-			t.Fatalf("configure failed: %v", err)
-		}
+	if err := app.RunTask(context.Background(), func(context.Context) error { return nil }); err != nil {
+		t.Fatalf("RunTask failed: %v", err)
 	}
 	if !configured {
 		t.Error("expected configure callback to run")
@@ -358,8 +352,8 @@ func TestWithGracefulTimeout(t *testing.T) {
 func TestDefaultGracefulTimeout(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	if app.gracefulTimeout != 15*time.Second {
-		t.Errorf("expected default 15s, got %v", app.gracefulTimeout)
+	if app.gracefulTimeout != 30*time.Second {
+		t.Errorf("expected default 30s, got %v", app.gracefulTimeout)
 	}
 }
 
@@ -413,7 +407,7 @@ func TestRunTaskWithHooks(t *testing.T) {
 	app, _ := NewApp(cfg)
 
 	order := []string{}
-	app.OnStart(func(ctx context.Context) error {
+	app.OnAfterStart(func(ctx context.Context) error {
 		order = append(order, "start")
 		return nil
 	})
@@ -425,7 +419,7 @@ func TestRunTaskWithHooks(t *testing.T) {
 		order = append(order, "ready")
 		return nil
 	})
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		order = append(order, "stop")
 		return nil
 	})
@@ -522,7 +516,7 @@ func TestWithLogger(t *testing.T) {
 func TestRunTaskWithStartHookError(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	app.OnStart(func(ctx context.Context) error {
+	app.OnAfterStart(func(ctx context.Context) error {
 		return fmt.Errorf("start hook failed")
 	})
 
@@ -567,7 +561,7 @@ func TestRunTaskWithReadyHookError(t *testing.T) {
 func TestRunTaskWithStopHookError(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		return fmt.Errorf("stop hook failed")
 	})
 

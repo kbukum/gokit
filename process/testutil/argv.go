@@ -36,10 +36,10 @@ func NewArgvRecorder(t *testing.T) *ArgvRecorder {
 // Command returns a process command that invokes the recorder with args as literal argv values.
 func (r *ArgvRecorder) Command(args ...string) process.Command {
 	return process.Command{
-		Binary:   r.Binary,
-		Args:     args,
-		Env:      []string{"GOKIT_PROCESS_ARGV_RECORDER_OUT=" + r.OutputPath},
-		ScrubEnv: true,
+		Binary:    r.Binary,
+		Args:      args,
+		Env:       map[string]string{"GOKIT_PROCESS_ARGV_RECORDER_OUT": r.OutputPath},
+		EnvPolicy: process.EnvEmpty,
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
+	"strings"
 	"time"
 
 	goerrors "github.com/kbukum/gokit/errors"
@@ -35,7 +37,7 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	newCmd := func() *exec.Cmd {
 		c := exec.CommandContext(ctx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 		c.Dir = cmd.Dir
-		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		c.Env = mergeEnv(cmd.Env, cmd.EnvPolicy)
 		applyInput(c, cmd)
 		if cmd.IO == IOInherited {
 			c.Stdout = os.Stdout
@@ -61,13 +63,8 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	}
 	duration := time.Since(start)
 
-	exitCode := -1
-	if c.ProcessState != nil {
-		exitCode = c.ProcessState.ExitCode()
-	}
-
 	result := &Result{
-		ExitCode: exitCode,
+		ExitCode: exitCodeOf(c.ProcessState),
 		Duration: duration,
 	}
 	if stdout != nil {
@@ -101,7 +98,9 @@ func classifyRunError(ctx context.Context, cmd Command, result *Result, err erro
 	if !stderrors.As(err, &exitErr) {
 		return SpawnError(fmt.Sprintf("process: start %s", cmd.Binary), err)
 	}
-	return fmt.Errorf("process: exit code %d: %w", result.ExitCode, err)
+	return goerrors.Internal(
+		fmt.Errorf("process: exit code %s: %w", exitCodeLabel(result.ExitCode), err),
+	).WithDetail("exit_code", result.ExitCodeOr(-1))
 }
 
 // applyLifecycle configures process-group isolation and the graceful cancel path on c.
@@ -120,14 +119,51 @@ func applyLifecycle(c *exec.Cmd, policy LifecyclePolicy) {
 	}
 }
 
-// mergeEnv prepares the process environment.
-func mergeEnv(extra []string, scrub bool) []string {
-	if scrub {
-		return append([]string{}, extra...)
+// mergeEnv prepares the process environment from the command's Env map and EnvPolicy.
+// A nil result inherits the parent environment unchanged; a non-nil (possibly empty) result
+// is passed to exec verbatim, so EnvEmpty always yields a non-nil slice. When inheriting,
+// Env entries are merged onto the parent by key so each variable appears exactly once and
+// the explicit override always wins — appending duplicates would let a child select the
+// inherited value instead, contrary to the documented override semantics.
+func mergeEnv(extra map[string]string, policy EnvPolicy) []string {
+	if policy == EnvEmpty {
+		return envSlice(extra) // non-nil, even when empty: start from an empty environment
 	}
 	if len(extra) == 0 {
-		return nil // inherit parent env
+		return nil // inherit parent env unchanged
 	}
-	env := os.Environ()
-	return append(env, extra...)
+	merged := make(map[string]string, len(extra))
+	for _, kv := range os.Environ() {
+		if i := strings.IndexByte(kv, '='); i >= 0 {
+			merged[kv[:i]] = kv[i+1:]
+		}
+	}
+	for k, v := range extra {
+		merged[k] = v
+	}
+	return envSlice(merged)
+}
+
+// envSlice renders an environment map as a non-nil sorted key=value slice.
+func envSlice(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k, v := range m {
+		out = append(out, k+"="+v)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// exitCodeOf reads a completed process's exit code, returning nil when the process was
+// killed by a signal or never produced a status (an explicit unknown-exit representation
+// rather than a -1 sentinel).
+func exitCodeOf(state *os.ProcessState) *int {
+	if state == nil {
+		return nil
+	}
+	code := state.ExitCode()
+	if code < 0 {
+		return nil
+	}
+	return &code
 }
