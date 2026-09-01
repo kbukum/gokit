@@ -47,7 +47,7 @@ var defaultFieldNames = []string{
 func NewDefaultMasker(cfg MaskingConfig) *DefaultMasker {
 	replacement := cfg.Replacement
 	if replacement == "" {
-		replacement = "***REDACTED***"
+		replacement = "[REDACTED]"
 	}
 
 	// Build the field name lookup set.

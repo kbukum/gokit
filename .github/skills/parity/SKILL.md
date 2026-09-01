@@ -1,7 +1,7 @@
 ---
 name: parity
 description: >-
-    Align gokit with its sibling kits (rskit, pykit) by capability, not blindly — mirror the
+    Align gokit with its sibling kit rskit by capability, not blindly — mirror the
     strongest existing implementation for a given scope, keep gokit idiomatic Go, and keep
     docs/PARITY-MATRIX.md accurate. Use when porting or aligning a module with a sibling
     counterpart, deciding whether something should be shared or stay kit-only, or when touching
@@ -11,9 +11,9 @@ user-invocable: true
 
 # Cross-kit parity for gokit
 
-gokit is a sibling kit to rskit (Rust) and pykit (Python): the same capabilities and the same engineering baseline, each expressed idiomatically per language. The goal of parity is **intuition transfer** — a user fluent in one kit should adapt to another quickly because the concepts, shapes, and behavior line up. rskit lives at https://github.com/kbukum/rskit.
+gokit is a sibling kit to rskit (Rust): the same capabilities and the same engineering baseline, each expressed idiomatically per language. The goal of parity is **intuition transfer** — a user fluent in one kit should adapt to the other quickly because the concepts, shapes, and behavior line up. rskit lives at https://github.com/kbukum/rskit.
 
-**No kit is the canonical reference.** Parity is judged per capability, and for each scope the kit with the *better, more complete, more correct* implementation is the one the others mirror. Parity levels the kits **up, never down** — never weaken or simplify a stronger gokit implementation just to match a weaker sibling, and when a sibling is stronger in some scope, bring gokit up to it rather than settle. If gokit is ahead in a scope, the parity direction flows outward from gokit; flag it for the siblings.
+**Neither kit is the canonical reference.** Parity is judged per capability, and for each scope the kit with the *better, more complete, more correct* implementation is the one the other mirrors. Parity levels the kits **up, never down** — never weaken or simplify a stronger gokit implementation just to match a weaker sibling, and when rskit is stronger in some scope, bring gokit up to it rather than settle. If gokit is ahead in a scope, the parity direction flows outward from gokit; flag it for rskit.
 
 ## Parity is scoped and capability-first, not symbol-for-symbol
 
@@ -31,7 +31,7 @@ Parity is about **capability and behavior**, not identical names or directory la
 
 ## Workflow
 
-1. **Find the strongest existing implementation.** Locate the counterpart in the sibling kits (rskit crate in the [rskit repo](https://github.com/kbukum/rskit) / pykit package) and study the public API, invariants, and error model — not just the surface — then decide which side currently has the better implementation for this scope.
+1. **Find the strongest existing implementation.** Locate the counterpart in the sibling kit (rskit crate in the [rskit repo](https://github.com/kbukum/rskit)) and study the public API, invariants, and error model — not just the surface — then decide which side currently has the better implementation for this scope.
 2. **Decide the mirroring level** (full / light / kit-only) and the direction (bring gokit up to a stronger sibling, or lift gokit's stronger version outward) using the rules above.
 3. **Implement idiomatically in Go** — generics-first, typed errors (`AppError`/RFC 9457), options constructors, no `any` in public APIs. Do not transliterate Rust; match behavior and invariants, express them the Go way. Enforce documented value invariants in code (saturate/clamp, NaN guards, half-open ranges) as gokit `media` does.
 4. **Update `docs/PARITY-MATRIX.md`.** Adjust the module-presence row (✅ / ➖ / ⏳) and the gokit-specific capability tables. The module-presence table is a shared cross-kit source (kept identical in `rskit/docs/PARITY-MATRIX.md`) — keep both sides consistent and note any intentional divergence.

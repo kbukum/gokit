@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -21,7 +23,7 @@ func decodeLine(t *testing.T, buf *bytes.Buffer) map[string]any {
 func TestNew_ReturnsLoggerWithoutError(t *testing.T) {
 	t.Parallel()
 
-	l, err := New(&Config{Level: "info", Format: "json", Output: "stdout"}, "svc")
+	l, err := New(&Config{Level: "info", Format: "json", Output: OutputStdout()}, "svc")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -48,6 +50,7 @@ func TestNewDefault(t *testing.T) {
 func TestNewFromEnv(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "warn")
 	t.Setenv("LOG_FORMAT", "json")
+	t.Setenv("LOG_OUTPUT", "stderr")
 
 	l, err := NewFromEnv("svc")
 	if err != nil {
@@ -192,7 +195,7 @@ func TestWithHandlerFansOutAndIsGoverned(t *testing.T) {
 	cfg := &Config{
 		Level:   "info",
 		Format:  "json",
-		Output:  "stdout",
+		Output:  OutputStdout(),
 		Masking: MaskingConfig{Enabled: true, Replacement: "***"},
 	}
 	byoHandler := slog.NewJSONHandler(&byo, nil)
@@ -210,6 +213,83 @@ func TestWithHandlerFansOutAndIsGoverned(t *testing.T) {
 		if strings.Contains(b.String(), "secret") {
 			t.Errorf("%s sink leaked secret: %q", name, b.String())
 		}
+	}
+}
+
+func TestNewWritesToFileOutputAndClosesSink(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "app.log")
+	cfg := &Config{
+		Level:   "info",
+		Format:  "json",
+		Output:  OutputFile(path),
+		Masking: MaskingConfig{Enabled: true},
+	}
+	l, err := New(cfg, "svc")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	l.Info("file sink", map[string]any{"password": "hunter2"})
+	if err := l.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read log file: %v", err)
+	}
+	if !strings.Contains(string(data), "file sink") {
+		t.Fatalf("log file missing record: %q", string(data))
+	}
+	if strings.Contains(string(data), "hunter2") {
+		t.Fatalf("log file leaked secret: %q", string(data))
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat log file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("log file perms = %o, want 600", perm)
+	}
+}
+
+func TestOutputSinkTightensExistingOverpermissiveFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "existing.log")
+	if err := os.WriteFile(path, []byte("prior\n"), 0o644); err != nil {
+		t.Fatalf("seed log file: %v", err)
+	}
+	_, closer, err := outputSink(OutputFile(path))
+	if err != nil {
+		t.Fatalf("outputSink: %v", err)
+	}
+	if closer != nil {
+		if err := closer.Close(); err != nil {
+			t.Fatalf("close sink: %v", err)
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat log file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("existing log file perms = %o, want 600", perm)
+	}
+}
+
+func TestWithBaseSinkSkipsConfiguredFileOutput(t *testing.T) {
+	t.Parallel()
+
+	// A file output combined with WithBaseSink must not open or create the
+	// configured file, since the base sink fully replaces it.
+	path := filepath.Join(t.TempDir(), "missing-dir", "app.log")
+	var buf bytes.Buffer
+	l, err := New(&Config{Level: "info", Format: "json", Output: OutputFile(path)}, "svc", WithBaseSink(slog.NewJSONHandler(&buf, nil)))
+	if err != nil {
+		t.Fatalf("New with base sink should ignore file output: %v", err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	if _, statErr := os.Stat(path); statErr == nil {
+		t.Fatal("configured file output should not be created when a base sink is supplied")
 	}
 }
 

@@ -5,12 +5,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/kbukum/gokit/contracttest/golden"
 )
 
 func newTestMasker() *DefaultMasker {
 	return NewDefaultMasker(MaskingConfig{
 		Enabled:     true,
-		Replacement: "***REDACTED***",
+		Replacement: "[REDACTED]",
 	})
 }
 
@@ -23,22 +25,22 @@ func TestMaskValue_FieldNames(t *testing.T) {
 		val  string
 		want string
 	}{
-		{"password", "password", "mysecretpw", "***REDACTED***"},
-		{"secret", "secret", "s3cr3t", "***REDACTED***"},
-		{"token", "token", "tok_abc123", "***REDACTED***"},
-		{"api_key", "api_key", "key-value", "***REDACTED***"},
-		{"apikey", "apikey", "key-value", "***REDACTED***"},
-		{"api-key", "api-key", "key-value", "***REDACTED***"},
-		{"authorization", "authorization", "Bearer xyz", "***REDACTED***"},
-		{"auth_token", "auth_token", "tok", "***REDACTED***"},
-		{"access_token", "access_token", "tok", "***REDACTED***"},
-		{"refresh_token", "refresh_token", "tok", "***REDACTED***"},
-		{"private_key", "private_key", "-----BEGIN RSA", "***REDACTED***"},
-		{"ssn", "ssn", "123-45-6789", "***REDACTED***"},
-		{"credit_card", "credit_card", "4111111111111111", "***REDACTED***"},
-		{"card_number", "card_number", "4111111111111111", "***REDACTED***"},
-		{"cvv", "cvv", "123", "***REDACTED***"},
-		{"pin", "pin", "9876", "***REDACTED***"},
+		{"password", "password", "mysecretpw", "[REDACTED]"},
+		{"secret", "secret", "s3cr3t", "[REDACTED]"},
+		{"token", "token", "tok_abc123", "[REDACTED]"},
+		{"api_key", "api_key", "key-value", "[REDACTED]"},
+		{"apikey", "apikey", "key-value", "[REDACTED]"},
+		{"api-key", "api-key", "key-value", "[REDACTED]"},
+		{"authorization", "authorization", "Bearer xyz", "[REDACTED]"},
+		{"auth_token", "auth_token", "tok", "[REDACTED]"},
+		{"access_token", "access_token", "tok", "[REDACTED]"},
+		{"refresh_token", "refresh_token", "tok", "[REDACTED]"},
+		{"private_key", "private_key", "-----BEGIN RSA", "[REDACTED]"},
+		{"ssn", "ssn", "123-45-6789", "[REDACTED]"},
+		{"credit_card", "credit_card", "4111111111111111", "[REDACTED]"},
+		{"card_number", "card_number", "4111111111111111", "[REDACTED]"},
+		{"cvv", "cvv", "123", "[REDACTED]"},
+		{"pin", "pin", "9876", "[REDACTED]"},
 	}
 
 	for _, tc := range tests {
@@ -68,8 +70,8 @@ func TestMaskValue_CaseInsensitiveFieldNames(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := m.MaskValue(tc.key, "some-value")
-			if got != "***REDACTED***" {
-				t.Errorf("MaskValue(%q, ...) = %q, want ***REDACTED***", tc.key, got)
+			if got != "[REDACTED]" {
+				t.Errorf("MaskValue(%q, ...) = %q, want [REDACTED]", tc.key, got)
 			}
 		})
 	}
@@ -223,7 +225,7 @@ func TestMaskValue_CustomFieldNames(t *testing.T) {
 	m := NewDefaultMasker(MaskingConfig{
 		Enabled:     true,
 		FieldNames:  []string{"custom_secret", "my_token"},
-		Replacement: "***REDACTED***",
+		Replacement: "[REDACTED]",
 	})
 
 	tests := []struct {
@@ -231,9 +233,9 @@ func TestMaskValue_CustomFieldNames(t *testing.T) {
 		key  string
 		want string
 	}{
-		{"custom field", "custom_secret", "***REDACTED***"},
-		{"another custom", "my_token", "***REDACTED***"},
-		{"default still works", "password", "***REDACTED***"},
+		{"custom field", "custom_secret", "[REDACTED]"},
+		{"another custom", "my_token", "[REDACTED]"},
+		{"default still works", "password", "[REDACTED]"},
 	}
 
 	for _, tc := range tests {
@@ -265,18 +267,18 @@ func TestMaskValue_CustomValuePatterns(t *testing.T) {
 func TestMaskValue_PreserveLast(t *testing.T) {
 	m := NewDefaultMasker(MaskingConfig{
 		Enabled:      true,
-		Replacement:  "***REDACTED***",
+		Replacement:  "[REDACTED]",
 		PreserveLast: 4,
 	})
 
 	got := m.MaskValue("password", "mysecretpassword")
-	if got != "***REDACTED***word" {
+	if got != "[REDACTED]word" {
 		t.Errorf("expected partial mask, got %q", got)
 	}
 
 	// Short value (shorter than PreserveLast) should still be fully replaced.
 	got = m.MaskValue("pin", "12")
-	if got != "***REDACTED***" {
+	if got != "[REDACTED]" {
 		t.Errorf("expected full mask for short value, got %q", got)
 	}
 }
@@ -294,7 +296,7 @@ func TestMaskFields(t *testing.T) {
 
 	masked := m.MaskFields(fields)
 
-	if masked["password"] != "***REDACTED***" {
+	if masked["password"] != "[REDACTED]" {
 		t.Errorf("password should be masked, got %v", masked["password"])
 	}
 	if masked["username"] != "john" {
@@ -325,7 +327,7 @@ func TestMaskingDisabledPassesThrough(t *testing.T) {
 	cfg := &Config{
 		Level:   "info",
 		Format:  "json",
-		Output:  "stdout",
+		Output:  OutputStdout(),
 		Masking: MaskingConfig{Enabled: false},
 	}
 	l, err := New(cfg, "test", WithWriter(&buf))
@@ -346,8 +348,8 @@ func TestMaskingEnabledRedactsInOutput(t *testing.T) {
 	cfg := &Config{
 		Level:   "info",
 		Format:  "json",
-		Output:  "stdout",
-		Masking: MaskingConfig{Enabled: true, Replacement: "***REDACTED***"},
+		Output:  OutputStdout(),
+		Masking: MaskingConfig{Enabled: true, Replacement: "[REDACTED]"},
 	}
 	l, err := New(cfg, "test", WithWriter(&buf))
 	if err != nil {
@@ -360,7 +362,7 @@ func TestMaskingEnabledRedactsInOutput(t *testing.T) {
 	})
 
 	m := decodeLine(t, &buf)
-	if m["password"] != "***REDACTED***" {
+	if m["password"] != "[REDACTED]" {
 		t.Errorf("password should be masked, got %v", m["password"])
 	}
 	if m["username"] != "alice" {
@@ -369,6 +371,14 @@ func TestMaskingEnabledRedactsInOutput(t *testing.T) {
 	if m["email"] != "***@***.***" {
 		t.Errorf("email should be masked, got %v", m["email"])
 	}
+	golden.AssertJSON(t, bytes.TrimSpace(buf.Bytes()), `{
+		"level": "INFO",
+		"message": "login attempt",
+		"service": "test",
+		"username": "alice",
+		"password": "[REDACTED]",
+		"email": "***@***.***"
+	}`)
 }
 
 func TestWithMaskerEnablesMasking(t *testing.T) {
@@ -376,7 +386,7 @@ func TestWithMaskerEnablesMasking(t *testing.T) {
 
 	var buf bytes.Buffer
 	// Config leaves masking disabled; WithMasker turns it on as a first-class seam.
-	cfg := &Config{Level: "info", Format: "json", Output: "stdout"}
+	cfg := &Config{Level: "info", Format: "json", Output: OutputStdout()}
 	l, err := New(cfg, "test", WithWriter(&buf), WithMasker(newTestMasker()))
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -421,7 +431,7 @@ func TestConfigApplyDefaults_Masking(t *testing.T) {
 	if !cfg.Masking.Enabled {
 		t.Error("expected Masking.Enabled to default to true")
 	}
-	if cfg.Masking.Replacement != "***REDACTED***" {
+	if cfg.Masking.Replacement != "[REDACTED]" {
 		t.Errorf("expected default replacement, got %q", cfg.Masking.Replacement)
 	}
 }

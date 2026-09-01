@@ -20,14 +20,16 @@ var (
 
 // VersionInfo is immutable build metadata describing the running binary.
 type VersionInfo struct {
-	Version   string    `json:"version"`
-	GitCommit string    `json:"git_commit"`
-	GitBranch string    `json:"git_branch"`
-	BuildTime string    `json:"build_time"`
-	GoVersion string    `json:"go_version"`
-	BuildDate time.Time `json:"build_date"`
-	IsRelease bool      `json:"is_release"`
-	IsDirty   bool      `json:"is_dirty"`
+	Version   string `json:"version"`
+	GitCommit string `json:"git_commit"`
+	GitBranch string `json:"git_branch"`
+	// BuildTime is the UTC build timestamp in RFC 3339 format, or empty if unavailable.
+	BuildTime string `json:"build_time"`
+	// BuildDate is the UTC build date (YYYY-MM-DD), omitted when unavailable.
+	BuildDate string `json:"build_date,omitempty"`
+	GoVersion string `json:"go_version"`
+	IsRelease bool   `json:"is_release"`
+	IsDirty   bool   `json:"is_dirty"`
 }
 
 // source is the raw, injectable input from which a VersionInfo is computed.
@@ -71,20 +73,16 @@ func compute(s source) *VersionInfo {
 		Version:   s.version,
 		GitCommit: s.gitCommit,
 		GitBranch: s.gitBranch,
-		BuildTime: s.buildTime,
 		GoVersion: s.goVersion,
-		IsRelease: isRelease(s.version),
 	}
 
-	if s.buildTime != "" {
-		if t, err := time.Parse(time.RFC3339, s.buildTime); err == nil {
-			info.BuildDate = t
-		}
-	}
+	info.BuildTime, info.BuildDate = buildTimestamp(s.buildTime)
 
 	if s.buildInfo != nil {
 		applyBuildInfo(info, s.buildInfo)
 	}
+
+	info.IsRelease = isRelease(s.version, info.IsDirty)
 
 	return info
 }
@@ -104,18 +102,29 @@ func applyBuildInfo(info *VersionInfo, bi *debug.BuildInfo) {
 			info.IsDirty = setting.Value == "true"
 		case "vcs.time":
 			if info.BuildTime == "" {
-				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
-					info.BuildDate = t
-					info.BuildTime = setting.Value
-				}
+				info.BuildTime, info.BuildDate = buildTimestamp(setting.Value)
 			}
 		}
 	}
 }
 
-// isRelease reports whether a version string denotes a release build.
-func isRelease(version string) bool {
-	return version != "dev" && !strings.Contains(version, "dirty")
+// buildTimestamp normalizes an RFC 3339 build timestamp to UTC, returning the
+// canonical UTC RFC 3339 timestamp and its UTC calendar date (YYYY-MM-DD). Both
+// are "" when the timestamp is empty or malformed, so callers never surface an
+// unvalidated build time.
+func buildTimestamp(buildTime string) (timestamp, date string) {
+	t, err := time.Parse(time.RFC3339, buildTime)
+	if err != nil {
+		return "", ""
+	}
+	utc := t.UTC()
+	return utc.Format(time.RFC3339), utc.Format("2006-01-02")
+}
+
+// isRelease reports whether a version string denotes a release build. A dirty
+// working tree is never a release, even when the version string looks clean.
+func isRelease(version string, dirty bool) bool {
+	return version != "dev" && !strings.Contains(version, "dirty") && !dirty
 }
 
 // shortCommit truncates a full VCS revision to a 7-character short hash.

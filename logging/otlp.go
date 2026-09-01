@@ -14,6 +14,8 @@ import (
 
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 const otlpLoggerName = "github.com/kbukum/gokit/logging"
@@ -192,10 +194,11 @@ func newLogExporter(ctx context.Context, cfg OTLPConfig) (sdklog.Exporter, error
 }
 
 func newGRPCLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploggrpc.Exporter, error) {
-	opts := []otlploggrpc.Option{otlploggrpc.WithEndpoint(cfg.Endpoint)}
-	if cfg.Insecure {
-		opts = append(opts, otlploggrpc.WithInsecure())
+	endpoint, err := resolveOTLPEndpoint(cfg)
+	if err != nil {
+		return nil, err
 	}
+	opts := []otlploggrpc.Option{otlploggrpc.WithEndpointURL(endpoint)}
 	if len(cfg.Headers) > 0 {
 		opts = append(opts, otlploggrpc.WithHeaders(cfg.Headers))
 	}
@@ -203,14 +206,55 @@ func newGRPCLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploggrpc.Expor
 }
 
 func newHTTPLogExporter(ctx context.Context, cfg OTLPConfig) (*otlploghttp.Exporter, error) {
-	opts := []otlploghttp.Option{otlploghttp.WithEndpoint(cfg.Endpoint)}
-	if cfg.Insecure {
-		opts = append(opts, otlploghttp.WithInsecure())
+	endpoint, err := resolveOTLPEndpoint(cfg)
+	if err != nil {
+		return nil, err
 	}
+	opts := []otlploghttp.Option{otlploghttp.WithEndpointURL(endpoint)}
 	if len(cfg.Headers) > 0 {
 		opts = append(opts, otlploghttp.WithHeaders(cfg.Headers))
 	}
 	return otlploghttp.New(ctx, opts...)
+}
+
+// resolveOTLPEndpoint applies the insecure transport policy to the configured
+// endpoint. This helper makes the endpoint URL scheme the single source of
+// transport security so Insecure stays authoritative and cannot silently
+// disagree with a per-exporter TLS toggle: a scheme-less endpoint is prefixed
+// with https:// (secure by default) or http:// when Insecure is set, so
+// plaintext is always an explicit opt-in. An explicit scheme is normalized
+// case-insensitively; one that contradicts the flag is rejected rather than
+// silently honored: https:// with Insecure, and http:// without Insecure (which
+// would ship records and headers in plaintext despite the secure default). Any
+// other explicit scheme is rejected.
+func resolveOTLPEndpoint(cfg OTLPConfig) (string, error) {
+	endpoint := strings.TrimSpace(cfg.Endpoint)
+	if idx := strings.Index(endpoint, "://"); idx >= 0 {
+		scheme := strings.ToLower(endpoint[:idx])
+		rest := endpoint[idx:]
+		switch scheme {
+		case "https":
+			if cfg.Insecure {
+				return "", apperrors.InvalidInput("logging.otlp.insecure",
+					fmt.Sprintf("insecure=true contradicts TLS endpoint %q", endpoint))
+			}
+			return scheme + rest, nil
+		case "http":
+			if !cfg.Insecure {
+				return "", apperrors.InvalidInput("logging.otlp.insecure",
+					fmt.Sprintf("plaintext endpoint %q requires insecure=true; use https:// for secure transport", endpoint))
+			}
+			return scheme + rest, nil
+		default:
+			return "", apperrors.InvalidInput("logging.otlp.endpoint",
+				fmt.Sprintf("unsupported endpoint scheme %q; use http:// or https://", scheme))
+		}
+	}
+	scheme := "https://"
+	if cfg.Insecure {
+		scheme = "http://"
+	}
+	return scheme + endpoint, nil
 }
 
 func newLogResource(serviceName, environment, version string) (*resource.Resource, error) {

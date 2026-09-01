@@ -202,7 +202,7 @@ make ci-lint   # lint jobs only
 
 ### Sibling-parity reminder
 
-Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit),
-[rskit](https://github.com/kbukum/rskit), and [pykit](https://github.com/kbukum/pykit).
-When you change one of these surfaces here, please open tracking issues in the sibling repos
+Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit)
+and [rskit](https://github.com/kbukum/rskit).
+When you change one of these surfaces here, please open a tracking issue in the rskit repo
 so the change can be evaluated for parity.

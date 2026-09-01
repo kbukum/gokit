@@ -35,9 +35,10 @@ func (c *CompiledSchema) TryValidate(value any) (ValidationResult, error) {
 		return ValidationResult{}, err
 	}
 
-	var errs []ValidationError
-	validateValue(c.schema, data, "", &errs)
-	return ValidationResult{Valid: len(errs) == 0, Errors: errs}, nil
+	if err := c.compiled.Validate(data); err != nil {
+		return validationResultFromError(err), nil
+	}
+	return ValidationResult{Valid: true}, nil
 }
 
 // ValidateWithOptions validates a value against a schema using explicit options,

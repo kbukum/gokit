@@ -1,5 +1,5 @@
 ---
-description: Align gokit with its sibling kits (rskit, pykit) by capability, not blindly — mirror the strongest existing implementation for a given scope, keep gokit idiomatic Go, and keep docs/PARITY-MATRIX.md accurate. Use when porting or aligning a module with a sibling counterpart, deciding whether something should be shared or stay kit-only, or when touching anything that has a cross-kit parity row.
+description: Align gokit with its sibling kit rskit by capability, not blindly — mirror the strongest existing implementation for a given scope, keep gokit idiomatic Go, and keep docs/PARITY-MATRIX.md accurate. Use when porting or aligning a module with a sibling counterpart, deciding whether something should be shared or stay kit-only, or when touching anything that has a cross-kit parity row.
 ---
 
 # /parity — router to the canonical skill

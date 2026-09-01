@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
+
+	"github.com/kbukum/gokit/codec"
+	gokitfs "github.com/kbukum/gokit/fs"
+	"github.com/kbukum/gokit/logging"
 )
 
 // FileSystem interface for file operations (useful for testing).
@@ -253,26 +258,15 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 
 	// 1. Load YAML config first (base configuration)
 	if files.ConfigFile != "" && fs.Exists(files.ConfigFile) {
-		v.SetConfigFile(files.ConfigFile)
-		if err := v.ReadInConfig(); err != nil {
-			if warn != nil {
-				warn("config: failed to load config file",
-					slog.String("file", files.ConfigFile),
-					slog.String("error", err.Error()),
-				)
-			}
+		if err := readConfigFile(v, files.ConfigFile); err != nil {
+			return warnAndWrap(warn, "config: failed to load config file", files.ConfigFile, err)
 		}
 	}
 
 	// 2. Load profile .env file (environment-specific overrides)
 	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
 		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
-			if warn != nil {
-				warn("config: failed to load profile env file",
-					slog.String("file", files.ProfileEnvFile),
-					slog.String("error", err.Error()),
-				)
-			}
+			return warnAndWrap(warn, "config: failed to load profile env file", files.ProfileEnvFile, err)
 		}
 	}
 
@@ -283,21 +277,16 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 	// 4. Load service .env file
 	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
-			if warn != nil {
-				warn("config: failed to load .env file",
-					slog.String("file", files.EnvFile),
-					slog.String("error", err.Error()),
-				)
-			}
-		} else {
-			// Re-bind env vars after loading .env to pick up new variables
-			autoBindEnvVars(v)
+			return warnAndWrap(warn, "config: failed to load .env file", files.EnvFile, err)
 		}
+		// Re-bind env vars after loading .env to pick up new variables
+		autoBindEnvVars(v)
 	}
 
 	// 5. Unmarshal into config struct (with duration parsing support)
 	if err := v.Unmarshal(cfg, viper.DecodeHook(
 		mapstructure.ComposeDecodeHookFunc(
+			logging.OutputDecodeHook(),
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
 		),
@@ -329,6 +318,35 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 	}
 
 	return nil
+}
+
+// warnAndWrap logs a resolved-file load failure through warn (when provided)
+// and returns it wrapped, so a file that exists but cannot be read or decoded
+// fails loudly instead of silently falling back to a defaulted config. Files
+// that are simply absent are skipped by the caller's Exists check and never
+// reach here.
+func warnAndWrap(warn WarningFunc, msg, file string, err error) error {
+	if warn != nil {
+		warn(msg, slog.String("file", file), slog.String("error", err.Error()))
+	}
+	return fmt.Errorf("%s %q: %w", msg, file, err)
+}
+
+func readConfigFile(v *viper.Viper, path string) error {
+	if strings.EqualFold(filepath.Ext(path), ".toml") {
+		data, err := gokitfs.ReadFileLimit(path, maxStrictFileBytes)
+		if err != nil {
+			return err
+		}
+		values, err := codec.Decode[map[string]any](codec.NewTOMLCodec(), string(data))
+		if err != nil {
+			return err
+		}
+		return v.MergeConfigMap(values)
+	}
+
+	v.SetConfigFile(path)
+	return v.ReadInConfig()
 }
 
 // buildEnvSearchPaths creates a list of paths to search for .env files.

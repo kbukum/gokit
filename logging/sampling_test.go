@@ -16,7 +16,7 @@ func TestSamplingBurstThenThereafter(t *testing.T) {
 	cfg := &Config{
 		Level:    "info",
 		Format:   "json",
-		Output:   "stdout",
+		Output:   OutputStdout(),
 		Sampling: SamplingConfig{Enabled: true, InitialRate: 2, ThereafterRate: 3},
 	}
 	l, err := New(cfg, "svc", WithWriter(&buf), WithClock(clock))
@@ -64,7 +64,7 @@ func TestSamplingBudgetSharedAcrossDerivedLoggers(t *testing.T) {
 	cfg := &Config{
 		Level:    "info",
 		Format:   "json",
-		Output:   "stdout",
+		Output:   OutputStdout(),
 		Sampling: SamplingConfig{Enabled: true, InitialRate: 2, ThereafterRate: 0},
 	}
 	root, err := New(cfg, "svc", WithWriter(&buf), WithClock(clock))

@@ -1,9 +1,9 @@
 # gokit
 
 Multi-module Go library providing foundational infrastructure for service development.
-A sibling kit to rskit (Rust) and pykit (Python): the same capabilities and the same
-engineering baseline, idiomatic per language. No kit is the canonical reference — for each
-capability, whichever kit has the stronger implementation is the one the others mirror, so
+A sibling kit to rskit (Rust): the same capabilities and the same
+engineering baseline, idiomatic per language. Parity is tracked against rskit — for each
+capability, whichever kit has the stronger implementation is the one the other mirrors, so
 parity levels the kits up (never down) and stays scoped rather than symbol-for-symbol.
 
 ## Engineering principles

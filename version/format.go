@@ -42,8 +42,8 @@ func (v *VersionInfo) Full() string {
 	}
 
 	full := strings.Join(parts, "-")
-	if !v.BuildDate.IsZero() {
-		full += fmt.Sprintf(" (built %s)", v.BuildDate.Format("2006-01-02T15:04:05Z"))
+	if v.BuildTime != "" {
+		full += fmt.Sprintf(" (built %s)", v.BuildTime)
 	}
 	return full
 }

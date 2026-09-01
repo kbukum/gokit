@@ -25,7 +25,7 @@ func main() {
     fmt.Println(info.GitBranch) // e.g. "main"
 
     fmt.Println(version.GetShortVersion()) // "1.2.3-abc1234"
-    fmt.Println(version.GetFullVersion())  // "1.2.3-abc1234 (main, 2024-01-15)"
+    fmt.Println(version.GetFullVersion())  // "1.2.3-abc1234 (built 2024-01-15T10:30:00Z)"
 }
 ```
 

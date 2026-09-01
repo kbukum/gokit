@@ -57,7 +57,7 @@ without reconstructing it from the diff.
   Paste real evidence if useful; don't fabricate output.
 - **Breaking Changes** — pre-stable, describe the redesign, not a migration shim.
 - **Sibling Parity** — if a public abstraction changed, confirm parity
-  or link the rskit/pykit item as a full URL; otherwise mark parity-not-required.
+  or link the rskit item as a full URL; otherwise mark parity-not-required.
 - **Checklist** — tick only what is genuinely true. An unchecked box is honest signal;
   a falsely checked one wastes reviewer trust. Do not narrate prior bugs or how they were fixed —
   describe the change as it stands.

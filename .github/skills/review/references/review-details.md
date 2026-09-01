@@ -24,7 +24,7 @@ or **project** (whole tree, no diff). State the mode up front.
 2. List the surface to review: changed modules/packages (changes mode)
    or chosen modules/workspace (project mode). Note cross-cutting touches:
    a root-module package's public surface fans out to every sub-module, every nested adapter,
-   and downstream consumers (rskit/pykit parity).
+   and downstream consumers (rskit parity).
    Also flag `go.work` / `core.go.work` / `contrib.go.work` edits, shared error types (`AppError`),
    public re-exports, `.golangci.yml`/`depguard` config.
 3. Determine which passes apply via the triggers below.

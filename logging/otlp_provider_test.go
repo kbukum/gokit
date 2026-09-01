@@ -9,6 +9,46 @@ import (
 	"testing"
 )
 
+func TestResolveOTLPEndpointPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		endpoint string
+		insecure bool
+		want     string
+		wantErr  bool
+	}{
+		{"scheme-less secure by default", "collector:4317", false, "https://collector:4317", false},
+		{"scheme-less insecure opt-in", "collector:4317", true, "http://collector:4317", false},
+		{"explicit http requires insecure", "http://collector:4317", false, "", true},
+		{"explicit http with insecure preserved", "http://collector:4317", true, "http://collector:4317", false},
+		{"explicit https stays secure", "https://collector:4317", false, "https://collector:4317", false},
+		{"https with insecure is rejected", "https://collector:4317", true, "", true},
+		{"uppercase https normalized", "HTTPS://collector:4317", false, "https://collector:4317", false},
+		{"mixed-case http normalized", "HtTp://collector:4317", true, "http://collector:4317", false},
+		{"unsupported scheme rejected", "grpc://collector:4317", false, "", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := resolveOTLPEndpoint(OTLPConfig{Endpoint: tc.endpoint, Insecure: tc.insecure})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for endpoint=%q insecure=%v", tc.endpoint, tc.insecure)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("resolveOTLPEndpoint(%q, insecure=%v) = %q, want %q", tc.endpoint, tc.insecure, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOTLPProviderConstruction(t *testing.T) {
 	t.Parallel()
 
@@ -39,7 +79,7 @@ func TestDerivationPropagatesThroughFullPipeline(t *testing.T) {
 	cfg := &Config{
 		Level:        "debug",
 		Format:       "json",
-		Output:       "stdout",
+		Output:       OutputStdout(),
 		Timestamp:    true,
 		Masking:      MaskingConfig{Enabled: true, Replacement: "***"},
 		Sampling:     SamplingConfig{Enabled: true, InitialRate: 100, ThereafterRate: 1},
@@ -78,7 +118,7 @@ func TestMaskingMasksBoundAttrs(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	cfg := &Config{Level: "info", Format: "json", Output: "stdout", Masking: MaskingConfig{Enabled: true, Replacement: "***"}}
+	cfg := &Config{Level: "info", Format: "json", Output: OutputStdout(), Masking: MaskingConfig{Enabled: true, Replacement: "***"}}
 	l, err := New(cfg, "svc", WithWriter(&buf))
 	if err != nil {
 		t.Fatalf("New: %v", err)

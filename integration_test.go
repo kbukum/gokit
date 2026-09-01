@@ -47,7 +47,7 @@ func newTestConfig(name string) *testConfig {
 			Name:        name,
 			Version:     "0.1.0",
 			Environment: "development",
-			Logging:     logging.Config{Level: "info", Format: "json", Output: "stdout"},
+			Logging:     logging.Config{Level: "info", Format: "json", Output: logging.OutputStdout()},
 		},
 	}
 }
@@ -665,7 +665,7 @@ func TestIntegration_Logger_Config_LoggerConfiguredViaConfig(t *testing.T) {
 	cfg := &logging.Config{
 		Level:       "debug",
 		Format:      "json",
-		Output:      "stdout",
+		Output:      logging.OutputStdout(),
 		ServiceName: "test-svc",
 	}
 

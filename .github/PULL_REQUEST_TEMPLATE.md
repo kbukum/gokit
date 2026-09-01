@@ -57,10 +57,10 @@ $ make test M=<module>
 
 ## Sibling Parity
 
-<!-- gokit is a sibling kit to rskit and pykit; no kit is the canonical reference. If this change touches a public abstraction (error codes, Component lifecycle, Provider shapes, stream, etc.), mirror whichever kit is strongest in that scope — confirm parity or link the corresponding sibling item as a full URL, e.g. https://github.com/kbukum/rskit/issues/123 -->
+<!-- gokit tracks parity against its sibling kit rskit. If this change touches a public abstraction (error codes, Component lifecycle, Provider shapes, stream, etc.), mirror whichever kit is strongest in that scope — confirm parity or link the corresponding sibling item as a full URL, e.g. https://github.com/kbukum/rskit/issues/123 -->
 
 - [ ] Sibling-parity not required (internal change)
-- [ ] Sibling-parity tracked: rskit <url>, pykit <url>
+- [ ] Sibling-parity tracked: rskit <url>
 - [ ] Reveals an upstream rskit gap (tagged **IMPROVE-RSKIT** in the description)
 
 ## Checklist

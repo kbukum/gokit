@@ -38,7 +38,7 @@ func TestModuleLevelOverridesGateOutput(t *testing.T) {
 	cfg := &Config{
 		Level:        "info",
 		Format:       "json",
-		Output:       "stdout",
+		Output:       OutputStdout(),
 		Timestamp:    true,
 		ModuleLevels: map[string]string{"db": "debug", "noisy": "warn"},
 	}

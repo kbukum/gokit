@@ -64,7 +64,7 @@ fmt.Printf("Running %s on %s:%d in %s mode\n",
 
 ### Loading Order (lowest → highest priority)
 
-1. YAML config file (`config.yml`)
+1. Config file — auto-discovery finds YAML only (`config.yml`); `WithConfigFile()` also accepts an explicit TOML file (`.toml`)
 2. Profile env file (`config/profiles/{profile}.env`)
 3. `.env` file
 4. Environment variables

@@ -1,6 +1,7 @@
 package errors_test
 
 import (
+	"encoding/json"
 	stderrors "errors"
 	"fmt"
 
@@ -29,4 +30,11 @@ func ExampleAppError_Unwrap() {
 		fmt.Println("cause preserved")
 	}
 	// Output: cause preserved
+}
+
+func ExampleCanceled_problemDetail() {
+	err := errors.Canceled("search")
+	body, _ := json.Marshal(err.ToProblemDetail())
+	fmt.Println(string(body))
+	// Output: {"type":"https://gokit.dev/errors/canceled","title":"Canceled","status":408,"detail":"The search operation was canceled.","code":"CANCELED","retryable":false,"details":{"operation":"search"}}
 }
