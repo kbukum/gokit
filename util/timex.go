@@ -32,6 +32,35 @@ func FormatDuration(d time.Duration) string {
 	}
 }
 
+// FormatDurationExact renders d as a lossless, round-trip-safe string, choosing the largest
+// time unit that represents the duration as an exact integer so ParseDuration reconstructs the
+// original value. Unlike FormatDuration, which rounds to two decimals for display, it never
+// rounds. Use it for any duration serialized to configuration or a cross-kit wire contract.
+//
+//	FormatDurationExact(3601 * time.Second) == "3601s"
+//	FormatDurationExact(2 * time.Hour) == "2h"
+//	FormatDurationExact(1500 * time.Millisecond) == "1500ms"
+func FormatDurationExact(d time.Duration) string {
+	nanos := d.Nanoseconds()
+	if nanos == 0 {
+		return "0s"
+	}
+	switch {
+	case nanos%int64(time.Hour) == 0:
+		return fmt.Sprintf("%dh", nanos/int64(time.Hour))
+	case nanos%int64(time.Minute) == 0:
+		return fmt.Sprintf("%dm", nanos/int64(time.Minute))
+	case nanos%int64(time.Second) == 0:
+		return fmt.Sprintf("%ds", nanos/int64(time.Second))
+	case nanos%int64(time.Millisecond) == 0:
+		return fmt.Sprintf("%dms", nanos/int64(time.Millisecond))
+	case nanos%int64(time.Microsecond) == 0:
+		return fmt.Sprintf("%dus", nanos/int64(time.Microsecond))
+	default:
+		return fmt.Sprintf("%dns", nanos)
+	}
+}
+
 // ParseDuration parses a duration string such as "5s", "10m", or "1.5h" into a
 // time.Duration. Parsing is case-insensitive, allows optional whitespace before the
 // unit, and treats a unit-less value as seconds. Recognized units are ns, us/μs, ms,

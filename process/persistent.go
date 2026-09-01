@@ -170,7 +170,7 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 	startErr := startWithETXTBSYRetry(func() error {
 		c = exec.CommandContext(spawnCtx, cmd.Binary, cmd.Args...) //nolint:gosec // dynamic args are the purpose of this package
 		c.Dir = cmd.Dir
-		c.Env = mergeEnv(cmd.Env, cmd.ScrubEnv)
+		c.Env = mergeEnv(cmd.Env, cmd.EnvPolicy)
 		applyInput(c, cmd)
 		if cfg.Lifecycle.IsolateProcessGroup {
 			configureSysProcAttr(c)
@@ -342,7 +342,7 @@ func persistentStartupContextError(ctx context.Context) error {
 
 func (p *PersistentProcess) exitedBeforeReadyErr() error {
 	return withStartErrorKind(
-		goerrors.Internal(fmt.Errorf("persistent process exited before readiness (exit code %d)", p.exitCode())),
+		goerrors.Internal(fmt.Errorf("persistent process exited before readiness (exit code %s)", exitCodeLabel(p.exitCode()))),
 		PersistentStartExitedBeforeReadiness,
 	)
 }
@@ -416,11 +416,8 @@ func (p *PersistentProcess) Shutdown(ctx context.Context) (ShutdownOutcome, erro
 	return ShutdownOutcome{Result: p.result()}, nil
 }
 
-func (p *PersistentProcess) exitCode() int {
-	if p.cmd.ProcessState == nil {
-		return -1
-	}
-	return p.cmd.ProcessState.ExitCode()
+func (p *PersistentProcess) exitCode() *int {
+	return exitCodeOf(p.cmd.ProcessState)
 }
 
 func (p *PersistentProcess) result() *Result {

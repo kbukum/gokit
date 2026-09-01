@@ -1,5 +1,7 @@
 package status
 
+import "fmt"
+
 // Status is the canonical status vocabulary for DAG node execution.
 type Status string
 
@@ -17,6 +19,26 @@ const (
 // String returns the wire representation of the status.
 func (s Status) String() string {
 	return string(s)
+}
+
+// IsValid reports whether s is one of the known status values.
+func (s Status) IsValid() bool {
+	switch s {
+	case Completed, Failed, Skipped, Unavailable, DepUnavailable, DepFailed, DepSkipped:
+		return true
+	default:
+		return false
+	}
+}
+
+// Parse converts a wire status string to a Status, rejecting unknown values so a decoded
+// graph result cannot carry a status outside the canonical vocabulary.
+func Parse(s string) (Status, error) {
+	st := Status(s)
+	if !st.IsValid() {
+		return "", fmt.Errorf("status: unknown status %q", s)
+	}
+	return st, nil
 }
 
 // IsTerminal returns true if the node ran to a terminal outcome (Completed or Failed).

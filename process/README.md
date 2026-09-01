@@ -40,7 +40,7 @@ func main() {
 	}
 
 	fmt.Println(string(result.Stdout)) // "hello world\n"
-	fmt.Println(result.ExitCode)       // 0
+	fmt.Println(result.ExitCodeOr(-1)) // 0 on success; -1 if the process was killed
 	fmt.Println(result.Duration)       // e.g. 2.1ms
 }
 ```
@@ -90,11 +90,12 @@ result, _ := process.Run(ctx, process.Command{
 	Binary: "python",
 	Args:   []string{"script.py"},
 	Dir:    "/opt/scripts",
-	Env:    []string{"MODEL=large", "GPU=true"},
+	Env:    map[string]string{"MODEL": "large", "GPU": "true"},
 })
 ```
 
-Extra environment variables are merged with the parent process environment.
+Env entries are merged onto the base environment selected by `EnvPolicy` (`EnvInherit` by
+default, or `EnvEmpty` to start from an empty environment).
 
 ### Resilient Execution
 

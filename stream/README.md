@@ -77,6 +77,7 @@ func main() {
 | `partition` | `stream.Partition` | Streaming bounded tee into matching/rejected branches. |
 | `throttle` | `stream.Throttle` | Drops values that arrive before the interval elapses. |
 | `debounce` | `stream.Debounce` | Emits the latest value after a quiet period. |
+| `debounce_batch` | `stream.DebounceBatch` | Accumulates every value in a burst and emits the window after a quiet period or once a size cap is hit. |
 | `distinct` | `stream.Distinct` | Removes duplicate comparable values. |
 | `take` | `stream.Take` | Emits at most the first `n` values. |
 | `skip` | `stream.Skip` | Ignores the first `n` values. |
@@ -140,6 +141,7 @@ b.Broadcast(newConfig) // reaches every live subscriber; slow ones drop overflow
 | `Throttle[T](p *Pipeline[T], interval time.Duration) *Pipeline[T]` | Rate-limit values (drop values arriving faster than interval) |
 | `Batch[T](p *Pipeline[T], size int, timeout time.Duration) *Pipeline[[]T]` | Collect N items or wait timeout, emit as slice |
 | `Debounce[T](p *Pipeline[T], duration time.Duration) *Pipeline[T]` | Wait for silence before emitting latest value |
+| `DebounceBatch[T](p *Pipeline[T], quiet time.Duration, maxItems int) *Pipeline[[]T]` | Accumulate a burst (trailing-edge) and emit the window after a quiet gap or at a size cap |
 | `TumblingWindow[T](p *Pipeline[T], duration time.Duration) *Pipeline[[]T]` | Non-overlapping fixed-duration windows |
 | `SlidingWindow[T](p *Pipeline[T], timeFn func(T) time.Time, windowSize, slideBy time.Duration) *Pipeline[[]T]` | Overlapping event-time windows with configurable slide |
 

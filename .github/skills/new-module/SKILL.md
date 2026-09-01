@@ -2,8 +2,8 @@
 name: new-module
 description: >-
     Scaffold a new package or module in the gokit multi-module monorepo the canonical way —
-    decide root package vs sub-module, wire go.mod + replace directive, doc.go, domains.toml,
-    the right go.work file, and the parity matrix. Use when adding a new capability, package, or
+    decide root package vs sub-module, wire go.mod + replace directive, doc.go, domains.toml, and
+    the right go.work file. Use when adding a new capability, package, or
     module to gokit, or when unsure whether new code belongs in the root module or its own go.mod.
 user-invocable: true
 ---
@@ -70,10 +70,10 @@ Then tidy: `toven tidy-fix --module go:<newmodule>` (see the `validate` skill).
 Add the module name (directory name without any kit prefix, sub-modules as `parent/child`) to the correct `[domains.<domain>].modules` list
 so the Makefile/CI `check-<domain>` gates and generated docs pick it up.
 
-## Step 6 — Parity matrix
+## Step 6 — Parity awareness
 
-If this capability exists (or should be tracked) in rskit,
-add/adjust its row in `docs/PARITY-MATRIX.md` (✅ present · ➖ absent) with a short note.
+If this capability exists (or should be tracked) in rskit, note it in an rskit tracking issue
+(https://github.com/kbukum/rskit) — the capability, the mirroring level, and any intentional divergence.
 See the `parity` skill for the capability-not-blind mirroring policy.
 
 ## Step 7 — Validate
@@ -94,7 +94,7 @@ toven tidy  --module go:<newmodule>
 - [ ] Public API typed/generic, options-based, no `any`
 - [ ] (sub-module) `go.mod` + `replace`, added to the right `*.go.work`
 - [ ] `domains.toml` updated
-- [ ] `docs/PARITY-MATRIX.md` updated if it has a cross-kit counterpart
+- [ ] Sibling parity tracked in an rskit issue if it has a cross-kit counterpart
 - [ ] build/lint/test/tidy green for the module
 
 Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.

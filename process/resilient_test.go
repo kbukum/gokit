@@ -21,8 +21,8 @@ func TestRunWithResilience_EmptyConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.ExitCode != 0 {
-		t.Fatalf("expected exit 0, got %d", result.ExitCode)
+	if result.ExitCodeOr(-1) != 0 {
+		t.Fatalf("expected exit 0, got %d", result.ExitCodeOr(-1))
 	}
 	if string(result.Stdout) != "hello\n" {
 		t.Fatalf("expected 'hello\\n', got %q", string(result.Stdout))
@@ -102,8 +102,8 @@ func TestRunWithResilience_SuccessDoesNotTripCB(t *testing.T) {
 		if err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i, err)
 		}
-		if result.ExitCode != 0 {
-			t.Fatalf("call %d: expected exit 0, got %d", i, result.ExitCode)
+		if result.ExitCodeOr(-1) != 0 {
+			t.Fatalf("call %d: expected exit 0, got %d", i, result.ExitCodeOr(-1))
 		}
 	}
 }
@@ -316,8 +316,8 @@ func TestAdapter_GracePeriodNotOverridden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run failed: %v", err)
 	}
-	if result.ExitCode != 0 {
-		t.Errorf("expected exit 0, got %d", result.ExitCode)
+	if result.ExitCodeOr(-1) != 0 {
+		t.Errorf("expected exit 0, got %d", result.ExitCodeOr(-1))
 	}
 }
 

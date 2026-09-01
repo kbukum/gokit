@@ -21,7 +21,7 @@ func TestRunInputInherit(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	if !result.Success() {
-		t.Fatalf("expected success, got exit %d", result.ExitCode)
+		t.Fatalf("expected success, got exit %d", result.ExitCodeOr(-1))
 	}
 }
 
@@ -56,7 +56,7 @@ func TestRunInheritedIONoCapture(t *testing.T) {
 		t.Fatalf("expected no captured stdout in inherited mode, got %q", result.Stdout)
 	}
 	if !result.Success() {
-		t.Fatalf("expected success, got exit %d", result.ExitCode)
+		t.Fatalf("expected success, got exit %d", result.ExitCodeOr(-1))
 	}
 }
 

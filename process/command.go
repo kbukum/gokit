@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+// EnvPolicy selects the base environment a subprocess starts from before Env overrides are
+// applied.
+type EnvPolicy int
+
+const (
+	// EnvInherit inherits the parent process environment, then applies Env overrides on top.
+	// This is the zero value and the default.
+	EnvInherit EnvPolicy = iota
+	// EnvEmpty starts from an empty environment and applies only the explicit Env entries.
+	EnvEmpty
+)
+
 // Command configures a subprocess to execute.
 type Command struct {
 	// Binary is the executable path or name (resolved via PATH).
@@ -13,11 +25,11 @@ type Command struct {
 	Args []string
 	// Dir is the working directory. If empty, uses the current directory.
 	Dir string
-	// Env is additional environment variables (key=value).
-	// By default these are merged with the parent environment.
-	Env []string
-	// ScrubEnv starts from an empty environment instead of inheriting the parent.
-	ScrubEnv bool
+	// Env holds environment variables applied to the child as key=value pairs, merged onto
+	// the base environment selected by EnvPolicy.
+	Env map[string]string
+	// EnvPolicy selects the base environment: inherit the parent (default) or start empty.
+	EnvPolicy EnvPolicy
 	// Stdin provides input to the process. May be nil. When set it takes precedence
 	// over Input and is fed to the child, then closed.
 	Stdin io.Reader

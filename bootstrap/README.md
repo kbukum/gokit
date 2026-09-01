@@ -55,7 +55,7 @@ func main() {
 ```
 
 Both modes share the same lifecycle:
-Initialize → OnStart → Configure → ReadyCheck → OnReady → (execute) → OnStop → Shutdown.
+Configure → OnBeforeStart → StartAll → OnAfterStart → ReadyCheck → OnReady → (execute) → OnBeforeStop → StopAll → OnAfterStop → Shutdown.
 
 ## Key Types & Functions
 
@@ -65,7 +65,7 @@ Initialize → OnStart → Configure → ReadyCheck → OnReady → (execute) �
 | `NewApp[C]()` | Create app from typed config (must satisfy `Config` interface) |
 | `Run()` | Start long-running service with signal handling |
 | `RunTask()` | Execute a finite task with signal-based cancellation |
-| `OnConfigure()` / `OnStart()` / `OnReady()` / `OnStop()` | Lifecycle hooks |
+| `OnConfigure()` / `OnBeforeStart()` / `OnAfterStart()` / `OnReady()` / `OnBeforeStop()` / `OnAfterStop()` | Lifecycle hooks |
 | `RegisterComponent()` | Add a managed component |
 | `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` | App options |
 | `Summary` | Tracks and displays startup summary |

@@ -127,7 +127,7 @@ func TestSubprocessHandlerWithEnv(t *testing.T) {
 	h := worker.NewSubprocessHandler(worker.SubprocessConfig{
 		Command: process.Command{
 			Binary: "sh",
-			Env:    []string{"MY_VAR=hello_from_env"},
+			Env:    map[string]string{"MY_VAR": "hello_from_env"},
 			Dir:    "/tmp",
 		},
 	})

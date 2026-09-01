@@ -57,25 +57,25 @@ func (t Transition[S, C]) Name() string { return t.name }
 // StateSnapshot is a point-in-time view of a StateMachine.
 type StateSnapshot[S comparable] struct {
 	// State is the current state.
-	State S
+	State S `json:"state"`
 	// Version is the monotonic state version, incremented on each transition.
-	Version uint64
+	Version uint64 `json:"version"`
 }
 
 // AuditEntry records one successfully applied transition.
 type AuditEntry[S comparable, C any] struct {
 	// Transition is the applied transition's name.
-	Transition string
+	Transition string `json:"transition"`
 	// From is the state before the transition.
-	From S
+	From S `json:"from"`
 	// To is the state after the transition.
-	To S
+	To S `json:"to"`
 	// Context is the caller-supplied transition context.
-	Context C
+	Context C `json:"context"`
 	// Version is the state version after the transition.
-	Version uint64
+	Version uint64 `json:"version"`
 	// RecordedAt is the wall-clock time the transition was applied.
-	RecordedAt time.Time
+	RecordedAt time.Time `json:"recorded_at"`
 }
 
 // StatePersistence is a hook invoked for each successful transition, before the

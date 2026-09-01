@@ -37,7 +37,6 @@ type App[C Config] struct {
 	Summary    *Summary
 
 	gracefulTimeout time.Duration
-	onConfigure     []func(ctx context.Context, app *App[C]) error
 	hooks           *hook.Registry
 }
 
@@ -57,7 +56,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		Cfg:             cfg,
 		Container:       di.NewContainer(),
 		Components:      component.NewRegistry(),
-		gracefulTimeout: 15 * time.Second,
+		gracefulTimeout: 30 * time.Second,
 		hooks:           hook.NewRegistry(),
 	}
 
@@ -90,10 +89,19 @@ func (a *App[C]) RegisterComponent(c component.Component) error {
 	return a.Components.Register(c)
 }
 
-// OnConfigure registers a callback to run during the configure phase.
-// Use this to set up business-layer dependencies after infrastructure is started.
+// OnConfigure registers a callback to run during the configure phase. Use it to register
+// application components and wire business-layer dependencies. Configure runs before
+// StartAll, so components it registers start in the same single pass as infrastructure —
+// they are not yet running when the callback executes. Callbacks run in registration order
+// through the lifecycle hook registry (EventConfigure); a callback error is fatal and aborts
+// startup, rolling back anything earlier phases created.
 func (a *App[C]) OnConfigure(fn func(ctx context.Context, app *App[C]) error) {
-	a.onConfigure = append(a.onConfigure, fn)
+	a.hooks.On(EventConfigure, func(ctx context.Context, _ hook.Event) error {
+		if err := fn(ctx, a); err != nil {
+			return fmt.Errorf("%w: onConfigure hook failed: %w", hook.ErrFatalHook, err)
+		}
+		return nil
+	})
 }
 
 // ReadyCheck verifies that all registered components are healthy.
@@ -116,7 +124,7 @@ func (a *App[C]) ReadyCheck(ctx context.Context) error {
 }
 
 // Run executes the full application lifecycle for long-running services:
-// Initialize → OnStart hooks → Configure → ReadyCheck → OnReady hooks → Block on signal → OnStop hooks → Graceful Shutdown.
+// Configure → OnBeforeStart hooks → StartAll → OnAfterStart hooks → ReadyCheck → OnReady hooks → Block on signal → OnBeforeStop hooks → StopAll → OnAfterStop hooks → Graceful Shutdown.
 func (a *App[C]) Run(ctx context.Context) error {
 	if err := a.startup(ctx); err != nil {
 		return err
@@ -127,7 +135,7 @@ func (a *App[C]) Run(ctx context.Context) error {
 	a.WaitForSignal(ctx)
 
 	// Graceful shutdown
-	return a.stop()
+	return a.stop() //nolint:contextcheck // stop intentionally uses a fresh bounded context; the Run ctx is already canceled at shutdown
 }
 
 // RunTask executes a finite task with the full bootstrap lifecycle. Unlike Run(),
@@ -173,7 +181,7 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 	taskErr := task(taskCtx)
 
 	// Graceful shutdown
-	if stopErr := a.stop(); stopErr != nil {
+	if stopErr := a.stop(); stopErr != nil { //nolint:contextcheck // stop intentionally uses a fresh bounded context; the task ctx may be canceled at shutdown
 		if taskErr != nil {
 			return taskErr
 		}
@@ -183,7 +191,10 @@ func (a *App[C]) RunTask(ctx context.Context, task func(ctx context.Context) err
 	return taskErr
 }
 
-// startup performs the common initialization sequence shared by Run and RunTask.
+// startup performs the common initialization sequence shared by Run and RunTask. Any fatal
+// error after the configure phase begins rolls back through the full shutdown sequence
+// (stop hooks, component teardown, DI container close) before returning, so a failed startup
+// never leaves components or container resources running.
 func (a *App[C]) startup(ctx context.Context) error {
 	start := time.Now()
 
@@ -192,40 +203,40 @@ func (a *App[C]) startup(ctx context.Context) error {
 		"version": a.Version,
 	})
 
-	// Phase 1: Configure — run business-layer setup callbacks that may register additional components.
-	// This happens before StartAll
-	// so that all components (infrastructure + application) start in a single pass.
-	if err := a.configure(ctx); err != nil {
-		return fmt.Errorf("configuration failed: %w", err)
+	// Phase: configure — run application-layer setup callbacks (registered via OnConfigure)
+	// that may register additional components. This happens before StartAll so that all
+	// components (infrastructure + application) start in a single pass. A configure error is
+	// fatal and aborts startup.
+	if err := a.emitLifecycleHooks(ctx, EventConfigure); err != nil {
+		return a.abortStartup("configure hook failed", err)
 	}
 
-	// Phase 2: Start — single-pass StartAll for all registered components.
+	// Phase: before_start — hooks run before any component is started.
+	if err := a.emitLifecycleHooks(ctx, EventBeforeStart); err != nil {
+		return a.abortStartup("onBeforeStart hook failed", err)
+	}
+
+	// Phase: start — single-pass StartAll for all registered components.
 	if err := a.Components.StartAll(ctx); err != nil {
-		// Partial rollback:
-		// run OnStop hooks for cleanup of any resources that configure callbacks may have set up.
-		if stopErr := a.emitLifecycleHooks(ctx, EventStop); stopErr != nil {
-			a.Logger.ErrorCtx(ctx, "OnStop hook error during startup rollback", map[string]any{
-				"error": stopErr.Error(),
-			})
-		}
-		return fmt.Errorf("component startup failed: %w", err)
+		return a.abortStartup("component startup failed", err)
 	}
 
-	// Run OnStart hooks
-	if err := a.emitLifecycleHooks(ctx, EventStart); err != nil {
-		return fmt.Errorf("onStart hook failed: %w", err)
+	// Phase: after_start — hooks run after all components are started, before the ready check.
+	if err := a.emitLifecycleHooks(ctx, EventAfterStart); err != nil {
+		return a.abortStartup("onAfterStart hook failed", err)
 	}
 
-	// Ready check — verify all components are healthy
+	// Ready check — advisory health probe of all components. A failure is logged and startup
+	// continues (degraded start); the ready phase below runs regardless of the outcome.
 	if err := a.ReadyCheck(ctx); err != nil {
 		a.Logger.WarnCtx(ctx, "Ready check reported issues", map[string]any{
 			"error": err.Error(),
 		})
 	}
 
-	// Run OnReady hooks
+	// Phase: ready — hooks run after the ready check completes, before accepting traffic.
 	if err := a.emitLifecycleHooks(ctx, EventReady); err != nil {
-		return fmt.Errorf("onReady hook failed: %w", err)
+		return a.abortStartup("onReady hook failed", err)
 	}
 
 	// Display startup summary
@@ -235,30 +246,24 @@ func (a *App[C]) startup(ctx context.Context) error {
 	return nil
 }
 
+// abortStartup tears down whatever earlier startup phases created after a fatal error and
+// returns the wrapped cause. Teardown runs through the normal shutdown sequence on a fresh
+// bounded context (via stop) because the startup context may already be canceled; StopAll
+// skips components that never started, so this is safe regardless of how far startup reached.
+func (a *App[C]) abortStartup(phase string, cause error) error {
+	if err := a.stop(); err != nil {
+		a.Logger.ErrorCtx(context.Background(), "Startup rollback reported errors", map[string]any{
+			"phase": phase,
+			"error": err.Error(),
+		})
+	}
+	return fmt.Errorf("%s: %w", phase, cause)
+}
+
 // DisplaySummary prints the startup summary. It auto-collects infrastructure, routes,
 // and health from the component registry and DI container.
 func (a *App[C]) DisplaySummary() {
 	a.Summary.DisplaySummary(a.Components, a.Container, a.Logger)
-}
-
-// configure runs registered configuration callbacks (Phase 2).
-func (a *App[C]) configure(ctx context.Context) error {
-	if len(a.onConfigure) == 0 {
-		return nil
-	}
-
-	a.Logger.DebugCtx(ctx, "Phase 2: Running configuration callbacks", map[string]any{
-		"count": len(a.onConfigure),
-	})
-
-	for _, fn := range a.onConfigure {
-		if err := fn(ctx, a); err != nil {
-			return err
-		}
-	}
-
-	a.Logger.DebugCtx(ctx, "Phase 2: Configuration complete")
-	return nil
 }
 
 // WaitForSignal blocks until an OS interrupt/term signal or context cancellation.
@@ -279,7 +284,7 @@ func (a *App[C]) WaitForSignal(ctx context.Context) os.Signal {
 	}
 }
 
-// Startup performs the full bootstrap lifecycle (initialize, start hooks, configure, start components, ready check, ready hooks) without blocking on shutdown signals.
+// Startup performs the full bootstrap lifecycle (configure, before-start hooks, start components, after-start hooks, ready check, ready hooks) without blocking on shutdown signals.
 // Pair with Shutdown for test and CLI scenarios.
 func (a *App[C]) Startup(ctx context.Context) error {
 	return a.startup(ctx)
@@ -318,9 +323,9 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 
 	var shutdownErrs []error
 
-	// Run OnStop hooks before stopping components — collect all errors.
-	if err := a.emitLifecycleHooks(ctx, EventStop); err != nil {
-		a.Logger.ErrorCtx(ctx, "OnStop hook error", map[string]any{
+	// Phase: before_stop — hooks run before stopping components — collect all errors.
+	if err := a.emitLifecycleHooks(ctx, EventBeforeStop); err != nil {
+		a.Logger.ErrorCtx(ctx, "OnBeforeStop hook error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
@@ -329,6 +334,14 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 	// Stop all components (reverse order)
 	if err := a.Components.StopAll(ctx); err != nil {
 		a.Logger.ErrorCtx(ctx, "Shutdown completed with errors", map[string]any{
+			"error": err.Error(),
+		})
+		shutdownErrs = append(shutdownErrs, err)
+	}
+
+	// Phase: after_stop — hooks run after all components are stopped, before DI teardown.
+	if err := a.emitLifecycleHooks(ctx, EventAfterStop); err != nil {
+		a.Logger.ErrorCtx(ctx, "OnAfterStop hook error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)

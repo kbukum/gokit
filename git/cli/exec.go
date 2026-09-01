@@ -20,7 +20,7 @@ func (b *Backend) run(ctx context.Context, args ...string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if result.ExitCode != 0 {
+	if result.ExitCodeOr(-1) != 0 {
 		return result.Stdout, giterr.Internal(b.commandError(args, result))
 	}
 	return result.Stdout, nil
@@ -32,7 +32,7 @@ func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Resul
 		Args:   append(append([]string(nil), b.extraArgs...), args...),
 		Dir:    b.root,
 	})
-	if err != nil && (result == nil || result.ExitCode < 0) {
+	if err != nil && result.ExitCodeOr(-1) < 0 {
 		return nil, giterr.Internal(err)
 	}
 	return result, nil
@@ -41,7 +41,7 @@ func (b *Backend) runResult(ctx context.Context, args ...string) (*process.Resul
 func (b *Backend) commandError(args []string, result *process.Result) error {
 	msg := redact.URLCredentials(strings.TrimSpace(string(result.Stderr)))
 	if msg == "" {
-		msg = fmt.Sprintf("git exited with code %d", result.ExitCode)
+		msg = fmt.Sprintf("git exited with code %d", result.ExitCodeOr(-1))
 	}
 	full := append(append([]string(nil), b.extraArgs...), args...)
 	sanitized := make([]string, len(full))

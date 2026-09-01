@@ -23,8 +23,8 @@ func TestRunEcho(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.ExitCode != 0 {
-		t.Fatalf("expected exit code 0, got %d", result.ExitCode)
+	if result.ExitCodeOr(-1) != 0 {
+		t.Fatalf("expected exit code 0, got %d", result.ExitCodeOr(-1))
 	}
 	out := strings.TrimSpace(string(result.Stdout))
 	if out != "hello world" {
@@ -54,8 +54,8 @@ func TestRunExitCode(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for non-zero exit")
 	}
-	if result.ExitCode != 42 {
-		t.Fatalf("expected exit code 42, got %d", result.ExitCode)
+	if result.ExitCodeOr(-1) != 42 {
+		t.Fatalf("expected exit code 42, got %d", result.ExitCodeOr(-1))
 	}
 }
 
@@ -114,7 +114,7 @@ func TestRunEnv(t *testing.T) {
 	result, err := process.Run(context.Background(), process.Command{
 		Binary: "sh",
 		Args:   []string{"-c", "echo $MY_TEST_VAR"},
-		Env:    []string{"MY_TEST_VAR=hello123"},
+		Env:    map[string]string{"MY_TEST_VAR": "hello123"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -125,14 +125,32 @@ func TestRunEnv(t *testing.T) {
 	}
 }
 
-func TestRunScrubEnv(t *testing.T) {
+func TestRunEnvOverridesInheritedDuplicate(t *testing.T) {
+	// The parent already defines the variable; the explicit Env override must win
+	// deterministically rather than depending on which duplicate the child selects.
+	t.Setenv("GOKIT_PROCESS_DUP", "inherited")
+
+	result, err := process.Run(context.Background(), process.Command{
+		Binary: "sh",
+		Args:   []string{"-c", "echo $GOKIT_PROCESS_DUP"},
+		Env:    map[string]string{"GOKIT_PROCESS_DUP": "override"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := strings.TrimSpace(string(result.Stdout)); got != "override" {
+		t.Fatalf("stdout = %q, want override", got)
+	}
+}
+
+func TestRunEmptyEnvPolicy(t *testing.T) {
 	t.Setenv("GOKIT_PROCESS_SECRET", "hidden")
 
 	result, err := process.Run(context.Background(), process.Command{
-		Binary:   "sh",
-		Args:     []string{"-c", "echo ${GOKIT_PROCESS_SECRET:-missing}:${EXPLICIT_ONLY:-unset}"},
-		Env:      []string{"EXPLICIT_ONLY=visible"},
-		ScrubEnv: true,
+		Binary:    "sh",
+		Args:      []string{"-c", "echo ${GOKIT_PROCESS_SECRET:-missing}:${EXPLICIT_ONLY:-unset}"},
+		Env:       map[string]string{"EXPLICIT_ONLY": "visible"},
+		EnvPolicy: process.EnvEmpty,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -217,8 +235,8 @@ func TestRunEmptyArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.ExitCode != 0 {
-		t.Fatalf("expected exit 0, got %d", result.ExitCode)
+	if result.ExitCodeOr(-1) != 0 {
+		t.Fatalf("expected exit 0, got %d", result.ExitCodeOr(-1))
 	}
 }
 
@@ -310,8 +328,8 @@ func TestRunConcurrent(t *testing.T) {
 		if errs[i] != nil {
 			t.Fatalf("goroutine %d: unexpected error: %v", i, errs[i])
 		}
-		if results[i].ExitCode != 0 {
-			t.Fatalf("goroutine %d: expected exit 0, got %d", i, results[i].ExitCode)
+		if results[i].ExitCodeOr(-1) != 0 {
+			t.Fatalf("goroutine %d: expected exit 0, got %d", i, results[i].ExitCodeOr(-1))
 		}
 		out := strings.TrimSpace(string(results[i].Stdout))
 		if out != "concurrent" {
@@ -348,8 +366,8 @@ func TestRunNoShellInjection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.ExitCode != 0 {
-		t.Fatalf("exit code = %d, want 0", result.ExitCode)
+	if result.ExitCodeOr(-1) != 0 {
+		t.Fatalf("exit code = %d, want 0", result.ExitCodeOr(-1))
 	}
 	if got := recorder.Args(t); !slices.Equal(got, []string{payload}) {
 		t.Fatalf("recorded argv = %#v, want literal payload", got)

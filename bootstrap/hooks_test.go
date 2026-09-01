@@ -7,17 +7,38 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/hook"
 )
+
+// TestLifecycleEventVocabulary locks the stable lifecycle phase strings shared across kits.
+func TestLifecycleEventVocabulary(t *testing.T) {
+	cases := []struct {
+		event hook.EventType
+		want  string
+	}{
+		{EventConfigure, "bootstrap:configure"},
+		{EventBeforeStart, "bootstrap:before_start"},
+		{EventAfterStart, "bootstrap:after_start"},
+		{EventReady, "bootstrap:ready"},
+		{EventBeforeStop, "bootstrap:before_stop"},
+		{EventAfterStop, "bootstrap:after_stop"},
+	}
+	for _, tc := range cases {
+		if string(tc.event) != tc.want {
+			t.Errorf("event = %q, want %q", string(tc.event), tc.want)
+		}
+	}
+}
 
 func TestHookErrorIncludesIndex(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
-	app.OnStart(
+	app.OnAfterStart(
 		func(ctx context.Context) error { return nil },
 		func(_ context.Context) error { return nil },
 		func(ctx context.Context) error { return fmt.Errorf("boom") },
 	)
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
+	err := app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -26,7 +47,7 @@ func TestHookErrorIncludesIndex(t *testing.T) {
 	}
 }
 
-func TestOnStopHookErrorDoesNotPreventComponentStop(t *testing.T) {
+func TestOnBeforeStopHookErrorDoesNotPreventComponentStop(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 
@@ -36,7 +57,7 @@ func TestOnStopHookErrorDoesNotPreventComponentStop(t *testing.T) {
 	}
 	app.RegisterComponent(comp)
 
-	app.OnStop(func(ctx context.Context) error {
+	app.OnBeforeStop(func(ctx context.Context) error {
 		return fmt.Errorf("stop hook error")
 	})
 
@@ -155,11 +176,11 @@ func TestEmptyHookSlicesAreNoop(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 	// No hooks registered — emit should succeed with no error.
-	err := app.emitLifecycleHooks(context.Background(), EventStart)
+	err := app.emitLifecycleHooks(context.Background(), EventAfterStart)
 	if err != nil {
 		t.Errorf("no hooks should succeed: %v", err)
 	}
-	err = app.emitLifecycleHooks(context.Background(), EventStop)
+	err = app.emitLifecycleHooks(context.Background(), EventBeforeStop)
 	if err != nil {
 		t.Errorf("no hooks should succeed: %v", err)
 	}

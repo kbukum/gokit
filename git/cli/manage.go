@@ -35,13 +35,13 @@ func (b *Backend) requireSigningKey() error {
 	ctx, cancel := context.WithTimeout(context.Background(), signingTimeout)
 	defer cancel()
 	result, err := b.runResult(ctx, "config", "--get", "user.signingkey")
-	if err != nil && (result == nil || result.ExitCode < 0) {
+	if err != nil && result.ExitCodeOr(-1) < 0 {
 		return err
 	}
-	if result == nil || result.ExitCode == 1 || strings.TrimSpace(string(result.Stdout)) == "" {
+	if result == nil || result.ExitCodeOr(-1) == 1 || strings.TrimSpace(string(result.Stdout)) == "" {
 		return giterr.SigningKeyMissing("user.signingkey")
 	}
-	if result.ExitCode != 0 {
+	if result.ExitCodeOr(-1) != 0 {
 		return giterr.Internal(b.commandError([]string{"config", "--get", "user.signingkey"}, result))
 	}
 	return nil
