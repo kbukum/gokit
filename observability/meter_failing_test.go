@@ -6,6 +6,8 @@ import (
 
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
 // failingMeter embeds a real meter and returns an error when the requested
@@ -49,8 +51,19 @@ func TestNewMetricsInstrumentErrors(t *testing.T) {
 		"error.total",
 	}
 	for _, name := range names {
-		if _, err := NewMetrics(&failingMeter{Meter: base, failOn: name}); err == nil {
+		_, err := NewMetrics(&failingMeter{Meter: base, failOn: name})
+		if err == nil {
 			t.Fatalf("expected error when %s creation fails", name)
+		}
+		appErr, ok := apperr.AsAppError(err)
+		if !ok {
+			t.Fatalf("%s: expected AppError, got %T", name, err)
+		}
+		if appErr.Code != apperr.ErrCodeInternal || appErr.HTTPStatus != 500 {
+			t.Fatalf("%s: code/status = %q/%d, want INTERNAL_ERROR/500", name, appErr.Code, appErr.HTTPStatus)
+		}
+		if !errors.Is(err, errInstrument) {
+			t.Fatalf("%s: expected underlying instrument error preserved as cause, got %v", name, err)
 		}
 	}
 }

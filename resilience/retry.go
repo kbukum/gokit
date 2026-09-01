@@ -5,14 +5,16 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"net/http"
 	"time"
 
 	apperr "github.com/kbukum/gokit/errors"
 )
 
-// Common retry errors.
+// Common retry errors. ErrMaxRetriesExceeded is a typed AppError so callers can
+// branch on the error code, while errors.Is still matches the sentinel.
 var (
-	ErrMaxRetriesExceeded = errors.New("max retries exceeded")
+	ErrMaxRetriesExceeded = apperr.New(apperr.ErrCodeServiceUnavailable, "max retries exceeded", http.StatusServiceUnavailable)
 )
 
 // BackoffStrategy defines how retry delays grow between attempts.
@@ -104,8 +106,12 @@ func DefaultRetryIf(err error) bool {
 	return !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded)
 }
 
-// Retry executes a function with retry logic. Returns the result of the function
-// or the last error if all retries fail.
+// Retry executes a function with retry logic. On success it returns the result.
+// When a non-retryable error is encountered it returns that error unchanged.
+// When all attempts (or the elapsed-time budget) are exhausted it returns
+// ErrMaxRetriesExceeded with the last error preserved as the cause, so callers
+// can branch on errors.Is(err, ErrMaxRetriesExceeded) while still unwrapping the
+// underlying failure.
 func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T, error) {
 	var zero T
 	var lastErr error
@@ -169,7 +175,7 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		}
 	}
 
-	return zero, lastErr
+	return zero, ErrMaxRetriesExceeded.WithCause(lastErr)
 }
 
 // RetryFunc executes a function that returns only an error.

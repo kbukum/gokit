@@ -145,7 +145,7 @@ func TestAppError_WithDetails_Merge(t *testing.T) {
 	}
 
 	// Test merging into existing details
-	err.WithDetails(map[string]any{
+	err = err.WithDetails(map[string]any{
 		"another": "detail",
 	})
 	if err.Details["another"] != "detail" {
@@ -170,7 +170,7 @@ func TestAppError_WithDetail_Single(t *testing.T) {
 	}
 
 	// Test overwriting
-	err.WithDetail("trace", "def")
+	err = err.WithDetail("trace", "def")
 	if err.Details["trace"] != "def" {
 		t.Errorf("expected trace=def after overwrite")
 	}
@@ -178,12 +178,50 @@ func TestAppError_WithDetail_Single(t *testing.T) {
 
 func TestAppError_WithDetail_NilMap(t *testing.T) {
 	err := &AppError{}
-	err.WithDetail("key", "value")
+	err = err.WithDetail("key", "value")
 	if err.Details == nil {
 		t.Fatal("expected Details map to be initialized")
 	}
 	if err.Details["key"] != "value" {
 		t.Errorf("expected key=value, got %v", err.Details["key"])
+	}
+}
+
+func TestAppError_Builders_CopyOnWrite(t *testing.T) {
+	t.Parallel()
+
+	// A shared sentinel must never be mutated by enrichment: WithCause/WithDetail
+	// return a fresh copy, so concurrent enrichment cannot race on the sentinel.
+	sentinel := New(ErrCodeServiceUnavailable, "sentinel", 503)
+
+	withCause := sentinel.WithCause(errors.New("boom"))
+	if sentinel.Cause != nil {
+		t.Fatalf("WithCause mutated the sentinel cause: %v", sentinel.Cause)
+	}
+	if withCause == sentinel {
+		t.Fatal("WithCause returned the receiver instead of a copy")
+	}
+
+	withDetail := sentinel.WithDetail("k", "v")
+	if len(sentinel.Details) != 0 {
+		t.Fatalf("WithDetail mutated the sentinel details: %v", sentinel.Details)
+	}
+	if withDetail.Details["k"] != "v" {
+		t.Fatalf("expected detail on the copy, got %v", withDetail.Details)
+	}
+
+	// The enriched copies still match the sentinel under errors.Is.
+	if !errors.Is(withCause, sentinel) {
+		t.Error("expected WithCause copy to match the sentinel under errors.Is")
+	}
+	if !errors.Is(withDetail, sentinel) {
+		t.Error("expected WithDetail copy to match the sentinel under errors.Is")
+	}
+
+	// A distinct sentinel sharing the same code must not match.
+	other := New(ErrCodeServiceUnavailable, "other", 503)
+	if errors.Is(withCause, other) {
+		t.Error("enriched error must not match an unrelated same-code sentinel")
 	}
 }
 
@@ -1057,7 +1095,7 @@ func TestEdgeCase_NilCauseInError(t *testing.T) {
 func TestEdgeCase_WithDetailsNilMap(t *testing.T) {
 	t.Parallel()
 	err := Conflict("test")
-	err.WithDetails(nil)
+	err = err.WithDetails(nil)
 	if err.Details == nil {
 		t.Fatal("Details should be initialized even after nil merge")
 	}

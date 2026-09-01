@@ -2,8 +2,11 @@ package provider
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"sync"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
 
 // OperationBinding binds an operation ID to a provider with priority and tier access.
@@ -48,7 +51,8 @@ func (r *OperationRegistry[T]) Resolve(operationID, tier string) (T, error) {
 	if !ok || len(bindings) == 0 {
 		r.mu.RUnlock()
 		var zero T
-		return zero, fmt.Errorf("provider: no bindings for operation %q", operationID)
+		return zero, goerrors.New(goerrors.ErrCodeNotFound,
+			fmt.Sprintf("provider: no bindings for operation %q", operationID), http.StatusNotFound)
 	}
 
 	// Filter by tier and copy to avoid holding the lock during provider creation.
@@ -62,7 +66,9 @@ func (r *OperationRegistry[T]) Resolve(operationID, tier string) (T, error) {
 
 	if len(candidates) == 0 {
 		var zero T
-		return zero, fmt.Errorf("provider: no bindings for operation %q accessible by tier %q", operationID, tier)
+		return zero, goerrors.New(goerrors.ErrCodeNotFound,
+			fmt.Sprintf("provider: no bindings for operation %q accessible by tier %q", operationID, tier),
+			http.StatusNotFound)
 	}
 
 	sort.Slice(candidates, func(i, j int) bool {
@@ -84,7 +90,9 @@ func (r *OperationRegistry[T]) Resolve(operationID, tier string) (T, error) {
 	}
 
 	var zero T
-	return zero, fmt.Errorf("provider: no available provider for operation %q tier %q", operationID, tier)
+	return zero, goerrors.New(goerrors.ErrCodeServiceUnavailable,
+		fmt.Sprintf("provider: no available provider for operation %q tier %q", operationID, tier),
+		http.StatusServiceUnavailable)
 }
 
 // ListBindings returns all bindings for the given operation ID, sorted by priority.

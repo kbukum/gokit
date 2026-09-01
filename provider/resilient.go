@@ -194,27 +194,22 @@ func ExecuteWithResilience[T any](ctx context.Context, s *ResilienceState, fn fu
 	return call()
 }
 
-// wrapResilienceError converts resilience sentinel errors to gokit AppError
-// for consistent error handling across the stack.
+// wrapResilienceError converts non-AppError failures surfaced by the resilience
+// layer (context cancellation/deadline) into gokit AppErrors. Resilience
+// sentinels (circuit-open, rate-limited, bulkhead) are already typed AppErrors
+// and pass through unchanged; they are safe to share because AppError's
+// WithCause/WithDetail builders are copy-on-write and never mutate the sentinel.
 func wrapResilienceError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	// Already an AppError — return as-is
+	// Already an AppError — return as-is (includes resilience sentinels).
 	if _, ok := goerrors.AsAppError(err); ok {
 		return err
 	}
 
 	switch {
-	case errors.Is(err, resilience.ErrCircuitOpen):
-		return goerrors.ServiceUnavailable("provider").WithCause(err)
-	case errors.Is(err, resilience.ErrRateLimited):
-		return goerrors.RateLimited().WithCause(err)
-	case errors.Is(err, resilience.ErrBulkheadFull), errors.Is(err, resilience.ErrBulkheadTimeout):
-		return goerrors.ServiceUnavailable("provider").
-			WithCause(err).
-			WithDetail("reason", "concurrency limit reached")
 	case errors.Is(err, context.Canceled):
 		return goerrors.Timeout("request canceled").WithCause(err)
 	case errors.Is(err, context.DeadlineExceeded):

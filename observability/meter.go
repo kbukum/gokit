@@ -2,7 +2,7 @@ package observability
 
 import (
 	"context"
-	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -11,7 +11,16 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
+
+// metricInitError wraps a meter/instrument setup failure as a typed internal
+// AppError, preserving the underlying cause so callers can branch on the code
+// and HTTP status while still unwrapping the OpenTelemetry error.
+func metricInitError(what string, cause error) error {
+	return apperr.New(apperr.ErrCodeInternal, "observability: "+what, http.StatusInternalServerError).WithCause(cause)
+}
 
 // MeterConfig configures the OpenTelemetry meter provider.
 type MeterConfig struct {
@@ -52,12 +61,12 @@ func DefaultMeterConfig(serviceName string) MeterConfig {
 func InitMeter(ctx context.Context, config *MeterConfig) (*sdkmetric.MeterProvider, error) {
 	exporter, err := newMetricExporter(ctx, config)
 	if err != nil {
-		return nil, fmt.Errorf("creating metric exporter: %w", err)
+		return nil, metricInitError("creating metric exporter", err)
 	}
 
 	res, err := newResource(config.ServiceName, config.ServiceVersion, config.Environment)
 	if err != nil {
-		return nil, fmt.Errorf("creating resource: %w", err)
+		return nil, metricInitError("creating resource", err)
 	}
 
 	readerOpts := []sdkmetric.PeriodicReaderOption{}
@@ -117,7 +126,7 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 		metric.WithDescription("Total number of requests"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating request.total counter: %w", err)
+		return nil, metricInitError("creating request.total counter", err)
 	}
 
 	requestDuration, err := meter.Float64Histogram("request.duration",
@@ -125,21 +134,21 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 		metric.WithUnit("s"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating request.duration histogram: %w", err)
+		return nil, metricInitError("creating request.duration histogram", err)
 	}
 
 	requestActive, err := meter.Int64UpDownCounter("request.active",
 		metric.WithDescription("Number of currently active requests"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating request.active gauge: %w", err)
+		return nil, metricInitError("creating request.active gauge", err)
 	}
 
 	operationTotal, err := meter.Int64Counter("operation.total",
 		metric.WithDescription("Total number of operations"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating operation.total counter: %w", err)
+		return nil, metricInitError("creating operation.total counter", err)
 	}
 
 	operationDuration, err := meter.Float64Histogram("operation.duration",
@@ -147,14 +156,14 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 		metric.WithUnit("s"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating operation.duration histogram: %w", err)
+		return nil, metricInitError("creating operation.duration histogram", err)
 	}
 
 	errorTotal, err := meter.Int64Counter("error.total",
 		metric.WithDescription("Total errors by type and component"),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("creating error.total counter: %w", err)
+		return nil, metricInitError("creating error.total counter", err)
 	}
 
 	return &Metrics{

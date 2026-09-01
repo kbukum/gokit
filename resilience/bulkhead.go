@@ -2,14 +2,19 @@ package resilience
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"time"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
-// Common bulkhead errors.
+// Common bulkhead errors. These are typed AppErrors so callers can branch on
+// the error code, while errors.Is still matches the sentinels. Capacity
+// rejection is backpressure, so both classify as rate-limited/429 (matching the
+// cross-kit contract) rather than service-unavailable.
 var (
-	ErrBulkheadFull    = errors.New("bulkhead is full")
-	ErrBulkheadTimeout = errors.New("bulkhead wait timeout")
+	ErrBulkheadFull    = apperr.New(apperr.ErrCodeRateLimited, "bulkhead is full", http.StatusTooManyRequests)
+	ErrBulkheadTimeout = apperr.New(apperr.ErrCodeRateLimited, "bulkhead wait timeout", http.StatusTooManyRequests)
 )
 
 // BulkheadConfig configures a bulkhead.

@@ -2,6 +2,7 @@ package security
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,5 +89,49 @@ func TestHeadersConfig_Disabled(t *testing.T) {
 	}
 	if len(headers) != 0 {
 		t.Fatalf("expected no headers when disabled, got %+v", headers)
+	}
+}
+
+// The default Permissions-Policy is the eight-directive shared cross-kit policy
+// (accelerometer, camera, geolocation, gyroscope, magnetometer, microphone,
+// payment, usb), each locked to the empty allowlist.
+func TestHeadersConfig_PermissionsPolicyEightDirectives(t *testing.T) {
+	t.Parallel()
+
+	var cfg HeadersConfig
+	headers, err := cfg.HeaderMap()
+	if err != nil {
+		t.Fatalf("HeaderMap: %v", err)
+	}
+	got := headers["Permissions-Policy"]
+	directives := strings.Split(got, ", ")
+	if len(directives) != 8 {
+		t.Fatalf("expected 8 Permissions-Policy directives, got %d: %q", len(directives), got)
+	}
+	want := []string{
+		"accelerometer=()", "camera=()", "geolocation=()", "gyroscope=()",
+		"magnetometer=()", "microphone=()", "payment=()", "usb=()",
+	}
+	for i, w := range want {
+		if directives[i] != w {
+			t.Fatalf("directive %d = %q, want %q (full: %q)", i, directives[i], w, got)
+		}
+	}
+}
+
+// HSTS max-age is caller-configurable and reflected verbatim (in seconds) in the
+// Strict-Transport-Security header.
+func TestHeadersConfig_HSTSMaxAgeConfigurable(t *testing.T) {
+	t.Parallel()
+
+	cfg := HeadersConfig{HSTSMaxAge: 90 * 24 * time.Hour}
+	headers, err := cfg.HeaderMap()
+	if err != nil {
+		t.Fatalf("HeaderMap: %v", err)
+	}
+	const wantSeconds = int64(90 * 24 * 60 * 60)
+	want := "max-age=" + strconv.FormatInt(wantSeconds, 10)
+	if !strings.HasPrefix(headers["Strict-Transport-Security"], want) {
+		t.Fatalf("HSTS = %q, want prefix %q", headers["Strict-Transport-Security"], want)
 	}
 }

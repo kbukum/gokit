@@ -14,17 +14,17 @@ func TestNewServiceHealth(t *testing.T) {
 	if sh.Version != "1.0.0" {
 		t.Errorf("expected Version '1.0.0', got %s", sh.Version)
 	}
-	if sh.Status != HealthStatusUp {
-		t.Errorf("expected Status 'up', got %s", sh.Status)
+	if sh.Status != HealthStatusHealthy {
+		t.Errorf("expected Status 'healthy', got %s", sh.Status)
 	}
 }
 
 func TestServiceHealth_AddComponent(t *testing.T) {
 	sh := NewServiceHealth("my-service", "1.0.0")
 
-	sh.AddComponent(Health{Name: "db", Status: HealthStatusUp})
-	if sh.Status != HealthStatusUp {
-		t.Errorf("expected status 'up' after healthy component, got %s", sh.Status)
+	sh.AddComponent(Health{Name: "db", Status: HealthStatusHealthy})
+	if sh.Status != HealthStatusHealthy {
+		t.Errorf("expected status 'healthy' after healthy component, got %s", sh.Status)
 	}
 
 	sh.AddComponent(Health{Name: "cache", Status: HealthStatusDegraded, Message: "high latency"})
@@ -32,9 +32,9 @@ func TestServiceHealth_AddComponent(t *testing.T) {
 		t.Errorf("expected status 'degraded', got %s", sh.Status)
 	}
 
-	sh.AddComponent(Health{Name: "queue", Status: HealthStatusDown, Message: "connection refused"})
-	if sh.Status != HealthStatusDown {
-		t.Errorf("expected status 'down', got %s", sh.Status)
+	sh.AddComponent(Health{Name: "queue", Status: HealthStatusUnhealthy, Message: "connection refused"})
+	if sh.Status != HealthStatusUnhealthy {
+		t.Errorf("expected status 'unhealthy', got %s", sh.Status)
 	}
 
 	if len(sh.Components) != 3 {
@@ -42,13 +42,13 @@ func TestServiceHealth_AddComponent(t *testing.T) {
 	}
 }
 
-func TestServiceHealth_DegradedDoesNotOverrideDown(t *testing.T) {
+func TestServiceHealth_DegradedDoesNotOverrideUnhealthy(t *testing.T) {
 	sh := NewServiceHealth("svc", "1.0.0")
-	sh.AddComponent(Health{Name: "a", Status: HealthStatusDown})
+	sh.AddComponent(Health{Name: "a", Status: HealthStatusUnhealthy})
 	sh.AddComponent(Health{Name: "b", Status: HealthStatusDegraded})
 
-	if sh.Status != HealthStatusDown {
-		t.Errorf("expected 'down' not overridden by 'degraded', got %s", sh.Status)
+	if sh.Status != HealthStatusUnhealthy {
+		t.Errorf("expected 'unhealthy' not overridden by 'degraded', got %s", sh.Status)
 	}
 }
 
@@ -56,7 +56,7 @@ func TestServiceHealthSequentialAddManyComponents(t *testing.T) {
 	sh := NewServiceHealth("svc", "1.0.0")
 
 	for i := 0; i < 50; i++ {
-		status := HealthStatusUp
+		status := HealthStatusHealthy
 		if i%3 == 0 {
 			status = HealthStatusDegraded
 		}
@@ -70,37 +70,37 @@ func TestServiceHealthSequentialAddManyComponents(t *testing.T) {
 		t.Errorf("expected 50 components, got %d", len(sh.Components))
 	}
 	// At least one degraded component should make overall degraded
-	if sh.Status == HealthStatusUp {
+	if sh.Status == HealthStatusHealthy {
 		t.Error("expected status to be degraded after adding degraded components")
 	}
 }
 
 func TestServiceHealthEmptyComponents(t *testing.T) {
 	sh := NewServiceHealth("svc", "1.0.0")
-	if sh.Status != HealthStatusUp {
-		t.Errorf("empty service should be up, got %q", sh.Status)
+	if sh.Status != HealthStatusHealthy {
+		t.Errorf("empty service should be healthy, got %q", sh.Status)
 	}
 	if len(sh.Components) != 0 {
 		t.Errorf("expected 0 components, got %d", len(sh.Components))
 	}
 }
 
-func TestServiceHealthMultipleDown(t *testing.T) {
+func TestServiceHealthMultipleUnhealthy(t *testing.T) {
 	sh := NewServiceHealth("svc", "1.0.0")
-	sh.AddComponent(Health{Name: "a", Status: HealthStatusDown})
-	sh.AddComponent(Health{Name: "b", Status: HealthStatusDown})
+	sh.AddComponent(Health{Name: "a", Status: HealthStatusUnhealthy})
+	sh.AddComponent(Health{Name: "b", Status: HealthStatusUnhealthy})
 
-	if sh.Status != HealthStatusDown {
-		t.Errorf("expected 'down', got %q", sh.Status)
+	if sh.Status != HealthStatusUnhealthy {
+		t.Errorf("expected 'unhealthy', got %q", sh.Status)
 	}
 }
 
 func TestHealthStatusConstants(t *testing.T) {
-	if HealthStatusUp != "up" {
-		t.Errorf("expected 'up', got %q", HealthStatusUp)
+	if HealthStatusHealthy != "healthy" {
+		t.Errorf("expected 'healthy', got %q", HealthStatusHealthy)
 	}
-	if HealthStatusDown != "down" {
-		t.Errorf("expected 'down', got %q", HealthStatusDown)
+	if HealthStatusUnhealthy != "unhealthy" {
+		t.Errorf("expected 'unhealthy', got %q", HealthStatusUnhealthy)
 	}
 	if HealthStatusDegraded != "degraded" {
 		t.Errorf("expected 'degraded', got %q", HealthStatusDegraded)
@@ -110,7 +110,7 @@ func TestHealthStatusConstants(t *testing.T) {
 func TestHealthStructFields(t *testing.T) {
 	h := Health{
 		Name:    "db",
-		Status:  HealthStatusUp,
+		Status:  HealthStatusHealthy,
 		Message: "connected",
 		Details: map[string]string{"host": "localhost", "port": "5432"},
 	}
@@ -118,7 +118,7 @@ func TestHealthStructFields(t *testing.T) {
 	if h.Name != "db" {
 		t.Errorf("Name: got %q", h.Name)
 	}
-	if h.Status != HealthStatusUp {
+	if h.Status != HealthStatusHealthy {
 		t.Errorf("Status: got %q", h.Status)
 	}
 	if h.Message != "connected" {

@@ -51,8 +51,8 @@ func TestWrapResilienceError_BulkheadFull(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 503 {
-		t.Errorf("expected 503, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus != 429 {
+		t.Errorf("expected 429, got %d", appErr.HTTPStatus)
 	}
 }
 
@@ -62,8 +62,8 @@ func TestWrapResilienceError_BulkheadTimeout(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 503 {
-		t.Errorf("expected 503, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus != 429 {
+		t.Errorf("expected 429, got %d", appErr.HTTPStatus)
 	}
 }
 

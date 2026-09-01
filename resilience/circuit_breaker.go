@@ -3,9 +3,11 @@
 package resilience
 
 import (
-	"errors"
+	"net/http"
 	"sync"
 	"time"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
 // State represents the circuit breaker state.
@@ -34,11 +36,9 @@ func (s State) String() string {
 	}
 }
 
-// Common errors.
-var (
-	ErrCircuitOpen     = errors.New("circuit breaker is open")
-	ErrTooManyFailures = errors.New("too many failures")
-)
+// ErrCircuitOpen is a typed AppError so callers can branch on the error code and
+// map to an HTTP status, while errors.Is still matches the sentinel.
+var ErrCircuitOpen = apperr.New(apperr.ErrCodeServiceUnavailable, "circuit breaker is open", http.StatusServiceUnavailable)
 
 // CircuitBreakerConfig configures a circuit breaker.
 type CircuitBreakerConfig struct {
