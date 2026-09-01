@@ -2,8 +2,11 @@ package provider
 
 import (
 	"fmt"
+	"net/http"
 	"sort"
 	"sync"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
 
 // Registry manages named provider factories and cached instances.
@@ -35,7 +38,8 @@ func (r *Registry[T]) Create(name string, cfg map[string]any) (T, error) {
 	r.mu.RUnlock()
 	if !ok {
 		var zero T
-		return zero, fmt.Errorf("provider factory %q not registered", name)
+		return zero, goerrors.New(goerrors.ErrCodeNotFound,
+			fmt.Sprintf("provider factory %q not registered", name), http.StatusNotFound)
 	}
 	return factory(cfg)
 }

@@ -6,9 +6,12 @@ import "context"
 type HealthStatus string
 
 const (
-	HealthStatusUp       HealthStatus = "up"
-	HealthStatusDown     HealthStatus = "down"
+	// HealthStatusHealthy indicates a component or service is fully operational.
+	HealthStatusHealthy HealthStatus = "healthy"
+	// HealthStatusDegraded indicates a component or service is operational but impaired.
 	HealthStatusDegraded HealthStatus = "degraded"
+	// HealthStatusUnhealthy indicates a component or service is not operational.
+	HealthStatusUnhealthy HealthStatus = "unhealthy"
 )
 
 // Health describes the health of an individual component.
@@ -32,11 +35,11 @@ type HealthChecker interface {
 	CheckHealth(ctx context.Context) Health
 }
 
-// NewServiceHealth creates a ServiceHealth with status up.
+// NewServiceHealth creates a ServiceHealth with a healthy status.
 func NewServiceHealth(service, version string) *ServiceHealth {
 	return &ServiceHealth{
 		Service: service,
-		Status:  HealthStatusUp,
+		Status:  HealthStatusHealthy,
 		Version: version,
 	}
 }
@@ -46,10 +49,10 @@ func (sh *ServiceHealth) AddComponent(ch Health) {
 	sh.Components = append(sh.Components, ch)
 
 	switch ch.Status {
-	case HealthStatusDown:
-		sh.Status = HealthStatusDown
+	case HealthStatusUnhealthy:
+		sh.Status = HealthStatusUnhealthy
 	case HealthStatusDegraded:
-		if sh.Status != HealthStatusDown {
+		if sh.Status != HealthStatusUnhealthy {
 			sh.Status = HealthStatusDegraded
 		}
 	default:

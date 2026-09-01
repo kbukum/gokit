@@ -3,6 +3,9 @@ package di
 import (
 	"context"
 	"fmt"
+	"net/http"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
 // Resolve resolves the value registered for type T (optionally qualified by [WithName]).
@@ -13,7 +16,7 @@ import (
 func Resolve[T any](ctx context.Context, c *Container, opts ...Option) (T, error) {
 	var zero T
 	if c == nil {
-		return zero, fmt.Errorf("di: container is nil")
+		return zero, errNilContainer()
 	}
 	o := buildOptions(opts)
 	k := keyFor[T](o.name)
@@ -24,7 +27,9 @@ func Resolve[T any](ctx context.Context, c *Container, opts ...Option) (T, error
 	}
 	typed, ok := v.(T)
 	if !ok {
-		return zero, fmt.Errorf("di: %s is %T, expected %s", k, v, typeName[T]())
+		return zero, apperr.New(apperr.ErrCodeInternal,
+			fmt.Sprintf("di: %s is %T, expected %s", k, v, typeName[T]()),
+			http.StatusInternalServerError)
 	}
 	return typed, nil
 }

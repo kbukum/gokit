@@ -26,6 +26,11 @@ type AppError struct {
 	Details map[string]any `json:"details,omitempty"`
 	// Cause is the underlying error that caused this error.
 	Cause error `json:"-"`
+	// origin identifies the canonical sentinel this error was derived from via a
+	// copy-on-write builder (WithCause/WithDetails/WithDetail). It lets errors.Is
+	// keep matching the sentinel after enrichment without exposing shared mutable
+	// state. It is unexported and never serialized.
+	origin *AppError
 }
 
 // Error returns the string representation of the error.
@@ -39,35 +44,70 @@ func (e *AppError) Error() string {
 // Unwrap returns the underlying cause of the error.
 func (e *AppError) Unwrap() error { return e.Cause }
 
-// WithCause sets the underlying cause of the error and returns the receiver.
-func (e *AppError) WithCause(cause error) *AppError {
-	e.Cause = cause
-	return e
+// Is reports whether target is this error or the canonical sentinel it was
+// derived from, so a shared sentinel still matches under errors.Is after
+// copy-on-write enrichment via WithCause/WithDetails/WithDetail.
+func (e *AppError) Is(target error) bool {
+	t, ok := target.(*AppError)
+	if !ok {
+		return false
+	}
+	return e == t || e.origin == t
 }
 
-// WithDetails merges the provided RFC 9457 extension members into the error
-// and returns the receiver.
+// clone returns a shallow copy of e with an independent Details map. The
+// copy-on-write builders use it so they never mutate a shared receiver such as a
+// package-global sentinel. The copy remembers the sentinel it derives from so
+// errors.Is keeps matching the original after enrichment.
+func (e *AppError) clone() *AppError {
+	c := *e
+	if e.Details != nil {
+		c.Details = make(map[string]any, len(e.Details))
+		for k, v := range e.Details {
+			c.Details[k] = v
+		}
+	}
+	if c.origin == nil {
+		c.origin = e
+	}
+	return &c
+}
+
+// WithCause returns a copy of the error with the underlying cause set. The
+// receiver is not modified, so shared sentinels stay immutable and safe to
+// enrich concurrently.
+func (e *AppError) WithCause(cause error) *AppError {
+	c := e.clone()
+	c.Cause = cause
+	return c
+}
+
+// WithDetails returns a copy of the error with the provided RFC 9457 extension
+// members merged in. The receiver is not modified.
 // The value type is a documented opaque-value exception (see AppError.Details);
 // values should be JSON-encodable.
 func (e *AppError) WithDetails(details map[string]any) *AppError {
-	if e.Details == nil {
-		e.Details = make(map[string]any)
+	c := e.clone()
+	if c.Details == nil {
+		c.Details = make(map[string]any)
 	}
 	for k, v := range details {
-		e.Details[k] = v
+		c.Details[k] = v
 	}
-	return e
+	return c
 }
 
-// WithDetail sets a single RFC 9457 extension member and returns the receiver.
+// WithDetail returns a copy of the error with a single RFC 9457 extension member
+// set. The receiver is not modified.
 // The value type is a documented opaque-value exception (see AppError.Details);
 // the value should be JSON-encodable.
 func (e *AppError) WithDetail(key string, value any) *AppError {
-	if e.Details == nil {
-		e.Details = make(map[string]any)
+	c := e.clone()
+	if c.Details == nil {
+		c.Details = make(map[string]any)
 	}
-	e.Details[key] = value
-	return e
+	c.Details[key] = value
+	return c
 }
 
 // New creates a new AppError with automatic retryable detection.

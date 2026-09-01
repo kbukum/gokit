@@ -3,6 +3,9 @@ package di
 import (
 	"context"
 	"fmt"
+	"net/http"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
 // Disposer releases the resources held by a registered value of type T. It is invoked by [Container.Close] with a context that bounds shutdown.
@@ -16,12 +19,12 @@ type Disposer[T any] func(ctx context.Context, value T) error
 // so a value replaced by a later registration is still closed.
 func RegisterCloseable[T any](c *Container, value T, dispose Disposer[T], opts ...Option) error {
 	if c == nil {
-		return fmt.Errorf("di: container is nil")
+		return errNilContainer()
 	}
 	o := buildOptions(opts)
 	k := keyFor[T](o.name)
 	if dispose == nil {
-		return fmt.Errorf("di: disposer for %s must not be nil", k)
+		return errNilDisposer(k)
 	}
 	c.put(k, &entry{
 		mode:        modeEager,
@@ -40,15 +43,15 @@ func RegisterCloseable[T any](c *Container, value T, dispose Disposer[T], opts .
 // An unresolved singleton constructs nothing and records no disposer, so nothing is closed for it.
 func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) (T, error), dispose Disposer[T], opts ...Option) error {
 	if c == nil {
-		return fmt.Errorf("di: container is nil")
+		return errNilContainer()
 	}
 	o := buildOptions(opts)
 	k := keyFor[T](o.name)
 	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", k)
+		return errNilConstructor(k)
 	}
 	if dispose == nil {
-		return fmt.Errorf("di: disposer for %s must not be nil", k)
+		return errNilDisposer(k)
 	}
 	c.put(k, &entry{
 		mode:     modeSingleton,
@@ -58,7 +61,8 @@ func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) 
 		disposer: func(ctx context.Context, v any) error {
 			value, ok := v.(T)
 			if !ok {
-				return fmt.Errorf("di: disposer for %s got %T", k, v)
+				return apperr.New(apperr.ErrCodeInternal,
+					fmt.Sprintf("di: disposer for %s got %T", k, v), http.StatusInternalServerError)
 			}
 			return dispose(ctx, value)
 		},

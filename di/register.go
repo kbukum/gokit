@@ -2,7 +2,6 @@ package di
 
 import (
 	"context"
-	"fmt"
 )
 
 // Option configures a registration or resolution.
@@ -32,7 +31,7 @@ func buildOptions(opts []Option) options {
 // use [RegisterCloseable] for a resource whose cleanup the container should own.
 func Register[T any](c *Container, value T, opts ...Option) error {
 	if c == nil {
-		return fmt.Errorf("di: container is nil")
+		return errNilContainer()
 	}
 	o := buildOptions(opts)
 	c.put(keyFor[T](o.name), &entry{
@@ -52,11 +51,11 @@ func Register[T any](c *Container, value T, opts ...Option) error {
 // use [RegisterSingletonCloseable] for a resource whose cleanup the container should own.
 func RegisterSingleton[T any](c *Container, ctor func(context.Context) (T, error), opts ...Option) error {
 	if c == nil {
-		return fmt.Errorf("di: container is nil")
+		return errNilContainer()
 	}
 	o := buildOptions(opts)
 	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", keyFor[T](o.name))
+		return errNilConstructor(keyFor[T](o.name))
 	}
 	c.put(keyFor[T](o.name), &entry{
 		mode:     modeSingleton,
@@ -72,11 +71,11 @@ func RegisterSingleton[T any](c *Container, ctor func(context.Context) (T, error
 // The factory resolves its own dependencies from c using the passed [context.Context].
 func RegisterTransient[T any](c *Container, ctor func(context.Context) (T, error), opts ...Option) error {
 	if c == nil {
-		return fmt.Errorf("di: container is nil")
+		return errNilContainer()
 	}
 	o := buildOptions(opts)
 	if ctor == nil {
-		return fmt.Errorf("di: constructor for %s must not be nil", keyFor[T](o.name))
+		return errNilConstructor(keyFor[T](o.name))
 	}
 	c.put(keyFor[T](o.name), &entry{
 		mode:     modeTransient,

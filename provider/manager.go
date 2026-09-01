@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
 
 // Manager provides the main API for working with providers, combining a Registry for storage
@@ -124,7 +127,8 @@ func (m *Manager[T]) Get(ctx context.Context) (T, error) {
 			return p, nil
 		}
 		var zero T
-		return zero, fmt.Errorf("default provider %q not found", defaultName)
+		return zero, goerrors.New(goerrors.ErrCodeNotFound,
+			fmt.Sprintf("default provider %q not found", defaultName), http.StatusNotFound)
 	}
 	return m.selector.Select(ctx, providers)
 }
@@ -137,7 +141,8 @@ func (m *Manager[T]) GetByName(name string) (T, error) {
 		return p, nil
 	}
 	var zero T
-	return zero, fmt.Errorf("provider %q not found", name)
+	return zero, goerrors.New(goerrors.ErrCodeNotFound,
+		fmt.Sprintf("provider %q not found", name), http.StatusNotFound)
 }
 
 // SetDefault sets the default provider by name.
@@ -145,7 +150,8 @@ func (m *Manager[T]) SetDefault(name string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, ok := m.providers[name]; !ok {
-		return fmt.Errorf("provider %q not initialized", name)
+		return goerrors.New(goerrors.ErrCodeNotFound,
+			fmt.Sprintf("provider %q not initialized", name), http.StatusNotFound)
 	}
 	m.defaultName = name
 	m.log.Info("default provider set", "provider", name)

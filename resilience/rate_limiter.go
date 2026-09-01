@@ -2,14 +2,17 @@ package resilience
 
 import (
 	"context"
-	"errors"
+	"net/http"
 	"sync"
 	"time"
+
+	apperr "github.com/kbukum/gokit/errors"
 )
 
-// Common rate limiter errors.
+// Common rate limiter errors. ErrRateLimited is a typed AppError so callers can
+// branch on the error code, while errors.Is still matches the sentinel.
 var (
-	ErrRateLimited = errors.New("rate limit exceeded")
+	ErrRateLimited = apperr.New(apperr.ErrCodeRateLimited, "rate limit exceeded", http.StatusTooManyRequests)
 )
 
 // RateLimiterConfig configures a rate limiter.
