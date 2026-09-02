@@ -15,7 +15,7 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-const servingProtocol = "kserve-v2-http"
+const servingProtocol = inference.ServingKServeV2HTTP
 
 // Provider implements inference.Inference against Triton / KServe v2 HTTP.
 type Provider struct {

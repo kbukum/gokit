@@ -43,7 +43,7 @@ func (c *Collector[T]) collectSource(ctx context.Context, item workItem[T]) sour
 	ev := sourceEvent[T]{
 		index:     item.index,
 		name:      item.src.Name(),
-		cacheKey:  item.cacheKey,
+		config:    item.config,
 		resumable: resumable,
 	}
 

@@ -13,4 +13,7 @@ type ToolSpec struct {
 	// InputSchema is a JSON Schema describing the tool input.
 	// schema.JSON is the documented opaque-value exception (a JSON Schema document is arbitrary JSON that must serialize cleanly to any provider wire format).
 	InputSchema schema.JSON `json:"input_schema,omitempty"`
+	// OutputSchema is a JSON Schema describing the tool output (optional).
+	// schema.JSON is the documented opaque-value exception (a JSON Schema document is arbitrary JSON that must serialize cleanly to any provider wire format).
+	OutputSchema schema.JSON `json:"output_schema,omitempty"`
 }

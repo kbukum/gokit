@@ -31,48 +31,12 @@ type EmbedRequest struct {
 	Options map[string]any `json:"options,omitempty"`
 }
 
-// EmbedInput is the sealed interface for embedding inputs.
-type EmbedInput interface {
-	embedInput()
-}
-
-// Text is a text embedding input.
-type Text struct {
-	Text string `json:"text"`
-}
-
-func (Text) embedInput() {}
-
-// Image is an image embedding input, either inline bytes or a URL.
-type Image struct {
-	Data []byte `json:"data,omitempty"`
-	URL  string `json:"url,omitempty"`
-}
-
-func (Image) embedInput() {}
-
-// Audio is an audio embedding input, either inline bytes or a URL.
-type Audio struct {
-	Data []byte `json:"data,omitempty"`
-	URL  string `json:"url,omitempty"`
-}
-
-func (Audio) embedInput() {}
-
-// Video is a video embedding input, either inline bytes or a URL.
-type Video struct {
-	Data []byte `json:"data,omitempty"`
-	URL  string `json:"url,omitempty"`
-}
-
-func (Video) embedInput() {}
-
 // EmbedResponse carries normalized embeddings, model echo, and usage.
+// Embeddings is the single vector carrier: one entry per input, in input order (D10, array-only).
 type EmbedResponse struct {
-	Embedding  Embedding   `json:"embedding"`
-	Embeddings []Embedding `json:"embeddings,omitempty"`
+	Embeddings []Embedding `json:"embeddings"`
 	Model      ai.Model    `json:"model"`
-	Usage      ai.Usage    `json:"usage,omitempty"`
+	Usage      ai.Usage    `json:"usage,omitzero"`
 }
 
 // Embedding is a normalized vector with its request index.

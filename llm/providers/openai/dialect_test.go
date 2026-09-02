@@ -173,3 +173,25 @@ func mustJSONMap(t *testing.T, v any) map[string]any {
 	}
 	return got
 }
+
+func TestDialect_BuildRequestTopPAndStopSequences(t *testing.T) {
+	d := &Dialect{}
+	topP := 0.9
+	body, err := d.BuildRequest(llm.CompletionRequest{
+		Model:         "gpt-test",
+		Messages:      []chat.Message{chat.User("hi")},
+		TopP:          &topP,
+		StopSequences: []string{"STOP", "END"},
+	})
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	got := mustJSONMap(t, body)
+	if got["top_p"] != 0.9 {
+		t.Errorf("top_p = %v, want 0.9", got["top_p"])
+	}
+	stop, ok := got["stop"].([]any)
+	if !ok || len(stop) != 2 || stop[0] != "STOP" || stop[1] != "END" {
+		t.Errorf("stop = %v, want [STOP END]", got["stop"])
+	}
+}

@@ -2,6 +2,7 @@ package stage
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/kbukum/gokit/stream"
 )
@@ -15,10 +16,12 @@ type Source[T any] interface {
 	Stream(ctx context.Context) *stream.Pipeline[T]
 }
 
-// Keyed is an optional capability a [Source] may implement to contribute a stable cache fingerprint distinct from its name.
+// Keyed is an optional capability a [Source] may implement to contribute a stable, object-shaped
+// configuration lineage distinct from its name.
 type Keyed interface {
-	// CacheKey returns a stable fingerprint of the source's configuration.
-	CacheKey() string
+	// CacheKey returns an object-shaped fingerprint of the source's configuration as opaque JSON.
+	// Build it with [Config] so heterogeneous sources record their own lineage shape.
+	CacheKey() json.RawMessage
 }
 
 // Bounded is an optional capability a [Source] may implement to advertise an upper bound on the number of items it will emit.
@@ -55,13 +58,24 @@ func (s *sliceSource[T]) Stream(context.Context) *stream.Pipeline[T] {
 
 func (s *sliceSource[T]) MaxItems() (int, bool) { return len(s.items), true }
 
-// CacheKey returns a source's fingerprint: its [Keyed] CacheKey when implemented,
-// otherwise its name.
-func CacheKey[T any](s Source[T]) string {
+// Config marshals an object-shaped source configuration into the opaque JSON lineage stored in
+// the manifest. A value that cannot be marshaled yields a nil lineage, which never satisfies a
+// cache hit: the manifest compares lineages fail-closed and treats an empty lineage as no match.
+func Config(v any) json.RawMessage {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return data
+}
+
+// CacheKey returns a source's configuration lineage: its [Keyed] CacheKey when implemented,
+// otherwise a name-derived object.
+func CacheKey[T any](s Source[T]) json.RawMessage {
 	if k, ok := s.(Keyed); ok {
 		return k.CacheKey()
 	}
-	return s.Name()
+	return Config(map[string]string{"name": s.Name()})
 }
 
 // MaxItems returns a source's item ceiling when it implements [Bounded].

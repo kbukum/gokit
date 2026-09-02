@@ -17,7 +17,6 @@ import (
 func makeTestResult() *bench.RunResult {
 	return &bench.RunResult{
 		ID:        "run-abc-123",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 		Tag:       "nightly",
 		Duration:  5 * time.Second,
@@ -113,7 +112,6 @@ func makeTestResult() *bench.RunResult {
 func makeMinimalResult() *bench.RunResult {
 	return &bench.RunResult{
 		ID:        "minimal-run",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Duration:  time.Second,
 		Dataset: bench.DatasetInfo{
@@ -131,7 +129,6 @@ func makeMinimalResult() *bench.RunResult {
 func makeEmptyResult() *bench.RunResult {
 	return &bench.RunResult{
 		ID:        "empty-run",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Now(),
 	}
 }

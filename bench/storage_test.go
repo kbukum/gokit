@@ -13,7 +13,6 @@ import (
 func makeTestResult(id, tag, dataset string) *RunResult {
 	return &RunResult{
 		ID:        id,
-		Schema:    SchemaVersion,
 		Timestamp: time.Now(),
 		Tag:       tag,
 		Duration:  100 * time.Millisecond,

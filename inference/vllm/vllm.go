@@ -86,7 +86,7 @@ func (p *Provider) Descriptor() inference.Descriptor {
 	return inference.Descriptor{
 		Name:            Kind,
 		Description:     "vLLM OpenAI-compatible text-generation inference adapter",
-		ServingProtocol: "openai-v1-completions",
+		ServingProtocol: inference.ServingVLLMRest,
 		Capabilities:    inference.CapabilityHints{SupportsStreaming: true},
 		Available:       true,
 	}

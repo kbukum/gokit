@@ -51,10 +51,13 @@ const (
 	ExecutionHybrid ExecutionHint = "hybrid"
 )
 
-// Resolved returns the effective hint, defaulting to Backend when zero.
+// Resolved returns the effective hint. The zero value and any unrecognized value
+// fall back to Backend, so an unknown hint never suppresses real execution.
 func (h ExecutionHint) Resolved() ExecutionHint {
-	if h == "" {
+	switch h {
+	case ExecutionBackend, ExecutionUI, ExecutionHybrid:
+		return h
+	default:
 		return ExecutionBackend
 	}
-	return h
 }

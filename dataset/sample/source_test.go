@@ -36,6 +36,15 @@ func TestDirSourceProducesLabeledItems(t *testing.T) {
 	}
 }
 
+func TestDirSourceCacheKeyIsObject(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	src := NewDirSource("s", dir, stage.LabelReal, payload.DefaultLimits())
+	if got, want := string(src.CacheKey()), `{"dir":"`+dir+`"}`; got != want {
+		t.Fatalf("CacheKey = %s; want %s", got, want)
+	}
+}
+
 func TestDirSourceMissingDirFailsClosed(t *testing.T) {
 	t.Parallel()
 	src := NewDirSource("s", filepath.Join(t.TempDir(), "absent"), stage.LabelReal, payload.DefaultLimits())

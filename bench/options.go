@@ -113,7 +113,7 @@ func WithClock[L comparable](clock util.Clock) RunOption[L] {
 	}
 }
 
-// WithIDSuffix injects the suffix appended to untagged run IDs, making default (untagged) runs reproducible under an injected clock. The production default is a random UUID fragment; a nil source is ignored.
+// WithIDSuffix injects the unique suffix appended to every run ID (the <uuid8> of <tag|run>_<ts>_<uuid8>), making runs reproducible under an injected clock. The production default is a random UUID fragment; a nil source is ignored.
 func WithIDSuffix[L comparable](suffix func() string) RunOption[L] {
 	return func(c *runConfig[L]) {
 		if suffix != nil {

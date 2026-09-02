@@ -2,6 +2,8 @@ package embedding_test
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kbukum/gokit/ai"
@@ -35,28 +37,58 @@ func TestEmbedRequestJSONRoundTrip(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	// Inputs is a sealed interface; a decoder cannot reconstruct the concrete
-	// types without a discriminator, so assert the scalar fields survive instead.
-	var raw struct {
-		Model   ai.Model       `json:"model"`
-		Options map[string]any `json:"options"`
+	// Inputs serialize as a tagged {type, value} discriminator; asset inputs
+	// nest a second {type, value} for bytes/url.
+	if got := gjsonType(t, data, 0); got != "text" {
+		t.Fatalf("inputs[0] type = %q, want text", got)
 	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	if got := gjsonType(t, data, 1); got != "image" {
+		t.Fatalf("inputs[1] type = %q, want image", got)
+	}
+
+	var got embedding.EmbedRequest
+	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if raw.Model.Name != "m" || raw.Model.Provider != ai.ProviderCustom {
-		t.Fatalf("model round-trip = %+v", raw.Model)
+	if got.Model.Name != "m" || got.Model.Provider != ai.ProviderCustom {
+		t.Fatalf("model round-trip = %+v", got.Model)
 	}
-	if raw.Options["normalize"] != true {
-		t.Fatalf("options round-trip = %+v", raw.Options)
+	if got.Options["normalize"] != true {
+		t.Fatalf("options round-trip = %+v", got.Options)
 	}
+	want := []embedding.EmbedInput{
+		embedding.Text{Text: "hello"},
+		embedding.Image{URL: "https://example/i.png"},
+		embedding.Audio{Data: []byte{1, 2}},
+		embedding.Video{URL: "https://example/v.mp4"},
+	}
+	if !reflect.DeepEqual(got.Inputs, want) {
+		t.Fatalf("inputs round-trip = %#v, want %#v", got.Inputs, want)
+	}
+}
+
+// gjsonType extracts inputs[i].type from the serialized request without pulling
+// in a JSON path dependency.
+func gjsonType(t *testing.T, data []byte, i int) string {
+	t.Helper()
+	var doc struct {
+		Inputs []struct {
+			Type string `json:"type"`
+		} `json:"inputs"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("decode inputs: %v", err)
+	}
+	if i >= len(doc.Inputs) {
+		t.Fatalf("input index %d out of range (%d inputs)", i, len(doc.Inputs))
+	}
+	return doc.Inputs[i].Type
 }
 
 func TestEmbedResponseJSONRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	resp := embedding.EmbedResponse{
-		Embedding: embedding.Embedding{Vector: []float32{0.1, 0.2}, Dimensions: 2, Index: 0},
 		Embeddings: []embedding.Embedding{
 			{Vector: []float32{0.1, 0.2}, Dimensions: 2, Index: 0},
 		},
@@ -68,15 +100,19 @@ func TestEmbedResponseJSONRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
+	// Array-only carrier (D10): no scalar "embedding" key.
+	if strings.Contains(string(data), `"embedding"`) {
+		t.Fatalf("response must not emit a scalar embedding key: %s", data)
+	}
 
 	var got embedding.EmbedResponse
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if got.Embedding.Dimensions != 2 || len(got.Embedding.Vector) != 2 {
-		t.Fatalf("embedding round-trip = %+v", got.Embedding)
+	if len(got.Embeddings) != 1 || got.Embeddings[0].Dimensions != 2 || len(got.Embeddings[0].Vector) != 2 {
+		t.Fatalf("embeddings round-trip = %+v", got.Embeddings)
 	}
-	if got.Embedding.Vector[0] != 0.1 || got.Embedding.Vector[1] != 0.2 {
-		t.Fatalf("vector round-trip = %v", got.Embedding.Vector)
+	if got.Embeddings[0].Vector[0] != 0.1 || got.Embeddings[0].Vector[1] != 0.2 {
+		t.Fatalf("vector round-trip = %v", got.Embeddings[0].Vector)
 	}
 }

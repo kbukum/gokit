@@ -33,6 +33,9 @@ type MessageComplete struct {
 
 func (MessageComplete) StreamEventMarker() {}
 
+// EventType returns the canonical wire string for the terminal message-complete event.
+func (MessageComplete) EventType() string { return ai.EventTypeMessageComplete }
+
 type MessageStop = chat.MessageStop
 
 var ErrCancelled = context.Canceled

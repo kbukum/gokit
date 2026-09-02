@@ -367,7 +367,7 @@ func TestSemanticSimilarityHonorsResponseIndexOrder(t *testing.T) {
 		for i := 1; i < len(all); i += 2 {
 			scrambled = append(scrambled, all[i])
 		}
-		return embedding.EmbedResponse{Embedding: scrambled[0], Embeddings: scrambled}, nil
+		return embedding.EmbedResponse{Embeddings: scrambled}, nil
 	}
 
 	m := newSemantic(t, embedtestutil.NewFakeProvider(embedtestutil.WithResponder(responder)))
@@ -394,7 +394,7 @@ func TestSemanticSimilarityRejectsMalformedResponse(t *testing.T) {
 			name: "wrong_count",
 			responder: func(_ context.Context, req embedding.EmbedRequest) (embedding.EmbedResponse, error) {
 				e := embedding.Embedding{Vector: []float32{1, 0}, Dimensions: 2, Index: 0}
-				return embedding.EmbedResponse{Embedding: e, Embeddings: []embedding.Embedding{e}}, nil
+				return embedding.EmbedResponse{Embeddings: []embedding.Embedding{e}}, nil
 			},
 		},
 		{
@@ -404,7 +404,7 @@ func TestSemanticSimilarityRejectsMalformedResponse(t *testing.T) {
 				for i := range req.Inputs {
 					embs[i] = embedding.Embedding{Vector: []float32{1, 0}, Dimensions: 2, Index: 0}
 				}
-				return embedding.EmbedResponse{Embedding: embs[0], Embeddings: embs}, nil
+				return embedding.EmbedResponse{Embeddings: embs}, nil
 			},
 		},
 		{
@@ -414,7 +414,7 @@ func TestSemanticSimilarityRejectsMalformedResponse(t *testing.T) {
 				for i := range req.Inputs {
 					embs[i] = embedding.Embedding{Vector: []float32{1, 0}, Dimensions: 2, Index: i + 100}
 				}
-				return embedding.EmbedResponse{Embedding: embs[0], Embeddings: embs}, nil
+				return embedding.EmbedResponse{Embeddings: embs}, nil
 			},
 		},
 	} {
@@ -480,7 +480,7 @@ func TestSemanticSimilarityRejectsZeroValueEmbedding(t *testing.T) {
 		for i := range req.Inputs {
 			embs[i] = embedding.Embedding{Index: i} // zero-value: no vector, Dimensions 0
 		}
-		return embedding.EmbedResponse{Embedding: embs[0], Embeddings: embs}, nil
+		return embedding.EmbedResponse{Embeddings: embs}, nil
 	}
 	m := newSemantic(t, embedtestutil.NewFakeProvider(embedtestutil.WithResponder(responder)))
 	_, err := m.Compute(context.Background(), semanticScored([2]string{"a", "b"}))
@@ -512,7 +512,7 @@ func TestSemanticSimilarityAppliesFreshTimeoutPerCall(t *testing.T) {
 		for i := range req.Inputs {
 			embs[i] = embedding.Embedding{Vector: []float32{1, 0}, Dimensions: 2, Index: i}
 		}
-		return embedding.EmbedResponse{Embedding: embs[0], Embeddings: embs}, nil
+		return embedding.EmbedResponse{Embeddings: embs}, nil
 	}
 	m := newSemantic(t, embedtestutil.NewFakeProvider(embedtestutil.WithResponder(responder)),
 		metric.WithSemanticTimeout[string](timeout), metric.WithSemanticBatchSize[string](1))
@@ -543,7 +543,7 @@ func TestSemanticSimilarityPolicyRetriesTransientFailures(t *testing.T) {
 		for i := range req.Inputs {
 			embs[i] = embedding.Embedding{Vector: []float32{1, 0}, Dimensions: 2, Index: i}
 		}
-		return embedding.EmbedResponse{Embedding: embs[0], Embeddings: embs}, nil
+		return embedding.EmbedResponse{Embeddings: embs}, nil
 	}
 	policy := resilience.NewPolicy().WithRetry(resilience.RetryConfig{
 		MaxAttempts: 3,

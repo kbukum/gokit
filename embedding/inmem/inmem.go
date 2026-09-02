@@ -77,7 +77,7 @@ func (p *Provider) Execute(ctx context.Context, req embedding.EmbedRequest) (emb
 		embeddings = append(embeddings, embedding.Embedding{Vector: p.vector(text), Dimensions: p.dimensions, Index: i})
 	}
 	p.lifecycle.Touch()
-	return embedding.EmbedResponse{Embedding: embeddings[0], Embeddings: embeddings, Model: model(req.Model), Usage: ai.Usage{}}, nil
+	return embedding.EmbedResponse{Embeddings: embeddings, Model: model(req.Model), Usage: ai.Usage{}}, nil
 }
 
 // --- component.Component (D12) ---

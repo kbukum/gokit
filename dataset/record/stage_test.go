@@ -18,8 +18,8 @@ func TestFileSourceReadsFormat(t *testing.T) {
 		t.Fatal(err)
 	}
 	src := NewFileSource("s", path, FormatCSV, payload.DefaultLimits())
-	if src.CacheKey() != "csv:"+path {
-		t.Fatalf("CacheKey = %q", src.CacheKey())
+	if got, want := string(src.CacheKey()), `{"format":"csv","path":"`+path+`"}`; got != want {
+		t.Fatalf("CacheKey = %s; want %s", got, want)
 	}
 	recs, err := stream.Collect(context.Background(), src.Stream(context.Background()))
 	if err != nil {

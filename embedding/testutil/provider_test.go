@@ -29,11 +29,11 @@ func TestFakeProviderDeterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(a.Embedding.Vector) != 4 {
-		t.Fatalf("dimensions = %d, want 4", len(a.Embedding.Vector))
+	if len(a.Embeddings[0].Vector) != 4 {
+		t.Fatalf("dimensions = %d, want 4", len(a.Embeddings[0].Vector))
 	}
-	for i := range a.Embedding.Vector {
-		if a.Embedding.Vector[i] != b.Embedding.Vector[i] {
+	for i := range a.Embeddings[0].Vector {
+		if a.Embeddings[0].Vector[i] != b.Embeddings[0].Vector[i] {
 			t.Fatalf("same text produced different vectors at %d", i)
 		}
 	}
@@ -92,15 +92,15 @@ func TestFakeProviderWithVectorClonesInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if got := resp.Embedding.Vector[0]; got != 1 {
+	if got := resp.Embeddings[0].Vector[0]; got != 1 {
 		t.Errorf("pinned vector[0] = %v, want 1 (input mutation must not leak)", got)
 	}
 	// Mutating a returned vector must not corrupt later responses.
-	resp.Embedding.Vector[0] = 42
+	resp.Embeddings[0].Vector[0] = 42
 	resp2, _ := p.Execute(context.Background(), embedding.EmbedRequest{
 		Inputs: []embedding.EmbedInput{embedding.Text{Text: "k"}},
 	})
-	if got := resp2.Embedding.Vector[0]; got != 1 {
+	if got := resp2.Embeddings[0].Vector[0]; got != 1 {
 		t.Errorf("pinned vector[0] = %v after response mutation, want 1", got)
 	}
 }

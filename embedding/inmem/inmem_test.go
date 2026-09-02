@@ -21,11 +21,11 @@ func TestProviderDeterministicTextEmbeddings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Embedding.Dimensions != 4 || len(first.Embedding.Vector) != 4 {
-		t.Fatalf("embedding=%+v", first.Embedding)
+	if first.Embeddings[0].Dimensions != 4 || len(first.Embeddings[0].Vector) != 4 {
+		t.Fatalf("embedding=%+v", first.Embeddings)
 	}
-	for i := range first.Embedding.Vector {
-		if first.Embedding.Vector[i] != second.Embedding.Vector[i] {
+	for i := range first.Embeddings[0].Vector {
+		if first.Embeddings[0].Vector[i] != second.Embeddings[0].Vector[i] {
 			t.Fatalf("not deterministic")
 		}
 	}
@@ -37,7 +37,7 @@ func TestProviderBatchAndUnsupportedInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(responses) != 2 || responses[1].Embedding.Index != 0 {
+	if len(responses) != 2 || responses[1].Embeddings[0].Index != 0 {
 		t.Fatalf("responses=%+v", responses)
 	}
 	_, err = p.Execute(context.Background(), embedding.EmbedRequest{Inputs: []embedding.EmbedInput{embedding.Image{URL: "x"}}})
@@ -54,8 +54,8 @@ func TestNewClampsNonPositiveDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if resp.Embedding.Dimensions != 8 {
-		t.Fatalf("default dimensions = %d, want 8", resp.Embedding.Dimensions)
+	if resp.Embeddings[0].Dimensions != 8 {
+		t.Fatalf("default dimensions = %d, want 8", resp.Embeddings[0].Dimensions)
 	}
 }
 
@@ -75,7 +75,7 @@ func TestExecuteEmptyInputs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(resp.Embeddings) != 0 || len(resp.Embedding.Vector) != 0 {
+	if len(resp.Embeddings) != 0 {
 		t.Fatalf("empty inputs should yield no embeddings, got %+v", resp)
 	}
 	if resp.Model.Name != "inmem-embedding" || resp.Model.Provider != ai.ProviderCustom {
@@ -153,7 +153,7 @@ func TestProviderAcceptsPointerTextInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(resp.Embedding.Vector) != 2 {
-		t.Fatalf("embedding=%+v", resp.Embedding)
+	if len(resp.Embeddings[0].Vector) != 2 {
+		t.Fatalf("embedding=%+v", resp.Embeddings)
 	}
 }

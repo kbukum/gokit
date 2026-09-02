@@ -50,3 +50,22 @@ func TestStreamEventVariantsSeal(t *testing.T) {
 		t.Fatalf("event[1] = %#v", events[1])
 	}
 }
+
+// TestStreamEventTypeWireStrings locks the canonical event-type wire strings
+// shared across kits.
+func TestStreamEventTypeWireStrings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		event ai.StreamEvent
+		want  string
+	}{
+		{ai.TextDelta{}, "text.delta"},
+		{ai.UsageDelta{}, "usage.delta"},
+		{ai.Error{}, "error"},
+	}
+	for _, tc := range cases {
+		if got := tc.event.EventType(); got != tc.want {
+			t.Errorf("%T.EventType() = %q, want %q", tc.event, got, tc.want)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/fs"
@@ -35,10 +36,12 @@ type SourceStats struct {
 	FetchedOffset int `json:"fetched_offset"`
 }
 
-// SourceEntry is a manifest record for one source: its cache key, stats, and completion status.
+// SourceEntry is a manifest record for one source: its configuration lineage, stats, and completion status.
 type SourceEntry struct {
-	// CacheKey fingerprints the source configuration this entry was built with.
-	CacheKey string `json:"cache_key"`
+	// Config is the object-shaped configuration lineage this entry was built with,
+	// carried as opaque JSON (the documented opaque-value exception) so heterogeneous
+	// sources can record their own fingerprint shape.
+	Config json.RawMessage `json:"config"`
 	// Stats holds the collected counts.
 	Stats SourceStats `json:"stats"`
 	// Status is either done or partial.
@@ -108,20 +111,20 @@ func (m *Manifest) Save(dir string) error {
 }
 
 // MarkDone records a completed source entry.
-func (m *Manifest) MarkDone(name, cacheKey string, stats SourceStats) {
-	m.Sources[name] = SourceEntry{CacheKey: cacheKey, Stats: stats, Status: statusDone}
+func (m *Manifest) MarkDone(name string, config json.RawMessage, stats SourceStats) {
+	m.Sources[name] = SourceEntry{Config: config, Stats: stats, Status: statusDone}
 }
 
 // MarkPartial records a resumable partial source entry.
-func (m *Manifest) MarkPartial(name, cacheKey string, stats SourceStats) {
-	m.Sources[name] = SourceEntry{CacheKey: cacheKey, Stats: stats, Status: statusPartial}
+func (m *Manifest) MarkPartial(name string, config json.RawMessage, stats SourceStats) {
+	m.Sources[name] = SourceEntry{Config: config, Stats: stats, Status: statusPartial}
 }
 
 // CacheStatusFor resolves a source's cache state.
 // A partial entry is promoted to done when it is within five items or 99% of a known ceiling.
-func (m *Manifest) CacheStatusFor(name, cacheKey string, ceiling int, hasCeiling bool) CacheStatus {
+func (m *Manifest) CacheStatusFor(name string, config json.RawMessage, ceiling int, hasCeiling bool) CacheStatus {
 	entry, ok := m.Sources[name]
-	if !ok || entry.CacheKey != cacheKey {
+	if !ok || !configsEqual(entry.Config, config) {
 		return CacheStatus{Kind: CacheNotCached}
 	}
 	switch entry.Status {
@@ -138,6 +141,23 @@ func (m *Manifest) CacheStatusFor(name, cacheKey string, ceiling int, hasCeiling
 	default:
 		return CacheStatus{Kind: CacheNotCached}
 	}
+}
+
+// configsEqual reports whether two configuration lineages are structurally equal.
+// It fails closed: either value that is empty or not valid JSON is treated as not equal,
+// so a malformed or missing lineage never satisfies a cache hit.
+func configsEqual(a, b json.RawMessage) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	var av, bv any
+	if err := json.Unmarshal(a, &av); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(b, &bv); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(av, bv)
 }
 
 // nearComplete reports whether total is within five items or 99% of ceiling.

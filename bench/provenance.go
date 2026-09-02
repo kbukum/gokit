@@ -135,6 +135,11 @@ func judgeProvenance(results []MetricResult) []JudgeProvenance {
 			PromptFingerprint: fingerprint,
 		})
 	}
+	// Sort by metric name so the recorded provenance is deterministic regardless of suite order
+	// (D2), mirroring the sibling rskit BTreeMap-keyed judges.
+	slices.SortFunc(judges, func(a, b JudgeProvenance) int {
+		return strings.Compare(a.Metric, b.Metric)
+	})
 	return judges
 }
 
