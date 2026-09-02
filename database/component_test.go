@@ -10,7 +10,10 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-func fakeDriver(string) gorm.Dialector { return nil }
+type fakeDialect struct{}
+
+func (fakeDialect) Name() string               { return "fake" }
+func (fakeDialect) Open(string) gorm.Dialector { return nil }
 
 // TestComponent_Name tests that the component returns the correct name.
 func TestComponent_Name(t *testing.T) {
@@ -39,8 +42,8 @@ func TestComponent_Interface(t *testing.T) {
 	var _ component.Component = comp
 }
 
-// TestComponent_WithDriver tests custom driver function wiring without importing a driver SDK.
-func TestComponent_WithDriver(t *testing.T) {
+// TestComponent_WithDialect tests custom dialect wiring without importing a driver SDK.
+func TestComponent_WithDialect(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
 		DSN:     ":memory:",
@@ -49,14 +52,14 @@ func TestComponent_WithDriver(t *testing.T) {
 	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
-	result := comp.WithDriver(fakeDriver)
+	result := comp.WithDialect(fakeDialect{})
 	if result != comp {
-		t.Error("WithDriver() should return the component for method chaining")
+		t.Error("WithDialect() should return the component for method chaining")
 	}
 }
 
-// TestComponent_RequiresExplicitDriver tests that no backend driver is selected by default.
-func TestComponent_RequiresExplicitDriver(t *testing.T) {
+// TestComponent_RequiresExplicitDriver tests that no backend dialect is selected by default.
+func TestComponent_RequiresExplicitDialect(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
 		DSN:     ":memory:",
@@ -68,12 +71,12 @@ func TestComponent_RequiresExplicitDriver(t *testing.T) {
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err == nil {
-		t.Fatal("Start() without explicit driver should fail")
+		t.Fatal("Start() without explicit dialect should fail")
 	}
 }
 
-func TestDriverRegistryNoSideEffects(t *testing.T) {
-	reg := NewDriverRegistry()
+func TestDialectRegistryNoSideEffects(t *testing.T) {
+	reg := NewDialectRegistry()
 	if _, ok := reg.Get("sqlite"); ok {
 		t.Fatal("sqlite registered without explicit adapter Register call")
 	}
@@ -86,7 +89,7 @@ func TestComponent_WithAutoMigrate_Chaining(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logging.NewDefault("test")
-	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
+	comp := NewComponent(cfg, log).WithDialect(fakeDialect{})
 
 	type User struct {
 		ID uint
@@ -105,7 +108,7 @@ func TestComponent_Health_BeforeStart(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logging.NewDefault("test")
-	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
+	comp := NewComponent(cfg, log).WithDialect(fakeDialect{})
 
 	ctx := context.Background()
 	health := comp.Health(ctx)
@@ -178,7 +181,7 @@ func TestComponent_Stop_BeforeStart(t *testing.T) {
 		DSN:     ":memory:",
 	}
 	log := logging.NewDefault("test")
-	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
+	comp := NewComponent(cfg, log).WithDialect(fakeDialect{})
 
 	ctx := context.Background()
 
@@ -202,7 +205,7 @@ func TestComponent_ChainedMethods(t *testing.T) {
 	}
 
 	comp := NewComponent(cfg, log).
-		WithDriver(fakeDriver).
+		WithDialect(fakeDialect{}).
 		WithAutoMigrate(&User{})
 
 	if comp == nil {
@@ -232,7 +235,7 @@ func TestComponent_Disabled(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
-	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
+	comp := NewComponent(cfg, log).WithDialect(fakeDialect{})
 
 	ctx := context.Background()
 
@@ -262,7 +265,7 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 	}
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
-	comp := NewComponent(cfg, log).WithDriver(fakeDriver)
+	comp := NewComponent(cfg, log).WithDialect(fakeDialect{})
 
 	ctx := context.Background()
 
@@ -271,5 +274,58 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 	}
 	if db := comp.DB(); db != nil {
 		t.Error("DB() should be nil when Enabled defaults to false")
+	}
+}
+
+// structuredDialect is a fake dialect that records the DSN it was asked to open and builds one
+// from ConnParams, exercising the Component's structured-DSN path without a real driver SDK.
+type structuredDialect struct{ gotDSN string }
+
+func (*structuredDialect) Name() string { return "structured" }
+
+func (d *structuredDialect) Open(dsn string) gorm.Dialector {
+	d.gotDSN = dsn
+	return nil
+}
+
+func (*structuredDialect) DSN(p ConnParams) (string, error) {
+	return "built://" + p.Host + "/" + p.Database, nil
+}
+
+// TestComponent_ResolveDSN_ExplicitWins verifies an explicit Config.DSN is used verbatim even when
+// the dialect could build one from Params.
+func TestComponent_ResolveDSN_ExplicitWins(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: "explicit://dsn", Params: ConnParams{Host: "ignored"}}
+	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(&structuredDialect{})
+	got, err := comp.resolveDSN()
+	if err != nil {
+		t.Fatalf("resolveDSN() error: %v", err)
+	}
+	if got != "explicit://dsn" {
+		t.Errorf("resolveDSN() = %q, want explicit DSN", got)
+	}
+}
+
+// TestComponent_ResolveDSN_FromParams verifies a StructuredDialect builds the DSN from Params when
+// no explicit DSN is set.
+func TestComponent_ResolveDSN_FromParams(t *testing.T) {
+	cfg := Config{Enabled: true, Params: ConnParams{Host: "db.example", Database: "app"}}
+	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(&structuredDialect{})
+	got, err := comp.resolveDSN()
+	if err != nil {
+		t.Fatalf("resolveDSN() error: %v", err)
+	}
+	if got != "built://db.example/app" {
+		t.Errorf("resolveDSN() = %q, want built DSN from params", got)
+	}
+}
+
+// TestComponent_ResolveDSN_NonStructuredRequiresDSN verifies that a dialect without structured
+// support fails clearly when only Params (no DSN) are provided.
+func TestComponent_ResolveDSN_NonStructuredRequiresDSN(t *testing.T) {
+	cfg := Config{Enabled: true, Params: ConnParams{Host: "db.example"}}
+	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(fakeDialect{})
+	if _, err := comp.resolveDSN(); err == nil {
+		t.Fatal("resolveDSN() should fail for a non-structured dialect without an explicit DSN")
 	}
 }

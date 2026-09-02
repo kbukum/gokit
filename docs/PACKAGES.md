@@ -80,6 +80,7 @@ This file is the bird's-eye index.
 | Module | Import | Description |
 |---|---|---|
 | `cache/redis` | `gokit/cache/redis` | Redis cache adapter |
+| `database/postgres` | `gokit/database/postgres` | PostgreSQL database driver |
 | `database/sqlite` | `gokit/database/sqlite` | SQLite database driver |
 | `llm/providers` | `gokit/llm/providers` | LLM provider adapters |
 | `llm/tokenizer/tiktoken` | `gokit/llm/tokenizer/tiktoken` | OpenAI BPE token counter (offline vocab) |

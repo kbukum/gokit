@@ -111,43 +111,6 @@ func TestConfig_ApplyDefaults_PreservesExistingValues(t *testing.T) {
 	}
 }
 
-// TestConfig_BuildDSN covers DSN precedence and construction from structured fields.
-func TestConfig_BuildDSN(t *testing.T) {
-	tests := []struct {
-		name string
-		cfg  Config
-		want string
-	}{
-		{
-			name: "explicit DSN takes precedence",
-			cfg:  Config{DSN: "postgres://verbatim", Host: "ignored"},
-			want: "postgres://verbatim",
-		},
-		{
-			name: "empty host yields empty DSN",
-			cfg:  Config{},
-			want: "",
-		},
-		{
-			name: "structured fields with defaults",
-			cfg:  Config{Host: "db.example", User: "u", Password: "p", DBName: "app"},
-			want: "postgres://u:p@db.example:5432/app?sslmode=disable",
-		},
-		{
-			name: "explicit port and sslmode preserved",
-			cfg:  Config{Host: "db.example", Port: 6543, SSLMode: "require", User: "u", Password: "p", DBName: "app"},
-			want: "postgres://u:p@db.example:6543/app?sslmode=require",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.cfg.BuildDSN(); got != tc.want {
-				t.Errorf("BuildDSN() = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestConfig_Validate_DisabledSkipsValidation(t *testing.T) {
 	cfg := Config{
 		Enabled: false,
@@ -199,7 +162,7 @@ func TestConfig_Validate_MissingDSN(t *testing.T) {
 		t.Error("Validate() should fail with empty DSN")
 	}
 
-	expectedMsg := "database: either dsn or host is required"
+	expectedMsg := "database: dsn or params is required"
 	if err.Error() != expectedMsg {
 		t.Errorf("Error message = %q, want %q", err.Error(), expectedMsg)
 	}
@@ -654,5 +617,31 @@ func TestConfig_Validate_AllErrorCasesCovered(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+// TestConfig_Validate_ParamsOnly verifies structured Params satisfy the "dsn or params" guard
+// when no explicit DSN is supplied.
+func TestConfig_Validate_ParamsOnly(t *testing.T) {
+	cfg := Config{
+		Enabled: true,
+		Params:  ConnParams{Host: "db.example", Database: "app"},
+	}
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate() with Params-only should succeed, got: %v", err)
+	}
+}
+
+// TestConnParams_IsZero covers the empty-vs-populated distinction the validate guard relies on.
+func TestConnParams_IsZero(t *testing.T) {
+	if !(ConnParams{}).IsZero() {
+		t.Error("zero ConnParams should report IsZero")
+	}
+	if (ConnParams{Host: "h"}).IsZero() {
+		t.Error("populated ConnParams should not report IsZero")
+	}
+	if (ConnParams{Options: map[string]string{"sslmode": "require"}}).IsZero() {
+		t.Error("ConnParams with Options should not report IsZero")
 	}
 }

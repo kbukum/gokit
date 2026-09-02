@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **database/postgres**: opt-in PostgreSQL driver adapter mirroring `database/sqlite` — `Name`, `Dialect()`, `Open(dsn) gorm.Dialector`, and `Register(*database.DialectRegistry)` over `gorm.io/driver/postgres`, with no import-time side effects. The dialect implements `database.StructuredDialect`, building a `postgres://…` DSN from structured `database.ConnParams` (agnostic core no longer does this). Adds `MigrateDriver()` so the driver-agnostic `migration` package works against Postgres via `golang-migrate`. Integration tests provision an ephemeral server with `testcontainers-go` behind the `integration` build tag and skip when no Docker daemon is reachable.
+
+### Changed
+- **database**: redesigned backend selection around a `Dialect` seam so core stays driver-agnostic. A `Dialect` (`Name`/`Open`) is registered in a `DialectRegistry` and selected via `Component.WithDialect`/`WithDialectFromRegistry`; the opt-in `StructuredDialect` adds `DSN(ConnParams)` so a dialect can build its own connection string. `Config` now carries an opaque `DSN` **or** structured, driver-agnostic `ConnParams` (`Host`/`Port`/`User`/`Password`/`Database` plus an `Options` map for backend-specific knobs like `sslmode`/`tls`); when `DSN` is empty the selected dialect builds it. Removes the postgres-coupled `Config` fields (`Host`/`Port`/`DBName`/`User`/`Password`/`SSLMode`), the unused `Resolve` and `Driver` fields, `BuildDSN()`, and the old `DriverFunc`/`DriverRegistry`/`WithDriver`/`WithDriverFromRegistry` names. `Validate` now requires a `DSN` or non-empty `Params` when enabled. Structured DSN construction lives entirely in each adapter (SQLite stays DSN-only; PostgreSQL implements `StructuredDialect`), so core never imports a driver SDK. Pre-stable breaking change.
+
+### Removed
+- **database**: the untimed `DB.Ping()` method. Callers must use the context-aware `DB.PingContext(ctx)` so every liveness check is cancellable — and timeout-bound when the caller passes a context carrying a deadline. Pre-stable breaking change.
+
+### Fixed
+- **database**: `gorm.Open` builds the `*sql.DB` pool lazily and succeeds even when the server is unreachable, so a failed attempt surfaced only at ping time left the pool open; each retry then abandoned another pool. GORM's automatic (context-free) ping is now disabled so `connectOnce` owns the sole cancellable `PingContext` and closes the pool on any post-open failure. `Component.Start` likewise closes the pool it opened when a follow-on step (auto-migration) fails, since the component registry only calls `Stop` for `Start` failures caused by a context error. Connection attempts now run through a `resilience.Policy` (canonical retry/backoff/timeout owner) instead of a bespoke loop, injectable via `WithConnectPolicy`, with a per-attempt `Config.ConnectTimeout` (default `30s`) bounding each attempt; `Component.Start` validates config before connecting.
+
 ## [0.3.0-alpha.1] - 2026-08-25
 
 ### Added — L5 transport rskit parity

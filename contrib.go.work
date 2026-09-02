@@ -5,6 +5,7 @@ toolchain go1.26.2
 use (
 	./bench/storage
 	./cache/redis
+	./database/postgres
 	./database/sqlite
 	./inference/tgi
 	./inference/triton

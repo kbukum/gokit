@@ -24,7 +24,7 @@ func TestCoreDoesNotImportDriverSDKs(t *testing.T) {
 		}
 		if d.IsDir() {
 			switch path {
-			case "sqlite", "testutil":
+			case "postgres", "sqlite", "testutil":
 				return filepath.SkipDir
 			}
 			return nil
@@ -54,6 +54,11 @@ func TestCoreDoesNotImportDriverSDKs(t *testing.T) {
 func TestCoreModuleDoesNotRequireDriverSDKs(t *testing.T) {
 	t.Parallel()
 
+	// This guards the meaningful boundary: core never *directly* requires a driver SDK, which
+	// pairs with TestCoreDoesNotImportDriverSDKs (no source import). Indirect entries are not
+	// failed because a pruned Go module graph records the test-dependencies of upstream packages
+	// core imports — e.g. golang-migrate's iofs and gorm both have tests that pull a driver SDK —
+	// so those lines are unavoidable and are not something core imports or builds against.
 	deniedModules := []string{
 		"gorm.io/driver/",
 		"github.com/lib/pq",

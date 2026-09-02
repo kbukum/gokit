@@ -257,8 +257,8 @@ func TestPing_Success(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
-		t.Errorf("Ping() error: %v", err)
+	if err := db.PingContext(context.Background()); err != nil {
+		t.Errorf("PingContext() error: %v", err)
 	}
 }
 
@@ -385,9 +385,6 @@ func TestOperationsFailOnClosedDB(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	if err := db.Ping(); err == nil {
-		t.Error("Ping on closed DB should fail")
-	}
 	if err := db.PingContext(ctx); err == nil {
 		t.Error("PingContext on closed DB should fail")
 	}

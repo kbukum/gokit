@@ -4,8 +4,8 @@
 // # Architecture
 //
 // The database module follows gokit's component pattern with a driver-agnostic design.
-// Users provide the database driver (postgres, mysql, sqlite, etc.) via WithDriver()
-// or an explicit DriverRegistry, keeping runtime backend selection adapter-driven.
+// Users provide the database backend as a Dialect (postgres, sqlite, etc.) via WithDialect()
+// or an explicit DialectRegistry, keeping runtime backend selection adapter-driven.
 //
 // # Quick Start
 //
@@ -14,16 +14,14 @@
 //	import (
 //	    "github.com/kbukum/gokit/bootstrap"
 //	    "github.com/kbukum/gokit/database"
-//	    "gorm.io/driver/postgres"
+//	    "github.com/kbukum/gokit/database/postgres"
 //	)
 //
 //	func main() {
 //	    app := bootstrap.New()
-//	    cfg := database.Config{Enabled: true, DSN: "host=localhost user=myuser password=mypass dbname=mydb"}
+//	    cfg := database.Config{Enabled: true, DSN: "host=localhost user=myuser dbname=mydb"}
 //	    app.Register(database.NewComponent(cfg, log).
-//	        WithDriver(func(dsn string) gorm.Dialector {
-//	            return postgres.Open(dsn)
-//	        }))
+//	        WithDialect(postgres.Dialect()))
 //	    app.Start(context.Background())
 //	}
 //
@@ -34,6 +32,7 @@
 //   - migration: File-based database migrations using golang-migrate
 //   - query: Advanced query builders and helpers
 //   - sqlite: Opt-in SQLite driver adapter
+//   - postgres: Opt-in PostgreSQL driver adapter
 //   - testutil: Testing utilities for database-dependent tests
 //
 // # Optional Component
