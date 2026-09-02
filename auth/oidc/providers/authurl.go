@@ -21,7 +21,7 @@ func BuildAuthURL(req AuthURLRequest) string {
 	if len(opts.Scopes) > 0 {
 		scopes = opts.Scopes
 	}
-	redirectURI := req.Config.RedirectURL
+	redirectURI := req.Config.RedirectURI
 	if opts.RedirectURI != "" {
 		redirectURI = opts.RedirectURI
 	}

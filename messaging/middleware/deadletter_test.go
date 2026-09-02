@@ -34,7 +34,7 @@ func (m *mockPublisher) PublishBinary(_ context.Context, _, _ string, _ []byte) 
 }
 
 func (m *mockPublisher) Send(ctx context.Context, msg messaging.Message) error {
-	return m.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
+	return m.PublishBinary(ctx, msg.Topic, msg.Key, msg.Payload)
 }
 
 func (m *mockPublisher) SendBatch(ctx context.Context, messages []messaging.Message) error {
@@ -69,7 +69,7 @@ func TestDeadLetterProducer_Send(t *testing.T) {
 	msg := messaging.Message{
 		Topic:   "orders",
 		Key:     "order-123",
-		Value:   []byte(`{"id":"order-123"}`),
+		Payload: []byte(`{"id":"order-123"}`),
 		Headers: map[string]string{"x-retry-count": "3", "content-type": "application/json"},
 	}
 
@@ -118,7 +118,7 @@ func TestDeadLetterProducer_Send_EmptyKey(t *testing.T) {
 	msg := messaging.Message{
 		Topic:   "events",
 		Key:     "",
-		Value:   []byte("data"),
+		Payload: []byte("data"),
 		Headers: map[string]string{},
 	}
 
@@ -134,7 +134,7 @@ func TestDeadLetterProducer_Send_NoRetryCountHeader(t *testing.T) {
 
 	msg := messaging.Message{
 		Topic:   "events",
-		Value:   []byte("data"),
+		Payload: []byte("data"),
 		Headers: map[string]string{},
 	}
 
@@ -178,8 +178,8 @@ func TestDeadLetterProducer_Send_RedactsSensitiveFields(t *testing.T) {
 	d := NewDeadLetterProducer(pub)
 
 	msg := messaging.Message{
-		Topic: "orders",
-		Value: []byte("password=secret"),
+		Topic:   "orders",
+		Payload: []byte("password=secret"),
 		Headers: map[string]string{
 			"authorization": "Bearer secret",
 			"trace-id":      "abc",
@@ -220,7 +220,7 @@ func TestDeadLetterProducer_Send_TruncatesPayload(t *testing.T) {
 	pub := &mockPublisher{}
 	d := NewDeadLetterProducer(pub)
 
-	msg := messaging.Message{Topic: "events", Value: []byte(strings.Repeat("x", maxDLQPayloadBytes+10))}
+	msg := messaging.Message{Topic: "events", Payload: []byte(strings.Repeat("x", maxDLQPayloadBytes+10))}
 	if err := d.Send(context.Background(), msg, errors.New("err")); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestDeadLetterProducer_Send_RedactsSensitiveLargePayloadBeyondTruncationLim
 	pub := &mockPublisher{}
 	d := NewDeadLetterProducer(pub)
 
-	msg := messaging.Message{Topic: "events", Value: []byte(strings.Repeat("x", maxDLQPayloadBytes+10) + "token")}
+	msg := messaging.Message{Topic: "events", Payload: []byte(strings.Repeat("x", maxDLQPayloadBytes+10) + "token")}
 	if err := d.Send(context.Background(), msg, errors.New("err")); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}

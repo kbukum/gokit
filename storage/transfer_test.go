@@ -14,7 +14,6 @@ import (
 var errMissing = errors.New("object not found")
 
 // mapStore is a minimal in-memory Storage used to exercise cross-store helpers.
-// It deliberately does not implement StatProvider.
 type mapStore struct {
 	mu    sync.Mutex
 	files map[string][]byte
@@ -22,13 +21,6 @@ type mapStore struct {
 
 func newMapStore() *mapStore {
 	return &mapStore{files: map[string][]byte{}}
-}
-
-// statStore is a mapStore that also implements StatProvider.
-type statStore struct{ *mapStore }
-
-func newStatStore() statStore {
-	return statStore{newMapStore()}
 }
 
 func (m *mapStore) Upload(_ context.Context, path string, reader io.Reader) error {
@@ -81,14 +73,37 @@ func (m *mapStore) List(_ context.Context, prefix string) ([]FileInfo, error) {
 	return out, nil
 }
 
-func (m statStore) Stat(_ context.Context, path string) (FileInfo, error) {
+func (m *mapStore) Head(_ context.Context, path string) (FileInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	data, ok := m.files[path]
 	if !ok {
-		return FileInfo{}, errMissing
+		return FileInfo{}, NotFoundError(path)
 	}
 	return FileInfo{Path: path, Size: int64(len(data)), ContentType: "application/octet-stream"}, nil
+}
+
+func (m *mapStore) Copy(_ context.Context, srcPath, dstPath string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.files[srcPath]
+	if !ok {
+		return errMissing
+	}
+	m.files[dstPath] = append([]byte(nil), data...)
+	return nil
+}
+
+func (m *mapStore) Rename(_ context.Context, srcPath, dstPath string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	data, ok := m.files[srcPath]
+	if !ok {
+		return errMissing
+	}
+	m.files[dstPath] = append([]byte(nil), data...)
+	delete(m.files, srcPath)
+	return nil
 }
 
 func TestTransferCopiesBytesBetweenStores(t *testing.T) {
@@ -141,47 +156,5 @@ func TestTransferValidatesArguments(t *testing.T) {
 		if err := Transfer(ctx, tc.src, tc.srcPath, tc.dst, tc.dstPath); err == nil {
 			t.Errorf("%s: Transfer did not error", name)
 		}
-	}
-}
-
-func TestStatUsesStatProviderWhenAvailable(t *testing.T) {
-	t.Parallel()
-
-	s := newStatStore()
-	ctx := context.Background()
-	if err := s.Upload(ctx, "a.txt", bytes.NewReader([]byte("hi"))); err != nil {
-		t.Fatalf("upload: %v", err)
-	}
-	info, err := Stat(ctx, s, "a.txt")
-	if err != nil {
-		t.Fatalf("Stat: %v", err)
-	}
-	if info.ContentType != "application/octet-stream" {
-		t.Fatalf("Stat did not use StatProvider (ContentType = %q)", info.ContentType)
-	}
-}
-
-func TestStatFallsBackToList(t *testing.T) {
-	t.Parallel()
-
-	s := newMapStore() // no StatProvider
-	ctx := context.Background()
-	if err := s.Upload(ctx, "dir/a.txt", bytes.NewReader([]byte("data"))); err != nil {
-		t.Fatalf("upload: %v", err)
-	}
-	info, err := Stat(ctx, s, "dir/a.txt")
-	if err != nil {
-		t.Fatalf("Stat fallback: %v", err)
-	}
-	if info.Size != 4 {
-		t.Fatalf("Stat fallback Size = %d, want 4", info.Size)
-	}
-}
-
-func TestStatNotFound(t *testing.T) {
-	t.Parallel()
-
-	if _, err := Stat(context.Background(), newMapStore(), "absent"); err == nil {
-		t.Fatal("Stat for a missing object did not error")
 	}
 }

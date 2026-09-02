@@ -22,8 +22,8 @@ type Config struct {
 	// ClientSecret is the OAuth2 client secret (for confidential clients).
 	ClientSecret string `mapstructure:"client_secret"`
 
-	// RedirectURL is the OAuth2 callback URL.
-	RedirectURL string `mapstructure:"redirect_url"`
+	// RedirectURI is the OAuth2 callback URL.
+	RedirectURI string `mapstructure:"redirect_uri"`
 
 	// PublicClient enables OAuth 2.1 public-client validation rules.
 	PublicClient bool `mapstructure:"public_client"`
@@ -77,10 +77,10 @@ func (c *Config) Validate() error {
 	if c.ClientID == "" {
 		return fmt.Errorf("client_id is required")
 	}
-	if c.RedirectURL != "" {
-		parsed, err := url.Parse(c.RedirectURL)
-		if err != nil || !parsed.IsAbs() || parsed.Fragment != "" || strings.Contains(c.RedirectURL, "*") {
-			return fmt.Errorf("redirect_url must be an exact absolute URI without fragments or wildcards")
+	if c.RedirectURI != "" {
+		parsed, err := url.Parse(c.RedirectURI)
+		if err != nil || !parsed.IsAbs() || parsed.Fragment != "" || strings.Contains(c.RedirectURI, "*") {
+			return fmt.Errorf("redirect_uri must be an exact absolute URI without fragments or wildcards")
 		}
 	}
 	if c.PublicClient && c.ClientSecret != "" {

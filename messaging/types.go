@@ -12,7 +12,7 @@ import (
 // Message represents a broker message with both binary and JSON support.
 type Message struct {
 	Key       string            `json:"key"`
-	Value     []byte            `json:"value"`
+	Payload   []byte            `json:"payload"`
 	Topic     string            `json:"topic"`
 	Partition int               `json:"partition"`
 	Offset    int64             `json:"offset"`
@@ -20,14 +20,14 @@ type Message struct {
 	Headers   map[string]string `json:"headers,omitempty"`
 }
 
-// NewMessage creates a broker-neutral Message with topic, key, value, and headers.
-func NewMessage(topic, key string, value []byte, headers map[string]string) Message {
+// NewMessage creates a broker-neutral Message with topic, key, payload, and headers.
+func NewMessage(topic, key string, payload []byte, headers map[string]string) Message {
 	if headers == nil {
 		headers = make(map[string]string)
 	}
 	return Message{
 		Key:     key,
-		Value:   value,
+		Payload: payload,
 		Topic:   topic,
 		Headers: headers,
 	}
@@ -97,22 +97,22 @@ func (m Message) IsJSON() bool {
 	if ct, ok := m.Headers["content-type"]; ok && ct == "application/json" {
 		return true
 	}
-	if len(m.Value) > 0 {
-		return m.Value[0] == '{' || m.Value[0] == '['
+	if len(m.Payload) > 0 {
+		return m.Payload[0] == '{' || m.Payload[0] == '['
 	}
 	return false
 }
 
-// UnmarshalValueJSON unmarshals the message value as JSON into v.
+// UnmarshalPayloadJSON unmarshals the message payload as JSON into v.
 // v is intentionally opaque because encoding/json requires a caller-owned destination.
-func (m Message) UnmarshalValueJSON(v any) error {
-	return json.Unmarshal(m.Value, v)
+func (m Message) UnmarshalPayloadJSON(v any) error {
+	return json.Unmarshal(m.Payload, v)
 }
 
-// UnmarshalMessageJSON unmarshals the message value into a typed value.
+// UnmarshalMessageJSON unmarshals the message payload into a typed value.
 func UnmarshalMessageJSON[T any](m Message) (T, error) {
 	var out T
-	err := json.Unmarshal(m.Value, &out)
+	err := json.Unmarshal(m.Payload, &out)
 	return out, err
 }
 
@@ -122,6 +122,6 @@ func (m Message) RoutingKey() string { return m.Key }
 // ToEvent converts the message to an Event (assumes JSON content).
 func (m Message) ToEvent() (Event, error) {
 	var event Event
-	err := json.Unmarshal(m.Value, &event)
+	err := json.Unmarshal(m.Payload, &event)
 	return event, err
 }

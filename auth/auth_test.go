@@ -97,7 +97,7 @@ func TestConfig_ApplyDefaultsValidateDescribe(t *testing.T) {
 			Enabled:     true,
 			Issuer:      "https://issuer.example.com",
 			ClientID:    "client-id",
-			RedirectURL: "https://app.example.com/callback",
+			RedirectURI: "https://app.example.com/callback",
 		},
 	}
 	cfg.ApplyDefaults()

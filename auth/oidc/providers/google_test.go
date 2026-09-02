@@ -22,7 +22,7 @@ func TestGoogleConstructor(t *testing.T) {
 func TestGoogleAuthURL(t *testing.T) {
 	g := NewGoogle(ProviderConfig{
 		ClientID:    "my-id",
-		RedirectURL: "http://localhost/callback",
+		RedirectURI: "http://localhost/callback",
 	})
 	u := g.AuthURL("test-state")
 

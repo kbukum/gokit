@@ -98,7 +98,7 @@ func TestConsumerConsumeAcksSuccessfulMessages(t *testing.T) {
 	if acks.acked != 1 || acks.nacked != 0 {
 		t.Fatalf("acks=%d nacks=%d", acks.acked, acks.nacked)
 	}
-	if got.Topic != "orders" || got.Key != "k" || string(got.Value) != "payload" || got.Headers["x"] != "y" {
+	if got.Topic != "orders" || got.Key != "k" || string(got.Payload) != "payload" || got.Headers["x"] != "y" {
 		t.Fatalf("message = %#v", got)
 	}
 }

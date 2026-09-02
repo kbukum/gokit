@@ -114,7 +114,7 @@ func TestExchangeWithExtraHeaders(t *testing.T) {
 	defer server.Close()
 
 	p := NewGeneric(GenericConfig{
-		ProviderConfig: ProviderConfig{ClientID: "id", ClientSecret: "s", RedirectURL: "http://test"},
+		ProviderConfig: ProviderConfig{ClientID: "id", ClientSecret: "s", RedirectURI: "http://test"},
 		ProviderName:   "header-test",
 		TokenEndpoint:  server.URL + "/token",
 		TokenExtraHeaders: map[string]string{

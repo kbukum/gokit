@@ -28,8 +28,8 @@ func TestFromKafkaMessage(t *testing.T) {
 	if msg.Key != "key1" {
 		t.Errorf("Key = %q, want key1", msg.Key)
 	}
-	if string(msg.Value) != `{"hello":"world"}` {
-		t.Errorf("Value = %q", string(msg.Value))
+	if string(msg.Payload) != `{"hello":"world"}` {
+		t.Errorf("Payload = %q", string(msg.Payload))
 	}
 	if msg.Topic != "test-topic" {
 		t.Errorf("Topic = %q", msg.Topic)

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	gcstorage "cloud.google.com/go/storage"
+
 	"github.com/kbukum/gokit/storage"
 )
 
@@ -39,7 +41,7 @@ func (f *fakeObjectClient) Get(_ context.Context, path string) (io.ReadCloser, e
 	}
 	v, ok := f.objects[path]
 	if !ok {
-		return nil, errors.New("missing")
+		return nil, gcstorage.ErrObjectNotExist
 	}
 	return io.NopCloser(strings.NewReader(v)), nil
 }
@@ -72,6 +74,29 @@ func (f *fakeObjectClient) List(_ context.Context, prefix string) ([]storage.Fil
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	return files, nil
+}
+
+func (f *fakeObjectClient) Head(_ context.Context, path string) (storage.FileInfo, error) {
+	if f.fail != nil {
+		return storage.FileInfo{}, f.fail
+	}
+	body, ok := f.objects[path]
+	if !ok {
+		return storage.FileInfo{}, storage.NotFoundError(path)
+	}
+	return storage.FileInfo{Path: path, Size: int64(len(body)), Checksum: "deadbeef"}, nil
+}
+
+func (f *fakeObjectClient) Copy(_ context.Context, srcPath, dstPath string) error {
+	if f.fail != nil {
+		return f.fail
+	}
+	body, ok := f.objects[srcPath]
+	if !ok {
+		return storage.NotFoundError(srcPath)
+	}
+	f.objects[dstPath] = body
+	return nil
 }
 
 func (f *fakeObjectClient) SignedURL(_ context.Context, path string, _ time.Duration) (string, error) {
@@ -118,6 +143,15 @@ func TestStorageOperationsUseInjectedClient(t *testing.T) {
 	}
 	if err := s.Delete(ctx, "dir/a.txt"); err != nil {
 		t.Fatalf("Delete: %v", err)
+	}
+}
+
+func TestDownload_MissingReturnsErrNotFound(t *testing.T) {
+	t.Parallel()
+	s := NewStorageWithClient("bucket", "", newFakeClient())
+	_, err := s.Download(context.Background(), "absent")
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("Download of a missing object = %v, want storage.ErrNotFound", err)
 	}
 }
 

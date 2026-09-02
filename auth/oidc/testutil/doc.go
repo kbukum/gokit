@@ -13,7 +13,7 @@
 //	        ProviderConfig: providers.ProviderConfig{
 //	            ClientID:     "test-client",
 //	            ClientSecret: "test-secret",
-//	            RedirectURL:  "http://localhost/callback",
+//	            RedirectURI:  "http://localhost/callback",
 //	        },
 //	        ProviderName:     "test",
 //	        AuthEndpoint:     srv.AuthURL(),

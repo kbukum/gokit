@@ -65,7 +65,7 @@ func (p *InMemoryProducer) Publish(_ context.Context, topic string, event messag
 	}
 	msg := messaging.Message{
 		Key:       partitionKey,
-		Value:     data,
+		Payload:   data,
 		Topic:     topic,
 		Timestamp: event.Timestamp,
 		Headers: map[string]string{
@@ -93,7 +93,7 @@ func (p *InMemoryProducer) PublishJSON(_ context.Context, topic, key string, val
 	}
 	msg := messaging.Message{
 		Key:       key,
-		Value:     data,
+		Payload:   data,
 		Topic:     topic,
 		Timestamp: time.Now().UTC(),
 		Headers:   map[string]string{"content-type": "application/json"},
@@ -112,7 +112,7 @@ func (p *InMemoryProducer) PublishBinary(_ context.Context, topic, key string, d
 
 	msg := messaging.Message{
 		Key:       key,
-		Value:     data,
+		Payload:   data,
 		Topic:     topic,
 		Timestamp: time.Now().UTC(),
 		Headers:   map[string]string{"content-type": "application/octet-stream"},

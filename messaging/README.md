@@ -45,7 +45,7 @@ func main() {
 
 	// Consume messages
 	go consumer.Consume(ctx, func(ctx context.Context, msg messaging.Message) error {
-		fmt.Printf("Received: %s\n", msg.Value)
+		fmt.Printf("Received: %s\n", msg.Payload)
 		return nil
 	})
 }
@@ -57,7 +57,7 @@ func main() {
 
 | Type | Description |
 |------|-------------|
-| `Message` | Low-level broker message with key, value, topic, partition, offset, headers |
+| `Message` | Low-level broker message with key, payload, topic, partition, offset, headers |
 | `NewMessage` | Broker-neutral constructor for low-level messages with non-nil headers |
 | `Event` | Structured domain event with ID, type, source, timestamp, and JSON data |
 | `Producer` | Interface with `Publish`, `PublishJSON`, and `PublishBinary` methods |
@@ -176,7 +176,7 @@ consumer := broker.Consumer("my-topic")
 // Publish and assert
 _ = producer.PublishBinary(ctx, "my-topic", "key", []byte("hello"))
 memory.AssertPublished(t, broker, "my-topic", func(msg messaging.Message) bool {
-	return string(msg.Value) == "hello"
+	return string(msg.Payload) == "hello"
 })
 ```
 

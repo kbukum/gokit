@@ -55,8 +55,8 @@ func TestBroker_ProduceConsume(t *testing.T) {
 	if len(received) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(received))
 	}
-	if string(received[0].Value) != "hello" {
-		t.Errorf("msg[0].Value = %q, want hello", string(received[0].Value))
+	if string(received[0].Payload) != "hello" {
+		t.Errorf("msg[0].Payload = %q, want hello", string(received[0].Payload))
 	}
 	if received[0].Key != "k1" {
 		t.Errorf("msg[0].Key = %q, want k1", received[0].Key)
@@ -102,7 +102,7 @@ func TestBroker_PublishJSON(t *testing.T) {
 		t.Errorf("content-type = %q", received.Headers["content-type"])
 	}
 	var parsed map[string]string
-	if err := json.Unmarshal(received.Value, &parsed); err != nil {
+	if err := json.Unmarshal(received.Payload, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	if parsed["name"] != "Alice" {
@@ -255,8 +255,8 @@ func TestBroker_Messages(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("Messages(t1) = %d, want 2", len(msgs))
 	}
-	if string(msgs[0].Value) != "a" || string(msgs[1].Value) != "b" {
-		t.Errorf("unexpected values: %q, %q", msgs[0].Value, msgs[1].Value)
+	if string(msgs[0].Payload) != "a" || string(msgs[1].Payload) != "b" {
+		t.Errorf("unexpected values: %q, %q", msgs[0].Payload, msgs[1].Payload)
 	}
 
 	all := broker.AllMessages()
@@ -333,7 +333,7 @@ func TestAssertPublished(t *testing.T) {
 	_ = producer.PublishBinary(context.Background(), "t1", "k2", []byte("world"))
 
 	AssertPublished(t, broker, "t1", func(m messaging.Message) bool {
-		return string(m.Value) == "world"
+		return string(m.Payload) == "world"
 	})
 }
 
@@ -365,8 +365,8 @@ func TestWaitForMessage(t *testing.T) {
 	}()
 
 	msg := WaitForMessage(t, broker, "t1", 2*time.Second)
-	if string(msg.Value) != "delayed" {
-		t.Errorf("WaitForMessage value = %q, want delayed", msg.Value)
+	if string(msg.Payload) != "delayed" {
+		t.Errorf("WaitForMessage value = %q, want delayed", msg.Payload)
 	}
 }
 
@@ -456,8 +456,8 @@ func TestBroker_SendBatch(t *testing.T) {
 
 	producer := broker.Producer()
 	msgs := []messaging.Message{
-		{Topic: "batch", Key: "k1", Value: []byte("a")},
-		{Topic: "batch", Key: "k2", Value: []byte("b")},
+		{Topic: "batch", Key: "k1", Payload: []byte("a")},
+		{Topic: "batch", Key: "k2", Payload: []byte("b")},
 	}
 	if err := producer.SendBatch(context.Background(), msgs); err != nil {
 		t.Fatalf("SendBatch() error: %v", err)

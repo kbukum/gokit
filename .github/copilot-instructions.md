@@ -1,10 +1,8 @@
 # gokit
 
-Multi-module Go library providing foundational infrastructure for service development.
-A sibling kit to rskit (Rust): the same capabilities and the same
-engineering baseline, idiomatic per language. Parity is tracked against rskit — for each
-capability, whichever kit has the stronger implementation is the one the other mirrors, so
-parity levels the kits up (never down) and stays scoped rather than symbol-for-symbol.
+Multi-module Go library providing foundational infrastructure for service development. A sibling kit to rskit (Rust): the same capabilities and the same engineering baseline, idiomatic per language. Parity is tracked against rskit — for each capability, whichever kit has the stronger implementation is the one the other mirrors, so parity levels the kits up (never down) and stays scoped rather than symbol-for-symbol.
+
+**Priority order:** up-to-date, idiomatic Go best practices outrank parity. Parity is a nice-to-have — pursue it only when it doesn't compromise practices, development ergonomics, or the tech stack; when the idiomatic Go approach is more efficient or correct, take it and let parity stay scoped to wire/contract compatibility, not internal types. Above both, **consistency across the project wins**: apply the same choice everywhere so the codebase reads as one coherent whole rather than a patchwork of locally-optimal decisions.
 
 ## Engineering principles
 

@@ -15,7 +15,7 @@ import (
 type Message struct {
 	Topic   string
 	Key     []byte
-	Value   []byte
+	Payload []byte
 	Headers map[string]string
 }
 
@@ -38,7 +38,7 @@ var (
 func (p *MockProducer) WriteMessage(topic string, key, value []byte) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.messages = append(p.messages, Message{Topic: topic, Key: key, Value: value})
+	p.messages = append(p.messages, Message{Topic: topic, Key: key, Payload: value})
 }
 
 // Publish sends a structured gokit Event to the in-memory store.
@@ -63,9 +63,9 @@ func (p *MockProducer) Publish(_ context.Context, topic string, event messaging.
 		partitionKey = event.ID
 	}
 	p.messages = append(p.messages, Message{
-		Topic: topic,
-		Key:   []byte(partitionKey),
-		Value: data,
+		Topic:   topic,
+		Key:     []byte(partitionKey),
+		Payload: data,
 		Headers: map[string]string{
 			"event-id":     event.ID,
 			"event-type":   event.Type,
@@ -93,7 +93,7 @@ func (p *MockProducer) PublishJSON(_ context.Context, topic, key string, value a
 	p.messages = append(p.messages, Message{
 		Topic:   topic,
 		Key:     []byte(key),
-		Value:   data,
+		Payload: data,
 		Headers: map[string]string{"content-type": "application/json"},
 	})
 	return nil
@@ -112,7 +112,7 @@ func (p *MockProducer) PublishBinary(_ context.Context, topic, key string, data 
 	p.messages = append(p.messages, Message{
 		Topic:   topic,
 		Key:     []byte(key),
-		Value:   data,
+		Payload: data,
 		Headers: map[string]string{"content-type": "application/octet-stream"},
 	})
 	return nil
@@ -131,7 +131,7 @@ func (p *MockProducer) Send(_ context.Context, msg messaging.Message) error {
 	p.messages = append(p.messages, Message{
 		Topic:   msg.Topic,
 		Key:     []byte(msg.Key),
-		Value:   msg.Value,
+		Payload: msg.Payload,
 		Headers: msg.Headers,
 	})
 	return nil

@@ -26,6 +26,9 @@ func (s *stubStorage) URL(context.Context, string) (string, error) {
 	return "https://stub/x", s.urlErr
 }
 func (s *stubStorage) List(context.Context, string) ([]FileInfo, error) { return nil, nil }
+func (s *stubStorage) Head(context.Context, string) (FileInfo, error)   { return FileInfo{}, nil }
+func (s *stubStorage) Copy(context.Context, string, string) error       { return nil }
+func (s *stubStorage) Rename(context.Context, string, string) error     { return nil }
 
 func stubRegistry(t *testing.T, s Storage) *FactoryRegistry {
 	t.Helper()

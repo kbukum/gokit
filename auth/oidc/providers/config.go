@@ -13,7 +13,7 @@
 //	google := providers.NewGoogle(providers.ProviderConfig{
 //	    ClientID:     "your-client-id",
 //	    ClientSecret: "your-client-secret",
-//	    RedirectURL:  "http://localhost:8381/api/v1/auth/oauth/google/callback",
+//	    RedirectURI:  "http://localhost:8381/api/v1/auth/oauth/google/callback",
 //	})
 //	authURL := google.AuthURL(state)
 //	tokens, err := google.Exchange(ctx, code)
@@ -35,7 +35,7 @@ var DefaultHTTPClient = &http.Client{Timeout: 10 * time.Second}
 type ProviderConfig struct {
 	ClientID     string
 	ClientSecret string
-	RedirectURL  string
+	RedirectURI  string
 	Scopes       []string
 }
 

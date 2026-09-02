@@ -41,7 +41,7 @@ func StartConsumer(ctx context.Context, cfg StartConsumerConfig) (*ManagedConsum
 		Config: cfg.Config,
 		Topic:  cfg.Topic,
 		Handler: func(ctx context.Context, msg messaging.Message) error {
-			return cfg.Handler(ctx, msg.Value)
+			return cfg.Handler(ctx, msg.Payload)
 		},
 		Log: cfg.Log,
 	})

@@ -88,7 +88,7 @@ func TestParseData_Invalid(t *testing.T) {
 func TestMessage_IsJSON_ByHeader(t *testing.T) {
 	msg := Message{
 		Headers: map[string]string{"content-type": "application/json"},
-		Value:   []byte("not json at all"),
+		Payload: []byte("not json at all"),
 	}
 	if !msg.IsJSON() {
 		t.Error("expected IsJSON=true when content-type header is application/json")
@@ -107,28 +107,28 @@ func TestMessage_IsJSON_ByContent(t *testing.T) {
 		{nil, false},
 	}
 	for _, tt := range tests {
-		msg := Message{Value: tt.value, Headers: map[string]string{}}
+		msg := Message{Payload: tt.value, Headers: map[string]string{}}
 		if got := msg.IsJSON(); got != tt.want {
 			t.Errorf("IsJSON(%q) = %v, want %v", string(tt.value), got, tt.want)
 		}
 	}
 }
 
-func TestMessage_UnmarshalValueJSON(t *testing.T) {
-	msg := Message{Value: []byte(`{"name":"Bob"}`)}
+func TestMessage_UnmarshalPayloadJSON(t *testing.T) {
+	msg := Message{Payload: []byte(`{"name":"Bob"}`)}
 	var result map[string]string
-	if err := msg.UnmarshalValueJSON(&result); err != nil {
-		t.Fatalf("UnmarshalValueJSON() error: %v", err)
+	if err := msg.UnmarshalPayloadJSON(&result); err != nil {
+		t.Fatalf("UnmarshalPayloadJSON() error: %v", err)
 	}
 	if result["name"] != "Bob" {
 		t.Errorf("name = %q, want Bob", result["name"])
 	}
 }
 
-func TestMessage_UnmarshalValueJSON_Invalid(t *testing.T) {
-	msg := Message{Value: []byte("not json")}
+func TestMessage_UnmarshalPayloadJSON_Invalid(t *testing.T) {
+	msg := Message{Payload: []byte("not json")}
 	var result map[string]string
-	if err := msg.UnmarshalValueJSON(&result); err == nil {
+	if err := msg.UnmarshalPayloadJSON(&result); err == nil {
 		t.Error("expected error for invalid JSON")
 	}
 }
@@ -140,7 +140,7 @@ func TestMessage_ToEvent(t *testing.T) {
 		Source: "unit-test",
 	}
 	data, _ := json.Marshal(e)
-	msg := Message{Value: data}
+	msg := Message{Payload: data}
 	parsed, err := msg.ToEvent()
 	if err != nil {
 		t.Fatalf("ToEvent() error: %v", err)
@@ -151,7 +151,7 @@ func TestMessage_ToEvent(t *testing.T) {
 }
 
 func TestMessage_ToEvent_Invalid(t *testing.T) {
-	msg := Message{Value: []byte("not json")}
+	msg := Message{Payload: []byte("not json")}
 	_, err := msg.ToEvent()
 	if err == nil {
 		t.Error("expected error for invalid JSON")
@@ -176,8 +176,8 @@ func TestNewMessage(t *testing.T) {
 	if msg.Key != "key" {
 		t.Errorf("Key = %q", msg.Key)
 	}
-	if string(msg.Value) != "val" {
-		t.Errorf("Value = %q", string(msg.Value))
+	if string(msg.Payload) != "val" {
+		t.Errorf("Payload = %q", string(msg.Payload))
 	}
 	if msg.Headers == nil {
 		t.Error("expected non-nil Headers")
@@ -195,7 +195,7 @@ func TestNewMessagePreservesHeaders(t *testing.T) {
 
 func TestUnmarshalMessageJSON(t *testing.T) {
 	t.Parallel()
-	msg := Message{Value: []byte(`{"name":"Alice","age":30}`)}
+	msg := Message{Payload: []byte(`{"name":"Alice","age":30}`)}
 	out, err := UnmarshalMessageJSON[struct {
 		Name string `json:"name"`
 		Age  int    `json:"age"`
@@ -207,7 +207,7 @@ func TestUnmarshalMessageJSON(t *testing.T) {
 		t.Fatalf("decoded = %+v", out)
 	}
 
-	if _, err := UnmarshalMessageJSON[map[string]string](Message{Value: []byte("not json")}); err == nil {
+	if _, err := UnmarshalMessageJSON[map[string]string](Message{Payload: []byte("not json")}); err == nil {
 		t.Fatal("expected unmarshal error for invalid JSON")
 	}
 }
@@ -230,4 +230,81 @@ func FuzzParseData(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		_, _ = ParseData[payload](Event{Data: data})
 	})
+}
+
+func TestMessage_JSONWireShape(t *testing.T) {
+	t.Parallel()
+
+	msg := Message{
+		Key:       "k1",
+		Payload:   []byte(`{"hello":"world"}`),
+		Topic:     "orders",
+		Partition: 2,
+		Offset:    42,
+		Timestamp: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		Headers:   map[string]string{"content-type": "application/json"},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+
+	wantKeys := map[string]bool{
+		"key": true, "payload": true, "topic": true, "partition": true,
+		"offset": true, "timestamp": true, "headers": true,
+	}
+	for k := range wire {
+		if !wantKeys[k] {
+			t.Errorf("unexpected wire key %q", k)
+		}
+	}
+	for k := range wantKeys {
+		if _, ok := wire[k]; !ok {
+			t.Errorf("missing wire key %q", k)
+		}
+	}
+	if _, ok := wire["value"]; ok {
+		t.Error("wire shape must not contain legacy key \"value\"")
+	}
+
+	var payload string
+	if err := json.Unmarshal(wire["payload"], &payload); err != nil {
+		t.Fatalf("payload not base64 string: %v", err)
+	}
+	if payload == "" {
+		t.Error("payload key must carry the message body")
+	}
+
+	var back Message
+	if err := json.Unmarshal(data, &back); err != nil {
+		t.Fatalf("round-trip Unmarshal() error: %v", err)
+	}
+	if string(back.Payload) != `{"hello":"world"}` {
+		t.Errorf("round-trip Payload = %q", string(back.Payload))
+	}
+	if back.Key != "k1" || back.Topic != "orders" || back.Partition != 2 || back.Offset != 42 {
+		t.Errorf("round-trip envelope = %+v", back)
+	}
+}
+
+func TestMessage_JSONHeadersOmitEmpty(t *testing.T) {
+	t.Parallel()
+
+	data, err := json.Marshal(Message{Key: "k", Payload: []byte("x"), Topic: "t"})
+	if err != nil {
+		t.Fatalf("Marshal() error: %v", err)
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatalf("Unmarshal() error: %v", err)
+	}
+	if _, ok := wire["headers"]; ok {
+		t.Error("headers must be omitted when empty")
+	}
 }

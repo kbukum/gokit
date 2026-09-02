@@ -28,7 +28,7 @@ func TestAppleAuthURL(t *testing.T) {
 	a := NewApple(AppleConfig{
 		ProviderConfig: ProviderConfig{
 			ClientID:    "apple-id",
-			RedirectURL: "http://localhost/callback",
+			RedirectURI: "http://localhost/callback",
 		},
 	})
 	u := a.AuthURL("apple-state")
@@ -53,7 +53,7 @@ func TestNewApple_WithPrivateKeySetsSecretFunc(t *testing.T) {
 	pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 
 	p := NewApple(AppleConfig{
-		ProviderConfig: ProviderConfig{ClientID: "cid", RedirectURL: "http://x"},
+		ProviderConfig: ProviderConfig{ClientID: "cid", RedirectURI: "http://x"},
 		TeamID:         "team",
 		KeyID:          "kid",
 		PrivateKey:     pemKey,

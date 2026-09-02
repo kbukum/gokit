@@ -13,6 +13,8 @@ import (
 // Both src and dst are resolved through symlinks (os.Stat / os.Open follow symlinks),
 // so if src is a symlink its target's content is copied;
 // if dst is an existing symlink the link target is overwritten.
+// It returns an error without modifying anything when src and dst resolve to the
+// same file (via os.SameFile), so a self-copy cannot truncate the source.
 // Use CopyDir to copy directory trees (symlinks inside are recreated as symlinks, not followed).
 // Parent directories of dst are created as needed.
 func CopyFile(src, dst string) error {
@@ -22,6 +24,13 @@ func CopyFile(src, dst string) error {
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("source is not a regular file: %s", src)
+	}
+	// Reject copying a file onto itself before opening the destination with
+	// O_TRUNC, which would otherwise erase the source content. os.SameFile
+	// catches path aliases (e.g. "a" and "./a"), symlinks, and hard links that
+	// a string comparison of src and dst would miss.
+	if dstInfo, statErr := os.Stat(dst); statErr == nil && os.SameFile(info, dstInfo) {
+		return fmt.Errorf("source and destination are the same file: %s", src)
 	}
 	if ensureErr := EnsureDir(filepath.Dir(dst)); ensureErr != nil {
 		return ensureErr

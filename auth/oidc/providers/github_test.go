@@ -29,7 +29,7 @@ func TestGitHubConstructor(t *testing.T) {
 func TestGitHubAuthURL(t *testing.T) {
 	g := NewGitHub(ProviderConfig{
 		ClientID:    "gh-id",
-		RedirectURL: "http://localhost/callback",
+		RedirectURI: "http://localhost/callback",
 		Scopes:      []string{"read:user", "user:email"},
 	})
 	u := g.AuthURL("my-state")
@@ -70,7 +70,7 @@ func TestGitHubEmailFallback(t *testing.T) {
 	defer server.Close()
 
 	p := NewGeneric(GenericConfig{
-		ProviderConfig:   ProviderConfig{ClientID: "id", ClientSecret: "s", RedirectURL: "http://test"},
+		ProviderConfig:   ProviderConfig{ClientID: "id", ClientSecret: "s", RedirectURI: "http://test"},
 		ProviderName:     "github-mock",
 		TokenEndpoint:    server.URL + "/token",
 		UserInfoEndpoint: server.URL + "/user",

@@ -18,12 +18,12 @@ import (
 func newTestStorage(t *testing.T, endpoint string) *Storage {
 	t.Helper()
 	cfg := &Config{
-		Bucket:         "bucket",
-		Region:         DefaultRegion,
-		Endpoint:       endpoint,
-		AccessKey:      "AKIA_TEST",
-		SecretKey:      "secret",
-		ForcePathStyle: true,
+		Bucket:          "bucket",
+		Region:          DefaultRegion,
+		Endpoint:        endpoint,
+		AccessKeyID:     "AKIA_TEST",
+		SecretAccessKey: "secret",
+		ForcePathStyle:  true,
 	}
 	s, err := NewStorage(context.Background(), cfg)
 	if err != nil {

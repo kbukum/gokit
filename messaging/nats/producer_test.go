@@ -52,7 +52,7 @@ func TestProducerPublishMethodsUseSubjectHeadersAndPayloads(t *testing.T) {
 	if err := p.Publish(ctx, "events", event); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if err := p.Send(ctx, messaging.Message{Topic: "raw", Key: "msg-key", Value: []byte("body"), Headers: map[string]string{"x": "y"}}); err != nil {
+	if err := p.Send(ctx, messaging.Message{Topic: "raw", Key: "msg-key", Payload: []byte("body"), Headers: map[string]string{"x": "y"}}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestProducerPublishMethodsUseSubjectHeadersAndPayloads(t *testing.T) {
 func TestProducerSendBatchStopsOnErrorAndCloseDrains(t *testing.T) {
 	conn := &fakeNATSConn{}
 	p := &Producer{cfg: Config{PublishTimeout: "1s"}, conn: conn, retryAttempts: 1}
-	err := p.SendBatch(context.Background(), []messaging.Message{{Topic: "a", Value: []byte("1")}, {Topic: "bad topic"}})
+	err := p.SendBatch(context.Background(), []messaging.Message{{Topic: "a", Payload: []byte("1")}, {Topic: "bad topic"}})
 	if err == nil {
 		t.Fatal("expected invalid topic error")
 	}

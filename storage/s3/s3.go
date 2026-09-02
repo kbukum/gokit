@@ -49,9 +49,9 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 		awsconfig.WithRegion(cfg.Region),
 	}
 
-	if cfg.AccessKey != "" && cfg.SecretKey != "" {
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
 		opts = append(opts, awsconfig.WithCredentialsProvider(
-			credentials.NewStaticCredentialsProvider(cfg.AccessKey, cfg.SecretKey, ""),
+			credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 		))
 	}
 
@@ -96,6 +96,9 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 		Key:    aws.String(path),
 	})
 	if err != nil {
+		if isNotFound(err) {
+			return nil, storage.NotFoundError(path)
+		}
 		return nil, fmt.Errorf("storage: s3 download: %w", err)
 	}
 	return out.Body, nil

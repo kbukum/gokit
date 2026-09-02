@@ -80,7 +80,7 @@ func TestConfig_Validate_PublicClientRequiresNoSecret(t *testing.T) {
 		ClientID:     "client-id",
 		ClientSecret: "secret",
 		PublicClient: true,
-		RedirectURL:  "https://app.example.com/callback",
+		RedirectURI:  "https://app.example.com/callback",
 	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err == nil {
@@ -148,7 +148,7 @@ func TestConfig_Validate_RejectsWildcardRedirectURI(t *testing.T) {
 		Enabled:     true,
 		Issuer:      "https://issuer.example.com",
 		ClientID:    "client-id",
-		RedirectURL: "https://*.example.com/callback",
+		RedirectURI: "https://*.example.com/callback",
 	}
 	cfg.ApplyDefaults()
 	err := cfg.Validate()

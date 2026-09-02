@@ -86,8 +86,8 @@ func TestConsumerDeliversMessageAndLogsRecovery(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Consume = %v, want context.Canceled", err)
 	}
-	if string(got.Value) != "payload" {
-		t.Fatalf("delivered value = %q", got.Value)
+	if string(got.Payload) != "payload" {
+		t.Fatalf("delivered value = %q", got.Payload)
 	}
 	if c.errCount.Load() != 0 {
 		t.Fatalf("errCount = %d, want reset to 0 after recovery", c.errCount.Load())

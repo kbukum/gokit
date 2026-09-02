@@ -75,7 +75,7 @@ func TestMockProducer_LastMessage(t *testing.T) {
 	p.WriteMessage("t2", nil, []byte("second"))
 
 	last := p.LastMessage()
-	if last.Topic != "t2" || string(last.Value) != "second" {
+	if last.Topic != "t2" || string(last.Payload) != "second" {
 		t.Errorf("LastMessage() = %+v, want topic=t2 value=second", last)
 	}
 }
