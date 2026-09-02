@@ -2,7 +2,7 @@
        replace-sync replace-check \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
        check-media check-infra check-devtools clean help release-plan release-status release-readiness release-tag \
-       release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump
+       release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump examples
 
 GOMOD := ./gomod.sh
 # Candidate Toven binary for the read-only self-hosting canary. Defaults to a
@@ -280,6 +280,19 @@ structure:
 module-index:
 	@$(TOVEN) run module-index
 
+## Build + vet every example demo (examples/ is a separate, unpublished workspace,
+## kept out of the release/coverage gates). Builds each demo module into a throwaway
+## dir so no binaries are left behind, keeping the demos compiling so they never rot.
+examples:
+	@set -e; ws=$(CURDIR)/examples/go.work; \
+	for mod in $$(find examples -name go.mod); do \
+	  dir=$$(dirname $$mod); \
+	  echo "▶ $$dir"; \
+	  out=$$(mktemp -d); \
+	  ( cd $$dir && GOWORK=$$ws go build -o "$$out/" ./... && GOWORK=$$ws go vet ./... ); \
+	  rc=$$?; rm -rf "$$out"; [ $$rc -eq 0 ] || exit $$rc; \
+	done
+
 ## Check only core domain modules
 check-core:
 	@./scripts/check-domain.sh core
@@ -386,6 +399,7 @@ help:
 	@echo "Guardrails (Toven-driven):"
 	@echo "  make structure                Declare-only/god-file guard (advisory)"
 	@echo "  make module-index             Regenerate docs/MODULE-INDEX.md"
+	@echo "  make examples                 Build + vet the examples/ demo workspace"
 	@echo ""
 	@echo "Go version:"
 	@echo "  make update-go VERSION=1.26.0 [W=]  Update Go version in go.mod files"

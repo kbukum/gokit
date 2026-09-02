@@ -56,7 +56,7 @@
 //
 // Push fan-out:
 //
-//   - Broadcaster: bounded, cancellable one-to-many event fan-out (drop overflow)
+//   - Broadcaster: bounded, cancellable one-to-many event fan-out (drop overflow, observable via DroppedCount/OnDrop)
 //
 // # Usage
 //
