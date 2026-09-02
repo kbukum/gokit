@@ -82,7 +82,7 @@ func main() {
 | `take` | `stream.Take` | Emits at most the first `n` values. |
 | `skip` | `stream.Skip` | Ignores the first `n` values. |
 | `buffer` | `stream.Buffer` | Bounded channel between stages; size <= 0 becomes 1. |
-| `broadcaster` | `stream.Broadcaster` | Bounded push fan-out to many subscribers; drops overflow per subscriber. |
+| `broadcaster` | `stream.Broadcaster` | Bounded push fan-out to many subscribers; drops overflow per subscriber, observable via `DroppedCount`/`OnDrop`. |
 
 ### Synchronous Operators
 
@@ -107,16 +107,20 @@ func main() {
 
 ### Push Fan-Out (Broadcaster)
 
-For the "watch one source → fan a typed change stream out to many independent observers" shape (config reloads, service discovery, cache invalidation, secret rotation), use `Broadcaster[T]`. Each subscriber owns a private bounded channel: a subscriber lagging beyond its buffer drops the overflow (backpressure by drop) but never blocks the broadcaster or its peers.
+For the "watch one source → fan a typed change stream out to many independent observers" shape (config reloads, service discovery, cache invalidation, secret rotation), use `Broadcaster[T]`. Each subscriber owns a private bounded channel: a subscriber lagging beyond its buffer drops the overflow (backpressure by drop) but never blocks the broadcaster or its peers. Dropped overflow is observable — without changing drop semantics — via `DroppedCount()` and an optional `WithBroadcastOnDrop` hook that a consumer can bridge to a metric.
 
 | Operator | Description |
 |----------|-------------|
 | `NewBroadcaster[T](opts ...BroadcasterOption) *Broadcaster[T]` | Create a fan-out bus (default buffer `DefaultBroadcastBuffer` = 64) |
 | `WithBroadcastBuffer(size int) BroadcasterOption` | Set per-subscriber buffer (clamped to >= 1) |
+| `WithBroadcastOnDrop(hook func()) BroadcasterOption` | Observe each dropped event (hook runs under the lock; keep it cheap, e.g. bridge to a counter) |
 | `(*Broadcaster[T]).Subscribe(ctx) <-chan T` | Register a subscriber; channel closes on ctx cancel or `Close` |
 | `(*Broadcaster[T]).Broadcast(item T)` | Deliver to all live subscribers; full subscribers drop the event |
 | `(*Broadcaster[T]).Close()` | Terminate all subscribers and release their goroutines (idempotent) |
 | `(*Broadcaster[T]).SubscriberCount() int` / `Buffer() int` | Live subscriber count / per-subscriber buffer |
+| `(*Broadcaster[T]).DroppedCount() uint64` | Total events dropped because a subscriber's buffer was full |
+
+A runnable end-to-end consumer lives in [`examples/broadcast-demo`](../examples/broadcast-demo/): it fans config-change events to several subscribers, overruns a deliberately-slow one, and bridges `WithBroadcastOnDrop` to an `observability` counter.
 
 ```go
 b := stream.NewBroadcaster[Config](stream.WithBroadcastBuffer(16))

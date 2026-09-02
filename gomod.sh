@@ -88,7 +88,10 @@ resolve_module() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Find all modules, excluding vendor directories. When -w is set, limit to modules
-# listed in the selected workspace file.
+# listed in the selected workspace file. The examples/ tree is a separate workspace of
+# unpublished demos (examples/go.work) that must stay out of default cross-module ops
+# (tidy/test-all), so the bare walk skips it — matching the vendor/.git exclusions.
+# Target a demo explicitly via its own workspace if needed.
 find_modules() {
   if [[ -n "$WORKSPACE_FILE" ]]; then
     awk '
@@ -122,6 +125,7 @@ find_modules() {
   find "$ROOT_DIR" -name "go.mod" \
     -not -path "*/vendor/*" \
     -not -path "*/.git/*" \
+    -not -path "$ROOT_DIR/examples/*" \
     | sort
 }
 

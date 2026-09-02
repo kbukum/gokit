@@ -2,6 +2,7 @@ package stream_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -99,6 +100,165 @@ func TestBroadcasterDropsOverflowWithoutBlocking(t *testing.T) {
 	case v := <-sub:
 		t.Fatalf("expected empty buffer after drain, got %d", v)
 	default:
+	}
+}
+
+func TestBroadcasterDroppedCountTracksOverflow(t *testing.T) {
+	t.Parallel()
+
+	b := stream.NewBroadcaster[int](stream.WithBroadcastBuffer(1))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sub := b.Subscribe(ctx)
+
+	if got := b.DroppedCount(); got != 0 {
+		t.Fatalf("fresh DroppedCount = %d, want 0", got)
+	}
+
+	// First event fills the buffer (no drop); the next two overflow it.
+	b.Broadcast(1)
+	if got := b.DroppedCount(); got != 0 {
+		t.Fatalf("DroppedCount after buffered delivery = %d, want 0", got)
+	}
+	b.Broadcast(2)
+	b.Broadcast(3)
+	if got := b.DroppedCount(); got != 2 {
+		t.Fatalf("DroppedCount after overflow = %d, want 2", got)
+	}
+
+	// The buffered event still arrives: drop observability leaves delivery intact.
+	if v := <-sub; v != 1 {
+		t.Fatalf("first delivered = %d, want 1", v)
+	}
+}
+
+func TestBroadcasterDroppedCountFreshAndNormalDelivery(t *testing.T) {
+	t.Parallel()
+
+	b := stream.NewBroadcaster[int](stream.WithBroadcastBuffer(4))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sub := b.Subscribe(ctx)
+
+	for i := 1; i <= 4; i++ {
+		b.Broadcast(i)
+	}
+	for i := 1; i <= 4; i++ {
+		if v := <-sub; v != i {
+			t.Fatalf("delivered = %d, want %d", v, i)
+		}
+	}
+	if got := b.DroppedCount(); got != 0 {
+		t.Fatalf("DroppedCount after normal delivery = %d, want 0", got)
+	}
+}
+
+func TestBroadcasterOnDropFiresExactlyOnOverflow(t *testing.T) {
+	t.Parallel()
+
+	var drops int
+	b := stream.NewBroadcaster[int](
+		stream.WithBroadcastBuffer(1),
+		stream.WithBroadcastOnDrop(func() { drops++ }),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	healthy := b.Subscribe(ctx)
+	slow := b.Subscribe(ctx)
+
+	// healthy drains after each send; slow never drains, so it overflows.
+	b.Broadcast(1)
+	if v := <-healthy; v != 1 {
+		t.Fatalf("healthy first = %d, want 1", v)
+	}
+	if drops != 0 {
+		t.Fatalf("OnDrop fired on normal delivery: drops = %d", drops)
+	}
+
+	b.Broadcast(2) // slow buffer full (holds 1) -> drop; healthy gets 2
+	if v := <-healthy; v != 2 {
+		t.Fatalf("healthy second = %d, want 2", v)
+	}
+	b.Broadcast(3) // slow still full -> drop; healthy gets 3
+	if v := <-healthy; v != 3 {
+		t.Fatalf("healthy third = %d, want 3", v)
+	}
+
+	if drops != 2 {
+		t.Fatalf("OnDrop fired %d times, want 2", drops)
+	}
+	if got := b.DroppedCount(); got != 2 {
+		t.Fatalf("DroppedCount = %d, want 2", got)
+	}
+	// slow still holds its one buffered event.
+	if v := <-slow; v != 1 {
+		t.Fatalf("slow buffered = %d, want 1", v)
+	}
+}
+
+func TestBroadcasterDropAfterCloseIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	var drops int
+	b := stream.NewBroadcaster[int](
+		stream.WithBroadcastBuffer(1),
+		stream.WithBroadcastOnDrop(func() { drops++ }),
+	)
+	b.Close()
+
+	b.Broadcast(1)
+	b.Broadcast(2)
+	if drops != 0 {
+		t.Fatalf("OnDrop fired after Close: drops = %d", drops)
+	}
+	if got := b.DroppedCount(); got != 0 {
+		t.Fatalf("DroppedCount after Close no-op = %d, want 0", got)
+	}
+}
+
+func TestBroadcasterOnDropUnderConcurrentBroadcast(t *testing.T) {
+	t.Parallel()
+
+	const senders = 8
+	const perSender = 50
+	var mu sync.Mutex
+	hookDrops := 0
+
+	b := stream.NewBroadcaster[int](
+		stream.WithBroadcastBuffer(1),
+		stream.WithBroadcastOnDrop(func() {
+			mu.Lock()
+			hookDrops++
+			mu.Unlock()
+		}),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_ = b.Subscribe(ctx) // never drained: every overflow drops
+
+	var wg sync.WaitGroup
+	for s := 0; s < senders; s++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < perSender; i++ {
+				b.Broadcast(i)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// One event fills the buffer; every remaining send drops.
+	const total = senders * perSender
+	wantDrops := uint64(total - 1)
+	if got := b.DroppedCount(); got != wantDrops {
+		t.Fatalf("DroppedCount = %d, want %d", got, wantDrops)
+	}
+	mu.Lock()
+	got := hookDrops
+	mu.Unlock()
+	if uint64(got) != wantDrops {
+		t.Fatalf("OnDrop fired %d times, want %d", got, wantDrops)
 	}
 }
 

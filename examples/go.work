@@ -1,0 +1,14 @@
+go 1.26.0
+
+toolchain go1.26.6
+
+// Independent workspace for gokit's runnable demos. It is deliberately NOT the
+// canonical go.work / core.go.work / contrib.go.work: keeping the example modules
+// out of those workspaces is what keeps them out of `./...` product runs, coverage,
+// and Toven's release discovery (which reads the canonical workspace, not a
+// filesystem walk). `use ../` makes the repo-root module resolve from local source
+// so demos always build against the working tree. Each demo module is added below.
+use (
+	../
+	./broadcast-demo
+)

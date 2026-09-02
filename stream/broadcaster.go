@@ -14,6 +14,8 @@ const DefaultBroadcastBuffer = 64
 // Each subscriber owns a private bounded channel —
 // a subscriber that falls further behind than the buffer loses interim events (backpressure by drop)
 // but never blocks the broadcaster or its peers.
+// Dropped overflow is observable via DroppedCount and an optional WithBroadcastOnDrop hook,
+// without altering drop semantics.
 // This is the canonical owner for the "watch a source → typed change stream" shape that recurs across config reloads,
 // service discovery, cache invalidation, and secret rotation.
 //
@@ -21,29 +23,18 @@ const DefaultBroadcastBuffer = 64
 // It is safe for concurrent use. NewBroadcaster is the canonical constructor,
 // but the zero value is also usable: it lazily initializes on first use with the default buffer.
 type Broadcaster[T any] struct {
-	mu     sync.Mutex
-	subs   []*subscriber[T]
-	buffer int
-	done   chan struct{}
-	closed bool
+	mu      sync.Mutex
+	subs    []*subscriber[T]
+	buffer  int
+	done    chan struct{}
+	closed  bool
+	dropped uint64
+	onDrop  func()
 }
 
 type subscriber[T any] struct {
 	ch     chan T
 	closed bool
-}
-
-type broadcasterConfig struct {
-	buffer int
-}
-
-// BroadcasterOption configures a Broadcaster at construction time.
-type BroadcasterOption func(*broadcasterConfig)
-
-// WithBroadcastBuffer sets the per-subscriber buffer size. Values below 1 are clamped to 1
-// so every subscriber can hold at least one in-flight event.
-func WithBroadcastBuffer(size int) BroadcasterOption {
-	return func(c *broadcasterConfig) { c.buffer = size }
 }
 
 // NewBroadcaster creates a Broadcaster with the given options.
@@ -56,7 +47,7 @@ func NewBroadcaster[T any](opts ...BroadcasterOption) *Broadcaster[T] {
 	if cfg.buffer < 1 {
 		cfg.buffer = 1
 	}
-	return &Broadcaster[T]{buffer: cfg.buffer, done: make(chan struct{})}
+	return &Broadcaster[T]{buffer: cfg.buffer, done: make(chan struct{}), onDrop: cfg.onDrop}
 }
 
 // Buffer returns the effective per-subscriber buffer size.
@@ -126,7 +117,9 @@ func (b *Broadcaster[T]) Subscribe(ctx context.Context) <-chan T {
 // Broadcast delivers item to every live subscriber.
 // Delivery to a full subscriber is dropped rather than blocked,
 // so a slow subscriber never stalls the broadcaster or its peers.
-// Broadcasting after Close is a no-op.
+// Each drop is observable via DroppedCount and any WithBroadcastOnDrop hook;
+// drop semantics, buffering, and delivery order are otherwise unchanged.
+// Broadcasting after Close is a no-op and counts no drops.
 func (b *Broadcaster[T]) Broadcast(item T) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -137,8 +130,21 @@ func (b *Broadcaster[T]) Broadcast(item T) {
 		select {
 		case sub.ch <- item:
 		default: // subscriber buffer full: drop the overflow event
+			b.dropped++
+			if b.onDrop != nil {
+				b.onDrop()
+			}
 		}
 	}
+}
+
+// DroppedCount returns the total number of deliveries dropped because a subscriber's
+// buffer was full since the Broadcaster was created. It is a monotonic observability
+// counter; drops still follow backpressure-by-drop semantics unchanged.
+func (b *Broadcaster[T]) DroppedCount() uint64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.dropped
 }
 
 // Close terminates the Broadcaster: every subscriber channel is closed

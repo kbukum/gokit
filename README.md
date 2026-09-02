@@ -97,7 +97,7 @@ func main() {
 }
 ```
 
-More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → [`docs/PACKAGES.md`](docs/PACKAGES.md).
+More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → [`docs/PACKAGES.md`](docs/PACKAGES.md). Runnable demo programs → [`examples/`](examples/).
 
 ## Documentation
 
@@ -109,6 +109,7 @@ More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → 
 | Versioning & releases | [`docs/VERSIONING.md`](docs/VERSIONING.md) · [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Semver & deprecation policy | [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md) · [`docs/policy/DEPRECATION.md`](docs/policy/DEPRECATION.md) |
 | Cross-module integration | [`INTEGRATION.md`](INTEGRATION.md) |
+| Runnable demo programs | [`examples/`](examples/) |
 | Per-package API docs | [pkg.go.dev](https://pkg.go.dev/github.com/kbukum/gokit) |
 
 ## Development
@@ -118,6 +119,7 @@ make check    # build + vet + test (all modules)
 make test     # tests with -race across all modules
 make lint     # golangci-lint
 make tidy     # go mod tidy for core + sub-modules
+make examples # build + vet the runnable demos in examples/
 ```
 
 ## Contributing
