@@ -42,7 +42,10 @@ func WithAuthenticator(a Authenticator) ServeOption {
 
 // WithClientIdentity injects an [IdentityResolver] that maps the authenticated
 // principal to a routing key (and optional metadata) so events can be scoped
-// per-principal. It has effect only when an [Authenticator] is also configured.
+// per-principal. A resolver runs only after a successful [Authenticator], so
+// configuring one without [WithAuthenticator] is a wiring error, not an
+// unauthenticated endpoint: the connection then fails closed (rejected with 401)
+// rather than silently serving an intended per-principal endpoint to anyone.
 func WithClientIdentity(fn IdentityResolver) ServeOption {
 	return func(c *serveConfig) {
 		if fn != nil {
@@ -63,6 +66,12 @@ func newServeConfig(opts ...ServeOption) *serveConfig {
 	c := &serveConfig{}
 	for _, opt := range opts {
 		opt(c)
+	}
+	// A resolver only makes sense after authentication. If one was supplied
+	// without an authenticator, fail closed rather than serve an intended
+	// per-principal endpoint unauthenticated.
+	if c.resolver != nil && c.authenticator == nil {
+		c.authenticator = failClosedAuthenticator{}
 	}
 	return c
 }

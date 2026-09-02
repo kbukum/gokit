@@ -14,11 +14,27 @@ go get github.com/kbukum/gokit
 package main
 
 import (
+    "errors"
     "net/http"
 
     "github.com/google/uuid"
     "github.com/kbukum/gokit/sse"
 )
+
+// Claims is the caller-defined identity your validator returns.
+type Claims struct{ Subject string }
+
+// validator is any auth.TokenValidator (JWT, OIDC, API key, …). It is injected,
+// not imported: sse is a transport layer and never depends on the auth module.
+// This minimal stand-in keeps the example self-contained and compilable.
+type validator struct{}
+
+func (validator) ValidateToken(token string) (any, error) {
+    if token == "" {
+        return nil, errors.New("empty token")
+    }
+    return &Claims{Subject: "user-1"}, nil // replace with real verification
+}
 
 func main() {
     hub := sse.NewHub()
@@ -29,7 +45,7 @@ func main() {
         // Pass a unique per-connection id so concurrent streams for one principal
         // never evict each other; WithClientIdentity sets the shared routing key.
         sse.ServeSSE(hub, w, r, uuid.NewString(),
-            sse.WithAuthenticator(sse.BearerAuthenticator(validator)),
+            sse.WithAuthenticator(sse.BearerAuthenticator(validator{})),
             sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
                 claims := identity.(*Claims)
                 // Derive the broadcast routing key from the verified principal.
@@ -45,8 +61,9 @@ func main() {
 }
 ```
 
-> `validator` is any `auth.TokenValidator` (JWT, OIDC, API key, …). It is injected,
-> not imported: `sse` is a transport layer and never depends on the `auth` module.
+> `validator` here is a stand-in for any `auth.TokenValidator` (JWT, OIDC, API
+> key, …). It is injected, not imported: `sse` is a transport layer and never
+> depends on the `auth` module.
 
 ## Authentication
 
@@ -70,13 +87,19 @@ Failure semantics are explicit:
 
 ### Why header-only, never the query string
 
-Credentials are read from the `Authorization` header **only**. A token in the URL
-query string (`?token=…` / `?id=…`) leaks into access logs, proxy logs, the
-`Referer` header, and browser history — so `sse` never reads one. The native
-browser `EventSource` cannot set custom headers; for authenticated browser
-streams use an `EventSource` polyfill built on `fetch` + `ReadableStream` (which
-can send `Authorization`), or an `HttpOnly; Secure` session cookie. Both keep the
-credential out of the URL.
+The invariant is simple: **no credential is ever read from the URL query string**
+(`?token=…` / `?id=…`), because a token there leaks into access logs, proxy logs,
+the `Referer` header, and browser history. Everything below keeps the credential
+out of the URL.
+
+The built-in `BearerAuthenticator` reads the token from the `Authorization` header
+**only**. The general `Authenticator` seam is broader — it receives the full
+`*http.Request`, so a custom authenticator may instead read an `HttpOnly; Secure`
+session cookie, which is also kept out of the URL. The native browser
+`EventSource` cannot set custom headers; for authenticated browser streams either
+use an `EventSource` polyfill built on `fetch` + `ReadableStream` (which can send
+`Authorization`), or authenticate from a secure cookie. Both honour the no-query
+invariant.
 
 ## Testing
 
@@ -124,8 +147,9 @@ rskit counterpart (the SSE/streaming transport) should mirror the same concept
 under the same name: an injected authenticator that derives credentials from the
 `Authorization` header, rejects query-string tokens, and applies 401/403
 semantics. Parity is scoped to the wire contract and the concept, not the Go
-option types. When this mirroring is scheduled, record it in an rskit tracking
-issue (https://github.com/kbukum/rskit) and link it here.
+option types. No rskit tracking issue exists for this mirroring yet; when the
+work is scheduled, open one in the [rskit](https://github.com/kbukum/rskit)
+tracker and link its full issue URL here.
 
 ---
 

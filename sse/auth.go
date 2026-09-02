@@ -3,6 +3,7 @@ package sse
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"net/http"
 	"strings"
 
@@ -69,13 +70,13 @@ type TokenValidator interface {
 func BearerAuthenticator(v TokenValidator) Authenticator {
 	if v == nil {
 		return AuthenticatorFunc(func(*http.Request) (any, error) {
-			return nil, apperrors.Unauthorized("authenticator is not configured")
+			return nil, bearerReject(apperrors.Unauthorized("authenticator is not configured"))
 		})
 	}
 	return AuthenticatorFunc(func(r *http.Request) (any, error) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
-			return nil, apperrors.Unauthorized("missing authorization header")
+			return nil, bearerReject(apperrors.Unauthorized("missing authorization header"))
 		}
 		// Parse exactly a scheme and a token; strings.Fields collapses runs of
 		// whitespace and drops empties, so a whitespace-only credential and an
@@ -83,14 +84,39 @@ func BearerAuthenticator(v TokenValidator) Authenticator {
 		// validator.
 		fields := strings.Fields(header)
 		if len(fields) != 2 || !strings.EqualFold(fields[0], security.BearerAuthScheme) {
-			return nil, apperrors.Unauthorized("invalid authorization scheme; expected 'Bearer <token>'")
+			return nil, bearerReject(apperrors.Unauthorized("invalid authorization scheme; expected 'Bearer <token>'"))
 		}
 		claims, err := v.ValidateToken(fields[1])
 		if err != nil {
-			return nil, apperrors.Unauthorized("invalid or expired token")
+			// Preserve the validator's cause so callers can errors.Is/As it for
+			// diagnostics; the response path canonicalizes and redacts it, so the
+			// original message never reaches the client.
+			return nil, bearerReject(apperrors.Unauthorized("invalid or expired token").WithCause(err))
 		}
 		return claims, nil
 	})
+}
+
+// bearerChallenge is the WWW-Authenticate scheme a bearer rejection advertises.
+var bearerChallenge = security.BearerAuthScheme
+
+// challengeError carries a WWW-Authenticate challenge alongside a rejection so a
+// scheme-specific gate (such as bearer) can emit a standards-compliant challenge
+// without hard-coding one for every authenticator. It unwraps to the underlying
+// [apperrors.AppError], so canonicalization and errors.Is/As still see it.
+type challengeError struct {
+	err       error
+	challenge string
+}
+
+func (e *challengeError) Error() string         { return e.err.Error() }
+func (e *challengeError) Unwrap() error         { return e.err }
+func (e *challengeError) authChallenge() string { return e.challenge }
+
+// bearerReject tags a rejection as a bearer failure so writeAuthError emits a
+// `WWW-Authenticate: Bearer` challenge on the 401.
+func bearerReject(err error) error {
+	return &challengeError{err: err, challenge: bearerChallenge}
 }
 
 // identityKey is the private context key under which a resolved identity is stored.
@@ -113,14 +139,33 @@ func IdentityFromContext(ctx context.Context) (any, bool) {
 // into one of the two statuses the SSE auth contract promises and writing an RFC
 // 9457 problem response. An [apperrors.Forbidden] error (an authenticated but
 // unauthorized principal) becomes a canonical 403; every other rejection becomes
-// a canonical 401. The originating error's message is never surfaced, so an
-// injected authenticator or resolver cannot leak credential or identity detail
-// through the response body or an unexpected status.
-func writeAuthError(w http.ResponseWriter, err error) {
+// a canonical 401. When the rejection carries a scheme challenge (a bearer gate),
+// a `WWW-Authenticate` header is emitted on the 401 so bearer clients receive a
+// standards-compliant challenge; it is never attached to a 403. The originating
+// error's message is never surfaced, so an injected authenticator or resolver
+// cannot leak credential or identity detail through the response body or an
+// unexpected status. It returns the body-encoding error, if any, so the caller
+// can log a failed write on the runtime HTTP path.
+func writeAuthError(w http.ResponseWriter, err error) error {
 	problem := canonicalAuthError(err).ToProblemDetail()
+	if problem.Status == http.StatusUnauthorized {
+		if challenge := authChallengeFor(err); challenge != "" {
+			w.Header().Set("WWW-Authenticate", challenge)
+		}
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(problem.Status)
-	_ = json.NewEncoder(w).Encode(problem)
+	return json.NewEncoder(w).Encode(problem)
+}
+
+// authChallengeFor returns the WWW-Authenticate challenge a rejection advertises,
+// or "" when it carries none.
+func authChallengeFor(err error) string {
+	var c interface{ authChallenge() string }
+	if stderrors.As(err, &c) {
+		return c.authChallenge()
+	}
+	return ""
 }
 
 // canonicalAuthError maps any rejection onto a canonical [apperrors.Forbidden]

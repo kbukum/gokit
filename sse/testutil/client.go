@@ -17,15 +17,18 @@ type Event struct {
 	Name string
 	// Data is the concatenated `data:` payload with the trailing newline removed.
 	Data []byte
-	// ID is the `id:` field used for Last-Event-ID reconnection, if present.
+	// ID is the persistent last-event ID in effect for this event (set by the
+	// most recent `id:` field and carried forward across blocks), empty until an
+	// `id:` field has been seen.
 	ID string
 }
 
 // StreamClient reads and decodes framed SSE events from an open response body.
 // It is not safe for concurrent use; drive it from a single test goroutine.
 type StreamClient struct {
-	resp   *http.Response
-	reader *bufio.Reader
+	resp        *http.Response
+	reader      *bufio.Reader
+	lastEventID string
 }
 
 // newStreamClient wraps an open SSE response body for frame-by-frame reading.
@@ -49,9 +52,15 @@ func (c *StreamClient) Close() error {
 // A frame is only complete at its blank-line boundary: when the stream ends
 // before that boundary, any partially-read fields are discarded and [io.EOF] is
 // returned rather than a truncated event.
+//
+// Framing follows the SSE dispatch algorithm: only a block that carried a `data`
+// field is dispatched, so an `id`-only or `event`-only block updates state
+// without surfacing a spurious event. An `id` field sets a persistent
+// last-event ID that carries onto every subsequent dispatched event (its
+// [Event.ID]) until changed, matching reconnection semantics.
 func (c *StreamClient) Next() (Event, error) {
 	var (
-		evt      Event
+		name     string
 		data     []string
 		haveData bool
 	)
@@ -68,12 +77,20 @@ func (c *StreamClient) Next() (Event, error) {
 		line = strings.TrimRight(line, "\r\n")
 
 		if line == "" {
-			// Frame boundary: emit only if we accumulated real fields.
-			if haveData || evt.Name != "" || evt.ID != "" {
-				evt.Data = []byte(strings.Join(data, "\n"))
-				return evt, nil
+			// Frame boundary. Per the SSE spec a block with no data field is not
+			// dispatched: an id-only or event-only block only updates state (the
+			// persistent last-event ID already applied below). Reset the per-block
+			// buffers and keep reading for the next dispatchable event.
+			if !haveData {
+				name = ""
+				data = data[:0]
+				continue
 			}
-			continue
+			return Event{
+				Name: name,
+				Data: []byte(strings.Join(data, "\n")),
+				ID:   c.lastEventID,
+			}, nil
 		}
 		if strings.HasPrefix(line, ":") {
 			continue // comment / keep-alive
@@ -83,12 +100,14 @@ func (c *StreamClient) Next() (Event, error) {
 		value = strings.TrimPrefix(value, " ")
 		switch field {
 		case "event":
-			evt.Name = value
+			name = value
 		case "data":
 			data = append(data, value)
 			haveData = true
 		case "id":
-			evt.ID = value
+			// The last-event ID persists across blocks and carries onto every
+			// later dispatched event until changed.
+			c.lastEventID = value
 		}
 	}
 }

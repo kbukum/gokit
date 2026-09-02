@@ -44,8 +44,10 @@ func TestAuthenticatedOpen_PerPrincipalScoping(t *testing.T) {
 		t.Fatalf("resolver should see identity via context, got %v", resolvedIdentity)
 	}
 
-	// Broadcast to the per-principal routing key derived from the identity.
-	waitForClient(t, h, "user:alice")
+	// Registration is synchronous (ServeSSE registers the client before writing
+	// the connected handshake, and Hub.Register blocks until the client is in the
+	// map), so SkipConnected above already guarantees the per-principal routing
+	// key is registered — no polling needed before broadcasting.
 	h.Hub.BroadcastFrame("user:alice", sse.Frame{Event: "ping", Data: []byte(`{"n":1}`)})
 
 	var payload struct {
@@ -120,9 +122,37 @@ func TestUnauthenticatedEndpointStillWorks(t *testing.T) {
 	testutil.RequireStatus(t, stream, http.StatusOK)
 	stream.SkipConnected(t)
 
-	waitForClient(t, h, "open:1*")
+	// SkipConnected guarantees the client is registered (synchronous Register),
+	// so the broadcast below cannot race registration.
 	h.Hub.BroadcastFrame("open:1*", sse.Frame{Event: "msg", Data: []byte(`{}`)})
 	stream.Require(t, "msg")
+}
+
+// TestResolverResolvedRouteWins verifies the resolved routing key wins even when
+// the resolver also returns a WithRoute in its options: the authoritative route
+// is applied last so per-principal scoping cannot be overridden.
+func TestResolverResolvedRouteWins(t *testing.T) {
+	t.Parallel()
+
+	h := testutil.New(t, "base",
+		sse.WithAuthenticator(testutil.AllowAuthenticator("alice")),
+		sse.WithClientIdentity(func(_ *http.Request, id any) (string, []sse.ClientOption, error) {
+			// Return a decoy route in the options; the resolved id must still win.
+			return "user:" + id.(string), []sse.ClientOption{sse.WithRoute("decoy")}, nil
+		}),
+	)
+
+	stream := h.MustConnect(t, testContext(t), "token")
+	defer stream.Close()
+	testutil.RequireStatus(t, stream, http.StatusOK)
+	stream.SkipConnected(t)
+
+	// The decoy route must not receive; the authoritative per-principal route must.
+	h.Hub.BroadcastFrame("decoy", sse.Frame{Event: "wrong", Data: []byte(`{}`)})
+	h.Hub.BroadcastFrame("user:alice", sse.Frame{Event: "right", Data: []byte(`{}`)})
+	if evt := stream.Require(t, "right"); evt.Name != "right" {
+		t.Fatalf("expected authoritative route to win, got %q", evt.Name)
+	}
 }
 
 // stubValidator is a no-op TokenValidator for header-path tests.
@@ -153,8 +183,9 @@ func TestConcurrentStreamsSamePrincipal(t *testing.T) {
 	testutil.RequireStatus(t, second, http.StatusOK)
 	second.SkipConnected(t)
 
-	waitForClientCount(t, h, "user:alice", 2)
-
+	// Both SkipConnected calls above guarantee both connections are registered
+	// under the shared route (synchronous Register), so a single broadcast reaches
+	// both without polling.
 	h.Hub.BroadcastFrame("user:alice", sse.Frame{Event: "ping", Data: []byte(`{}`)})
 	first.Require(t, "ping")
 	second.Require(t, "ping")
@@ -170,31 +201,31 @@ func TestNilAuthenticatorFailsClosed(t *testing.T) {
 	testutil.RequireStatus(t, stream, http.StatusUnauthorized)
 }
 
-// waitForClient blocks until at least one client whose routing key matches
-// routePattern has registered, so a broadcast is not raced against asynchronous
-// registration.
-func waitForClient(t *testing.T, h *testutil.Harness, routePattern string) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(h.Hub.GetClientsByRoute(routePattern)) > 0 {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatalf("no client matching route %q registered", routePattern)
+// TestNilIdentityRejected verifies an authenticator that returns (nil, nil) is
+// treated as a rejection rather than admitting an identity-less connection.
+func TestNilIdentityRejected(t *testing.T) {
+	t.Parallel()
+
+	h := testutil.New(t, "base",
+		sse.WithAuthenticator(sse.AuthenticatorFunc(func(*http.Request) (any, error) {
+			return nil, nil //nolint:nilnil // exercising the (nil, nil) admit path the handler must reject
+		})),
+	)
+	stream := h.MustConnect(t, testContext(t), "token")
+	testutil.RequireStatus(t, stream, http.StatusUnauthorized)
 }
 
-// waitForClientCount blocks until at least n clients whose routing key matches
-// routePattern have registered.
-func waitForClientCount(t *testing.T, h *testutil.Harness, routePattern string, n int) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if len(h.Hub.GetClientsByRoute(routePattern)) >= n {
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	t.Fatalf("expected >=%d clients matching route %q", n, routePattern)
+// TestResolverWithoutAuthenticatorFailsClosed verifies configuring an identity
+// resolver without an authenticator fails closed instead of serving the intended
+// per-principal endpoint unauthenticated.
+func TestResolverWithoutAuthenticatorFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	h := testutil.New(t, "base",
+		sse.WithClientIdentity(func(*http.Request, any) (string, []sse.ClientOption, error) {
+			return "user:x", nil, nil
+		}),
+	)
+	stream := h.MustConnect(t, testContext(t), "token")
+	testutil.RequireStatus(t, stream, http.StatusUnauthorized)
 }

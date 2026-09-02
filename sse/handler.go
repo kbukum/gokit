@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 const DefaultKeepAliveInterval = 30 * time.Second
@@ -33,41 +35,24 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 
 	clientOpts := cfg.clientOpts
 	if cfg.authenticator != nil {
-		baseCtx := r.Context()
 		identity, err := cfg.authenticator.Authenticate(r)
+		if err == nil && identity == nil {
+			// An authenticator that returns (nil, nil) would admit the connection
+			// while IdentityFromContext reports it unauthenticated and any resolver
+			// that type-asserts the identity panics. Treat a missing identity as a
+			// rejection so success always carries a usable principal.
+			err = apperrors.Unauthorized("authenticator returned no identity")
+		}
 		if err != nil {
-			// Log only the controlled canonical code — never err.Error(), which
-			// may carry the bearer token or other credential detail from an
-			// injected authenticator.
-			hub.log.WarnCtx(baseCtx, "[SSE] Authentication rejected", map[string]any{
-				"client_id": clientID,
-				"reason":    canonicalAuthError(err).Code,
-			})
-			writeAuthError(w, err)
+			rejectConnection(hub, r, w, clientID, "[SSE] Authentication rejected", err)
 			return
 		}
-		r = r.WithContext(withIdentity(baseCtx, identity))
-		if cfg.resolver != nil {
-			resolvedID, resolvedOpts, rErr := cfg.resolver(r, identity)
-			if rErr != nil {
-				// As above, the resolver error may embed principal or
-				// authorization detail; log only the canonical code.
-				hub.log.WarnCtx(baseCtx, "[SSE] Identity resolution rejected", map[string]any{
-					"client_id": clientID,
-					"reason":    canonicalAuthError(rErr).Code,
-				})
-				writeAuthError(w, rErr)
-				return
-			}
-			// The resolved value is a per-principal routing key, not a new
-			// connection id: apply it as the client's route so every concurrent
-			// stream for the principal keeps its unique registration key and none
-			// evicts another. clientID stays the unique per-connection id.
-			if resolvedID != "" {
-				clientOpts = append(clientOpts, WithRoute(resolvedID))
-			}
-			clientOpts = append(clientOpts, resolvedOpts...)
+		r = r.WithContext(withIdentity(r.Context(), identity))
+		resolvedOpts, ok := resolveIdentity(hub, r, w, clientID, cfg, identity, clientOpts)
+		if !ok {
+			return
 		}
+		clientOpts = resolvedOpts
 	}
 
 	// Check SSE support (requires http.Flusher interface)
@@ -169,5 +154,47 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 				"client_id": clientID,
 			})
 		}
+	}
+}
+
+// resolveIdentity runs the optional [IdentityResolver] for an authenticated
+// request. It returns the client options to register with (resolver metadata
+// first, then the verified routing key last so per-principal scoping always wins)
+// and ok true; on a resolver rejection it writes the mapped 401/403 response and
+// returns ok false. When no resolver is configured it returns clientOpts
+// unchanged. The resolved value is a routing key, not a new connection id, so the
+// caller's clientID stays the unique per-connection registration key and
+// concurrent streams for one principal never evict one another.
+func resolveIdentity(hub *Hub, r *http.Request, w http.ResponseWriter, clientID string, cfg *serveConfig, identity any, clientOpts []ClientOption) ([]ClientOption, bool) {
+	if cfg.resolver == nil {
+		return clientOpts, true
+	}
+	resolvedID, resolvedOpts, err := cfg.resolver(r, identity)
+	if err != nil {
+		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected", err)
+		return nil, false
+	}
+	clientOpts = append(clientOpts, resolvedOpts...)
+	if resolvedID != "" {
+		clientOpts = append(clientOpts, WithRoute(resolvedID))
+	}
+	return clientOpts, true
+}
+
+// rejectConnection logs a rejection by its canonical code only (never the raw
+// error, which may carry credential or principal detail from an injected
+// implementation) and writes the mapped RFC 9457 problem response, logging a
+// failed body write on the runtime HTTP path.
+func rejectConnection(hub *Hub, r *http.Request, w http.ResponseWriter, clientID, msg string, err error) {
+	ctx := r.Context()
+	hub.log.WarnCtx(ctx, msg, map[string]any{
+		"client_id": clientID,
+		"reason":    canonicalAuthError(err).Code,
+	})
+	if werr := writeAuthError(w, err); werr != nil {
+		hub.log.ErrorCtx(ctx, "[SSE] Failed to write auth rejection", map[string]any{
+			"client_id": clientID,
+			"error":     werr.Error(),
+		})
 	}
 }

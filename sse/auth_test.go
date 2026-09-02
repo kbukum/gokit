@@ -146,11 +146,61 @@ func TestWriteAuthError_NoMessageLeak(t *testing.T) {
 
 	secret := "super-secret-token-abc123"
 	rec := httptest.NewRecorder()
-	writeAuthError(rec, apperrors.Unauthorized(secret))
+	if err := writeAuthError(rec, apperrors.Unauthorized(secret)); err != nil {
+		t.Fatalf("writeAuthError returned error: %v", err)
+	}
 	if body := rec.Body.String(); strings.Contains(body, secret) {
 		t.Fatalf("response body leaked the error message: %q", body)
 	}
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+// TestWriteAuthError_BearerChallenge verifies a bearer rejection advertises a
+// `WWW-Authenticate: Bearer` challenge on the 401, while a non-bearer 401 and any
+// 403 carry no challenge.
+func TestWriteAuthError_BearerChallenge(t *testing.T) {
+	t.Parallel()
+
+	auth := BearerAuthenticator(stubValidator{claims: "u"})
+	r := httptest.NewRequest(http.MethodGet, "/events", http.NoBody) // missing header
+	_, bearerErr := auth.Authenticate(r)
+
+	rec := httptest.NewRecorder()
+	if err := writeAuthError(rec, bearerErr); err != nil {
+		t.Fatalf("writeAuthError returned error: %v", err)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); got != "Bearer" {
+		t.Fatalf("expected WWW-Authenticate: Bearer, got %q", got)
+	}
+
+	recPlain := httptest.NewRecorder()
+	_ = writeAuthError(recPlain, apperrors.Unauthorized("no creds"))
+	if got := recPlain.Header().Get("WWW-Authenticate"); got != "" {
+		t.Fatalf("non-bearer 401 must not advertise a challenge, got %q", got)
+	}
+
+	recForbidden := httptest.NewRecorder()
+	_ = writeAuthError(recForbidden, bearerReject(apperrors.Forbidden("nope")))
+	if got := recForbidden.Header().Get("WWW-Authenticate"); got != "" {
+		t.Fatalf("403 must not advertise a bearer challenge, got %q", got)
+	}
+}
+
+// TestBearerAuthenticator_PreservesCause verifies the validator's original error
+// is preserved as the cause so callers can errors.Is/As it for diagnostics, even
+// though the response path redacts it.
+func TestBearerAuthenticator_PreservesCause(t *testing.T) {
+	t.Parallel()
+
+	sentinel := errors.New("token expired 2020-01-01")
+	auth := BearerAuthenticator(stubValidator{err: sentinel})
+	r := httptest.NewRequest(http.MethodGet, "/events", http.NoBody)
+	r.Header.Set("Authorization", "Bearer some-token")
+
+	_, err := auth.Authenticate(r)
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected the validator cause to be preserved, got %v", err)
 	}
 }

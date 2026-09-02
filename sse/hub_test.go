@@ -92,7 +92,6 @@ func TestHub_RegisterUnregister(t *testing.T) {
 
 	// Register client
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond) // Wait for registration
 
 	if hub.GetClientCount() != 1 {
 		t.Errorf("expected 1 client after register, got %d", hub.GetClientCount())
@@ -100,7 +99,6 @@ func TestHub_RegisterUnregister(t *testing.T) {
 
 	// Unregister client
 	hub.Unregister(client)
-	time.Sleep(10 * time.Millisecond) // Wait for unregistration
 
 	if hub.GetClientCount() != 0 {
 		t.Errorf("expected 0 clients after unregister, got %d", hub.GetClientCount())
@@ -145,7 +143,6 @@ func TestHub_GetClientIDs(t *testing.T) {
 
 	hub.Register(client1)
 	hub.Register(client2)
-	time.Sleep(10 * time.Millisecond)
 
 	ids := hub.GetClientIDs()
 	if len(ids) != 2 {
@@ -175,7 +172,6 @@ func TestHub_BroadcastToPattern_ExactMatch(t *testing.T) {
 
 	hub.Register(client1)
 	hub.Register(client2)
-	time.Sleep(10 * time.Millisecond)
 
 	// Broadcast to exact match
 	hub.BroadcastToPattern("test:abc123", []byte("message for abc"))
@@ -211,7 +207,6 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	hub.Register(client1)
 	hub.Register(client2)
 	hub.Register(client3)
-	time.Sleep(10 * time.Millisecond)
 
 	// Broadcast to all execution clients
 	hub.BroadcastToPattern("test:*", []byte("message for executions"))
@@ -246,6 +241,39 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	}
 }
 
+// TestHub_Broadcast_AllClientsCrossesSlash verifies the "*" all-clients pattern
+// reaches routes containing "/", which plain path.Match would exclude because
+// "*" does not cross a path separator.
+func TestHub_Broadcast_AllClientsCrossesSlash(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	flat := NewClient("flat")
+	nested := NewClient("conn-1", WithRoute("user:org/alice"))
+	hub.Register(flat)
+	hub.Register(nested)
+
+	hub.Broadcast("ping", []byte("all"))
+	time.Sleep(10 * time.Millisecond)
+
+	for _, c := range []*Client{flat, nested} {
+		select {
+		case msg := <-c.Events():
+			if string(msg.Data) != "all" {
+				t.Errorf("client %q: expected 'all', got %q", c.ID(), msg.Data)
+			}
+		default:
+			t.Errorf("client %q with route %q should have received the broadcast", c.ID(), c.Route())
+		}
+	}
+
+	// GetClientsByRoute shares the same semantics: "*" must select the nested route.
+	if got := len(hub.GetClientsByRoute("*")); got != 2 {
+		t.Errorf("expected \"*\" to match 2 clients, got %d", got)
+	}
+}
+
 func TestHub_ConcurrentOperations(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
@@ -263,7 +291,6 @@ func TestHub_ConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	time.Sleep(20 * time.Millisecond)
 
 	if hub.GetClientCount() != 10 {
 		t.Errorf("expected 10 clients, got %d", hub.GetClientCount())
@@ -288,7 +315,6 @@ func TestHub_ConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	time.Sleep(20 * time.Millisecond)
 
 	if hub.GetClientCount() != 0 {
 		t.Errorf("expected 0 clients after unregister, got %d", hub.GetClientCount())
@@ -383,7 +409,6 @@ func TestHub_GetClient(t *testing.T) {
 
 	client := NewClient("test:abc123")
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond)
 
 	got := hub.GetClient("test:abc123")
 	if got == nil {
@@ -405,7 +430,6 @@ func TestHub_Stop(t *testing.T) {
 
 	client := NewClient("test:abc")
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond)
 
 	hub.Stop()
 	time.Sleep(10 * time.Millisecond)
