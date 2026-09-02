@@ -29,6 +29,15 @@ When in doubt about a heavy capability, prefer the light-gokit / strong-elsewher
 
 Parity is about **capability and behavior**, not identical names or directory layouts. Where a language's current idioms, conventions, or best practices differ, follow Go's convention rather than force structural sameness — naming conventions, file/folder organization, error/option ergonomics, and module layout should read as native Go. Match the *concept and behavior* so users get intuition transfer; do not transliterate Rust. Call out any deliberate rename or reshaping in the rskit tracking issue so the mapping stays discoverable.
 
+## Priority order: consistency > best practices > parity
+
+Parity is a **nice-to-have**, not a mandate. When it conflicts with anything more important, parity yields:
+
+1. **Up-to-date, idiomatic Go best practices win over parity.** If the idiomatic Go approach is more efficient, safer, or more maintainable — considering current conventions, development ergonomics, and the tech stack — take it, even when it diverges from the sibling's shape. Never force a non-idiomatic type or structure (e.g. `any` in a public API, a hand-rolled sum type, a foreign directory layout) purely to match rskit. Parity legitimately binds only **wire/contract compatibility** (serialized shapes, event-type strings, protocol semantics), not internal representations.
+2. **Consistency across the project outranks both.** This is the load-bearing rule: once a pattern is chosen for a concern, apply it *everywhere* so gokit reads as one coherent whole rather than a patchwork of locally-optimal choices. A slightly-less-ideal choice applied consistently beats a marginally-better choice applied in one place and not another. Before diverging for idiom, check how the rest of gokit already handles the concern and match it.
+
+When a parity gap is intentionally left unclosed because Go's idiom or project consistency wins, record the decision (rskit tracking issue and/or a stored memory) so it is not re-flagged as a gap in later reviews.
+
 ## Workflow
 
 1. **Find the strongest existing implementation.** Locate the counterpart in the sibling kit (rskit crate in the [rskit repo](https://github.com/kbukum/rskit)) and study the public API, invariants, and error model — not just the surface — then decide which side currently has the better implementation for this scope.
