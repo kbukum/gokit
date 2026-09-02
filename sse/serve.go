@@ -32,10 +32,13 @@ type serveConfig struct {
 // installed as a fail-closed gate that rejects every connection with 401, so an
 // endpoint meant to be protected can never silently open up.
 func WithAuthenticator(a Authenticator) ServeOption {
+	// Normalize before capturing so the returned option is read-only: a
+	// ServeOption is commonly built once and applied by many concurrent
+	// handlers, and mutating the captured value inside the closure would race.
+	if a == nil {
+		a = failClosedAuthenticator{}
+	}
 	return func(c *serveConfig) {
-		if a == nil {
-			a = failClosedAuthenticator{}
-		}
 		c.authenticator = a
 	}
 }
