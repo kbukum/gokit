@@ -23,11 +23,12 @@ func TestAuthenticatedOpen_PerPrincipalScoping(t *testing.T) {
 	t.Parallel()
 
 	auth := testutil.AllowAuthenticator("alice")
-	var resolvedIdentity any
+	resolved := make(chan any, 1)
 	h := testutil.New(t, "base",
 		sse.WithAuthenticator(auth),
 		sse.WithClientIdentity(func(r *http.Request, identity any) (string, []sse.ClientOption, error) {
-			resolvedIdentity, _ = sse.IdentityFromContext(r.Context())
+			seen, _ := sse.IdentityFromContext(r.Context())
+			resolved <- seen
 			return "user:" + identity.(string), []sse.ClientOption{sse.WithUserID(identity.(string))}, nil
 		}),
 	)
@@ -40,7 +41,10 @@ func TestAuthenticatedOpen_PerPrincipalScoping(t *testing.T) {
 	if want := `"user_id":"alice"`; !strings.Contains(string(connected.Data), want) {
 		t.Fatalf("expected %s in connected event, got %q", want, connected.Data)
 	}
-	if resolvedIdentity != "alice" {
+	// The buffered channel is the synchronization edge between the resolver
+	// (server goroutine) and this assertion (test goroutine); reading a shared
+	// variable directly would race under -race.
+	if resolvedIdentity := <-resolved; resolvedIdentity != "alice" {
 		t.Fatalf("resolver should see identity via context, got %v", resolvedIdentity)
 	}
 
