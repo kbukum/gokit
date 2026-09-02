@@ -45,7 +45,7 @@ Shared engineering baseline — apply to all work here:
 Standing,
 re-runnable development skills encoding this baseline live in [`.github/skills/`](skills/README.md)
 — the `review` skill runs the review passes in a fresh, clean-context agent after every change set
-and before releases; `create-branch`, `create-plan`, `apply-plan`, `apply-step`, `create-pr`,
+and before releases (reviewing the change's **blast radius** — surrounding and related code, not just the diff — and reporting/fixing the pre-existing problems it surfaces, redesign over patch); `create-branch`, `create-plan`, `apply-plan`, `apply-step`, `create-pr`,
 `validate`, `new-module`, `new-backend`, `parity`, and `release` cover the rest of the workflow.
 Validation is driven through `toven` (see `toven.toml`).
 
