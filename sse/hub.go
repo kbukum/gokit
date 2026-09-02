@@ -42,15 +42,17 @@ type Frame struct {
 
 // Client represents a connected SSE client.
 //
-// id is the unique per-connection key the hub registers under, so two
-// connections never evict each other from the client map. route is the
-// broadcast-matching key: many connections may share one route (for example
-// every tab of the same principal), and it defaults to id when unset. Keeping
-// the two separate lets per-principal scoping fan out to every live connection
-// instead of silently replacing the previous one.
+// id is the client's caller-supplied public identifier; it need not be unique.
+// The hub registers each connection under an internal unique key (regKey), so two
+// connections that share an id never evict each other from the client map. route
+// is the broadcast-matching key: many connections may share one route (for
+// example every tab of the same principal), and it defaults to id when unset.
+// Keeping these separate lets per-principal scoping fan out to every live
+// connection instead of silently replacing the previous one.
 type Client struct {
-	id       string                         // Unique per-connection registration key
+	id       string                         // Caller-supplied public identifier; not required unique
 	route    string                         // Broadcast-matching key; defaults to id when empty
+	regKey   uint64                         // Hub-assigned unique registration key; keys the client map
 	metadata map[string]string              // Optional metadata (userID, sessionID, etc.)
 	events   chan Frame                     // Channel for sending events to client
 	log      atomic.Pointer[logging.Logger] // Published by the hub at registration; nil before then
@@ -175,12 +177,13 @@ func (c *Client) Close() {
 
 // Hub manages SSE client connections and message broadcasting.
 type Hub struct {
-	clients    map[string]*Client    // client ID -> Client
+	clients    map[uint64]*Client    // registration key -> Client
 	register   chan clientMembership // Channel for registering clients
 	unregister chan clientMembership // Channel for unregistering clients
 	broadcast  chan *Message         // Channel for broadcasting messages
 	done       chan struct{}         // Signals the hub to stop
 	stopped    bool                  // Whether the hub has been stopped
+	regSeq     uint64                // Monotonic registration counter; only touched by the hub loop
 	mu         sync.RWMutex          // Protects clients map for reads during matching
 	log        *logging.Logger       // Injected logger for hub diagnostics; never nil after NewHub
 }
@@ -214,7 +217,7 @@ type Message struct {
 // console logger; inject a logger with [WithHubLogger] to route them elsewhere.
 func NewHub(opts ...HubOption) *Hub {
 	h := &Hub{
-		clients:    make(map[string]*Client),
+		clients:    make(map[uint64]*Client),
 		register:   make(chan clientMembership),
 		unregister: make(chan clientMembership),
 		broadcast:  make(chan *Message, DefaultBroadcastBufferSize),
@@ -240,7 +243,9 @@ func (h *Hub) Run() {
 
 		case reg := <-h.register:
 			h.mu.Lock()
-			h.clients[reg.client.id] = reg.client
+			h.regSeq++
+			reg.client.regKey = h.regSeq
+			h.clients[reg.client.regKey] = reg.client
 			total := len(h.clients)
 			h.mu.Unlock()
 			close(reg.ack)
@@ -251,8 +256,8 @@ func (h *Hub) Run() {
 
 		case unreg := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[unreg.client.id]; ok {
-				delete(h.clients, unreg.client.id)
+			if _, ok := h.clients[unreg.client.regKey]; ok {
+				delete(h.clients, unreg.client.regKey)
 				unreg.client.Close()
 			}
 			total := len(h.clients)
@@ -284,9 +289,9 @@ func (h *Hub) Stop() {
 func (h *Hub) closeAllClients() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for id, client := range h.clients {
+	for key, client := range h.clients {
 		client.Close()
-		delete(h.clients, id)
+		delete(h.clients, key)
 	}
 	h.log.Debug("[SSE_HUB] All clients closed during shutdown")
 }
@@ -422,23 +427,33 @@ func (h *Hub) GetClientCount() int {
 	return len(h.clients)
 }
 
-// GetClientIDs returns a list of all connected client IDs.
+// GetClientIDs returns the public identifiers of all connected clients. Because
+// ids are caller-supplied and need not be unique, the result may contain
+// duplicates when several connections share an id.
 func (h *Hub) GetClientIDs() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	ids := make([]string, 0, len(h.clients))
-	for id := range h.clients {
-		ids = append(ids, id)
+	for _, client := range h.clients {
+		ids = append(ids, client.id)
 	}
 	return ids
 }
 
-// GetClient returns a client by ID, or nil if not found.
+// GetClient returns a connected client by its public id, or nil if none match.
+// When several connections share an id (ids are caller-supplied and not required
+// unique), an arbitrary matching client is returned; use [Hub.GetClientsByRoute]
+// to address every connection for a routing key.
 func (h *Hub) GetClient(id string) *Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.clients[id]
+	for _, client := range h.clients {
+		if client.id == id {
+			return client
+		}
+	}
+	return nil
 }
 
 // GetClientsByRoute returns every connected client whose broadcast-matching key

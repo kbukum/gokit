@@ -241,6 +241,43 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	}
 }
 
+// TestHub_DuplicateIDsCoexist verifies two connections that share a caller-
+// supplied id register under distinct internal keys, so neither evicts the other
+// and unregistering the first leaves the second live and reachable.
+func TestHub_DuplicateIDsCoexist(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	first := NewClient("dup", WithRoute("user:alice"))
+	second := NewClient("dup", WithRoute("user:alice"))
+	hub.Register(first)
+	hub.Register(second)
+
+	if got := hub.GetClientCount(); got != 2 {
+		t.Fatalf("expected 2 coexisting clients, got %d", got)
+	}
+	if got := len(hub.GetClientsByRoute("user:alice")); got != 2 {
+		t.Fatalf("expected 2 clients on the shared route, got %d", got)
+	}
+
+	// Unregistering the first connection must not evict the second.
+	hub.Unregister(first)
+	if got := hub.GetClientCount(); got != 1 {
+		t.Fatalf("expected 1 client after unregistering one duplicate, got %d", got)
+	}
+
+	hub.BroadcastFrame("user:alice", Frame{Event: "ping", Data: []byte("x")})
+	select {
+	case msg := <-second.Events():
+		if string(msg.Data) != "x" {
+			t.Fatalf("expected 'x', got %q", msg.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("surviving client should have received the broadcast")
+	}
+}
+
 // TestHub_Broadcast_AllClientsCrossesSlash verifies the "*" all-clients pattern
 // reaches routes containing "/", which plain path.Match would exclude because
 // "*" does not cross a path separator.
@@ -255,7 +292,6 @@ func TestHub_Broadcast_AllClientsCrossesSlash(t *testing.T) {
 	hub.Register(nested)
 
 	hub.Broadcast("ping", []byte("all"))
-	time.Sleep(10 * time.Millisecond)
 
 	for _, c := range []*Client{flat, nested} {
 		select {
@@ -263,7 +299,7 @@ func TestHub_Broadcast_AllClientsCrossesSlash(t *testing.T) {
 			if string(msg.Data) != "all" {
 				t.Errorf("client %q: expected 'all', got %q", c.ID(), msg.Data)
 			}
-		default:
+		case <-time.After(time.Second):
 			t.Errorf("client %q with route %q should have received the broadcast", c.ID(), c.Route())
 		}
 	}
