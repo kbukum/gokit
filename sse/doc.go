@@ -24,4 +24,22 @@
 //	router.GET("/events", func(w http.ResponseWriter, r *http.Request) {
 //	    sse.ServeSSE(hub, w, r, "tenant:client-1")
 //	})
+//
+// # Authentication
+//
+// ServeSSE accepts an injected [Authenticator] that gates the connection before
+// the stream opens. Derive credentials from the Authorization header only — a
+// token in the URL query string leaks into access logs, proxies, and browser
+// history. [BearerAuthenticator] adapts any structural [TokenValidator] (such as
+// auth.TokenValidator) without importing the auth module, keeping this transport
+// layer decoupled from identity. A [WithClientIdentity] resolver maps the
+// verified principal to a routing key so broadcasts scope per-subject:
+//
+//	sse.ServeSSE(hub, w, r, "",
+//	    sse.WithAuthenticator(sse.BearerAuthenticator(validator)),
+//	    sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
+//	        claims := identity.(*Claims)
+//	        return "user:" + claims.Subject, []sse.ClientOption{sse.WithUserID(claims.Subject)}, nil
+//	    }),
+//	)
 package sse

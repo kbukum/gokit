@@ -21,6 +21,7 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Encryption / secrets | `encryption` / `security` | ad-hoc crypto, custom header sets | current algorithms only; non-crypto secret redaction/masking lives in `util` (`SecretString`, `SecretKeyMatcher`) |
 | Git operations | `git` | bare `exec.Command("git", …)` | |
 | Validation | `validation` | inline boundary checks duplicated per package | |
+| Token/identity validation | `auth` (`TokenValidator`) | per-transport token contracts; reading credentials from the URL query string | injected into transports (server/grpc/connect/sse) via a local structural interface — L5 never imports `auth` (L6); header-only, 401 missing/invalid vs 403 not-permitted |
 | Eval run provenance / reproducibility | `bench` | ad-hoc seed/commit/host capture on benchmark results | `RunProvenance`, injected `ProvenanceProbe`, seeded `math/rand/v2`, order-independent dataset hash |
 | Tokenization / token counting | `llm` | per-package `len(text)/4` estimates, ad-hoc BPE/HF wrappers | `TokenCounter` port + `HeuristicTokenCounter` default; real tokenizers as contrib sub-modules (`llm/tokenizer/tiktoken`, `llm/tokenizer/huggingface`); heuristic shares `ai/chat.ApproxTokens` |
 

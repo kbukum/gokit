@@ -489,7 +489,7 @@ func TestServeSSE(t *testing.T) {
 
 	// Create a test HTTP server
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ServeSSE(hub, w, r, "test:client-1", WithUserID("user-1"))
+		ServeSSE(hub, w, r, "test:client-1", WithClientOptions(WithUserID("user-1")))
 	})
 
 	server := httptest.NewServer(handler)

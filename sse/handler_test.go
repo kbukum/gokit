@@ -95,7 +95,7 @@ func TestEdge_ServeSSE_ConnectedEventFormat(t *testing.T) {
 	defer hub.Stop()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ServeSSE(hub, w, r, "test:fmt", WithUserID("u1"), WithSessionID("s1"))
+		ServeSSE(hub, w, r, "test:fmt", WithClientOptions(WithUserID("u1"), WithSessionID("s1")))
 	})
 
 	server := httptest.NewServer(handler)

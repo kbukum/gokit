@@ -19,7 +19,47 @@ type ConnectedEvent struct {
 
 // ServeSSE handles an SSE connection for a specific client.
 // This is the main entry point called from HTTP handlers.
-func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ClientOption) {
+//
+// When a [WithAuthenticator] option is supplied, the connection is authenticated
+// before the stream opens: on rejection the handler writes the mapped 401/403
+// status and returns without registering a client or emitting any frame. Derive
+// credentials from the Authorization header only (see [BearerAuthenticator]) —
+// never the query string. A [WithClientIdentity] resolver can then replace
+// clientID with a per-principal routing key so broadcasts scope to the
+// authenticated subject.
+func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ServeOption) {
+	cfg := newServeConfig(opts...)
+
+	clientOpts := cfg.clientOpts
+	if cfg.authenticator != nil {
+		baseCtx := r.Context()
+		identity, err := cfg.authenticator.Authenticate(r)
+		if err != nil {
+			hub.log.WarnCtx(baseCtx, "[SSE] Authentication rejected", map[string]any{
+				"client_id": clientID,
+				"error":     err.Error(),
+			})
+			writeAuthError(w, err)
+			return
+		}
+		r = r.WithContext(withIdentity(baseCtx, identity))
+		if cfg.resolver != nil {
+			resolvedID, resolvedOpts, rErr := cfg.resolver(r, identity)
+			if rErr != nil {
+				hub.log.WarnCtx(baseCtx, "[SSE] Identity resolution rejected", map[string]any{
+					"client_id": clientID,
+					"error":     rErr.Error(),
+				})
+				writeAuthError(w, rErr)
+				return
+			}
+			if resolvedID != "" {
+				clientID = resolvedID
+			}
+			clientOpts = append(clientOpts, resolvedOpts...)
+		}
+	}
+
 	// Check SSE support (requires http.Flusher interface)
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -49,7 +89,7 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
 
 	// Create and register client with options
-	client := NewClient(clientID, opts...)
+	client := NewClient(clientID, clientOpts...)
 	hub.Register(client)
 	defer func() {
 		hub.Unregister(client)
