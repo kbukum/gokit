@@ -47,29 +47,32 @@ func main() {
         sse.ServeSSE(hub, w, r, uuid.NewString(),
             sse.WithAuthenticator(sse.BearerAuthenticator(validator{})),
             sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
-                claims := identity.(*Claims)
+                claims, ok := identity.(*Claims)
+                if !ok {
+                    return "", nil, errors.New("unexpected identity type")
+                }
                 // Derive the broadcast routing key from the verified principal.
                 return "user:" + claims.Subject, []sse.ClientOption{sse.WithUserID(claims.Subject)}, nil
             }),
         )
     })
 
-    // Broadcast to clients matching a pattern
-    hub.BroadcastToPattern("user:*", []byte(`{"type":"update","data":"hello"}`))
+    // Broadcast from a request (or any background source) once clients are
+    // connected — broadcasting before the server accepts connections would drop
+    // the frame because no stream is open yet.
+    http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
+        hub.BroadcastToPattern("user:*", []byte(`{"type":"update","data":"hello"}`))
+    })
 
     http.ListenAndServe(":8080", nil)
 }
 ```
 
-> `validator` here is a stand-in for any `auth.TokenValidator` (JWT, OIDC, API
-> key, …). It is injected, not imported: `sse` is a transport layer and never
-> depends on the `auth` module.
+> `validator` here is a stand-in for any `auth.TokenValidator` (JWT, OIDC, API key, …). It is injected, not imported: `sse` is a transport layer and never depends on the `auth` module.
 
 ## Authentication
 
-`ServeSSE` accepts an injected `Authenticator` that gates the connection **before**
-the stream opens. On rejection it writes an RFC 9457 problem response with the
-mapped status and never starts the event loop — no partial stream is emitted.
+`ServeSSE` accepts an injected `Authenticator` that gates the connection **before** the stream opens. On rejection it writes an RFC 9457 problem response with the mapped status and never starts the event loop — no partial stream is emitted.
 
 | Option | Purpose |
 |--------|---------|
@@ -80,34 +83,18 @@ mapped status and never starts the event loop — no partial stream is emitted.
 
 Failure semantics are explicit:
 
-- **Missing or invalid credential** → `401 Unauthorized` (`BearerAuthenticator`, or
-  any authenticator returning a non-`Forbidden` error).
-- **Authenticated but not permitted** → `403 Forbidden` (return `errors.Forbidden(...)`
-  from the authenticator or the `WithClientIdentity` resolver).
+- **Missing or invalid credential** → `401 Unauthorized` (`BearerAuthenticator`, or any authenticator returning a non-`Forbidden` error).
+- **Authenticated but not permitted** → `403 Forbidden` (return `errors.Forbidden(...)` from the authenticator or the `WithClientIdentity` resolver).
 
 ### Why header-only, never the query string
 
-The invariant is simple: **no credential is ever read from the URL query string**
-(`?token=…` / `?id=…`), because a token there leaks into access logs, proxy logs,
-the `Referer` header, and browser history. Everything below keeps the credential
-out of the URL.
+The invariant is simple: **no credential is ever read from the URL query string** (`?token=…` / `?id=…`), because a token there leaks into access logs, proxy logs, the `Referer` header, and browser history. Everything below keeps the credential out of the URL.
 
-The built-in `BearerAuthenticator` reads the token from the `Authorization` header
-**only**. The general `Authenticator` seam is broader — it receives the full
-`*http.Request`, so a custom authenticator may instead read an `HttpOnly; Secure`
-session cookie, which is also kept out of the URL. The native browser
-`EventSource` cannot set custom headers; for authenticated browser streams either
-use an `EventSource` polyfill built on `fetch` + `ReadableStream` (which can send
-`Authorization`), or authenticate from a secure cookie. Both honour the no-query
-invariant.
+The built-in `BearerAuthenticator` reads the token from the `Authorization` header **only**. The general `Authenticator` seam is broader — it receives the full `*http.Request`, so a custom authenticator may instead read an `HttpOnly; Secure` session cookie, which is also kept out of the URL. The native browser `EventSource` cannot set custom headers; for authenticated browser streams either use an `EventSource` polyfill built on `fetch` + `ReadableStream` (which can send `Authorization`), or authenticate from a secure cookie. Both honour the no-query invariant.
 
 ## Testing
 
-`sse/testutil` provides a reusable harness so consumers test their wiring without
-hand-rolling SSE fakes: a call-counting `FakeAuthenticator` (`AllowAuthenticator`,
-`RejectUnauthorized`, `RejectForbidden`), a `Harness` (running hub + httptest
-server), and a `StreamClient` that decodes framed events and asserts on the
-200/401/403 paths.
+`sse/testutil` provides a reusable harness so consumers test their wiring without hand-rolling SSE fakes: a call-counting `FakeAuthenticator` (`AllowAuthenticator`, `RejectUnauthorized`, `RejectForbidden`), a `Harness` (running hub + httptest server), and a `StreamClient` that decodes framed events and asserts on the 200/401/403 paths.
 
 ## Key Types & Functions
 
@@ -142,14 +129,7 @@ server), and a `StreamClient` that decodes framed events and asserts on the
 
 ## Cross-kit parity
 
-The header-only authentication seam is a gokit-side security correction. Its
-rskit counterpart (the SSE/streaming transport) should mirror the same concept
-under the same name: an injected authenticator that derives credentials from the
-`Authorization` header, rejects query-string tokens, and applies 401/403
-semantics. Parity is scoped to the wire contract and the concept, not the Go
-option types. No rskit tracking issue exists for this mirroring yet; when the
-work is scheduled, open one in the [rskit](https://github.com/kbukum/rskit)
-tracker and link its full issue URL here.
+The header-only authentication seam is a gokit-side security correction. Its rskit counterpart (the SSE/streaming transport) should mirror the same concept under the same name: an injected authenticator that derives credentials from the `Authorization` header, rejects query-string tokens, and applies 401/403 semantics. Parity is scoped to the wire contract and the concept, not the Go option types. This mirroring is not yet tracked by an rskit issue; open one in the [rskit](https://github.com/kbukum/rskit) tracker when the work is scheduled and link its full issue URL here.
 
 ---
 

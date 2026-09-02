@@ -39,7 +39,10 @@
 //	sse.ServeSSE(hub, w, r, uuid.NewString(),
 //	    sse.WithAuthenticator(sse.BearerAuthenticator(validator)),
 //	    sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
-//	        claims := identity.(*Claims)
+//	        claims, ok := identity.(*Claims)
+//	        if !ok {
+//	            return "", nil, errors.New("unexpected identity type")
+//	        }
 //	        return "user:" + claims.Subject, []sse.ClientOption{sse.WithUserID(claims.Subject)}, nil
 //	    }),
 //	)
