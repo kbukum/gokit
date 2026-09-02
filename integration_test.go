@@ -182,12 +182,19 @@ func TestIntegration_Errors_Resilience_RetryPreservesAppError(t *testing.T) {
 	if attempts != 3 {
 		t.Errorf("expected 3 attempts, got %d", attempts)
 	}
-	// The underlying error should still be our AppError
+	// Exhausting retries surfaces ErrMaxRetriesExceeded while preserving the
+	// original AppError as the cause, so callers can branch on the sentinel and
+	// still unwrap the underlying failure.
+	if !errors.Is(err, resilience.ErrMaxRetriesExceeded) {
+		t.Errorf("expected ErrMaxRetriesExceeded, got %v", err)
+	}
 	var appErr *appErrors.AppError
-	if errors.As(err, &appErr) {
+	if errors.As(errors.Unwrap(err), &appErr) {
 		if appErr.Code != appErrors.ErrCodeTimeout {
-			t.Errorf("expected TIMEOUT code, got %s", appErr.Code)
+			t.Errorf("expected TIMEOUT code on cause, got %s", appErr.Code)
 		}
+	} else {
+		t.Errorf("expected cause to be an AppError, got %v", errors.Unwrap(err))
 	}
 }
 
