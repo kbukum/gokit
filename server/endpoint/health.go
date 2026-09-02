@@ -16,32 +16,32 @@ type HealthChecker func(ctx context.Context) []component.Health
 // Health returns a handler that reports service health including component statuses.
 func Health(serviceName string, checker HealthChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		status := "healthy"
+		status := string(component.StatusHealthy)
 		var components []component.Health
 
 		if checker != nil {
 			components = checker(c.Request.Context())
 			for _, ch := range components {
 				if ch.Status == component.StatusUnhealthy {
-					status = "unhealthy"
+					status = string(component.StatusUnhealthy)
 					break
 				}
-				if ch.Status == component.StatusDegraded && status != "unhealthy" {
-					status = "degraded"
+				if ch.Status == component.StatusDegraded && status != string(component.StatusUnhealthy) {
+					status = string(component.StatusDegraded)
 				}
 			}
 		}
 
 		httpStatus := http.StatusOK
-		if status == "unhealthy" {
+		if status == string(component.StatusUnhealthy) {
 			httpStatus = http.StatusServiceUnavailable
 		}
 
-		c.JSON(httpStatus, gin.H{
-			"status":     status,
-			"service":    serviceName,
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"components": components,
+		c.JSON(httpStatus, HealthResponse{
+			Status:     status,
+			Service:    serviceName,
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			Components: components,
 		})
 	}
 }

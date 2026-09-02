@@ -76,10 +76,10 @@ func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 		Timeout:        cfg.Timeout,
 		Auth:           cfg.Auth,
 		TLS:            cfg.TLS,
-		Headers:        cfg.Headers,
-		Retry:          cfg.Retry,
-		CircuitBreaker: cfg.CircuitBreaker,
-		RateLimiter:    cfg.RateLimiter,
+		DefaultHeaders: cfg.Headers,
+	}
+	if cfg.ResiliencePolicy != nil {
+		restCfg.ResiliencePolicy = cfg.ResiliencePolicy
 	}
 	client, err := rest.New(restCfg)
 	if err != nil {

@@ -37,21 +37,17 @@ type Config struct {
 	// TLS configures TLS settings for the HTTP transport.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 
-	// Headers are default headers applied to all requests.
-	Headers map[string]string `yaml:"headers" mapstructure:"headers"`
+	// DefaultHeaders are default headers applied to all requests.
+	DefaultHeaders map[string]string `yaml:"default_headers" mapstructure:"default_headers"`
 
-	// Retry configures retry behavior. Nil disables retry.
-	Retry *resilience.RetryConfig `yaml:"-" mapstructure:"-"`
+	// ResiliencePolicy configures the retry / circuit-breaker / rate-limiter
+	// stack applied to buffered requests. Nil disables resilience. It is loaded
+	// from the shared resilience.Policy config vocabulary.
+	ResiliencePolicy *resilience.Policy `yaml:"resilience_policy" mapstructure:"resilience_policy"`
 
-	// CircuitBreaker configures circuit breaker behavior. Nil disables it.
-	CircuitBreaker *resilience.CircuitBreakerConfig `yaml:"-" mapstructure:"-"`
-
-	// RateLimiter configures rate limiting. Nil disables it.
-	RateLimiter *resilience.RateLimiterConfig `yaml:"-" mapstructure:"-"`
-
-	// MaxResponseBytes bounds the buffered response body read into memory by Do.
+	// MaxResponseBodyBytes bounds the buffered response body read into memory by Do.
 	// Defaults to 10 MiB. Streaming responses (DoStream) are not affected.
-	MaxResponseBytes int64 `yaml:"max_response_bytes" mapstructure:"max_response_bytes"`
+	MaxResponseBodyBytes int64 `yaml:"max_response_body_bytes" mapstructure:"max_response_body_bytes"`
 }
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
@@ -59,8 +55,8 @@ func (c *Config) ApplyDefaults() {
 	if c.Timeout <= 0 {
 		c.Timeout = defaultTimeout
 	}
-	if c.MaxResponseBytes <= 0 {
-		c.MaxResponseBytes = defaultMaxResponseBytes
+	if c.MaxResponseBodyBytes <= 0 {
+		c.MaxResponseBodyBytes = defaultMaxResponseBytes
 	}
 }
 

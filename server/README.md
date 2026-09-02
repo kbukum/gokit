@@ -34,7 +34,7 @@ defer comp.Stop(ctx)
 | Symbol | Description |
 |---|---|
 | `Server` | Wraps Gin engine + `http.ServeMux` with h2c |
-| `Config` | Host, Port, timeouts, max body size, CORS, Docs |
+| `Config` | Host, Port, timeouts, max body bytes, h2c toggle, CORS, Docs |
 | `DocsConfig` | Controls API documentation serving (`docs.enabled`) |
 | `Component` | Managed lifecycle — `Start`, `Stop`, `Health` |
 | `New(cfg, log)` | Create a server instance |

@@ -12,6 +12,7 @@ import (
 	"github.com/kbukum/gokit/authz"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/inference"
+	"github.com/kbukum/gokit/resilience"
 )
 
 const servingProtocol = "kserve-v2-http"
@@ -53,11 +54,13 @@ func NewProvider(cfg Config, options ...Option) (*Provider, error) {
 	client := opts.httpClient
 	if client == nil {
 		httpCfg := httpclient.Config{
-			Name:    cfg.Name,
-			BaseURL: strings.TrimRight(cfg.BaseURL, "/"),
-			Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second,
-			Headers: cfg.Headers,
-			Retry:   opts.retry,
+			Name:           cfg.Name,
+			BaseURL:        strings.TrimRight(cfg.BaseURL, "/"),
+			Timeout:        time.Duration(cfg.TimeoutSeconds) * time.Second,
+			DefaultHeaders: cfg.Headers,
+		}
+		if opts.retry != nil {
+			httpCfg.ResiliencePolicy = resilience.NewPolicy().WithRetry(*opts.retry)
 		}
 		if strings.TrimSpace(cfg.BearerToken) != "" {
 			httpCfg.Auth = &httpclient.AuthConfig{Type: httpclient.AuthBearer, Token: cfg.BearerToken}

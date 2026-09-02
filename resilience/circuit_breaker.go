@@ -43,15 +43,15 @@ var ErrCircuitOpen = apperr.New(apperr.ErrCodeServiceUnavailable, "circuit break
 // CircuitBreakerConfig configures a circuit breaker.
 type CircuitBreakerConfig struct {
 	// Name identifies this circuit breaker for metrics/logging.
-	Name string
+	Name string `json:"name,omitempty" yaml:"name" mapstructure:"name"`
 	// MaxFailures is the number of failures before opening the circuit.
-	MaxFailures int
+	MaxFailures int `json:"max_failures,omitempty" yaml:"max_failures" mapstructure:"max_failures"`
 	// Timeout is how long to wait before transitioning from open to half-open.
-	Timeout time.Duration
+	Timeout time.Duration `json:"timeout,omitempty" yaml:"timeout" mapstructure:"timeout"`
 	// HalfOpenMaxCalls is the number of calls allowed in half-open state.
-	HalfOpenMaxCalls int
+	HalfOpenMaxCalls int `json:"half_open_max_calls,omitempty" yaml:"half_open_max_calls" mapstructure:"half_open_max_calls"`
 	// OnStateChange is called when state changes.
-	OnStateChange func(name string, from, to State)
+	OnStateChange func(name string, from, to State) `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 // DefaultCircuitBreakerConfig returns sensible defaults.

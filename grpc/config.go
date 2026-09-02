@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
@@ -21,13 +22,13 @@ type KeepaliveConfig struct {
 type Config struct {
 	// Name identifies this adapter instance (used by provider.Provider interface).
 	Name string `mapstructure:"name"`
-	// Addr is the gRPC server target (e.g., "localhost:50051"). Set statically via config
+	// Target is the gRPC server target (e.g., "localhost:50051"). Set statically via config
 	// or dynamically via discovery (endpoint.HostPort()).
-	Addr string `mapstructure:"addr"`
-	// MaxRecvMsgSize is the maximum message size the client can receive (bytes).
-	MaxRecvMsgSize int `mapstructure:"max_recv_msg_size"`
-	// MaxSendMsgSize is the maximum message size the client can send (bytes).
-	MaxSendMsgSize int `mapstructure:"max_send_msg_size"`
+	Target string `mapstructure:"target"`
+	// MaxMessageSize is the maximum message size the client can receive (bytes).
+	MaxMessageSize int `mapstructure:"max_message_size"`
+	// MaxSendMessageSize is the maximum message size the client can send (bytes).
+	MaxSendMessageSize int `mapstructure:"max_send_message_size"`
 	// Keepalive holds keepalive configuration.
 	Keepalive KeepaliveConfig `mapstructure:"keepalive"`
 	// TLS holds TLS configuration.
@@ -35,29 +36,34 @@ type Config struct {
 	TLS *security.TLSConfig `mapstructure:"tls"`
 	// Enabled controls whether gRPC is active.
 	Enabled bool `mapstructure:"enabled"`
-	// CallTimeout is the default timeout for unary RPCs.
-	CallTimeout time.Duration `mapstructure:"call_timeout"`
+	// Timeout is the default timeout for unary RPCs.
+	Timeout time.Duration `mapstructure:"timeout"`
+	// ResiliencePolicy configures the retry / circuit-breaker / rate-limiter
+	// stack applied to unary RPCs via the client resilience interceptor. Nil
+	// applies timeout-only behavior derived from Timeout. It uses the shared
+	// resilience.Policy vocabulary, the same block understood by the httpclient
+	// transport.
+	ResiliencePolicy *resilience.Policy `mapstructure:"resilience_policy"`
 }
 
 const (
-	defaultAddr             = "localhost:50051"
-	defaultMaxRecvMsgSize   = 4 * 1024 * 1024 // 4 MB
-	defaultMaxSendMsgSize   = 4 * 1024 * 1024 // 4 MB
+	defaultTarget           = "localhost:50051"
+	defaultMaxMessageSize   = 4 * 1024 * 1024 // 4 MB
 	defaultKeepaliveTime    = 30 * time.Second
 	defaultKeepaliveTimeout = 10 * time.Second
-	defaultCallTimeout      = 30 * time.Second
+	defaultTimeout          = 30 * time.Second
 )
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
-	if c.Addr == "" {
-		c.Addr = defaultAddr
+	if c.Target == "" {
+		c.Target = defaultTarget
 	}
-	if c.MaxRecvMsgSize == 0 {
-		c.MaxRecvMsgSize = defaultMaxRecvMsgSize
+	if c.MaxMessageSize == 0 {
+		c.MaxMessageSize = defaultMaxMessageSize
 	}
-	if c.MaxSendMsgSize == 0 {
-		c.MaxSendMsgSize = defaultMaxSendMsgSize
+	if c.MaxSendMessageSize == 0 {
+		c.MaxSendMessageSize = defaultMaxMessageSize
 	}
 	if c.Keepalive.Time == 0 {
 		c.Keepalive.Time = defaultKeepaliveTime
@@ -65,21 +71,21 @@ func (c *Config) ApplyDefaults() {
 	if c.Keepalive.Timeout == 0 {
 		c.Keepalive.Timeout = defaultKeepaliveTimeout
 	}
-	if c.CallTimeout == 0 {
-		c.CallTimeout = defaultCallTimeout
+	if c.Timeout == 0 {
+		c.Timeout = defaultTimeout
 	}
 }
 
 // Validate checks that the configuration is valid.
 func (c *Config) Validate() error {
-	if c.Addr == "" {
-		return fmt.Errorf("grpc: addr must not be empty")
+	if c.Target == "" {
+		return fmt.Errorf("grpc: target must not be empty")
 	}
-	if c.MaxRecvMsgSize <= 0 {
-		return fmt.Errorf("grpc: max_recv_msg_size must be positive, got %d", c.MaxRecvMsgSize)
+	if c.MaxMessageSize <= 0 {
+		return fmt.Errorf("grpc: max_message_size must be positive, got %d", c.MaxMessageSize)
 	}
-	if c.MaxSendMsgSize <= 0 {
-		return fmt.Errorf("grpc: max_send_msg_size must be positive, got %d", c.MaxSendMsgSize)
+	if c.MaxSendMessageSize <= 0 {
+		return fmt.Errorf("grpc: max_send_message_size must be positive, got %d", c.MaxSendMessageSize)
 	}
 	if c.TLS != nil {
 		if err := c.TLS.Validate(); err != nil {
@@ -91,5 +97,5 @@ func (c *Config) Validate() error {
 
 // Address returns the dial target for gRPC connections.
 func (c *Config) Address() string {
-	return c.Addr
+	return c.Target
 }

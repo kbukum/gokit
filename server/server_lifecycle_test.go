@@ -110,8 +110,14 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 	if cfg.IdleTimeout != 60 {
 		t.Errorf("idle_timeout: want 60, got %d", cfg.IdleTimeout)
 	}
-	if cfg.MaxBodySize != "10MB" {
-		t.Errorf("max_body_size: want 10MB, got %s", cfg.MaxBodySize)
+	if cfg.MaxBodyBytes != 10*1024*1024 {
+		t.Errorf("max_body_bytes: want %d, got %d", 10*1024*1024, cfg.MaxBodyBytes)
+	}
+	if cfg.ShutdownTimeout != 5 {
+		t.Errorf("shutdown_timeout: want 5, got %d", cfg.ShutdownTimeout)
+	}
+	if !cfg.H2CEnabled() {
+		t.Error("enable_h2c: want true by default")
 	}
 }
 
@@ -159,13 +165,25 @@ func TestConfig_Validate_NegativeTimeouts(t *testing.T) {
 		{"read", server.Config{ReadTimeout: -1}},
 		{"write", server.Config{WriteTimeout: -1}},
 		{"idle", server.Config{IdleTimeout: -1}},
+		{"request", server.Config{RequestTimeout: -1}},
+		{"shutdown", server.Config{ShutdownTimeout: -1}},
+		{"max_body_bytes", server.Config{MaxBodyBytes: -1}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.cfg.Validate(); err == nil {
-				t.Error("expected validation error for negative timeout")
+				t.Error("expected validation error for negative value")
 			}
 		})
+	}
+}
+
+func TestConfig_H2CExplicitFalse(t *testing.T) {
+	disabled := false
+	cfg := &server.Config{EnableH2C: &disabled}
+	cfg.ApplyDefaults()
+	if cfg.H2CEnabled() {
+		t.Error("enable_h2c: explicit false must stay disabled after ApplyDefaults")
 	}
 }
 
@@ -633,6 +651,66 @@ func TestHandle_SequentialMultipleRegistration(t *testing.T) {
 
 	if got := len(s.Mounts()); got != 10 {
 		t.Errorf("mounts after registration: want 10, got %d", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Request timeout scoping
+// ---------------------------------------------------------------------------
+
+// The per-request timeout must wrap REST routes only. RPC/streaming handlers
+// mounted via Handle() must keep a flushable writer, because http.TimeoutHandler
+// buffers the response and cannot flush or hijack.
+
+func TestApplyMiddleware_RequestTimeout_SkipsMountedHandlers(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.RequestTimeout = 1
+	s := server.New(cfg, logging.NewDefault("test"))
+
+	var mountFlushable bool
+	s.Handle("/svc.S/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, mountFlushable = w.(http.Flusher)
+		w.WriteHeader(http.StatusOK)
+	}))
+	s.ApplyMiddleware()
+
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/svc.S/")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status: want 200, got %d", resp.StatusCode)
+	}
+	if !mountFlushable {
+		t.Error("mounted RPC handler must receive a flushable writer (not wrapped by the request timeout)")
+	}
+}
+
+func TestApplyMiddleware_RequestTimeout_AppliesToREST(t *testing.T) {
+	cfg := newTestConfig()
+	cfg.RequestTimeout = 1
+	s := server.New(cfg, logging.NewDefault("test"))
+
+	s.GinEngine().GET("/slow", func(c *gin.Context) {
+		<-c.Request.Context().Done()
+		c.String(http.StatusOK, "done")
+	})
+	s.ApplyMiddleware()
+
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/slow")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("REST slow handler: want 503 from request timeout, got %d", resp.StatusCode)
 	}
 }
 

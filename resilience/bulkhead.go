@@ -20,17 +20,17 @@ var (
 // BulkheadConfig configures a bulkhead.
 type BulkheadConfig struct {
 	// Name identifies this bulkhead for metrics/logging.
-	Name string
+	Name string `json:"name,omitempty" yaml:"name" mapstructure:"name"`
 	// MaxConcurrent is the maximum number of concurrent calls.
-	MaxConcurrent int
+	MaxConcurrent int `json:"max_concurrent,omitempty" yaml:"max_concurrent" mapstructure:"max_concurrent"`
 	// MaxWait is how long to wait for a slot. 0 means fail immediately.
-	MaxWait time.Duration
+	MaxWait time.Duration `json:"max_wait,omitempty" yaml:"max_wait" mapstructure:"max_wait"`
 	// OnReject is called when a request is rejected.
-	OnReject func(name string)
+	OnReject func(name string) `json:"-" yaml:"-" mapstructure:"-"`
 	// OnAcquire is called when a slot is acquired.
-	OnAcquire func(name string)
+	OnAcquire func(name string) `json:"-" yaml:"-" mapstructure:"-"`
 	// OnRelease is called when a slot is released.
-	OnRelease func(name string)
+	OnRelease func(name string) `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 // DefaultBulkheadConfig returns sensible defaults.

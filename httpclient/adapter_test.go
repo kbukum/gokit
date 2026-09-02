@@ -99,8 +99,8 @@ func TestClient_Do_DefaultHeaders(t *testing.T) {
 	defer srv.Close()
 
 	c, err := New(Config{
-		BaseURL: srv.URL,
-		Headers: map[string]string{"X-Custom": "value"},
+		BaseURL:        srv.URL,
+		DefaultHeaders: map[string]string{"X-Custom": "value"},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -292,8 +292,8 @@ func TestClient_Do_Retry(t *testing.T) {
 	retryCfg.RetryIf = IsRetryable
 
 	c, err := New(Config{
-		BaseURL: srv.URL,
-		Retry:   &retryCfg,
+		BaseURL:          srv.URL,
+		ResiliencePolicy: resilience.NewPolicy().WithRetry(retryCfg),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -321,8 +321,8 @@ func TestClient_Do_CircuitBreaker(t *testing.T) {
 	cbCfg.MaxFailures = 2
 
 	c, err := New(Config{
-		BaseURL:        srv.URL,
-		CircuitBreaker: &cbCfg,
+		BaseURL:          srv.URL,
+		ResiliencePolicy: resilience.NewPolicy().WithCircuitBreaker(cbCfg),
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -771,9 +771,9 @@ func TestBuildRequest_RequestHeaders_OverrideDefaults(t *testing.T) {
 	defer ts.Close()
 
 	a, err := New(Config{
-		BaseURL: ts.URL,
-		Timeout: 5 * time.Second,
-		Headers: map[string]string{"X-Custom": "default"},
+		BaseURL:        ts.URL,
+		Timeout:        5 * time.Second,
+		DefaultHeaders: map[string]string{"X-Custom": "default"},
 	})
 	if err != nil {
 		t.Fatal(err)

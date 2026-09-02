@@ -35,8 +35,8 @@ func TestAdapter_IsAvailable_WithCB(t *testing.T) {
 	cfg := resilience.DefaultCircuitBreakerConfig("test-cb")
 	cfg.MaxFailures = 1
 	a, err := New(Config{
-		BaseURL:        "http://localhost",
-		CircuitBreaker: &cfg,
+		BaseURL:          "http://localhost",
+		ResiliencePolicy: resilience.NewPolicy().WithCircuitBreaker(cfg),
 	})
 	if err != nil {
 		t.Fatal(err)

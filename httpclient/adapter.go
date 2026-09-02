@@ -20,8 +20,6 @@ type Adapter struct {
 	httpClient *http.Client
 	baseURL    string
 	config     Config
-	cb         *resilience.CircuitBreaker
-	rl         *resilience.RateLimiter
 }
 
 // New creates a new HTTP adapter with the given configuration.
@@ -53,12 +51,11 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 		config:  cfg,
 	}
 
-	// Initialize resilience components
-	if cfg.CircuitBreaker != nil {
-		c.cb = resilience.NewCircuitBreaker(*cfg.CircuitBreaker)
-	}
-	if cfg.RateLimiter != nil {
-		c.rl = resilience.NewRateLimiter(*cfg.RateLimiter)
+	// A retry block loaded from config carries no predicate (RetryIf is not
+	// serializable). Default it to the HTTP-aware IsRetryable so config-driven
+	// clients retry only genuinely retryable failures rather than every error.
+	if p := c.config.ResiliencePolicy; p != nil && p.Retry != nil && p.Retry.RetryIf == nil {
+		p.Retry.RetryIf = IsRetryable
 	}
 
 	// Apply options
@@ -69,14 +66,14 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 	return c, nil
 }
 
-// Do executes an HTTP request and returns the complete response.
+// Do executes an HTTP request and returns the complete response. Buffered
+// requests run through the configured resilience.Policy — rate limiter, bulkhead,
+// circuit breaker, timeout, and retry, in that order — so every configured
+// primitive is honored in the policy's documented sequence.
 func (c *Adapter) Do(ctx context.Context, req Request) (*Response, error) {
-	if c.config.Retry != nil {
-		return resilience.Retry(ctx, *c.config.Retry, func() (*Response, error) {
-			return c.doOnce(ctx, req)
-		})
-	}
-	return c.doOnce(ctx, req)
+	return resilience.Execute(ctx, c.config.ResiliencePolicy, func(callCtx context.Context) (*Response, error) {
+		return c.executeRequest(callCtx, req)
+	})
 }
 
 // DoStream executes an HTTP request and returns a streaming response.
@@ -89,33 +86,6 @@ func (c *Adapter) DoStream(ctx context.Context, req Request) (*StreamResponse, e
 // Unwrap returns the underlying *http.Client for advanced use cases.
 func (c *Adapter) Unwrap() *http.Client {
 	return c.httpClient
-}
-
-// doOnce executes a single HTTP request with CB and rate limiter.
-func (c *Adapter) doOnce(ctx context.Context, req Request) (*Response, error) {
-	execute := func() (*Response, error) {
-		return c.executeRequest(ctx, req)
-	}
-
-	// Apply rate limiter
-	if c.rl != nil {
-		if err := c.rl.Wait(ctx); err != nil {
-			return nil, err
-		}
-	}
-
-	// Apply circuit breaker
-	if c.cb != nil {
-		var resp *Response
-		err := c.cb.Execute(func() error {
-			var execErr error
-			resp, execErr = execute()
-			return execErr
-		})
-		return resp, err
-	}
-
-	return execute()
 }
 
 // executeRequest builds and sends the HTTP request.
@@ -136,12 +106,12 @@ func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, e
 
 	// Read one byte past the cap so an oversized body is rejected explicitly
 	// rather than silently truncated to a shorter, possibly still-decodable one.
-	body, err := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes+1))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBodyBytes+1))
 	if err != nil {
 		return nil, NewConnectionError(fmt.Errorf("read response body: %w", err))
 	}
-	if int64(len(body)) > c.config.MaxResponseBytes {
-		return nil, NewResponseTooLargeError(c.config.MaxResponseBytes)
+	if int64(len(body)) > c.config.MaxResponseBodyBytes {
+		return nil, NewResponseTooLargeError(c.config.MaxResponseBodyBytes)
 	}
 
 	result := &Response{
@@ -180,7 +150,7 @@ func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, e
 
 	// Check for error status before starting to stream
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBytes))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBodyBytes))
 		_ = resp.Body.Close()
 		return nil, ClassifyStatusCode(resp.StatusCode, body)
 	}
@@ -236,7 +206,7 @@ func (c *Adapter) buildRequest(ctx context.Context, req Request) (*http.Request,
 	}
 
 	// Apply default headers
-	for k, v := range c.config.Headers {
+	for k, v := range c.config.DefaultHeaders {
 		httpReq.Header.Set(k, v)
 	}
 
@@ -303,10 +273,7 @@ func (c *Adapter) Name() string {
 
 // IsAvailable checks if the adapter is ready to handle requests (implements provider.Provider).
 func (c *Adapter) IsAvailable(_ context.Context) bool {
-	if c.cb != nil {
-		return c.cb.State() != resilience.StateOpen
-	}
-	return true
+	return c.config.ResiliencePolicy.IsAvailable()
 }
 
 // --- provider.RequestResponse[Request, *Response] interface ---

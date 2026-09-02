@@ -74,9 +74,9 @@ func TestDiscoveryConnectionFactory_NewConn_Success(t *testing.T) {
 	})
 
 	cfg := grpccfg.Config{
-		Addr:           "localhost:50055",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
+		Target:             "localhost:50055",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
 	}
 	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
 	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
@@ -101,14 +101,14 @@ func TestDiscoveryConnectionFactory_NewConn_InvalidConfig(t *testing.T) {
 		Weight:  1,
 	})
 
-	cfg := grpccfg.Config{MaxRecvMsgSize: -1}
+	cfg := grpccfg.Config{MaxMessageSize: -1}
 	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
 	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
 
 	conn, err := factory.NewConn("orders")
 	require.Error(t, err)
 	require.Nil(t, conn)
-	require.Contains(t, err.Error(), "max_recv_msg_size must be positive")
+	require.Contains(t, err.Error(), "max_message_size must be positive")
 }
 
 // TestDiscoveryConnectionFactory_NewConn_TLS covers the TLS transport-credentials
@@ -125,10 +125,10 @@ func TestDiscoveryConnectionFactory_NewConn_TLS(t *testing.T) {
 	})
 
 	cfg := grpccfg.Config{
-		Addr:           "localhost:50055",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
-		TLS:            &security.TLSConfig{SkipVerify: true, ServerName: "orders.internal"},
+		Target:             "localhost:50055",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
+		TLS:                &security.TLSConfig{SkipVerify: true, ServerName: "orders.internal"},
 	}
 	dc := discovery.NewClient(mockDisc, discovery.ClientConfig{CacheTTL: 30}, log)
 	factory := NewDiscoveryConnectionFactory(dc, cfg, log)
@@ -145,9 +145,9 @@ func TestNewDiscoveryConnectionFactory(t *testing.T) {
 	mockDisc := NewMockDiscovery()
 
 	cfg := grpccfg.Config{
-		Addr:           "localhost:50051",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
+		Target:             "localhost:50051",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
 	}
 
 	// Create a real discovery.Client wrapping the mock
@@ -165,9 +165,9 @@ func TestDiscoveryConnectionFactoryDiscoveryFailure(t *testing.T) {
 	mockDisc := NewMockDiscovery().WithFailure(true)
 
 	cfg := grpccfg.Config{
-		Addr:           "localhost:50051",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
+		Target:             "localhost:50051",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
 	}
 	cfg.ApplyDefaults()
 
@@ -224,9 +224,9 @@ func BenchmarkDiscoveryConnectionFactoryNewConn(b *testing.B) {
 	mockDisc.WithService("bench-service", inst)
 
 	cfg := grpccfg.Config{
-		Addr:           "localhost:50051",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
+		Target:             "localhost:50051",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
 	}
 	cfg.ApplyDefaults()
 

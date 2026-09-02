@@ -348,7 +348,7 @@ func TestBuilder_Close_IsIdempotent(t *testing.T) {
 
 func validGRPCConfig() grpccfg.Config {
 	c := grpccfg.Config{
-		Addr:    "unused-but-required-by-validate",
+		Target:  "unused-but-required-by-validate",
 		Enabled: true,
 	}
 	c.ApplyDefaults()
@@ -386,9 +386,9 @@ func TestNewResolverConnectionFactory_NewConn_CustomScheme(t *testing.T) {
 
 // Invalid grpc.Config (empty Addr) must surface as error from buildDialOptions.
 func TestNewResolverConnectionFactory_InvalidConfig_Errors(t *testing.T) {
-	bad := grpccfg.Config{Enabled: true} // Addr empty → ApplyDefaults sets default; force invalid via MaxRecvMsgSize<0
+	bad := grpccfg.Config{Enabled: true} // Addr empty → ApplyDefaults sets default; force invalid via MaxMessageSize<0
 	bad.ApplyDefaults()
-	bad.MaxRecvMsgSize = -1 // invalid
+	bad.MaxMessageSize = -1 // invalid
 
 	f := resdisc.NewResolverConnectionFactory(&fakeDiscovery{}, bad, testLogger())
 	_, err := f.NewConn("svc")

@@ -20,14 +20,15 @@ import (
 
 // Server is a unified HTTP server backed by Gin with optional support for additional http.Handler mounts (e.g. Connect-Go / gRPC) on the same port.
 type Server struct {
-	httpServer *http.Server
-	engine     *gin.Engine
-	mux        *http.ServeMux
-	config     Config
-	log        *logging.Logger
-	mounts     []MountedHandler      // tracked for summary display
-	listener   net.Listener          // set by Start(); used by ListenAddr()
-	secHeaders middleware.Middleware // built once from config; no-op when disabled
+	httpServer  *http.Server
+	engine      *gin.Engine
+	mux         *http.ServeMux
+	restHandler http.Handler // Gin engine, optionally wrapped with the per-request timeout
+	config      Config
+	log         *logging.Logger
+	mounts      []MountedHandler      // tracked for summary display
+	listener    net.Listener          // set by Start(); used by ListenAddr()
+	secHeaders  middleware.Middleware // built once from config; no-op when disabled
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -56,9 +57,6 @@ func New(cfg *Config, log *logging.Logger) *Server {
 	engine := gin.New()
 	mux := http.NewServeMux()
 
-	// Mount Gin as the fallback handler on the root mux.
-	mux.Handle("/", engine)
-
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 
 	// Configure HTTP/2 protocol support based on TLS setting.
@@ -76,7 +74,7 @@ func New(cfg *Config, log *logging.Logger) *Server {
 			// We don't panic in constructors.
 			tlsConfig = nil
 		}
-	} else {
+	} else if cfg.H2CEnabled() {
 		// No TLS: enable unencrypted HTTP/2 (h2c) for gRPC without TLS.
 		protocols.SetUnencryptedHTTP2(true)
 	}
@@ -109,7 +107,7 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		}
 	}
 
-	return &Server{
+	srv := &Server{
 		httpServer: httpServer,
 		engine:     engine,
 		mux:        mux,
@@ -117,6 +115,14 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		log:        log,
 		secHeaders: secHeaders,
 	}
+	// Default the REST handler to the bare Gin engine; ApplyMiddleware may wrap
+	// it with the per-request timeout. Mount an indirection at "/" so that later
+	// wrapping is visible without re-registering the (single-use) mux pattern.
+	srv.restHandler = engine
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		srv.restHandler.ServeHTTP(w, r)
+	}))
+	return srv
 }
 
 // GinEngine returns the underlying Gin engine for route registration.
@@ -187,11 +193,16 @@ func (s *Server) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop gracefully shuts down the server with a 5-second deadline.
+// Stop gracefully shuts down the server, waiting up to the configured
+// shutdown_timeout for in-flight requests to drain.
 func (s *Server) Stop(ctx context.Context) error {
 	s.log.DebugCtx(ctx, "Shutting down HTTP server")
 
-	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	timeout := time.Duration(s.config.ShutdownTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	shutdownCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
@@ -232,7 +243,19 @@ func readSpecFile(path string) ([]byte, error) {
 
 // ApplyMiddleware applies the standard middleware stack at the handler level
 // so it covers ALL routes — both Gin REST endpoints and ConnectRPC services mounted via Handle().
+//
+// The optional per-request timeout is the exception: it wraps only the Gin
+// (REST) engine, not the RPC/streaming handlers mounted via Handle(), because
+// http.TimeoutHandler buffers the response and cannot flush or hijack — which
+// would break streaming RPCs and h2c.
 func (s *Server) ApplyMiddleware() {
+	// Wrap the REST engine (and only the REST engine) with the per-request
+	// timeout. RPC/streaming mounts keep serving through the bare mux.
+	s.restHandler = s.engine
+	if s.config.RequestTimeout > 0 {
+		s.restHandler = middleware.Timeout(time.Duration(s.config.RequestTimeout) * time.Second)(s.engine)
+	}
+
 	stack := []middleware.Middleware{
 		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
@@ -245,8 +268,8 @@ func (s *Server) ApplyMiddleware() {
 		middleware.CORS(&s.config.CORS),
 		middleware.RequestLogger(s.log),
 	)
-	if s.config.MaxBodySize != "" {
-		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodySize))
+	if s.config.MaxBodyBytes > 0 {
+		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodyBytes))
 	}
 
 	s.httpServer.Handler = middleware.Chain(stack...)(s.mux)

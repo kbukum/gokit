@@ -71,15 +71,14 @@ func buildDialOptions(cfg grpccfg.Config, log *logging.Logger) ([]grpc.DialOptio
 		}),
 		// Message size limits
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(cfg.MaxRecvMsgSize),
-			grpc.MaxCallSendMsgSize(cfg.MaxSendMsgSize),
+			grpc.MaxCallRecvMsgSize(cfg.MaxMessageSize),
+			grpc.MaxCallSendMsgSize(cfg.MaxSendMessageSize),
 		),
 	)
 
 	// Unary interceptors: logging → resilience
 	unary := []grpc.UnaryClientInterceptor{interceptor.UnaryClientLoggingInterceptor(log)}
-	if cfg.CallTimeout > 0 {
-		policy := resilience.NewPolicy().WithTimeoutIfUnset(cfg.CallTimeout)
+	if policy := resiliencePolicyFor(cfg); policy != nil {
 		unary = append(unary, interceptor.UnaryClientResilienceInterceptor(policy))
 	}
 	opts = append(opts,
@@ -91,6 +90,26 @@ func buildDialOptions(cfg grpccfg.Config, log *logging.Logger) ([]grpc.DialOptio
 	)
 
 	return opts, nil
+}
+
+// resiliencePolicyFor returns the unary resilience policy for a client config.
+// An explicit ResiliencePolicy is used as-is (its retry block, if present,
+// defaults to the gRPC-aware IsRetryable predicate); otherwise a timeout-only
+// policy is derived from Timeout, and nil is returned when neither is set.
+func resiliencePolicyFor(cfg grpccfg.Config) *resilience.Policy {
+	if p := cfg.ResiliencePolicy; p != nil {
+		if p.Retry != nil && p.Retry.RetryIf == nil {
+			p.Retry.RetryIf = interceptor.IsRetryable
+		}
+		if p.Timeout == 0 && cfg.Timeout > 0 {
+			p.WithTimeoutIfUnset(cfg.Timeout)
+		}
+		return p
+	}
+	if cfg.Timeout > 0 {
+		return resilience.NewPolicy().WithTimeoutIfUnset(cfg.Timeout)
+	}
+	return nil
 }
 
 // transportCredentials returns the appropriate transport credentials.
