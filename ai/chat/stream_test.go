@@ -31,3 +31,25 @@ func TestStreamEventsAndErrors(t *testing.T) {
 		t.Fatalf("stream error unwrap failed: %#v", events[8])
 	}
 }
+
+// TestChatStreamEventTypeWireStrings locks the canonical event-type wire
+// strings for chat-layer stream events.
+func TestChatStreamEventTypeWireStrings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		event ai.StreamEvent
+		want  string
+	}{
+		{chat.MessageStart{}, "message.start"},
+		{chat.ReasoningDelta{}, "reasoning.delta"},
+		{chat.ToolUseStart{}, "tool_use.start"},
+		{chat.ToolUseDelta{}, "tool_use.delta"},
+		{chat.ToolUseStop{}, "tool_use.stop"},
+		{chat.MessageStop{}, "message.stop"},
+	}
+	for _, tc := range cases {
+		if got := tc.event.EventType(); got != tc.want {
+			t.Errorf("%T.EventType() = %q, want %q", tc.event, got, tc.want)
+		}
+	}
+}

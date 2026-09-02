@@ -1,5 +1,7 @@
 package media
 
+import "encoding/json"
+
 // Type is the broad media category a piece of content belongs to.
 //
 // It covers the video/audio/image categories
@@ -32,6 +34,37 @@ func (t Type) String() string {
 		return "text"
 	default:
 		return "unknown"
+	}
+}
+
+// MarshalJSON encodes Type as its lowercase string name (video/audio/image/text/unknown),
+// never the underlying integer, so the wire form is stable and cross-kit compatible.
+func (t Type) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.String())
+}
+
+// UnmarshalJSON decodes a lowercase Type name. Any unrecognized value decodes to Unknown.
+func (t *Type) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*t = parseType(s)
+	return nil
+}
+
+func parseType(s string) Type {
+	switch s {
+	case "video":
+		return Video
+	case "audio":
+		return Audio
+	case "image":
+		return Image
+	case "text":
+		return Text
+	default:
+		return Unknown
 	}
 }
 

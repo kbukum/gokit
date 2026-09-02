@@ -8,6 +8,7 @@ import (
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/semconv"
+	"github.com/kbukum/gokit/schema"
 )
 
 func TestContentPartVariants(t *testing.T) {
@@ -144,5 +145,23 @@ func TestSemconvOperations(t *testing.T) {
 		if got != want[name] {
 			t.Fatalf("%s = %q, want %q", name, got, want[name])
 		}
+	}
+}
+
+func TestToolSpecJSONIncludesOutputSchema(t *testing.T) {
+	t.Parallel()
+	spec := ai.ToolSpec{
+		Name:         "search",
+		Description:  "search docs",
+		InputSchema:  schema.JSON{"type": "object"},
+		OutputSchema: schema.JSON{"type": "string"},
+	}
+	data, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	const want = `{"name":"search","description":"search docs","input_schema":{"type":"object"},"output_schema":{"type":"string"}}`
+	if string(data) != want {
+		t.Fatalf("got %s want %s", data, want)
 	}
 }

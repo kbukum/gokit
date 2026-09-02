@@ -2,6 +2,7 @@ package stage
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/kbukum/gokit/stream"
@@ -9,10 +10,10 @@ import (
 
 type keyedSource struct {
 	Source[row]
-	key string
+	key json.RawMessage
 }
 
-func (k keyedSource) CacheKey() string { return k.key }
+func (k keyedSource) CacheKey() json.RawMessage { return k.key }
 
 func TestSliceSource(t *testing.T) {
 	t.Parallel()
@@ -38,19 +39,35 @@ func TestSliceSourceMaxItems(t *testing.T) {
 	}
 }
 
-func TestCacheKeyDefaultsToName(t *testing.T) {
+func TestCacheKeyDefaultsToNameObject(t *testing.T) {
 	t.Parallel()
 	src := NewSliceSource("plain", []row{})
-	if CacheKey(src) != "plain" {
-		t.Fatalf("CacheKey = %q; want plain", CacheKey(src))
+	if got, want := string(CacheKey(src)), `{"name":"plain"}`; got != want {
+		t.Fatalf("CacheKey = %s; want %s", got, want)
 	}
 }
 
 func TestCacheKeyUsesKeyed(t *testing.T) {
 	t.Parallel()
-	src := keyedSource{Source: NewSliceSource("plain", []row{}), key: "fingerprint"}
-	if CacheKey[row](src) != "fingerprint" {
-		t.Fatalf("CacheKey = %q; want fingerprint", CacheKey[row](src))
+	src := keyedSource{Source: NewSliceSource("plain", []row{}), key: json.RawMessage(`{"fp":"x"}`)}
+	if got, want := string(CacheKey[row](src)), `{"fp":"x"}`; got != want {
+		t.Fatalf("CacheKey = %s; want %s", got, want)
+	}
+}
+
+func TestConfigMarshalsObject(t *testing.T) {
+	t.Parallel()
+	got := string(Config(map[string]string{"dir": "/data"}))
+	if want := `{"dir":"/data"}`; got != want {
+		t.Fatalf("Config = %s; want %s", got, want)
+	}
+}
+
+func TestConfigFailsClosedOnUnmarshalable(t *testing.T) {
+	t.Parallel()
+	// A value that cannot be marshaled yields a nil lineage, which never satisfies a cache hit.
+	if got := Config(make(chan int)); got != nil {
+		t.Fatalf("Config(unmarshalable) = %s; want nil", got)
 	}
 }
 

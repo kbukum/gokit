@@ -516,6 +516,21 @@ func TestAnnotations_ExecutionHint(t *testing.T) {
 	}
 }
 
+func TestExecutionHint_ResolvedFallsBackToBackend(t *testing.T) {
+	cases := map[tool.ExecutionHint]tool.ExecutionHint{
+		"":                    tool.ExecutionBackend,
+		tool.ExecutionUI:      tool.ExecutionUI,
+		tool.ExecutionHybrid:  tool.ExecutionHybrid,
+		tool.ExecutionBackend: tool.ExecutionBackend,
+		"totally-unknown":     tool.ExecutionBackend,
+	}
+	for hint, want := range cases {
+		if got := hint.Resolved(); got != want {
+			t.Errorf("ExecutionHint(%q).Resolved() = %q, want %q", string(hint), got, want)
+		}
+	}
+}
+
 func TestRegistry_FilterByExecutionHint(t *testing.T) {
 	reg := tool.NewRegistry()
 

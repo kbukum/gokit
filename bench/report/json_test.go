@@ -12,7 +12,6 @@ import (
 func sampleRunResult() *bench.RunResult {
 	return &bench.RunResult{
 		ID:        "test-run-001",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
 		Tag:       "v1-test",
 		Duration:  2 * time.Second,
@@ -308,7 +307,6 @@ func TestJSONReporterEmptyResult(t *testing.T) {
 	r := JSON()
 	result := &bench.RunResult{
 		ID:        "empty-run",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Now(),
 	}
 

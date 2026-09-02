@@ -125,7 +125,6 @@ func (p *FakeProvider) Execute(ctx context.Context, req embedding.EmbedRequest) 
 	}
 	resp := embedding.EmbedResponse{Model: req.Model}
 	if len(embeddings) > 0 {
-		resp.Embedding = embeddings[0]
 		resp.Embeddings = embeddings
 	}
 	return resp, nil
@@ -160,7 +159,7 @@ func (p *FakeProvider) vector(ctx context.Context, text string) ([]float32, erro
 	if err != nil {
 		return nil, err
 	}
-	return resp.Embedding.Vector, nil
+	return resp.Embeddings[0].Vector, nil
 }
 
 // inputText extracts text from a text embedding input. Non-text inputs (image, audio, video, or a nil text pointer) are rejected with an error, mirroring the real [inmem.Provider] so this reusable double cannot mask a consumer that sends an unsupported modality.

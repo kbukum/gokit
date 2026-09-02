@@ -228,14 +228,9 @@ func providerError(err error) error {
 	}
 }
 
-// orderedVectors returns the response vectors reindexed to input order. It requires exactly n embeddings whose [embedding.Embedding.Index] values form a permutation of 0..n-1, so a provider that reorders, duplicates, or drops an index is rejected as an untrusted-response failure rather than silently mispairing prediction and reference vectors. Each vector must also be non-empty with a [embedding.Embedding.Dimensions] equal to its length, so a zero-value or dimension-inconsistent embedding (for example an entry an adapter preallocated for a missing response item) is rejected rather than scored as a spurious similarity. A single-embedding response shape carries no meaningful index and is accepted only for a single input.
+// orderedVectors returns the response vectors reindexed to input order. It requires exactly n embeddings whose [embedding.Embedding.Index] values form a permutation of 0..n-1, so a provider that reorders, duplicates, or drops an index is rejected as an untrusted-response failure rather than silently mispairing prediction and reference vectors. Each vector must also be non-empty with a [embedding.Embedding.Dimensions] equal to its length, so a zero-value or dimension-inconsistent embedding (for example an entry an adapter preallocated for a missing response item) is rejected rather than scored as a spurious similarity.
 func orderedVectors(resp embedding.EmbedResponse, n int) ([][]float32, error) {
-	byIndex := true
 	embeds := resp.Embeddings
-	if len(embeds) == 0 && n == 1 {
-		embeds = []embedding.Embedding{resp.Embedding}
-		byIndex = false
-	}
 	if len(embeds) != n {
 		return nil, invalidResponse(fmt.Sprintf("provider returned %d embeddings for %d inputs", len(embeds), n))
 	}
@@ -243,10 +238,7 @@ func orderedVectors(resp embedding.EmbedResponse, n int) ([][]float32, error) {
 	out := make([][]float32, n)
 	seen := make([]bool, n)
 	for i := range embeds {
-		idx := i
-		if byIndex {
-			idx = embeds[i].Index
-		}
+		idx := embeds[i].Index
 		if idx < 0 || idx >= n || seen[idx] {
 			return nil, invalidResponse(fmt.Sprintf("provider returned out-of-range or duplicate embedding index %d for %d inputs", idx, n))
 		}

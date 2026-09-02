@@ -2,10 +2,12 @@ package bench
 
 import "time"
 
-// RunResult holds the complete output of a benchmark run.
+// RunResult holds the complete output of a benchmark run. It serializes with the shared cross-kit
+// envelope — a top-level `$schema` URL and `version` (see [SchemaURL] and [SchemaVersion]) — so a
+// run persisted by any sibling kit decodes in the others. The envelope keys are emitted from the
+// package constants at marshal time rather than stored on the struct.
 type RunResult struct {
 	ID        string                  `json:"id"`
-	Schema    string                  `json:"schema"`
 	Timestamp time.Time               `json:"timestamp"`
 	Tag       string                  `json:"tag,omitempty"`
 	Duration  time.Duration           `json:"duration_ms"`

@@ -24,6 +24,9 @@ type MessageStart struct {
 
 func (MessageStart) StreamEventMarker() {}
 
+// EventType returns the canonical wire string for a message start.
+func (MessageStart) EventType() string { return ai.EventTypeMessageStart }
+
 // ToolUseStart is emitted when a tool-use block begins.
 type ToolUseStart struct {
 	Index int    `json:"index"`
@@ -32,6 +35,9 @@ type ToolUseStart struct {
 }
 
 func (ToolUseStart) StreamEventMarker() {}
+
+// EventType returns the canonical wire string for a tool-use start.
+func (ToolUseStart) EventType() string { return ai.EventTypeToolUseStart }
 
 // ToolUseDelta carries incremental tool input JSON.
 type ToolUseDelta struct {
@@ -43,6 +49,9 @@ type ToolUseDelta struct {
 
 func (ToolUseDelta) StreamEventMarker() {}
 
+// EventType returns the canonical wire string for a tool-use delta.
+func (ToolUseDelta) EventType() string { return ai.EventTypeToolUseDelta }
+
 // ToolUseStop is emitted when a tool-use block completes.
 type ToolUseStop struct {
 	Index int    `json:"index"`
@@ -51,12 +60,18 @@ type ToolUseStop struct {
 
 func (ToolUseStop) StreamEventMarker() {}
 
+// EventType returns the canonical wire string for a tool-use stop.
+func (ToolUseStop) EventType() string { return ai.EventTypeToolUseStop }
+
 // ReasoningDelta carries incremental reasoning content.
 type ReasoningDelta struct {
 	Text string `json:"text"`
 }
 
 func (ReasoningDelta) StreamEventMarker() {}
+
+// EventType returns the canonical wire string for a reasoning delta.
+func (ReasoningDelta) EventType() string { return ai.EventTypeReasoningDelta }
 
 // MessageStop is emitted when the streaming response completes.
 type MessageStop struct {
@@ -65,6 +80,9 @@ type MessageStop struct {
 }
 
 func (MessageStop) StreamEventMarker() {}
+
+// EventType returns the canonical wire string for a message stop.
+func (MessageStop) EventType() string { return ai.EventTypeMessageStop }
 
 var (
 	_ ai.StreamEvent = MessageStart{}

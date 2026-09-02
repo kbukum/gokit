@@ -260,6 +260,7 @@ func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
 		WithClock[string](clock),
+		WithIDSuffix[string](func() string { return "fixedsfx" }),
 		WithTag[string]("deterministic"),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
@@ -271,8 +272,8 @@ func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
 		t.Fatalf("Run() error: %v", err)
 	}
 
-	if result.ID != "deterministic_20260823-043054" {
-		t.Errorf("ID = %q, want %q", result.ID, "deterministic_20260823-043054")
+	if result.ID != "deterministic_20260823-043054_fixedsfx" {
+		t.Errorf("ID = %q, want %q", result.ID, "deterministic_20260823-043054_fixedsfx")
 	}
 	if !result.Timestamp.Equal(clock.Now()) {
 		t.Errorf("Timestamp = %s, want %s", result.Timestamp, clock.Now())

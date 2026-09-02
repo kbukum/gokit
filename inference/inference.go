@@ -39,10 +39,32 @@ type StreamingInference interface {
 type Descriptor struct {
 	Name            string          `json:"name"`
 	Description     string          `json:"description"`
-	ServingProtocol string          `json:"serving_protocol"`
+	ServingProtocol ServingProtocol `json:"serving_protocol"`
 	Capabilities    CapabilityHints `json:"capabilities,omitempty"`
 	Available       bool            `json:"available"`
 }
+
+// ServingProtocol identifies the model-serving runtime protocol an adapter speaks.
+type ServingProtocol string
+
+const (
+	// ServingKServeV2HTTP is KServe v2 over HTTP (Triton).
+	ServingKServeV2HTTP ServingProtocol = "kserve_v2_http"
+	// ServingKServeV2GRPC is KServe v2 over gRPC.
+	ServingKServeV2GRPC ServingProtocol = "kserve_v2_grpc"
+	// ServingVLLMRest is the vLLM REST generation API.
+	ServingVLLMRest ServingProtocol = "vllm_rest"
+	// ServingTGIRest is the Hugging Face Text Generation Inference REST API.
+	ServingTGIRest ServingProtocol = "tgi_rest"
+	// ServingBentoML is the BentoML serving API.
+	ServingBentoML ServingProtocol = "bento_ml"
+	// ServingONNXRuntime is the ONNX Runtime serving API.
+	ServingONNXRuntime ServingProtocol = "onnx_runtime"
+	// ServingTFServing is the TensorFlow Serving API.
+	ServingTFServing ServingProtocol = "tf_serving"
+	// ServingCustom is a custom or in-memory runtime protocol.
+	ServingCustom ServingProtocol = "custom"
+)
 
 // PredictRequest carries arbitrary inputs.
 // Inputs is the canonical payload (a map of named inputs to typed values supporting tensors, strings, byte blobs, and nested structs);
@@ -63,11 +85,13 @@ type PredictResponse struct {
 	Outputs  map[string]Value  `json:"outputs"`
 	Model    ai.Model          `json:"model"`
 	Status   PredictStatus     `json:"status"`
-	Usage    Usage             `json:"usage,omitempty"`
+	Reason   string            `json:"reason,omitempty"`
+	Usage    Usage             `json:"usage,omitzero"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // PredictStatus reports normalized serving status.
+// An error or partial-success response carries an explanatory [PredictResponse.Reason].
 type PredictStatus string
 
 const (

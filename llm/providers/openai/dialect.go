@@ -57,8 +57,14 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
+	if req.TopP != nil {
+		body["top_p"] = *req.TopP
+	}
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
+	}
+	if len(req.StopSequences) > 0 {
+		body["stop"] = req.StopSequences
 	}
 	if len(req.Tools) > 0 {
 		body["tools"] = encodeTools(req.Tools)

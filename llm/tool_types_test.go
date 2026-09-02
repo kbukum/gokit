@@ -25,13 +25,24 @@ func TestStreamToolCallSerialization(t *testing.T) {
 }
 
 func TestToolResultToMessage(t *testing.T) {
-	result := ToolResult{ToolCallID: "call_abc123", Content: `{"temperature":22}`, IsError: false}
+	result := ToolResult{ToolUseID: "call_abc123", Content: `{"temperature":22}`, IsError: false}
 	msg := result.ToMessage()
 	if msg.Role() != string(chat.RoleTool) {
 		t.Fatalf("Role() = %q", msg.Role())
 	}
-	if msg.Content != result.Content || msg.ToolUseID != result.ToolCallID {
+	if msg.Content != result.Content || msg.ToolUseID != result.ToolUseID {
 		t.Fatalf("msg=%+v result=%+v", msg, result)
+	}
+}
+
+func TestToolResultJSONUsesToolUseID(t *testing.T) {
+	data, err := json.Marshal(ToolResult{ToolUseID: "call_abc123", Content: "ok"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	const want = `{"tool_use_id":"call_abc123","content":"ok"}`
+	if string(data) != want {
+		t.Fatalf("got %s want %s", data, want)
 	}
 }
 

@@ -11,16 +11,21 @@ import (
 // JSON (un)marshaling to emit and restore the millisecond form rather than the default
 // nanosecond integer.
 
-// MarshalJSON encodes the run result with its Duration as whole milliseconds under duration_ms.
+// MarshalJSON encodes the run result with the shared cross-kit envelope — the `$schema` URL and
+// `version` from the package constants — and its Duration as whole milliseconds under duration_ms.
 func (r RunResult) MarshalJSON() ([]byte, error) {
 	type alias RunResult
 	return json.Marshal(struct {
+		Schema  string `json:"$schema"`
+		Version string `json:"version"`
 		alias
 		Duration int64 `json:"duration_ms"`
-	}{alias: alias(r), Duration: r.Duration.Milliseconds()})
+	}{Schema: SchemaURL, Version: SchemaVersion, alias: alias(r), Duration: r.Duration.Milliseconds()})
 }
 
 // UnmarshalJSON decodes the run result, restoring Duration from the millisecond duration_ms field.
+// The `$schema` and `version` envelope keys are accepted and ignored: they are fixed package
+// constants, not per-run data.
 func (r *RunResult) UnmarshalJSON(data []byte) error {
 	type alias RunResult
 	aux := struct {

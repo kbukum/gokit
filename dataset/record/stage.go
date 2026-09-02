@@ -3,6 +3,7 @@ package record
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 
 	"github.com/kbukum/gokit/dataset/payload"
@@ -32,7 +33,9 @@ func NewFileSource(name, path string, format Format, limits payload.Limits) *Fil
 func (s *FileSource) Name() string { return s.name }
 
 // CacheKey fingerprints the source by format and path.
-func (s *FileSource) CacheKey() string { return s.format.String() + ":" + s.path }
+func (s *FileSource) CacheKey() json.RawMessage {
+	return stage.Config(map[string]string{"format": s.format.String(), "path": s.path})
+}
 
 // Stream reads the file lazily, surfacing any read
 // or parse error on the first pull rather than at construction time.

@@ -140,13 +140,13 @@ func (c *Collector[T]) plan(man *manifest.Manifest, result *Result) []workItem[T
 				continue
 			case manifest.CachePartial:
 				stage.Resume(src, status.Stats.FetchedOffset, status.Stats.Total)
-				work = append(work, workItem[T]{index: i, src: src, cacheKey: key, resume: status.Stats})
+				work = append(work, workItem[T]{index: i, src: src, config: key, resume: status.Stats})
 				c.progress.OnSourceStart(i, src.Name(), ceiling, hasMax)
 				continue
 			case manifest.CacheNotCached:
 			}
 		}
-		work = append(work, workItem[T]{index: i, src: src, cacheKey: key})
+		work = append(work, workItem[T]{index: i, src: src, config: key})
 		c.progress.OnSourceStart(i, src.Name(), ceiling, hasMax)
 	}
 	return work
@@ -209,7 +209,7 @@ func (c *Collector[T]) handleEvent(ctx context.Context, man *manifest.Manifest, 
 	if ev.outcome == outcomeFailed {
 		c.progress.OnSourceError(ev.index, ev.name, ev.err)
 		if ev.resumable && ev.stats.Total > 0 {
-			man.MarkPartial(ev.name, ev.cacheKey, ev.stats)
+			man.MarkPartial(ev.name, ev.config, ev.stats)
 		}
 		return ev.err
 	}
@@ -218,7 +218,7 @@ func (c *Collector[T]) handleEvent(ctx context.Context, man *manifest.Manifest, 
 		c.progress.OnSourceError(ev.index, ev.name, err)
 		return err
 	}
-	man.MarkDone(ev.name, ev.cacheKey, ev.stats)
+	man.MarkDone(ev.name, ev.config, ev.stats)
 	c.recordStats(result, ev.name, ev.stats)
 	c.progress.OnSourceProgress(ev.index, ev.stats.Total)
 	c.progress.OnSourceDone(ev.index, ev.name, ev.stats)

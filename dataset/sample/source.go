@@ -2,6 +2,7 @@ package sample
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -40,7 +41,9 @@ func NewDirSource(name, dir string, label stage.Label, limits payload.Limits) *D
 func (s *DirSource) Name() string { return s.name }
 
 // CacheKey fingerprints the source by directory.
-func (s *DirSource) CacheKey() string { return "dir:" + s.dir }
+func (s *DirSource) CacheKey() json.RawMessage {
+	return stage.Config(map[string]string{"dir": s.dir})
+}
 
 // Stream lists the directory lazily, surfacing any listing or path-safety error on the first pull.
 func (s *DirSource) Stream(context.Context) *stream.Pipeline[Item] {

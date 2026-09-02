@@ -54,13 +54,13 @@ type streamChunk = streamwire.Chunk
 type streamToolCall = streamwire.ToolCall
 
 type ToolResult struct {
-	ToolCallID string `json:"tool_call_id"`
-	Content    string `json:"content"`
-	IsError    bool   `json:"is_error,omitempty"`
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	IsError   bool   `json:"is_error,omitempty"`
 }
 
 func (r ToolResult) ToMessage() chat.ToolResultMessage {
-	return chat.ToolResultMsg(r.ToolCallID, r.Content, r.IsError)
+	return chat.ToolResultMsg(r.ToolUseID, r.Content, r.IsError)
 }
 
 type ToolChoice struct {

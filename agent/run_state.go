@@ -25,6 +25,10 @@ func (a *Agent) buildResult(st runState, finalMsg chat.AssistantMessage, reason 
 	return &Result{Messages: st.msgs, FinalMessage: finalMsg, TotalUsage: st.usage, TurnCount: st.turns, StopReason: reason}
 }
 
+// budgetError enforces the shared limit-error precedence (D12), highest to lowest:
+// cancellation, wall-clock deadline (both via context), tool-call budget, token budget,
+// then turn budget. This mirrors the sibling kit's locked AgentLimitError ranking so a run
+// that trips several limits at once reports the same winning stop reason across kits.
 func (a *Agent) budgetError(ctx context.Context, state budgetState) error {
 	if err := ctx.Err(); err != nil {
 		return mapContextErr(ctx)
@@ -42,11 +46,12 @@ func (a *Agent) budgetError(ctx context.Context, state budgetState) error {
 }
 
 func mapContextErr(ctx context.Context) error {
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return ErrWallClockExceeded
-	}
+	// Cancellation outranks the wall-clock deadline (D12).
 	if errors.Is(ctx.Err(), context.Canceled) {
 		return ErrCancelled
+	}
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return ErrWallClockExceeded
 	}
 	return ctx.Err()
 }

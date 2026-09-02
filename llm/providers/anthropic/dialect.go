@@ -57,10 +57,17 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
 	}
+	if req.TopP != nil {
+		body["top_p"] = *req.TopP
+	}
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
 	} else {
 		body["max_tokens"] = 4096 // Anthropic requires max_tokens
+	}
+
+	if len(req.StopSequences) > 0 {
+		body["stop_sequences"] = req.StopSequences
 	}
 
 	if len(req.Tools) > 0 {

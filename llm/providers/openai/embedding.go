@@ -176,7 +176,7 @@ func (p *EmbeddingProvider) embedOne(ctx context.Context, req embedding.EmbedReq
 	if result.Usage.TotalTokens > result.Usage.PromptTokens {
 		usage.OutputTokens = result.Usage.TotalTokens - result.Usage.PromptTokens
 	}
-	return embedding.EmbedResponse{Embedding: embeddings[0], Embeddings: embeddings, Model: p.responseModel(req.Model), Usage: usage}, nil
+	return embedding.EmbedResponse{Embeddings: embeddings, Model: p.responseModel(req.Model), Usage: usage}, nil
 }
 
 func (p *EmbeddingProvider) modelName(model ai.Model) string {

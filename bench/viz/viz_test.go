@@ -11,7 +11,6 @@ import (
 func makeTestResult() *bench.RunResult {
 	return &bench.RunResult{
 		ID:        "run-viz-001",
-		Schema:    bench.SchemaVersion,
 		Timestamp: time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC),
 		Tag:       "viz-test",
 		Duration:  3 * time.Second,

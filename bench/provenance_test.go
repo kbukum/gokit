@@ -57,6 +57,32 @@ func TestRunProvenanceRoundTrips(t *testing.T) {
 	}
 }
 
+// TestJudgeProvenanceSortedByMetric locks D2: the judges array is sorted by metric name, so the
+// stored provenance is deterministic regardless of the suite order the judge metrics ran in
+// (mirroring the sibling rskit BTreeMap-keyed judges).
+func TestJudgeProvenanceSortedByMetric(t *testing.T) {
+	t.Parallel()
+
+	judge := func(name string) MetricResult {
+		return MetricResult{
+			Name: name,
+			Detail: map[string]any{
+				DetailJudgeModel:         "gpt-4o-mini",
+				DetailJudgePromptVersion: "1.0.0",
+			},
+		}
+	}
+	// Supplied out of order: relevance, then coherence.
+	judges := judgeProvenance([]MetricResult{judge("relevance"), judge("coherence")})
+	if len(judges) != 2 {
+		t.Fatalf("judgeProvenance returned %d entries, want 2", len(judges))
+	}
+	if judges[0].Metric != "coherence" || judges[1].Metric != "relevance" {
+		t.Errorf("judges order = [%q, %q], want sorted [coherence, relevance]",
+			judges[0].Metric, judges[1].Metric)
+	}
+}
+
 func TestWithProvenanceProbeIgnoresNilAndTypedNil(t *testing.T) {
 	t.Parallel()
 
@@ -255,6 +281,7 @@ func benchProvenanceRunner(t *testing.T, probe ProvenanceProbe) (first, second *
 		r := NewBenchRunner(
 			WithClock[string](clock),
 			WithTag[string]("prov"),
+			WithIDSuffix[string](func() string { return "fixedsfx" }),
 			WithSeed[string](99),
 			WithProvenanceProbe[string](probe),
 			WithMetrics(&simpleMetric{name: "accuracy"}),

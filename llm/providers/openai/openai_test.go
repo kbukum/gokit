@@ -333,8 +333,11 @@ func TestEmbeddingProvider_Embed(t *testing.T) {
 	if resp.Model.Provider != ai.ProviderOpenAI || resp.Model.Name != "text-embedding-3-small" {
 		t.Fatalf("model=%+v", resp.Model)
 	}
-	if resp.Embedding.Dimensions != 3 || resp.Embedding.Vector[0] < 0.09 || resp.Embedding.Vector[0] > 0.11 {
-		t.Fatalf("embedding=%+v", resp.Embedding)
+	if len(resp.Embeddings) != 1 {
+		t.Fatalf("embeddings=%d, want 1", len(resp.Embeddings))
+	}
+	if got := resp.Embeddings[0]; got.Dimensions != 3 || got.Vector[0] < 0.09 || got.Vector[0] > 0.11 {
+		t.Fatalf("embedding=%+v", got)
 	}
 	if resp.Usage.InputTokens != 2 {
 		t.Fatalf("usage=%+v", resp.Usage)

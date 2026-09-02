@@ -85,7 +85,7 @@ func (p *Provider) Descriptor() inference.Descriptor {
 	return inference.Descriptor{
 		Name:            Kind,
 		Description:     "Hugging Face TGI OpenAI-compatible text-generation inference adapter",
-		ServingProtocol: "openai-v1-completions",
+		ServingProtocol: inference.ServingTGIRest,
 		Capabilities:    inference.CapabilityHints{SupportsStreaming: true},
 		Available:       true,
 	}

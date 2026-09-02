@@ -71,7 +71,7 @@ func (e *Echo) Descriptor() inference.Descriptor {
 	return inference.Descriptor{
 		Name:            Kind,
 		Description:     "in-memory echo inference adapter",
-		ServingProtocol: "in-memory",
+		ServingProtocol: inference.ServingCustom,
 		Available:       true,
 	}
 }

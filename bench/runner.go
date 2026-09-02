@@ -174,7 +174,6 @@ func (r *BenchRunner[L]) Run(ctx context.Context, dataset *DatasetLoader[L]) (*R
 
 	result := &RunResult{
 		ID:        runID,
-		Schema:    SchemaVersion,
 		Timestamp: start,
 		Tag:       r.cfg.tag,
 		Duration:  r.cfg.clock.Now().Sub(start),

@@ -124,7 +124,7 @@ func TestProviderHealth(t *testing.T) {
 		t.Fatalf("Health = %+v", health)
 	}
 	desc := provider.Descriptor()
-	if desc.ServingProtocol != "kserve-v2-http" || !desc.Available {
+	if desc.ServingProtocol != inference.ServingKServeV2HTTP || !desc.Available {
 		t.Fatalf("descriptor = %+v", desc)
 	}
 }
