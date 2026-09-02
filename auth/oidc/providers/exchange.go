@@ -40,7 +40,7 @@ type tokenResponse struct {
 func ExchangeCode(ctx context.Context, req ExchangeRequest) (*tokenResponse, error) {
 	redirectURI := req.Options.RedirectURI
 	if redirectURI == "" {
-		redirectURI = req.Config.RedirectURL
+		redirectURI = req.Config.RedirectURI
 	}
 
 	data := url.Values{
@@ -90,7 +90,7 @@ func ExchangeCode(ctx context.Context, req ExchangeRequest) (*tokenResponse, err
 func ExchangeJSON(ctx context.Context, req ExchangeRequest) (*tokenResponse, error) {
 	redirectURI := req.Options.RedirectURI
 	if redirectURI == "" {
-		redirectURI = req.Config.RedirectURL
+		redirectURI = req.Config.RedirectURI
 	}
 
 	clientIDKey := "client_id"

@@ -149,10 +149,10 @@ func TestInstrumentHandler_PassesThrough(t *testing.T) {
 	}
 
 	wrapped := InstrumentHandler("t", "g", handler)
-	msg := messaging.Message{Topic: "t", Key: "k1", Value: []byte("v"), Headers: map[string]string{}}
+	msg := messaging.Message{Topic: "t", Key: "k1", Payload: []byte("v"), Headers: map[string]string{}}
 	_ = wrapped(context.Background(), msg)
 
-	if received.Key != "k1" || string(received.Value) != "v" {
+	if received.Key != "k1" || string(received.Payload) != "v" {
 		t.Errorf("handler received wrong message: %+v", received)
 	}
 }

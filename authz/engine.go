@@ -10,30 +10,30 @@ type Attributes map[string]string
 
 // Subject is the caller being authorized.
 type Subject struct {
-	ID         string
-	Roles      []string
-	Attributes Attributes
+	ID         string     `json:"id"`
+	Roles      []string   `json:"roles"`
+	Attributes Attributes `json:"attributes"`
 }
 
 // Resource is the target being accessed.
 type Resource struct {
-	Type       string
-	ID         string
-	Attributes Attributes
+	Type       string     `json:"resource_type"`
+	ID         string     `json:"id"`
+	Attributes Attributes `json:"attributes"`
 }
 
 // Request is the canonical authorization input.
 type Request struct {
-	Subject  Subject
-	Resource Resource
-	Action   string
-	Context  Attributes
+	Subject  Subject    `json:"subject"`
+	Resource Resource   `json:"resource"`
+	Action   string     `json:"action"`
+	Context  Attributes `json:"context"`
 }
 
 // Permission is an RBAC grant with wildcard-capable resource/action matching.
 type Permission struct {
-	Resource string
-	Action   string
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
 }
 
 // Matches reports whether the permission covers the requested resource/action.
@@ -43,9 +43,9 @@ func (p Permission) Matches(resource, action string) bool {
 
 // Role defines an RBAC role and any inherited parent roles.
 type Role struct {
-	Name        string
-	Inherits    []string
-	Permissions []Permission
+	Name        string       `json:"name"`
+	Inherits    []string     `json:"inherits"`
+	Permissions []Permission `json:"permissions"`
 }
 
 // Effect determines the result of a policy match.
@@ -76,27 +76,27 @@ const (
 
 // Condition compares a source attribute against literal values or another attribute.
 type Condition struct {
-	Source        AttributeSource
-	Key           string
-	Operator      Operator
-	Values        []string
-	CompareSource AttributeSource
-	CompareKey    string
+	Source        AttributeSource `json:"source"`
+	Key           string          `json:"key"`
+	Operator      Operator        `json:"operator"`
+	Values        []string        `json:"values"`
+	CompareSource AttributeSource `json:"compare_source,omitempty"`
+	CompareKey    string          `json:"compare_key,omitempty"`
 }
 
 // Policy is an ABAC rule evaluated alongside RBAC grants.
 type Policy struct {
-	Name       string
-	Effect     Effect
-	Actions    []string
-	Resources  []string
-	Conditions []Condition
+	Name       string      `json:"name"`
+	Effect     Effect      `json:"effect"`
+	Actions    []string    `json:"actions"`
+	Resources  []string    `json:"resources"`
+	Conditions []Condition `json:"conditions"`
 }
 
 // Decision is the authorization result.
 type Decision struct {
-	Allowed bool
-	Reason  string
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason"`
 }
 
 // Engine evaluates RBAC role grants and ABAC policies with explicit default-deny semantics.

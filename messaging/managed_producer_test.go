@@ -157,7 +157,7 @@ func TestManagedProducer_SendBeforeStartErrors(t *testing.T) {
 
 	p := &recordingProducer{}
 	mp := newTestManagedProducer(p, nil)
-	err := mp.Send(context.Background(), Message{Topic: "t", Value: []byte("v")})
+	err := mp.Send(context.Background(), Message{Topic: "t", Payload: []byte("v")})
 	if err == nil {
 		t.Fatal("Send before Start did not error")
 	}
@@ -176,7 +176,7 @@ func TestManagedProducer_SendAfterStartDelegatesAndRecordsMetrics(t *testing.T) 
 	if err := mp.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := mp.Send(ctx, Message{Topic: "t", Value: []byte("v")}); err != nil {
+	if err := mp.Send(ctx, Message{Topic: "t", Payload: []byte("v")}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if p.sentCount() != 1 {

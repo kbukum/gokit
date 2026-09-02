@@ -120,10 +120,10 @@ func TestProducerConvenienceMethodsRouteThroughWriter(t *testing.T) {
 	p := newTestProducer(w, 1, 0)
 	ctx := context.Background()
 
-	if err := p.Send(ctx, messaging.Message{Topic: "orders", Key: "k", Value: []byte("send")}); err != nil {
+	if err := p.Send(ctx, messaging.Message{Topic: "orders", Key: "k", Payload: []byte("send")}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
-	if err := p.SendBatch(ctx, []messaging.Message{{Topic: "orders", Value: []byte("a")}, {Topic: "orders", Value: []byte("b")}}); err != nil {
+	if err := p.SendBatch(ctx, []messaging.Message{{Topic: "orders", Payload: []byte("a")}, {Topic: "orders", Payload: []byte("b")}}); err != nil {
 		t.Fatalf("SendBatch: %v", err)
 	}
 	if err := p.PublishJSON(ctx, "orders", "jk", map[string]string{"id": "1"}); err != nil {

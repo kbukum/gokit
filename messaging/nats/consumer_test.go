@@ -48,7 +48,7 @@ func TestConsumerConsumeDeliversHeadersAndStopsOnContext(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Consume = %v, want context.Canceled", err)
 	}
-	if got.Topic != "orders" || got.Key != "k" || string(got.Value) != "payload" || got.Headers["x"] != "y" {
+	if got.Topic != "orders" || got.Key != "k" || string(got.Payload) != "payload" || got.Headers["x"] != "y" {
 		t.Fatalf("delivered message = %#v", got)
 	}
 }

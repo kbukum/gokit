@@ -78,7 +78,41 @@ func (m *mockStorage) List(_ context.Context, prefix string) ([]FileInfo, error)
 	return files, nil
 }
 
-// --- UploadProvider tests ---
+func (m *mockStorage) Head(_ context.Context, path string) (FileInfo, error) {
+	if m.failOn == "head" {
+		return FileInfo{}, fmt.Errorf("mock head error")
+	}
+	v, ok := m.data[path]
+	if !ok {
+		return FileInfo{}, fmt.Errorf("not found: %s", path)
+	}
+	return FileInfo{Path: path, Size: int64(len(v)), LastModified: time.Now()}, nil
+}
+
+func (m *mockStorage) Copy(_ context.Context, srcPath, dstPath string) error {
+	if m.failOn == "copy" {
+		return fmt.Errorf("mock copy error")
+	}
+	v, ok := m.data[srcPath]
+	if !ok {
+		return fmt.Errorf("not found: %s", srcPath)
+	}
+	m.data[dstPath] = append([]byte(nil), v...)
+	return nil
+}
+
+func (m *mockStorage) Rename(_ context.Context, srcPath, dstPath string) error {
+	if m.failOn == "rename" {
+		return fmt.Errorf("mock rename error")
+	}
+	v, ok := m.data[srcPath]
+	if !ok {
+		return fmt.Errorf("not found: %s", srcPath)
+	}
+	m.data[dstPath] = append([]byte(nil), v...)
+	delete(m.data, srcPath)
+	return nil
+}
 
 func TestUploadProvider_Name(t *testing.T) {
 	p := NewUploadProvider("s3-upload", newMockStorage())

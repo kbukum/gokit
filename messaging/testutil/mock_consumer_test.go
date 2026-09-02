@@ -34,8 +34,8 @@ func TestChannelConsumer_FeedAndConsume(t *testing.T) {
 	}()
 
 	c.Feed(
-		messaging.Message{Topic: "events", Key: "k1", Value: []byte("hello")},
-		messaging.Message{Topic: "events", Key: "k2", Value: []byte("world")},
+		messaging.Message{Topic: "events", Key: "k1", Payload: []byte("hello")},
+		messaging.Message{Topic: "events", Key: "k2", Payload: []byte("world")},
 	)
 
 	// Give the consumer time to process
@@ -46,11 +46,11 @@ func TestChannelConsumer_FeedAndConsume(t *testing.T) {
 	if len(received) != 2 {
 		t.Fatalf("received %d messages, want 2", len(received))
 	}
-	if string(received[0].Value) != "hello" {
-		t.Errorf("received[0].Value = %q, want hello", string(received[0].Value))
+	if string(received[0].Payload) != "hello" {
+		t.Errorf("received[0].Payload = %q, want hello", string(received[0].Payload))
 	}
-	if string(received[1].Value) != "world" {
-		t.Errorf("received[1].Value = %q, want world", string(received[1].Value))
+	if string(received[1].Payload) != "world" {
+		t.Errorf("received[1].Payload = %q, want world", string(received[1].Payload))
 	}
 }
 

@@ -68,7 +68,7 @@ func (d *DeadLetterProducer) Send(ctx context.Context, msg messaging.Message, or
 		RetryCount:    retryCount,
 		Timestamp:     time.Now().UTC(),
 		Headers:       redactHeaders(msg.Headers),
-		Payload:       summarizePayloadBytes(msg.Value),
+		Payload:       summarizePayloadBytes(msg.Payload),
 	}
 
 	dlqTopic := msg.Topic + d.suffix

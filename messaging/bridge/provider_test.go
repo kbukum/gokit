@@ -23,16 +23,16 @@ func TestProducerAsSink(t *testing.T) {
 			name:  "simple message",
 			topic: "orders",
 			msg: messaging.Message{
-				Key:   "k1",
-				Value: []byte("hello"),
+				Key:     "k1",
+				Payload: []byte("hello"),
 			},
 		},
 		{
 			name:  "empty value",
 			topic: "events",
 			msg: messaging.Message{
-				Key:   "k2",
-				Value: nil,
+				Key:     "k2",
+				Payload: nil,
 			},
 		},
 	}
@@ -62,8 +62,8 @@ func TestProducerAsSink(t *testing.T) {
 			if len(msgs) != 1 {
 				t.Fatalf("expected 1 message on topic %q, got %d", tt.topic, len(msgs))
 			}
-			if !bytes.Equal(msgs[0].Value, tt.msg.Value) {
-				t.Errorf("value = %q, want %q", msgs[0].Value, tt.msg.Value)
+			if !bytes.Equal(msgs[0].Payload, tt.msg.Payload) {
+				t.Errorf("value = %q, want %q", msgs[0].Payload, tt.msg.Payload)
 			}
 		})
 	}
@@ -139,8 +139,8 @@ func TestConsumerAsStream(t *testing.T) {
 		if !ok {
 			t.Fatal("Next() returned ok=false, want true")
 		}
-		if len(msg.Value) != 1 || msg.Value[0] != byte(i) {
-			t.Errorf("message %d value = %v, want [%d]", i, msg.Value, i)
+		if len(msg.Payload) != 1 || msg.Payload[0] != byte(i) {
+			t.Errorf("message %d value = %v, want [%d]", i, msg.Payload, i)
 		}
 	}
 }

@@ -29,7 +29,7 @@ func mockProviderConfig() ProviderConfig {
 	return ProviderConfig{
 		ClientID:     "test-client-id",
 		ClientSecret: "test-client-secret",
-		RedirectURL:  "http://localhost/callback",
+		RedirectURI:  "http://localhost/callback",
 	}
 }
 
@@ -110,7 +110,7 @@ func TestFullFlowTikTokLike(t *testing.T) {
 		ProviderConfig: ProviderConfig{
 			ClientID:     "tk-key",
 			ClientSecret: "tk-secret",
-			RedirectURL:  "http://test/callback",
+			RedirectURI:  "http://test/callback",
 			Scopes:       []string{"user.info.basic", "video.list"},
 		},
 		ProviderName:       "tiktok-mock",

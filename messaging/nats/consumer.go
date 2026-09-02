@@ -96,7 +96,7 @@ func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler
 		}
 		domain := messaging.Message{
 			Key:       headers["message-key"],
-			Value:     msg.Data,
+			Payload:   msg.Data,
 			Topic:     c.topic,
 			Timestamp: time.Now().UTC(),
 			Headers:   headers,

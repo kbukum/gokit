@@ -14,7 +14,7 @@ func FromKafkaMessage(msg kafkago.Message) messaging.Message {
 	}
 	return messaging.Message{
 		Key:       string(msg.Key),
-		Value:     msg.Value,
+		Payload:   msg.Value,
 		Topic:     msg.Topic,
 		Partition: msg.Partition,
 		Offset:    msg.Offset,
@@ -31,7 +31,7 @@ func ToKafkaMessage(m messaging.Message) kafkago.Message {
 	}
 	return kafkago.Message{
 		Key:       []byte(m.Key),
-		Value:     m.Value,
+		Value:     m.Payload,
 		Topic:     m.Topic,
 		Partition: m.Partition,
 		Offset:    m.Offset,

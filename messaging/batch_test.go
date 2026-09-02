@@ -30,12 +30,12 @@ func (p *stubProducer) PublishBinary(_ context.Context, topic, key string, data 
 	if p.err != nil {
 		return p.err
 	}
-	p.messages = append(p.messages, Message{Topic: topic, Key: key, Value: data})
+	p.messages = append(p.messages, Message{Topic: topic, Key: key, Payload: data})
 	return nil
 }
 
 func (p *stubProducer) Send(ctx context.Context, msg Message) error {
-	return p.PublishBinary(ctx, msg.Topic, msg.Key, msg.Value)
+	return p.PublishBinary(ctx, msg.Topic, msg.Key, msg.Payload)
 }
 
 func (p *stubProducer) SendBatch(ctx context.Context, messages []Message) error {
@@ -66,7 +66,7 @@ func TestBatchProducer_SizeTriggeredFlush(t *testing.T) {
 
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		if err := bp.Send(ctx, Message{Key: "k", Value: []byte("v")}); err != nil {
+		if err := bp.Send(ctx, Message{Key: "k", Payload: []byte("v")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -87,7 +87,7 @@ func TestBatchProducer_TimeTriggeredFlush(t *testing.T) {
 	defer bp.Close(context.Background())
 
 	ctx := context.Background()
-	if err := bp.Send(ctx, Message{Key: "k", Value: []byte("v")}); err != nil {
+	if err := bp.Send(ctx, Message{Key: "k", Payload: []byte("v")}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,7 +113,7 @@ func TestBatchProducer_ByteTriggeredFlush(t *testing.T) {
 	ctx := context.Background()
 	// 6 bytes each → second message should trigger flush at 12 bytes ≥ 10.
 	for i := 0; i < 2; i++ {
-		if err := bp.Send(ctx, Message{Key: "k", Value: []byte("123456")}); err != nil {
+		if err := bp.Send(ctx, Message{Key: "k", Payload: []byte("123456")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -134,7 +134,7 @@ func TestBatchProducer_CloseFlushesRemaining(t *testing.T) {
 
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		if err := bp.Send(ctx, Message{Key: "k", Value: []byte("v")}); err != nil {
+		if err := bp.Send(ctx, Message{Key: "k", Payload: []byte("v")}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -163,7 +163,7 @@ func TestBatchProducer_FlushExplicit(t *testing.T) {
 	defer bp.Close(context.Background())
 
 	ctx := context.Background()
-	_ = bp.Send(ctx, Message{Key: "k", Value: []byte("v")})
+	_ = bp.Send(ctx, Message{Key: "k", Payload: []byte("v")})
 
 	if err := bp.Flush(ctx); err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestBatchProducer_ConcurrentSend(t *testing.T) {
 	for i := 0; i < n; i++ {
 		go func() {
 			defer wg.Done()
-			if err := bp.Send(context.Background(), Message{Key: "k", Value: []byte("v")}); err != nil {
+			if err := bp.Send(context.Background(), Message{Key: "k", Payload: []byte("v")}); err != nil {
 				sendErr.Store(err)
 			}
 		}()
@@ -215,7 +215,7 @@ func TestBatchProducer_SendAfterCloseReturnsError(t *testing.T) {
 	bp := NewBatchProducer(sp, "topic", BatchConfig{MaxSize: 10, MaxWait: time.Hour})
 	_ = bp.Close(context.Background())
 
-	err := bp.Send(context.Background(), Message{Key: "k", Value: []byte("v")})
+	err := bp.Send(context.Background(), Message{Key: "k", Payload: []byte("v")})
 	if err == nil {
 		t.Error("expected error after Close, got nil")
 	}
@@ -229,7 +229,7 @@ func TestBatchProducer_ProducerErrorPropagated(t *testing.T) {
 	bp := NewBatchProducer(sp, "topic", BatchConfig{MaxSize: 1, MaxWait: time.Hour})
 	defer bp.Close(context.Background())
 
-	err := bp.Send(context.Background(), Message{Key: "k", Value: []byte("v")})
+	err := bp.Send(context.Background(), Message{Key: "k", Payload: []byte("v")})
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error = %v, want %v", err, sentinel)
 	}

@@ -12,5 +12,5 @@
 //	kfk.MockProducerClient().Messages() // returns all produced messages
 //
 //	// Access mock consumer that can be fed messages
-//	kfk.MockConsumerClient("my-topic").Feed(Message{Value: []byte("hello")})
+//	kfk.MockConsumerClient("my-topic").Feed(Message{Payload: []byte("hello")})
 package testutil

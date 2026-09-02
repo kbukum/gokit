@@ -13,7 +13,7 @@ func TestAuthURLWithPKCE(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURL: "http://test"})
+	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURI: "http://test"})
 	u := g.AuthURL("state", oidc.WithPKCE(pkce))
 
 	if !strings.Contains(u, "code_challenge=") {
@@ -27,7 +27,7 @@ func TestAuthURLWithPKCE(t *testing.T) {
 func TestAuthURLWithOverrides(t *testing.T) {
 	g := NewGoogle(ProviderConfig{
 		ClientID:    "id",
-		RedirectURL: "http://original",
+		RedirectURI: "http://original",
 		Scopes:      []string{"openid"},
 	})
 
@@ -46,7 +46,7 @@ func TestAuthURLWithOverrides(t *testing.T) {
 }
 
 func TestAuthURLWithNonce(t *testing.T) {
-	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURL: "http://test"})
+	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURI: "http://test"})
 	u := g.AuthURL("state", oidc.WithNonce("my-nonce"))
 
 	if !strings.Contains(u, "nonce=my-nonce") {
@@ -56,7 +56,7 @@ func TestAuthURLWithNonce(t *testing.T) {
 
 func TestAuthURLCustomClientIDParam(t *testing.T) {
 	p := NewGeneric(GenericConfig{
-		ProviderConfig: ProviderConfig{ClientID: "tk-key", RedirectURL: "http://test"},
+		ProviderConfig: ProviderConfig{ClientID: "tk-key", RedirectURI: "http://test"},
 		ProviderName:   "tiktok-like",
 		AuthEndpoint:   "https://example.com/auth",
 		ClientIDParam:  "client_key",
@@ -75,7 +75,7 @@ func TestAuthURLCustomScopeSeparator(t *testing.T) {
 	p := NewGeneric(GenericConfig{
 		ProviderConfig: ProviderConfig{
 			ClientID:    "id",
-			RedirectURL: "http://test",
+			RedirectURI: "http://test",
 			Scopes:      []string{"user.info.basic", "video.list"},
 		},
 		ProviderName:   "tiktok-like",

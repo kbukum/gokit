@@ -68,6 +68,33 @@ func (f *fakeStorage) URL(_ context.Context, path string) (string, error) {
 	return "mem://" + path, nil
 }
 
+func (f *fakeStorage) Head(_ context.Context, path string) (gostorage.FileInfo, error) {
+	data, ok := f.objects[path]
+	if !ok {
+		return gostorage.FileInfo{}, errors.New("not found: " + path)
+	}
+	return gostorage.FileInfo{Path: path, Size: int64(len(data))}, nil
+}
+
+func (f *fakeStorage) Copy(_ context.Context, srcPath, dstPath string) error {
+	data, ok := f.objects[srcPath]
+	if !ok {
+		return errors.New("not found: " + srcPath)
+	}
+	f.objects[dstPath] = bytes.Clone(data)
+	return nil
+}
+
+func (f *fakeStorage) Rename(_ context.Context, srcPath, dstPath string) error {
+	data, ok := f.objects[srcPath]
+	if !ok {
+		return errors.New("not found: " + srcPath)
+	}
+	f.objects[dstPath] = data
+	delete(f.objects, srcPath)
+	return nil
+}
+
 func (f *fakeStorage) List(_ context.Context, prefix string) ([]gostorage.FileInfo, error) {
 	if f.failList {
 		return nil, errors.New("list failed")

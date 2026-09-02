@@ -102,13 +102,13 @@ type SearchResult struct {
 // Value is a JSON-representable payload value (the documented opaque exception);
 // backends restrict it to supported scalar types where required.
 type FilterCondition struct {
-	Field string
-	Value any
+	Field string `json:"field"`
+	Value any    `json:"equals"`
 }
 
 // SearchFilter represents optional filters for search queries.
 type SearchFilter struct {
-	Must []FilterCondition
+	Must []FilterCondition `json:"must"`
 }
 
 // NewSearchFilter creates a new empty SearchFilter.

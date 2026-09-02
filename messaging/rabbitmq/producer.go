@@ -73,7 +73,7 @@ func (p *Producer) ensureChannelLocked() (rabbitChannel, error) {
 
 // Send writes a pre-built transport-agnostic message.
 func (p *Producer) Send(ctx context.Context, msg messaging.Message) error {
-	return p.publish(ctx, msg.Topic, msg.Value, headersWithMessageKey(msg.Headers, msg.Key))
+	return p.publish(ctx, msg.Topic, msg.Payload, headersWithMessageKey(msg.Headers, msg.Key))
 }
 
 // SendBatch writes pre-built messages in order.

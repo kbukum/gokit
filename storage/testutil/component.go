@@ -3,6 +3,8 @@ package testutil
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"sort"
@@ -20,6 +22,8 @@ type memFile struct {
 	data        []byte
 	contentType string
 	modTime     time.Time
+	checksum    string
+	metadata    map[string]string
 }
 
 // Component is a test storage component backed by an in-memory map.
@@ -103,9 +107,7 @@ func (c *Component) Snapshot(_ context.Context) (any, error) {
 	}
 	snap := make(map[string]*memFile, len(c.files))
 	for k, v := range c.files {
-		cp := *v
-		cp.data = append([]byte(nil), v.data...)
-		snap[k] = &cp
+		snap[k] = v.clone()
 	}
 	return snap, nil
 }
@@ -122,9 +124,7 @@ func (c *Component) Restore(_ context.Context, snap any) error {
 	}
 	c.files = make(map[string]*memFile, len(s))
 	for k, v := range s {
-		cp := *v
-		cp.data = append([]byte(nil), v.data...)
-		c.files[k] = &cp
+		c.files[k] = v.clone()
 	}
 	return nil
 }
@@ -138,7 +138,12 @@ func (c *Component) Upload(_ context.Context, path string, reader io.Reader) err
 	if err != nil {
 		return fmt.Errorf("read upload data: %w", err)
 	}
-	c.files[path] = &memFile{data: data, modTime: time.Now()}
+	sum := sha256.Sum256(data)
+	c.files[path] = &memFile{
+		data:     data,
+		modTime:  time.Now(),
+		checksum: hex.EncodeToString(sum[:]),
+	}
 	return nil
 }
 
@@ -147,7 +152,7 @@ func (c *Component) Download(_ context.Context, path string) (io.ReadCloser, err
 	defer c.mu.RUnlock()
 	f, ok := c.files[path]
 	if !ok {
-		return nil, fmt.Errorf("file not found: %s", path)
+		return nil, storage.NotFoundError(path)
 	}
 	return io.NopCloser(bytes.NewReader(f.data)), nil
 }
@@ -176,14 +181,82 @@ func (c *Component) List(_ context.Context, prefix string) ([]storage.FileInfo, 
 	var result []storage.FileInfo
 	for path, f := range c.files {
 		if strings.HasPrefix(path, prefix) {
-			result = append(result, storage.FileInfo{
-				Path:         path,
-				Size:         int64(len(f.data)),
-				LastModified: f.modTime,
-				ContentType:  f.contentType,
-			})
+			result = append(result, f.toFileInfo(path))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result, nil
+}
+
+// Head returns metadata for the object at path, including its sha256 checksum.
+func (c *Component) Head(_ context.Context, path string) (storage.FileInfo, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	f, ok := c.files[path]
+	if !ok {
+		return storage.FileInfo{}, storage.NotFoundError(path)
+	}
+	return f.toFileInfo(path), nil
+}
+
+// Copy duplicates the object at srcPath to dstPath, leaving the source in place.
+func (c *Component) Copy(_ context.Context, srcPath, dstPath string) error {
+	if err := storage.CheckDistinctPaths("Copy", srcPath, dstPath); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	src, ok := c.files[srcPath]
+	if !ok {
+		return storage.NotFoundError(srcPath)
+	}
+	c.files[dstPath] = src.clone()
+	return nil
+}
+
+// Rename moves the object at srcPath to dstPath, removing the source.
+func (c *Component) Rename(_ context.Context, srcPath, dstPath string) error {
+	if err := storage.CheckDistinctPaths("Rename", srcPath, dstPath); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	src, ok := c.files[srcPath]
+	if !ok {
+		return storage.NotFoundError(srcPath)
+	}
+	c.files[dstPath] = src.clone()
+	delete(c.files, srcPath)
+	return nil
+}
+
+// toFileInfo renders the stored file's metadata as a storage.FileInfo.
+func (f *memFile) toFileInfo(path string) storage.FileInfo {
+	fi := storage.FileInfo{
+		Path:         path,
+		Size:         int64(len(f.data)),
+		LastModified: f.modTime,
+		ContentType:  f.contentType,
+		Checksum:     f.checksum,
+	}
+	if len(f.metadata) > 0 {
+		fi.Metadata = make(map[string]string, len(f.metadata))
+		for k, v := range f.metadata {
+			fi.Metadata[k] = v
+		}
+	}
+	return fi
+}
+
+// clone returns a deep copy of the stored file.
+func (f *memFile) clone() *memFile {
+	cp := *f
+	cp.data = append([]byte(nil), f.data...)
+	if len(f.metadata) > 0 {
+		cp.metadata = make(map[string]string, len(f.metadata))
+		for k, v := range f.metadata {
+			cp.metadata[k] = v
+		}
+	}
+	return &cp
 }

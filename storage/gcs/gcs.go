@@ -42,6 +42,8 @@ type objectClient interface {
 	Delete(ctx context.Context, path string) error
 	Exists(ctx context.Context, path string) (bool, error)
 	List(ctx context.Context, prefix string) ([]storage.FileInfo, error)
+	Head(ctx context.Context, path string) (storage.FileInfo, error)
+	Copy(ctx context.Context, srcPath, dstPath string) error
 	SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error)
 }
 
@@ -78,6 +80,9 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	body, err := s.client.Get(ctx, path)
 	if err != nil {
+		if errors.Is(err, gcstorage.ErrObjectNotExist) {
+			return nil, storage.NotFoundError(path)
+		}
 		return nil, fmt.Errorf("storage: gcs download: %w", err)
 	}
 	return body, nil

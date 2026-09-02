@@ -49,7 +49,7 @@ func TestMockProducer_WriteAndRead(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("Messages() = %d, want 2", len(msgs))
 	}
-	if msgs[0].Topic != "topic-1" || string(msgs[0].Value) != "value" {
+	if msgs[0].Topic != "topic-1" || string(msgs[0].Payload) != "value" {
 		t.Errorf("msg[0] = %+v, unexpected", msgs[0])
 	}
 
@@ -135,7 +135,7 @@ func TestMockProducer_Publish_WithExplicitKey(t *testing.T) {
 
 func TestMockProducer_Send(t *testing.T) {
 	p := &MockProducer{}
-	msg := messaging.Message{Topic: "send-topic", Key: "k1", Value: []byte("v1")}
+	msg := messaging.Message{Topic: "send-topic", Key: "k1", Payload: []byte("v1")}
 	if err := p.Send(context.Background(), msg); err != nil {
 		t.Fatalf("Send() error: %v", err)
 	}
@@ -205,8 +205,8 @@ func TestMockConsumer_FeedAndProcess(t *testing.T) {
 		close(done)
 	}()
 
-	mc.Feed(Message{Topic: "events", Value: []byte("hello")})
-	mc.Feed(Message{Topic: "events", Value: []byte("world")})
+	mc.Feed(Message{Topic: "events", Payload: []byte("hello")})
+	mc.Feed(Message{Topic: "events", Payload: []byte("world")})
 
 	// Give consumer time to process
 	cancel()

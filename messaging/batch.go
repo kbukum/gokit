@@ -61,7 +61,7 @@ func (b *BatchProducer) Send(ctx context.Context, msg Message) error {
 	}
 
 	b.buf = append(b.buf, msg)
-	b.bufBytes += int64(len(msg.Value))
+	b.bufBytes += int64(len(msg.Payload))
 
 	needsFlush := len(b.buf) >= b.cfg.MaxSize ||
 		(b.cfg.MaxBytes > 0 && b.bufBytes >= b.cfg.MaxBytes)
@@ -129,7 +129,7 @@ func (b *BatchProducer) timerFlush() {
 // publishBatch sends each message in the batch via the underlying Producer.
 func (b *BatchProducer) publishBatch(ctx context.Context, batch []Message) error {
 	for _, msg := range batch {
-		if err := b.producer.PublishBinary(ctx, b.topic, msg.Key, msg.Value); err != nil {
+		if err := b.producer.PublishBinary(ctx, b.topic, msg.Key, msg.Payload); err != nil {
 			return err
 		}
 	}

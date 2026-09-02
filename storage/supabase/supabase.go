@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -19,11 +20,43 @@ import (
 // diagnostics, so a misbehaving or hostile endpoint cannot exhaust memory.
 const maxErrorBodyBytes = 8 << 10
 
+// maxMetadataBodyBytes bounds how much of a success response body is decoded for
+// object metadata (info, list, and signed-URL responses), so a misconfigured or
+// hostile endpoint cannot force unbounded memory consumption.
+const maxMetadataBodyBytes = 1 << 20
+
 // readErrorBody reads at most [maxErrorBodyBytes] from a response body for use
 // in an error message.
 func readErrorBody(r io.Reader) []byte {
 	b, _ := io.ReadAll(io.LimitReader(r, maxErrorBodyBytes))
 	return b
+}
+
+// decodeJSONBody decodes at most [maxMetadataBodyBytes] of r into v. A response
+// whose JSON is not complete within the limit is rejected with a decode error
+// rather than read unbounded.
+func decodeJSONBody(r io.Reader, v any) error {
+	return json.NewDecoder(io.LimitReader(r, maxMetadataBodyBytes)).Decode(v)
+}
+
+// escapeObjectPath percent-encodes each segment of an object key so a caller-supplied
+// key cannot inject query parameters, fragments, or extra path elements into the
+// request target. Dot-only segments ("." and "..") are encoded explicitly so an
+// intermediary or router cannot normalize them to address a different object.
+// Separators between segments are preserved.
+func escapeObjectPath(path string) string {
+	segments := strings.Split(path, "/")
+	for i, seg := range segments {
+		switch seg {
+		case ".":
+			segments[i] = "%2E"
+		case "..":
+			segments[i] = "%2E%2E"
+		default:
+			segments[i] = url.PathEscape(seg)
+		}
+	}
+	return strings.Join(segments, "/")
 }
 
 // Register registers a configured Supabase storage provider into the given registry.
@@ -81,7 +114,7 @@ func NewStorage(cfg *Config) (*Storage, error) {
 
 // Upload writes data from reader to Supabase storage.
 func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) error {
-	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
+	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, reader)
 	if err != nil {
@@ -106,7 +139,7 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 
 // Download returns a reader for the object at the given path.
 func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
+	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
@@ -121,7 +154,7 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 
 	if resp.StatusCode == http.StatusNotFound {
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("storage: file not found: %s", path)
+		return nil, storage.NotFoundError(path)
 	}
 	if resp.StatusCode >= 400 {
 		body := readErrorBody(resp.Body)
@@ -133,7 +166,7 @@ func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, err
 
 // Delete removes an object. Returns nil if the object does not exist.
 func (s *Storage) Delete(ctx context.Context, path string) error {
-	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
+	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, http.NoBody)
 	if err != nil {
@@ -156,7 +189,7 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 
 // Exists checks whether an object exists.
 func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
-	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, path)
+	u := fmt.Sprintf("%s/object/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, http.NoBody)
 	if err != nil {
@@ -181,7 +214,7 @@ func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
 
 // URL returns a public URL for the object.
 func (s *Storage) URL(_ context.Context, path string) (string, error) {
-	return fmt.Sprintf("%s/object/public/%s/%s", s.baseURL, s.bucket, path), nil
+	return fmt.Sprintf("%s/object/public/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path)), nil
 }
 
 // List returns metadata for all objects whose path starts with prefix.
@@ -238,7 +271,7 @@ func (s *Storage) List(ctx context.Context, prefix string) ([]storage.FileInfo, 
 		} `json:"metadata"`
 		UpdatedAt string `json:"updated_at"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+	if err := decodeJSONBody(resp.Body, &items); err != nil {
 		return nil, fmt.Errorf("storage: supabase decode response: %w", err)
 	}
 
@@ -270,7 +303,7 @@ func (s *Storage) setHeaders(req *http.Request) {
 
 // SignedURL returns a pre-signed URL valid for the specified duration.
 func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error) {
-	u := fmt.Sprintf("%s/object/sign/%s/%s", s.baseURL, s.bucket, path)
+	u := fmt.Sprintf("%s/object/sign/%s/%s", s.baseURL, s.bucket, escapeObjectPath(path))
 
 	body := fmt.Sprintf(`{"expiresIn": %d}`, int(expiry.Seconds()))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, strings.NewReader(body))
@@ -294,7 +327,7 @@ func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Durati
 	var result struct {
 		SignedURL string `json:"signedURL"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := decodeJSONBody(resp.Body, &result); err != nil {
 		return "", fmt.Errorf("storage: supabase decode sign response: %w", err)
 	}
 

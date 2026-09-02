@@ -100,7 +100,7 @@ func TestUserInfoNeverSendsTokenInQueryString(t *testing.T) {
 	defer server.Close()
 
 	p := NewGeneric(GenericConfig{
-		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURL: "http://test"},
+		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURI: "http://test"},
 		ProviderName:     "placeholder-test",
 		UserInfoEndpoint: server.URL + "/me?access_token={access_token}",
 		UserInfo:         UserInfoMapper{SubjectKey: "id"},
@@ -250,7 +250,7 @@ func TestResponsePath(t *testing.T) {
 	defer server.Close()
 
 	p := NewGeneric(GenericConfig{
-		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURL: "http://test"},
+		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURI: "http://test"},
 		ProviderName:     "nested-test",
 		UserInfoEndpoint: server.URL + "/userinfo",
 		UserInfo: UserInfoMapper{
@@ -284,7 +284,7 @@ func TestNumericSubjectFallback(t *testing.T) {
 	defer server.Close()
 
 	p := NewGeneric(GenericConfig{
-		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURL: "http://test"},
+		ProviderConfig:   ProviderConfig{ClientID: "id", RedirectURI: "http://test"},
 		ProviderName:     "num-id",
 		UserInfoEndpoint: server.URL + "/user",
 		UserInfo:         UserInfoMapper{SubjectKey: "id", NameKey: "name"},

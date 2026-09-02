@@ -77,7 +77,7 @@ func TestManagerListProvidersWithSocial(t *testing.T) {
 }
 
 func TestManagerAuthURL(t *testing.T) {
-	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURL: "http://test"})
+	g := NewGoogle(ProviderConfig{ClientID: "id", RedirectURI: "http://test"})
 	m := NewManager(g)
 
 	u, err := m.AuthURL("google", "state123")

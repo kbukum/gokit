@@ -154,6 +154,33 @@ func TestCopyFile(t *testing.T) {
 	}
 }
 
+func TestCopyFileRejectsSameFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "a.txt")
+	if err := os.WriteFile(src, []byte("keep"), 0o600); err != nil {
+		t.Fatalf("WriteFile(src) failed: %v", err)
+	}
+
+	if err := CopyFile(src, src); err == nil {
+		t.Fatal("CopyFile onto the same path must be rejected")
+	}
+	// An aliased destination ("dir/./a.txt") resolves to the same file and must
+	// also be rejected before the source is truncated.
+	if err := CopyFile(src, filepath.Join(dir, ".", "a.txt")); err == nil {
+		t.Fatal("CopyFile onto an alias of the source must be rejected")
+	}
+
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("ReadFile(src) failed: %v", err)
+	}
+	if !bytes.Equal(data, []byte("keep")) {
+		t.Fatalf("source content = %q, want %q (a rejected self-copy must not truncate)", data, "keep")
+	}
+}
+
 func TestCopyDir(t *testing.T) {
 	t.Parallel()
 

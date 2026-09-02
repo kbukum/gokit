@@ -23,11 +23,11 @@ type Config struct {
 	// Set = resolve from discovery provider.
 	Resolve string `mapstructure:"resolve" json:"resolve"`
 
-	// AccessKey is the AWS access key ID.
-	AccessKey string `mapstructure:"access_key" json:"access_key"`
+	// AccessKeyID is the AWS access key ID.
+	AccessKeyID string `mapstructure:"access_key_id" json:"access_key_id"`
 
-	// SecretKey is the AWS secret access key.
-	SecretKey string `mapstructure:"secret_key" json:"secret_key"`
+	// SecretAccessKey is the AWS secret access key.
+	SecretAccessKey string `mapstructure:"secret_access_key" json:"secret_access_key"`
 
 	// ForcePathStyle forces path-style URLs instead of virtual-hosted-style.
 	ForcePathStyle bool `mapstructure:"force_path_style" json:"force_path_style"`

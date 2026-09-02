@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/kbukum/gokit/storage"
@@ -823,19 +824,19 @@ func TestRegister_RejectsMultipleConfigs(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Stat (storage.StatProvider)
+// Head
 // ---------------------------------------------------------------------------
 
-func TestStat_ReturnsMetadata(t *testing.T) {
+func TestHead_ReturnsMetadata(t *testing.T) {
 	s := newTestStorage(t)
 	ctx := context.Background()
 	if err := s.Upload(ctx, "docs/note.txt", strings.NewReader("hello")); err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
 
-	info, err := s.Stat(ctx, "docs/note.txt")
+	info, err := s.Head(ctx, "docs/note.txt")
 	if err != nil {
-		t.Fatalf("Stat: %v", err)
+		t.Fatalf("Head: %v", err)
 	}
 	if info.Path != "docs/note.txt" {
 		t.Errorf("Path = %q, want %q", info.Path, "docs/note.txt")
@@ -851,13 +852,181 @@ func TestStat_ReturnsMetadata(t *testing.T) {
 	}
 }
 
-func TestStat_MissingFileErrors(t *testing.T) {
+func TestHead_MissingFileErrors(t *testing.T) {
 	s := newTestStorage(t)
-	if _, err := s.Stat(context.Background(), "absent.txt"); err == nil {
-		t.Fatal("Stat for a missing file did not error")
+	if _, err := s.Head(context.Background(), "absent.txt"); err == nil {
+		t.Fatal("Head for a missing file did not error")
 	}
 }
 
-func TestStat_SatisfiesStatProvider(t *testing.T) {
-	var _ storage.StatProvider = newTestStorage(t)
+func TestHead_MissingFileReturnsErrNotFound(t *testing.T) {
+	s := newTestStorage(t)
+	if _, err := s.Head(context.Background(), "absent.txt"); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("Head error is not storage.ErrNotFound: %v", err)
+	}
+}
+
+func TestCopyRename_RejectSamePath(t *testing.T) {
+	s := newTestStorage(t)
+	ctx := context.Background()
+	if err := s.Upload(ctx, "a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if err := s.Copy(ctx, "a.txt", "a.txt"); !errors.Is(err, storage.ErrSameObject) {
+		t.Errorf("Copy same path = %v, want storage.ErrSameObject", err)
+	}
+	if err := s.Rename(ctx, "a.txt", "a.txt"); !errors.Is(err, storage.ErrSameObject) {
+		t.Errorf("Rename same path = %v, want storage.ErrSameObject", err)
+	}
+	assertContent(t, s, "a.txt", "payload")
+}
+
+func TestCopy_DoesNotFollowSymlinkOutsideBase(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secret, []byte("top secret"), 0o600); err != nil {
+		t.Fatalf("write secret: %v", err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, "link.txt")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	if cErr := s.Copy(context.Background(), "link.txt", "copy.txt"); cErr == nil {
+		t.Fatal("Copy through a symlink escaping the base must be rejected")
+	}
+}
+
+func TestCopy_DuplicatesBytesAndKeepsSource(t *testing.T) {
+	s := newTestStorage(t)
+	ctx := context.Background()
+	if err := s.Upload(ctx, "src/a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if err := s.Copy(ctx, "src/a.txt", "dst/b.txt"); err != nil {
+		t.Fatalf("Copy: %v", err)
+	}
+	assertContent(t, s, "dst/b.txt", "payload")
+	assertContent(t, s, "src/a.txt", "payload")
+}
+
+func TestCopy_MissingSourceErrors(t *testing.T) {
+	s := newTestStorage(t)
+	if err := s.Copy(context.Background(), "absent.txt", "dst.txt"); err == nil {
+		t.Fatal("Copy of a missing source did not error")
+	}
+}
+
+func TestCopy_RejectsSameFileViaAlias(t *testing.T) {
+	s := newTestStorage(t)
+	ctx := context.Background()
+	if err := s.Upload(ctx, "a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	// "a.txt" and "./a.txt" are distinct strings that pass the same-key guard but
+	// resolve to the same file; the copy must be rejected before the destination
+	// is truncated, leaving the source intact.
+	if err := s.Copy(ctx, "a.txt", "./a.txt"); err == nil {
+		t.Fatal("Copy of a destination aliasing the source must be rejected")
+	}
+	assertContent(t, s, "a.txt", "payload")
+}
+
+func TestRename_RejectsSymlinkedDestinationParent(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "link")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	s, err := NewStorage(dir)
+	if err != nil {
+		t.Fatalf("NewStorage: %v", err)
+	}
+	ctx := context.Background()
+	if err := s.Upload(ctx, "src/a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	// "link" is a symlink escaping the base; renaming into it must be rejected so
+	// the object cannot be moved outside the configured store.
+	if err := s.Rename(ctx, "src/a.txt", "link/b.txt"); err == nil {
+		t.Fatal("Rename into a symlinked destination parent escaping the base must be rejected")
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "b.txt")); statErr == nil {
+		t.Fatal("object was moved outside the base directory through a symlink")
+	}
+	assertContent(t, s, "src/a.txt", "payload")
+}
+
+func TestRename_MovesBytesAndRemovesSource(t *testing.T) {
+	s := newTestStorage(t)
+	ctx := context.Background()
+	if err := s.Upload(ctx, "src/a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if err := s.Rename(ctx, "src/a.txt", "dst/b.txt"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	assertContent(t, s, "dst/b.txt", "payload")
+	if ok, err := s.Exists(ctx, "src/a.txt"); err != nil || ok {
+		t.Fatalf("source still present: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRename_MissingSourceErrors(t *testing.T) {
+	s := newTestStorage(t)
+	if err := s.Rename(context.Background(), "absent.txt", "dst.txt"); err == nil {
+		t.Fatal("Rename of a missing source did not error")
+	}
+}
+
+func TestRename_FallsBackToCopyWhenCrossDevice(t *testing.T) {
+	s := newTestStorage(t)
+	s.renameFile = func(_, _ string) error { return &os.LinkError{Op: "rename", Err: syscall.EXDEV} }
+	ctx := context.Background()
+	if err := s.Upload(ctx, "src/a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if err := s.Rename(ctx, "src/a.txt", "dst/b.txt"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	assertContent(t, s, "dst/b.txt", "payload")
+	if ok, err := s.Exists(ctx, "src/a.txt"); err != nil || ok {
+		t.Fatalf("source still present: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestRename_NonCrossDeviceErrorIsNotDowngraded(t *testing.T) {
+	s := newTestStorage(t)
+	s.renameFile = func(_, _ string) error { return &os.LinkError{Op: "rename", Err: syscall.EPERM} }
+	ctx := context.Background()
+	if err := s.Upload(ctx, "src/a.txt", strings.NewReader("payload")); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if err := s.Rename(ctx, "src/a.txt", "dst/b.txt"); err == nil {
+		t.Fatal("Rename must return a non-cross-device error rather than falling back to copy+delete")
+	}
+	// The source must be left in place when the atomic rename fails for a
+	// reason other than a cross-device link.
+	if ok, err := s.Exists(ctx, "src/a.txt"); err != nil || !ok {
+		t.Fatalf("source must remain: ok=%v err=%v", ok, err)
+	}
+}
+
+func assertContent(t *testing.T, s *Storage, path, want string) {
+	t.Helper()
+	rc, err := s.Download(context.Background(), path)
+	if err != nil {
+		t.Fatalf("Download %q: %v", path, err)
+	}
+	defer func() { _ = rc.Close() }()
+	got, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("ReadAll %q: %v", path, err)
+	}
+	if string(got) != want {
+		t.Fatalf("content of %q = %q, want %q", path, got, want)
+	}
 }

@@ -40,7 +40,7 @@ func TestClientSecretFunc(t *testing.T) {
 		ProviderConfig: ProviderConfig{
 			ClientID:     "apple-client",
 			ClientSecret: "static-secret-should-be-overridden",
-			RedirectURL:  "http://test",
+			RedirectURI:  "http://test",
 		},
 		ProviderName:  "apple-like",
 		TokenEndpoint: srv.TokenURL(),

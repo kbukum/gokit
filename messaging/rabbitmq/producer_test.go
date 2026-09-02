@@ -176,7 +176,7 @@ func TestProducerPublishMethodsDeclareQueueAndPublish(t *testing.T) {
 	if err := p.Publish(ctx, "events", event); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
-	if err := p.Send(ctx, messaging.Message{Topic: "raw", Key: "msg-key", Value: []byte("body"), Headers: map[string]string{"x": "y"}}); err != nil {
+	if err := p.Send(ctx, messaging.Message{Topic: "raw", Key: "msg-key", Payload: []byte("body"), Headers: map[string]string{"x": "y"}}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 	if len(ch.published) != 4 {
@@ -231,7 +231,7 @@ func TestProducerErrorsFlushAndClose(t *testing.T) {
 func TestProducerSendBatchStopsOnError(t *testing.T) {
 	ch := &fakeRabbitChannel{}
 	p := &Producer{cfg: Config{PublishTimeout: "1s"}, ch: ch, retryAttempts: 1, declared: map[string]struct{}{}}
-	err := p.SendBatch(context.Background(), []messaging.Message{{Topic: "a", Value: []byte("1")}, {Topic: "bad topic"}})
+	err := p.SendBatch(context.Background(), []messaging.Message{{Topic: "a", Payload: []byte("1")}, {Topic: "bad topic"}})
 	if err == nil {
 		t.Fatal("expected invalid topic error")
 	}

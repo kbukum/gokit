@@ -36,8 +36,8 @@ func TestAssertConsumed(t *testing.T) {
 	t.Parallel()
 
 	received := []messaging.Message{
-		{Key: "k1", Value: []byte("v1")},
-		{Key: "k2", Value: []byte("v2")},
+		{Key: "k1", Payload: []byte("v1")},
+		{Key: "k2", Payload: []byte("v2")},
 	}
 	AssertConsumed(t, received, 2)
 	AssertConsumed(t, nil, 0)
