@@ -4,9 +4,9 @@
 // and adds typed convenience methods for common REST operations:
 //
 //	client := rest.New(httpclient.Config{
-//	    BaseURL: "https://api.example.com",
-//	    Auth:    httpclient.BearerAuth("token"),
-//	    Retry:   httpclient.DefaultRetryConfig(),
+//	    BaseURL:          "https://api.example.com",
+//	    Auth:             httpclient.BearerAuth("token"),
+//	    ResiliencePolicy: resilience.NewPolicy().WithRetry(*httpclient.DefaultRetryConfig()),
 //	})
 //
 //	// Typed GET

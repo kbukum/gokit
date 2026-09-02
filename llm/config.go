@@ -42,14 +42,11 @@ type Config struct {
 	// Headers are additional HTTP headers sent with every request.
 	Headers map[string]string `yaml:"headers" json:"headers"`
 
-	// Retry configures retry behavior for failed requests.
-	Retry *resilience.RetryConfig `yaml:"retry" json:"retry"`
-
-	// CircuitBreaker configures circuit breaker protection.
-	CircuitBreaker *resilience.CircuitBreakerConfig `yaml:"circuit_breaker" json:"circuit_breaker"`
-
-	// RateLimiter configures rate limiting.
-	RateLimiter *resilience.RateLimiterConfig `yaml:"rate_limiter" json:"rate_limiter"`
+	// ResiliencePolicy configures the retry / circuit-breaker / rate-limiter
+	// stack applied to outbound requests. Nil disables resilience. It uses the
+	// shared resilience.Policy config vocabulary, the same block understood by
+	// the httpclient and grpc transports.
+	ResiliencePolicy *resilience.Policy `yaml:"resilience_policy" json:"resilience_policy"`
 }
 
 // applyDefaults sets default values for unset config fields.

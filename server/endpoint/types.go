@@ -15,6 +15,20 @@ type HealthResponse struct {
 	Components []component.Health `json:"components"`
 }
 
+// ReadinessResponse is the response from GET /readyz.
+type ReadinessResponse struct {
+	Status    string `json:"status" example:"ready"`
+	Service   string `json:"service" example:"my-service"`
+	Timestamp string `json:"timestamp" example:"2026-03-05T10:00:00Z"`
+}
+
+// LivenessResponse is the response from GET /livez.
+type LivenessResponse struct {
+	Status    string `json:"status" example:"alive"`
+	Service   string `json:"service" example:"my-service"`
+	Timestamp string `json:"timestamp" example:"2026-03-05T10:00:00Z"`
+}
+
 // InfoResponse is the response from GET /info.
 type InfoResponse struct {
 	Service   string `json:"service" example:"my-service"`

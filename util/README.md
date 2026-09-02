@@ -55,7 +55,7 @@ func main() {
 | `SecretString` / `SecretKeyMatcher` / `MaskSecret()` | In-memory secret redaction (crypto lives in `encryption`) |
 | `GetEnv()` / `GetEnvOr()` / `GetEnvBool()` / `GetEnvParsed[T]()` | Environment variable access |
 | `ContentHasher` / `Sha256Hex()` / `HashHex()` / `Sha256Reader()` | Content hashing |
-| `FormatBytes()` / `ParseBytes()` / `ParseSize()` | Human-readable byte sizes |
+| `FormatBytes()` / `ParseBytes()` | Human-readable byte sizes |
 | `FormatDuration()` / `ParseDuration()` / `TimeIt[T]()` | Duration formatting and timing |
 | `Clock` / `NewFakeClock()` | Injectable clock for deterministic tests |
 | `GlobMatch()` / `NewGlob()` / `HasWildcard()` | Glob pattern matching |

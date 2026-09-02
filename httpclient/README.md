@@ -49,9 +49,10 @@ created, err := rest.Post[User](ctx, client, "/users", CreateUserRequest{
 
 ```go
 client, err := httpclient.New(httpclient.Config{
-    BaseURL:        "https://api.example.com",
-    Retry:          httpclient.DefaultRetryConfig(),
-    CircuitBreaker: httpclient.DefaultCircuitBreakerConfig("my-api"),
+    BaseURL: "https://api.example.com",
+    ResiliencePolicy: resilience.NewPolicy().
+        WithRetry(*httpclient.DefaultRetryConfig()).
+        WithCircuitBreaker(*httpclient.DefaultCircuitBreakerConfig("my-api")),
 })
 // Retry on transient errors (5xx, timeouts, connection failures)
 // Circuit breaker opens after repeated failures

@@ -18,13 +18,13 @@ var (
 // RateLimiterConfig configures a rate limiter.
 type RateLimiterConfig struct {
 	// Name identifies this rate limiter for metrics/logging.
-	Name string
+	Name string `json:"name,omitempty" yaml:"name" mapstructure:"name"`
 	// Rate is the number of requests allowed per second.
-	Rate float64
+	Rate float64 `json:"rate,omitempty" yaml:"rate" mapstructure:"rate"`
 	// Burst is the maximum burst size.
-	Burst int
+	Burst int `json:"burst,omitempty" yaml:"burst" mapstructure:"burst"`
 	// OnLimit is called when a request is rate limited.
-	OnLimit func(name string)
+	OnLimit func(name string) `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 // DefaultRateLimiterConfig returns sensible defaults.

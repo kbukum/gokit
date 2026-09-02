@@ -147,8 +147,8 @@ func (f *DiscoveryConnectionFactory) buildDialOptions() ([]grpc.DialOption, erro
 		}),
 		// Message size limits
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(f.gRPCCfg.MaxRecvMsgSize),
-			grpc.MaxCallSendMsgSize(f.gRPCCfg.MaxSendMsgSize),
+			grpc.MaxCallRecvMsgSize(f.gRPCCfg.MaxMessageSize),
+			grpc.MaxCallSendMsgSize(f.gRPCCfg.MaxSendMessageSize),
 		),
 	)
 

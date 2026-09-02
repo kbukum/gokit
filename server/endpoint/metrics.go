@@ -14,14 +14,14 @@ func Metrics() gin.HandlerFunc {
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
 
-		c.JSON(http.StatusOK, gin.H{
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"goroutines": runtime.NumGoroutine(),
-			"memory": gin.H{
-				"alloc_mb":       m.Alloc / 1024 / 1024,
-				"total_alloc_mb": m.TotalAlloc / 1024 / 1024,
-				"sys_mb":         m.Sys / 1024 / 1024,
-				"gc_runs":        m.NumGC,
+		c.JSON(http.StatusOK, MetricsResponse{
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+			Goroutines: runtime.NumGoroutine(),
+			Memory: MemoryMetrics{
+				AllocMB:      m.Alloc / 1024 / 1024,
+				TotalAllocMB: m.TotalAlloc / 1024 / 1024,
+				SysMB:        m.Sys / 1024 / 1024,
+				GCRuns:       m.NumGC,
 			},
 		})
 	}

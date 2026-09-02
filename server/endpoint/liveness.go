@@ -11,10 +11,10 @@ import (
 // and able to serve HTTP.
 func Liveness(serviceName string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status":    "alive",
-			"service":   serviceName,
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		c.JSON(http.StatusOK, LivenessResponse{
+			Status:    "alive",
+			Service:   serviceName,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
 }

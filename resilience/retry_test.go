@@ -617,3 +617,64 @@ func TestCalculateBackoff_ExtremeInputs(t *testing.T) {
 		}
 	}
 }
+
+func TestBackoffStrategyTextRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		strategy BackoffStrategy
+		text     string
+	}{
+		{ExponentialBackoff, "exponential"},
+		{ConstantBackoff, "constant"},
+		{LinearBackoff, "linear"},
+	}
+	for _, tc := range cases {
+		if got := tc.strategy.String(); got != tc.text {
+			t.Errorf("String(): got %q want %q", got, tc.text)
+		}
+		out, err := tc.strategy.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText(%v): %v", tc.strategy, err)
+		}
+		if string(out) != tc.text {
+			t.Errorf("MarshalText(): got %q want %q", out, tc.text)
+		}
+		var s BackoffStrategy
+		if err := s.UnmarshalText([]byte(tc.text)); err != nil {
+			t.Fatalf("UnmarshalText(%q): %v", tc.text, err)
+		}
+		if s != tc.strategy {
+			t.Errorf("UnmarshalText(%q): got %v want %v", tc.text, s, tc.strategy)
+		}
+	}
+}
+
+func TestBackoffStrategyUnmarshalTextEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	empty := LinearBackoff
+	if err := empty.UnmarshalText(nil); err != nil {
+		t.Fatalf("UnmarshalText(empty): %v", err)
+	}
+	if empty != ExponentialBackoff {
+		t.Errorf("empty text: got %v want exponential", empty)
+	}
+
+	var unknown BackoffStrategy
+	if err := unknown.UnmarshalText([]byte("quadratic")); err == nil {
+		t.Error("UnmarshalText(unknown): expected error, got nil")
+	}
+}
+
+func TestBackoffStrategyMarshalTextRejectsUnknown(t *testing.T) {
+	t.Parallel()
+
+	unknown := BackoffStrategy(99)
+	if _, err := unknown.MarshalText(); err == nil {
+		t.Error("MarshalText(unknown): expected error, got nil")
+	}
+	if got := unknown.String(); got != "BackoffStrategy(99)" {
+		t.Errorf("String(unknown): got %q want identifying form", got)
+	}
+}

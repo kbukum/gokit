@@ -29,15 +29,15 @@ func testLogger() *logging.Logger { return logging.NewDefault("test") }
 
 func validInsecureConfig() grpccfg.Config {
 	return grpccfg.Config{
-		Name:           "test-svc",
-		Addr:           "passthrough:///localhost:50051",
-		MaxRecvMsgSize: 4 * 1024 * 1024,
-		MaxSendMsgSize: 4 * 1024 * 1024,
+		Name:               "test-svc",
+		Target:             "passthrough:///localhost:50051",
+		MaxMessageSize:     4 * 1024 * 1024,
+		MaxSendMessageSize: 4 * 1024 * 1024,
 		Keepalive: grpccfg.KeepaliveConfig{
 			Time:    30 * time.Second,
 			Timeout: 10 * time.Second,
 		},
-		CallTimeout: 5 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 }
 
@@ -137,7 +137,7 @@ func TestNewClient_AppliesDefaults(t *testing.T) {
 	t.Parallel()
 
 	cfg := grpccfg.Config{
-		Addr: "passthrough:///localhost:9090",
+		Target: "passthrough:///localhost:9090",
 	}
 	log := testLogger()
 
@@ -150,28 +150,28 @@ func TestNewClient_AppliesDefaults(t *testing.T) {
 func TestNewClient_ValidationFailure_EmptyAddr(t *testing.T) {
 	t.Parallel()
 
-	// ApplyDefaults will fill Addr, so we need zero MaxRecvMsgSize to cause failure.
+	// ApplyDefaults will fill Addr, so we need zero MaxMessageSize to cause failure.
 	// Actually, ApplyDefaults is called first, so Addr will be set.
 	// The only way to fail validation after defaults is negative msg size.
 	cfg := grpccfg.Config{
-		MaxRecvMsgSize: -1,
+		MaxMessageSize: -1,
 	}
 	log := testLogger()
 
 	conn, err := NewClient(cfg, log)
 	require.Error(t, err)
 	assert.Nil(t, conn)
-	assert.Contains(t, err.Error(), "max_recv_msg_size must be positive")
+	assert.Contains(t, err.Error(), "max_message_size must be positive")
 }
 
 func TestNewClient_ValidationFailure_BadTLS(t *testing.T) {
 	t.Parallel()
 
 	cfg := grpccfg.Config{
-		Addr:           "passthrough:///localhost:50051",
-		MaxRecvMsgSize: 1024,
-		MaxSendMsgSize: 1024,
-		TLS:            &security.TLSConfig{CertFile: "/nonexistent.pem"},
+		Target:             "passthrough:///localhost:50051",
+		MaxMessageSize:     1024,
+		MaxSendMessageSize: 1024,
+		TLS:                &security.TLSConfig{CertFile: "/nonexistent.pem"},
 	}
 	log := testLogger()
 
@@ -180,11 +180,11 @@ func TestNewClient_ValidationFailure_BadTLS(t *testing.T) {
 	assert.Nil(t, conn)
 }
 
-func TestNewClient_WithCallTimeout(t *testing.T) {
+func TestNewClient_WithTimeout(t *testing.T) {
 	t.Parallel()
 
 	cfg := validInsecureConfig()
-	cfg.CallTimeout = 2 * time.Second
+	cfg.Timeout = 2 * time.Second
 	log := testLogger()
 
 	conn, err := NewClient(cfg, log)
@@ -242,7 +242,7 @@ func TestNewAdapter_InsecureConfig(t *testing.T) {
 func TestNewAdapter_ValidationFailure(t *testing.T) {
 	t.Parallel()
 
-	cfg := grpccfg.Config{MaxRecvMsgSize: -1}
+	cfg := grpccfg.Config{MaxMessageSize: -1}
 	log := testLogger()
 
 	adapter, err := NewAdapter(cfg, log)
@@ -289,8 +289,8 @@ func TestAdapter_GetConfig(t *testing.T) {
 
 	got := adapter.GetConfig()
 	assert.Equal(t, cfg.Name, got.Name)
-	// Addr may have been modified by ApplyDefaults inside NewClient
-	assert.NotEmpty(t, got.Addr)
+	// Target may have been modified by ApplyDefaults inside NewClient
+	assert.NotEmpty(t, got.Target)
 }
 
 func TestAdapter_IsAvailable(t *testing.T) {
@@ -673,7 +673,7 @@ func TestClientOptionsBuilder_GetDialTimeout(t *testing.T) {
 	t.Parallel()
 
 	cfg := validInsecureConfig()
-	cfg.CallTimeout = 15 * time.Second
+	cfg.Timeout = 15 * time.Second
 	builder := NewClientOptionsBuilder(&cfg)
 	assert.Equal(t, 15*time.Second, builder.GetDialTimeout())
 }
@@ -682,7 +682,7 @@ func TestClientOptionsBuilder_GetDialTimeout_Default(t *testing.T) {
 	t.Parallel()
 
 	cfg := validInsecureConfig()
-	cfg.CallTimeout = 0
+	cfg.Timeout = 0
 	builder := NewClientOptionsBuilder(&cfg)
 	assert.Equal(t, 10*time.Second, builder.GetDialTimeout())
 }
@@ -836,4 +836,34 @@ func TestTryOpenStream_Timeout(t *testing.T) {
 	result, err := TryOpenStream(context.Background(), conn, 50*time.Millisecond, opener)
 	require.Error(t, err)
 	assert.Equal(t, 0, result)
+}
+
+func TestResiliencePolicyFor_ConfigPolicyDefaultsRetryPredicate(t *testing.T) {
+	t.Parallel()
+
+	cfg := grpccfg.Config{
+		Target:  "localhost:50051",
+		Timeout: 2 * time.Second,
+		ResiliencePolicy: resilience.NewPolicy().WithRetry(resilience.RetryConfig{
+			MaxAttempts: 3,
+		}),
+	}
+
+	policy := resiliencePolicyFor(cfg)
+	require.NotNil(t, policy)
+	require.NotNil(t, policy.Retry)
+	require.NotNil(t, policy.Retry.RetryIf, "config retry block should default to the gRPC-aware predicate")
+	// Timeout is seeded from Timeout when the policy leaves it unset.
+	assert.Equal(t, 2*time.Second, policy.Timeout)
+}
+
+func TestResiliencePolicyFor_TimeoutOnlyWhenNoPolicy(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, resiliencePolicyFor(grpccfg.Config{Target: "x:1"}))
+
+	policy := resiliencePolicyFor(grpccfg.Config{Target: "x:1", Timeout: time.Second})
+	require.NotNil(t, policy)
+	assert.Nil(t, policy.Retry)
+	assert.Equal(t, time.Second, policy.Timeout)
 }

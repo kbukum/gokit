@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -15,17 +16,42 @@ var (
 )
 
 // ServiceInstance represents a discovered service endpoint.
+//
+// Its JSON encoding is gokit's stable discovery contract: snake_case field
+// names, a tri-state Health that is always one of "unknown"/"healthy"/
+// "unhealthy", and an omitted Weight that decodes to 1. It is the shape gokit
+// emits and accepts across its discovery backends; cross-kit alignment with
+// rskit is tracked separately and is not yet byte-for-byte identical.
 type ServiceInstance struct {
-	ID       string
-	Name     string
-	Address  string
-	Port     int
-	Protocol string
-	Tags     []string
-	Metadata map[string]string
-	Health   HealthStatus
-	Weight   int
-	LastSeen time.Time
+	ID       string            `json:"id"`
+	Name     string            `json:"name"`
+	Address  string            `json:"address"`
+	Port     int               `json:"port"`
+	Protocol string            `json:"protocol"`
+	Tags     []string          `json:"tags"`
+	Metadata map[string]string `json:"metadata"`
+	Health   HealthStatus      `json:"health"`
+	Weight   int               `json:"weight"`
+	LastSeen time.Time         `json:"last_seen"`
+}
+
+// UnmarshalJSON decodes a ServiceInstance, defaulting an omitted Weight to 1 so
+// weighted balancing treats an unspecified instance as a single unit of load
+// (an explicit "weight": 0 is preserved as-is), and an omitted Health to
+// HealthUnknown so the field is always one of the tri-state values. A present
+// but out-of-range Health is rejected so a malformed payload cannot enter the
+// model.
+func (s *ServiceInstance) UnmarshalJSON(data []byte) error {
+	type alias ServiceInstance
+	tmp := alias{Weight: 1, Health: HealthUnknown}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	if !tmp.Health.valid() {
+		return fmt.Errorf("discovery: invalid health status %q", string(tmp.Health))
+	}
+	*s = ServiceInstance(tmp)
+	return nil
 }
 
 // Endpoint is an alias for ServiceInstance, providing a shorter name
@@ -33,7 +59,7 @@ type ServiceInstance struct {
 type Endpoint = ServiceInstance
 
 // HostPort returns the host:port string (e.g., "192.168.1.5:8080").
-// Use this to set client Config.Addr from a discovered endpoint.
+// Use this to set a client's target address from a discovered endpoint.
 func (s ServiceInstance) HostPort() string {
 	return fmt.Sprintf("%s:%d", s.Address, s.Port)
 }
@@ -46,6 +72,29 @@ const (
 	HealthHealthy   HealthStatus = "healthy"
 	HealthUnhealthy HealthStatus = "unhealthy"
 )
+
+// valid reports whether h is one of the defined tri-state values.
+func (h HealthStatus) valid() bool {
+	switch h {
+	case HealthUnknown, HealthHealthy, HealthUnhealthy:
+		return true
+	default:
+		return false
+	}
+}
+
+// MarshalJSON encodes HealthStatus, mapping the zero value to "unknown" so the
+// wire form is always populated. Any other out-of-range value is rejected so an
+// invalid in-memory status cannot be emitted as a valid-looking payload.
+func (h HealthStatus) MarshalJSON() ([]byte, error) {
+	if h == "" {
+		h = HealthUnknown
+	}
+	if !h.valid() {
+		return nil, fmt.Errorf("discovery: invalid health status %q", string(h))
+	}
+	return json.Marshal(string(h))
+}
 
 // Discovery defines the contract for discovering service instances.
 type Discovery interface {

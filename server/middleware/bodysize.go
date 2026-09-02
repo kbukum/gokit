@@ -4,18 +4,19 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/kbukum/gokit/util"
 )
 
-const defaultMaxBodySize = 10 * 1024 * 1024 // 10MB
+const defaultMaxBodySize int64 = 10 * 1024 * 1024 // 10MB
 
-// BodySizeLimit returns middleware that restricts the request body to the given size string (e.g. "10MB", "512KB", "1GB").
-func BodySizeLimit(maxSize string) Middleware {
-	size := util.ParseSize(maxSize, defaultMaxBodySize)
+// BodySizeLimit returns middleware that restricts the request body to maxBytes.
+// A non-positive maxBytes falls back to the 10MB default.
+func BodySizeLimit(maxBytes int64) Middleware {
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxBodySize
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			r.Body = http.MaxBytesReader(w, r.Body, size)
+			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -24,6 +25,6 @@ func BodySizeLimit(maxSize string) Middleware {
 // GinBodySizeLimit returns a Gin middleware for body size limiting.
 // Prefer using BodySizeLimit() at the server level via ApplyMiddleware() which covers all routes.
 // Use this only when you need it on the Gin engine directly.
-func GinBodySizeLimit(maxSize string) gin.HandlerFunc {
-	return GinWrap(BodySizeLimit(maxSize))
+func GinBodySizeLimit(maxBytes int64) gin.HandlerFunc {
+	return GinWrap(BodySizeLimit(maxBytes))
 }

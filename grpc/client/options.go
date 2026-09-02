@@ -31,11 +31,19 @@ func DefaultRetryPolicy() *resilience.RetryConfig {
 }
 
 // NewClientOptionsBuilder creates a new options builder from gokit gRPC config.
+// A ResiliencePolicy set on the config is honored as the client's policy;
+// otherwise the builder seeds a timeout-plus-default-retry policy.
 func NewClientOptionsBuilder(cfg *grpccfg.Config) *ClientOptionsBuilder {
+	policy := cfg.ResiliencePolicy
+	if policy == nil {
+		policy = resilience.NewPolicy().WithTimeoutIfUnset(cfg.Timeout).WithRetry(*DefaultRetryPolicy())
+	} else if policy.Timeout == 0 && cfg.Timeout > 0 {
+		policy.WithTimeoutIfUnset(cfg.Timeout)
+	}
 	return &ClientOptionsBuilder{
 		config:           cfg,
 		enableLogging:    true,
-		resiliencePolicy: resilience.NewPolicy().WithTimeoutIfUnset(cfg.CallTimeout).WithRetry(*DefaultRetryPolicy()),
+		resiliencePolicy: policy,
 	}
 }
 
@@ -48,7 +56,7 @@ func (b *ClientOptionsBuilder) WithLogging(enabled bool) *ClientOptionsBuilder {
 // WithRetryPolicy sets or disables the retry portion of the client resilience policy.
 func (b *ClientOptionsBuilder) WithRetryPolicy(cfg *resilience.RetryConfig) *ClientOptionsBuilder {
 	if b.resiliencePolicy == nil {
-		b.resiliencePolicy = resilience.NewPolicy().WithTimeoutIfUnset(b.config.CallTimeout)
+		b.resiliencePolicy = resilience.NewPolicy().WithTimeoutIfUnset(b.config.Timeout)
 	}
 	if cfg == nil {
 		b.resiliencePolicy.Retry = nil
@@ -131,8 +139,8 @@ func (b *ClientOptionsBuilder) buildStreamInterceptors() []grpc.StreamClientInte
 
 // GetDialTimeout returns the configured call timeout as dial timeout.
 func (b *ClientOptionsBuilder) GetDialTimeout() time.Duration {
-	if b.config.CallTimeout > 0 {
-		return b.config.CallTimeout
+	if b.config.Timeout > 0 {
+		return b.config.Timeout
 	}
 	return 10 * time.Second
 }

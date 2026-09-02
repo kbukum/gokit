@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/kbukum/gokit/component"
 )
 
 // Readiness returns a handler for K8s readiness probes.
@@ -16,7 +18,7 @@ func Readiness(serviceName string, checker HealthChecker) gin.HandlerFunc {
 
 		if checker != nil {
 			for _, ch := range checker(c.Request.Context()) {
-				if ch.Status == "unhealthy" {
+				if ch.Status == component.StatusUnhealthy {
 					status = "not_ready"
 					httpStatus = http.StatusServiceUnavailable
 					break
@@ -24,10 +26,10 @@ func Readiness(serviceName string, checker HealthChecker) gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(httpStatus, gin.H{
-			"status":    status,
-			"service":   serviceName,
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
+		c.JSON(httpStatus, ReadinessResponse{
+			Status:    status,
+			Service:   serviceName,
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
 }

@@ -18,12 +18,17 @@ const (
 )
 
 // Policy composes resilience primitives into a single reusable execution policy.
+//
+// Its exported fields carry snake_case json/mapstructure/yaml tags so a Policy can be
+// loaded from configuration and round-tripped through JSON (e.g. an httpclient
+// resilience_policy block). Callback and RNG fields are not serializable and are
+// tagged json:"-" so encoding a configured policy never fails on a function value.
 type Policy struct {
-	Retry          *RetryConfig
-	CircuitBreaker *CircuitBreakerConfig
-	Bulkhead       *BulkheadConfig
-	RateLimiter    *RateLimiterConfig
-	Timeout        time.Duration
+	Retry          *RetryConfig          `json:"retry,omitempty" yaml:"retry" mapstructure:"retry"`
+	CircuitBreaker *CircuitBreakerConfig `json:"circuit_breaker,omitempty" yaml:"circuit_breaker" mapstructure:"circuit_breaker"`
+	Bulkhead       *BulkheadConfig       `json:"bulkhead,omitempty" yaml:"bulkhead" mapstructure:"bulkhead"`
+	RateLimiter    *RateLimiterConfig    `json:"rate_limiter,omitempty" yaml:"rate_limiter" mapstructure:"rate_limiter"`
+	Timeout        time.Duration         `json:"timeout,omitempty" yaml:"timeout" mapstructure:"timeout"`
 	timeoutMode    TimeoutMode
 
 	once sync.Once
@@ -90,6 +95,18 @@ func (p *Policy) init() {
 			p.rl = NewRateLimiter(*p.RateLimiter)
 		}
 	})
+}
+
+// IsAvailable reports whether the policy's circuit breaker currently permits
+// calls. It returns true when no breaker is configured or the breaker is not
+// open, so a provider can delegate its own availability check to the policy
+// instead of duplicating breaker state.
+func (p *Policy) IsAvailable() bool {
+	if p == nil {
+		return true
+	}
+	p.init()
+	return p.cb == nil || p.cb.State() != StateOpen
 }
 
 // Execute runs fn through the configured resilience stack.

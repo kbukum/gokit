@@ -3,6 +3,7 @@ package resilience
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"net/http"
@@ -29,35 +30,88 @@ const (
 	LinearBackoff
 )
 
+// String returns the lower-case wire name of the strategy ("exponential",
+// "constant", "linear"). An unrecognized value is rendered in an identifying
+// form (e.g. "BackoffStrategy(7)") rather than masquerading as a valid strategy.
+func (s BackoffStrategy) String() string {
+	switch s {
+	case ExponentialBackoff:
+		return "exponential"
+	case ConstantBackoff:
+		return "constant"
+	case LinearBackoff:
+		return "linear"
+	default:
+		return fmt.Sprintf("BackoffStrategy(%d)", int(s))
+	}
+}
+
+func (s BackoffStrategy) valid() bool {
+	switch s {
+	case ExponentialBackoff, ConstantBackoff, LinearBackoff:
+		return true
+	default:
+		return false
+	}
+}
+
+// MarshalText encodes the strategy as its lower-case wire name so it serializes
+// to a stable string in JSON, YAML, and other text formats. An unrecognized
+// value is rejected rather than silently coerced to a default, so a corrupt or
+// programmer-introduced strategy surfaces instead of round-tripping incorrectly.
+func (s BackoffStrategy) MarshalText() ([]byte, error) {
+	if !s.valid() {
+		return nil, fmt.Errorf("resilience: unknown backoff strategy %d", int(s))
+	}
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText decodes the lower-case wire name back into a BackoffStrategy,
+// letting config keys and JSON use "exponential"/"constant"/"linear" rather
+// than opaque integers. An empty value decodes to the exponential default.
+func (s *BackoffStrategy) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "", "exponential":
+		*s = ExponentialBackoff
+	case "constant":
+		*s = ConstantBackoff
+	case "linear":
+		*s = LinearBackoff
+	default:
+		return fmt.Errorf("resilience: unknown backoff strategy %q", text)
+	}
+	return nil
+}
+
 // RetryConfig configures retry behavior.
 type RetryConfig struct {
 	// MaxAttempts is the maximum number of attempts (including the first).
-	MaxAttempts int
+	MaxAttempts int `json:"max_attempts,omitempty" yaml:"max_attempts" mapstructure:"max_attempts"`
 	// InitialBackoff is the initial delay between retries.
-	InitialBackoff time.Duration
+	InitialBackoff time.Duration `json:"initial_backoff,omitempty" yaml:"initial_backoff" mapstructure:"initial_backoff"`
 	// MaxBackoff is the maximum delay between retries.
-	MaxBackoff time.Duration
+	MaxBackoff time.Duration `json:"max_backoff,omitempty" yaml:"max_backoff" mapstructure:"max_backoff"`
 	// MaxElapsedTime bounds the elapsed-time budget for retries. It is enforced at each
 	// attempt boundary (the loop stops before starting an attempt or a backoff sleep once
 	// the budget is spent) and returns the last attempt's error. Zero means unbounded (only
 	// MaxAttempts bounds retries). A single in-flight attempt is not interrupted, because
 	// the retried function receives no context; supply a context-aware function and derive a
 	// per-attempt deadline yourself if you need to cancel a running attempt.
-	MaxElapsedTime time.Duration
+	MaxElapsedTime time.Duration `json:"max_elapsed_time,omitempty" yaml:"max_elapsed_time" mapstructure:"max_elapsed_time"`
 	// Strategy controls how the delay grows between retries.
-	Strategy BackoffStrategy
+	Strategy BackoffStrategy `json:"strategy,omitempty" yaml:"strategy" mapstructure:"strategy"`
 	// BackoffFactor is the multiplier for exponential backoff.
-	BackoffFactor float64
+	BackoffFactor float64 `json:"backoff_factor,omitempty" yaml:"backoff_factor" mapstructure:"backoff_factor"`
 	// Jitter adds randomness to backoff (0.0 to 1.0).
-	Jitter float64
+	Jitter float64 `json:"jitter,omitempty" yaml:"jitter" mapstructure:"jitter"`
 	// Rand supplies a uniform random float64 in [0.0, 1.0) used to compute jitter.
 	// Leave nil for the concurrency-safe, auto-seeded default;
 	// inject a seeded source (e.g. rand.New(rand.NewPCG(seed1, seed2)).Float64) to make backoff deterministic under test.
-	Rand func() float64
+	Rand func() float64 `json:"-" yaml:"-" mapstructure:"-"`
 	// RetryIf determines if an error should be retried.
-	RetryIf func(error) bool
+	RetryIf func(error) bool `json:"-" yaml:"-" mapstructure:"-"`
 	// OnRetry is called before each retry.
-	OnRetry func(attempt int, err error, backoff time.Duration)
+	OnRetry func(attempt int, err error, backoff time.Duration) `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 // DefaultRetryConfig returns sensible defaults.

@@ -90,8 +90,8 @@ func (f *ResolverConnectionFactory) buildDialOptions() ([]grpc.DialOption, error
 			PermitWithoutStream: f.gRPCCfg.Keepalive.PermitWithoutStream,
 		}),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(f.gRPCCfg.MaxRecvMsgSize),
-			grpc.MaxCallSendMsgSize(f.gRPCCfg.MaxSendMsgSize),
+			grpc.MaxCallRecvMsgSize(f.gRPCCfg.MaxMessageSize),
+			grpc.MaxCallSendMsgSize(f.gRPCCfg.MaxSendMessageSize),
 		),
 	)
 

@@ -34,14 +34,14 @@ func (c *Client) Close(ctx context.Context) error { return c.http.Close(ctx) }
 // New creates a new REST client from the given config. JSON headers are applied automatically.
 func New(cfg httpclient.Config) (*Client, error) {
 	// Ensure JSON headers
-	if cfg.Headers == nil {
-		cfg.Headers = make(map[string]string)
+	if cfg.DefaultHeaders == nil {
+		cfg.DefaultHeaders = make(map[string]string)
 	}
-	if _, ok := cfg.Headers["Content-Type"]; !ok {
-		cfg.Headers["Content-Type"] = "application/json"
+	if _, ok := cfg.DefaultHeaders["Content-Type"]; !ok {
+		cfg.DefaultHeaders["Content-Type"] = "application/json"
 	}
-	if _, ok := cfg.Headers["Accept"]; !ok {
-		cfg.Headers["Accept"] = "application/json"
+	if _, ok := cfg.DefaultHeaders["Accept"]; !ok {
+		cfg.DefaultHeaders["Accept"] = "application/json"
 	}
 
 	c, err := httpclient.New(cfg)

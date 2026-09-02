@@ -221,7 +221,7 @@ func TestRequestLogger_SkipsHealth(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBodySizeLimit_AppliesLimit(t *testing.T) {
-	handler := middleware.BodySizeLimit("1KB")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := middleware.BodySizeLimit(1024)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 

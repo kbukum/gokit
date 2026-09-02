@@ -34,7 +34,8 @@
 //
 //	adapter, _ := httpclient.New(httpclient.Config{
 //	    BaseURL: "https://api.example.com",
-//	    Retry:   httpclient.DefaultRetryConfig(),
-//	    CircuitBreaker: httpclient.DefaultCircuitBreakerConfig("my-api"),
+//	    ResiliencePolicy: resilience.NewPolicy().
+//	        WithRetry(*httpclient.DefaultRetryConfig()).
+//	        WithCircuitBreaker(*httpclient.DefaultCircuitBreakerConfig("my-api")),
 //	})
 package httpclient

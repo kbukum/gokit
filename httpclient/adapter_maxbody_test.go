@@ -17,7 +17,7 @@ func TestMaxResponseBytes_RejectsOversizeBufferedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := New(Config{BaseURL: srv.URL, MaxResponseBytes: 1024})
+	c, err := New(Config{BaseURL: srv.URL, MaxResponseBodyBytes: 1024})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestMaxResponseBytes_AtLimitReturned(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c, err := New(Config{BaseURL: srv.URL, MaxResponseBytes: 1024})
+	c, err := New(Config{BaseURL: srv.URL, MaxResponseBodyBytes: 1024})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestMaxResponseBytes_DefaultApplied(t *testing.T) {
 
 	var c Config
 	c.ApplyDefaults()
-	if c.MaxResponseBytes != defaultMaxResponseBytes {
-		t.Fatalf("MaxResponseBytes = %d, want default %d", c.MaxResponseBytes, defaultMaxResponseBytes)
+	if c.MaxResponseBodyBytes != defaultMaxResponseBytes {
+		t.Fatalf("MaxResponseBodyBytes = %d, want default %d", c.MaxResponseBodyBytes, defaultMaxResponseBytes)
 	}
 }

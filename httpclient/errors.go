@@ -24,7 +24,7 @@ const (
 	// ErrCodeServer indicates a server-side error (5xx).
 	ErrCodeServer
 	// ErrCodeResponseTooLarge indicates the response body exceeded the
-	// configured maximum size (see Config.MaxResponseBytes).
+	// configured maximum size (see Config.MaxResponseBodyBytes).
 	ErrCodeResponseTooLarge
 )
 

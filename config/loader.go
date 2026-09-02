@@ -289,6 +289,7 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 			logging.OutputDecodeHook(),
 			mapstructure.StringToTimeDurationHookFunc(),
 			mapstructure.StringToSliceHookFunc(","),
+			mapstructure.TextUnmarshallerHookFunc(),
 		),
 	)); err != nil {
 		return fmt.Errorf("failed to unmarshal config for service %s: %w", serviceName, err)

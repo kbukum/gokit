@@ -16,17 +16,17 @@ var startTime = time.Now()
 func Info(serviceName string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		v := version.GetVersionInfo()
-		c.JSON(http.StatusOK, gin.H{
-			"service":    serviceName,
-			"version":    v.Version,
-			"git_commit": v.GitCommit,
-			"git_branch": v.GitBranch,
-			"build_time": v.BuildTime,
-			"go_version": v.GoVersion,
-			"is_release": v.IsRelease,
-			"is_dirty":   v.IsDirty,
-			"uptime":     time.Since(startTime).String(),
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		c.JSON(http.StatusOK, InfoResponse{
+			Service:   serviceName,
+			Version:   v.Version,
+			GitCommit: v.GitCommit,
+			GitBranch: v.GitBranch,
+			BuildTime: v.BuildTime,
+			GoVersion: v.GoVersion,
+			IsRelease: v.IsRelease,
+			IsDirty:   v.IsDirty,
+			Uptime:    time.Since(startTime).String(),
+			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
 }

@@ -2,8 +2,10 @@ package resilience
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -172,5 +174,55 @@ func strategyName(strategy BackoffStrategy) string {
 		return "linear"
 	default:
 		return "exponential"
+	}
+}
+
+func TestPolicyJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	// A fully-populated policy, including a Retry block carrying non-serializable
+	// callbacks, must marshal without error (func fields are json:"-") and decode
+	// back to the same serializable shape via snake_case keys.
+	in := &Policy{
+		Retry: &RetryConfig{
+			MaxAttempts:    4,
+			InitialBackoff: 50 * time.Millisecond,
+			MaxBackoff:     2 * time.Second,
+			Strategy:       LinearBackoff,
+			BackoffFactor:  1.5,
+			Jitter:         0.2,
+			Rand:           func() float64 { return 0 },
+			RetryIf:        func(error) bool { return true },
+			OnRetry:        func(int, error, time.Duration) {},
+		},
+		CircuitBreaker: &CircuitBreakerConfig{Name: "cb", MaxFailures: 5, Timeout: time.Second, OnStateChange: func(string, State, State) {}},
+		RateLimiter:    &RateLimiterConfig{Name: "rl", Rate: 10, Burst: 2, OnLimit: func(string) {}},
+		Bulkhead:       &BulkheadConfig{Name: "bh", MaxConcurrent: 3, MaxWait: time.Second, OnReject: func(string) {}},
+		Timeout:        5 * time.Second,
+	}
+
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal policy: %v", err)
+	}
+	if !strings.Contains(string(data), `"max_attempts"`) || !strings.Contains(string(data), `"circuit_breaker"`) {
+		t.Fatalf("expected snake_case keys, got %s", data)
+	}
+	if strings.Contains(string(data), `"strategy":0`) {
+		t.Fatalf("strategy should encode as text, got %s", data)
+	}
+
+	var out Policy
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("Unmarshal policy: %v", err)
+	}
+	if out.Retry == nil || out.Retry.MaxAttempts != 4 || out.Retry.Strategy != LinearBackoff {
+		t.Fatalf("retry did not round-trip: %+v", out.Retry)
+	}
+	if out.CircuitBreaker == nil || out.CircuitBreaker.MaxFailures != 5 {
+		t.Fatalf("circuit breaker did not round-trip: %+v", out.CircuitBreaker)
+	}
+	if out.Timeout != 5*time.Second {
+		t.Fatalf("timeout did not round-trip: %v", out.Timeout)
 	}
 }

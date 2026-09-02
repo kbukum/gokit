@@ -12,7 +12,7 @@ import (
 func TestGinBodySizeLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(GinBodySizeLimit("10MB"))
+	r.Use(GinBodySizeLimit(10 * 1024 * 1024))
 	r.POST("/", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("hello"))

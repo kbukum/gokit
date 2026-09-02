@@ -9,14 +9,17 @@ import (
 
 // Config holds HTTP server configuration.
 type Config struct {
-	Host         string                `yaml:"host" mapstructure:"host"`
-	Port         int                   `yaml:"port" mapstructure:"port"`
-	ReadTimeout  int                   `yaml:"read_timeout" mapstructure:"read_timeout"`   // seconds
-	WriteTimeout int                   `yaml:"write_timeout" mapstructure:"write_timeout"` // seconds
-	IdleTimeout  int                   `yaml:"idle_timeout" mapstructure:"idle_timeout"`   // seconds
-	MaxBodySize  string                `yaml:"max_body_size" mapstructure:"max_body_size"` // e.g. "10MB"
-	TLS          *security.TLSConfig   `yaml:"tls" mapstructure:"tls"`
-	CORS         middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
+	Host            string                `yaml:"host" mapstructure:"host"`
+	Port            int                   `yaml:"port" mapstructure:"port"`
+	ReadTimeout     int                   `yaml:"read_timeout" mapstructure:"read_timeout"`         // seconds
+	WriteTimeout    int                   `yaml:"write_timeout" mapstructure:"write_timeout"`       // seconds
+	IdleTimeout     int                   `yaml:"idle_timeout" mapstructure:"idle_timeout"`         // seconds
+	RequestTimeout  int                   `yaml:"request_timeout" mapstructure:"request_timeout"`   // seconds; 0 disables the per-request timeout. Applies to REST routes only, not RPC/streaming mounts; keep it off in front of SSE/streaming handlers.
+	ShutdownTimeout int                   `yaml:"shutdown_timeout" mapstructure:"shutdown_timeout"` // seconds
+	MaxBodyBytes    int64                 `yaml:"max_body_bytes" mapstructure:"max_body_bytes"`     // request body cap in bytes
+	EnableH2C       *bool                 `yaml:"enable_h2c" mapstructure:"enable_h2c"`             // serve HTTP/2 cleartext when TLS is off (default true)
+	TLS             *security.TLSConfig   `yaml:"tls" mapstructure:"tls"`
+	CORS            middleware.CORSConfig `yaml:"cors" mapstructure:"cors"`
 	// SecurityHeaders configures the secure-by-default response headers applied to every route.
 	// Zero value yields secure defaults; set Disabled to opt out.
 	SecurityHeaders security.HeadersConfig `yaml:"security_headers" mapstructure:"security_headers"`
@@ -53,8 +56,15 @@ func (c *Config) ApplyDefaults() {
 	if c.IdleTimeout == 0 {
 		c.IdleTimeout = 60
 	}
-	if c.MaxBodySize == "" {
-		c.MaxBodySize = "10MB"
+	if c.ShutdownTimeout == 0 {
+		c.ShutdownTimeout = 5
+	}
+	if c.MaxBodyBytes == 0 {
+		c.MaxBodyBytes = 10 * 1024 * 1024
+	}
+	if c.EnableH2C == nil {
+		enabled := true
+		c.EnableH2C = &enabled
 	}
 	if len(c.CORS.AllowedOrigins) == 0 {
 		c.CORS.AllowedOrigins = []string{"*"}
@@ -65,6 +75,12 @@ func (c *Config) ApplyDefaults() {
 	if len(c.CORS.AllowedHeaders) == 0 {
 		c.CORS.AllowedHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	}
+}
+
+// H2CEnabled reports whether HTTP/2 cleartext should be served when TLS is off.
+// It defaults to true when unset.
+func (c *Config) H2CEnabled() bool {
+	return c.EnableH2C == nil || *c.EnableH2C
 }
 
 // Validate checks the configuration for invalid values.
@@ -80,6 +96,15 @@ func (c *Config) Validate() error {
 	}
 	if c.IdleTimeout < 0 {
 		return fmt.Errorf("server.idle_timeout must be non-negative (got: %d)", c.IdleTimeout)
+	}
+	if c.RequestTimeout < 0 {
+		return fmt.Errorf("server.request_timeout must be non-negative (got: %d)", c.RequestTimeout)
+	}
+	if c.ShutdownTimeout < 0 {
+		return fmt.Errorf("server.shutdown_timeout must be non-negative (got: %d)", c.ShutdownTimeout)
+	}
+	if c.MaxBodyBytes < 0 {
+		return fmt.Errorf("server.max_body_bytes must be non-negative (got: %d)", c.MaxBodyBytes)
 	}
 	if _, err := c.SecurityHeaders.HeaderMap(); err != nil {
 		return err
