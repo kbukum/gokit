@@ -27,13 +27,52 @@ type Event struct {
 // It is not safe for concurrent use; drive it from a single test goroutine.
 type StreamClient struct {
 	resp        *http.Response
-	reader      *bufio.Reader
+	scanner     *bufio.Scanner
 	lastEventID string
 }
 
 // newStreamClient wraps an open SSE response body for frame-by-frame reading.
 func newStreamClient(resp *http.Response) *StreamClient {
-	return &StreamClient{resp: resp, reader: bufio.NewReader(resp.Body)}
+	return &StreamClient{resp: resp, scanner: newEventScanner(resp.Body)}
+}
+
+// newEventScanner builds a scanner that splits an SSE byte stream into lines on
+// any of the three event-stream terminators (CR, LF, or CRLF), matching the SSE
+// spec instead of bufio's LF-only [bufio.ScanLines].
+func newEventScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Split(scanEventLines)
+	return s
+}
+
+// scanEventLines is a [bufio.SplitFunc] that yields one line per call, stripping a
+// trailing CR, LF, or CRLF. It defers on a lone trailing CR until more data (or
+// EOF) reveals whether an LF follows, so CRLF is never split into two lines.
+func scanEventLines(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case '\n':
+			return i + 1, data[:i], nil
+		case '\r':
+			if i+1 < len(data) {
+				if data[i+1] == '\n' {
+					return i + 2, data[:i], nil
+				}
+				return i + 1, data[:i], nil
+			}
+			if atEOF {
+				return i + 1, data[:i], nil
+			}
+			return 0, nil, nil // lone trailing CR: wait for the byte after it
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }
 
 // Response returns the underlying HTTP response (headers, status, body).
@@ -65,16 +104,16 @@ func (c *StreamClient) Next() (Event, error) {
 		haveData bool
 	)
 	for {
-		line, err := c.reader.ReadString('\n')
-		if err != nil {
-			// A partial trailing frame (no terminating blank line) is malformed;
-			// discard whatever was accumulated and surface the stream error.
-			if err == io.EOF {
-				return Event{}, io.EOF
+		if !c.scanner.Scan() {
+			if err := c.scanner.Err(); err != nil {
+				return Event{}, err
 			}
-			return Event{}, err
+			// The stream ended. A partial trailing frame (no terminating blank
+			// line) is malformed; discard whatever was accumulated and report EOF
+			// rather than a truncated event.
+			return Event{}, io.EOF
 		}
-		line = strings.TrimRight(line, "\r\n")
+		line := c.scanner.Text()
 
 		if line == "" {
 			// Frame boundary. Per the SSE spec a block with no data field is not
@@ -106,8 +145,12 @@ func (c *StreamClient) Next() (Event, error) {
 			haveData = true
 		case "id":
 			// The last-event ID persists across blocks and carries onto every
-			// later dispatched event until changed.
-			c.lastEventID = value
+			// later dispatched event until changed. Per the SSE spec an id whose
+			// value contains U+0000 is ignored, so the previous id is kept rather
+			// than adopting an invalid reconnection token.
+			if !strings.ContainsRune(value, '\x00') {
+				c.lastEventID = value
+			}
 		}
 	}
 }

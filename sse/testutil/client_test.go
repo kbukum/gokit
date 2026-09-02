@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"io"
@@ -12,7 +11,7 @@ import (
 // parserFrom builds a StreamClient reading directly from raw SSE bytes, bypassing
 // the HTTP transport so the wire parser can be exercised in isolation.
 func parserFrom(raw string) *StreamClient {
-	return &StreamClient{reader: bufio.NewReader(strings.NewReader(raw))}
+	return &StreamClient{scanner: newEventScanner(strings.NewReader(raw))}
 }
 
 // drain reads every dispatchable event until EOF, returning them in order. Any
@@ -66,6 +65,11 @@ func TestStreamClient_Next_Framing(t *testing.T) {
 			want: []Event{{Name: "ping", Data: []byte("crlf")}},
 		},
 		{
+			name: "CR-only line endings",
+			raw:  "event: ping\rdata: cr\r\r",
+			want: []Event{{Name: "ping", Data: []byte("cr")}},
+		},
+		{
 			name: "unknown fields are ignored",
 			raw:  "retry: 5000\nfoo: bar\ndata: kept\n\n",
 			want: []Event{{Data: []byte("kept")}},
@@ -87,6 +91,14 @@ func TestStreamClient_Next_Framing(t *testing.T) {
 				{Data: []byte("a"), ID: "1"},
 				{Data: []byte("b"), ID: "1"},
 				{Data: []byte("c"), ID: "2"},
+			},
+		},
+		{
+			name: "id containing NUL is ignored and previous id is kept",
+			raw:  "id: 1\ndata: a\n\nid: x\x00y\ndata: b\n\n",
+			want: []Event{
+				{Data: []byte("a"), ID: "1"},
+				{Data: []byte("b"), ID: "1"},
 			},
 		},
 		{
