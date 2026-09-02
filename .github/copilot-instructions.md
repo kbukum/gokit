@@ -10,6 +10,7 @@ Shared engineering baseline — apply to all work here:
 
 - **Phases:** discover → decide (Redesign / Align / Enhance / Drop / Leave) → implement completely → validate.
   Prefer root-cause redesign over symptom patches; no compatibility shims in pre-stable code.
+  Implement the *simplest* design that fully solves it — flexible, extensible, and scalable — on current idiomatic best practices, not folklore; complexity must earn its place.
 - **Layering & reuse:** explicit, acyclic dependency direction —
   lower layers never import higher (enforced by `depguard`). Reuse
   or enhance the canonical owner before writing new code;
@@ -30,7 +31,8 @@ Shared engineering baseline — apply to all work here:
 - **Composition:** explicit injected registries and config-driven selection;
   no `init()` side effects, no mutable package-global registries;
   inject logger / tracer / policies rather than reaching for globals.
-- **Tests:** behavioral and deterministic; green under `-race -shuffle=on -count=1`;
+- **Tests:** behavioral and deterministic; **test-first** (failing test → minimal code → refactor while green);
+  green under `-race -shuffle=on -count=1`;
   cover failure paths; injected clocks (never `time.Sleep`); fixtures over embedded config;
   regression-test every fix.
 - **AI / model features:** treat model output and retrieved context as untrusted;

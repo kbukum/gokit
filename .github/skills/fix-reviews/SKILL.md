@@ -64,6 +64,7 @@ git diff origin/main...HEAD --name-only     # the files in scope
 
 - Search the whole change set for the pattern (grep/glob) and fix every occurrence.
 - Make the same class of fix consistently; prefer a root-cause change over repeating a patch.
+- Where a fix changes behavior, do it **test-first** (failing test → fix → green, failure paths included); keep the fix the simplest correct design on current idiomatic best practices, not a bolt-on shim.
 - Keep each pattern's fixes cohesive so the follow-up commit reads as one intent.
 
 ## 4. Validate — scoped to what changed
