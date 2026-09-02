@@ -33,6 +33,7 @@ Apply the current step's actions **test-first**, honoring gokit's engineering ba
 
 - **TDD.** For each behavior: failing test → minimal code → refactor while green,
   failure paths included. Never write the production code first and add tests after.
+- **Best-practices bar.** Deliver the *simplest* design that fully solves the step — simple, not shortsighted: keep it flexible and extensible (small typed seams / functional options over rigid or speculative abstraction) and scalable (bounded resources, no accidental O(n²) or unbounded buffering). Use current, idiomatic Go — the right implementation for today's stdlib/spec/security guidance, not folklore. Complexity must earn its place; if a simpler correct design exists, take it and delete the rest.
 - **Placement & layering.** Right module (root vs sub-module vs nested adapter);
   acyclic imports (lower layers never import higher); new packages get `doc.go`.
 - **Canonical reuse.** Before writing a new type/helper, open [`docs/concern-owners.md`](../../../docs/concern-owners.md), find the concern's owner, and reuse or extend it — never duplicate a shared concern (errors, config, logging, path safety, retries, HTTP, registries). Put new logic in concern-named files; never in `doc.go`.
