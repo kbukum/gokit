@@ -20,9 +20,9 @@
 //	    }),
 //	)
 //
-//	stream, resp := h.MustConnect(t, "valid-token")
+//	stream := h.MustConnect(t, ctx, "valid-token")
 //	defer stream.Close()
-//	testutil.RequireStatus(t, resp, http.StatusOK)
+//	testutil.RequireStatus(t, stream, http.StatusOK)
 //
 //	h.Hub.BroadcastFrame("user:user-1", sse.Frame{Event: "ping", Data: []byte(`{"n":1}`)})
 //	evt := stream.Require(t, "ping")

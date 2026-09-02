@@ -41,8 +41,16 @@ type Frame struct {
 }
 
 // Client represents a connected SSE client.
+//
+// id is the unique per-connection key the hub registers under, so two
+// connections never evict each other from the client map. route is the
+// broadcast-matching key: many connections may share one route (for example
+// every tab of the same principal), and it defaults to id when unset. Keeping
+// the two separate lets per-principal scoping fan out to every live connection
+// instead of silently replacing the previous one.
 type Client struct {
-	id       string                         // Unique client ID
+	id       string                         // Unique per-connection registration key
+	route    string                         // Broadcast-matching key; defaults to id when empty
 	metadata map[string]string              // Optional metadata (userID, sessionID, etc.)
 	events   chan Frame                     // Channel for sending events to client
 	log      atomic.Pointer[logging.Logger] // Published by the hub at registration; nil before then
@@ -71,6 +79,17 @@ func WithSessionID(sessionID string) ClientOption {
 	return WithMetadata("session_id", sessionID)
 }
 
+// WithRoute sets the client's broadcast-matching key independently of its unique
+// registration id. Use it to scope a connection to a shared subject (such as a
+// per-principal routing key) without colliding with other connections for the
+// same subject: each connection keeps a unique id while several share one route.
+// An empty route leaves the client matching on its id.
+func WithRoute(route string) ClientOption {
+	return func(c *Client) {
+		c.route = route
+	}
+}
+
 // NewClient creates a new SSE client with optional metadata.
 func NewClient(id string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -86,6 +105,15 @@ func NewClient(id string, opts ...ClientOption) *Client {
 
 // ID returns the client's unique identifier.
 func (c *Client) ID() string {
+	return c.id
+}
+
+// Route returns the client's broadcast-matching key: the value set via
+// [WithRoute], or the unique id when no route was configured.
+func (c *Client) Route() string {
+	if c.route != "" {
+		return c.route
+	}
 	return c.id
 }
 
@@ -160,7 +188,8 @@ type Hub struct {
 // Message represents a message to broadcast.
 //
 // Pattern selects which clients receive the message —
-// glob-matched against each client's ID (e.g. "execution:*" or "execution:abc123").
+// glob-matched against each client's routing key (its [WithRoute] value, or its
+// unique id when unset), e.g. "execution:*" or "execution:abc123".
 // Use "*" to reach every connected client.
 //
 // Event, when non-empty, becomes the SSE `event:` line
@@ -318,8 +347,9 @@ func (h *Hub) dispatch(msg *Message) {
 
 	frame := Frame{Event: msg.Event, Data: msg.Data}
 	matchCount := 0
-	for clientID, client := range h.clients {
-		matched, err := path.Match(msg.Pattern, clientID)
+	for _, client := range h.clients {
+		route := client.Route()
+		matched, err := path.Match(msg.Pattern, route)
 		if err != nil {
 			h.log.Error("[SSE_HUB] Pattern match error", map[string]any{
 				"pattern": msg.Pattern,
@@ -378,6 +408,23 @@ func (h *Hub) GetClient(id string) *Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.clients[id]
+}
+
+// GetClientsByRoute returns every connected client whose broadcast-matching key
+// matches pattern, using the same glob semantics as a broadcast (e.g. "user:*"
+// or "user:alice"). Because several connections can share one route, this may
+// return multiple clients; the result is empty when none match.
+func (h *Hub) GetClientsByRoute(pattern string) []*Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var matched []*Client
+	for _, client := range h.clients {
+		if ok, err := path.Match(pattern, client.Route()); err == nil && ok {
+			matched = append(matched, client)
+		}
+	}
+	return matched
 }
 
 // Ensure Hub implements Broadcaster.

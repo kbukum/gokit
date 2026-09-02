@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -32,6 +33,8 @@ func TestBearerAuthenticator_HeaderOnly(t *testing.T) {
 		{name: "missing header", wantStatus: http.StatusUnauthorized},
 		{name: "wrong scheme", header: "Basic abc", wantStatus: http.StatusUnauthorized},
 		{name: "empty token", header: "Bearer ", wantStatus: http.StatusUnauthorized},
+		{name: "whitespace-only token", header: "Bearer    ", wantStatus: http.StatusUnauthorized},
+		{name: "extra token", header: "Bearer a b", wantStatus: http.StatusUnauthorized},
 		{name: "token in query ignored", query: "token=good-token", wantStatus: http.StatusUnauthorized},
 	}
 	for _, tc := range tests {
@@ -113,5 +116,41 @@ func TestIdentityFromContext(t *testing.T) {
 	got, ok := IdentityFromContext(ctx)
 	if !ok || got != "user-9" {
 		t.Fatalf("expected identity user-9, got %v (ok=%v)", got, ok)
+	}
+}
+
+// TestBearerAuthenticator_NilValidator verifies a nil validator is a fail-closed
+// wiring error: construction succeeds but every request is rejected with 401
+// rather than panicking on the request path.
+func TestBearerAuthenticator_NilValidator(t *testing.T) {
+	t.Parallel()
+
+	auth := BearerAuthenticator(nil)
+	r := httptest.NewRequest(http.MethodGet, "/events", http.NoBody)
+	r.Header.Set("Authorization", "Bearer any-token")
+
+	identity, err := auth.Authenticate(r)
+	if identity != nil {
+		t.Fatalf("expected nil identity from nil validator, got %v", identity)
+	}
+	appErr, ok := apperrors.AsAppError(err)
+	if !ok || appErr.HTTPStatus != http.StatusUnauthorized {
+		t.Fatalf("expected 401 from nil validator, got %v", err)
+	}
+}
+
+// TestWriteAuthError_NoMessageLeak verifies the response body never echoes an
+// injected error's message: only the canonical 401/403 problem detail is written.
+func TestWriteAuthError_NoMessageLeak(t *testing.T) {
+	t.Parallel()
+
+	secret := "super-secret-token-abc123"
+	rec := httptest.NewRecorder()
+	writeAuthError(rec, apperrors.Unauthorized(secret))
+	if body := rec.Body.String(); strings.Contains(body, secret) {
+		t.Fatalf("response body leaked the error message: %q", body)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 }

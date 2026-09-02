@@ -34,6 +34,16 @@ type AuthenticatorFunc func(r *http.Request) (any, error)
 // Authenticate implements [Authenticator].
 func (f AuthenticatorFunc) Authenticate(r *http.Request) (any, error) { return f(r) }
 
+// failClosedAuthenticator rejects every connection with 401. It is installed
+// when a nil [Authenticator] is supplied to [WithAuthenticator], turning a wiring
+// mistake into a closed gate rather than a silently unauthenticated endpoint.
+type failClosedAuthenticator struct{}
+
+// Authenticate implements [Authenticator] by always rejecting.
+func (failClosedAuthenticator) Authenticate(*http.Request) (any, error) {
+	return nil, apperrors.Unauthorized("authenticator is not configured")
+}
+
 // TokenValidator validates a bearer token and returns opaque claims. It is
 // declared locally so the transport layer (L5) never imports the auth module
 // (L6): any concrete validator with this method — including auth.TokenValidator —
@@ -49,20 +59,33 @@ type TokenValidator interface {
 // the Authorization header only and validates it with v.
 //
 // Credentials are never read from the URL query string: a token there leaks into
-// access logs, proxies, and browser history. A missing header, a non-Bearer
-// scheme, an empty token, or a validation failure all reject the connection with
-// 401 before the stream opens.
+// access logs, proxies, and browser history. A missing header, a malformed
+// bearer value (wrong scheme, whitespace-only or extra tokens), or a validation
+// failure all reject the connection with 401 before the stream opens.
+//
+// A nil v is a wiring error: rather than panic on the request path, the returned
+// authenticator fails closed and rejects every connection with 401, so a
+// misconfigured endpoint can never authenticate a request.
 func BearerAuthenticator(v TokenValidator) Authenticator {
+	if v == nil {
+		return AuthenticatorFunc(func(*http.Request) (any, error) {
+			return nil, apperrors.Unauthorized("authenticator is not configured")
+		})
+	}
 	return AuthenticatorFunc(func(r *http.Request) (any, error) {
 		header := r.Header.Get("Authorization")
 		if header == "" {
 			return nil, apperrors.Unauthorized("missing authorization header")
 		}
-		scheme, token, ok := strings.Cut(header, " ")
-		if !ok || !strings.EqualFold(scheme, security.BearerAuthScheme) || token == "" {
+		// Parse exactly a scheme and a token; strings.Fields collapses runs of
+		// whitespace and drops empties, so a whitespace-only credential and an
+		// extra-token form are rejected here rather than handed to a permissive
+		// validator.
+		fields := strings.Fields(header)
+		if len(fields) != 2 || !strings.EqualFold(fields[0], security.BearerAuthScheme) {
 			return nil, apperrors.Unauthorized("invalid authorization scheme; expected 'Bearer <token>'")
 		}
-		claims, err := v.ValidateToken(token)
+		claims, err := v.ValidateToken(fields[1])
 		if err != nil {
 			return nil, apperrors.Unauthorized("invalid or expired token")
 		}
@@ -86,16 +109,27 @@ func IdentityFromContext(ctx context.Context) (any, bool) {
 	return v, v != nil
 }
 
-// writeAuthError rejects a connection before the stream opens, mapping err to an
-// RFC 9457 problem response. An [apperrors.AppError] carries its own HTTP status
-// (403 for Forbidden, 401 for Unauthorized); any other error defaults to 401.
+// writeAuthError rejects a connection before the stream opens, collapsing err
+// into one of the two statuses the SSE auth contract promises and writing an RFC
+// 9457 problem response. An [apperrors.Forbidden] error (an authenticated but
+// unauthorized principal) becomes a canonical 403; every other rejection becomes
+// a canonical 401. The originating error's message is never surfaced, so an
+// injected authenticator or resolver cannot leak credential or identity detail
+// through the response body or an unexpected status.
 func writeAuthError(w http.ResponseWriter, err error) {
-	appErr, ok := apperrors.AsAppError(err)
-	if !ok {
-		appErr = apperrors.Unauthorized(err.Error())
-	}
-	problem := appErr.ToProblemDetail()
+	problem := canonicalAuthError(err).ToProblemDetail()
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(problem.Status)
 	_ = json.NewEncoder(w).Encode(problem)
+}
+
+// canonicalAuthError maps any rejection onto a canonical [apperrors.Forbidden]
+// (403) or [apperrors.Unauthorized] (401) with a generic message, discarding the
+// original error's contents so nothing an injected implementation returns reaches
+// the client.
+func canonicalAuthError(err error) *apperrors.AppError {
+	if appErr, ok := apperrors.AsAppError(err); ok && appErr.Code == apperrors.ErrCodeForbidden {
+		return apperrors.Forbidden("")
+	}
+	return apperrors.Unauthorized("")
 }

@@ -24,9 +24,10 @@ type ConnectedEvent struct {
 // before the stream opens: on rejection the handler writes the mapped 401/403
 // status and returns without registering a client or emitting any frame. Derive
 // credentials from the Authorization header only (see [BearerAuthenticator]) —
-// never the query string. A [WithClientIdentity] resolver can then replace
-// clientID with a per-principal routing key so broadcasts scope to the
-// authenticated subject.
+// never the query string. A [WithClientIdentity] resolver can then attach a
+// per-principal routing key so broadcasts scope to the authenticated subject
+// while clientID stays the unique per-connection registration key, letting
+// several concurrent streams for one principal coexist.
 func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ServeOption) {
 	cfg := newServeConfig(opts...)
 
@@ -35,9 +36,12 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		baseCtx := r.Context()
 		identity, err := cfg.authenticator.Authenticate(r)
 		if err != nil {
+			// Log only the controlled canonical code — never err.Error(), which
+			// may carry the bearer token or other credential detail from an
+			// injected authenticator.
 			hub.log.WarnCtx(baseCtx, "[SSE] Authentication rejected", map[string]any{
 				"client_id": clientID,
-				"error":     err.Error(),
+				"reason":    canonicalAuthError(err).Code,
 			})
 			writeAuthError(w, err)
 			return
@@ -46,15 +50,21 @@ func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string,
 		if cfg.resolver != nil {
 			resolvedID, resolvedOpts, rErr := cfg.resolver(r, identity)
 			if rErr != nil {
+				// As above, the resolver error may embed principal or
+				// authorization detail; log only the canonical code.
 				hub.log.WarnCtx(baseCtx, "[SSE] Identity resolution rejected", map[string]any{
 					"client_id": clientID,
-					"error":     rErr.Error(),
+					"reason":    canonicalAuthError(rErr).Code,
 				})
 				writeAuthError(w, rErr)
 				return
 			}
+			// The resolved value is a per-principal routing key, not a new
+			// connection id: apply it as the client's route so every concurrent
+			// stream for the principal keeps its unique registration key and none
+			// evicts another. clientID stays the unique per-connection id.
 			if resolvedID != "" {
-				clientID = resolvedID
+				clientOpts = append(clientOpts, WithRoute(resolvedID))
 			}
 			clientOpts = append(clientOpts, resolvedOpts...)
 		}

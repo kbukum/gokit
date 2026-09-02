@@ -33,9 +33,10 @@
 // history. [BearerAuthenticator] adapts any structural [TokenValidator] (such as
 // auth.TokenValidator) without importing the auth module, keeping this transport
 // layer decoupled from identity. A [WithClientIdentity] resolver maps the
-// verified principal to a routing key so broadcasts scope per-subject:
+// verified principal to a routing key so broadcasts scope per-subject, while the
+// per-connection id stays unique so concurrent streams for one principal coexist:
 //
-//	sse.ServeSSE(hub, w, r, "",
+//	sse.ServeSSE(hub, w, r, uuid.NewString(),
 //	    sse.WithAuthenticator(sse.BearerAuthenticator(validator)),
 //	    sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
 //	        claims := identity.(*Claims)

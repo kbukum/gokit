@@ -10,10 +10,11 @@ type ServeOption func(*serveConfig)
 // IdentityResolver derives a client's routing key from the authenticated
 // principal, enabling per-principal event scoping. It runs only after a
 // successful [Authenticator] and receives the request plus the resolved
-// identity. The returned clientID, when non-empty, replaces the clientID passed
-// to [ServeSSE] as the broadcast-matching key; the returned options add client
-// metadata. A returned [apperrors.Forbidden] error rejects the connection with
-// 403, any other error with 401.
+// identity. The returned clientID, when non-empty, becomes the client's
+// broadcast-matching route (via [WithRoute]) without replacing the unique
+// per-connection id, so concurrent streams for one principal coexist; the
+// returned options add client metadata. A returned [apperrors.Forbidden] error
+// rejects the connection with 403, any other error with 401.
 type IdentityResolver func(r *http.Request, identity any) (clientID string, opts []ClientOption, err error)
 
 type serveConfig struct {
@@ -26,11 +27,16 @@ type serveConfig struct {
 // the stream opens. On rejection the handler writes the mapped 401/403 status and
 // never starts the event loop. Without this option the endpoint stays
 // unauthenticated.
+//
+// A nil authenticator is a wiring error, not an "unauthenticated" request: it is
+// installed as a fail-closed gate that rejects every connection with 401, so an
+// endpoint meant to be protected can never silently open up.
 func WithAuthenticator(a Authenticator) ServeOption {
 	return func(c *serveConfig) {
-		if a != nil {
-			c.authenticator = a
+		if a == nil {
+			a = failClosedAuthenticator{}
 		}
+		c.authenticator = a
 	}
 }
 

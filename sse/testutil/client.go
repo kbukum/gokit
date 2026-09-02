@@ -46,7 +46,9 @@ func (c *StreamClient) Close() error {
 
 // Next reads the next complete SSE event, blocking until a blank-line frame
 // boundary arrives. Comment (`:`) lines — including keep-alives — are skipped.
-// It returns [io.EOF] when the stream ends.
+// A frame is only complete at its blank-line boundary: when the stream ends
+// before that boundary, any partially-read fields are discarded and [io.EOF] is
+// returned rather than a truncated event.
 func (c *StreamClient) Next() (Event, error) {
 	var (
 		evt      Event
@@ -56,9 +58,10 @@ func (c *StreamClient) Next() (Event, error) {
 	for {
 		line, err := c.reader.ReadString('\n')
 		if err != nil {
-			if err == io.EOF && (haveData || evt.Name != "" || evt.ID != "") {
-				evt.Data = []byte(strings.Join(data, "\n"))
-				return evt, nil
+			// A partial trailing frame (no terminating blank line) is malformed;
+			// discard whatever was accumulated and surface the stream error.
+			if err == io.EOF {
+				return Event{}, io.EOF
 			}
 			return Event{}, err
 		}

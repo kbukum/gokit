@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kbukum/gokit/security"
@@ -22,22 +24,30 @@ type Harness struct {
 }
 
 // New starts a Harness serving ServeSSE at the server root with the given base
-// clientID and options. When the options include an [sse.WithClientIdentity]
-// resolver, the resolved routing key overrides baseClientID per connection.
+// clientID and options. Each connection receives a unique per-connection id
+// derived from baseClientID so concurrent streams never evict one another; when
+// the options include an [sse.WithClientIdentity] resolver, the resolved routing
+// key becomes the broadcast-matching key while the unique id is preserved.
 func New(t *testing.T, baseClientID string, opts ...sse.ServeOption) *Harness {
 	t.Helper()
 
 	hub := sse.NewHub()
 	go hub.Run()
 
+	var conns atomic.Int64
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sse.ServeSSE(hub, w, r, baseClientID, opts...)
+		clientID := baseClientID + "#" + strconv.FormatInt(conns.Add(1), 10)
+		sse.ServeSSE(hub, w, r, clientID, opts...)
 	})
 	server := httptest.NewServer(handler)
 
 	t.Cleanup(func() {
-		server.Close()
+		// Stop the hub before closing the server: hub.Stop closes the client
+		// event channels so open SSE handlers return, and httptest.Server.Close
+		// blocks on active handlers — closing the server first can hang cleanup
+		// when a test leaves a stream open.
 		hub.Stop()
+		server.Close()
 	})
 	return &Harness{Hub: hub, Server: server}
 }
@@ -73,8 +83,8 @@ func (h *Harness) MustConnect(t *testing.T, ctx context.Context, token string) *
 	return stream
 }
 
-// RequireStatus asserts the stream's response status, drains and closes rejected
-// bodies so no test goroutine leaks a held connection, and returns the response.
+// RequireStatus asserts the stream's response status, and drains and closes
+// rejected bodies so no test goroutine leaks a held connection.
 func RequireStatus(t *testing.T, stream *StreamClient, want int) {
 	t.Helper()
 	resp := stream.Response() //nolint:bodyclose // stream owns the body; the caller closes accepted streams, and rejected ones are drained/closed below.

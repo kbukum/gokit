@@ -15,6 +15,8 @@ package main
 
 import (
     "net/http"
+
+    "github.com/google/uuid"
     "github.com/kbukum/gokit/sse"
 )
 
@@ -24,7 +26,9 @@ func main() {
 
     // SSE endpoint — authenticate from the Authorization header only.
     http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-        sse.ServeSSE(hub, w, r, "",
+        // Pass a unique per-connection id so concurrent streams for one principal
+        // never evict each other; WithClientIdentity sets the shared routing key.
+        sse.ServeSSE(hub, w, r, uuid.NewString(),
             sse.WithAuthenticator(sse.BearerAuthenticator(validator)),
             sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
                 claims := identity.(*Claims)
@@ -115,12 +119,13 @@ server), and a `StreamClient` that decodes framed events and asserts on the
 
 ## Cross-kit parity
 
-The header-only authentication seam is a gokit-side security correction, tracked
-for parity against rskit. rskit's SSE/streaming transport should expose the same
-concept under the same name (an injected authenticator that derives credentials
-from the `Authorization` header, rejecting query-string tokens, with 401/403
-semantics). Parity is scoped to the wire contract and the concept, not the Go
-option types.
+The header-only authentication seam is a gokit-side security correction. Its
+rskit counterpart (the SSE/streaming transport) should mirror the same concept
+under the same name: an injected authenticator that derives credentials from the
+`Authorization` header, rejects query-string tokens, and applies 401/403
+semantics. Parity is scoped to the wire contract and the concept, not the Go
+option types. When this mirroring is scheduled, record it in an rskit tracking
+issue (https://github.com/kbukum/rskit) and link it here.
 
 ---
 

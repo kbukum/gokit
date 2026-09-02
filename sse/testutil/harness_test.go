@@ -120,8 +120,8 @@ func TestUnauthenticatedEndpointStillWorks(t *testing.T) {
 	testutil.RequireStatus(t, stream, http.StatusOK)
 	stream.SkipConnected(t)
 
-	waitForClient(t, h, "open:1")
-	h.Hub.BroadcastFrame("open:1", sse.Frame{Event: "msg", Data: []byte(`{}`)})
+	waitForClient(t, h, "open:1*")
+	h.Hub.BroadcastFrame("open:1*", sse.Frame{Event: "msg", Data: []byte(`{}`)})
 	stream.Require(t, "msg")
 }
 
@@ -130,16 +130,71 @@ type stubValidator struct{ err error }
 
 func (s stubValidator) ValidateToken(string) (any, error) { return "claims", s.err }
 
-// waitForClient blocks until the hub has registered clientID, so a broadcast is
-// not raced against asynchronous registration.
-func waitForClient(t *testing.T, h *testutil.Harness, clientID string) {
+// TestConcurrentStreamsSamePrincipal covers two simultaneous streams resolving to
+// the same routing key: each keeps a unique registration id, so neither evicts
+// the other and a broadcast to the shared route reaches both.
+func TestConcurrentStreamsSamePrincipal(t *testing.T) {
+	t.Parallel()
+
+	h := testutil.New(t, "base",
+		sse.WithAuthenticator(testutil.AllowAuthenticator("alice")),
+		sse.WithClientIdentity(func(_ *http.Request, id any) (string, []sse.ClientOption, error) {
+			return "user:" + id.(string), nil, nil
+		}),
+	)
+
+	first := h.MustConnect(t, testContext(t), "token-1")
+	defer first.Close()
+	testutil.RequireStatus(t, first, http.StatusOK)
+	first.SkipConnected(t)
+
+	second := h.MustConnect(t, testContext(t), "token-2")
+	defer second.Close()
+	testutil.RequireStatus(t, second, http.StatusOK)
+	second.SkipConnected(t)
+
+	waitForClientCount(t, h, "user:alice", 2)
+
+	h.Hub.BroadcastFrame("user:alice", sse.Frame{Event: "ping", Data: []byte(`{}`)})
+	first.Require(t, "ping")
+	second.Require(t, "ping")
+}
+
+// TestNilAuthenticatorFailsClosed verifies WithAuthenticator(nil) installs a
+// fail-closed gate rather than leaving the endpoint publicly accessible.
+func TestNilAuthenticatorFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	h := testutil.New(t, "base", sse.WithAuthenticator(nil))
+	stream := h.MustConnect(t, testContext(t), "token")
+	testutil.RequireStatus(t, stream, http.StatusUnauthorized)
+}
+
+// waitForClient blocks until at least one client whose routing key matches
+// routePattern has registered, so a broadcast is not raced against asynchronous
+// registration.
+func waitForClient(t *testing.T, h *testutil.Harness, routePattern string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if h.Hub.GetClient(clientID) != nil {
+		if len(h.Hub.GetClientsByRoute(routePattern)) > 0 {
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("client %q never registered", clientID)
+	t.Fatalf("no client matching route %q registered", routePattern)
+}
+
+// waitForClientCount blocks until at least n clients whose routing key matches
+// routePattern have registered.
+func waitForClientCount(t *testing.T, h *testutil.Harness, routePattern string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(h.Hub.GetClientsByRoute(routePattern)) >= n {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("expected >=%d clients matching route %q", n, routePattern)
 }
