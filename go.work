@@ -16,6 +16,7 @@ use (
 	./connect/testutil
 	./dag/testutil
 	./database
+	./database/postgres
 	./database/sqlite
 	./database/testutil
 	./dataset

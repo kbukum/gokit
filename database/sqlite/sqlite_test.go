@@ -7,23 +7,23 @@ import (
 	"github.com/kbukum/gokit/database/sqlite"
 )
 
-func TestRegisterAddsDriverToRegistry(t *testing.T) {
-	reg := database.NewDriverRegistry()
+func TestRegisterAddsDialectToRegistry(t *testing.T) {
+	reg := database.NewDialectRegistry()
 	if err := sqlite.Register(reg); err != nil {
 		t.Fatalf("Register: %v", err)
 	}
 
-	driver, ok := reg.Get(sqlite.Name)
+	d, ok := reg.Get(sqlite.Name)
 	if !ok {
-		t.Fatalf("driver %q not found after Register", sqlite.Name)
+		t.Fatalf("dialect %q not found after Register", sqlite.Name)
 	}
-	if driver(":memory:") == nil {
-		t.Fatal("registered driver returned nil dialector")
+	if d.Open(":memory:") == nil {
+		t.Fatal("registered dialect returned nil dialector")
 	}
 }
 
 func TestRegisterRejectsDuplicate(t *testing.T) {
-	reg := database.NewDriverRegistry()
+	reg := database.NewDialectRegistry()
 	if err := sqlite.Register(reg); err != nil {
 		t.Fatalf("first Register: %v", err)
 	}

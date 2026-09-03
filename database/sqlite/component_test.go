@@ -22,7 +22,7 @@ func testConfig() database.Config {
 func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 	cfg := testConfig()
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 	ctx := context.Background()
 
 	if db := comp.DB(); db != nil {
@@ -43,7 +43,7 @@ func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = true
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 
 	type User struct {
 		ID   uint
@@ -68,7 +68,7 @@ func TestComponentWithAutoMigrateDisabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = false
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 
 	type User struct {
 		ID   uint
@@ -100,8 +100,8 @@ func TestNewWithContextSQLiteAdapter(t *testing.T) {
 	if db == nil {
 		t.Error("NewWithContext() returned nil DB")
 	}
-	if err := db.Ping(); err != nil {
-		t.Errorf("Ping() failed: %v", err)
+	if err := db.PingContext(context.Background()); err != nil {
+		t.Errorf("PingContext() failed: %v", err)
 	}
 	if err := db.Close(); err != nil {
 		t.Fatalf("Close() failed: %v", err)
@@ -112,7 +112,7 @@ func TestComponentStartWithInvalidDSN(t *testing.T) {
 	cfg := testConfig()
 	cfg.DSN = "/invalid/path/to/db.db"
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 
 	err := comp.Start(context.Background())
 	if err != nil && err.Error() == "" {
@@ -123,7 +123,7 @@ func TestComponentStartWithInvalidDSN(t *testing.T) {
 func TestComponentHealthAfterStart(t *testing.T) {
 	cfg := testConfig()
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -144,7 +144,7 @@ func TestComponentHealthAfterStart(t *testing.T) {
 func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 	cfg := testConfig()
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -162,7 +162,7 @@ func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 func TestComponentContextInHealthCheck(t *testing.T) {
 	cfg := testConfig()
 	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDriver(sqlite.Open)
+	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 	ctx := context.Background()
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
@@ -175,5 +175,37 @@ func TestComponentContextInHealthCheck(t *testing.T) {
 	health := comp.Health(canceledCtx)
 	if health.Name != "database" {
 		t.Errorf("Health Name = %q, want %q", health.Name, "database")
+	}
+}
+
+// unmigratable has no fields GORM can map, so AutoMigrate fails. It proves the connection Start
+// opened is released when a post-open startup step fails — the registry does not Stop a component
+// whose Start returns a non-context error, so the component must clean up after itself.
+type unmigratable struct{}
+
+func (unmigratable) TableName() string { return "" }
+
+func TestComponentStartClosesPoolWhenAutoMigrateFails(t *testing.T) {
+	cfg := testConfig()
+	cfg.AutoMigrate = true
+	log := logging.NewDefault("test")
+	comp := database.NewComponent(cfg, log).
+		WithDialect(sqlite.Dialect()).
+		WithAutoMigrate(&unmigratable{})
+
+	err := comp.Start(context.Background())
+	if err == nil {
+		t.Fatal("expected auto-migrate to fail")
+	}
+	if comp.DB() != nil {
+		t.Fatal("DB() should be nil after a failed Start so the pool is not leaked")
+	}
+	// Stop must be a no-op (nil DB), not a panic or double-close.
+	if stopErr := comp.Stop(context.Background()); stopErr != nil {
+		t.Fatalf("Stop after failed Start: %v", stopErr)
+	}
+	// Health should report unhealthy (not initialized), confirming no live pool lingers.
+	if h := comp.Health(context.Background()); h.Status != component.StatusUnhealthy {
+		t.Fatalf("Health = %+v, want unhealthy", h)
 	}
 }

@@ -7,14 +7,28 @@ import (
 	"gorm.io/gorm"
 )
 
+// Name is the registry key for the SQLite backend.
 const Name = "sqlite"
 
-// Register registers the SQLite GORM driver in an explicit database registry.
-func Register(reg *database.DriverRegistry) error {
-	return reg.Register(Name, gormsqlite.Open)
-}
+// dialect is the SQLite backend. SQLite has no structured DSN form — its DSN is a file path or
+// ":memory:" — so it implements only database.Dialect (not StructuredDialect); callers set
+// Config.DSN directly.
+type dialect struct{}
 
-// Open returns a SQLite GORM dialector.
-func Open(dsn string) gorm.Dialector {
-	return gormsqlite.Open(dsn)
+// Dialect returns the SQLite backend dialect.
+func Dialect() database.Dialect { return dialect{} }
+
+// Name reports the backend identifier.
+func (dialect) Name() string { return Name }
+
+// Open returns a SQLite GORM dialector for the given DSN. It is the low-level primitive; most
+// callers select the backend through Dialect or Register instead.
+func Open(dsn string) gorm.Dialector { return gormsqlite.Open(dsn) }
+
+// Open returns a SQLite GORM dialector for the given DSN.
+func (dialect) Open(dsn string) gorm.Dialector { return Open(dsn) }
+
+// Register registers the SQLite dialect in an explicit database registry.
+func Register(reg *database.DialectRegistry) error {
+	return reg.Register(Dialect())
 }
