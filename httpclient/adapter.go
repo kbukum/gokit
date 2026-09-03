@@ -54,8 +54,12 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 	// A retry block loaded from config carries no predicate (RetryIf is not
 	// serializable). Default it to the HTTP-aware IsRetryable so config-driven
 	// clients retry only genuinely retryable failures rather than every error.
+	// Clone the policy first so defaulting the callback never mutates — or races
+	// — a source policy shared across concurrently constructed adapters.
 	if p := c.config.ResiliencePolicy; p != nil && p.Retry != nil && p.Retry.RetryIf == nil {
-		p.Retry.RetryIf = IsRetryable
+		cloned := p.Clone()
+		cloned.Retry.RetryIf = IsRetryable
+		c.config.ResiliencePolicy = cloned
 	}
 
 	// Apply options

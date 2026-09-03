@@ -19,4 +19,5 @@ use (
 	./storage/gcs
 	./storage/s3
 	./vectorstore/qdrant
+	./workload/dmr
 )

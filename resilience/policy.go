@@ -80,6 +80,29 @@ func (p *Policy) WithTimeoutIfUnset(d time.Duration) *Policy {
 	return p
 }
 
+// Clone returns a copy of the policy carrying only its configuration, with fresh
+// lazily-initialized primitive state. The Retry block is deep-copied so a caller
+// may safely default its non-serializable callbacks (for example RetryIf) on the
+// clone without mutating — or racing — the source policy shared by other callers.
+// Clone on a nil policy returns nil.
+func (p *Policy) Clone() *Policy {
+	if p == nil {
+		return nil
+	}
+	c := &Policy{
+		CircuitBreaker: p.CircuitBreaker,
+		Bulkhead:       p.Bulkhead,
+		RateLimiter:    p.RateLimiter,
+		Timeout:        p.Timeout,
+		timeoutMode:    p.timeoutMode,
+	}
+	if p.Retry != nil {
+		retry := *p.Retry
+		c.Retry = &retry
+	}
+	return c
+}
+
 func (p *Policy) init() {
 	if p == nil {
 		return

@@ -123,3 +123,33 @@ func TestNew_ConfigLoadedRetryDefaultsToIsRetryable(t *testing.T) {
 		t.Error("expected not-found error to be non-retryable")
 	}
 }
+
+// TestNew_RetryDefaultDoesNotMutateSourcePolicy locks in the Clone race fix: New
+// must default a nil RetryIf on a copy, never on the caller-owned policy that may
+// be shared across concurrently constructed adapters.
+func TestNew_RetryDefaultDoesNotMutateSourcePolicy(t *testing.T) {
+	t.Parallel()
+
+	source := resilience.NewPolicy().WithRetry(resilience.RetryConfig{MaxAttempts: 3})
+	cfg := Config{BaseURL: "https://api.example.com", ResiliencePolicy: source}
+
+	adapter, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if source.Retry.RetryIf != nil {
+		t.Error("New must not default RetryIf on the caller-owned source policy")
+	}
+
+	got := adapter.GetConfig().ResiliencePolicy
+	if got == source {
+		t.Error("adapter must own a distinct policy pointer, not the source policy")
+	}
+	if got.Retry == source.Retry {
+		t.Error("adapter must own a distinct retry pointer, not the source retry block")
+	}
+	if got.Retry.RetryIf == nil {
+		t.Error("adapter's cloned retry should default RetryIf to the HTTP-aware predicate")
+	}
+}

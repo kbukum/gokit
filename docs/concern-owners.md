@@ -25,6 +25,7 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Database persistence / GORM drivers | `database` (+ adapter sub-modules) | hand-wiring `gorm.io/driver/*` + a `golang-migrate` driver per consumer | `DialectRegistry`, repositories, `migration`; drivers live in adapters (`database/sqlite`, `database/postgres`), registered explicitly, no `init()` |
 | Eval run provenance / reproducibility | `bench` | ad-hoc seed/commit/host capture on benchmark results | `RunProvenance`, injected `ProvenanceProbe`, seeded `math/rand/v2`, order-independent dataset hash |
 | Tokenization / token counting | `llm` | per-package `len(text)/4` estimates, ad-hoc BPE/HF wrappers | `TokenCounter` port + `HeuristicTokenCounter` default; real tokenizers as contrib sub-modules (`llm/tokenizer/tiktoken`, `llm/tokenizer/huggingface`); heuristic shares `ai/chat.ApproxTokens` |
+| Model runtime (run/serve a model as a workload) | `workload` | ad-hoc DMR/Ollama HTTP clients, per-consumer model pull/serve/unload lifecycle | runtime-neutral `ModelRuntime` port (narrow core `Start`/`Stop`/`Endpoint`; `Health`/`Stats`/list/remove as opt-in capability interfaces); backends as opt-in nested modules (`workload/dmr`) built on the canonical `httpclient`/`resilience` owners, registered explicitly with typed config, no `init()`. Reports *where* to infer; inference itself is owned by `llm` |
 
 ## How to use this map
 
