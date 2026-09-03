@@ -37,6 +37,10 @@ func (validator) ValidateToken(token string) (any, error) {
 }
 
 func main() {
+    // internalToken gates the trusted broadcast endpoint below; load a real
+    // secret from configuration in production.
+    const internalToken = "replace-with-a-real-secret"
+
     hub := sse.NewHub()
     go hub.Run()
 
@@ -57,10 +61,15 @@ func main() {
         )
     })
 
-    // Broadcast from a request (or any background source) once clients are
-    // connected — broadcasting before the server accepts connections would drop
-    // the frame because no stream is open yet.
+    // Broadcast from trusted application logic once clients are connected.
+    // This endpoint fans out to every "user:*" stream, so it must be gated by
+    // your own authorization — never leave a broadcast trigger publicly
+    // reachable. Here a shared internal token stands in for that gate.
     http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
+        if r.Header.Get("X-Internal-Token") != internalToken {
+            http.Error(w, "forbidden", http.StatusForbidden)
+            return
+        }
         hub.BroadcastToPattern("user:*", []byte(`{"type":"update","data":"hello"}`))
     })
 
@@ -129,7 +138,7 @@ The built-in `BearerAuthenticator` reads the token from the `Authorization` head
 
 ## Cross-kit parity
 
-The header-only authentication seam is a gokit-side security correction. Its rskit counterpart (the SSE/streaming transport) should mirror the same concept under the same name: an injected authenticator that derives credentials from the `Authorization` header, rejects query-string tokens, and applies 401/403 semantics. Parity is scoped to the wire contract and the concept, not the Go option types. This mirroring is not yet tracked by an rskit issue; open one in the [rskit](https://github.com/kbukum/rskit) tracker when the work is scheduled and link its full issue URL here.
+The header-only authentication seam is a gokit-side security correction. Its rskit counterpart (the SSE/streaming transport) should mirror the same concept under the same name: an injected authenticator that derives credentials from the `Authorization` header, rejects query-string tokens, and applies 401/403 semantics. Parity is scoped to the wire contract and the concept, not the Go option types.
 
 ---
 

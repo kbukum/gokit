@@ -188,6 +188,73 @@ func TestWriteAuthError_BearerChallenge(t *testing.T) {
 	}
 }
 
+// TestBearerAuthenticator_TypedNilValidator verifies a typed-nil validator (a nil
+// pointer or nil func carried in a non-nil interface) fails closed with 401
+// rather than panicking on the request path.
+func TestBearerAuthenticator_TypedNilValidator(t *testing.T) {
+	t.Parallel()
+
+	var nilPtr *stubValidatorPtr // typed nil implementing TokenValidator
+	for _, v := range []TokenValidator{nilPtr, tokenValidatorFunc(nil)} {
+		auth := BearerAuthenticator(v)
+		r := httptest.NewRequest(http.MethodGet, "/events", http.NoBody)
+		r.Header.Set("Authorization", "******")
+
+		identity, err := auth.Authenticate(r) // must not panic
+		if identity != nil {
+			t.Fatalf("expected nil identity from typed-nil validator, got %v", identity)
+		}
+		if appErr, ok := apperrors.AsAppError(err); !ok || appErr.HTTPStatus != http.StatusUnauthorized {
+			t.Fatalf("expected 401 from typed-nil validator, got %v", err)
+		}
+	}
+}
+
+type stubValidatorPtr struct{}
+
+func (*stubValidatorPtr) ValidateToken(string) (any, error) { return "u", nil }
+
+type tokenValidatorFunc func(string) (any, error)
+
+func (f tokenValidatorFunc) ValidateToken(t string) (any, error) { return f(t) }
+
+// TestCanonicalAuthError_TypedNilAppError verifies an error interface carrying a
+// nil *AppError does not panic while being canonicalized, and maps to 401.
+func TestCanonicalAuthError_TypedNilAppError(t *testing.T) {
+	t.Parallel()
+
+	var nilApp *apperrors.AppError // non-nil error interface wrapping a nil pointer
+	var err error = nilApp
+
+	rec := httptest.NewRecorder()
+	if werr := writeAuthError(rec, err); werr != nil { // must not panic
+		t.Fatalf("writeAuthError returned error: %v", werr)
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for a nil *AppError, got %d", rec.Code)
+	}
+}
+
+// TestWithChallenge_ExternalAuthenticator verifies a custom authenticator can
+// advertise a WWW-Authenticate challenge on its 401 through the exported
+// WithChallenge helper, without implementing any package-private method.
+func TestWithChallenge_ExternalAuthenticator(t *testing.T) {
+	t.Parallel()
+
+	auth := AuthenticatorFunc(func(*http.Request) (any, error) {
+		return nil, WithChallenge(apperrors.Unauthorized("no creds"), "Bearer realm=\"api\"")
+	})
+	_, err := auth.Authenticate(httptest.NewRequest(http.MethodGet, "/events", http.NoBody))
+
+	rec := httptest.NewRecorder()
+	if werr := writeAuthError(rec, err); werr != nil {
+		t.Fatalf("writeAuthError returned error: %v", werr)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); got != "Bearer realm=\"api\"" {
+		t.Fatalf("expected the custom challenge to be advertised, got %q", got)
+	}
+}
+
 // TestBearerAuthenticator_PreservesCause verifies the validator's original error
 // is preserved as the cause so callers can errors.Is/As it for diagnostics, even
 // though the response path redacts it.

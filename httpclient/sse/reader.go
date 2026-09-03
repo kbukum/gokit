@@ -2,9 +2,9 @@
 package sse
 
 import (
-	"bufio"
 	"io"
-	"strings"
+
+	rootsse "github.com/kbukum/gokit/sse"
 )
 
 // Event represents a single server-sent event.
@@ -13,7 +13,8 @@ type Event struct {
 	Event string
 	// Data is the event payload (from "data:" line(s)). Multi-line data is joined with newlines.
 	Data string
-	// ID is the event ID (from "id:" line).
+	// ID is the persistent last-event ID in effect for this event: set by the most
+	// recent "id:" line and carried forward across events until changed.
 	ID string
 }
 
@@ -26,83 +27,29 @@ type Reader interface {
 }
 
 type reader struct {
-	scanner *bufio.Scanner
-	body    io.ReadCloser
+	dec  *rootsse.Decoder
+	body io.ReadCloser
 }
 
-// NewReader creates an SSE reader from a readable stream.
+// NewReader creates an SSE reader from a readable stream. Decoding is delegated
+// to the canonical [rootsse.Decoder], so this reader and the SSE test harness
+// share one spec-correct parser (CR/LF/CRLF line endings, a single leading BOM
+// ignored, comment lines skipped, NUL ids ignored, and a truncated trailing
+// block discarded at EOF rather than surfaced as a partial event).
 func NewReader(body io.ReadCloser) Reader {
-	return &reader{
-		scanner: bufio.NewScanner(body),
-		body:    body,
-	}
+	return &reader{dec: rootsse.NewDecoder(body), body: body}
 }
 
 // Next returns the next SSE event. Returns io.EOF when the stream ends.
 func (r *reader) Next() (*Event, error) {
-	var event Event
-	var hasData bool
-
-	for r.scanner.Scan() {
-		line := r.scanner.Text()
-
-		// Blank line signals end of event
-		if line == "" {
-			if hasData {
-				return &event, nil
-			}
-			continue
-		}
-
-		// Skip comments
-		if strings.HasPrefix(line, ":") {
-			continue
-		}
-
-		// Parse field
-		field, value := parseSSELine(line)
-		switch field {
-		case "data":
-			if hasData {
-				event.Data += "\n" + value
-			} else {
-				event.Data = value
-				hasData = true
-			}
-		case "event":
-			event.Event = value
-		case "id":
-			event.ID = value
-		}
-	}
-
-	if err := r.scanner.Err(); err != nil {
+	ev, err := r.dec.Next()
+	if err != nil {
 		return nil, err
 	}
-
-	// Stream ended — return last event if present
-	if hasData {
-		return &event, nil
-	}
-	return nil, io.EOF
+	return &Event{Event: ev.Event, Data: string(ev.Data), ID: ev.ID}, nil
 }
 
 // Close releases the underlying stream.
 func (r *reader) Close() error {
 	return r.body.Close()
-}
-
-// parseSSELine parses a single SSE line into field and value.
-func parseSSELine(line string) (field, value string) {
-	idx := strings.IndexByte(line, ':')
-	if idx < 0 {
-		return line, ""
-	}
-	field = line[:idx]
-	value = line[idx+1:]
-	// Strip single leading space after colon per SSE spec
-	if value != "" && value[0] == ' ' {
-		value = value[1:]
-	}
-	return field, value
 }

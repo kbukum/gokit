@@ -5,11 +5,30 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"net/http"
+	"reflect"
 	"strings"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/security"
 )
+
+// isNilValue reports whether v is nil or a nil-able dynamic value — a nil
+// pointer, interface, map, slice, channel, or func — carried inside an otherwise
+// non-nil interface. A typed-nil dependency such as (*Validator)(nil) or
+// AuthenticatorFunc(nil) passes a plain v == nil guard yet panics when invoked,
+// so the security seams normalize it to a fail-closed gate here rather than on
+// the request path.
+func isNilValue(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch rv := reflect.ValueOf(v); rv.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
 
 // Authenticator gates an SSE connection before the stream opens. It derives
 // credentials from the request — header-only, never the query string — and
@@ -68,7 +87,7 @@ type TokenValidator interface {
 // authenticator fails closed and rejects every connection with 401, so a
 // misconfigured endpoint can never authenticate a request.
 func BearerAuthenticator(v TokenValidator) Authenticator {
-	if v == nil {
+	if isNilValue(v) {
 		return AuthenticatorFunc(func(*http.Request) (any, error) {
 			return nil, bearerReject(apperrors.Unauthorized("authenticator is not configured"))
 		})
@@ -113,10 +132,24 @@ func (e *challengeError) Error() string         { return e.err.Error() }
 func (e *challengeError) Unwrap() error         { return e.err }
 func (e *challengeError) authChallenge() string { return e.challenge }
 
+// WithChallenge tags a rejection with the WWW-Authenticate challenge it should
+// advertise (for example [security.BearerAuthScheme]) so writeAuthError emits it
+// on the resulting 401. A custom [Authenticator] returns
+// WithChallenge(err, scheme) to give clients a standards-compliant challenge
+// without every authenticator hard-coding one; the wrapped err still
+// canonicalizes and unwraps for errors.Is/As. A challenge is only ever attached
+// to a 401, never a 403. An empty challenge leaves the rejection unchanged.
+func WithChallenge(err error, challenge string) error {
+	if err == nil || challenge == "" {
+		return err
+	}
+	return &challengeError{err: err, challenge: challenge}
+}
+
 // bearerReject tags a rejection as a bearer failure so writeAuthError emits a
 // `WWW-Authenticate: Bearer` challenge on the 401.
 func bearerReject(err error) error {
-	return &challengeError{err: err, challenge: bearerChallenge}
+	return WithChallenge(err, bearerChallenge)
 }
 
 // identityKey is the private context key under which a resolved identity is stored.
@@ -161,6 +194,11 @@ func writeAuthError(w http.ResponseWriter, err error) error {
 // authChallengeFor returns the WWW-Authenticate challenge a rejection advertises,
 // or "" when it carries none.
 func authChallengeFor(err error) string {
+	// A typed-nil error (such as an injected (*AppError)(nil)) would panic when
+	// errors.As unwraps it; it advertises no challenge, so short-circuit here.
+	if isNilValue(err) {
+		return ""
+	}
 	var c interface{ authChallenge() string }
 	if stderrors.As(err, &c) {
 		return c.authChallenge()
@@ -173,7 +211,10 @@ func authChallengeFor(err error) string {
 // original error's contents so nothing an injected implementation returns reaches
 // the client.
 func canonicalAuthError(err error) *apperrors.AppError {
-	if appErr, ok := apperrors.AsAppError(err); ok && appErr.Code == apperrors.ErrCodeForbidden {
+	// A nil *AppError can be carried inside a non-nil error interface; AsAppError
+	// then reports a match with a nil pointer, so guard it before reading Code to
+	// avoid a nil dereference while handling the rejection.
+	if appErr, ok := apperrors.AsAppError(err); ok && appErr != nil && appErr.Code == apperrors.ErrCodeForbidden {
 		return apperrors.Forbidden("")
 	}
 	return apperrors.Unauthorized("")

@@ -92,7 +92,11 @@ func RequireStatus(t *testing.T, stream *StreamClient, want int) {
 		t.Fatalf("expected status %d, got %d", want, resp.StatusCode)
 	}
 	if want != http.StatusOK {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = stream.Close()
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			t.Errorf("draining rejected SSE body: %v", err)
+		}
+		if err := stream.Close(); err != nil {
+			t.Errorf("closing rejected SSE stream: %v", err)
+		}
 	}
 }

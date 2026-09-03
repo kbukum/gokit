@@ -1,11 +1,11 @@
 package sse
 
 import (
-	"path"
 	"sync"
 	"sync/atomic"
 
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/util"
 )
 
 // HubOption configures a Hub.
@@ -243,6 +243,20 @@ func (h *Hub) Run() {
 
 		case reg := <-h.register:
 			h.mu.Lock()
+			if reg.client.regKey != 0 {
+				// A Client is single-use: the hub keys the map by an internal
+				// registration key it assigns here. Re-registering an instance that
+				// already holds one (a caller reusing a *Client, or re-adding one
+				// after Unregister closed its channel) would leave a stale map entry
+				// that a later broadcast reaches after the channel is closed,
+				// panicking on send. Reject the duplicate instead.
+				h.mu.Unlock()
+				close(reg.ack)
+				h.log.Warn("[SSE_HUB] Rejected duplicate client registration", map[string]any{
+					"client_id": reg.client.id,
+				})
+				continue
+			}
 			h.regSeq++
 			reg.client.regKey = h.regSeq
 			h.clients[reg.client.regKey] = reg.client
@@ -385,15 +399,7 @@ func (h *Hub) dispatch(msg *Message) {
 	frame := Frame{Event: msg.Event, Data: msg.Data}
 	matchCount := 0
 	for _, client := range h.clients {
-		matched, err := matchRoute(msg.Pattern, client.Route())
-		if err != nil {
-			h.log.Error("[SSE_HUB] Pattern match error", map[string]any{
-				"pattern": msg.Pattern,
-				"error":   err.Error(),
-			})
-			continue
-		}
-		if matched {
+		if util.GlobMatch(msg.Pattern, client.Route()) {
 			if client.SendFrame(frame) {
 				matchCount++
 			}
@@ -441,19 +447,22 @@ func (h *Hub) GetClientIDs() []string {
 	return ids
 }
 
-// GetClient returns a connected client by its public id, or nil if none match.
-// When several connections share an id (ids are caller-supplied and not required
-// unique), an arbitrary matching client is returned; use [Hub.GetClientsByRoute]
-// to address every connection for a routing key.
-func (h *Hub) GetClient(id string) *Client {
+// GetClientsByID returns every connected client whose caller-supplied public id
+// equals id, in unspecified order. Because ids are caller-supplied and need not
+// be unique, several connections may share one id; the result is empty when none
+// match. Use [Hub.GetClientsByRoute] to address connections by their
+// broadcast-matching route instead.
+func (h *Hub) GetClientsByID(id string) []*Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
+	var matched []*Client
 	for _, client := range h.clients {
 		if client.id == id {
-			return client
+			matched = append(matched, client)
 		}
 	}
-	return nil
+	return matched
 }
 
 // GetClientsByRoute returns every connected client whose broadcast-matching key
@@ -466,24 +475,11 @@ func (h *Hub) GetClientsByRoute(pattern string) []*Client {
 
 	var matched []*Client
 	for _, client := range h.clients {
-		if ok, err := matchRoute(pattern, client.Route()); err == nil && ok {
+		if util.GlobMatch(pattern, client.Route()) {
 			matched = append(matched, client)
 		}
 	}
 	return matched
 }
 
-// matchRoute reports whether route is selected by pattern. The all-clients
-// pattern "*" matches every route, including routing keys that contain "/" —
-// path.Match alone would exclude those because "*" does not cross a path
-// separator, silently dropping authenticated clients whose per-principal route
-// embeds a "/". Every other pattern keeps glob semantics.
-func matchRoute(pattern, route string) (bool, error) {
-	if pattern == "*" {
-		return true, nil
-	}
-	return path.Match(pattern, route)
-}
-
-// Ensure Hub implements Broadcaster.
 var _ Broadcaster = (*Hub)(nil)

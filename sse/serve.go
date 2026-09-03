@@ -10,11 +10,15 @@ type ServeOption func(*serveConfig)
 // IdentityResolver derives a client's routing key from the authenticated
 // principal, enabling per-principal event scoping. It runs only after a
 // successful [Authenticator] and receives the request plus the resolved
-// identity. The returned clientID, when non-empty, becomes the client's
-// broadcast-matching route (via [WithRoute]) without replacing the unique
-// per-connection id, so concurrent streams for one principal coexist; the
-// returned options add client metadata. A returned [apperrors.Forbidden] error
-// rejects the connection with 403, any other error with 401.
+// identity. The returned clientID becomes the client's broadcast-matching route
+// (via [WithRoute]) without replacing the unique per-connection id, so concurrent
+// streams for one principal coexist; the returned options add client metadata.
+// The route is authoritative: it must be non-empty and free of glob
+// metacharacters ('*'/'?'), or the connection is rejected — an empty key would
+// silently fall back to the caller's (possibly shared) clientID, and a
+// principal-derived wildcard could over-deliver events to another subject. A
+// returned [apperrors.Forbidden] error rejects the connection with 403, any
+// other error with 401.
 type IdentityResolver func(r *http.Request, identity any) (clientID string, opts []ClientOption, err error)
 
 type serveConfig struct {
@@ -35,7 +39,10 @@ func WithAuthenticator(a Authenticator) ServeOption {
 	// Normalize before capturing so the returned option is read-only: a
 	// ServeOption is commonly built once and applied by many concurrent
 	// handlers, and mutating the captured value inside the closure would race.
-	if a == nil {
+	// isNilValue also catches a typed-nil authenticator (a nil AuthenticatorFunc
+	// or nil-pointer implementation) that a plain a == nil guard would miss and
+	// then panic on the request path.
+	if isNilValue(a) {
 		a = failClosedAuthenticator{}
 	}
 	return func(c *serveConfig) {

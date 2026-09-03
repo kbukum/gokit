@@ -7,6 +7,7 @@ import (
 	"time"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
 const DefaultKeepAliveInterval = 30 * time.Second
@@ -27,9 +28,10 @@ type ConnectedEvent struct {
 // status and returns without registering a client or emitting any frame. Derive
 // credentials from the Authorization header only (see [BearerAuthenticator]) —
 // never the query string. A [WithClientIdentity] resolver can then attach a
-// per-principal routing key so broadcasts scope to the authenticated subject
-// while clientID stays the unique per-connection registration key, letting
-// several concurrent streams for one principal coexist.
+// per-principal routing key so broadcasts scope to the authenticated subject.
+// clientID is only the caller-supplied public id — the hub assigns its own
+// unique internal registration key — so it need not be unique, and several
+// concurrent streams for one principal coexist under one routing key.
 func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ServeOption) {
 	cfg := newServeConfig(opts...)
 
@@ -174,10 +176,23 @@ func resolveIdentity(hub *Hub, r *http.Request, w http.ResponseWriter, clientID 
 		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected", err)
 		return nil, false
 	}
-	clientOpts = append(clientOpts, resolvedOpts...)
-	if resolvedID != "" {
-		clientOpts = append(clientOpts, WithRoute(resolvedID))
+	// The resolved key is authoritative and becomes a broadcast-matching route, so
+	// validate it at this trust boundary. An empty key would silently fall back to
+	// the caller's (possibly shared) clientID, and a wildcard from a
+	// principal-derived value could over-deliver events to another subject; fail
+	// closed on either rather than scope the stream incorrectly.
+	if resolvedID == "" {
+		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected",
+			apperrors.Unauthorized("identity resolver returned an empty route"))
+		return nil, false
 	}
+	if util.HasWildcard(resolvedID) {
+		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected",
+			apperrors.Unauthorized("identity resolver returned a route with glob metacharacters"))
+		return nil, false
+	}
+	clientOpts = append(clientOpts, resolvedOpts...)
+	clientOpts = append(clientOpts, WithRoute(resolvedID))
 	return clientOpts, true
 }
 
