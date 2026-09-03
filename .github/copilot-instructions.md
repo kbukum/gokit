@@ -10,7 +10,6 @@ Shared engineering baseline — apply to all work here:
 
 - **Phases:** discover → decide (Redesign / Align / Enhance / Drop / Leave) → implement completely → validate.
   Prefer root-cause redesign over symptom patches; no compatibility shims in pre-stable code.
-  Implement the *simplest* design that fully solves it — flexible, extensible, and scalable — on current idiomatic best practices, not folklore; complexity must earn its place.
 - **Layering & reuse:** explicit, acyclic dependency direction —
   lower layers never import higher (enforced by `depguard`). Reuse
   or enhance the canonical owner before writing new code;
@@ -31,8 +30,7 @@ Shared engineering baseline — apply to all work here:
 - **Composition:** explicit injected registries and config-driven selection;
   no `init()` side effects, no mutable package-global registries;
   inject logger / tracer / policies rather than reaching for globals.
-- **Tests:** behavioral and deterministic; **test-first** (failing test → minimal code → refactor while green);
-  green under `-race -shuffle=on -count=1`;
+- **Tests:** behavioral and deterministic; green under `-race -shuffle=on -count=1`;
   cover failure paths; injected clocks (never `time.Sleep`); fixtures over embedded config;
   regression-test every fix.
 - **AI / model features:** treat model output and retrieved context as untrusted;
@@ -47,7 +45,7 @@ Shared engineering baseline — apply to all work here:
 Standing,
 re-runnable development skills encoding this baseline live in [`.github/skills/`](skills/README.md)
 — the `review` skill runs the review passes in a fresh, clean-context agent after every change set
-and before releases (reviewing the change's **blast radius** — surrounding and related code, not just the diff — and reporting/fixing the pre-existing problems it surfaces, redesign over patch); `create-branch`, `create-plan`, `apply-plan`, `apply-step`, `create-pr`,
+and before releases; `create-branch`, `create-plan`, `apply-plan`, `apply-step`, `create-pr`,
 `validate`, `new-module`, `new-backend`, `parity`, and `release` cover the rest of the workflow.
 Validation is driven through `toven` (see `toven.toml`).
 
