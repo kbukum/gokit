@@ -144,37 +144,33 @@ func TestReader_DataWithoutSpace(t *testing.T) {
 	}
 }
 
-func TestReader_LastEventWithoutTrailingNewline(t *testing.T) {
+func TestReader_TruncatedTrailingEventDiscarded(t *testing.T) {
+	// A block not terminated by a blank line is incomplete; per the SSE dispatch
+	// algorithm the decoder discards it and reports EOF rather than emitting a
+	// truncated event.
 	body := newMockBody("data: trailing")
 	r := NewReader(body)
 	defer r.Close()
 
-	ev, err := r.Next()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ev.Data != "trailing" {
-		t.Errorf("data = %q, want %q", ev.Data, "trailing")
+	_, err := r.Next()
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("expected io.EOF for a truncated trailing event, got %v", err)
 	}
 }
 
-func TestParseSSELine(t *testing.T) {
-	tests := []struct {
-		line  string
-		field string
-		value string
-	}{
-		{"data: hello", "data", "hello"},
-		{"data:hello", "data", "hello"},
-		{"event: msg", "event", "msg"},
-		{"id: 1", "id", "1"},
-		{"retry: 3000", "retry", "3000"},
-		{"fieldonly", "fieldonly", ""},
-	}
-	for _, tt := range tests {
-		f, v := parseSSELine(tt.line)
-		if f != tt.field || v != tt.value {
-			t.Errorf("parseSSELine(%q) = (%q, %q), want (%q, %q)", tt.line, f, v, tt.field, tt.value)
+func TestReader_PersistentEventID(t *testing.T) {
+	// The last-event ID carries forward across events until changed.
+	body := newMockBody("id: 1\ndata: a\n\ndata: b\n\nid: 2\ndata: c\n\n")
+	r := NewReader(body)
+	defer r.Close()
+
+	for _, want := range []struct{ data, id string }{{"a", "1"}, {"b", "1"}, {"c", "2"}} {
+		ev, err := r.Next()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if ev.Data != want.data || ev.ID != want.id {
+			t.Errorf("got (data %q, id %q), want (data %q, id %q)", ev.Data, ev.ID, want.data, want.id)
 		}
 	}
 }

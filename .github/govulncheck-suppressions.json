@@ -23,6 +23,7 @@
         "discovery",
         "discovery/testutil",
         "embedding",
+        "examples/broadcast-demo",
         "git",
         "git/testutil",
         "grpc",

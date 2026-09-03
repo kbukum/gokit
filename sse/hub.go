@@ -1,11 +1,11 @@
 package sse
 
 import (
-	"path"
 	"sync"
 	"sync/atomic"
 
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/util"
 )
 
 // HubOption configures a Hub.
@@ -41,8 +41,18 @@ type Frame struct {
 }
 
 // Client represents a connected SSE client.
+//
+// id is the client's caller-supplied public identifier; it need not be unique.
+// The hub registers each connection under an internal unique key (regKey), so two
+// connections that share an id never evict each other from the client map. route
+// is the broadcast-matching key: many connections may share one route (for
+// example every tab of the same principal), and it defaults to id when unset.
+// Keeping these separate lets per-principal scoping fan out to every live
+// connection instead of silently replacing the previous one.
 type Client struct {
-	id       string                         // Unique client ID
+	id       string                         // Caller-supplied public identifier; not required unique
+	route    string                         // Broadcast-matching key; defaults to id when empty
+	regKey   uint64                         // Hub-assigned unique registration key; keys the client map
 	metadata map[string]string              // Optional metadata (userID, sessionID, etc.)
 	events   chan Frame                     // Channel for sending events to client
 	log      atomic.Pointer[logging.Logger] // Published by the hub at registration; nil before then
@@ -71,6 +81,17 @@ func WithSessionID(sessionID string) ClientOption {
 	return WithMetadata("session_id", sessionID)
 }
 
+// WithRoute sets the client's broadcast-matching key independently of its unique
+// registration id. Use it to scope a connection to a shared subject (such as a
+// per-principal routing key) without colliding with other connections for the
+// same subject: each connection keeps a unique id while several share one route.
+// An empty route leaves the client matching on its id.
+func WithRoute(route string) ClientOption {
+	return func(c *Client) {
+		c.route = route
+	}
+}
+
 // NewClient creates a new SSE client with optional metadata.
 func NewClient(id string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -86,6 +107,15 @@ func NewClient(id string, opts ...ClientOption) *Client {
 
 // ID returns the client's unique identifier.
 func (c *Client) ID() string {
+	return c.id
+}
+
+// Route returns the client's broadcast-matching key: the value set via
+// [WithRoute], or the unique id when no route was configured.
+func (c *Client) Route() string {
+	if c.route != "" {
+		return c.route
+	}
 	return c.id
 }
 
@@ -147,20 +177,31 @@ func (c *Client) Close() {
 
 // Hub manages SSE client connections and message broadcasting.
 type Hub struct {
-	clients    map[string]*Client // client ID -> Client
-	register   chan *Client       // Channel for registering clients
-	unregister chan *Client       // Channel for unregistering clients
-	broadcast  chan *Message      // Channel for broadcasting messages
-	done       chan struct{}      // Signals the hub to stop
-	stopped    bool               // Whether the hub has been stopped
-	mu         sync.RWMutex       // Protects clients map for reads during matching
-	log        *logging.Logger    // Injected logger for hub diagnostics; never nil after NewHub
+	clients    map[uint64]*Client    // registration key -> Client
+	register   chan clientMembership // Channel for registering clients
+	unregister chan clientMembership // Channel for unregistering clients
+	broadcast  chan *Message         // Channel for broadcasting messages
+	done       chan struct{}         // Signals the hub to stop
+	stopped    bool                  // Whether the hub has been stopped
+	regSeq     uint64                // Monotonic registration counter; only touched by the hub loop
+	mu         sync.RWMutex          // Protects clients map for reads during matching
+	log        *logging.Logger       // Injected logger for hub diagnostics; never nil after NewHub
+}
+
+// clientMembership carries a client to the hub loop together with an ack channel
+// the loop closes once the clients map has been updated. It makes Register and
+// Unregister synchronous with respect to the map write, so callers (and tests)
+// observe a registration the moment the call returns without polling.
+type clientMembership struct {
+	client *Client
+	ack    chan struct{}
 }
 
 // Message represents a message to broadcast.
 //
 // Pattern selects which clients receive the message —
-// glob-matched against each client's ID (e.g. "execution:*" or "execution:abc123").
+// glob-matched against each client's routing key (its [WithRoute] value, or its
+// unique id when unset), e.g. "execution:*" or "execution:abc123".
 // Use "*" to reach every connected client.
 //
 // Event, when non-empty, becomes the SSE `event:` line
@@ -176,9 +217,9 @@ type Message struct {
 // console logger; inject a logger with [WithHubLogger] to route them elsewhere.
 func NewHub(opts ...HubOption) *Hub {
 	h := &Hub{
-		clients:    make(map[string]*Client),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		clients:    make(map[uint64]*Client),
+		register:   make(chan clientMembership),
+		unregister: make(chan clientMembership),
 		broadcast:  make(chan *Message, DefaultBroadcastBufferSize),
 		done:       make(chan struct{}),
 	}
@@ -200,25 +241,45 @@ func (h *Hub) Run() {
 			h.closeAllClients()
 			return
 
-		case client := <-h.register:
+		case reg := <-h.register:
 			h.mu.Lock()
-			h.clients[client.id] = client
+			if reg.client.regKey != 0 {
+				// A Client is single-use: the hub keys the map by an internal
+				// registration key it assigns here. Re-registering an instance that
+				// already holds one (a caller reusing a *Client, or re-adding one
+				// after Unregister closed its channel) would leave a stale map entry
+				// that a later broadcast reaches after the channel is closed,
+				// panicking on send. Reject the duplicate instead.
+				h.mu.Unlock()
+				close(reg.ack)
+				h.log.Warn("[SSE_HUB] Rejected duplicate client registration", map[string]any{
+					"client_id": reg.client.id,
+				})
+				continue
+			}
+			h.regSeq++
+			reg.client.regKey = h.regSeq
+			h.clients[reg.client.regKey] = reg.client
+			total := len(h.clients)
 			h.mu.Unlock()
+			close(reg.ack)
 			h.log.Debug("[SSE_HUB] Client registered", map[string]any{
-				"client_id":     client.id,
-				"total_clients": len(h.clients),
+				"client_id":     reg.client.id,
+				"total_clients": total,
 			})
 
-		case client := <-h.unregister:
+		case unreg := <-h.unregister:
 			h.mu.Lock()
-			if _, ok := h.clients[client.id]; ok {
-				delete(h.clients, client.id)
-				client.Close()
+			if _, ok := h.clients[unreg.client.regKey]; ok {
+				delete(h.clients, unreg.client.regKey)
+				unreg.client.Close()
 			}
+			total := len(h.clients)
 			h.mu.Unlock()
+			close(unreg.ack)
 			h.log.Debug("[SSE_HUB] Client unregistered", map[string]any{
-				"client_id":     client.id,
-				"total_clients": len(h.clients),
+				"client_id":     unreg.client.id,
+				"total_clients": total,
 			})
 
 		case msg := <-h.broadcast:
@@ -242,29 +303,44 @@ func (h *Hub) Stop() {
 func (h *Hub) closeAllClients() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for id, client := range h.clients {
+	for key, client := range h.clients {
 		client.Close()
-		delete(h.clients, id)
+		delete(h.clients, key)
 	}
 	h.log.Debug("[SSE_HUB] All clients closed during shutdown")
 }
 
-// Register adds a client to the hub. Returns immediately if the hub has been stopped.
-// The hub's logger is published to the client through an atomic pointer before it is
-// handed to the hub loop, so a concurrent SendFrame loading client.log never races
-// with registration.
+// Register adds a client to the hub and blocks until it is present in the clients
+// map (or the hub has stopped). The hub's logger is published to the client
+// through an atomic pointer before it is handed to the hub loop, so a concurrent
+// SendFrame loading client.log never races with registration. Because the call
+// returns only after the map write, callers can immediately observe the client
+// without polling.
 func (h *Hub) Register(client *Client) {
 	client.log.Store(h.log)
+	ack := make(chan struct{})
 	select {
-	case h.register <- client:
+	case h.register <- clientMembership{client: client, ack: ack}:
+	case <-h.done:
+		return
+	}
+	select {
+	case <-ack:
 	case <-h.done:
 	}
 }
 
-// Unregister removes a client from the hub. Returns immediately if the hub has been stopped.
+// Unregister removes a client from the hub and blocks until the removal has been
+// applied (or the hub has stopped).
 func (h *Hub) Unregister(client *Client) {
+	ack := make(chan struct{})
 	select {
-	case h.unregister <- client:
+	case h.unregister <- clientMembership{client: client, ack: ack}:
+	case <-h.done:
+		return
+	}
+	select {
+	case <-ack:
 	case <-h.done:
 	}
 }
@@ -286,9 +362,11 @@ func (h *Hub) Broadcast(event string, data []byte) {
 	}
 }
 
-// BroadcastToPattern sends data to all clients whose ID matches pattern.
-// Pattern uses glob-style matching (e.g., "execution:*" or "execution:abc123").
-// Use Broadcast for global, event-typed notifications.
+// BroadcastToPattern sends data to all clients whose routing key matches pattern.
+// A client's routing key is its [WithRoute] value, or its unique id when no route
+// was set. Pattern uses glob-style matching (e.g., "execution:*" or
+// "execution:abc123"); "*" reaches every connected client, including routes that
+// contain "/". Use Broadcast for global, event-typed notifications.
 //
 // Returns immediately if the hub has been stopped (drops the message). Delivery is best-effort:
 // slow clients can still drop frames when their bounded queue is full.
@@ -299,8 +377,10 @@ func (h *Hub) BroadcastToPattern(pattern string, data []byte) {
 	}
 }
 
-// BroadcastFrame sends a typed frame to all clients whose ID matches pattern.
-// Use Broadcast for the common "deliver to everyone" case.
+// BroadcastFrame sends a typed frame to all clients whose routing key matches
+// pattern. A client's routing key is its [WithRoute] value, or its unique id when
+// no route was set; "*" reaches every connected client, including routes that
+// contain "/". Use Broadcast for the common "deliver to everyone" case.
 //
 // Returns immediately if the hub has been stopped (drops the message). Delivery is best-effort:
 // slow clients can still drop frames when their bounded queue is full.
@@ -318,16 +398,8 @@ func (h *Hub) dispatch(msg *Message) {
 
 	frame := Frame{Event: msg.Event, Data: msg.Data}
 	matchCount := 0
-	for clientID, client := range h.clients {
-		matched, err := path.Match(msg.Pattern, clientID)
-		if err != nil {
-			h.log.Error("[SSE_HUB] Pattern match error", map[string]any{
-				"pattern": msg.Pattern,
-				"error":   err.Error(),
-			})
-			continue
-		}
-		if matched {
+	for _, client := range h.clients {
+		if util.GlobMatch(msg.Pattern, client.Route()) {
 			if client.SendFrame(frame) {
 				matchCount++
 			}
@@ -361,24 +433,53 @@ func (h *Hub) GetClientCount() int {
 	return len(h.clients)
 }
 
-// GetClientIDs returns a list of all connected client IDs.
+// GetClientIDs returns the public identifiers of all connected clients. Because
+// ids are caller-supplied and need not be unique, the result may contain
+// duplicates when several connections share an id.
 func (h *Hub) GetClientIDs() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	ids := make([]string, 0, len(h.clients))
-	for id := range h.clients {
-		ids = append(ids, id)
+	for _, client := range h.clients {
+		ids = append(ids, client.id)
 	}
 	return ids
 }
 
-// GetClient returns a client by ID, or nil if not found.
-func (h *Hub) GetClient(id string) *Client {
+// GetClientsByID returns every connected client whose caller-supplied public id
+// equals id, in unspecified order. Because ids are caller-supplied and need not
+// be unique, several connections may share one id; the result is empty when none
+// match. Use [Hub.GetClientsByRoute] to address connections by their
+// broadcast-matching route instead.
+func (h *Hub) GetClientsByID(id string) []*Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.clients[id]
+
+	var matched []*Client
+	for _, client := range h.clients {
+		if client.id == id {
+			matched = append(matched, client)
+		}
+	}
+	return matched
 }
 
-// Ensure Hub implements Broadcaster.
+// GetClientsByRoute returns every connected client whose broadcast-matching key
+// matches pattern, using the same glob semantics as a broadcast (e.g. "user:*"
+// or "user:alice"). Because several connections can share one route, this may
+// return multiple clients; the result is empty when none match.
+func (h *Hub) GetClientsByRoute(pattern string) []*Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var matched []*Client
+	for _, client := range h.clients {
+		if util.GlobMatch(pattern, client.Route()) {
+			matched = append(matched, client)
+		}
+	}
+	return matched
+}
+
 var _ Broadcaster = (*Hub)(nil)

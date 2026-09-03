@@ -92,7 +92,6 @@ func TestHub_RegisterUnregister(t *testing.T) {
 
 	// Register client
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond) // Wait for registration
 
 	if hub.GetClientCount() != 1 {
 		t.Errorf("expected 1 client after register, got %d", hub.GetClientCount())
@@ -100,7 +99,6 @@ func TestHub_RegisterUnregister(t *testing.T) {
 
 	// Unregister client
 	hub.Unregister(client)
-	time.Sleep(10 * time.Millisecond) // Wait for unregistration
 
 	if hub.GetClientCount() != 0 {
 		t.Errorf("expected 0 clients after unregister, got %d", hub.GetClientCount())
@@ -145,7 +143,6 @@ func TestHub_GetClientIDs(t *testing.T) {
 
 	hub.Register(client1)
 	hub.Register(client2)
-	time.Sleep(10 * time.Millisecond)
 
 	ids := hub.GetClientIDs()
 	if len(ids) != 2 {
@@ -175,7 +172,6 @@ func TestHub_BroadcastToPattern_ExactMatch(t *testing.T) {
 
 	hub.Register(client1)
 	hub.Register(client2)
-	time.Sleep(10 * time.Millisecond)
 
 	// Broadcast to exact match
 	hub.BroadcastToPattern("test:abc123", []byte("message for abc"))
@@ -211,7 +207,6 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	hub.Register(client1)
 	hub.Register(client2)
 	hub.Register(client3)
-	time.Sleep(10 * time.Millisecond)
 
 	// Broadcast to all execution clients
 	hub.BroadcastToPattern("test:*", []byte("message for executions"))
@@ -246,6 +241,101 @@ func TestHub_BroadcastToPattern_Wildcard(t *testing.T) {
 	}
 }
 
+// TestHub_DuplicateInstanceRegistrationRejected verifies that registering the
+// same *Client twice is rejected: the hub keeps a single map entry and a later
+// Unregister + broadcast never sends on a closed channel (which would panic).
+func TestHub_DuplicateInstanceRegistrationRejected(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	client := NewClient("reused", WithRoute("user:alice"))
+	hub.Register(client)
+	hub.Register(client) // duplicate: must be rejected, not create a stale entry
+
+	if got := hub.GetClientCount(); got != 1 {
+		t.Fatalf("expected 1 client after a rejected duplicate registration, got %d", got)
+	}
+
+	hub.Unregister(client)
+	if got := hub.GetClientCount(); got != 0 {
+		t.Fatalf("expected 0 clients after unregister, got %d", got)
+	}
+
+	// A broadcast after unregister must not panic on a stale, closed client.
+	hub.BroadcastFrame("user:alice", Frame{Data: []byte("x")})
+	time.Sleep(10 * time.Millisecond)
+}
+
+// TestHub_DuplicateIDsCoexist verifies two connections that share a caller-
+// supplied id register under distinct internal keys, so neither evicts the other
+// and unregistering the first leaves the second live and reachable.
+func TestHub_DuplicateIDsCoexist(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	first := NewClient("dup", WithRoute("user:alice"))
+	second := NewClient("dup", WithRoute("user:alice"))
+	hub.Register(first)
+	hub.Register(second)
+
+	if got := hub.GetClientCount(); got != 2 {
+		t.Fatalf("expected 2 coexisting clients, got %d", got)
+	}
+	if got := len(hub.GetClientsByRoute("user:alice")); got != 2 {
+		t.Fatalf("expected 2 clients on the shared route, got %d", got)
+	}
+
+	// Unregistering the first connection must not evict the second.
+	hub.Unregister(first)
+	if got := hub.GetClientCount(); got != 1 {
+		t.Fatalf("expected 1 client after unregistering one duplicate, got %d", got)
+	}
+
+	hub.BroadcastFrame("user:alice", Frame{Event: "ping", Data: []byte("x")})
+	select {
+	case msg := <-second.Events():
+		if string(msg.Data) != "x" {
+			t.Fatalf("expected 'x', got %q", msg.Data)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("surviving client should have received the broadcast")
+	}
+}
+
+// TestHub_Broadcast_AllClientsCrossesSlash verifies the "*" all-clients pattern
+// reaches routes containing "/", which plain path.Match would exclude because
+// "*" does not cross a path separator.
+func TestHub_Broadcast_AllClientsCrossesSlash(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	flat := NewClient("flat")
+	nested := NewClient("conn-1", WithRoute("user:org/alice"))
+	hub.Register(flat)
+	hub.Register(nested)
+
+	hub.Broadcast("ping", []byte("all"))
+
+	for _, c := range []*Client{flat, nested} {
+		select {
+		case msg := <-c.Events():
+			if string(msg.Data) != "all" {
+				t.Errorf("client %q: expected 'all', got %q", c.ID(), msg.Data)
+			}
+		case <-time.After(time.Second):
+			t.Errorf("client %q with route %q should have received the broadcast", c.ID(), c.Route())
+		}
+	}
+
+	// GetClientsByRoute shares the same semantics: "*" must select the nested route.
+	if got := len(hub.GetClientsByRoute("*")); got != 2 {
+		t.Errorf("expected \"*\" to match 2 clients, got %d", got)
+	}
+}
+
 func TestHub_ConcurrentOperations(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
@@ -263,7 +353,6 @@ func TestHub_ConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	time.Sleep(20 * time.Millisecond)
 
 	if hub.GetClientCount() != 10 {
 		t.Errorf("expected 10 clients, got %d", hub.GetClientCount())
@@ -288,7 +377,6 @@ func TestHub_ConcurrentOperations(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	time.Sleep(20 * time.Millisecond)
 
 	if hub.GetClientCount() != 0 {
 		t.Errorf("expected 0 clients after unregister, got %d", hub.GetClientCount())
@@ -376,26 +464,39 @@ func TestClient_Metadata(t *testing.T) {
 	}
 }
 
-func TestHub_GetClient(t *testing.T) {
+func TestHub_GetClientsByID(t *testing.T) {
 	hub := NewHub()
 	go hub.Run()
 	defer hub.Stop()
 
 	client := NewClient("test:abc123")
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond)
 
-	got := hub.GetClient("test:abc123")
-	if got == nil {
-		t.Error("expected to find registered client")
+	got := hub.GetClientsByID("test:abc123")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 registered client, got %d", len(got))
 	}
-	if got.ID() != "test:abc123" {
-		t.Errorf("expected ID 'test:abc123', got '%s'", got.ID())
+	if got[0].ID() != "test:abc123" {
+		t.Errorf("expected ID 'test:abc123', got '%s'", got[0].ID())
 	}
 
-	missing := hub.GetClient("nonexistent")
-	if missing != nil {
-		t.Error("expected nil for unregistered client")
+	if missing := hub.GetClientsByID("nonexistent"); len(missing) != 0 {
+		t.Errorf("expected no clients for unregistered id, got %d", len(missing))
+	}
+}
+
+// TestHub_GetClientsByID_ReturnsAllDuplicates verifies the plural lookup returns
+// every connection sharing a caller-supplied id rather than an arbitrary one.
+func TestHub_GetClientsByID_ReturnsAllDuplicates(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	hub.Register(NewClient("dup"))
+	hub.Register(NewClient("dup"))
+
+	if got := hub.GetClientsByID("dup"); len(got) != 2 {
+		t.Fatalf("expected 2 clients sharing the id, got %d", len(got))
 	}
 }
 
@@ -405,7 +506,6 @@ func TestHub_Stop(t *testing.T) {
 
 	client := NewClient("test:abc")
 	hub.Register(client)
-	time.Sleep(10 * time.Millisecond)
 
 	hub.Stop()
 	time.Sleep(10 * time.Millisecond)
@@ -489,7 +589,7 @@ func TestServeSSE(t *testing.T) {
 
 	// Create a test HTTP server
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ServeSSE(hub, w, r, "test:client-1", WithUserID("user-1"))
+		ServeSSE(hub, w, r, "test:client-1", WithClientOptions(WithUserID("user-1")))
 	})
 
 	server := httptest.NewServer(handler)
@@ -657,15 +757,16 @@ func TestEdge_PatternMatching_InvalidGlob(t *testing.T) {
 	hub.Register(client)
 	time.Sleep(10 * time.Millisecond)
 
-	// filepath.Match returns an error for malformed patterns like "[abc"
-	// The hub should log the error and not panic.
+	// The canonical util.GlobMatch treats a bracket as a literal (it has no
+	// character-class syntax), so "[invalid" can never error or match "test:abc".
+	// The hub must not panic and must deliver nothing.
 	hub.BroadcastToPattern("[invalid", []byte("should not crash"))
 	time.Sleep(20 * time.Millisecond)
 
-	// Client should NOT receive the message since the pattern is invalid
+	// Client should NOT receive the message since the pattern does not match.
 	select {
 	case <-client.Events():
-		t.Error("client should not receive message for invalid pattern")
+		t.Error("client should not receive message for a non-matching pattern")
 	default:
 		// Expected: no message delivered
 	}
@@ -788,38 +889,37 @@ func TestEdge_PatternMatching_QuestionMarkWildcard(t *testing.T) {
 	}
 }
 
-func TestEdge_PatternMatching_CharacterClass(t *testing.T) {
+// TestEdge_PatternMatching_BracketsAreLiteral documents that the canonical
+// util.GlobMatch has no character-class syntax: brackets are matched literally,
+// so "[ab]" reaches only a client whose route is exactly "[ab]", never "a"/"b".
+func TestEdge_PatternMatching_BracketsAreLiteral(t *testing.T) {
 	t.Parallel()
 
 	hub := NewHub()
 	go hub.Run()
 	defer hub.Stop()
 
-	c1 := NewClient("a")
-	c2 := NewClient("b")
-	c3 := NewClient("c")
-	hub.Register(c1)
-	hub.Register(c2)
-	hub.Register(c3)
+	literal := NewClient("[ab]")
+	a := NewClient("a")
+	hub.Register(literal)
+	hub.Register(a)
 	time.Sleep(10 * time.Millisecond)
 
 	hub.BroadcastToPattern("[ab]", []byte("hit"))
 	time.Sleep(10 * time.Millisecond)
 
-	for _, c := range []*Client{c1, c2} {
-		select {
-		case msg := <-c.Events():
-			if string(msg.Data) != "hit" {
-				t.Errorf("client %s: expected 'hit', got %q", c.ID(), string(msg.Data))
-			}
-		default:
-			t.Errorf("client %s should match '[ab]'", c.ID())
+	select {
+	case msg := <-literal.Events():
+		if string(msg.Data) != "hit" {
+			t.Errorf("literal client: expected 'hit', got %q", string(msg.Data))
 		}
+	default:
+		t.Error("client with literal id '[ab]' should match pattern '[ab]'")
 	}
 
 	select {
-	case <-c3.Events():
-		t.Error("client 'c' should NOT match '[ab]'")
+	case <-a.Events():
+		t.Error("client 'a' should NOT match literal pattern '[ab]'")
 	default:
 	}
 }
@@ -1009,23 +1109,24 @@ func TestEdge_ClientMetadataPreservation(t *testing.T) {
 	hub.Register(c)
 	time.Sleep(10 * time.Millisecond)
 
-	got := hub.GetClient("test:meta")
-	if got == nil {
-		t.Fatal("expected to find registered client")
+	got := hub.GetClientsByID("test:meta")
+	if len(got) != 1 {
+		t.Fatalf("expected to find 1 registered client, got %d", len(got))
 	}
+	client := got[0]
 
 	// Verify all metadata is preserved
-	if got.UserID() != "user-42" {
-		t.Errorf("UserID: expected 'user-42', got %q", got.UserID())
+	if client.UserID() != "user-42" {
+		t.Errorf("UserID: expected 'user-42', got %q", client.UserID())
 	}
-	if got.SessionID() != "sess-99" {
-		t.Errorf("SessionID: expected 'sess-99', got %q", got.SessionID())
+	if client.SessionID() != "sess-99" {
+		t.Errorf("SessionID: expected 'sess-99', got %q", client.SessionID())
 	}
-	if got.GetMetadata("role") != "admin" {
-		t.Errorf("role: expected 'admin', got %q", got.GetMetadata("role"))
+	if client.GetMetadata("role") != "admin" {
+		t.Errorf("role: expected 'admin', got %q", client.GetMetadata("role"))
 	}
-	if got.GetMetadata("lang") != "en" {
-		t.Errorf("lang: expected 'en', got %q", got.GetMetadata("lang"))
+	if client.GetMetadata("lang") != "en" {
+		t.Errorf("lang: expected 'en', got %q", client.GetMetadata("lang"))
 	}
 }
 
@@ -1156,28 +1257,32 @@ func TestEdge_ConcurrentBroadcastOrdering(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Wildcard * does not match across path separators in filepath.Match
+// Wildcard * crosses separators under the canonical identifier matcher
 // ---------------------------------------------------------------------------
 
-func TestEdge_PatternMatching_WildcardDoesNotMatchSlash(t *testing.T) {
+func TestEdge_PatternMatching_WildcardCrossesSlash(t *testing.T) {
 	t.Parallel()
 
 	hub := NewHub()
 	go hub.Run()
 	defer hub.Stop()
 
-	// filepath.Match("a:*", "a:b/c") returns false because * doesn't match /
+	// The canonical util.GlobMatch has identifier (separator-free) semantics, so
+	// "a:*" matches a route containing "/" — unlike path.Match, whose "*" stops at
+	// a separator. A per-principal route like "a:b/c" is therefore reachable.
 	c := NewClient("a:b/c")
 	hub.Register(c)
 	time.Sleep(10 * time.Millisecond)
 
-	hub.BroadcastToPattern("a:*", []byte("nope"))
-	time.Sleep(10 * time.Millisecond)
+	hub.BroadcastToPattern("a:*", []byte("hit"))
 
 	select {
-	case <-c.Events():
-		t.Error("* should not match / in filepath.Match")
-	default:
+	case msg := <-c.Events():
+		if string(msg.Data) != "hit" {
+			t.Errorf("expected 'hit', got %q", msg.Data)
+		}
+	case <-time.After(time.Second):
+		t.Error("* should match / under util.GlobMatch")
 	}
 }
 
