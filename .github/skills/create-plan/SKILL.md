@@ -70,6 +70,7 @@ A plan may **not** invent a lighter standard than gokit's. Its cross-cutting rul
 - **Test-first (TDD).** Each behavior gets a failing test first, then minimal code,
   then refactor while green — failure paths included. Never batch production code
   and bolt tests on later.
+- **Best-practices bar.** Prefer the *simplest* design that fully solves each step — flexible and extensible (small typed seams / functional options, no rigid or speculative abstraction), scalable (bounded resources, no accidental O(n²) or unbounded buffering), on current idiomatic Go best practices, not folklore. Complexity must earn its place.
 - **Structure & placement.** Correct module (root vs sub-module vs nested adapter);
   acyclic layering (lower layers never import higher); every new package has `doc.go`.
 - **Canonical reuse.** Reuse or enhance the owning package / stdlib before writing new code; never duplicate a shared concern. Consult [`docs/concern-owners.md`](../../../docs/concern-owners.md) for the canonical owner (formats → `codec`, helpers → `util`, paths → `fs`, …).

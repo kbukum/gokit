@@ -37,6 +37,7 @@ This is the pass the user cares about most: **is the code readable, maintainable
 
 ## Maintainability
 
+- **Root-cause over patches.** gokit is pre-stable — **no compatibility shims, no backward compatibility owed**. Prefer a clean redesign over a symptom patch; flag a shim/hedge/"leave the old path too" as should-fix with a redesign suggestion. Pre-existing defects and design smells in the change's blast radius (touched files and their close callers/callees) are in scope — report them, don't wave them through because "the diff didn't add them."
 - **DRY within reason.** Copy-pasted blocks with small tweaks → one parameterized helper.
   (But do not over-abstract a single use.)
 - **No dead or speculative code.** No commented-out blocks (git history exists), no unused exports,
