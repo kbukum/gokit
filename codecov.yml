@@ -651,6 +651,9 @@ component_management:
     - component_id: workload_docker
       name: workload/docker
       paths: ["workload/docker/**", "!workload/docker/*/**"]
+    - component_id: workload_dmr
+      name: workload/dmr
+      paths: ["workload/dmr/**", "!workload/dmr/*/**"]
     - component_id: workload_kubernetes
       name: workload/kubernetes
       paths: ["workload/kubernetes/**", "!workload/kubernetes/*/**"]

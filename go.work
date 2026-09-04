@@ -56,5 +56,6 @@ use (
 	./vectorstore
 	./vectorstore/qdrant
 	./workload
+	./workload/dmr
 	./workload/testutil
 )

@@ -93,6 +93,7 @@ This file is the bird's-eye index.
 | `inference/tgi` | `gokit/inference/tgi` | Text Generation Inference adapter |
 | `inference/triton` | `gokit/inference/triton` | Triton inference adapter |
 | `inference/vllm` | `gokit/inference/vllm` | vLLM inference adapter |
+| `workload/dmr` | `gokit/workload/dmr` | Docker Model Runner model-runtime adapter |
 | `vectorstore/qdrant` | `gokit/vectorstore/qdrant` | Qdrant vectorstore adapter |
 
 ## Nested Test Utility Modules

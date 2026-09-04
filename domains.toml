@@ -52,5 +52,5 @@ depends_on = ["core", "patterns", "crosscutting"]
 
 [domains.infra]
 description = "Workload management, CLI, benchmarking, dataset, test utilities, integration"
-modules = ["workload", "workload/testutil", "cli", "dataset", "bench", "bench/storage", "testutil"]
-depends_on = ["core", "patterns", "ai"]
+modules = ["workload", "workload/dmr", "workload/testutil", "cli", "dataset", "bench", "bench/storage", "testutil"]
+depends_on = ["core", "patterns", "crosscutting", "transport", "ai"]

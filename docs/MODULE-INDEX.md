@@ -30,7 +30,7 @@ ai · llm · llm/providers · llm/tokenizer/tiktoken · llm/tokenizer/huggingfac
 media
 
 ## ⚙️ Infra  (`make check-infra`)
-workload · workload/testutil · cli · dataset · bench · bench/storage · testutil
+workload · workload/dmr · workload/testutil · cli · dataset · bench · bench/storage · testutil
 
 ## 📦 Devtools  (`make check-devtools`)
 git · git/testutil
