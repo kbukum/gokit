@@ -1,8 +1,6 @@
 module github.com/kbukum/gokit/vectorstore/qdrant
 
-go 1.26.0
-
-toolchain go1.26.6
+go 1.26.7
 
 require (
 	github.com/google/uuid v1.6.0

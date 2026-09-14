@@ -1,8 +1,6 @@
 module github.com/kbukum/gokit/schema
 
-go 1.26.0
-
-toolchain go1.26.6
+go 1.26.7
 
 require (
 	github.com/invopop/jsonschema v0.14.0
@@ -16,7 +14,7 @@ require (
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
 
 replace github.com/kbukum/gokit => ../
