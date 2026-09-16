@@ -1,8 +1,6 @@
 module github.com/kbukum/gokit/ai
 
-go 1.26.0
-
-toolchain go1.26.6
+go 1.26.7
 
 require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
@@ -16,7 +14,7 @@ require (
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )
 
 replace (
