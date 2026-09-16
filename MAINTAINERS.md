@@ -1,7 +1,6 @@
 # Maintainers
 
-This file lists the people responsible for the gokit project.
-Maintainers are responsible for code review, releases, and project direction.
+This file lists the people responsible for the gokit project. Maintainers are responsible for code review, releases, and project direction.
 
 ## Core Maintainers
 
@@ -11,10 +10,7 @@ Maintainers are responsible for code review, releases, and project direction.
 
 ## Bus Factor: 1 — Co-Maintainers Wanted
 
-gokit has a **single core maintainer**.
-This is a known sustainability risk for a project of this size (50 Go modules).
-We are actively looking for contributors interested in becoming co-maintainers,
-particularly in the following areas:
+gokit has a **single core maintainer**. This is a known sustainability risk for a project of this size (54 Go modules). We are actively looking for contributors interested in becoming co-maintainers, particularly in the following areas:
 
 - **Transport/protocol packages**: `grpc`, `connect`, `sse`, `server`
 - **Messaging**: `messaging`, `messaging/kafka`, `messaging/nats`, `messaging/rabbitmq`
@@ -22,14 +18,11 @@ particularly in the following areas:
 - **Security**: `auth`, `auth/oidc`, `encryption`
 - **Storage**: `storage/*`, `cache/*`
 
-If you are interested,
-please open an issue using the [engineering review template](.github/ISSUE_TEMPLATE/) describing your area of interest
-and recent contributions, or start by picking up issues labelled `good-first-issue` / `help-wanted`.
+If you are interested, please open an issue using the [engineering review template](.github/ISSUE_TEMPLATE/) describing your area of interest and recent contributions, or start by picking up issues labelled `good-first-issue` / `help-wanted`.
 
 ## How Maintainers Are Added
 
-New maintainers are added by the existing core maintainers via a pull request that updates this file.
-Candidates are typically long-term contributors who have demonstrated:
+New maintainers are added by the existing core maintainers via a pull request that updates this file. Candidates are typically long-term contributors who have demonstrated:
 
 - A track record of high-quality contributions across multiple areas of the codebase.
 - Familiarity with project conventions, the multi-module layout, and the release process.
@@ -46,8 +39,7 @@ Maintainers are expected to:
 
 ## Becoming Inactive / Stepping Down
 
-A maintainer who has been inactive for 6 months may be moved to an "Emeritus" section by the remaining maintainers.
-Maintainers are encouraged to step down explicitly by opening a PR to update this file.
+A maintainer who has been inactive for 6 months may be moved to an "Emeritus" section by the remaining maintainers. Maintainers are encouraged to step down explicitly by opening a PR to update this file.
 
 ## Emeritus Maintainers
 
@@ -55,5 +47,4 @@ _No emeritus maintainers yet._
 
 ## Contact
 
-For routine project communication, use GitHub issues or discussions. For security issues,
-see [SECURITY.md](SECURITY.md).
+For routine project communication, use GitHub issues or discussions. For security issues, see [SECURITY.md](SECURITY.md).

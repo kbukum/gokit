@@ -7,20 +7,16 @@
 > not Go micro-benchmarks. For CPU/memory micro-benchmarks see `go test -bench`
 > and the per-package `*_test.go` files.
 
-Think of `bench` as `testing.B` for classification accuracy, ranking quality,
-probability calibration, and regression error. Evaluators are backed by gokit **providers**,
-datasets flow through **pipelines**, and metrics are fully pluggable.
+Think of `bench` as `testing.B` for classification accuracy, ranking quality, probability calibration, and regression error. Evaluators are backed by gokit **providers**, datasets flow through **pipelines**, and metrics are fully pluggable.
 
 ## Features
 
 - **Generics-first** — `Sample[L]`, `Prediction[L]`, `Evaluator[L]` are parameterised on the label type
 - **Provider integration** — any `provider.RequestResponse` becomes an evaluator with one adapter call
 - **Pipeline integration** — datasets expose a `stream.Pipeline` / `stream.Iterator` for lazy, backpressure-aware loading
-- **Pluggable metrics** — classification, probability, ranking, regression, matching —
-  or bring your own
+- **Pluggable metrics** — classification, probability, ranking, regression, matching — or bring your own
 - **Multiple output formats** — JSON, Markdown, CSV, HTML, JUnit XML, Vega-Lite, SVG visualisations
-- **Comparison & regression detection** — diff two runs, surface fixed/regressed samples,
-  gate CI on thresholds
+- **Comparison & regression detection** — diff two runs, surface fixed/regressed samples, gate CI on thresholds
 - **CLI helpers** — `CLIRunner` wires up run → store → compare → print in a few lines
 - **Concurrent evaluation** — fan out across evaluators with configurable concurrency and per-sample timeouts
 - **Reproducible runs** — every `RunResult` carries a `RunProvenance` record (seed, git commit, tool/host/os/arch, and an order-independent dataset hash); inject a `ProvenanceProbe` and a run seed for deterministic, auditable runs

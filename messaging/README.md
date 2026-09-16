@@ -1,7 +1,6 @@
 # gokit/messaging
 
-Transport-agnostic message producer/consumer abstraction with explicit adapter registration,
-in-memory broker for testing, and composable middleware.
+Transport-agnostic message producer/consumer abstraction with explicit adapter registration, in-memory broker for testing, and composable middleware.
 
 ## Overview
 

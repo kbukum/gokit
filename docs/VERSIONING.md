@@ -84,7 +84,7 @@ The complete mechanical procedure is in [`RELEASING.md`](RELEASING.md), and the 
 |---|---|---|
 | Next version selection | `toven release plan` / `toven release status` | anchors on reachable git tags. Tagged modules auto-bump from Conventional-Commit history (e.g. `authz 0.2.0 → 0.2.1`); modules with no prior tag report "has never been released and declares no version" until an explicit `--set-version` is supplied to the mutating `bump`/`tag`/`publish` cut. Toven never fabricates a `0.0.0` baseline |
 | Per-module tag names | `toven release plan` / `toven release publish --dry-run` | path-prefixed tag names (`auth/v…`, `database/sqlite/v…`, `messaging/nats/v…`) |
-| Lock-step tagging of every `go.mod` | `toven modules` + `toven release plan` | all 50 modules discovered; every module deliberately included and tagged in lock-step. Toven does support a per-module `exclude`, but gokit's contract withholds none — inclusion is explicit, not a missing mechanism |
+| Lock-step tagging of every `go.mod` | `toven modules` + `toven release plan` | all 54 modules discovered; every module deliberately included and tagged in lock-step. Toven does support a per-module `exclude`, but gokit's contract withholds none — inclusion is explicit, not a missing mechanism |
 | Dependency-aware cascade | `toven release plan` (`dependency-cascade` reason column) | dependents shown as `cascade` when a dependency changes |
 | Clean-tree requirement | `toven release readiness` | `clean-tree` check, `fail` on a dirty tree |
 | Cut and push the signed tags | `toven release tag` / `toven release publish` | signed annotated tags created and pushed; the hosted Release is created with commit-derived notes |

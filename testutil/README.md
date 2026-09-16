@@ -4,8 +4,7 @@ The `testutil` package provides a comprehensive testing infrastructure for gokit
 
 ## Features
 
-- **TestComponent Interface**:
-  Extends `component.Component` with testing-specific methods (Reset, Snapshot, Restore)
+- **TestComponent Interface**: Extends `component.Component` with testing-specific methods (Reset, Snapshot, Restore)
 - **TestManager**: Lifecycle manager for coordinating multiple test components
 - **Helper Functions**: Convenient wrappers for common testing patterns
 - **Testing.T Integration**: Automatic cleanup integration with Go's testing package

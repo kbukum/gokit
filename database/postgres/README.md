@@ -40,10 +40,7 @@ comp := database.NewComponent(cfg, log).
 
 ## Building a DSN
 
-Core `database.Config` is driver-agnostic: it takes either an opaque `DSN` string or structured
-`database.ConnParams`, and does not know PostgreSQL's connection-string shape. The PostgreSQL
-dialect implements `database.StructuredDialect`, so when you set `Config.Params` (and leave `DSN`
-empty) the component builds the DSN for you:
+Core `database.Config` is driver-agnostic: it takes either an opaque `DSN` string or structured `database.ConnParams`, and does not know PostgreSQL's connection-string shape. The PostgreSQL dialect implements `database.StructuredDialect`, so when you set `Config.Params` (and leave `DSN` empty) the component builds the DSN for you:
 
 ```go
 cfg := database.Config{
@@ -59,11 +56,7 @@ cfg := database.Config{
 comp := database.NewComponent(cfg, log).WithDialect(postgres.Dialect())
 ```
 
-A zero `Port` defaults to `5432` and an absent `Options["sslmode"]` to `verify-full`, so
-connections are encrypted and the server certificate is verified by default. Set
-`Options["sslmode"] = "disable"` explicitly to opt out on a trusted local network. Every field —
-user, password, host, path, and option value — is URL-encoded (IPv6 hosts are bracketed), and the
-dialect emits a URL-form DSN that GORM's PostgreSQL driver accepts.
+A zero `Port` defaults to `5432` and an absent `Options["sslmode"]` to `verify-full`, so connections are encrypted and the server certificate is verified by default. Set `Options["sslmode"] = "disable"` explicitly to opt out on a trusted local network. Every field — user, password, host, path, and option value — is URL-encoded (IPv6 hosts are bracketed), and the dialect emits a URL-form DSN that GORM's PostgreSQL driver accepts.
 
 ## Migrations
 

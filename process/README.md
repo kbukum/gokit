@@ -94,8 +94,7 @@ result, _ := process.Run(ctx, process.Command{
 })
 ```
 
-Env entries are merged onto the base environment selected by `EnvPolicy` (`EnvInherit` by
-default, or `EnvEmpty` to start from an empty environment).
+Env entries are merged onto the base environment selected by `EnvPolicy` (`EnvInherit` by default, or `EnvEmpty` to start from an empty environment).
 
 ### Resilient Execution
 

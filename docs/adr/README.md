@@ -1,9 +1,6 @@
 # Architecture Decision Records (ADR)
 
-ADRs document **significant** architectural choices: tradeoffs considered, why we picked one option,
-and the consequences. They are immutable — superseded ADRs are kept and linked from the replacement.
-
-Closes F-065 sub-finding: `docs/` had no `docs/adr/`.
+ADRs document **significant** architectural choices: tradeoffs considered, why we picked one option, and the consequences. They are immutable — superseded ADRs are kept and linked from the replacement.
 
 ## When to write an ADR
 
@@ -14,8 +11,7 @@ Closes F-065 sub-finding: `docs/` had no `docs/adr/`.
 
 ## Format
 
-Each ADR is a Markdown file named `NNNN-short-kebab-title.md` where NNNN is the next zero-padded sequence number.
-Use [`0000-template.md`](0000-template.md) as the starting point.
+Each ADR is a Markdown file named `NNNN-short-kebab-title.md` where NNNN is the next zero-padded sequence number. Use [`0000-template.md`](0000-template.md) as the starting point.
 
 ## Index
 

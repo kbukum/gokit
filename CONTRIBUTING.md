@@ -4,9 +4,7 @@
 
 - **Go 1.26+**
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
-- **ast-grep** — powers the advisory `make structure` guard;
-  `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx)
-  and falling back to an unpinned Homebrew install last
+- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned Homebrew install last
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
 ## Getting Started
@@ -54,8 +52,7 @@ gokit/
 └── .golangci.yml           # Shared linter configuration
 ```
 
-**Core packages** live under the root `go.mod` and must stay lightweight.
-**Sub-modules** each have their own `go.mod` and may pull in heavy dependencies.
+**Core packages** live under the root `go.mod` and must stay lightweight. **Sub-modules** each have their own `go.mod` and may pull in heavy dependencies.
 
 ## Development Workflow
 
@@ -77,8 +74,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 
 ### Cross-Module Script
 
-`gomod.sh` discovers all modules automatically by finding `go.mod` files.
-You never maintain a hardcoded module list:
+`gomod.sh` discovers all modules automatically by finding `go.mod` files. You never maintain a hardcoded module list:
 
 ```bash
 ./gomod.sh tidy              # go mod tidy all modules
@@ -112,27 +108,18 @@ You never maintain a hardcoded module list:
    replace github.com/kbukum/gokit => ../
    ```
 2. Add a `doc.go` with package-level documentation
-3. If the module wraps an infrastructure component,
-   implement `component.Component` for lifecycle management
-4. If the module depends on another gokit sub-module (e.g. `.../testutil`), add a
-   local `replace` for it too — run `make replace-sync` to derive them from the
-   module graph, or `make replace-check` to verify. These keep `go mod tidy`
-   working against not-yet-published versions during a release bump and are
-   enforced in CI.
+3. If the module wraps an infrastructure component, implement `component.Component` for lifecycle management
+4. If the module depends on another gokit sub-module (e.g. `.../testutil`), add a local `replace` for it too — run `make replace-sync` to derive them from the module graph, or `make replace-check` to verify. These keep `go mod tidy` working against not-yet-published versions during a release bump and are enforced in CI.
 5. Add tests — the module is automatically discovered by `gomod.sh`, CI, and all `make` targets
 
 ## Coding Standards
 
 - **Formatting**: `gofmt` and `goimports` (enforced by CI via `.golangci.yml`)
 - **Imports**: Separate stdlib, third-party, and gokit imports with blank lines
-- **Config pattern**:
-  Each module that needs configuration uses a `Config` struct with `ApplyDefaults()`
-  and `Validate()` methods
+- **Config pattern**: Each module that needs configuration uses a `Config` struct with `ApplyDefaults()` and `Validate()` methods
 - **Validation**: Plain Go validation — no external validator library
-- **Naming**: Follow Go conventions;
-  avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
-- **Testing**: Use `-race -count=1`;
-  **prefer table-driven tests** for any test that exercises >1 input/expected pair. Pattern:
+- **Naming**: Follow Go conventions; avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
+- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any test that exercises >1 input/expected pair. Pattern:
 
   ```go
   func TestThing(t *testing.T) {
@@ -172,13 +159,11 @@ make release-tag                # cut manifests, commit, and create signed modul
 make list-tags                  # view all tags
 ```
 
-Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by Toven
-(`toven release tag`), which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by Toven (`toven release tag`), which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
 
 ## CI
 
-CI runs on GitHub Actions and is fully dynamic — modules are discovered at runtime, not hardcoded.
-Each module gets its own parallel check and lint job. You can run it locally:
+CI runs on GitHub Actions and is fully dynamic — modules are discovered at runtime, not hardcoded. Each module gets its own parallel check and lint job. You can run it locally:
 
 ```bash
 make ci        # full pipeline (requires Docker + act)
@@ -202,7 +187,4 @@ make ci-lint   # lint jobs only
 
 ### Sibling-parity reminder
 
-Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit)
-and [rskit](https://github.com/kbukum/rskit).
-When you change one of these surfaces here, please open a tracking issue in the rskit repo
-so the change can be evaluated for parity.
+Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit) and [rskit](https://github.com/kbukum/rskit). When you change one of these surfaces here, please open a tracking issue in the rskit repo so the change can be evaluated for parity.

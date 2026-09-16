@@ -2,8 +2,7 @@
 
 ## Scope
 
-This document covers the security baseline for `auth`, `authz`, `security`,
-and their interaction with `encryption`.
+This document covers the security baseline for `auth`, `authz`, `security`, and their interaction with `encryption`.
 
 ## Threat model
 
@@ -11,8 +10,7 @@ gokit assumes:
 
 - attackers can replay bearer tokens if transport or nonce/state handling is weak
 - attackers may attempt JWT algorithm-confusion, `alg:none`, or weak symmetric-secret abuse
-- attackers may attempt privilege escalation through missing default-deny
-  or cross-tenant authorization gaps
+- attackers may attempt privilege escalation through missing default-deny or cross-tenant authorization gaps
 - attackers may exploit missing browser response headers where gokit powers HTTP transports
 
 ## Authentication
@@ -77,5 +75,4 @@ gokit assumes:
 
 - access and refresh tokens have separate TTLs
 - OIDC refresh flows support refresh-token rotation responses
-- API consumers should treat refresh tokens as one-time rotation candidates
-  and persist replacements atomically
+- API consumers should treat refresh tokens as one-time rotation candidates and persist replacements atomically
