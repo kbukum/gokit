@@ -1,10 +1,6 @@
 # Releasing
 
-The mechanical steps to cut a release of `gokit`.
-For *what* counts as a breaking change vs a feature vs a fix, see `policy/SEMVER.md`
-and `policy/DEPRECATION.md`.
-For how much of the release and CI lifecycle Toven drives (and what stays native),
-see [`TOVEN-MIGRATION.md`](TOVEN-MIGRATION.md).
+The mechanical steps to cut a release of `gokit`. For *what* counts as a breaking change vs a feature vs a fix, see `policy/SEMVER.md` and `policy/DEPRECATION.md`. For how much of the release and CI lifecycle Toven drives (and what stays native), see [`TOVEN-MIGRATION.md`](TOVEN-MIGRATION.md).
 
 ## Prerequisites
 
@@ -24,9 +20,7 @@ git tag --sort=-v:refname | head -1
 git log --oneline $(git describe --tags --abbrev=0)..HEAD
 ```
 
-Use the [SEMVER policy](./policy/SEMVER.md) to pick the next version. While in `0.x`,
-every release with a breaking change in the `[Unreleased]` CHANGELOG section bumps MINOR;
-otherwise PATCH.
+Use the [SEMVER policy](./policy/SEMVER.md) to pick the next version. While in `0.x`, every release with a breaking change in the `[Unreleased]` CHANGELOG section bumps MINOR; otherwise PATCH.
 
 ## 2. Update the CHANGELOG
 
@@ -35,31 +29,15 @@ otherwise PATCH.
 3. For a stable release, use `## [X.Y.Z] - YYYY-MM-DD` and the same empty-section rotation.
 4. Refuse to release when the populated `[Unreleased]` section is empty.
 
-For stable releases, Toven requires a matching changelog section.
-Prereleases use the dated alpha or beta section for release notes.
+For stable releases, Toven requires a matching changelog section. Prereleases use the dated alpha or beta section for release notes.
 
 ## 3. Stage the version bump (Phase 1)
 
-A lock-step release rewrites every module's version and the inter-module
-dependency floors — the `require github.com/kbukum/gokit/<mod> vX.Y.Z` lines that
-let a published consumer resolve one gokit module's dependency on another. Toven
-stages that rewrite for review; it never commits, tags, or pushes here.
+A lock-step release rewrites every module's version and the inter-module dependency floors — the `require github.com/kbukum/gokit/<mod> vX.Y.Z` lines that let a published consumer resolve one gokit module's dependency on another. Toven stages that rewrite for review; it never commits, tags, or pushes here.
 
-Because the bump moves those floors to a version that is not published yet, `go
-mod tidy` would try (and fail) to fetch it from the proxy — except every
-intra-repo dependency also carries a local `replace github.com/kbukum/gokit/<mod>
-=> ../<path>` directive that resolves it from the working tree instead. Those
-directives are maintained by `make replace-sync` (derived from the module graph,
-not by hand) and enforced in CI preflight via `make replace-check`, so the set
-stays complete as modules are added. If a bump-then-`tidy` ever fails downloading
-a `github.com/kbukum/gokit/...` module, run `make replace-sync` and commit the
-result. The directives are ignored by downstream consumers, so committing local
-relative paths is safe.
+Because the bump moves those floors to a version that is not published yet, `go mod tidy` would try (and fail) to fetch it from the proxy — except every intra-repo dependency also carries a local `replace github.com/kbukum/gokit/<mod> => ../<path>` directive that resolves it from the working tree instead. Those directives are maintained by `make replace-sync` (derived from the module graph, not by hand) and enforced in CI preflight via `make replace-check`, so the set stays complete as modules are added. If a bump-then-`tidy` ever fails downloading a `github.com/kbukum/gokit/...` module, run `make replace-sync` and commit the result. The directives are ignored by downstream consumers, so committing local relative paths is safe.
 
-`release bump` computes the versions from `main`'s baseline (reachable tags plus
-Conventional-Commit history), but the mutation lands in your working tree — so
-branch off a clean `main` first, then run the bump on the branch. There is no
-need to stage on `main` and carry the change over.
+`release bump` computes the versions from `main`'s baseline (reachable tags plus Conventional-Commit history), but the mutation lands in your working tree — so branch off a clean `main` first, then run the bump on the branch. There is no need to stage on `main` and carry the change over.
 
 ```sh
 git switch -c release/vX.Y.Z                       # branch off clean main
@@ -72,51 +50,26 @@ Then, on the branch:
 2. Commit the staged bump + CHANGELOG.
 3. Open a pull request and merge it into `main` after review.
 
-The bump lands through a reviewed PR so `main` stays the source of truth; the
-signed tags are cut only after the PR merges (Phase 2). The last published line
-is `v0.2.0`, so `release status` / `release plan` work: modules carrying a
-`v0.2.0` tag auto-bump from their Conventional-Commit history. Modules added
-since v0.2.0 (media, agent, ai, …) carry no tag, so supply the first version to
-the mutating action with `--set-version` — accepted on `release bump`,
-`release tag`, and `release publish`, workspace-wide (`--set-version 0.3.0-alpha.1`,
-no `v` prefix) or per module (`--set-version go:media=0.3.0-alpha.1`), per
-[`VERSIONING.md`](VERSIONING.md). Toven never fabricates a synthetic `0.0.0`.
+The bump lands through a reviewed PR so `main` stays the source of truth; the signed tags are cut only after the PR merges (Phase 2). The last published line is `v0.2.0`, so `release status` / `release plan` work: modules carrying a `v0.2.0` tag auto-bump from their Conventional-Commit history. Modules added since v0.2.0 (media, agent, ai, …) carry no tag, so supply the first version to the mutating action with `--set-version` — accepted on `release bump`, `release tag`, and `release publish`, workspace-wide (`--set-version 0.3.0-alpha.1`, no `v` prefix) or per module (`--set-version go:media=0.3.0-alpha.1`), per [`VERSIONING.md`](VERSIONING.md). Toven never fabricates a synthetic `0.0.0`.
 
 ## 4. Cut the tags and hosted Release (Phase 2)
 
-Run this only after the Phase 1 bump PR has merged into `main`. Toven owns
-tagging and the hosted GitHub Release: it discovers every `go.mod`, cuts
-path-prefixed tags in lock-step, and creates the Release with commit-derived
-notes.
+Run this only after the Phase 1 bump PR has merged into `main`. Toven owns tagging and the hosted GitHub Release: it discovers every `go.mod`, cuts path-prefixed tags in lock-step, and creates the Release with commit-derived notes.
 
 ### Canonical path — dispatch from Actions
 
-The authoritative publish runs in CI through the **`Release (publish)`**
-workflow (`.github/workflows/release.yml`), modeled on Toven's own release
-pipeline. From the repository **Actions** tab, run the workflow against `main`:
+The authoritative publish runs in CI through the **`Release (publish)`** workflow (`.github/workflows/release.yml`), modeled on Toven's own release pipeline. From the repository **Actions** tab, run the workflow against `main`:
 
-1. Leave `dry_run` checked and dispatch once. The `preview` job runs the
-   mutation-free rehearsal (`toven-canary` + `release publish --dry-run`) and
-   uploads the plan as the `release-preview` artifact. No approval is requested
-   and nothing is pushed.
-2. Review the preview, then dispatch again with `dry_run` unchecked. The
-   `publish` job is gated by the protected `release` environment — a required
-   reviewer approves it, then Toven cuts and pushes the lock-step tags and
-   creates the hosted Release. The pushed root `v*` tag triggers
-   `release-artifacts.yml` (step 5).
+1. Leave `dry_run` checked and dispatch once. The `preview` job runs the mutation-free rehearsal (`toven-canary` + `release publish --dry-run`) and uploads the plan as the `release-preview` artifact. No approval is requested and nothing is pushed.
+2. Review the preview, then dispatch again with `dry_run` unchecked. The `publish` job is gated by the protected `release` environment — a required reviewer approves it, then Toven cuts and pushes the lock-step tags and creates the hosted Release. The pushed root `v*` tag triggers `release-artifacts.yml` (step 5).
 
-For the first Go release (modules added since v0.2.0 carry no tag), set the
-`set_version` input to `0.3.0-alpha.1` (no `v` prefix). Leave it empty once every
-module carries a tag and history alone drives the bump.
+For the first Go release (modules added since v0.2.0 carry no tag), set the `set_version` input to `0.3.0-alpha.1` (no `v` prefix). Leave it empty once every module carries a tag and history alone drives the bump.
 
-CI cuts annotated tags under the `github-actions[bot]` identity; integrity comes
-from the `release` environment approval plus the cosign signatures and SLSA
-provenance that `release-artifacts.yml` attaches, not from GPG-signed tags.
+CI cuts annotated tags under the `github-actions[bot]` identity; integrity comes from the `release` environment approval plus the cosign signatures and SLSA provenance that `release-artifacts.yml` attaches, not from GPG-signed tags.
 
 ### Local fallback
 
-If you must publish from a workstation, use a clean checkout of the merged
-commit. This cuts GPG-signed tags when your git config provides a signing key.
+If you must publish from a workstation, use a clean checkout of the merged commit. This cuts GPG-signed tags when your git config provides a signing key.
 
 ```sh
 make release-plan               # preview the exact version cascade and tag set
@@ -124,10 +77,7 @@ make release-publish-dry-run    # mutation-free registry + hosted-Release rehear
 make release-publish            # cut and push tags, then create the hosted Release
 ```
 
-`make release-tag` is available if you want to create and push the tags before
-creating the Release; `make release-publish` performs the full tag → push →
-hosted-Release sequence idempotently. Pass `SET_VERSION=0.3.0-alpha.1` for the
-first release, exactly as the CI `set_version` input does.
+`make release-tag` is available if you want to create and push the tags before creating the Release; `make release-publish` performs the full tag → push → hosted-Release sequence idempotently. Pass `SET_VERSION=0.3.0-alpha.1` for the first release, exactly as the CI `set_version` input does.
 
 Either path, Toven will:
 - Refuse to run with a dirty working tree (the clean-tree guardrail has no bypass).
@@ -139,8 +89,7 @@ Either path, Toven will:
 
 Pushing the root tag starts `.github/workflows/release-artifacts.yml`. GoReleaser runs in `keep-existing` mode and attaches the source archive, checksums, SBOM, signatures, and provenance to the Release Toven already created — it does not recreate the Release or replace Toven's notes. Do not create a second release manually with `gh`.
 
-GitHub Releases are mandatory; downstream tooling (`go install`, Dependabot,
-and pkg.go.dev) only surface release signal when both the tag and release exist.
+GitHub Releases are mandatory; downstream tooling (`go install`, Dependabot, and pkg.go.dev) only surface release signal when both the tag and release exist.
 
 ## 6. Verify on `pkg.go.dev`
 
@@ -163,8 +112,7 @@ GOPROXY=https://proxy.golang.org go list -m github.com/kbukum/gokit@vX.Y.Z
 
 ## Hotfix releases
 
-Hotfixes follow the same flow
-but skip the `[Unreleased]` rotation if the fix is targeted at an older line:
+Hotfixes follow the same flow but skip the `[Unreleased]` rotation if the fix is targeted at an older line:
 
 ```sh
 git checkout <existing-release-tag>
@@ -181,8 +129,7 @@ toven release publish --dry-run
 toven release publish --yes
 ```
 
-Toven marks the hosted Release as a prerelease from the tag's prerelease suffix,
-and GoReleaser (in `keep-existing` mode) attaches artifacts to that Release.
+Toven marks the hosted Release as a prerelease from the tag's prerelease suffix, and GoReleaser (in `keep-existing` mode) attaches artifacts to that Release.
 
 ## Recovery
 
@@ -201,22 +148,14 @@ make list-tags         # every version tag currently on the remote
 
 ## Supply-chain artifacts (automated)
 
-Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.3.0-alpha.1`) triggers `.github/workflows/release-artifacts.yml`,
-which runs GoReleaser in library mode and produces, for every release:
+Pushing a root `vX.Y.Z` tag (including pre-releases like `v0.3.0-alpha.1`) triggers `.github/workflows/release-artifacts.yml`, which runs GoReleaser in library mode and produces, for every release:
 
 - a reproducible source archive (`gokit-<version>-source.tar.gz`) and a `checksums.txt`;
-- a CycloneDX SBOM (`gokit-<version>.cdx.json`) generated by `cyclonedx-gomod` over the root module
-  and its dependencies;
-- cosign **keyless** (OIDC) signatures
-  and certificates for **every** artifact (source archive, checksums, and SBOM);
-  the same job then **verifies** the `checksums.txt` signature with `cosign verify-blob` against the workflow's OIDC identity
-  — since `checksums.txt` pins the SHA-256 of every other artifact,
-  this transitively establishes their integrity, and the release fails if verification fails;
-- a **SLSA build provenance** attestation over the source archive, checksums,
-  and SBOM via `actions/attest-build-provenance`, verifiable with `gh attestation verify`.
+- a CycloneDX SBOM (`gokit-<version>.cdx.json`) generated by `cyclonedx-gomod` over the root module and its dependencies;
+- cosign **keyless** (OIDC) signatures and certificates for **every** artifact (source archive, checksums, and SBOM); the same job then **verifies** the `checksums.txt` signature with `cosign verify-blob` against the workflow's OIDC identity — since `checksums.txt` pins the SHA-256 of every other artifact, this transitively establishes their integrity, and the release fails if verification fails;
+- a **SLSA build provenance** attestation over the source archive, checksums, and SBOM via `actions/attest-build-provenance`, verifiable with `gh attestation verify`.
 
-Every dependency's license is additionally gated against a permissive allow-list on each push (`scripts/check-licenses.sh`);
-see [`dependencies.md`](dependencies.md).
+Every dependency's license is additionally gated against a permissive allow-list on each push (`scripts/check-licenses.sh`); see [`dependencies.md`](dependencies.md).
 
 To dry-run the artifact build locally without signing or publishing:
 
@@ -224,6 +163,4 @@ To dry-run the artifact build locally without signing or publishing:
 make release-dry VERSION=vX.Y.Z   # goreleaser --snapshot, skips sign + publish
 ```
 
-gokit ships **libraries only** (no `package main` anywhere), so there are no runnable binaries
-and the release publishes no container images; distribution is entirely through the Go module proxy
-and pkg.go.dev.
+gokit ships **libraries only** (no `package main` anywhere), so there are no runnable binaries and the release publishes no container images; distribution is entirely through the Go module proxy and pkg.go.dev.

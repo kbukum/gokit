@@ -1,7 +1,6 @@
 # vectorstore
 
-Vector similarity search store abstraction with explicit backend registration
-and an in-memory implementation for gokit.
+Vector similarity search store abstraction with explicit backend registration and an in-memory implementation for gokit.
 
 ## Features
 

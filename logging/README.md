@@ -54,9 +54,7 @@ if err != nil {
 defer log.Close()
 ```
 
-For configurations known-good at author time (no OTLP, or a config validated elsewhere) and for
-tests, use `MustNew` — the sanctioned Must-twin that panics instead of returning an error, mirroring
-`regexp.MustCompile`. Do not use it on runtime or user-supplied config paths.
+For configurations known-good at author time (no OTLP, or a config validated elsewhere) and for tests, use `MustNew` — the sanctioned Must-twin that panics instead of returning an error, mirroring `regexp.MustCompile`. Do not use it on runtime or user-supplied config paths.
 
 ```go
 log := logging.MustNew(&logging.Config{Level: "debug", Format: "console"}, "my-service")
@@ -64,16 +62,13 @@ log := logging.MustNew(&logging.Config{Level: "debug", Format: "console"}, "my-s
 
 ## Bring Your Own Sink / Logging Port
 
-The logging engine is not baked into gokit. `Logger` is a facade over `*slog.Logger`, and every
-value-add feature is a `slog.Handler` in a middleware chain:
+The logging engine is not baked into gokit. `Logger` is a facade over `*slog.Logger`, and every value-add feature is a `slog.Handler` in a middleware chain:
 
 ```
 moduleLevel → sampling → masking → context → fanout{ default sink, OTLP, your handler(s)… }
 ```
 
-Out of the box you get the default sink (console in dev, JSON in prod) with masking on — zero config.
-When you need something else, four constructor options and one escape hatch cover it, and none of
-them require editing the kit:
+Out of the box you get the default sink (console in dev, JSON in prod) with masking on — zero config. When you need something else, four constructor options and one escape hatch cover it, and none of them require editing the kit:
 
 | Seam | What it does |
 |------|--------------|
@@ -98,9 +93,7 @@ var buf bytes.Buffer
 log = logging.MustNew(cfg, "my-service", logging.WithWriter(&buf))
 ```
 
-Because the middleware wraps the fanout, masking and sampling apply uniformly to the default sink,
-the OTLP branch, and every consumer-supplied handler — you cannot accidentally bypass redaction by
-bringing your own backend.
+Because the middleware wraps the fanout, masking and sampling apply uniformly to the default sink, the OTLP branch, and every consumer-supplied handler — you cannot accidentally bypass redaction by bringing your own backend.
 
 ## Configuration
 
@@ -148,8 +141,7 @@ logging:
 
 ## Masking
 
-Masking is **enabled by default**.
-Every log field is checked against sensitive field names (case-insensitive) and value patterns (regex). If a match is found, the value is replaced before it reaches any output sink.
+Masking is **enabled by default**. Every log field is checked against sensitive field names (case-insensitive) and value patterns (regex). If a match is found, the value is replaced before it reaches any output sink.
 
 Masking applies to structured attribute **values**, not to the free-text log message. Keep dynamic data in fields (`logger.Fields(...)`), never interpolated into the message string, so it can be redacted.
 
@@ -227,10 +219,7 @@ sampling:
 > **When to use:** Enable sampling on hot-path services producing thousands of log lines per second.
 > Leave disabled for low-volume services or during debugging.
 
-Sampling is implemented as a pure-Go `slog.Handler` decorator (`samplingHandler`) — no third-party
-sampler. Each one-second window is tracked with an injected clock, so behavior is deterministic under
-test. Inject the clock with `logging.WithClock(func() time.Time { ... })` when you need to drive the
-window from a fake clock; it defaults to `time.Now`.
+Sampling is implemented as a pure-Go `slog.Handler` decorator (`samplingHandler`) — no third-party sampler. Each one-second window is tracked with an injected clock, so behavior is deterministic under test. Inject the clock with `logging.WithClock(func() time.Time { ... })` when you need to drive the window from a fake clock; it defaults to `time.Now`.
 
 ```go
 // Deterministic sampling in a test:
@@ -375,9 +364,7 @@ type Masker interface {
 }
 ```
 
-Masking is applied as a `slog.Handler` in the chain, not as a mutable field on the logger. Supply
-your masker at construction with the `WithMasker` option — passing one also turns masking on even if
-the config leaves it disabled:
+Masking is applied as a `slog.Handler` in the chain, not as a mutable field on the logger. Supply your masker at construction with the `WithMasker` option — passing one also turns masking on even if the config leaves it disabled:
 
 ```go
 type MyMasker struct{}

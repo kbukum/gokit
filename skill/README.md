@@ -4,8 +4,7 @@
 
 # gokit/skill
 
-`skill` owns `kit.skill.yaml` manifests, progressive-disclosure loading, in-process skill providers,
-signature verification seams, and activation envelope helpers.
+`skill` owns `kit.skill.yaml` manifests, progressive-disclosure loading, in-process skill providers, signature verification seams, and activation envelope helpers.
 
 ## Architecture
 

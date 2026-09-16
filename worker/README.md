@@ -7,8 +7,7 @@
 ## Features
 
 - **Handler[I, O]** — single generic interface for all task execution
-- **Push-based events** — handlers call `emit()` for progress, partial results,
-  and logs during execution
+- **Push-based events** — handlers call `emit()` for progress, partial results, and logs during execution
 - **Worker pool** — fixed-size goroutine pool with per-task handles, cancellation, and graceful shutdown
 - **Dispatch strategies** — round-robin and least-loaded worker selection
 - **Supervision** — panic tracking, health monitoring, backoff, and configurable restart policies
@@ -297,8 +296,7 @@ go func() {
 | Use case | Long tasks with progress, subprocess streaming | Data transformation, batch processing |
 | Lifecycle | Task-scoped with explicit pool management | Lazy evaluation, runs on terminal operator |
 
-Use **worker** when you need real-time visibility into task execution.
-Use **pipeline** for composable data transformations with backpressure.
+Use **worker** when you need real-time visibility into task execution. Use **pipeline** for composable data transformations with backpressure.
 
 ### Handler ↔ Provider ↔ Process
 
@@ -344,8 +342,7 @@ func TestMyWorker(t *testing.T) {
 
 ## Performance Considerations
 
-- **Lock-free hot path** — `stopped` is `atomic.Bool`, worker stats use `atomic.Int32`.
-  No mutex on Submit, dispatch, or runWorker
+- **Lock-free hot path** — `stopped` is `atomic.Bool`, worker stats use `atomic.Int32`. No mutex on Submit, dispatch, or runWorker
 - **Non-blocking event forwarding** — pool-level events use `select/default` to avoid blocking workers; per-task events are buffered
 - **Timer management** — backoff uses `time.NewTimer` + `Stop()` (no `time.After` leaks)
 - **Context.AfterFunc** — ties task context to pool context for zero-overhead cancellation propagation (Go 1.21+)

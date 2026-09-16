@@ -28,13 +28,13 @@ Tests that pin the package's **public contract** through its exported surface on
 Tests that drive a real backend or cross-module wiring. In gokit these live in the **adapter sub-module** that owns the SDK dependency (e.g. `messaging/kafka`, `storage/s3`, `database/sqlite`), not in the backend-agnostic core, and are named `<concern>_integration_test.go`.
 
 - A test that needs a live service (broker, container, network) is guarded so the default `go test ./...` stays hermetic — behind a build tag or an early skip when the service/env is absent — never failing a developer who lacks the backend.
-- The adapter sub-module's integration tests are what exercise the backend-agnostic **core** package. Core coverage is attributed back across module boundaries via `-coverpkg`: each module lists the packages to attribute in a `.coverpkg` file, which CI feeds to `go test -coverpkg=…`. A core package reading low in a plain per-module sweep is usually covered from its adapter — **re-measure the CI way before assuming a gap** (see the coverage caveat in `tmp/tdd-hardening/README.md`).
+- The adapter sub-module's integration tests are what exercise the backend-agnostic **core** package. Core coverage is attributed back across module boundaries via `-coverpkg`: each module lists the packages to attribute in a `.coverpkg` file, which CI feeds to `go test -coverpkg=…`. A core package reading low in a plain per-module sweep is usually covered from its adapter — **re-measure the CI way before assuming a gap**.
 
 ## Where shared test tooling lives
 
 Fakes, clocks, spies/recorders, setup harnesses, and assertions are a **shipped product**, not throwaway scaffolding. They live in the owning `testutil` package — the root `testutil/` for cross-cutting component/lifecycle helpers, or the area's `<parent>/testutil/` (e.g. `messaging/testutil`, `database/testutil`, `git/testutil`) — and are reused across tiers.
 
-- Never hand-roll a one-off fake inside a `_test.go` when a shared helper exists or the fake should live in a `testutil`. When a test needs a new fake/harness, **add or extend it in the owning `testutil` and reuse it** (see the reuse dimension in `tmp/tdd-hardening/README.md`).
+- Never hand-roll a one-off fake inside a `_test.go` when a shared helper exists or the fake should live in a `testutil`. When a test needs a new fake/harness, **add or extend it in the owning `testutil` and reuse it**.
 - Each `testutil` keeps a declare-only `doc.go` and, where user-facing, a short README showing intended reuse. Helper naming is consistent across modules (see `naming-and-structure.md`).
 
 ## Non-goals

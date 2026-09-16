@@ -1,16 +1,10 @@
 # database
 
-GORM-backed database contracts, component lifecycle, transaction helpers, repository helpers,
-migrations, query builder, and tenant utilities.
+GORM-backed database contracts, component lifecycle, transaction helpers, repository helpers, migrations, query builder, and tenant utilities.
 
-Core does not select a backend by default. Applications register or inject the dialect they need
-as a `Dialect`; adapter packages must not use import-time registration.
+Core does not select a backend by default. Applications register or inject the dialect they need as a `Dialect`; adapter packages must not use import-time registration.
 
-A backend is a `Dialect` — it names itself and opens a GORM connection for a DSN. `Config.DSN` is
-an opaque connection string whose format is defined by that dialect. Core is driver-agnostic and
-never assembles a DSN itself: when you supply structured `Config.Params` instead of a DSN, the
-selected dialect builds the DSN (it must implement `StructuredDialect`, as `database/postgres`
-does). SQLite has no structured form, so callers set `DSN` (a path or `:memory:`) directly.
+A backend is a `Dialect` — it names itself and opens a GORM connection for a DSN. `Config.DSN` is an opaque connection string whose format is defined by that dialect. Core is driver-agnostic and never assembles a DSN itself: when you supply structured `Config.Params` instead of a DSN, the selected dialect builds the DSN (it must implement `StructuredDialect`, as `database/postgres` does). SQLite has no structured form, so callers set `DSN` (a path or `:memory:`) directly.
 
 ## Explicit dialect
 
@@ -30,8 +24,7 @@ comp := database.NewComponent(cfg, log).
 
 ## Structured params
 
-Let the dialect build the DSN from typed fields instead of a hand-written string. Backend-specific
-knobs (`sslmode`, `tls`, …) go in `Options`, so the common shape stays shared across drivers:
+Let the dialect build the DSN from typed fields instead of a hand-written string. Backend-specific knobs (`sslmode`, `tls`, …) go in `Options`, so the common shape stays shared across drivers:
 
 ```go
 cfg := database.Config{
@@ -89,9 +82,7 @@ comp := database.NewComponent(database.Config{
 
 ## PostgreSQL adapter
 
-`database/postgres` is the nested adapter module for the standard cloud backend. It mirrors the
-SQLite adapter — explicit `Register`, no import-time side effects — and additionally exposes
-`MigrateDriver()` so the driver-agnostic `migration` package works against Postgres:
+`database/postgres` is the nested adapter module for the standard cloud backend. It mirrors the SQLite adapter — explicit `Register`, no import-time side effects — and additionally exposes `MigrateDriver()` so the driver-agnostic `migration` package works against Postgres:
 
 ```go
 import "github.com/kbukum/gokit/database/postgres"
@@ -107,8 +98,7 @@ comp := database.NewComponent(database.Config{
 }, log).WithDialectFromRegistry(dialects, postgres.Name)
 ```
 
-Register both adapters and let configuration pick the backend name — `sqlite` locally, `postgres` in
-the cloud — through the same registry.
+Register both adapters and let configuration pick the backend name — `sqlite` locally, `postgres` in the cloud — through the same registry.
 
 ## Drivers
 
@@ -117,8 +107,7 @@ the cloud — through the same registry.
 | `sqlite` | `database/sqlite` | `gorm.io/driver/sqlite` | user-supplied | local / tests |
 | `postgres` | `database/postgres` | `gorm.io/driver/postgres` | `postgres.MigrateDriver()` | cloud |
 
-Cross-kit parity: mirrors rskit's database driver contrib, keeping backend selection registry-driven
-and adapter-owned in both kits.
+Cross-kit parity: mirrors rskit's database driver contrib, keeping backend selection registry-driven and adapter-owned in both kits.
 
 ## Design constraints
 
