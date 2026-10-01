@@ -122,6 +122,7 @@ type initCloseProvider struct {
 
 func (p *initCloseProvider) Name() string                       { return p.name }
 func (p *initCloseProvider) IsAvailable(_ context.Context) bool { return p.initialized && !p.closed }
+
 func (p *initCloseProvider) Execute(_ context.Context, in string) (string, error) {
 	return in, nil
 }

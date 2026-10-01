@@ -166,8 +166,8 @@ func TestFromDatabase_NotFound(t *testing.T) {
 	if appErr.Code != apperrors.ErrCodeNotFound {
 		t.Errorf("code = %s, want %s", appErr.Code, apperrors.ErrCodeNotFound)
 	}
-	if appErr.HTTPStatus != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusNotFound)
+	if appErr.HTTPStatus() != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", appErr.HTTPStatus(), http.StatusNotFound)
 	}
 }
 
@@ -179,8 +179,8 @@ func TestFromDatabase_DuplicateKey(t *testing.T) {
 	if appErr.Code != apperrors.ErrCodeAlreadyExists {
 		t.Errorf("code = %s, want %s", appErr.Code, apperrors.ErrCodeAlreadyExists)
 	}
-	if appErr.HTTPStatus != http.StatusConflict {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusConflict)
+	if appErr.HTTPStatus() != http.StatusConflict {
+		t.Errorf("status = %d, want %d", appErr.HTTPStatus(), http.StatusConflict)
 	}
 	if appErr.Retryable {
 		t.Error("duplicate key should not be retryable")
@@ -199,8 +199,8 @@ func TestFromDatabase_ConnectionError(t *testing.T) {
 	if appErr.Code != apperrors.ErrCodeDatabaseError {
 		t.Errorf("code = %s, want %s", appErr.Code, apperrors.ErrCodeDatabaseError)
 	}
-	if appErr.HTTPStatus != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusServiceUnavailable)
+	if appErr.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("database category status = %d, want 500", appErr.HTTPStatus())
 	}
 	if !appErr.Retryable {
 		t.Error("connection error should be retryable")
@@ -213,8 +213,8 @@ func TestFromDatabase_RetryableDeadlock(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected non-nil AppError")
 	}
-	if appErr.HTTPStatus != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusServiceUnavailable)
+	if appErr.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("database category status = %d, want 500", appErr.HTTPStatus())
 	}
 	if !appErr.Retryable {
 		t.Error("deadlock should be retryable")
@@ -230,8 +230,8 @@ func TestFromDatabase_GenericError(t *testing.T) {
 	if appErr.Code != apperrors.ErrCodeDatabaseError {
 		t.Errorf("code = %s, want %s", appErr.Code, apperrors.ErrCodeDatabaseError)
 	}
-	if appErr.HTTPStatus != http.StatusInternalServerError {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusInternalServerError)
+	if appErr.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", appErr.HTTPStatus(), http.StatusInternalServerError)
 	}
 }
 

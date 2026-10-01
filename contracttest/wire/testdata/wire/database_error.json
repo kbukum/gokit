@@ -1,0 +1,37 @@
+{
+  "name": "database_error",
+  "httpStatus": 500,
+  "rpcCode": 13,
+  "vocabulary": {
+    "code": "DATABASE_ERROR",
+    "message": "A database error occurred.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/database-error",
+    "title": "Database Error",
+    "status": 500,
+    "detail": "A database error occurred.",
+    "code": "DATABASE_ERROR",
+    "retryable": false
+  },
+  "grpcStatus": "CA0SGkEgZGF0YWJhc2UgZXJyb3Igb2NjdXJyZWQuGoEBCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElUKDkRBVEFCQVNFX0VSUk9SEglnb2tpdC5kZXYaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+  "connectJson": {
+    "code": "internal",
+    "message": "A database error occurred.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg5EQVRBQkFTRV9FUlJPUhIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "DATABASE_ERROR",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "timeout",
+  "httpStatus": 504,
+  "rpcCode": 4,
+  "vocabulary": {
+    "code": "TIMEOUT",
+    "message": "The request took too long. Please try again.",
+    "retryable": true
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/timeout",
+    "title": "Timeout",
+    "status": 504,
+    "detail": "The request took too long. Please try again.",
+    "code": "TIMEOUT",
+    "retryable": true,
+    "details": {
+      "operation": "request"
+    }
+  },
+  "grpcStatus": "CAQSLFRoZSByZXF1ZXN0IHRvb2sgdG9vIGxvbmcuIFBsZWFzZSB0cnkgYWdhaW4uGnkKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8STQoHVElNRU9VVBIJZ29raXQuZGV2GhEKCXJldHJ5YWJsZRIEdHJ1ZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNlGi4KKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5SZXRyeUluZm8SAgoA",
+  "connectJson": {
+    "code": "deadline_exceeded",
+    "message": "The request took too long. Please try again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CgdUSU1FT1VUEglnb2tpdC5kZXYaEQoJcmV0cnlhYmxlEgR0cnVlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U",
+        "debug": {
+          "reason": "TIMEOUT",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "true",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.RetryInfo",
+        "value": "CgA",
+        "debug": {
+          "retryDelay": "0s"
+        }
+      }
+    ]
+  }
+}

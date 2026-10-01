@@ -13,6 +13,7 @@ import (
 	. "github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/resilience"
 )
 
 // helper to create a DB instance with SQLite in-memory for testing.
@@ -351,14 +352,44 @@ func TestNewWithContext_CancelsDuringBackoff(t *testing.T) {
 	cfg := Config{Enabled: true, DSN: "/nonexistent-dir-xyz/db.sqlite", MaxRetries: 3}
 	cfg.ApplyDefaults()
 	cfg.MaxRetries = 3
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	policy := resilience.NewPolicy().WithRetry(resilience.RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: time.Hour,
+		MaxBackoff:     time.Hour,
+		OnRetry: func(_ int, _ error, _ time.Duration) {
+			cancel()
+		},
+	})
+	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
 	if err == nil || db != nil {
 		t.Fatalf("NewWithContext = db:%v err:%v, want cancellation", db, err)
 	}
-	if !strings.Contains(err.Error(), "canceled") {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want cancellation", err)
+	}
+}
+
+func TestNewWithContext_StopsBeforeBackoffExceedsDeadline(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: "/nonexistent-dir-xyz/db.sqlite", MaxRetries: 3}
+	cfg.ApplyDefaults()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	policy := resilience.NewPolicy().WithRetry(resilience.RetryConfig{
+		MaxAttempts:    3,
+		InitialBackoff: 2 * time.Hour,
+		MaxBackoff:     2 * time.Hour,
+	})
+	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
+	if db != nil || !errors.Is(err, resilience.ErrMaxRetriesExceeded) {
+		t.Fatalf("NewWithContext = db:%v err:%v, want retry budget failure", db, err)
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("context error = %v, want early failure before deadline", ctx.Err())
+	}
+	if !strings.Contains(err.Error(), "after 1 attempts") {
+		t.Fatalf("error = %v, want actual attempt count", err)
 	}
 }
 

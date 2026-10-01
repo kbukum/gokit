@@ -24,6 +24,8 @@ import (
 // fake server (bufconn, no real network): dialing, deadlines, cancellation, and
 // the canonical AppError <-> gRPC status mapping proven over the wire.
 
+const clientDomain = "gokit.test.v1.OrderService"
+
 func dialFake(t *testing.T, srv *grpctestutil.Server, opts ...grpc.DialOption) *grpc.ClientConn {
 	t.Helper()
 	conn, err := srv.Dial(opts...)
@@ -66,11 +68,15 @@ func TestClient_CanonicalMapping_OverWire(t *testing.T) {
 				Code:      code,
 				Message:   "boundary failure for " + string(code),
 				Retryable: apperrors.IsRetryableCode(code),
-				Details:   map[string]any{"trace": string(code)},
+				TraceID:   "trace-" + string(code),
 			}
 			localSrv := newFakeServer(t)
 			localSrv.SetUnaryHandler(func(context.Context) error {
-				return grpccfg.AppErrorToStatus(want).Err()
+				st, encodeErr := grpccfg.AppErrorToStatus(want, clientDomain)
+				if encodeErr != nil {
+					return encodeErr
+				}
+				return st.Err()
 			})
 			localConn := dialFake(t, localSrv)
 
@@ -78,25 +84,25 @@ func TestClient_CanonicalMapping_OverWire(t *testing.T) {
 			require.Error(t, err)
 
 			st := status.Convert(err)
-			assert.Equal(t, grpccfg.ErrorCodeToGRPCCode(code), st.Code(),
+			assert.Equal(t, codes.Code(apperrors.RPCCodeFor(code)), st.Code(),
 				"gRPC code must survive the wire")
 
-			got := grpccfg.StatusToAppError(st)
+			got, decodeErr := grpccfg.DecodeError(err)
+			require.NoError(t, decodeErr)
 			require.NotNil(t, got)
 			assert.Equal(t, want.Code, got.Code, "error code must round-trip losslessly")
 			assert.Equal(t, want.Message, got.Message, "message must round-trip losslessly")
 			assert.Equal(t, want.Retryable, got.Retryable)
-			require.NotNil(t, got.Details)
-			assert.Equal(t, string(code), got.Details["trace"], "extension members must round-trip")
+			assert.Equal(t, want.TraceID, got.TraceID, "trace id must round-trip losslessly")
 		})
 	}
 }
 
 // ---------------------------------------------------------------------------
-// user-facing FromGRPC mapping, proven over the wire
+// plain status decode (no gokit details), proven over the wire
 // ---------------------------------------------------------------------------
 
-func TestClient_FromGRPC_OverWire(t *testing.T) {
+func TestClient_PlainStatusDecode_OverWire(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -121,7 +127,8 @@ func TestClient_FromGRPC_OverWire(t *testing.T) {
 			err := srv.Invoke(context.Background(), conn)
 			require.Error(t, err)
 
-			appErr := grpccfg.FromGRPC(err, "orders")
+			appErr, decodeErr := grpccfg.DecodeError(err)
+			require.NoError(t, decodeErr)
 			require.NotNil(t, appErr)
 			assert.Equal(t, tc.wantCode, appErr.Code)
 			assert.ErrorIs(t, appErr, err, "mapping must preserve the underlying cause")
@@ -150,7 +157,8 @@ func TestClient_DeadlineExceeded_OverWire(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.DeadlineExceeded, status.Code(err), "deadline must surface as DeadlineExceeded")
 
-	appErr := grpccfg.FromGRPC(err, "orders")
+	appErr, decodeErr := grpccfg.DecodeError(err)
+	require.NoError(t, decodeErr)
 	require.NotNil(t, appErr)
 	assert.Equal(t, apperrors.ErrCodeTimeout, appErr.Code)
 }
@@ -202,7 +210,8 @@ func TestClient_ConnectionFailure_OverWire(t *testing.T) {
 	err := conn.Invoke(ctx, grpctestutil.MethodUnary, new(emptypb.Empty), new(emptypb.Empty))
 	require.Error(t, err)
 
-	appErr := grpccfg.FromGRPC(err, "orders")
+	appErr, decodeErr := grpccfg.DecodeError(err)
+	require.NoError(t, decodeErr)
 	require.NotNil(t, appErr)
 	assert.Contains(t,
 		[]apperrors.ErrorCode{apperrors.ErrCodeServiceUnavailable, apperrors.ErrCodeTimeout},
@@ -232,7 +241,7 @@ func TestClient_ResilienceInterceptor_RetriesOverWire(t *testing.T) {
 	conn := dialFake(t, srv,
 		grpc.WithChainUnaryInterceptor(interceptor.UnaryClientResilienceInterceptor(policy)))
 
-	err := srv.Invoke(context.Background(), conn)
+	err := conn.Invoke(context.Background(), grpctestutil.MethodUnary, new(emptypb.Empty), new(emptypb.Empty), interceptor.Idempotent())
 	require.NoError(t, err, "retryable Unavailable responses must be retried to success")
 	assert.Equal(t, int32(3), calls.Load(), "resilience policy should retry until the call succeeds")
 }

@@ -144,9 +144,9 @@ func appendZipEntry(zw *zip.Writer, entry ArchiveEntry, out string) error {
 func createArchiveOut(out string) (*os.File, error) {
 	file, err := os.Create(out)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, apperrors.New(code,
-			fmt.Sprintf("cannot create archive '%s': %v", out, err), status).WithCause(err)
+			"cannot create archive").WithCause(err)
 	}
 	return file, nil
 }
@@ -156,23 +156,23 @@ func openArchiveSource(source string) (*os.File, int64, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, 0, apperrors.InvalidInput("source",
-				fmt.Sprintf("archive source '%s' does not exist", source)).WithCause(err)
+				"archive source does not exist").WithCause(err)
 		}
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, 0, apperrors.New(code,
-			fmt.Sprintf("cannot open archive source '%s': %v", source, err), status).WithCause(err)
+			"cannot open archive source").WithCause(err)
 	}
 	info, err := file.Stat()
 	if err != nil {
 		_ = file.Close()
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, 0, apperrors.New(code,
-			fmt.Sprintf("cannot stat archive source '%s': %v", source, err), status).WithCause(err)
+			"cannot inspect archive source").WithCause(err)
 	}
 	return file, info.Size(), nil
 }
 
 func archiveIOError(out, action string, err error) error {
 	return apperrors.New(apperrors.ErrCodeInternal,
-		fmt.Sprintf("cannot %s for '%s': %v", action, out, err), 500).WithCause(err)
+		"cannot "+action).WithCause(fmt.Errorf("%s for %q: %w", action, out, err))
 }

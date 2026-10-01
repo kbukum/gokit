@@ -203,7 +203,7 @@ func inputResponse[T sdkmcp.InputResponse](req *sdkmcp.CallToolRequest, label st
 	}
 	// Reject a typed-nil pointer (it satisfies the assertion but would panic on
 	// dereference), keeping the extraction fail-closed.
-	if v := reflect.ValueOf(typed); v.Kind() == reflect.Ptr && v.IsNil() {
+	if v := reflect.ValueOf(typed); v.Kind() == reflect.Pointer && v.IsNil() {
 		return zero, fmt.Errorf("mcp: input response for %q is nil", label)
 	}
 	return typed, nil

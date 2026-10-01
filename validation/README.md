@@ -34,7 +34,8 @@ func main() {
         Name  string `validate:"required"`
         Email string `validate:"required,email"`
     }
-    if err := validation.Validate(User{}); err != nil {
+    validator := validation.NewStructValidator()
+    if err := validator.Validate(User{}); err != nil {
         fmt.Println(err)
     }
 }
@@ -45,15 +46,17 @@ func main() {
 | Name | Description |
 |------|-------------|
 | `Validator` | Fluent validation builder collecting field errors |
-| `FieldError` | Individual field validation error |
+| `errors.Violation` | Field path, semantic reason, and safe message |
 | `New()` | Create a new Validator |
 | `Required()` / `RequiredUUID()` / `OptionalUUID()` | Presence checks |
 | `MinLength()` / `MaxLength()` / `Range()` / `Min()` / `Max()` | Size/range rules |
 | `Before()` / `After()` | Time bound checks |
 | `Email()` / `URL()` | Email and URL format checks |
 | `Pattern()` / `OneOf()` / `Custom()` | Pattern, enum, and custom rules |
-| `Validate(s any)` | Struct tag validation using `validate` tags |
+| `NewStructValidator()` | Build once and inject; validates structs using `validate` tags |
 | `ValidateUUID()` | Parse and validate UUID string |
+
+Violations use `REQUIRED`, `INVALID_FORMAT`, `OUT_OF_RANGE`, or `INVALID_VALUE`, not validator-specific IDs. Struct paths use JSON names, nested dots, and repeated indexes. RPC paths use protobuf names and require descriptor-aware client translation. Invalid validator inputs and invalid regular expressions are internal evaluation failures with retained causes, not mistakes attributed to the user.
 
 ---
 

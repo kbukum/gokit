@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"fmt"
 	"os"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -10,10 +9,10 @@ import (
 // HardLink creates a hard link at linkPath pointing to the same inode as original.
 func HardLink(original, linkPath string) error {
 	if err := os.Link(original, linkPath); err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return apperrors.New(code,
-			fmt.Sprintf("failed to create hard link '%s' -> '%s': %v", linkPath, original, err),
-			status).WithCause(err)
+			"failed to create hard link",
+		).WithCause(err)
 	}
 	return nil
 }
@@ -22,9 +21,9 @@ func HardLink(original, linkPath string) error {
 func ReadLink(path string) (string, error) {
 	target, err := os.Readlink(path)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return "", apperrors.New(code,
-			fmt.Sprintf("failed to read link '%s': %v", path, err), status).WithCause(err)
+			"failed to read link").WithCause(err)
 	}
 	return target, nil
 }
@@ -32,10 +31,10 @@ func ReadLink(path string) (string, error) {
 // SymlinkFile creates a symbolic link at linkPath pointing to original.
 func SymlinkFile(original, linkPath string) error {
 	if err := os.Symlink(original, linkPath); err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return apperrors.New(code,
-			fmt.Sprintf("failed to create symlink '%s' -> '%s': %v", linkPath, original, err),
-			status).WithCause(err)
+			"failed to create symlink",
+		).WithCause(err)
 	}
 	return nil
 }

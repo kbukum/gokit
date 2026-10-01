@@ -12,66 +12,61 @@ import (
 	"github.com/kbukum/gokit/errors"
 )
 
-// Validator collects validation errors.
+// Validator collects field violations from hand-written business rules and turns
+// them into a single AppError. It produces the shared errors.Violation shape, so
+// a manual rule and a protovalidate rule land on form fields the same way.
 type Validator struct {
-	errors []FieldError
-}
-
-// FieldError represents a validation error for a specific field.
-type FieldError struct {
-	Field   string `json:"field"`
-	Message string `json:"message"`
+	violations []errors.Violation
+	cause      error
 }
 
 // New creates a new Validator.
 func New() *Validator {
-	return &Validator{
-		errors: make([]FieldError, 0),
-	}
+	return &Validator{violations: make([]errors.Violation, 0)}
 }
 
-// AddError adds a field error.
+// AddViolation records a field problem with a semantic reason.
+func (v *Validator) AddViolation(field string, reason errors.ViolationReason, message string) {
+	v.violations = append(v.violations, errors.Violation{Field: field, Reason: reason, Message: message})
+}
+
+// AddError records a field problem without a machine rule id.
 func (v *Validator) AddError(field, message string) {
-	v.errors = append(v.errors, FieldError{
-		Field:   field,
-		Message: message,
-	})
+	v.AddViolation(field, errors.ViolationInvalidValue, message)
 }
 
-// HasErrors returns true if there are validation errors.
+// HasErrors returns true if there are violations.
 func (v *Validator) HasErrors() bool {
-	return len(v.errors) > 0
+	return v.cause != nil || len(v.violations) > 0
 }
 
-// Errors returns all validation errors.
-func (v *Validator) Errors() []FieldError {
-	return v.errors
+// Violations returns all collected violations.
+func (v *Validator) Violations() []errors.Violation {
+	return v.violations
 }
 
-// Validate returns an AppError if there are validation errors, nil otherwise.
+// Validate returns an AppError carrying the collected violations, or nil when
+// there are none.
 func (v *Validator) Validate() *errors.AppError {
+	if v.cause != nil {
+		return errors.Internal(v.cause)
+	}
 	if !v.HasErrors() {
 		return nil
 	}
 
-	// Build error message from all field errors
-	messages := make([]string, len(v.errors))
-	for i, e := range v.errors {
-		messages[i] = fmt.Sprintf("%s: %s", e.Field, e.Message)
+	messages := make([]string, len(v.violations))
+	for i, viol := range v.violations {
+		messages[i] = fmt.Sprintf("%s: %s", viol.Field, viol.Message)
 	}
 
-	appErr := errors.Validation(strings.Join(messages, "; "))
-	appErr.Details = map[string]any{
-		"fields": v.errors,
-	}
-
-	return appErr
+	return errors.Validation(strings.Join(messages, "; ")).WithViolations(v.violations...)
 }
 
 // Required checks if a string is non-empty.
 func (v *Validator) Required(field, value string) *Validator {
 	if strings.TrimSpace(value) == "" {
-		v.AddError(field, "is required")
+		v.AddViolation(field, ReasonForRule("required"), "is required")
 	}
 	return v
 }
@@ -79,18 +74,18 @@ func (v *Validator) Required(field, value string) *Validator {
 // RequiredUUID checks if a string is a valid non-nil UUID.
 func (v *Validator) RequiredUUID(field, value string) *Validator {
 	if strings.TrimSpace(value) == "" {
-		v.AddError(field, "is required")
+		v.AddViolation(field, ReasonForRule("required"), "is required")
 		return v
 	}
 
 	parsed, err := uuid.Parse(value)
 	if err != nil {
-		v.AddError(field, "must be a valid UUID")
+		v.AddViolation(field, ReasonForRule("uuid"), "must be a valid UUID")
 		return v
 	}
 
 	if parsed == uuid.Nil {
-		v.AddError(field, "must not be empty")
+		v.AddViolation(field, ReasonForRule("uuid"), "must not be empty")
 	}
 
 	return v
@@ -102,7 +97,7 @@ func (v *Validator) OptionalUUID(field, value string) *Validator {
 		return v
 	}
 	if _, err := uuid.Parse(value); err != nil {
-		v.AddError(field, "must be a valid UUID")
+		v.AddViolation(field, ReasonForRule("uuid"), "must be a valid UUID")
 	}
 	return v
 }
@@ -110,7 +105,7 @@ func (v *Validator) OptionalUUID(field, value string) *Validator {
 // MaxLength checks if a string is within max length.
 func (v *Validator) MaxLength(field, value string, maxLen int) *Validator {
 	if len(value) > maxLen {
-		v.AddError(field, fmt.Sprintf("must be %d characters or less", maxLen))
+		v.AddViolation(field, ReasonForRule("max_len"), fmt.Sprintf("must be %d characters or less", maxLen))
 	}
 	return v
 }
@@ -118,7 +113,7 @@ func (v *Validator) MaxLength(field, value string, maxLen int) *Validator {
 // MinLength checks if a string meets minimum length.
 func (v *Validator) MinLength(field, value string, minLen int) *Validator {
 	if len(value) < minLen {
-		v.AddError(field, fmt.Sprintf("must be at least %d characters", minLen))
+		v.AddViolation(field, ReasonForRule("min_len"), fmt.Sprintf("must be at least %d characters", minLen))
 	}
 	return v
 }
@@ -128,7 +123,7 @@ func (v *Validator) Email(field, value string) *Validator {
 	local, domain, ok := strings.Cut(value, "@")
 	if !ok || local == "" || domain == "" || strings.Contains(domain, "@") ||
 		!strings.Contains(domain, ".") || strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") {
-		v.AddError(field, "must be a valid email address")
+		v.AddViolation(field, ReasonForRule("email"), "must be a valid email address")
 	}
 	return v
 }
@@ -137,7 +132,7 @@ func (v *Validator) Email(field, value string) *Validator {
 func (v *Validator) URL(field, value string) *Validator {
 	parsed, err := url.Parse(value)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		v.AddError(field, "must be a valid URL")
+		v.AddViolation(field, ReasonForRule("url"), "must be a valid URL")
 	}
 	return v
 }
@@ -145,7 +140,7 @@ func (v *Validator) URL(field, value string) *Validator {
 // Before checks if a time is before a deadline.
 func (v *Validator) Before(field string, value, deadline time.Time) *Validator {
 	if !value.Before(deadline) {
-		v.AddError(field, fmt.Sprintf("must be before %s", deadline.Format(time.RFC3339Nano)))
+		v.AddViolation(field, ReasonForRule("before"), fmt.Sprintf("must be before %s", deadline.Format(time.RFC3339Nano)))
 	}
 	return v
 }
@@ -153,7 +148,7 @@ func (v *Validator) Before(field string, value, deadline time.Time) *Validator {
 // After checks if a time is after a floor.
 func (v *Validator) After(field string, value, floor time.Time) *Validator {
 	if !value.After(floor) {
-		v.AddError(field, fmt.Sprintf("must be after %s", floor.Format(time.RFC3339Nano)))
+		v.AddViolation(field, ReasonForRule("after"), fmt.Sprintf("must be after %s", floor.Format(time.RFC3339Nano)))
 	}
 	return v
 }
@@ -161,7 +156,7 @@ func (v *Validator) After(field string, value, floor time.Time) *Validator {
 // Range checks if a number is within a range.
 func (v *Validator) Range(field string, value, minVal, maxVal int) *Validator {
 	if value < minVal || value > maxVal {
-		v.AddError(field, fmt.Sprintf("must be between %d and %d", minVal, maxVal))
+		v.AddViolation(field, ReasonForRule("range"), fmt.Sprintf("must be between %d and %d", minVal, maxVal))
 	}
 	return v
 }
@@ -169,7 +164,7 @@ func (v *Validator) Range(field string, value, minVal, maxVal int) *Validator {
 // Min checks if a number meets minimum value.
 func (v *Validator) Min(field string, value, minVal int) *Validator {
 	if value < minVal {
-		v.AddError(field, fmt.Sprintf("must be at least %d", minVal))
+		v.AddViolation(field, ReasonForRule("min"), fmt.Sprintf("must be at least %d", minVal))
 	}
 	return v
 }
@@ -177,7 +172,7 @@ func (v *Validator) Min(field string, value, minVal int) *Validator {
 // Max checks if a number is within max value.
 func (v *Validator) Max(field string, value, maxVal int) *Validator {
 	if value > maxVal {
-		v.AddError(field, fmt.Sprintf("must be %d or less", maxVal))
+		v.AddViolation(field, ReasonForRule("max"), fmt.Sprintf("must be %d or less", maxVal))
 	}
 	return v
 }
@@ -188,8 +183,12 @@ func (v *Validator) Pattern(field, value, pattern string) *Validator {
 		return v
 	}
 	matched, err := regexp.MatchString(pattern, value)
-	if err != nil || !matched {
-		v.AddError(field, "does not match required format")
+	if err != nil {
+		v.cause = err
+		return v
+	}
+	if !matched {
+		v.AddViolation(field, ReasonForRule("pattern"), "does not match required format")
 	}
 	return v
 }
@@ -204,7 +203,7 @@ func (v *Validator) OneOf(field, value string, allowed []string) *Validator {
 			return v
 		}
 	}
-	v.AddError(field, fmt.Sprintf("must be one of: %s", strings.Join(allowed, ", ")))
+	v.AddViolation(field, ReasonForRule("one_of"), fmt.Sprintf("must be one of: %s", strings.Join(allowed, ", ")))
 	return v
 }
 
@@ -228,12 +227,12 @@ func Required(field, value string) error {
 // ValidateUUID validates and parses a UUID string.
 func ValidateUUID(field, value string) (uuid.UUID, error) {
 	if strings.TrimSpace(value) == "" {
-		return uuid.Nil, errors.Validation(fmt.Sprintf("%s is required", field))
+		return uuid.Nil, errors.MissingField(field)
 	}
 
 	id, err := uuid.Parse(value)
 	if err != nil {
-		return uuid.Nil, errors.Validation(fmt.Sprintf("%s must be a valid UUID", field))
+		return uuid.Nil, errors.InvalidFormat(field, "UUID")
 	}
 
 	return id, nil

@@ -106,7 +106,7 @@ linters:
       min-complexity: 8
     gosec:
       excludes:
-        # Codes valid for the pinned golangci-lint (v2.9.0) gosec.
+        # Codes valid for the pinned golangci-lint's gosec.
         # Mirrored by gosec.toml for the `// #nosec`-honouring annotations
         # path. Standalone gosec CI job removed (F-005 #35) — golangci-lint's
         # gosec is the single source of truth.
@@ -200,15 +200,23 @@ linters:
               desc: "transport (L5) must not import auth (L6); inject a TokenValidator and ClaimsSetter instead."
             - pkg: github.com/kbukum/gokit/authz
               desc: "transport (L5) must not import authz (L6); inject a PermissionChecker instead."
-        errors-no-grpc:
-          # Core errors are transport-agnostic: gRPC status mapping lives in the
-          # grpc transport (grpc.ToGRPCStatus/FromGRPC), never in errors.
+        core-errors-no-wire:
           list-mode: lax
           files:
-            - "$gokit/errors/**/*.go"
+            - "**/errors/*.go"
+            - "**/validation/*.go"
+            - "!$test"
           deny:
             - pkg: google.golang.org/grpc
-              desc: "errors (core) must not import gRPC; status mapping belongs in the grpc transport."
+              desc: "core error and validation types must not depend on a transport implementation."
+            - pkg: connectrpc.com/connect
+              desc: "core error and validation types must not depend on a transport implementation."
+            - pkg: google.golang.org/protobuf
+              desc: "protobuf error details belong in errors/rpc, not core errors or validation."
+            - pkg: google.golang.org/genproto
+              desc: "protobuf error details belong in errors/rpc, not core errors or validation."
+            - pkg: github.com/kbukum/gokit/errors/rpc
+              desc: "core error and validation types must not import the wire adapter."
 
 issues:
   max-issues-per-linter: 0

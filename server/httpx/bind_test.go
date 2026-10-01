@@ -2,6 +2,8 @@ package httpx_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +16,7 @@ import (
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/server/httpx"
+	"github.com/kbukum/gokit/validation"
 )
 
 func init() {
@@ -23,6 +26,27 @@ func init() {
 type createReq struct {
 	Name  string `json:"name" validate:"required"`
 	Email string `json:"email" validate:"required,email"`
+}
+
+type diagnosticInput struct{}
+
+func (*diagnosticInput) UnmarshalJSON([]byte) error {
+	return errors.New("private decoder diagnostic")
+}
+
+func TestBindingDiagnosticIsNotPublic(t *testing.T) {
+	t.Parallel()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader("{}"))
+	c.Request.Header.Set("Content-Type", "application/json")
+	_, err := httpx.BindJSON[diagnosticInput](c, validation.NewStructValidator())
+	appErr := apperrors.Normalize(err)
+	require.Error(t, appErr.Cause)
+	body, marshalErr := json.Marshal(appErr.ToProblemDetail())
+	require.NoError(t, marshalErr)
+	require.NotContains(t, string(body), "private decoder diagnostic")
+	require.Len(t, appErr.Violations, 1)
 }
 
 func TestBindJSON(t *testing.T) {
@@ -74,7 +98,8 @@ func TestBindJSON(t *testing.T) {
 			c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(tc.body))
 			c.Request.Header.Set("Content-Type", "application/json")
 
-			got, err := httpx.BindJSON[createReq](c)
+			sv := validation.NewStructValidator()
+			got, err := httpx.BindJSON[createReq](c, sv)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -95,6 +120,20 @@ func TestBindJSON(t *testing.T) {
 type searchQuery struct {
 	Q    string `form:"q" validate:"required"`
 	Page int    `form:"page"`
+}
+
+func TestQueryDiagnosticIsNotPublic(t *testing.T) {
+	t.Parallel()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/?q=hello&page=private-input-value", http.NoBody)
+	_, err := httpx.BindQuery[searchQuery](c, validation.NewStructValidator())
+	appErr := apperrors.Normalize(err)
+	require.Error(t, appErr.Cause)
+	body, marshalErr := json.Marshal(appErr.ToProblemDetail())
+	require.NoError(t, marshalErr)
+	require.NotContains(t, string(body), "private-input-value")
+	require.Len(t, appErr.Violations, 1)
 }
 
 func TestBindQuery(t *testing.T) {
@@ -126,7 +165,8 @@ func TestBindQuery(t *testing.T) {
 			c, _ := gin.CreateTestContext(w)
 			c.Request = httptest.NewRequest(http.MethodGet, "/?"+tc.query, http.NoBody)
 
-			got, err := httpx.BindQuery[searchQuery](c)
+			sv := validation.NewStructValidator()
+			got, err := httpx.BindQuery[searchQuery](c, sv)
 
 			if tc.wantErr {
 				require.Error(t, err)
@@ -163,6 +203,7 @@ func FuzzBindJSON(f *testing.F) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
 		c.Request.Header.Set("Content-Type", "application/json")
-		_, _ = httpx.BindJSON[req](c)
+		sv := validation.NewStructValidator()
+		_, _ = httpx.BindJSON[req](c, sv)
 	})
 }

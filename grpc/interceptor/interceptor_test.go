@@ -2,7 +2,7 @@ package interceptor
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -130,6 +130,38 @@ func TestUnaryResilienceInterceptor_PropagatesInvokerError(t *testing.T) {
 	assert.Equal(t, wantErr, err)
 }
 
+func TestRetriesRequireExplicitIdempotency(t *testing.T) {
+	t.Parallel()
+	for _, idempotent := range []bool{false, true} {
+		t.Run(fmt.Sprint(idempotent), func(t *testing.T) {
+			t.Parallel()
+			cfg := resilience.DefaultRetryConfig()
+			cfg.InitialBackoff = time.Nanosecond
+			policy := resilience.NewPolicy().WithRetry(cfg)
+			calls := 0
+			invoke := func(context.Context, string, any, any, *grpc.ClientConn, ...grpc.CallOption) error {
+				calls++
+				if calls == 1 {
+					return status.Error(codes.Unavailable, "retry hint is not idempotency")
+				}
+				return nil
+			}
+			var opts []grpc.CallOption
+			if idempotent {
+				opts = append(opts, Idempotent())
+			}
+			err := UnaryClientResilienceInterceptor(policy)(context.Background(), "/svc/Create", nil, nil, nil, invoke, opts...)
+			if idempotent {
+				require.NoError(t, err)
+				require.Equal(t, 2, calls)
+			} else {
+				require.Error(t, err)
+				require.Equal(t, 1, calls)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // UnaryClientLoggingInterceptor
 // ---------------------------------------------------------------------------
@@ -194,119 +226,4 @@ func TestStreamLoggingInterceptor_Error(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Nil(t, stream)
-}
-
-// ---------------------------------------------------------------------------
-// ErrorMapper
-// ---------------------------------------------------------------------------
-
-func TestErrorMapper_NilError(t *testing.T) {
-	t.Parallel()
-	msg, retry := ErrorMapper(nil)
-	assert.Empty(t, msg)
-	assert.False(t, retry)
-}
-
-func TestErrorMapper_NonStatusError(t *testing.T) {
-	t.Parallel()
-	msg, retry := ErrorMapper(errors.New("plain error"))
-	assert.Contains(t, msg, "unexpected error")
-	assert.True(t, retry)
-}
-
-func TestErrorMapper_AllCodes(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		code      codes.Code
-		wantRetry bool
-		wantSub   string
-	}{
-		{codes.Unavailable, true, "temporarily unavailable"},
-		{codes.DeadlineExceeded, true, "took too long"},
-		{codes.NotFound, false, "not found"},
-		{codes.InvalidArgument, false, "Invalid request"},
-		{codes.PermissionDenied, false, "permission"},
-		{codes.Unauthenticated, false, "Authentication required"},
-		{codes.ResourceExhausted, true, "Too many requests"},
-		{codes.Internal, true, "internal error"},
-		{codes.Canceled, false, "canceled"},
-		{codes.Aborted, true, "aborted"},
-		{codes.DataLoss, true, "unexpected"}, // default/unknown case
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.code.String(), func(t *testing.T) {
-			t.Parallel()
-			grpcErr := status.Error(tc.code, "test")
-			msg, retry := ErrorMapper(grpcErr)
-
-			assert.Contains(t, msg, tc.wantSub, "message substring")
-			assert.Equal(t, tc.wantRetry, retry, "retryable")
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// IsRetryableCode / IsRetryable
-// ---------------------------------------------------------------------------
-
-func TestIsRetryableCode_Retryable(t *testing.T) {
-	t.Parallel()
-
-	retryable := []codes.Code{
-		codes.Unavailable,
-		codes.DeadlineExceeded,
-		codes.ResourceExhausted,
-		codes.Aborted,
-	}
-	for _, c := range retryable {
-		t.Run(c.String(), func(t *testing.T) {
-			t.Parallel()
-			assert.True(t, IsRetryableCode(c))
-		})
-	}
-}
-
-func TestIsRetryableCode_NonRetryable(t *testing.T) {
-	t.Parallel()
-
-	nonRetryable := []codes.Code{
-		codes.OK,
-		codes.NotFound,
-		codes.InvalidArgument,
-		codes.PermissionDenied,
-		codes.Unauthenticated,
-		codes.Internal,
-		codes.Canceled,
-		codes.FailedPrecondition,
-	}
-	for _, c := range nonRetryable {
-		t.Run(c.String(), func(t *testing.T) {
-			t.Parallel()
-			assert.False(t, IsRetryableCode(c))
-		})
-	}
-}
-
-func TestIsRetryable_NilError(t *testing.T) {
-	t.Parallel()
-	assert.False(t, IsRetryable(nil))
-}
-
-func TestIsRetryable_NonGRPCError(t *testing.T) {
-	t.Parallel()
-	assert.False(t, IsRetryable(errors.New("not a grpc error")))
-}
-
-func TestIsRetryable_RetryableGRPCError(t *testing.T) {
-	t.Parallel()
-	err := status.Error(codes.Unavailable, "down")
-	assert.True(t, IsRetryable(err))
-}
-
-func TestIsRetryable_NonRetryableGRPCError(t *testing.T) {
-	t.Parallel()
-	err := status.Error(codes.NotFound, "gone")
-	assert.False(t, IsRetryable(err))
 }

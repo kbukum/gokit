@@ -24,8 +24,8 @@ func TestRegistryCreateUnregisteredIsTypedNotFound(t *testing.T) {
 	if appErr.Code != goerrors.ErrCodeNotFound {
 		t.Fatalf("code = %q, want NOT_FOUND", appErr.Code)
 	}
-	if appErr.HTTPStatus != 404 {
-		t.Fatalf("status = %d, want 404", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 404 {
+		t.Fatalf("status = %d, want 404", appErr.HTTPStatus())
 	}
 }
 

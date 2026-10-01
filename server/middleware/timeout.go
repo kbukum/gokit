@@ -48,7 +48,7 @@ func Timeout(d time.Duration) Middleware {
 
 // writeTimeout emits the 503 Problem Details response for an elapsed deadline.
 func writeTimeout(w http.ResponseWriter, r *http.Request) {
-	pd := apperrors.New(apperrors.ErrCodeServiceUnavailable, "request timeout", http.StatusServiceUnavailable).ToProblemDetail()
+	pd := apperrors.New(apperrors.ErrCodeServiceUnavailable, "request timeout").ToProblemDetail()
 	pd.Instance = r.URL.Path
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusServiceUnavailable)

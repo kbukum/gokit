@@ -3,7 +3,6 @@ package chat
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/errors"
@@ -104,6 +103,6 @@ func MarshalMessage(m Message) ([]byte, error) {
 			IsError   bool   `json:"is_error,omitempty"`
 		}{Role: string(RoleTool), ToolUseID: msg.ToolUseID, Content: msg.Content, IsError: msg.IsError})
 	default:
-		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("ai/chat: unknown message type %T", m), http.StatusBadRequest)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("ai/chat: unknown message type %T", m))
 	}
 }

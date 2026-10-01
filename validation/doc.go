@@ -10,7 +10,8 @@
 //	    Name  string `validate:"required,min=2"`
 //	    Email string `validate:"required,email"`
 //	}
-//	err := validation.Validate(cmd)
+//	validator := validation.NewStructValidator()
+//	err := validator.Validate(cmd)
 //
 // # Programmatic Validation
 //

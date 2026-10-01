@@ -2,7 +2,6 @@ package worker
 
 import (
 	"encoding"
-	"net/http"
 
 	gkerrors "github.com/kbukum/gokit/errors"
 )
@@ -26,7 +25,7 @@ const (
 
 var (
 	// ErrQueueFull is returned when a task cannot be enqueued immediately.
-	ErrQueueFull = gkerrors.New(gkerrors.ErrCodeRateLimited, "worker queue is full", http.StatusTooManyRequests)
+	ErrQueueFull = gkerrors.New(gkerrors.ErrCodeRateLimited, "worker queue is full")
 	// ErrTaskDropped is reported to a task that was evicted by DropOldest.
 	ErrTaskDropped = gkerrors.Canceled("worker task dropped due to overflow")
 )

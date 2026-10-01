@@ -97,9 +97,12 @@ func buildDialOptions(cfg grpccfg.Config, log *logging.Logger) ([]grpc.DialOptio
 // defaults to the gRPC-aware IsRetryable predicate); otherwise a timeout-only
 // policy is derived from Timeout, and nil is returned when neither is set.
 func resiliencePolicyFor(cfg grpccfg.Config) *resilience.Policy {
-	if p := cfg.ResiliencePolicy; p != nil {
+	if p := cfg.ResiliencePolicy.Clone(); p != nil {
 		if p.Retry != nil && p.Retry.RetryIf == nil {
-			p.Retry.RetryIf = interceptor.IsRetryable
+			p.Retry.RetryIf = grpccfg.IsRetryable
+		}
+		if p.Retry != nil && p.Retry.MinimumDelay == nil {
+			p.Retry.MinimumDelay = grpccfg.RetryDelay
 		}
 		if p.Timeout == 0 && cfg.Timeout > 0 {
 			p.WithTimeoutIfUnset(cfg.Timeout)

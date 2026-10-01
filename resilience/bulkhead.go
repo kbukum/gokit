@@ -2,7 +2,6 @@ package resilience
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	apperr "github.com/kbukum/gokit/errors"
@@ -13,8 +12,8 @@ import (
 // rejection is backpressure, so both classify as rate-limited/429 (matching the
 // cross-kit contract) rather than service-unavailable.
 var (
-	ErrBulkheadFull    = apperr.New(apperr.ErrCodeRateLimited, "bulkhead is full", http.StatusTooManyRequests)
-	ErrBulkheadTimeout = apperr.New(apperr.ErrCodeRateLimited, "bulkhead wait timeout", http.StatusTooManyRequests)
+	ErrBulkheadFull    = apperr.New(apperr.ErrCodeRateLimited, "bulkhead is full")
+	ErrBulkheadTimeout = apperr.New(apperr.ErrCodeRateLimited, "bulkhead wait timeout")
 )
 
 // BulkheadConfig configures a bulkhead.

@@ -1,0 +1,82 @@
+{
+  "name": "validation_with_violations",
+  "httpStatus": 422,
+  "rpcCode": 3,
+  "vocabulary": {
+    "code": "INVALID_INPUT",
+    "message": "request failed validation",
+    "reason": "FORM_INVALID",
+    "violations": [
+      {
+        "field": "email",
+        "reason": "REQUIRED",
+        "message": "is required"
+      },
+      {
+        "field": "age",
+        "reason": "OUT_OF_RANGE",
+        "message": "must be \u003e= 18"
+      }
+    ],
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/invalid-input",
+    "title": "Invalid Input",
+    "status": 422,
+    "detail": "request failed validation",
+    "code": "INVALID_INPUT",
+    "reason": "FORM_INVALID",
+    "retryable": false,
+    "violations": [
+      {
+        "field": "email",
+        "reason": "REQUIRED",
+        "message": "is required"
+      },
+      {
+        "field": "age",
+        "reason": "OUT_OF_RANGE",
+        "message": "must be \u003e= 18"
+      }
+    ]
+  },
+  "grpcStatus": "CAMSGXJlcXVlc3QgZmFpbGVkIHZhbGlkYXRpb24amAEKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SbAoNSU5WQUxJRF9JTlBVVBIJZ29raXQuZGV2GhYKBnJlYXNvbhIMRk9STV9JTlZBTElEGhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZRpxCil0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuQmFkUmVxdWVzdBJECh4KBWVtYWlsEgtpcyByZXF1aXJlZBoIUkVRVUlSRUQKIgoDYWdlEg1tdXN0IGJlID49IDE4GgxPVVRfT0ZfUkFOR0U=",
+  "connectJson": {
+    "code": "invalid_argument",
+    "message": "request failed validation",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg1JTlZBTElEX0lOUFVUEglnb2tpdC5kZXYaFgoGcmVhc29uEgxGT1JNX0lOVkFMSUQaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+        "debug": {
+          "reason": "INVALID_INPUT",
+          "domain": "gokit.dev",
+          "metadata": {
+            "reason": "FORM_INVALID",
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.BadRequest",
+        "value": "Ch4KBWVtYWlsEgtpcyByZXF1aXJlZBoIUkVRVUlSRUQKIgoDYWdlEg1tdXN0IGJlID49IDE4GgxPVVRfT0ZfUkFOR0U",
+        "debug": {
+          "fieldViolations": [
+            {
+              "field": "email",
+              "description": "is required",
+              "reason": "REQUIRED"
+            },
+            {
+              "field": "age",
+              "description": "must be \u003e= 18",
+              "reason": "OUT_OF_RANGE"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

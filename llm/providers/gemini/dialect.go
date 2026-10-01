@@ -3,7 +3,6 @@ package gemini
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
@@ -106,7 +105,7 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	body["_model"] = req.Model
 
 	if err := dialect.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
-		return nil, errors.New(errors.ErrCodeInvalidInput, "gemini: invalid request extra", http.StatusBadRequest).WithCause(err)
+		return nil, errors.New(errors.ErrCodeInvalidInput, "gemini: invalid request extra").WithCause(err)
 	}
 
 	return body, nil
@@ -144,11 +143,11 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}
 
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, errors.New(errors.ErrCodeInvalidFormat, "gemini: parse response", http.StatusBadGateway).WithCause(err)
+		return nil, errors.New(errors.ErrCodeExternalService, "gemini: parse response").WithCause(err)
 	}
 
 	if len(raw.Candidates) == 0 {
-		return nil, errors.New(errors.ErrCodeInvalidFormat, "gemini: response has no candidates", http.StatusBadGateway)
+		return nil, errors.New(errors.ErrCodeExternalService, "gemini: response has no candidates")
 	}
 
 	candidate := raw.Candidates[0]
@@ -204,7 +203,7 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return streamwire.Chunk{}, errors.New(errors.ErrCodeInvalidFormat, "gemini: parse stream chunk", http.StatusBadGateway).WithCause(err)
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "gemini: parse stream chunk").WithCause(err)
 	}
 
 	if len(chunk.Candidates) == 0 {
@@ -284,7 +283,7 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 			},
 		}, nil
 	default:
-		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("gemini: unknown message type %T", m), http.StatusBadRequest)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("gemini: unknown message type %T", m))
 	}
 }
 

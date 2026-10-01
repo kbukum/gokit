@@ -3,7 +3,6 @@ package encryption
 import (
 	"encoding/base64"
 	"fmt"
-	"net/http"
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -47,7 +46,7 @@ func algorithmFromID(id byte) (Algorithm, bool) {
 }
 
 func invalidEnvelope(message string) *apperrors.AppError {
-	return apperrors.New(apperrors.ErrCodeInvalidFormat, message, http.StatusUnprocessableEntity)
+	return apperrors.New(apperrors.ErrCodeInvalidFormat, message)
 }
 
 // envelope is a decoded, minimally validated ciphertext envelope.

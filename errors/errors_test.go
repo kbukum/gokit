@@ -12,15 +12,15 @@ import (
 )
 
 func TestAppError_New_Success(t *testing.T) {
-	err := New(ErrCodeNotFound, "not found", http.StatusNotFound)
+	err := New(ErrCodeNotFound, "not found")
 	if err.Code != ErrCodeNotFound {
 		t.Errorf("expected code %s, got %s", ErrCodeNotFound, err.Code)
 	}
 	if err.Message != "not found" {
 		t.Errorf("expected message 'not found', got %q", err.Message)
 	}
-	if err.HTTPStatus != http.StatusNotFound {
-		t.Errorf("expected status %d, got %d", http.StatusNotFound, err.HTTPStatus)
+	if err.HTTPStatus() != http.StatusNotFound {
+		t.Errorf("expected status %d, got %d", http.StatusNotFound, err.HTTPStatus())
 	}
 	if err.Retryable != false {
 		t.Error("NOT_FOUND should not be retryable")
@@ -28,7 +28,7 @@ func TestAppError_New_Success(t *testing.T) {
 }
 
 func TestAppError_New_Retryable(t *testing.T) {
-	err := New(ErrCodeTimeout, "timed out", http.StatusGatewayTimeout)
+	err := New(ErrCodeTimeout, "timed out")
 	if !err.Retryable {
 		t.Error("TIMEOUT should be retryable")
 	}
@@ -39,8 +39,8 @@ func TestAppError_NotFound_Success(t *testing.T) {
 	if err.Code != ErrCodeNotFound {
 		t.Errorf("expected NOT_FOUND, got %s", err.Code)
 	}
-	if err.HTTPStatus != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", err.HTTPStatus)
+	if err.HTTPStatus() != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", err.HTTPStatus())
 	}
 	if err.Details["resource"] != "user" {
 		t.Errorf("expected resource=user, got %v", err.Details["resource"])
@@ -66,8 +66,8 @@ func TestAppError_Internal_Success(t *testing.T) {
 	if err.Code != ErrCodeInternal {
 		t.Errorf("expected INTERNAL_ERROR, got %s", err.Code)
 	}
-	if err.HTTPStatus != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", err.HTTPStatus)
+	if err.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", err.HTTPStatus())
 	}
 	if !errors.Is(err.Cause, cause) {
 		t.Error("expected cause to be set")
@@ -94,8 +94,8 @@ func TestAppError_Unauthorized_Success(t *testing.T) {
 
 func TestAppError_Forbidden_Success(t *testing.T) {
 	err := Forbidden("")
-	if err.HTTPStatus != http.StatusForbidden {
-		t.Errorf("expected 403, got %d", err.HTTPStatus)
+	if err.HTTPStatus() != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", err.HTTPStatus())
 	}
 	if !strings.Contains(err.Message, "permission") {
 		t.Errorf("expected default message with 'permission', got %q", err.Message)
@@ -107,8 +107,8 @@ func TestAppError_TokenExpired_Success(t *testing.T) {
 	if err.Code != ErrCodeTokenExpired {
 		t.Errorf("expected TOKEN_EXPIRED, got %s", err.Code)
 	}
-	if err.HTTPStatus != http.StatusUnauthorized {
-		t.Errorf("expected 401, got %d", err.HTTPStatus)
+	if err.HTTPStatus() != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", err.HTTPStatus())
 	}
 }
 
@@ -117,8 +117,8 @@ func TestAppError_InvalidInput_Success(t *testing.T) {
 	if err.Code != ErrCodeInvalidInput {
 		t.Errorf("expected INVALID_INPUT, got %s", err.Code)
 	}
-	if err.Details["field"] != "email" {
-		t.Errorf("expected field=email, got %v", err.Details["field"])
+	if err.Violations[0].Field != "email" {
+		t.Errorf("expected field=email, got %v", err.Violations[0].Field)
 	}
 }
 
@@ -192,7 +192,7 @@ func TestAppError_Builders_CopyOnWrite(t *testing.T) {
 
 	// A shared sentinel must never be mutated by enrichment: WithCause/WithDetail
 	// return a fresh copy, so concurrent enrichment cannot race on the sentinel.
-	sentinel := New(ErrCodeServiceUnavailable, "sentinel", 503)
+	sentinel := New(ErrCodeServiceUnavailable, "sentinel")
 
 	withCause := sentinel.WithCause(errors.New("boom"))
 	if sentinel.Cause != nil {
@@ -219,7 +219,7 @@ func TestAppError_Builders_CopyOnWrite(t *testing.T) {
 	}
 
 	// A distinct sentinel sharing the same code must not match.
-	other := New(ErrCodeServiceUnavailable, "other", 503)
+	other := New(ErrCodeServiceUnavailable, "other")
 	if errors.Is(withCause, other) {
 		t.Error("enriched error must not match an unrelated same-code sentinel")
 	}
@@ -267,7 +267,7 @@ func TestAppError_Constructors_Table(t *testing.T) {
 		{"InvalidFormat", InvalidFormat("date", "RFC3339"), ErrCodeInvalidFormat, http.StatusUnprocessableEntity, false},
 		{"InvalidToken", InvalidToken(), ErrCodeInvalidToken, http.StatusUnauthorized, false},
 		{"DatabaseError", DatabaseError(nil), ErrCodeDatabaseError, http.StatusInternalServerError, false},
-		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusInternalServerError, true},
+		{"ExternalServiceError", ExternalServiceError("stripe", nil), ErrCodeExternalService, http.StatusInternalServerError, false},
 		{"Validation", Validation("bad input"), ErrCodeInvalidInput, http.StatusUnprocessableEntity, false},
 		{"Canceled", Canceled("search"), ErrCodeCanceled, http.StatusRequestTimeout, false},
 	}
@@ -277,8 +277,8 @@ func TestAppError_Constructors_Table(t *testing.T) {
 			if tc.err.Code != tc.code {
 				t.Errorf("expected code %s, got %s", tc.code, tc.err.Code)
 			}
-			if tc.err.HTTPStatus != tc.status {
-				t.Errorf("expected status %d, got %d", tc.status, tc.err.HTTPStatus)
+			if tc.err.HTTPStatus() != tc.status {
+				t.Errorf("expected status %d, got %d", tc.status, tc.err.HTTPStatus())
 			}
 			if tc.err.Retryable != tc.retryable {
 				t.Errorf("expected retryable=%v, got %v", tc.retryable, tc.err.Retryable)
@@ -288,7 +288,7 @@ func TestAppError_Constructors_Table(t *testing.T) {
 }
 
 func TestErrorCode_IsRetryableCode_Table(t *testing.T) {
-	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited, ErrCodeExternalService}
+	retryable := []ErrorCode{ErrCodeServiceUnavailable, ErrCodeConnectionFailed, ErrCodeTimeout, ErrCodeRateLimited}
 	for _, code := range retryable {
 		if !IsRetryableCode(code) {
 			t.Errorf("expected %s to be retryable", code)
@@ -482,8 +482,8 @@ func TestErrorCode_HTTPStatusMapping_All(t *testing.T) {
 				t.Fatalf("no constructor registered for code %s", tc.code)
 			}
 			err := fn()
-			if err.HTTPStatus != tc.status {
-				t.Errorf("code %s: expected HTTP %d, got %d", tc.code, tc.status, err.HTTPStatus)
+			if err.HTTPStatus() != tc.status {
+				t.Errorf("code %s: expected HTTP %d, got %d", tc.code, tc.status, err.HTTPStatus())
 			}
 		})
 	}
@@ -503,7 +503,7 @@ func TestIsRetryableCode_Exhaustive(t *testing.T) {
 		{ErrCodeConnectionFailed, true},
 		{ErrCodeTimeout, true},
 		{ErrCodeRateLimited, true},
-		{ErrCodeExternalService, true},
+		{ErrCodeExternalService, false},
 		{ErrCodeNotFound, false},
 		{ErrCodeAlreadyExists, false},
 		{ErrCodeConflict, false},
@@ -657,8 +657,8 @@ func TestToProblemDetail_EmptyError(t *testing.T) {
 	if pd.Type != "https://gokit.dev/errors/" {
 		t.Errorf("Type = %q, want base URL with empty code", pd.Type)
 	}
-	if pd.Status != 0 {
-		t.Errorf("Status = %d, want 0 for zero-value AppError", pd.Status)
+	if pd.Status != 500 {
+		t.Errorf("Status = %d, want 500 for zero-value AppError", pd.Status)
 	}
 	if pd.Detail != "" {
 		t.Errorf("Detail = %q, want empty", pd.Detail)
@@ -790,8 +790,8 @@ func TestConstructor_AlreadyExists_Details(t *testing.T) {
 func TestConstructor_MissingField_Details(t *testing.T) {
 	t.Parallel()
 	err := MissingField("email")
-	if err.Details["field"] != "email" {
-		t.Errorf("field = %v, want email", err.Details["field"])
+	if err.Violations[0].Field != "email" {
+		t.Errorf("field = %v, want email", err.Violations[0].Field)
 	}
 	if !strings.Contains(err.Message, "email") {
 		t.Errorf("message should mention field name, got %q", err.Message)
@@ -801,19 +801,19 @@ func TestConstructor_MissingField_Details(t *testing.T) {
 func TestConstructor_InvalidFormat_Details(t *testing.T) {
 	t.Parallel()
 	err := InvalidFormat("date", "RFC3339")
-	if err.Details["field"] != "date" {
-		t.Errorf("field = %v, want date", err.Details["field"])
+	if err.Violations[0].Field != "date" {
+		t.Errorf("field = %v, want date", err.Violations[0].Field)
 	}
-	if err.Details["expected_format"] != "RFC3339" {
-		t.Errorf("expected_format = %v, want RFC3339", err.Details["expected_format"])
+	if err.Violations[0].Message != "expected RFC3339" {
+		t.Errorf("format violation = %+v", err.Violations[0])
 	}
 }
 
 func TestConstructor_InvalidInput_Details(t *testing.T) {
 	t.Parallel()
 	err := InvalidInput("email", "must be valid")
-	if err.Details["field"] != "email" {
-		t.Errorf("field = %v, want email", err.Details["field"])
+	if err.Violations[0].Field != "email" {
+		t.Errorf("field = %v, want email", err.Violations[0].Field)
 	}
 	if !strings.Contains(err.Message, "must be valid") {
 		t.Errorf("message should contain reason, got %q", err.Message)
@@ -823,8 +823,8 @@ func TestConstructor_InvalidInput_Details(t *testing.T) {
 func TestConstructor_InvalidInput_EmptyField(t *testing.T) {
 	t.Parallel()
 	err := InvalidInput("", "some reason")
-	if _, ok := err.Details["field"]; ok {
-		t.Error("empty field should not be present in details")
+	if len(err.Violations) != 0 {
+		t.Error("request-level failure should not invent a field")
 	}
 }
 
@@ -1366,8 +1366,8 @@ func TestWrap_PlainError_SetsInternal(t *testing.T) {
 	if got.Code != ErrCodeInternal {
 		t.Errorf("code = %s, want INTERNAL_ERROR", got.Code)
 	}
-	if got.HTTPStatus != http.StatusInternalServerError {
-		t.Errorf("status = %d, want 500", got.HTTPStatus)
+	if got.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("status = %d, want 500", got.HTTPStatus())
 	}
 }
 
@@ -1412,7 +1412,7 @@ func TestNew_SetsRetryableFromCode(t *testing.T) {
 		{ErrCodeServiceUnavailable, true},
 		{ErrCodeConnectionFailed, true},
 		{ErrCodeRateLimited, true},
-		{ErrCodeExternalService, true},
+		{ErrCodeExternalService, false},
 		{ErrCodeNotFound, false},
 		{ErrCodeInternal, false},
 		{ErrCodeInvalidInput, false},
@@ -1421,7 +1421,7 @@ func TestNew_SetsRetryableFromCode(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(string(tc.code), func(t *testing.T) {
 			t.Parallel()
-			err := New(tc.code, "msg", 500)
+			err := New(tc.code, "msg")
 			if err.Retryable != tc.retryable {
 				t.Errorf("New(%s).Retryable = %v, want %v", tc.code, err.Retryable, tc.retryable)
 			}
@@ -1431,12 +1431,12 @@ func TestNew_SetsRetryableFromCode(t *testing.T) {
 
 func TestNew_CustomCode(t *testing.T) {
 	t.Parallel()
-	err := New(ErrorCode("CUSTOM"), "custom msg", 418)
+	err := New(ErrorCode("CUSTOM"), "custom msg")
 	if err.Code != ErrorCode("CUSTOM") {
 		t.Errorf("code = %s, want CUSTOM", err.Code)
 	}
-	if err.HTTPStatus != 418 {
-		t.Errorf("status = %d, want 418", err.HTTPStatus)
+	if err.HTTPStatus() != 500 {
+		t.Errorf("unknown category status = %d, want 500", err.HTTPStatus())
 	}
 	if err.Message != "custom msg" {
 		t.Errorf("message = %q, want 'custom msg'", err.Message)

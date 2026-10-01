@@ -103,7 +103,7 @@ func (r *Registry[T]) Each(fn func(name string, v T)) {
 func isNil[T any](v T) bool {
 	rv := reflect.ValueOf(&v).Elem()
 	switch rv.Kind() {
-	case reflect.Interface, reflect.Ptr, reflect.Func,
+	case reflect.Interface, reflect.Pointer, reflect.Func,
 		reflect.Map, reflect.Chan, reflect.Slice:
 		return rv.IsNil()
 	default:

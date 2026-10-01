@@ -4,7 +4,7 @@ root = "."
 base_ref = "origin/main"
 
 # Bound per-tool CPU parallelism during APPLY fan-out. gokit's `test`/`build`/
-# `lint` tasks fan out one `go` process per module (50 modules) across the
+# `lint` tasks fan out one `go` process per module across the
 # worker pool; left unbounded, every child defaults its own `GOMAXPROCS` to the
 # whole machine and peak thread pressure climbs toward cores², thrashing the
 # host. `auto` sizes a host-CPU budget and splits it across each concurrent
@@ -153,6 +153,13 @@ shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 argv = ["go", "-C", "{module.root}", "mod", "tidy", "{args}"]
 cacheable = false
 fan_out = "per-module"
+shared_inputs = ["go.sum", "go.work", "go.work.sum"]
+
+[ecosystems.go.tasks.update]
+argv = ["go", "-C", "{module.root}", "get", "-u", "-t", "{args}", "{module.selector}"]
+cacheable = false
+fan_out = "per-module"
+selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.vuln]

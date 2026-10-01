@@ -2,7 +2,6 @@ package metric
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 
 	"github.com/kbukum/gokit/bench"
@@ -43,7 +42,7 @@ func TokenStats[L comparable](counter llm.TokenCounter) (Metric[L], error) {
 	if isNilCounter(counter) {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"token_stats: TokenStats requires a non-nil llm.TokenCounter",
-			http.StatusBadRequest)
+		)
 	}
 	name := fmt.Sprintf("%s[%s]", tokenStatsBaseName, counter.Name())
 	return &tokenStats[L]{counter: counter, name: name}, nil

@@ -217,11 +217,19 @@ func (k *jwk) ecPublicKey() (*ecdsa.PublicKey, error) {
 		return nil, fmt.Errorf("unsupported curve: %s", k.Crv)
 	}
 
-	return &ecdsa.PublicKey{
-		Curve: curve,
-		X:     new(big.Int).SetBytes(xBytes),
-		Y:     new(big.Int).SetBytes(yBytes),
-	}, nil
+	coordinateSize := (curve.Params().BitSize + 7) / 8
+	if len(xBytes) != coordinateSize || len(yBytes) != coordinateSize {
+		return nil, fmt.Errorf("invalid EC coordinate length for %s", k.Crv)
+	}
+	point := make([]byte, 1+2*coordinateSize)
+	point[0] = 4
+	copy(point[1:], xBytes)
+	copy(point[1+coordinateSize:], yBytes)
+	key, err := ecdsa.ParseUncompressedPublicKey(curve, point)
+	if err != nil {
+		return nil, fmt.Errorf("parse EC public key: %w", err)
+	}
+	return key, nil
 }
 
 func (k *jwk) okpPublicKey() (ed25519.PublicKey, error) {

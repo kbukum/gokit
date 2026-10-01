@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
-	"net/http"
 	"time"
 
 	apperr "github.com/kbukum/gokit/errors"
@@ -15,7 +14,7 @@ import (
 // Common retry errors. ErrMaxRetriesExceeded is a typed AppError so callers can
 // branch on the error code, while errors.Is still matches the sentinel.
 var (
-	ErrMaxRetriesExceeded = apperr.New(apperr.ErrCodeServiceUnavailable, "max retries exceeded", http.StatusServiceUnavailable)
+	ErrMaxRetriesExceeded = apperr.New(apperr.ErrCodeServiceUnavailable, "max retries exceeded")
 )
 
 // BackoffStrategy defines how retry delays grow between attempts.
@@ -110,6 +109,8 @@ type RetryConfig struct {
 	Rand func() float64 `json:"-" yaml:"-" mapstructure:"-"`
 	// RetryIf determines if an error should be retried.
 	RetryIf func(error) bool `json:"-" yaml:"-" mapstructure:"-"`
+	// MinimumDelay reads an optional server hint. The retry owner never shortens it to MaxBackoff and surfaces decoding failures.
+	MinimumDelay func(error) (time.Duration, error) `json:"-" yaml:"-" mapstructure:"-"`
 	// OnRetry is called before each retry.
 	OnRetry func(attempt int, err error, backoff time.Duration) `json:"-" yaml:"-" mapstructure:"-"`
 }
@@ -205,6 +206,16 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		}
 
 		backoff := calculateBackoff(attempt, cfg)
+		if cfg.MinimumDelay != nil {
+			minimum, hintErr := cfg.MinimumDelay(err)
+			if hintErr != nil {
+				return zero, hintErr
+			}
+			if minimum < 0 {
+				return zero, apperr.InvalidInput("retryDelay", "must not be negative")
+			}
+			backoff = max(backoff, minimum)
+		}
 
 		// Refuse to sleep past the total elapsed-time budget. Compare the backoff against
 		// the remaining budget rather than elapsed+backoff, so a large configured backoff
@@ -212,6 +223,9 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		// also stops when the sleep would land exactly on the deadline, leaving no room for
 		// the next attempt to run.
 		if cfg.MaxElapsedTime > 0 && backoff >= cfg.MaxElapsedTime-time.Since(start) {
+			break
+		}
+		if deadline, ok := ctx.Deadline(); ok && backoff >= time.Until(deadline) {
 			break
 		}
 

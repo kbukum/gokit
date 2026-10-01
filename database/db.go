@@ -96,7 +96,7 @@ func NewWithContext(ctx context.Context, dialector any, cfg Config, log *logging
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf("database connection canceled: %w", err)
 		}
-		return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", cfg.MaxRetries, err)
+		return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", attempt, err)
 	}
 
 	log.InfoCtx(ctx, "Database connection established", map[string]any{"attempt": attempt})

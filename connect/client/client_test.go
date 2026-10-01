@@ -2,14 +2,11 @@ package client
 
 import (
 	"context"
-	"crypto/tls"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/net/http2"
 
 	"github.com/kbukum/gokit/security"
 )
@@ -22,11 +19,11 @@ func TestNewHTTPClientBuildsH2CClientByDefault(t *testing.T) {
 	if client.Timeout != defaultTimeout {
 		t.Fatalf("Timeout = %s, want %s", client.Timeout, defaultTimeout)
 	}
-	transport, ok := client.Transport.(*http2.Transport)
+	transport, ok := client.Transport.(*schemeTransport)
 	if !ok {
-		t.Fatalf("Transport = %T, want *http2.Transport", client.Transport)
+		t.Fatalf("Transport = %T, want *schemeTransport", client.Transport)
 	}
-	if !transport.AllowHTTP {
+	if transport.Protocols == nil || !transport.Protocols.UnencryptedHTTP2() || transport.Protocols.HTTP1() || transport.Protocols.HTTP2() {
 		t.Fatal("default transport should allow h2c")
 	}
 	if transport.TLSClientConfig != nil {
@@ -73,11 +70,11 @@ func TestNewHTTPClientBuildsTLSTransport(t *testing.T) {
 	if client.Timeout != 5*time.Second {
 		t.Fatalf("Timeout = %s, want 5s", client.Timeout)
 	}
-	transport, ok := client.Transport.(*http2.Transport)
+	transport, ok := client.Transport.(*schemeTransport)
 	if !ok {
-		t.Fatalf("Transport = %T, want *http2.Transport", client.Transport)
+		t.Fatalf("Transport = %T, want *schemeTransport", client.Transport)
 	}
-	if transport.AllowHTTP {
+	if transport.Protocols == nil || transport.Protocols.UnencryptedHTTP2() || transport.Protocols.HTTP1() || !transport.Protocols.HTTP2() {
 		t.Fatal("TLS transport should not allow cleartext HTTP")
 	}
 	if transport.TLSClientConfig == nil {
@@ -92,11 +89,14 @@ func TestNewHTTPClientBuildsTLSTransport(t *testing.T) {
 }
 
 func TestBuildH2CTransportDialUsesContext(t *testing.T) {
-	transport := buildH2CTransport(Config{DialTimeout: time.Minute}).(*http2.Transport)
+	transport, ok := buildH2CTransport(Config{DialTimeout: time.Minute}).(*schemeTransport)
+	if !ok {
+		t.Fatal("expected native HTTP transport")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	conn, err := transport.DialTLSContext(ctx, "tcp", "127.0.0.1:1", nil)
+	conn, err := transport.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {
 		if conn != nil {
 			_ = conn.Close()
@@ -116,11 +116,14 @@ func TestBuildTLSTransportDialUsesContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTLSTransport returned error: %v", err)
 	}
-	h2Transport := transport.(*http2.Transport)
+	h2Transport, ok := transport.(*schemeTransport)
+	if !ok {
+		t.Fatal("expected HTTPS-only transport")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	conn, err := h2Transport.DialTLSContext(ctx, "tcp", "127.0.0.1:1", &tls.Config{MinVersion: tls.VersionTLS12})
+	conn, err := h2Transport.DialContext(ctx, "tcp", "127.0.0.1:1")
 	if err == nil {
 		if conn != nil {
 			_ = conn.Close()
@@ -137,11 +140,11 @@ func TestBuildTransportWithDisabledTLSUsesH2C(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTransport returned error: %v", err)
 	}
-	h2Transport, ok := transport.(*http2.Transport)
+	h2Transport, ok := transport.(*schemeTransport)
 	if !ok {
-		t.Fatalf("Transport = %T, want *http2.Transport", transport)
+		t.Fatalf("Transport = %T, want *schemeTransport", transport)
 	}
-	if !h2Transport.AllowHTTP {
+	if h2Transport.Protocols == nil || !h2Transport.Protocols.UnencryptedHTTP2() {
 		t.Fatal("disabled TLS config should still use h2c")
 	}
 }

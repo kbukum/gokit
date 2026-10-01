@@ -59,8 +59,8 @@ func TestNewMetricsInstrumentErrors(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: expected AppError, got %T", name, err)
 		}
-		if appErr.Code != apperr.ErrCodeInternal || appErr.HTTPStatus != 500 {
-			t.Fatalf("%s: code/status = %q/%d, want INTERNAL_ERROR/500", name, appErr.Code, appErr.HTTPStatus)
+		if appErr.Code != apperr.ErrCodeInternal || appErr.HTTPStatus() != 500 {
+			t.Fatalf("%s: code/status = %q/%d, want INTERNAL_ERROR/500", name, appErr.Code, appErr.HTTPStatus())
 		}
 		if !errors.Is(err, errInstrument) {
 			t.Fatalf("%s: expected underlying instrument error preserved as cause, got %v", name, err)

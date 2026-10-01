@@ -1,0 +1,37 @@
+{
+  "name": "invalid_token",
+  "httpStatus": 401,
+  "rpcCode": 16,
+  "vocabulary": {
+    "code": "INVALID_TOKEN",
+    "message": "Invalid authentication token. Please log in again.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/invalid-token",
+    "title": "Invalid Token",
+    "status": 401,
+    "detail": "Invalid authentication token. Please log in again.",
+    "code": "INVALID_TOKEN",
+    "retryable": false
+  },
+  "grpcStatus": "CBASMkludmFsaWQgYXV0aGVudGljYXRpb24gdG9rZW4uIFBsZWFzZSBsb2cgaW4gYWdhaW4uGoABCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElQKDUlOVkFMSURfVE9LRU4SCWdva2l0LmRldhoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U=",
+  "connectJson": {
+    "code": "unauthenticated",
+    "message": "Invalid authentication token. Please log in again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg1JTlZBTElEX1RPS0VOEglnb2tpdC5kZXYaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+        "debug": {
+          "reason": "INVALID_TOKEN",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

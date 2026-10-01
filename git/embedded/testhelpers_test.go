@@ -46,6 +46,7 @@ func commitFileAt(t *testing.T, repoDir, path, content, message string, when tim
 }
 
 func createBranch(t *testing.T, repoDir, name string) { t.Helper(); runGit(t, repoDir, "branch", name) }
+
 func checkoutBranch(t *testing.T, repoDir, name string) {
 	t.Helper()
 	runGit(t, repoDir, "checkout", name)

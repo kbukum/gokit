@@ -95,8 +95,8 @@ func TestRetry_RespectsContext(t *testing.T) {
 		return "", errors.New("error")
 	})
 
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected context.DeadlineExceeded, got %v", err)
+	if !errors.Is(err, ErrMaxRetriesExceeded) {
+		t.Errorf("expected retry budget exhaustion before an oversized sleep, got %v", err)
 	}
 	// Should have made at least 1 attempt but not all 10
 	if callCount >= 10 {
@@ -513,11 +513,10 @@ func TestRetry_ContextTimeoutMidRetry(t *testing.T) {
 		return 0, errors.New("fail")
 	})
 
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected DeadlineExceeded, got %v", err)
+	if !errors.Is(err, ErrMaxRetriesExceeded) {
+		t.Errorf("expected retry budget exhaustion, got %v", err)
 	}
-	// With 50ms backoff and 80ms timeout: attempt 1 at 0ms, sleep 50ms,
-	// attempt 2 at ~50ms, sleep 50ms → context expires ~80ms.
+	// The second delay does not fit the remaining budget, so no timer is started.
 	if callCount > 5 {
 		t.Errorf("too many attempts (%d) – context should have stopped retries", callCount)
 	}

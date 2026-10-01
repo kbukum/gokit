@@ -59,15 +59,15 @@ func envAbsolutePath(key string, env func(string) (string, bool)) (string, error
 	value, ok := env(key)
 	if !ok {
 		return "", apperrors.New(apperrors.ErrCodeInvalidInput,
-			fmt.Sprintf("%s is required to resolve the application cache directory", key), 422)
+			fmt.Sprintf("%s is required to resolve the application cache directory", key))
 	}
 	if value == "" {
 		return "", apperrors.New(apperrors.ErrCodeInvalidInput,
-			fmt.Sprintf("%s cannot be empty", key), 422)
+			fmt.Sprintf("%s cannot be empty", key))
 	}
 	if !filepath.IsAbs(value) {
 		return "", apperrors.New(apperrors.ErrCodeInvalidInput,
-			fmt.Sprintf("%s must be an absolute path", key), 422)
+			fmt.Sprintf("%s must be an absolute path", key))
 	}
 	return value, nil
 }
@@ -83,7 +83,7 @@ func envPathIfAbsolute(key string, env func(string) (string, bool)) (value strin
 	}
 	if !filepath.IsAbs(value) {
 		return "", false, apperrors.New(apperrors.ErrCodeInvalidInput,
-			fmt.Sprintf("%s must be an absolute path when set", key), 422)
+			fmt.Sprintf("%s must be an absolute path when set", key))
 	}
 	return value, true, nil
 }

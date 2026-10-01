@@ -191,9 +191,7 @@ func (s *Summary) TrackClient(name, target, status, clientType string) {
 // DisplaySummary prints the bootstrap summary. It auto-collects infrastructure, routes,
 // and health from the component registry and DI registrations from the container.
 // Manual Track* calls are only needed for non-component items (e.g., auth config).
-func (s *Summary) DisplaySummary(registry *component.Registry, container *di.Container, log *logging.Logger) {
-	ctx := context.Background()
-
+func (s *Summary) DisplaySummary(ctx context.Context, registry *component.Registry, container *di.Container, log *logging.Logger) {
 	// --- Auto-collect from registry ---
 	s.collectFromRegistry(ctx, registry)
 

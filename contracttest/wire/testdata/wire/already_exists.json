@@ -1,0 +1,40 @@
+{
+  "name": "already_exists",
+  "httpStatus": 409,
+  "rpcCode": 6,
+  "vocabulary": {
+    "code": "ALREADY_EXISTS",
+    "message": "A user with these details already exists.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/already-exists",
+    "title": "Already Exists",
+    "status": 409,
+    "detail": "A user with these details already exists.",
+    "code": "ALREADY_EXISTS",
+    "retryable": false,
+    "details": {
+      "resource": "user"
+    }
+  },
+  "grpcStatus": "CAYSKUEgdXNlciB3aXRoIHRoZXNlIGRldGFpbHMgYWxyZWFkeSBleGlzdHMuGoEBCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElUKDkFMUkVBRFlfRVhJU1RTEglnb2tpdC5kZXYaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+  "connectJson": {
+    "code": "already_exists",
+    "message": "A user with these details already exists.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg5BTFJFQURZX0VYSVNUUxIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "ALREADY_EXISTS",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -3,7 +3,6 @@ package di
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	apperr "github.com/kbukum/gokit/errors"
 )
@@ -29,7 +28,7 @@ func Resolve[T any](ctx context.Context, c *Container, opts ...Option) (T, error
 	if !ok {
 		return zero, apperr.New(apperr.ErrCodeInternal,
 			fmt.Sprintf("di: %s is %T, expected %s", k, v, typeName[T]()),
-			http.StatusInternalServerError)
+		)
 	}
 	return typed, nil
 }

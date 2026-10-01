@@ -103,7 +103,7 @@ func TestClientRedisErrorsAndCloseIdempotence(t *testing.T) {
 	if err := client.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
 	}
-	if err := ((*Client)(nil)).Close(); err != nil {
+	if err := (*Client)(nil).Close(); err != nil {
 		t.Fatalf("nil Close: %v", err)
 	}
 	if _, _, err := client.Get(context.Background(), "k"); err == nil {

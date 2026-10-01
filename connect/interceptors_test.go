@@ -2,235 +2,368 @@ package connect
 
 import (
 	"context"
-	"errors"
+	stderrors "errors"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
+	validate "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	protovalidate "buf.build/go/protovalidate"
 	connectrpc "connectrpc.com/connect"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 )
 
-// ---------------------------------------------------------------------------
-// Mapping helpers
-// ---------------------------------------------------------------------------
+func newProtoRequest() connectrpc.AnyRequest {
+	return connectrpc.NewRequest(&emptypb.Empty{})
+}
 
-func TestAppErrorCodeToConnect_AllCodes(t *testing.T) {
-	cases := []struct {
-		code     apperrors.ErrorCode
-		expected connectrpc.Code
-	}{
-		{apperrors.ErrCodeNotFound, connectrpc.CodeNotFound},
-		{apperrors.ErrCodeAlreadyExists, connectrpc.CodeAlreadyExists},
-		{apperrors.ErrCodeInvalidInput, connectrpc.CodeInvalidArgument},
-		{apperrors.ErrCodeMissingField, connectrpc.CodeInvalidArgument},
-		{apperrors.ErrCodeInvalidFormat, connectrpc.CodeInvalidArgument},
-		{apperrors.ErrCodeUnauthorized, connectrpc.CodeUnauthenticated},
-		{apperrors.ErrCodeTokenExpired, connectrpc.CodeUnauthenticated},
-		{apperrors.ErrCodeInvalidToken, connectrpc.CodeUnauthenticated},
-		{apperrors.ErrCodeForbidden, connectrpc.CodePermissionDenied},
-		{apperrors.ErrCodeConflict, connectrpc.CodeFailedPrecondition},
-		{apperrors.ErrCodeTimeout, connectrpc.CodeDeadlineExceeded},
-		{apperrors.ErrCodeRateLimited, connectrpc.CodeResourceExhausted},
-		{apperrors.ErrCodeServiceUnavailable, connectrpc.CodeUnavailable},
-		{apperrors.ErrCodeConnectionFailed, connectrpc.CodeUnavailable},
-		{apperrors.ErrCodeInternal, connectrpc.CodeInternal},
-		{apperrors.ErrCodeDatabaseError, connectrpc.CodeInternal},
-		{apperrors.ErrCodeExternalService, connectrpc.CodeInternal},
-	}
-
-	for _, tc := range cases {
-		got := appErrorCodeToConnect(tc.code)
-		if got != tc.expected {
-			t.Errorf("appErrorCodeToConnect(%v) = %v, want %v", tc.code, got, tc.expected)
-		}
+func unaryHandler(resp connectrpc.AnyResponse, err error) connectrpc.UnaryFunc {
+	return func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+		return resp, err
 	}
 }
 
-func TestSanitizeMessage(t *testing.T) {
-	if got := sanitizeMessage(""); got != "An error occurred." {
-		t.Errorf("expected default message, got %q", got)
-	}
-	if got := sanitizeMessage("hello"); got != "hello" {
-		t.Errorf("expected 'hello', got %q", got)
-	}
-}
+func okResp() connectrpc.AnyResponse { return connectrpc.NewResponse(&emptypb.Empty{}) }
 
 // ---------------------------------------------------------------------------
-// ToConnectError / FromConnectError
+// NormalizingInterceptor
 // ---------------------------------------------------------------------------
 
-func TestToConnectError_Nil(t *testing.T) {
-	if ToConnectError(nil) != nil {
-		t.Fatal("expected nil for nil input")
-	}
-}
+func TestNormalizingInterceptor_Unary(t *testing.T) {
+	t.Parallel()
+	interceptor := NormalizingInterceptor(nil)
 
-func TestToConnectError_NotFound(t *testing.T) {
-	appErr := apperrors.NotFound("user", "123")
-	cErr := ToConnectError(appErr)
-	if cErr == nil {
-		t.Fatal("expected non-nil connect error")
-	}
-	if cErr.Code() != connectrpc.CodeNotFound {
-		t.Fatalf("expected NotFound, got %v", cErr.Code())
-	}
-}
-
-func TestToConnectError_Internal(t *testing.T) {
-	appErr := apperrors.Internal(nil)
-	cErr := ToConnectError(appErr)
-	if cErr.Code() != connectrpc.CodeInternal {
-		t.Fatalf("expected Internal, got %v", cErr.Code())
-	}
-}
-
-func TestFromConnectError_Nil(t *testing.T) {
-	if FromConnectError(nil) != nil {
-		t.Fatal("expected nil for nil input")
-	}
-}
-
-func TestFromConnectError_NotFound(t *testing.T) {
-	cErr := connectrpc.NewError(connectrpc.CodeNotFound, nil)
-	appErr := FromConnectError(cErr)
-	if appErr == nil {
-		t.Fatal("expected non-nil app error")
-	}
-	if appErr.Code != apperrors.ErrCodeNotFound {
-		t.Fatalf("expected NotFound, got %v", appErr.Code)
-	}
-}
-
-func TestFromConnectError_NonConnectError(t *testing.T) {
-	appErr := FromConnectError(apperrors.Internal(nil))
-	if appErr == nil {
-		t.Fatal("expected non-nil app error")
-	}
-	if appErr.Code != apperrors.ErrCodeInternal {
-		t.Fatalf("expected Internal, got %v", appErr.Code)
-	}
-}
-
-func TestErrorInterceptor(t *testing.T) {
-	ctx := context.Background()
-	req := connectrpc.NewRequest(&struct{}{})
-	wantResp := connectrpc.NewResponse(&struct{}{})
-
-	t.Run("success passes response", func(t *testing.T) {
-		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return wantResp, nil
-		})(ctx, req)
+	t.Run("success passes through", func(t *testing.T) {
+		t.Parallel()
+		want := okResp()
+		resp, err := interceptor.WrapUnary(unaryHandler(want, nil))(context.Background(), newProtoRequest())
 		if err != nil {
-			t.Fatalf("ErrorInterceptor returned error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if resp != wantResp {
-			t.Fatal("response was not passed through")
+		if resp != want {
+			t.Fatal("response not passed through")
 		}
 	})
 
-	t.Run("connect error passes through", func(t *testing.T) {
-		wantErr := connectrpc.NewError(connectrpc.CodePermissionDenied, errors.New("denied"))
-		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return wantResp, wantErr
-		})(ctx, req)
-		if resp != wantResp {
-			t.Fatal("response was not passed through")
-		}
-		if !errors.Is(err, wantErr) {
+	t.Run("existing connect error passes through", func(t *testing.T) {
+		t.Parallel()
+		want := connectrpc.NewError(connectrpc.CodePermissionDenied, stderrors.New("denied"))
+		_, err := interceptor.WrapUnary(unaryHandler(nil, want))(context.Background(), newProtoRequest())
+		if !stderrors.Is(err, want) {
 			t.Fatalf("error = %v, want original connect error", err)
 		}
 	})
 
-	t.Run("app error converts to connect error", func(t *testing.T) {
-		resp, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return wantResp, apperrors.Unauthorized("login required")
-		})(ctx, req)
-		if resp != wantResp {
-			t.Fatal("response was not passed through")
-		}
+	t.Run("app error maps to its code", func(t *testing.T) {
+		t.Parallel()
+		_, err := interceptor.WrapUnary(unaryHandler(nil, apperrors.Unauthorized("login required")))(context.Background(), newProtoRequest())
 		if connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
-			t.Fatalf("CodeOf(err) = %v, want unauthenticated", connectrpc.CodeOf(err))
+			t.Fatalf("code = %v, want unauthenticated", connectrpc.CodeOf(err))
 		}
 	})
 
-	t.Run("plain error passes through", func(t *testing.T) {
-		wantErr := errors.New("plain")
-		_, err := ErrorInterceptor()(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return nil, wantErr
-		})(ctx, req)
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("error = %v, want original plain error", err)
+	t.Run("wrapped cancellation maps to canceled", func(t *testing.T) {
+		t.Parallel()
+		wrapped := fmt.Errorf("handler: %w", context.Canceled)
+		_, err := interceptor.WrapUnary(unaryHandler(nil, wrapped))(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeCanceled {
+			t.Fatalf("code = %v, want canceled", connectrpc.CodeOf(err))
+		}
+	})
+
+	t.Run("wrapped deadline maps to deadline_exceeded", func(t *testing.T) {
+		t.Parallel()
+		wrapped := fmt.Errorf("handler: %w", context.DeadlineExceeded)
+		_, err := interceptor.WrapUnary(unaryHandler(nil, wrapped))(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeDeadlineExceeded {
+			t.Fatalf("code = %v, want deadline_exceeded", connectrpc.CodeOf(err))
+		}
+	})
+
+	t.Run("unknown error is internal and never leaks text", func(t *testing.T) {
+		t.Parallel()
+		secret := "connection string postgres://user:pw@host/db"
+		_, err := interceptor.WrapUnary(unaryHandler(nil, stderrors.New(secret)))(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeInternal {
+			t.Fatalf("code = %v, want internal", connectrpc.CodeOf(err))
+		}
+		if strings.Contains(err.Error(), "postgres") {
+			t.Fatalf("internal cause leaked to client: %q", err.Error())
+		}
+	})
+
+	t.Run("app error wrapping a connect cause owns its own encoding", func(t *testing.T) {
+		t.Parallel()
+		leak := "private backend diagnostic"
+		cause := connectrpc.NewError(connectrpc.CodeUnavailable, stderrors.New(leak))
+		wrapped := apperrors.Internal(cause)
+		_, err := interceptor.WrapUnary(unaryHandler(nil, wrapped))(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeInternal {
+			t.Fatalf("code = %v, want internal", connectrpc.CodeOf(err))
+		}
+		if got := mustDecode(t, err); got.Code != apperrors.ErrCodeInternal {
+			t.Fatalf("decoded code = %q, want %q", got.Code, apperrors.ErrCodeInternal)
+		}
+		if strings.Contains(err.Error(), leak) {
+			t.Fatalf("internal cause leaked to client: %q", err.Error())
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// ValidationInterceptor
+// ---------------------------------------------------------------------------
+
+type fakeValidator struct {
+	err error
+}
+
+func (f fakeValidator) Validate(proto.Message, ...protovalidate.ValidationOption) error {
+	return f.err
+}
+
+func newValidationError(field, rule, msg string) *protovalidate.ValidationError {
+	element := &validate.FieldPathElement{}
+	element.SetFieldName(field)
+	path := &validate.FieldPath{}
+	path.SetElements([]*validate.FieldPathElement{element})
+	v := &validate.Violation{}
+	v.SetField(path)
+	v.SetRuleId(rule)
+	v.SetMessage(msg)
+	return &protovalidate.ValidationError{Violations: []*protovalidate.Violation{{Proto: v}}}
+}
+
+func TestValidationInterceptor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("valid request proceeds", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			called = true
+			return okResp(), nil
+		}
+		_, err := ValidationInterceptor(fakeValidator{})(next)(context.Background(), newProtoRequest())
+		if err != nil || !called {
+			t.Fatalf("expected handler to run; called=%v err=%v", called, err)
+		}
+	})
+
+	t.Run("violations become shared violations", func(t *testing.T) {
+		t.Parallel()
+		v := fakeValidator{err: newValidationError("email", "required", "is required")}
+		_, err := ValidationInterceptor(v)(unaryHandler(okResp(), nil))(context.Background(), newProtoRequest())
+		appErr, ok := apperrors.AsAppError(err)
+		if !ok || appErr.Code != apperrors.ErrCodeInvalidInput {
+			t.Fatalf("expected application validation error, got %v", err)
+		}
+		if len(appErr.Violations) != 1 {
+			t.Fatalf("expected 1 violation, got %d", len(appErr.Violations))
+		}
+
+		got := appErr.Violations[0]
+		want := apperrors.Violation{Field: "email", Reason: "REQUIRED", Message: "is required"}
+		if got != want {
+			t.Fatalf("violation = %+v, want %+v", got, want)
+		}
+	})
+
+	t.Run("non-proto request passes through", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			called = true
+			return okResp(), nil
+		}
+		req := connectrpc.NewRequest(&struct{}{})
+		_, err := ValidationInterceptor(fakeValidator{err: stderrors.New("ignored")})(next)(context.Background(), req)
+		if err != nil || !called {
+			t.Fatalf("expected passthrough; called=%v err=%v", called, err)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// DeadlineInterceptor
+// ---------------------------------------------------------------------------
+
+func TestValidationEvaluationFailurePreservesCause(t *testing.T) {
+	t.Parallel()
+	cause := stderrors.New("invalid validation program")
+	_, err := ValidationInterceptor(fakeValidator{err: cause})(unaryHandler(okResp(), nil))(context.Background(), newProtoRequest())
+	got, ok := apperrors.AsAppError(err)
+	if !ok || got.Code != apperrors.ErrCodeInternal || !stderrors.Is(got, cause) || got.Message == cause.Error() {
+		t.Fatalf("evaluation failure lost its safe classification or cause: %v", err)
+	}
+}
+
+func TestDecodedRemoteFailureIsNotForwarded(t *testing.T) {
+	t.Parallel()
+	remote := mustDecode(t, mustEncode(t, apperrors.New(apperrors.ErrCodeInternal, "upstream private detail"), testDomain))
+	handler := NormalizingInterceptor(nil).WrapUnary(unaryHandler(nil, remote))
+	_, err := handler(context.Background(), newProtoRequest())
+	if strings.Contains(err.Error(), "upstream private detail") {
+		t.Fatalf("remote detail crossed the public boundary: %v", err)
+	}
+	if connectrpc.CodeOf(err) != connectrpc.CodeInternal {
+		t.Fatalf("unexpected code: %v", err)
+	}
+}
+
+func TestDeadlineClampsLongerClientBudget(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
+	defer cancel()
+	start := time.Now()
+	_, err := DeadlineInterceptor(time.Hour)(func(callCtx context.Context, _ connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+		deadline, ok := callCtx.Deadline()
+		if !ok || deadline.Before(start.Add(time.Hour)) || deadline.After(time.Now().Add(time.Hour)) {
+			t.Fatalf("deadline not clamped to server maximum: %v", deadline)
+		}
+		return okResp(), nil
+	})(ctx, newProtoRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeadlineInterceptor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("disabled when max is non-positive", func(t *testing.T) {
+		t.Parallel()
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			if _, ok := ctx.Deadline(); ok {
+				t.Error("expected no deadline")
+			}
+			return okResp(), nil
+		}
+		if _, err := DeadlineInterceptor(0)(next)(context.Background(), newProtoRequest()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("applies max when client sends none", func(t *testing.T) {
+		t.Parallel()
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			deadline, ok := ctx.Deadline()
+			if !ok {
+				t.Fatal("expected a bounded deadline")
+			}
+			if remaining := time.Until(deadline); remaining > time.Minute {
+				t.Errorf("deadline too far out: %v", remaining)
+			}
+			return okResp(), nil
+		}
+		if _, err := DeadlineInterceptor(30*time.Second)(next)(context.Background(), newProtoRequest()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("keeps a tighter client deadline", func(t *testing.T) {
+		t.Parallel()
+		clientDeadline := time.Now().Add(2 * time.Second)
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			deadline, _ := ctx.Deadline()
+			if !deadline.Equal(clientDeadline) {
+				t.Errorf("deadline = %v, want client's %v", deadline, clientDeadline)
+			}
+			return okResp(), nil
+		}
+		ctx, cancel := context.WithDeadline(context.Background(), clientDeadline)
+		defer cancel()
+		if _, err := DeadlineInterceptor(time.Hour)(next)(ctx, newProtoRequest()); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("blocked dependency ends at the server maximum", func(t *testing.T) {
+		t.Parallel()
+		next := func(ctx context.Context, req connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
+			<-ctx.Done()
+			return nil, apperrors.Normalize(ctx.Err())
+		}
+		chain := NormalizingInterceptor(nil).WrapUnary(DeadlineInterceptor(50 * time.Millisecond)(next))
+		_, err := chain(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeDeadlineExceeded {
+			t.Fatalf("code = %v, want deadline_exceeded", connectrpc.CodeOf(err))
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Composed chain
+// ---------------------------------------------------------------------------
+
+func TestComposedChain(t *testing.T) {
+	t.Parallel()
+	normalizing := NormalizingInterceptor(nil)
+
+	t.Run("auth failure stays unauthenticated", func(t *testing.T) {
+		t.Parallel()
+		validator := stubTokenValidator{err: stderrors.New("bad")}
+		handler := normalizing.WrapUnary(TokenAuthInterceptor(validator).WrapUnary(unaryHandler(okResp(), nil)))
+		_, err := handler(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
+			t.Fatalf("code = %v, want unauthenticated", connectrpc.CodeOf(err))
+		}
+	})
+
+	t.Run("validation failure surfaces violations", func(t *testing.T) {
+		t.Parallel()
+		v := fakeValidator{err: newValidationError("name", "required", "is required")}
+		handler := normalizing.WrapUnary(ValidationInterceptor(v).WrapUnary(unaryHandler(okResp(), nil)))
+		_, err := handler(context.Background(), newProtoRequest())
+		if connectrpc.CodeOf(err) != connectrpc.CodeInvalidArgument {
+			t.Fatalf("code = %v, want invalid_argument", connectrpc.CodeOf(err))
+		}
+		if len(mustDecode(t, err).Violations) != 1 {
+			t.Fatal("expected violations to survive the chain")
+		}
+	})
+}
+
+type stubTokenValidator struct {
+	err error
+}
+
+func (s stubTokenValidator) ValidateToken(string) (any, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return struct{}{}, nil
+}
+
+// ---------------------------------------------------------------------------
+// LoggingInterceptor
+// ---------------------------------------------------------------------------
 
 func TestLoggingInterceptor(t *testing.T) {
+	t.Parallel()
 	log := logging.MustNew(&logging.Config{Level: "debug", Format: "json", Output: logging.OutputStdout()}, "connect-test")
-	req := connectrpc.NewRequest(&struct{}{})
-	wantResp := connectrpc.NewResponse(&struct{}{})
+	req := newProtoRequest()
+	wantResp := okResp()
 
 	t.Run("success", func(t *testing.T) {
-		resp, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return wantResp, nil
-		})(context.Background(), req)
-		if err != nil {
-			t.Fatalf("LoggingInterceptor returned error: %v", err)
-		}
-		if resp != wantResp {
-			t.Fatal("response was not passed through")
+		t.Parallel()
+		resp, err := LoggingInterceptor(log)(unaryHandler(wantResp, nil))(context.Background(), req)
+		if err != nil || resp != wantResp {
+			t.Fatalf("resp=%v err=%v", resp, err)
 		}
 	})
 
-	t.Run("connect error", func(t *testing.T) {
-		wantErr := connectrpc.NewError(connectrpc.CodeUnavailable, errors.New("down"))
-		resp, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return wantResp, wantErr
-		})(context.Background(), req)
-		if resp != wantResp {
-			t.Fatal("response was not passed through")
-		}
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("error = %v, want original connect error", err)
+	t.Run("error passes through", func(t *testing.T) {
+		t.Parallel()
+		wantErr := connectrpc.NewError(connectrpc.CodeUnavailable, stderrors.New("down"))
+		_, err := LoggingInterceptor(log)(unaryHandler(wantResp, wantErr))(context.Background(), req)
+		if !stderrors.Is(err, wantErr) {
+			t.Fatalf("error = %v, want original", err)
 		}
 	})
-
-	t.Run("plain error", func(t *testing.T) {
-		wantErr := errors.New("plain")
-		_, err := LoggingInterceptor(log)(func(context.Context, connectrpc.AnyRequest) (connectrpc.AnyResponse, error) {
-			return nil, wantErr
-		})(context.Background(), req)
-		if !errors.Is(err, wantErr) {
-			t.Fatalf("error = %v, want original plain error", err)
-		}
-	})
-}
-
-func TestConnectCodeToAppError_AllCodes(t *testing.T) {
-	cases := []struct {
-		code     connectrpc.Code
-		wantCode apperrors.ErrorCode
-	}{
-		{connectrpc.CodeNotFound, apperrors.ErrCodeNotFound},
-		{connectrpc.CodeAlreadyExists, apperrors.ErrCodeAlreadyExists},
-		{connectrpc.CodeInvalidArgument, apperrors.ErrCodeInvalidInput},
-		{connectrpc.CodeUnauthenticated, apperrors.ErrCodeUnauthorized},
-		{connectrpc.CodePermissionDenied, apperrors.ErrCodeForbidden},
-		{connectrpc.CodeFailedPrecondition, apperrors.ErrCodeConflict},
-		{connectrpc.CodeDeadlineExceeded, apperrors.ErrCodeTimeout},
-		{connectrpc.CodeResourceExhausted, apperrors.ErrCodeRateLimited},
-		{connectrpc.CodeUnavailable, apperrors.ErrCodeServiceUnavailable},
-		{connectrpc.CodeCanceled, apperrors.ErrCodeInternal},
-		{connectrpc.CodeInternal, apperrors.ErrCodeInternal},
-	}
-
-	for _, tc := range cases {
-		appErr := connectCodeToAppError(tc.code, "message")
-		if appErr == nil {
-			t.Fatalf("connectCodeToAppError(%v) returned nil", tc.code)
-		}
-		if appErr.Code != tc.wantCode {
-			t.Fatalf("connectCodeToAppError(%v).Code = %v, want %v", tc.code, appErr.Code, tc.wantCode)
-		}
-	}
 }

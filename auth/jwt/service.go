@@ -238,7 +238,7 @@ func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
 // Returns a pointer to the embedded field, or nil if not found.
 func findRegisteredClaims(v any) *gojwt.RegisteredClaims {
 	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
 			return nil
 		}

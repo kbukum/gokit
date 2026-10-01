@@ -70,8 +70,8 @@ Cross-module operations use `./gomod.sh`:
 ./gomod.sh cmd "go test" -m messaging      # Run in specific module
 ```
 
-Requires: Go 1.25+,
-golangci-lint (`go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`).
+Requires: Go 1.27.1+,
+golangci-lint (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`).
 
 ## Module Structure
 
@@ -107,6 +107,7 @@ When adding a new module:
 - Every package has a `doc.go`.
 - Exported interfaces + factory functions; concrete implementations unexported.
 - Errors: RFC 9457 `AppError` with typed error codes.
+- Error contracts: `errors.New(code, message)` derives REST status; do not add status overrides. `errors/rpc` owns shared protobuf details for Connect and gRPC. Validation exposes semantic violation reasons, not validator IDs. Remote decoded failures are not trusted public AppErrors. Retry hints require operation idempotency and one bounded retry owner; server delays are minimums.
 - Tests: parallel, table-driven, use `testutil` helpers; deterministic under `-race -shuffle`.
 - **Readability & structure (load-bearing, not cosmetic):** organize by focused,
   well-named files within a package — never pile unrelated concerns into one large file.

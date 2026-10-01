@@ -14,7 +14,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -72,7 +71,7 @@ func ReadFrame(r io.Reader, maxBytes int) ([]byte, error) {
 		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 			return nil, apperrors.New(apperrors.ErrCodeServiceUnavailable,
 				"framed transport: stream ended mid-frame (truncated payload)",
-				http.StatusServiceUnavailable)
+			)
 		}
 		return nil, transportError("read frame payload", err)
 	}
@@ -91,7 +90,7 @@ func readFull(r io.Reader, buf []byte) error {
 	case errors.Is(err, io.ErrUnexpectedEOF):
 		return apperrors.New(apperrors.ErrCodeServiceUnavailable,
 			"framed transport: stream ended mid-frame (truncated length prefix)",
-			http.StatusServiceUnavailable)
+		)
 	default:
 		return transportError("read frame length", err)
 	}
@@ -101,5 +100,5 @@ func readFull(r io.Reader, buf []byte) error {
 func transportError(context string, err error) error {
 	return apperrors.New(apperrors.ErrCodeServiceUnavailable,
 		fmt.Sprintf("framed transport: %s", context),
-		http.StatusServiceUnavailable).WithCause(err)
+	).WithCause(err)
 }

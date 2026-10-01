@@ -39,6 +39,7 @@ toven test --base origin/main --merge-base    # run just those
 | Format (check) | `toven format-check` | fails on unformatted files |
 | Tidy (check) | `toven tidy` | `go mod tidy -diff` |
 | Tidy (write) | `toven tidy-fix` | `go mod tidy` |
+| Update dependencies | `make update` | Toven runs `go get -u -t ./...`, then tidy |
 | Vuln scan | `toven vuln` | `govulncheck` per module |
 | Structure | `make structure` | declare-only aggregator guard (`doc.go` docs-only + god-file advisory) |
 

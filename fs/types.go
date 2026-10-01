@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -47,9 +46,9 @@ type DirEntry struct {
 func Metadata(path string) (FileMeta, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return FileMeta{}, apperrors.New(code,
-			fmt.Sprintf("failed to inspect '%s': %v", path, err), status).WithCause(err)
+			"failed to inspect path").WithCause(err)
 	}
 	return FileMeta{
 		Path:      path,
@@ -66,9 +65,9 @@ func Metadata(path string) (FileMeta, error) {
 func ReadDir(dir string) ([]DirEntry, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, apperrors.New(code,
-			fmt.Sprintf("failed to read directory '%s': %v", dir, err), status).WithCause(err)
+			"failed to read directory").WithCause(err)
 	}
 	out := make([]DirEntry, 0, len(entries))
 	for _, entry := range entries {

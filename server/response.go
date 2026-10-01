@@ -1,8 +1,9 @@
 package server
 
 import (
-	"errors"
+	"math"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,19 +31,23 @@ type Meta struct {
 //
 // 5xx responses are logged at Error level (with method, path, status, and the underlying error chain) so operators have a server-side trail even when the client only sees a generic problem detail. The logger is taken from the request context (injected by the server's InjectLogger middleware); when absent — e.g. the helper is used outside a gokit Server — the extra error log is skipped rather than reaching for a package global. 4xx responses are not logged here — that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
 func RespondWithError(c *gin.Context, err error) {
-	var appErr *apperrors.AppError
-	if !errors.As(err, &appErr) {
-		appErr = apperrors.Internal(err)
+	if err == nil {
+		err = apperrors.Internal(nil)
+	}
+	appErr := apperrors.Normalize(err)
+	if validationErr := appErr.Validate(); validationErr != nil {
+		appErr = apperrors.Internal(validationErr)
+		err = appErr
 	}
 	pd := appErr.ToProblemDetail()
 	pd.Instance = c.Request.URL.Path
 
-	if appErr.HTTPStatus >= http.StatusInternalServerError {
+	if appErr.HTTPStatus() >= http.StatusInternalServerError {
 		if log, ok := logging.LoggerFromContext(c.Request.Context()); ok {
 			log.ErrorCtx(c.Request.Context(), "HTTP error response", map[string]any{
 				"method": c.Request.Method,
 				"path":   c.Request.URL.Path,
-				"status": appErr.HTTPStatus,
+				"status": appErr.HTTPStatus(),
 				"code":   string(appErr.Code),
 				"error":  err.Error(),
 			})
@@ -50,7 +55,10 @@ func RespondWithError(c *gin.Context, err error) {
 	}
 
 	c.Header("Content-Type", "application/problem+json")
-	c.JSON(appErr.HTTPStatus, pd)
+	if appErr.Retryable && appErr.RetryAfter > 0 {
+		c.Header("Retry-After", strconv.Itoa(int(math.Ceil(appErr.RetryAfter.Seconds()))))
+	}
+	c.JSON(appErr.HTTPStatus(), pd)
 }
 
 // RespondOK sends a 200 response wrapping data.

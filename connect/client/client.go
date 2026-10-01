@@ -1,19 +1,16 @@
 package client
 
 import (
-	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
 
 	"connectrpc.com/connect"
-	"golang.org/x/net/http2"
 )
 
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
-// When TLS is configured, a standard HTTPS transport is used. When TLS is nil (the default),
+// When TLS is configured, an HTTPS-only HTTP/2 transport is used. When TLS is nil (the default),
 // an h2c (cleartext HTTP/2) transport is used, which is required for ConnectRPC
 // and gRPC communication without TLS.
 //
@@ -45,11 +42,13 @@ func buildTransport(cfg Config) (http.RoundTripper, error) {
 
 // buildH2CTransport creates an h2c (cleartext HTTP/2) transport.
 func buildH2CTransport(cfg Config) http.RoundTripper {
-	dialTimeout := cfg.DialTimeout
-	return &http2.Transport{
-		AllowHTTP: true,
-		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-			return (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, network, addr)
+	protocols := new(http.Protocols)
+	protocols.SetUnencryptedHTTP2(true)
+	return &schemeTransport{
+		scheme: "http",
+		Transport: &http.Transport{
+			Protocols:   protocols,
+			DialContext: (&net.Dialer{Timeout: cfg.DialTimeout}).DialContext,
 		},
 	}
 }
@@ -61,16 +60,33 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 		return nil, err
 	}
 
-	return &http2.Transport{
-		TLSClientConfig: tlsCfg,
-		DialTLSContext: func(ctx context.Context, network, addr string, tlsConf *tls.Config) (net.Conn, error) {
-			dialer := &tls.Dialer{
-				NetDialer: &net.Dialer{Timeout: cfg.DialTimeout},
-				Config:    tlsConf,
-			}
-			return dialer.DialContext(ctx, network, addr)
+	protocols := new(http.Protocols)
+	protocols.SetHTTP2(true)
+	return &schemeTransport{
+		scheme: "https",
+		Transport: &http.Transport{
+			Protocols:           protocols,
+			TLSClientConfig:     tlsCfg,
+			DialContext:         (&net.Dialer{Timeout: cfg.DialTimeout}).DialContext,
+			TLSHandshakeTimeout: cfg.DialTimeout,
 		},
 	}, nil
+}
+
+// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme.
+type schemeTransport struct {
+	*http.Transport
+	scheme string
+}
+
+func (t *schemeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Scheme != t.scheme {
+		if req.Body != nil {
+			_ = req.Body.Close()
+		}
+		return nil, fmt.Errorf("connect client: transport requires %s URLs", t.scheme)
+	}
+	return t.Transport.RoundTrip(req)
 }
 
 // ProtocolOption returns the connect.ClientOption for the configured wire protocol.

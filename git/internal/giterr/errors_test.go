@@ -55,13 +55,17 @@ func TestConstructorsReturnTypedAppErrors(t *testing.T) {
 			if tt.err.Code != tt.code {
 				t.Fatalf("Code = %s, want %s", tt.err.Code, tt.code)
 			}
-			if tt.err.HTTPStatus != tt.status {
-				t.Fatalf("HTTPStatus = %d, want %d", tt.err.HTTPStatus, tt.status)
+			if tt.err.HTTPStatus() != tt.status {
+				t.Fatalf("HTTPStatus = %d, want %d", tt.err.HTTPStatus(), tt.status)
 			}
 			if !strings.Contains(tt.err.Message, tt.message) {
 				t.Fatalf("Message = %q, want containing %q", tt.err.Message, tt.message)
 			}
-			if tt.detailKey != "" && tt.err.Details[tt.detailKey] != tt.detailWant {
+			if tt.detailKey == "field" {
+				if len(tt.err.Violations) != 1 || tt.err.Violations[0].Field != tt.detailWant {
+					t.Fatalf("Violations = %#v, want field %q", tt.err.Violations, tt.detailWant)
+				}
+			} else if tt.detailKey != "" && tt.err.Details[tt.detailKey] != tt.detailWant {
 				t.Fatalf("Details[%q] = %#v, want %q", tt.detailKey, tt.err.Details[tt.detailKey], tt.detailWant)
 			}
 			if tt.cause != nil && !stderrors.Is(tt.err, tt.cause) {

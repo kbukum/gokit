@@ -14,6 +14,7 @@ func ErrConflict(path string) *errors.AppError            { return giterr.Confli
 func ErrCheckedOutBranch(name string) *errors.AppError    { return giterr.CheckedOutBranch(name) }
 func ErrDetachedHead() *errors.AppError                   { return giterr.DetachedHead() }
 func ErrAlreadyExists(kind, name string) *errors.AppError { return giterr.AlreadyExists(kind, name) }
+
 func ErrInvalidLineRange(start, end int) *errors.AppError { return giterr.InvalidLineRange(start, end) }
 func ErrInvalidPath(path string) *errors.AppError         { return giterr.InvalidPath(path) }
 func ErrInvalidConfigKey(key string) *errors.AppError     { return giterr.InvalidConfigKey(key) }

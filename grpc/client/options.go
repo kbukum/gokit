@@ -26,20 +26,16 @@ func DefaultRetryPolicy() *resilience.RetryConfig {
 	cfg := resilience.DefaultRetryConfig()
 	cfg.MaxAttempts = 4
 	cfg.MaxBackoff = time.Second
-	cfg.RetryIf = interceptor.IsRetryable
+	cfg.RetryIf = grpccfg.IsRetryable
+	cfg.MinimumDelay = grpccfg.RetryDelay
 	return &cfg
 }
 
 // NewClientOptionsBuilder creates a new options builder from gokit gRPC config.
 // A ResiliencePolicy set on the config is honored as the client's policy;
-// otherwise the builder seeds a timeout-plus-default-retry policy.
+// otherwise the builder seeds a timeout-only policy. Retries require an explicit policy and an idempotent call.
 func NewClientOptionsBuilder(cfg *grpccfg.Config) *ClientOptionsBuilder {
-	policy := cfg.ResiliencePolicy
-	if policy == nil {
-		policy = resilience.NewPolicy().WithTimeoutIfUnset(cfg.Timeout).WithRetry(*DefaultRetryPolicy())
-	} else if policy.Timeout == 0 && cfg.Timeout > 0 {
-		policy.WithTimeoutIfUnset(cfg.Timeout)
-	}
+	policy := resiliencePolicyFor(*cfg)
 	return &ClientOptionsBuilder{
 		config:           cfg,
 		enableLogging:    true,

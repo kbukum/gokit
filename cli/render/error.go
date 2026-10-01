@@ -135,7 +135,7 @@ func newEnvelope(err *errors.AppError, exit ExitCode) errorEnvelope {
 		Code:       err.Code,
 		Message:    err.Message,
 		Retryable:  err.Retryable,
-		HTTPStatus: err.HTTPStatus,
+		HTTPStatus: err.HTTPStatus(),
 		ExitCode:   exit.Int(),
 		Details:    err.Details,
 	}

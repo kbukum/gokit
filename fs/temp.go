@@ -2,7 +2,6 @@ package fs
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,8 +33,8 @@ func NewTempFileIn(dir string) (*TempFile, error) {
 	file, err := os.CreateTemp(dir, "gokit-fs-*")
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to create temp file: %v", err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to create temp file",
+		).WithCause(err)
 	}
 	return &TempFile{file: file, path: file.Name()}, nil
 }
@@ -50,13 +49,13 @@ func (t *TempFile) File() *os.File { return t.file }
 func (t *TempFile) Persist(target string) (string, error) {
 	if err := t.file.Close(); err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to close temp file: %v", err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to close temp file",
+		).WithCause(err)
 	}
 	if err := os.Rename(t.path, target); err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to persist temp file to '%s': %v", target, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to persist temp file",
+		).WithCause(err)
 	}
 	t.persisted = true
 	return target, nil
@@ -70,8 +69,8 @@ func (t *TempFile) Remove() error {
 	_ = t.file.Close()
 	if err := os.Remove(t.path); err != nil && !os.IsNotExist(err) {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to remove temp file '%s': %v", t.path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to remove temp file",
+		).WithCause(err)
 	}
 	return nil
 }
@@ -87,8 +86,8 @@ func NewTempDir() (*TempDir, error) {
 	path, err := os.MkdirTemp("", "gokit-fs-*")
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to create temp dir: %v", err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to create temp directory",
+		).WithCause(err)
 	}
 	return &TempDir{path: path}, nil
 }
@@ -110,13 +109,13 @@ func (d *TempDir) WriteFile(relPath string, content []byte) (string, error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to create parent directories for '%s': %v", target, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to create parent directories",
+		).WithCause(err)
 	}
 	if err := os.WriteFile(target, content, 0o644); err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to write '%s': %v", target, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to write file",
+		).WithCause(err)
 	}
 	return target, nil
 }
@@ -125,8 +124,8 @@ func (d *TempDir) WriteFile(relPath string, content []byte) (string, error) {
 func (d *TempDir) Remove() error {
 	if err := os.RemoveAll(d.path); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to remove temp dir '%s': %v", d.path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to remove temp directory",
+		).WithCause(err)
 	}
 	return nil
 }

@@ -2,7 +2,6 @@ package metric
 
 import (
 	"fmt"
-	"net/http"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/util"
@@ -72,7 +71,7 @@ type JudgePrompt struct {
 func ParseJudgePrompt(id, promptVersion string, template string) (JudgePrompt, error) {
 	if id == "" {
 		return JudgePrompt{}, apperrors.New(apperrors.ErrCodeInvalidInput,
-			"llm_judge: prompt id must not be empty", http.StatusBadRequest)
+			"llm_judge: prompt id must not be empty")
 	}
 	if err := validateJudgePromptVersion(promptVersion); err != nil {
 		return JudgePrompt{}, err
@@ -81,13 +80,13 @@ func ParseJudgePrompt(id, promptVersion string, template string) (JudgePrompt, e
 	if err != nil {
 		return JudgePrompt{}, apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("llm_judge: invalid prompt template: %v", err),
-			http.StatusBadRequest).WithCause(err)
+		).WithCause(err)
 	}
 	for _, ph := range judgePlaceholders {
 		if !tmpl.Contains(ph) {
 			return JudgePrompt{}, apperrors.New(apperrors.ErrCodeInvalidInput,
 				fmt.Sprintf("llm_judge: prompt template must reference {%s}", ph.Token()),
-				http.StatusBadRequest)
+			)
 		}
 	}
 	return JudgePrompt{id: id, version: promptVersion, system: defaultJudgeSystemPrompt, template: tmpl, source: template}, nil
@@ -100,7 +99,7 @@ func validateJudgePromptVersion(v string) error {
 	if _, err := version.ParseVersion(v); err != nil {
 		return apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("llm_judge: prompt version %q must be a strict semantic version (for example 1.0.0)", v),
-			http.StatusBadRequest).WithCause(err)
+		).WithCause(err)
 	}
 	return nil
 }

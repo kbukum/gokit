@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -34,16 +33,16 @@ func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, apperrors.New(code,
-			fmt.Sprintf("failed to open '%s': %v", path, err), status).WithCause(err)
+			"failed to open file").WithCause(err)
 	}
 	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to inspect '%s': %v", path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to inspect file",
+		).WithCause(err)
 	}
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%w: %s", ErrNotRegularFile, path)
@@ -60,8 +59,8 @@ func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
 	data, err := io.ReadAll(io.LimitReader(f, probe))
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to read '%s': %v", path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to read file",
+		).WithCause(err)
 	}
 	if int64(len(data)) > maxBytes {
 		return nil, fmt.Errorf("%w: %s (limit %d bytes)", ErrFileTooLarge, path, maxBytes)

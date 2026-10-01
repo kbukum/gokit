@@ -629,8 +629,10 @@ type writeErrTerminal struct{}
 
 func (writeErrTerminal) ReadLine() (line string, ok bool, err error) { return "", false, nil }
 func (writeErrTerminal) Write(string) error                          { return errString("write failed") }
-func (writeErrTerminal) WriteLine(string) error                      { return errString("write failed") }
-func (writeErrTerminal) Flush() error                                { return errString("flush failed") }
+
+func (writeErrTerminal) WriteLine(string) error { return errString("write failed") }
+
+func (writeErrTerminal) Flush() error { return errString("flush failed") }
 
 // gateTerminal replays scripted input and fails a chosen write family on its
 // Nth call, so deep write-error branches (choice rows, the answer-marker flush,

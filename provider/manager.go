@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync"
 
 	goerrors "github.com/kbukum/gokit/errors"
@@ -128,7 +127,7 @@ func (m *Manager[T]) Get(ctx context.Context) (T, error) {
 		}
 		var zero T
 		return zero, goerrors.New(goerrors.ErrCodeNotFound,
-			fmt.Sprintf("default provider %q not found", defaultName), http.StatusNotFound)
+			fmt.Sprintf("default provider %q not found", defaultName))
 	}
 	return m.selector.Select(ctx, providers)
 }
@@ -142,7 +141,7 @@ func (m *Manager[T]) GetByName(name string) (T, error) {
 	}
 	var zero T
 	return zero, goerrors.New(goerrors.ErrCodeNotFound,
-		fmt.Sprintf("provider %q not found", name), http.StatusNotFound)
+		fmt.Sprintf("provider %q not found", name))
 }
 
 // SetDefault sets the default provider by name.
@@ -151,7 +150,7 @@ func (m *Manager[T]) SetDefault(name string) error {
 	defer m.mu.Unlock()
 	if _, ok := m.providers[name]; !ok {
 		return goerrors.New(goerrors.ErrCodeNotFound,
-			fmt.Sprintf("provider %q not initialized", name), http.StatusNotFound)
+			fmt.Sprintf("provider %q not initialized", name))
 	}
 	m.defaultName = name
 	m.log.Info("default provider set", "provider", name)

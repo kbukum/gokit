@@ -1,6 +1,6 @@
-go 1.26.0
+go 1.27.1
 
-toolchain go1.26.6
+toolchain go1.27.1
 
 // Independent workspace for gokit's runnable demos. It is deliberately NOT the
 // canonical go.work / core.go.work / contrib.go.work: keeping the example modules

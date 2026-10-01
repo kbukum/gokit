@@ -3,7 +3,6 @@
 package fs
 
 import (
-	"fmt"
 	"os"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -21,9 +20,9 @@ func Mode(path string) (os.FileMode, error) {
 // SetMode sets a path's Unix permission bits.
 func SetMode(path string, mode os.FileMode) error {
 	if err := os.Chmod(path, mode.Perm()); err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return apperrors.New(code,
-			fmt.Sprintf("failed to set permissions for '%s': %v", path, err), status).WithCause(err)
+			"failed to set permissions").WithCause(err)
 	}
 	return nil
 }

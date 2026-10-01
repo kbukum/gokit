@@ -25,8 +25,8 @@ func TestResolveUnregisteredIsTypedNotFound(t *testing.T) {
 	if appErr.Code != apperr.ErrCodeNotFound {
 		t.Fatalf("code = %q, want NOT_FOUND", appErr.Code)
 	}
-	if appErr.HTTPStatus != http.StatusNotFound {
-		t.Fatalf("status = %d, want 404", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", appErr.HTTPStatus())
 	}
 }
 
@@ -45,8 +45,8 @@ func TestResolveCircularIsTypedConflict(t *testing.T) {
 	if appErr.Code != apperr.ErrCodeConflict {
 		t.Fatalf("code = %q, want CONFLICT", appErr.Code)
 	}
-	if appErr.HTTPStatus != http.StatusConflict {
-		t.Fatalf("status = %d, want 409", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", appErr.HTTPStatus())
 	}
 }
 
@@ -61,7 +61,7 @@ func TestRegisterNilContainerIsTypedInvalidInput(t *testing.T) {
 	if appErr.Code != apperr.ErrCodeInvalidInput {
 		t.Fatalf("code = %q, want INVALID_INPUT", appErr.Code)
 	}
-	if appErr.HTTPStatus != http.StatusUnprocessableEntity {
-		t.Fatalf("status = %d, want 422", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422", appErr.HTTPStatus())
 	}
 }
