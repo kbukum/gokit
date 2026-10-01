@@ -1,0 +1,37 @@
+{
+  "name": "token_expired",
+  "httpStatus": 401,
+  "rpcCode": 16,
+  "vocabulary": {
+    "code": "TOKEN_EXPIRED",
+    "message": "Your session has expired. Please log in again.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/token-expired",
+    "title": "Token Expired",
+    "status": 401,
+    "detail": "Your session has expired. Please log in again.",
+    "code": "TOKEN_EXPIRED",
+    "retryable": false
+  },
+  "grpcStatus": "CBASLllvdXIgc2Vzc2lvbiBoYXMgZXhwaXJlZC4gUGxlYXNlIGxvZyBpbiBhZ2Fpbi4agAEKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SVAoNVE9LRU5fRVhQSVJFRBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ==",
+  "connectJson": {
+    "code": "unauthenticated",
+    "message": "Your session has expired. Please log in again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg1UT0tFTl9FWFBJUkVEEglnb2tpdC5kZXYaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+        "debug": {
+          "reason": "TOKEN_EXPIRED",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "missing_field_exact_code",
+  "httpStatus": 422,
+  "rpcCode": 3,
+  "vocabulary": {
+    "code": "MISSING_FIELD",
+    "message": "Missing required field: name",
+    "violations": [
+      {
+        "field": "name",
+        "reason": "REQUIRED",
+        "message": "is required"
+      }
+    ],
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/missing-field",
+    "title": "Missing Field",
+    "status": 422,
+    "detail": "Missing required field: name",
+    "code": "MISSING_FIELD",
+    "retryable": false,
+    "violations": [
+      {
+        "field": "name",
+        "reason": "REQUIRED",
+        "message": "is required"
+      }
+    ]
+  },
+  "grpcStatus": "CAMSHE1pc3NpbmcgcmVxdWlyZWQgZmllbGQ6IG5hbWUagAEKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SVAoNTUlTU0lOR19GSUVMRBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZRpMCil0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuQmFkUmVxdWVzdBIfCh0KBG5hbWUSC2lzIHJlcXVpcmVkGghSRVFVSVJFRA==",
+  "connectJson": {
+    "code": "invalid_argument",
+    "message": "Missing required field: name",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg1NSVNTSU5HX0ZJRUxEEglnb2tpdC5kZXYaEgoJcmV0cnlhYmxlEgVmYWxzZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+        "debug": {
+          "reason": "MISSING_FIELD",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.BadRequest",
+        "value": "Ch0KBG5hbWUSC2lzIHJlcXVpcmVkGghSRVFVSVJFRA",
+        "debug": {
+          "fieldViolations": [
+            {
+              "field": "name",
+              "description": "is required",
+              "reason": "REQUIRED"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

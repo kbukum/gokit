@@ -7,27 +7,29 @@ import (
 	"github.com/kbukum/gokit/validation"
 )
 
-// BindJSON binds a JSON request body into T and validates it via gokit/validation struct tags.
-// Returns a gokit/errors.AppError on parse or validation failure.
-func BindJSON[T any](c *gin.Context) (*T, error) {
+// BindJSON binds a JSON request body into T and validates it with the injected
+// StructValidator. Returns a gokit/errors.AppError on parse or validation failure.
+func BindJSON[T any](c *gin.Context, sv *validation.StructValidator) (*T, error) {
 	var req T
 	if err := c.ShouldBindJSON(&req); err != nil {
-		return nil, goerrors.Validation("invalid request body").WithDetail("error", err.Error())
+		return nil, goerrors.Validation("invalid request body").WithCause(err).
+			WithViolations(goerrors.Violation{Reason: goerrors.ViolationInvalidFormat, Message: "invalid request body"})
 	}
-	if err := validation.Validate(req); err != nil {
-		return nil, err
+	if appErr := sv.Validate(req); appErr != nil {
+		return nil, appErr
 	}
 	return &req, nil
 }
 
-// BindQuery binds query parameters into T and validates.
-func BindQuery[T any](c *gin.Context) (*T, error) {
+// BindQuery binds query parameters into T and validates with the injected validator.
+func BindQuery[T any](c *gin.Context, sv *validation.StructValidator) (*T, error) {
 	var req T
 	if err := c.ShouldBindQuery(&req); err != nil {
-		return nil, goerrors.Validation("invalid query parameters").WithDetail("error", err.Error())
+		return nil, goerrors.Validation("invalid query parameters").WithCause(err).
+			WithViolations(goerrors.Violation{Reason: goerrors.ViolationInvalidFormat, Message: "invalid query parameters"})
 	}
-	if err := validation.Validate(req); err != nil {
-		return nil, err
+	if appErr := sv.Validate(req); appErr != nil {
+		return nil, appErr
 	}
 	return &req, nil
 }

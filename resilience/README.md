@@ -2,6 +2,10 @@
 
 Resilience patterns: circuit breaker, retry with backoff, rate limiter, and bulkhead for concurrency control.
 
+`Policy` applies its timeout to the whole execution: rate-limiter and bulkhead admission, circuit-breaker execution, retries, and the operation. `WithTimeout` chooses the earlier of the policy and caller deadlines; `WithTimeoutIfUnset` preserves an existing caller deadline. Work must cooperate with context cancellation.
+
+Retry only when the operation is safe to repeat. `RetryConfig.MinimumDelay` supplies a server minimum; the retry owner waits at least that long or stops if the remaining budget cannot accommodate it. `ExecuteWithRetry` selects a call's retry configuration without resetting the policy's shared limiter, bulkhead, or circuit breaker.
+
 ## Install
 
 ```bash

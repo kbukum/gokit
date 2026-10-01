@@ -2,6 +2,8 @@
 
 Local filesystem primitives for safe paths, temporary files and directories, atomic writes, permissions, metadata, symlinks and hard links, bounded archive create/extract, debounced change watching, and OS-standard application directories. It stays deliberately below storage abstractions — higher-level packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each re-implementing path safety, temp files, and atomic replacement. Where the standard library already suffices (`os`, `io/fs`, `path/filepath`), this package builds on it.
 
+Typed failures expose safe operation messages. Local paths and raw OS diagnostics stay in the error cause for logging, not in public messages or validation details. Plain sentinel errors remain available for `errors.Is`; normalize errors at transport boundaries rather than serializing `err.Error()`.
+
 ## Install
 
 ```bash

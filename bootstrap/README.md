@@ -2,6 +2,8 @@
 
 Application bootstrap framework with lifecycle hooks, component registration, and startup summary.
 
+`App.DisplaySummary(ctx)` and `Summary.DisplaySummary(ctx, registry, container, logger)` pass the caller's context to health probes. Startup rollback preserves context values but detaches cancellation and applies the configured shutdown timeout, so a canceled startup cannot prevent cleanup.
+
 ## Install
 
 ```bash

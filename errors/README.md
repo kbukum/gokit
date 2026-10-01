@@ -21,7 +21,6 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/kbukum/gokit/errors"
 )
@@ -31,7 +30,7 @@ func main() {
 	err := errors.NotFound("user", "abc-123")
 
 	fmt.Println(err.Code)       // "NOT_FOUND"
-	fmt.Println(err.HTTPStatus) // 404
+	fmt.Println(err.HTTPStatus()) // 404
 	fmt.Println(err.Retryable)  // false
 
 	// Check if it's an AppError and convert to response
@@ -85,7 +84,7 @@ The `ErrorCode` type defines all machine-readable error categories:
 | `INVALID_TOKEN` | 401 | No |
 | `INTERNAL_ERROR` | 500 | No |
 | `DATABASE_ERROR` | 500 | No |
-| `EXTERNAL_SERVICE_ERROR` | 500 | Yes |
+| `EXTERNAL_SERVICE_ERROR` | 500 | No |
 | `SERVICE_UNAVAILABLE` | 503 | Yes |
 | `CONNECTION_FAILED` | 502 | Yes |
 | `TIMEOUT` | 504 | Yes |
@@ -97,6 +96,23 @@ The `ErrorCode` type defines all machine-readable error categories:
 - `WithCause(err error)`: Chains an underlying error.
 - `WithDetail(key string, value any)`: Adds a single piece of metadata.
 - `WithDetails(map[string]any)`: Merges multiple pieces of metadata.
+- `WithReason(reason string)`: Adds a stable domain reason.
+- `WithViolations(...Violation)`: Adds typed field problems with semantic reasons.
+- `WithRetryable(bool)`: Explicitly overrides the transient-failure hint; false clears the delay.
+- `WithRetryAfter(time.Duration)`: Marks the failure transient with a minimum retry delay.
+- `WithTraceID(string)`: Adds safe log correlation.
+
+`New(code, message)` derives REST status from the code; there is no status override. Application reasons and violation reasons are UPPER_SNAKE_CASE with at most 63 characters. Public encoders validate the vocabulary and report invalid values as internal failures. `Normalize` preserves explicit application outcomes before classifying otherwise-untyped context errors.
+
+An `AppError` is a deliberate public response. Its message, violations, and HTTP details must be safe to disclose; put raw OS errors, decoder failures, and other internal diagnostics in `Cause`. Normalization does not sanitize trusted application fields. Malformed upstream responses are external-service failures, not caller validation errors, and are not automatically retryable.
+
+### Shared RPC contract
+
+[`errors/rpc`](rpc) owns protobuf encoding and decoding without importing Connect or gRPC implementations. Both transport adapters consume it. `ErrorInfo.domain` is `gokit.dev`; its `reason` is the application code. Metadata contains the mandatory `retryable` string (`true` or `false`) and optional domain `reason`, `traceId`, and service. `BadRequest` carries semantic field violations. `RetryInfo` carries a minimum delay. Details are decoded independently of their order.
+
+Decoded `rpc.Error` values preserve remote RPC identity and raw remote messages, but are not trusted `AppError` values for onward serialization. Foreign or unknown identities do not replace protocol status. Malformed recognized details produce an explicit decode error. Arbitrary `Details` remain HTTP-only; they are not part of the shared RPC vocabulary.
+
+Connect owns its protocol HTTP mapping, which may differ from the REST table. A transient database or external-service error still has its category's 500 REST status; clients use its explicit retry hint, not a status override.
 
 ### RFC 9457 Support
 
@@ -126,12 +142,11 @@ fmt.Println(appErr.Unwrap() == cause) // true
 
 ### Retry Logic
 
-The `Retryable` flag is automatically set based on the `ErrorCode`. This can be used by middleware or clients to implement backoff and retry strategies.
+`Retryable` starts from the code default and can be explicitly overridden. It describes the failure, not whether repeating an operation is safe. Generic database and external-service errors default to false. Retry owners require operation idempotency, bounded attempts, and one retry loop; server delays are minimums and are never shortened to fit a backoff cap.
 
 ```go
-if appErr, ok := errors.AsAppError(err); ok && appErr.Retryable {
-    // Implement retry logic
-}
+// Only after establishing that the failure is transient:
+err := errors.DatabaseError(cause).WithRetryAfter(time.Second)
 ```
 
 ## Testing

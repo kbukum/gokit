@@ -181,6 +181,22 @@ func TestNewGoogleClientRejectsInvalidCredentialsJSON(t *testing.T) {
 	}
 }
 
+func TestNewGoogleClientRejectsInvalidConfig(t *testing.T) {
+	t.Parallel()
+	for name, cfg := range map[string]*Config{
+		"nil":                     nil,
+		"missing bucket":          {},
+		"conflicting credentials": {Bucket: "objects", CredentialsFile: "unused", CredentialsJSON: []byte("{}")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := newGoogleClient(t.Context(), cfg); err == nil {
+				t.Fatal("invalid configuration was accepted")
+			}
+		})
+	}
+}
+
 func TestNewStoragePropagatesClientError(t *testing.T) {
 	t.Parallel()
 	_, err := NewStorage(context.Background(), &Config{
@@ -220,6 +236,21 @@ func TestGoogleClientTreatsMissingObjectAsAbsent(t *testing.T) {
 	}
 }
 
+func TestNewGoogleClientRejectsNonServiceAccountCredentials(t *testing.T) {
+	t.Parallel()
+	creds := []byte(`{"type":"authorized_user","client_id":"id","client_secret":"secret","refresh_token":"token"}`)
+	gc, err := newGoogleClient(t.Context(), &Config{
+		Bucket:          "objects",
+		CredentialsJSON: creds,
+	})
+	if gc != nil {
+		_ = gc.client.Close()
+	}
+	if err == nil {
+		t.Fatal("service account configuration accepted user credentials")
+	}
+}
+
 func TestNewGoogleClientUsesProvidedCredentials(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -227,7 +258,18 @@ func TestNewGoogleClientUsesProvidedCredentials(t *testing.T) {
 	}))
 	defer server.Close()
 
-	creds := []byte(`{"type":"authorized_user","client_id":"id","client_secret":"secret","refresh_token":"token"}`)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	creds, err := json.Marshal(map[string]string{
+		"type": "service_account", "client_email": "service@example.test",
+		"private_key": string(pemKey), "token_uri": server.URL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	gc, err := newGoogleClient(context.Background(), &Config{
 		Bucket:          "objects",
 		Endpoint:        server.URL,
@@ -239,4 +281,5 @@ func TestNewGoogleClientUsesProvidedCredentials(t *testing.T) {
 	if gc == nil {
 		t.Fatal("expected client")
 	}
+	t.Cleanup(func() { _ = gc.client.Close() })
 }

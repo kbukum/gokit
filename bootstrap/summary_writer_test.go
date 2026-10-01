@@ -17,7 +17,7 @@ func TestSummary_WithWriter_CapturesOutput(t *testing.T) {
 	s.SetStartupDuration(150 * time.Millisecond)
 
 	// Display with no registry / container — just exercises the header path.
-	s.DisplaySummary(nil, nil, nil)
+	s.DisplaySummary(t.Context(), nil, nil, nil)
 
 	out := buf.String()
 	if !strings.Contains(out, "test-svc") {
@@ -35,7 +35,7 @@ func TestSummary_SetWriter_OverridesDefault(t *testing.T) {
 	var buf bytes.Buffer
 	s.SetWriter(&buf)
 	s.SetStartupDuration(time.Millisecond)
-	s.DisplaySummary(nil, nil, nil)
+	s.DisplaySummary(t.Context(), nil, nil, nil)
 
 	if buf.Len() == 0 {
 		t.Fatal("expected output written to injected writer")
@@ -49,7 +49,7 @@ func TestSummary_NilWriter_IgnoredBySetWriter(t *testing.T) {
 	s := bootstrap.NewSummaryWithOptions("svc", "1.0.0", bootstrap.WithWriter(&buf))
 	s.SetWriter(nil) // nil should be ignored, not replace the existing writer.
 	s.SetStartupDuration(time.Millisecond)
-	s.DisplaySummary(nil, nil, nil)
+	s.DisplaySummary(t.Context(), nil, nil, nil)
 
 	if buf.Len() == 0 {
 		t.Fatal("nil SetWriter should not replace existing writer")

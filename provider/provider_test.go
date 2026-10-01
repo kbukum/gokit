@@ -512,9 +512,12 @@ type closeTrackingProvider struct {
 	closeCalled *bool
 }
 
-func (p *closeTrackingProvider) Name() string                                         { return p.name }
-func (p *closeTrackingProvider) IsAvailable(_ context.Context) bool                   { return true }
+func (p *closeTrackingProvider) Name() string { return p.name }
+
+func (p *closeTrackingProvider) IsAvailable(_ context.Context) bool { return true }
+
 func (p *closeTrackingProvider) Execute(_ context.Context, in string) (string, error) { return in, nil }
+
 func (p *closeTrackingProvider) Close(_ context.Context) error {
 	*p.closeCalled = true
 	return nil

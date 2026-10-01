@@ -146,22 +146,19 @@ func addRecursive(watcher *fsnotify.Watcher, root string) error {
 }
 
 func watchError(action, path string, err error) error {
-	message := fmt.Sprintf("failed to %s", action)
-	if path != "" {
-		message = fmt.Sprintf("failed to %s '%s'", action, path)
-	}
-	code, status := watchErrorCode(err)
-	return apperrors.New(code, fmt.Sprintf("%s: %v", message, err), status).WithCause(err)
+	code := watchErrorCode(err)
+	return apperrors.New(code, "failed to "+action).
+		WithCause(fmt.Errorf("%s %q: %w", action, path, err))
 }
 
 // watchErrorCode classifies a watch failure into a typed error code so it carries a
 // meaningful status instead of a blanket internal error.
-func watchErrorCode(err error) (code apperrors.ErrorCode, status int) {
+func watchErrorCode(err error) apperrors.ErrorCode {
 	switch {
 	case os.IsNotExist(err):
-		return apperrors.ErrCodeNotFound, 404
+		return apperrors.ErrCodeNotFound
 	case os.IsPermission(err):
-		return apperrors.ErrCodeForbidden, 403
+		return apperrors.ErrCodeForbidden
 	default:
 		return osErrorCode(err)
 	}

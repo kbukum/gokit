@@ -133,8 +133,8 @@ func TestAuthErrors_HTTPStatusCodes(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if tc.err.HTTPStatus != tc.wantStatus {
-				t.Errorf("expected HTTP %d, got %d", tc.wantStatus, tc.err.HTTPStatus)
+			if tc.err.HTTPStatus() != tc.wantStatus {
+				t.Errorf("expected HTTP %d, got %d", tc.wantStatus, tc.err.HTTPStatus())
 			}
 		})
 	}

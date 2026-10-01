@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"time"
 
@@ -43,7 +42,7 @@ func SemanticSimilarity[L comparable](provider embedding.Provider, model ai.Mode
 	if isNilProvider(provider) {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"semantic_similarity: SemanticSimilarity requires a non-nil embedding.Provider",
-			http.StatusBadRequest)
+		)
 	}
 	m := &semanticSimilarity[L]{
 		provider:  provider,
@@ -142,7 +141,7 @@ func (m *semanticSimilarity[L]) Compute(ctx context.Context, scored []bench.Scor
 	if len(vectors) != len(texts) {
 		return Result{}, apperrors.New(apperrors.ErrCodeInternal,
 			fmt.Sprintf("semantic_similarity: provider returned %d embeddings for %d inputs", len(vectors), len(texts)),
-			http.StatusInternalServerError)
+		)
 	}
 
 	var sum float64
@@ -177,11 +176,11 @@ func (m *semanticSimilarity[L]) similarityError(sample int, err error) error {
 	if errors.Is(err, vector.ErrNonFinite) {
 		return apperrors.New(apperrors.ErrCodeExternalService,
 			fmt.Sprintf("semantic_similarity: sample %d embedding has a non-finite component", sample),
-			http.StatusBadGateway).WithCause(err)
+		).WithCause(err)
 	}
 	return apperrors.New(apperrors.ErrCodeInvalidInput,
 		fmt.Sprintf("semantic_similarity: sample %d embedding dimension mismatch", sample),
-		http.StatusBadRequest).WithCause(err)
+	).WithCause(err)
 }
 
 // embed embeds texts in batches, returning the vectors in input order. Each batch is one provider call routed through the resilience policy (default: a per-call timeout), so a large run is not scored against a single dataset-wide deadline; every call honors cancellation.
@@ -224,7 +223,7 @@ func providerError(err error) error {
 		return apperrors.Canceled("semantic_similarity embedding").WithCause(err)
 	default:
 		return apperrors.New(apperrors.ErrCodeExternalService,
-			"semantic_similarity: embedding provider failed", http.StatusBadGateway).WithCause(err)
+			"semantic_similarity: embedding provider failed").WithCause(err)
 	}
 }
 
@@ -255,7 +254,7 @@ func orderedVectors(resp embedding.EmbedResponse, n int) ([][]float32, error) {
 // invalidResponse types an untrusted embedding-response failure. The provider is external, so a malformed response is an external-service error.
 func invalidResponse(msg string) error {
 	return apperrors.New(apperrors.ErrCodeExternalService,
-		"semantic_similarity: "+msg, http.StatusBadGateway)
+		"semantic_similarity: "+msg)
 }
 
 func (m *semanticSimilarity[L]) zeroed() Result {

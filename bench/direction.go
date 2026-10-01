@@ -3,7 +3,6 @@ package bench
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -85,7 +84,7 @@ func (d Direction) MarshalJSON() ([]byte, error) {
 	if !ok {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("bench: invalid metric direction %d", int(d)),
-			http.StatusBadRequest)
+		)
 	}
 	return []byte(`"` + s + `"`), nil
 }
@@ -100,7 +99,7 @@ func (d *Direction) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &s); err != nil {
 		return apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("bench: metric direction must be a JSON string, got %s", data),
-			http.StatusBadRequest)
+		)
 	}
 	for dir, name := range directionString {
 		if name == s {
@@ -110,5 +109,5 @@ func (d *Direction) UnmarshalJSON(data []byte) error {
 	}
 	return apperrors.New(apperrors.ErrCodeInvalidInput,
 		fmt.Sprintf("bench: unknown metric direction %q", s),
-		http.StatusBadRequest)
+	)
 }

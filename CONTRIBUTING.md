@@ -2,8 +2,10 @@
 
 ## Prerequisites
 
-- **Go 1.26+**
-- **golangci-lint** — `go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest`
+- **Go 1.27.1+**
+- **golangci-lint** — `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`
+- **govulncheck** — `go install golang.org/x/vuln/cmd/govulncheck@v1.8.0`
+- **go-licenses** — `go install github.com/google/go-licenses/v2@v2.0.1`
 - **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned Homebrew install last
 - **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
 
@@ -68,6 +70,7 @@ make test M=cache T=TestGet  # run specific test in cache
 make lint                    # lint all modules
 make lint M=provider         # lint only provider
 make tidy                    # go mod tidy across all modules
+make update                  # update dependencies and tidy through Toven
 make fmt                     # format all code
 make ci                      # run full CI pipeline locally (requires Docker)
 ```
@@ -103,7 +106,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 1. Create `yourmod/` with its own `go.mod`:
    ```
    module github.com/kbukum/gokit/yourmod
-   go 1.26.0
+   go 1.27.1
    require github.com/kbukum/gokit v0.1.2
    replace github.com/kbukum/gokit => ../
    ```

@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -85,7 +84,7 @@ func existingAncestorAndMissingSuffix(path string) (existing string, missing []s
 		parent := filepath.Dir(current)
 		if parent == current {
 			return "", nil, apperrors.New(apperrors.ErrCodeNotFound,
-				fmt.Sprintf("no existing ancestor for '%s'", path), http.StatusNotFound)
+				"no existing path ancestor").WithCause(fmt.Errorf("find ancestor of %q: %w", path, os.ErrNotExist))
 		}
 		missing = append(missing, filepath.Base(current))
 		current = parent
@@ -102,12 +101,12 @@ func canonicalizeDirectoryRoot(root string) (string, error) {
 	info, err := os.Stat(resolved)
 	if err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to inspect confined root '%s': %v", resolved, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to inspect confined root",
+		).WithCause(err)
 	}
 	if !info.IsDir() {
 		return "", apperrors.InvalidInput("root",
-			fmt.Sprintf("confined root '%s' is not a directory", resolved))
+			"confined root is not a directory").WithCause(fmt.Errorf("root %q is not a directory", resolved))
 	}
 	return resolved, nil
 }
@@ -115,9 +114,9 @@ func canonicalizeDirectoryRoot(root string) (string, error) {
 func canonicalizeConfinedInput(path, label string) (string, error) {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return "", apperrors.New(code,
-			fmt.Sprintf("failed to canonicalize %s '%s': %v", label, path, err), status).WithCause(err)
+			"failed to canonicalize "+label).WithCause(err)
 	}
 	return filepath.Abs(resolved)
 }
@@ -128,8 +127,8 @@ func existsWithoutFollowingSymlinks(path string) (bool, error) {
 			return false, nil
 		}
 		return false, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to inspect '%s': %v", path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to inspect path",
+		).WithCause(err)
 	}
 	return true, nil
 }
@@ -141,12 +140,12 @@ func ensureDirectoryForMissingSuffix(existing string, missing []string) error {
 	info, err := os.Stat(existing)
 	if err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to inspect existing path ancestor '%s': %v", existing, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to inspect existing path ancestor",
+		).WithCause(err)
 	}
 	if !info.IsDir() {
 		return apperrors.InvalidInput("path",
-			fmt.Sprintf("existing path ancestor '%s' is not a directory", existing))
+			"existing path ancestor is not a directory").WithCause(fmt.Errorf("ancestor %q is not a directory", existing))
 	}
 	return nil
 }
@@ -155,11 +154,11 @@ func appendSafeMissingSuffix(base string, missing []string) (string, error) {
 	for _, segment := range missing {
 		if err := ValidateRelativePath(segment); err != nil {
 			return "", apperrors.InvalidInput("path",
-				fmt.Sprintf("path segment '%s' is not safe: %v", segment, err))
+				"path segment is not safe").WithCause(fmt.Errorf("unsafe segment %q: %w", segment, err))
 		}
 		if segments := splitSegments(segment); len(segments) != 1 || segments[0] == "" || segments[0] == "." {
 			return "", apperrors.InvalidInput("path",
-				fmt.Sprintf("path segment '%s' is not safe", segment))
+				"path segment is not safe").WithCause(fmt.Errorf("unsafe segment %q", segment))
 		}
 		base = filepath.Join(base, segment)
 	}
@@ -171,7 +170,7 @@ func ensureConfined(root, path string) error {
 	rel, err := filepath.Rel(root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return apperrors.InvalidInput("path",
-			fmt.Sprintf("path '%s' resolves outside confined root '%s'", path, root))
+			"path resolves outside confined root").WithCause(fmt.Errorf("path %q outside root %q", path, root))
 	}
 	return nil
 }

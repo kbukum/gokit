@@ -1,7 +1,6 @@
 package supabase
 
 import (
-	"net/http"
 	"strings"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -19,19 +18,19 @@ func FromSupabase(err error) *apperrors.AppError {
 	// Authentication errors
 	if strings.Contains(errStr, "invalid login credentials") {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeUnauthorized,
-			Message:    "Invalid email or password.",
-			HTTPStatus: http.StatusUnauthorized,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeUnauthorized,
+			Message: "Invalid email or password.",
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 
 	if strings.Contains(errStr, "email not confirmed") {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeUnauthorized,
-			Message:    "Please verify your email address before logging in.",
-			HTTPStatus: http.StatusUnauthorized,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeUnauthorized,
+			Message: "Please verify your email address before logging in.",
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 
@@ -52,30 +51,30 @@ func FromSupabase(err error) *apperrors.AppError {
 	// User already exists
 	if strings.Contains(errStr, "user already registered") {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeAlreadyExists,
-			Message:    "An account with this email already exists.",
-			HTTPStatus: http.StatusConflict,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeAlreadyExists,
+			Message: "An account with this email already exists.",
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 
 	// Password requirements
 	if strings.Contains(errStr, "password") && strings.Contains(errStr, "weak") {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeInvalidInput,
-			Message:    "Password is too weak. Please choose a stronger password.",
-			HTTPStatus: http.StatusBadRequest,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeInvalidInput,
+			Message: "Password is too weak. Please choose a stronger password.",
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 
 	// Email format
 	if strings.Contains(errStr, "invalid email") {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeInvalidFormat,
-			Message:    "Please enter a valid email address.",
-			HTTPStatus: http.StatusBadRequest,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeInvalidFormat,
+			Message: "Please enter a valid email address.",
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 

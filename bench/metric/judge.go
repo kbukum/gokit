@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"net/http"
 	"reflect"
 	"strings"
 	"sync"
@@ -59,18 +58,18 @@ const (
 func LLMJudge[L comparable](provider llm.Provider, model string, prompt JudgePrompt, opts ...JudgeOption[L]) (ContextMetric[L], error) {
 	if isNilLLMProvider(provider) {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
-			"llm_judge: LLMJudge requires a non-nil llm.Provider", http.StatusBadRequest)
+			"llm_judge: LLMJudge requires a non-nil llm.Provider")
 	}
 	if !prompt.bound() {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"llm_judge: prompt must be built with ParseJudgePrompt or DefaultJudgePrompt; it must bind both {reference} and {prediction}",
-			http.StatusBadRequest)
+		)
 	}
 	model = strings.TrimSpace(model)
 	if model == "" {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"llm_judge: model must not be empty; a judge run must record a reproducible requested model rather than fall through to a provider default",
-			http.StatusBadRequest)
+		)
 	}
 	m := &llmJudge[L]{
 		provider:       provider,
@@ -92,17 +91,17 @@ func LLMJudge[L comparable](provider llm.Provider, model string, prompt JudgePro
 	if m.concurrency < 1 {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("llm_judge: concurrency %d must be greater than zero", m.concurrency),
-			http.StatusBadRequest)
+		)
 	}
 	if m.policy == nil || m.policy.Timeout <= 0 {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"llm_judge: resilience policy must carry a positive timeout so every judge call is time-bounded",
-			http.StatusBadRequest)
+		)
 	}
 	if m.policy.Retry != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInvalidInput,
 			"llm_judge: resilience policy must not configure retries; a judge call is not idempotent, so a retry would bill a duplicate completion and could replace the verdict nondeterministically",
-			http.StatusBadRequest)
+		)
 	}
 	m.name = judgeMetricName(provider.Name(), model, prompt, m.threshold)
 	return m, nil
@@ -113,7 +112,7 @@ func validateJudgeThreshold(threshold float64) error {
 	if math.IsNaN(threshold) || math.IsInf(threshold, 0) || threshold < 0 || threshold > 1 {
 		return apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("llm_judge: threshold %v must be a finite value within [0, 1]", threshold),
-			http.StatusBadRequest)
+		)
 	}
 	return nil
 }
@@ -312,13 +311,13 @@ func (m *llmJudge[L]) grade(ctx context.Context, s bench.ScoredSample[L]) (score
 	rendered, err := m.prompt.render(prediction, reference)
 	if err != nil {
 		return 0, "", apperrors.New(apperrors.ErrCodeInternal,
-			"llm_judge: failed to render prompt template", http.StatusInternalServerError).WithCause(err)
+			"llm_judge: failed to render prompt template").WithCause(err)
 	}
 	if len(rendered) > m.maxPromptBytes {
 		return 0, "", apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("llm_judge: rendered prompt of %d bytes exceeds the %d-byte bound; the reference/prediction labels are too large to judge",
 				len(rendered), m.maxPromptBytes),
-			http.StatusBadRequest)
+		)
 	}
 
 	temperature := 0.0

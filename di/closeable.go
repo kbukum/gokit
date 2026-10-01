@@ -3,7 +3,6 @@ package di
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	apperr "github.com/kbukum/gokit/errors"
 )
@@ -62,7 +61,7 @@ func RegisterSingletonCloseable[T any](c *Container, ctor func(context.Context) 
 			value, ok := v.(T)
 			if !ok {
 				return apperr.New(apperr.ErrCodeInternal,
-					fmt.Sprintf("di: disposer for %s got %T", k, v), http.StatusInternalServerError)
+					fmt.Sprintf("di: disposer for %s got %T", k, v))
 			}
 			return dispose(ctx, value)
 		},

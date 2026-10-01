@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/vectorstore
 
-go 1.26.7
+go 1.27.1
 
 replace github.com/kbukum/gokit => ../
 

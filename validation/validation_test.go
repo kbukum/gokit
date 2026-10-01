@@ -12,6 +12,8 @@ import (
 	appErrors "github.com/kbukum/gokit/errors"
 )
 
+var testSV = NewStructValidator()
+
 func TestValidatorRequired(t *testing.T) {
 	v := New()
 	v.Required("name", "John")
@@ -38,7 +40,7 @@ func TestValidatorRequiredUUID(t *testing.T) {
 	v := New()
 	v.RequiredUUID("id", validUUID)
 	if v.HasErrors() {
-		t.Errorf("expected no errors for valid UUID, got %v", v.Errors())
+		t.Errorf("expected no errors for valid UUID, got %v", v.Violations())
 	}
 
 	v2 := New()
@@ -203,8 +205,8 @@ func TestValidatorCustom(t *testing.T) {
 	if !v2.HasErrors() {
 		t.Error("expected error for false condition")
 	}
-	if v2.Errors()[0].Message != "custom error" {
-		t.Errorf("expected 'custom error', got %q", v2.Errors()[0].Message)
+	if v2.Violations()[0].Message != "custom error" {
+		t.Errorf("expected 'custom error', got %q", v2.Violations()[0].Message)
 	}
 }
 
@@ -223,8 +225,8 @@ func TestValidatorValidate(t *testing.T) {
 	if appErr2 == nil {
 		t.Fatal("expected error")
 	}
-	if appErr2.Details == nil {
-		t.Fatal("expected details in error")
+	if len(appErr2.Violations) != 2 {
+		t.Fatalf("expected 2 violations in error, got %d", len(appErr2.Violations))
 	}
 	if !strings.Contains(appErr2.Message, "name") || !strings.Contains(appErr2.Message, "email") {
 		t.Errorf("expected both fields in message, got %q", appErr2.Message)
@@ -248,9 +250,42 @@ func TestStructValidateValid(t *testing.T) {
 		Email string `json:"email" validate:"required,email"`
 	}
 
-	err := Validate(User{Name: "John", Email: "john@example.com"})
+	err := testSV.Validate(User{Name: "John", Email: "john@example.com"})
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestStructValidateNestedFieldPaths(t *testing.T) {
+	type Address struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+	type Sample struct {
+		Prompt string `json:"prompt" validate:"required"`
+	}
+	type Request struct {
+		Billing  Address  `json:"billing"`
+		Shipping Address  `json:"shipping"`
+		Samples  []Sample `json:"samples" validate:"dive"`
+	}
+
+	err := testSV.Validate(Request{
+		Billing:  Address{Email: "not-an-email"},
+		Shipping: Address{Email: ""},
+		Samples:  []Sample{{Prompt: "ok"}, {Prompt: ""}},
+	})
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	fields := make(map[string]bool)
+	for _, v := range err.Violations {
+		fields[v.Field] = true
+	}
+	for _, want := range []string{"billing.email", "shipping.email", "samples[1].prompt"} {
+		if !fields[want] {
+			t.Errorf("expected violation for %q; got fields %v", want, fields)
+		}
 	}
 }
 
@@ -260,7 +295,7 @@ func TestStructValidateInvalid(t *testing.T) {
 		Email string `json:"email" validate:"required,email"`
 	}
 
-	err := Validate(User{Name: "", Email: "not-an-email"})
+	err := testSV.Validate(User{Name: "", Email: "not-an-email"})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -275,11 +310,11 @@ func TestStructValidateMaxMin(t *testing.T) {
 		Code string `json:"code" validate:"required,min=3,max=10"`
 	}
 
-	if err := Validate(Input{Code: "abc"}); err != nil {
+	if err := testSV.Validate(Input{Code: "abc"}); err != nil {
 		t.Errorf("expected valid, got %v", err)
 	}
 
-	if err := Validate(Input{Code: "ab"}); err == nil {
+	if err := testSV.Validate(Input{Code: "ab"}); err == nil {
 		t.Error("expected error for code too short")
 	}
 }
@@ -327,7 +362,7 @@ func TestStructValidateAcronymFieldNames(t *testing.T) {
 		MeetingURL string `validate:"required,url"`
 	}
 
-	err := Validate(TriggerBot{UserID: "", MeetingURL: "not-a-url"})
+	err := testSV.Validate(TriggerBot{UserID: "", MeetingURL: "not-a-url"})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -732,7 +767,7 @@ func TestRequiredUUID_TableDriven(t *testing.T) {
 				t.Errorf("RequiredUUID(%q): HasErrors() = %v, want %v", tt.value, got, tt.wantErr)
 			}
 			if tt.wantErr && tt.wantMsg != "" {
-				if msg := v.Errors()[0].Message; msg != tt.wantMsg {
+				if msg := v.Violations()[0].Message; msg != tt.wantMsg {
 					t.Errorf("RequiredUUID(%q): message = %q, want %q", tt.value, msg, tt.wantMsg)
 				}
 			}
@@ -777,7 +812,7 @@ func TestNew_ReturnsEmptyValidator(t *testing.T) {
 	if v.HasErrors() {
 		t.Error("new validator should have no errors")
 	}
-	if len(v.Errors()) != 0 {
+	if len(v.Violations()) != 0 {
 		t.Error("new validator Errors() should be empty slice")
 	}
 }
@@ -788,7 +823,7 @@ func TestAddError_DirectlyAddsFieldError(t *testing.T) {
 	v.AddError("email", "is invalid")
 	v.AddError("name", "too short")
 
-	errs := v.Errors()
+	errs := v.Violations()
 	if len(errs) != 2 {
 		t.Fatalf("expected 2 errors, got %d", len(errs))
 	}
@@ -824,7 +859,7 @@ func TestChainingReturnsSameInstance(t *testing.T) {
 		t.Error("chaining should always return the same *Validator")
 	}
 	if v.HasErrors() {
-		t.Errorf("expected no errors, got %v", v.Errors())
+		t.Errorf("expected no errors, got %v", v.Violations())
 	}
 }
 
@@ -834,7 +869,7 @@ func TestChainingReturnsSameInstance(t *testing.T) {
 
 func TestFieldError_FieldsExposed(t *testing.T) {
 	t.Parallel()
-	fe := FieldError{Field: "username", Message: "is required"}
+	fe := appErrors.Violation{Field: "username", Message: "is required"}
 	if fe.Field != "username" {
 		t.Errorf("Field = %q, want %q", fe.Field, "username")
 	}
@@ -855,7 +890,7 @@ func TestMultipleErrors_Collected(t *testing.T) {
 	v.Min("age", -1, 0)
 	v.MaxLength("bio", strings.Repeat("x", 300), 255)
 
-	errs := v.Errors()
+	errs := v.Violations()
 	if len(errs) != 4 {
 		t.Fatalf("expected 4 errors, got %d: %v", len(errs), errs)
 	}
@@ -887,16 +922,8 @@ func TestValidate_MultipleErrors_AppErrorContainsAll(t *testing.T) {
 			t.Errorf("AppError message should contain %q, got %q", want, msg)
 		}
 	}
-	fieldsRaw, ok := appErr.Details["fields"]
-	if !ok {
-		t.Fatal("expected 'fields' in Details")
-	}
-	fieldSlice, ok := fieldsRaw.([]FieldError)
-	if !ok {
-		t.Fatalf("fields is %T, want []FieldError", fieldsRaw)
-	}
-	if len(fieldSlice) != 3 {
-		t.Errorf("expected 3 field errors in details, got %d", len(fieldSlice))
+	if len(appErr.Violations) != 3 {
+		t.Errorf("expected 3 violations, got %d", len(appErr.Violations))
 	}
 }
 
@@ -931,7 +958,7 @@ func TestStructValidate_Email(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(Form{Email: tt.email})
+			err := testSV.Validate(Form{Email: tt.email})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(email=%q): err=%v, wantErr=%v", tt.email, err, tt.wantErr)
 			}
@@ -957,7 +984,7 @@ func TestStructValidate_URL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(Form{Link: tt.url})
+			err := testSV.Validate(Form{Link: tt.url})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(link=%q): err=%v, wantErr=%v", tt.url, err, tt.wantErr)
 			}
@@ -983,7 +1010,7 @@ func TestStructValidate_UUID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(Form{ID: tt.id})
+			err := testSV.Validate(Form{ID: tt.id})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(id=%q): err=%v, wantErr=%v", tt.id, err, tt.wantErr)
 			}
@@ -1009,7 +1036,7 @@ func TestStructValidate_OneOf(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(Form{Status: tt.status})
+			err := testSV.Validate(Form{Status: tt.status})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(status=%q): err=%v, wantErr=%v", tt.status, err, tt.wantErr)
 			}
@@ -1036,7 +1063,7 @@ func TestStructValidate_MinMax(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			err := Validate(Form{Name: tt.input})
+			err := testSV.Validate(Form{Name: tt.input})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate(name=%q): err=%v, wantErr=%v", tt.input, err, tt.wantErr)
 			}
@@ -1052,7 +1079,7 @@ func TestStructValidate_MultipleFieldErrors(t *testing.T) {
 		Age   int    `json:"age" validate:"required,min=1"`
 	}
 
-	err := Validate(User{Name: "", Email: "bad", Age: 0})
+	err := testSV.Validate(User{Name: "", Email: "bad", Age: 0})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1060,12 +1087,8 @@ func TestStructValidate_MultipleFieldErrors(t *testing.T) {
 	if !errors.As(err, &appErr) {
 		t.Fatalf("expected *appErrors.AppError, got %T", err)
 	}
-	fields, ok := appErr.Details["fields"].([]FieldError)
-	if !ok {
-		t.Fatalf("expected []FieldError in details, got %T", appErr.Details["fields"])
-	}
-	if len(fields) < 2 {
-		t.Errorf("expected at least 2 field errors, got %d", len(fields))
+	if len(appErr.Violations) < 2 {
+		t.Errorf("expected at least 2 violations, got %d", len(appErr.Violations))
 	}
 }
 
@@ -1074,7 +1097,7 @@ func TestStructValidate_JsonTagUsedForFieldName(t *testing.T) {
 	type Form struct {
 		FirstName string `json:"first_name" validate:"required"`
 	}
-	err := Validate(Form{FirstName: ""})
+	err := testSV.Validate(Form{FirstName: ""})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1088,7 +1111,7 @@ func TestStructValidate_NoJsonTag_UsesGoFieldName(t *testing.T) {
 	type Form struct {
 		GoFieldName string `validate:"required"`
 	}
-	err := Validate(Form{GoFieldName: ""})
+	err := testSV.Validate(Form{GoFieldName: ""})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1103,7 +1126,7 @@ func TestStructValidate_ValidStruct_NoError(t *testing.T) {
 		Name  string `json:"name" validate:"required"`
 		Email string `json:"email" validate:"required,email"`
 	}
-	err := Validate(Form{Name: "Alice", Email: "alice@example.com"})
+	err := testSV.Validate(Form{Name: "Alice", Email: "alice@example.com"})
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -1114,7 +1137,7 @@ func TestStructValidate_NoValidationTags(t *testing.T) {
 	type Form struct {
 		Name string `json:"name"`
 	}
-	err := Validate(Form{Name: ""})
+	err := testSV.Validate(Form{Name: ""})
 	if err != nil {
 		t.Errorf("struct with no validate tags should pass, got %v", err)
 	}
@@ -1185,7 +1208,7 @@ func TestSecurity_InjectionInFieldNames(t *testing.T) {
 	v := New()
 	v.AddError(maliciousField, maliciousMsg)
 
-	errs := v.Errors()
+	errs := v.Violations()
 	if len(errs) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(errs))
 	}
@@ -1213,7 +1236,7 @@ func TestSecurity_InjectionViaCustomValidator(t *testing.T) {
 	t.Parallel()
 	v := New()
 	v.Custom(false, "field", `<img onerror="alert(1)" src=x>`)
-	errs := v.Errors()
+	errs := v.Violations()
 	if len(errs) != 1 {
 		t.Fatal("expected 1 error")
 	}
@@ -1259,7 +1282,7 @@ func TestEdge_UnicodeFieldNames(t *testing.T) {
 	t.Parallel()
 	v := New()
 	v.Required("名前", "")
-	errs := v.Errors()
+	errs := v.Violations()
 	if len(errs) != 1 {
 		t.Fatal("expected 1 error")
 	}
@@ -1348,8 +1371,8 @@ func TestEdge_ManyErrors(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		v.AddError(fmt.Sprintf("field_%d", i), "error")
 	}
-	if len(v.Errors()) != 100 {
-		t.Errorf("expected 100 errors, got %d", len(v.Errors()))
+	if len(v.Violations()) != 100 {
+		t.Errorf("expected 100 errors, got %d", len(v.Violations()))
 	}
 	appErr := v.Validate()
 	if appErr == nil {
@@ -1378,7 +1401,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"required"`
 		}
-		err := Validate(S{})
+		err := testSV.Validate(S{})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1392,7 +1415,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"email"`
 		}
-		err := Validate(S{F: "bad"})
+		err := testSV.Validate(S{F: "bad"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1406,7 +1429,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"min=5"`
 		}
-		err := Validate(S{F: "ab"})
+		err := testSV.Validate(S{F: "ab"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1420,7 +1443,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"max=2"`
 		}
-		err := Validate(S{F: "abcdef"})
+		err := testSV.Validate(S{F: "abcdef"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1434,7 +1457,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"url"`
 		}
-		err := Validate(S{F: "not-a-url"})
+		err := testSV.Validate(S{F: "not-a-url"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1448,7 +1471,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"uuid"`
 		}
-		err := Validate(S{F: "bad"})
+		err := testSV.Validate(S{F: "bad"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1462,7 +1485,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"oneof=a b c"`
 		}
-		err := Validate(S{F: "z"})
+		err := testSV.Validate(S{F: "z"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1476,7 +1499,7 @@ func TestFormatValidationError_AllTags(t *testing.T) {
 		type S struct {
 			F string `json:"f" validate:"alpha"`
 		}
-		err := Validate(S{F: "123"})
+		err := testSV.Validate(S{F: "123"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -1501,8 +1524,8 @@ func TestValidate_AppErrorProperties(t *testing.T) {
 	if appErr.Code != appErrors.ErrCodeInvalidInput {
 		t.Errorf("expected code %q, got %q", appErrors.ErrCodeInvalidInput, appErr.Code)
 	}
-	if appErr.HTTPStatus != 422 {
-		t.Errorf("expected HTTP 422, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 422 {
+		t.Errorf("expected HTTP 422, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -1511,7 +1534,7 @@ func TestStructValidate_ReturnsAppError(t *testing.T) {
 	type S struct {
 		F string `json:"f" validate:"required"`
 	}
-	err := Validate(S{})
+	err := testSV.Validate(S{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1541,13 +1564,48 @@ func TestValidator_ConcurrentStructValidation(t *testing.T) {
 		go func(n int) {
 			defer func() { done <- struct{}{} }()
 			if n%2 == 0 {
-				_ = Validate(User{Name: "Alice", Email: "alice@example.com"})
+				_ = testSV.Validate(User{Name: "Alice", Email: "alice@example.com"})
 			} else {
-				_ = Validate(User{Name: "", Email: "bad"})
+				_ = testSV.Validate(User{Name: "", Email: "bad"})
 			}
 		}(i)
 	}
 	for i := 0; i < 50; i++ {
 		<-done
+	}
+}
+
+func TestValidator_ViolationsCarryRuleIDs(t *testing.T) {
+	t.Parallel()
+	v := New()
+	v.Required("name", "")
+	v.Email("email", "bad")
+	viols := v.Violations()
+	if len(viols) != 2 {
+		t.Fatalf("expected 2 violations, got %d", len(viols))
+	}
+	if viols[0].Field != "name" || viols[0].Reason != "REQUIRED" {
+		t.Errorf("violation[0] = %+v, want field=name rule=required", viols[0])
+	}
+	if viols[1].Field != "email" || viols[1].Reason != "INVALID_FORMAT" {
+		t.Errorf("violation[1] = %+v, want field=email rule=email", viols[1])
+	}
+}
+
+func TestStructValidator_ViolationRuleFromTag(t *testing.T) {
+	t.Parallel()
+	type Form struct {
+		Email string `json:"email" validate:"required,email"`
+	}
+	appErr := NewStructValidator().Validate(Form{Email: "bad"})
+	if appErr == nil {
+		t.Fatal("expected error")
+	}
+	if len(appErr.Violations) == 0 {
+		t.Fatal("expected violations")
+	}
+	v := appErr.Violations[0]
+	if v.Field != "email" || v.Reason != "INVALID_FORMAT" {
+		t.Errorf("violation = %+v, want field=email rule=email", v)
 	}
 }

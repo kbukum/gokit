@@ -1,6 +1,6 @@
 # grpc
 
-gRPC client library with lazy initialization, generic client wrapper, interceptors, and error mapping.
+gRPC client and server library with lazy initialization, a generic client wrapper, interceptors, and one table-driven AppError wire (the exact gRPC mirror of the Connect adapter).
 
 ## Install
 
@@ -36,8 +36,10 @@ svc, _ := lazy.GetClient()
 | Symbol | Description |
 |---|---|
 | `Config` | Host, Port, TLS, keepalive, message size limits, call timeout |
-| `FromGRPC(err, svc)` | Map gRPC error → `*AppError` |
-| `ToGRPCStatus(appErr)` | Map `*AppError` → gRPC status error |
+| `AppErrorToStatus(appErr, service)` | Encode shared google.rpc details; returns `(*status.Status, error)` |
+| `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error |
+| `IsRetryable(err)` | Read the transient-failure hint, never permission to repeat an operation |
+| `RetryDelay(err)` | Read the server's minimum retry delay |
 
 ### `grpc/client`
 
@@ -54,6 +56,11 @@ svc, _ := lazy.GetClient()
 |---|---|
 | `UnaryClientLoggingInterceptor(log)` | Log unary RPC calls |
 | `UnaryClientResilienceInterceptor(policy)` | Apply retry/timeout policy to unary calls |
+| `Idempotent()` | Call option explicitly marking an operation safe to repeat |
+| `UnaryServerNormalizingInterceptor(log)` | Convert any handler error to a coded status; already-coded errors pass through |
+| `StreamServerNormalizingInterceptor(log)` | Streaming counterpart of the unary normalizer |
+| `UnaryServerDeadlineInterceptor(max)` | Bound unary RPCs to a server maximum deadline |
+| `UnaryServerLoggingInterceptor(log)` | Log incoming RPCs with method, duration, and status |
 
 ## Interceptor ordering
 
@@ -61,10 +68,11 @@ When composing interceptors, preserve this order for shared cross-cutting concer
 
 1. tracing
 2. logging
-3. auth
-4. validation
-5. handler
-6. metrics
+3. normalization
+4. server deadline
+5. auth
+6. validation
+7. handler
 
 For gokit's gRPC client builder, the built-in unary chain is:
 
@@ -73,6 +81,10 @@ For gokit's gRPC client builder, the built-in unary chain is:
 3. user-supplied interceptors
 
 This keeps logging around the whole RPC while letting resilience set deadlines and retries before custom per-call behavior.
+
+Clients default to timeout-only behavior. Retrying requires both an explicit retry policy and `interceptor.Idempotent()` on the call. The shared resilience owner honors minimum server delays without shortening them to `MaxBackoff`; if the delay cannot fit the remaining budget, it stops. Do not enable a second application or transport retry loop around it.
+
+The [shared error contract](../errors/README.md#shared-rpc-contract) is implemented once in `errors/rpc`. Decoded remote messages are not approved public application messages. Server deadlines cancel cooperative work; they do not forcibly terminate a blocked dependency.
 
 ## TLS policy
 
@@ -93,7 +105,11 @@ srv := testutil.NewServer()
 defer srv.Stop(ctx)
 
 srv.SetUnaryHandler(func(ctx context.Context) error {
-    return grpc.AppErrorToStatus(appErr).Err() // or nil, or block on ctx.Done()
+    status, err := grpc.AppErrorToStatus(appErr, "pkg.Service")
+    if err != nil {
+        return err
+    }
+    return status.Err()
 })
 
 conn, _ := srv.Dial()

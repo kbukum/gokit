@@ -5,19 +5,30 @@ package errors
 
 import (
 	"fmt"
-	"net/http"
+	"time"
 )
 
 // AppError is the unified application error type.
 type AppError struct {
 	// Code is a machine-readable error code.
 	Code ErrorCode `json:"code"`
-	// Message is a human-readable error message.
+	// Reason is an optional, stable domain reason a feature can branch on
+	// (e.g. "GATE_BLOCKED"). It is finer-grained than Code and, unlike Message,
+	// is not meant for display. Empty when the code alone is enough.
+	Reason string `json:"reason,omitempty"`
+	// Message is a human-readable, safe error message.
 	Message string `json:"message"`
-	// Retryable indicates if the operation can be retried.
+	// Violations lists field-level problems with canonical paths. It supersedes
+	// stuffing field errors into Details.
+	Violations []Violation `json:"violations,omitempty"`
+	// Retryable is a transient-failure hint, not permission to repeat a non-idempotent operation.
 	Retryable bool `json:"retryable"`
-	// HTTPStatus is the recommended HTTP status code for this error.
-	HTTPStatus int `json:"-"`
+	// RetryAfter is an optional hint for how long to wait before retrying. It is
+	// only meaningful when Retryable is true; zero means "no specific delay".
+	RetryAfter time.Duration `json:"-"`
+	// TraceID correlates this failure with server logs and traces. It is safe to
+	// expose and never carries the underlying cause.
+	TraceID string `json:"traceId,omitempty"`
 	// Details carries RFC 9457 problem-detail extension members. These are, by definition,
 	// arbitrary JSON and cannot be given a closed type without losing that openness,
 	// so map[string]any is a deliberate,
@@ -67,6 +78,10 @@ func (e *AppError) clone() *AppError {
 			c.Details[k] = v
 		}
 	}
+	if e.Violations != nil {
+		c.Violations = make([]Violation, len(e.Violations))
+		copy(c.Violations, e.Violations)
+	}
 	if c.origin == nil {
 		c.origin = e
 	}
@@ -110,13 +125,65 @@ func (e *AppError) WithDetail(key string, value any) *AppError {
 	return c
 }
 
-// New creates a new AppError with automatic retryable detection.
-func New(code ErrorCode, message string, httpStatus int) *AppError {
+// WithReason returns a copy of the error with the domain reason set. The
+// receiver is not modified.
+func (e *AppError) WithReason(reason string) *AppError {
+	c := e.clone()
+	c.Reason = reason
+	return c
+}
+
+// WithViolations returns a copy of the error with the given field violations
+// set, replacing any existing ones. The receiver is not modified.
+func (e *AppError) WithViolations(violations ...Violation) *AppError {
+	c := e.clone()
+	if len(violations) == 0 {
+		c.Violations = nil
+		return c
+	}
+	c.Violations = make([]Violation, len(violations))
+	copy(c.Violations, violations)
+	return c
+}
+
+// WithRetryAfter returns a copy of the error marked retryable with the given
+// retry delay. A zero delay still marks the error retryable with no specific
+// wait. The receiver is not modified.
+func (e *AppError) WithRetryAfter(d time.Duration) *AppError {
+	c := e.clone()
+	c.Retryable = true
+	c.RetryAfter = d
+	return c
+}
+
+// WithRetryable overrides the transient-failure hint. Disabling it also clears the delay.
+func (e *AppError) WithRetryable(retryable bool) *AppError {
+	c := e.clone()
+	c.Retryable = retryable
+	if !retryable {
+		c.RetryAfter = 0
+	}
+	return c
+}
+
+// HTTPStatus returns the REST status derived from Code. Protocols such as Connect own their HTTP mapping.
+func (e *AppError) HTTPStatus() int { return HTTPStatusFor(e.Code) }
+
+// WithTraceID returns a copy of the error with the trace id set. The receiver is
+// not modified.
+func (e *AppError) WithTraceID(traceID string) *AppError {
+	c := e.clone()
+	c.TraceID = traceID
+	return c
+}
+
+// New creates an application error with the code's default transient-failure hint.
+func New(code ErrorCode, message string) *AppError {
+	s := specFor(code)
 	return &AppError{
-		Code:       code,
-		Message:    message,
-		HTTPStatus: httpStatus,
-		Retryable:  IsRetryableCode(code),
+		Code:      code,
+		Message:   message,
+		Retryable: s.retryable,
 	}
 }
 
@@ -124,37 +191,28 @@ func New(code ErrorCode, message string, httpStatus int) *AppError {
 
 // ServiceUnavailable creates a new AppError for a service that is temporarily unavailable.
 func ServiceUnavailable(service string) *AppError {
-	return &AppError{
-		Code: ErrCodeServiceUnavailable, Message: fmt.Sprintf("The %s is temporarily unavailable. Please try again.", service),
-		HTTPStatus: http.StatusServiceUnavailable, Retryable: true,
-		Details: map[string]any{"service": service},
-	}
+	e := New(ErrCodeServiceUnavailable, fmt.Sprintf("The %s is temporarily unavailable. Please try again.", service))
+	e.Details = map[string]any{"service": service}
+	return e
 }
 
 // ConnectionFailed creates a new AppError for a failed connection to a service.
 func ConnectionFailed(service string) *AppError {
-	return &AppError{
-		Code: ErrCodeConnectionFailed, Message: fmt.Sprintf("Unable to connect to %s. Please verify the service is running.", service),
-		HTTPStatus: http.StatusBadGateway, Retryable: true,
-		Details: map[string]any{"service": service},
-	}
+	e := New(ErrCodeConnectionFailed, fmt.Sprintf("Unable to connect to %s. Please verify the service is running.", service))
+	e.Details = map[string]any{"service": service}
+	return e
 }
 
 // Timeout creates a new AppError for a request that timed out.
 func Timeout(operation string) *AppError {
-	return &AppError{
-		Code: ErrCodeTimeout, Message: "The request took too long. Please try again.",
-		HTTPStatus: http.StatusGatewayTimeout, Retryable: true,
-		Details: map[string]any{"operation": operation},
-	}
+	e := New(ErrCodeTimeout, "The request took too long. Please try again.")
+	e.Details = map[string]any{"operation": operation}
+	return e
 }
 
 // RateLimited creates a new AppError for too many requests.
 func RateLimited() *AppError {
-	return &AppError{
-		Code: ErrCodeRateLimited, Message: "Too many requests. Please wait a moment and try again.",
-		HTTPStatus: http.StatusTooManyRequests, Retryable: true,
-	}
+	return New(ErrCodeRateLimited, "Too many requests. Please wait a moment and try again.")
 }
 
 // NotFound creates a new AppError for a resource that was not found.
@@ -163,65 +221,49 @@ func NotFound(resource, id string) *AppError {
 	if id != "" {
 		details["id"] = id
 	}
-	return &AppError{
-		Code: ErrCodeNotFound, Message: fmt.Sprintf("The requested %s was not found.", resource),
-		HTTPStatus: http.StatusNotFound, Retryable: false, Details: details,
-	}
+	e := New(ErrCodeNotFound, fmt.Sprintf("The requested %s was not found.", resource))
+	e.Details = details
+	return e
 }
 
 // AlreadyExists creates a new AppError for a resource that already exists.
 func AlreadyExists(resource string) *AppError {
-	return &AppError{
-		Code: ErrCodeAlreadyExists, Message: fmt.Sprintf("A %s with these details already exists.", resource),
-		HTTPStatus: http.StatusConflict, Retryable: false,
-		Details: map[string]any{"resource": resource},
-	}
+	e := New(ErrCodeAlreadyExists, fmt.Sprintf("A %s with these details already exists.", resource))
+	e.Details = map[string]any{"resource": resource}
+	return e
 }
 
 // Conflict creates a new AppError for a conflict with the current state of the resource.
 func Conflict(reason string) *AppError {
-	return &AppError{
-		Code: ErrCodeConflict, Message: reason,
-		HTTPStatus: http.StatusConflict, Retryable: false,
-	}
+	return New(ErrCodeConflict, reason)
 }
 
 // InvalidInput creates a new AppError for invalid input.
 func InvalidInput(field, reason string) *AppError {
-	details := make(map[string]any)
+	e := New(ErrCodeInvalidInput, fmt.Sprintf("Invalid input: %s", reason))
 	if field != "" {
-		details["field"] = field
+		e.Violations = []Violation{{Field: field, Reason: ViolationInvalidValue, Message: reason}}
 	}
-	return &AppError{
-		Code: ErrCodeInvalidInput, Message: fmt.Sprintf("Invalid input: %s", reason),
-		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false, Details: details,
-	}
+	return e
 }
 
 // Validation creates a new AppError for validation errors.
 func Validation(message string) *AppError {
-	return &AppError{
-		Code: ErrCodeInvalidInput, Message: message,
-		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
-	}
+	return New(ErrCodeInvalidInput, message)
 }
 
 // MissingField creates a new AppError for a missing required field.
 func MissingField(field string) *AppError {
-	return &AppError{
-		Code: ErrCodeMissingField, Message: fmt.Sprintf("Missing required field: %s", field),
-		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
-		Details: map[string]any{"field": field},
-	}
+	e := New(ErrCodeMissingField, fmt.Sprintf("Missing required field: %s", field))
+	e.Violations = []Violation{{Field: field, Reason: ViolationRequired, Message: "is required"}}
+	return e
 }
 
 // InvalidFormat creates a new AppError for an invalid field format.
 func InvalidFormat(field, expectedFormat string) *AppError {
-	return &AppError{
-		Code: ErrCodeInvalidFormat, Message: fmt.Sprintf("Invalid format for %s. Expected: %s", field, expectedFormat),
-		HTTPStatus: http.StatusUnprocessableEntity, Retryable: false,
-		Details: map[string]any{"field": field, "expected_format": expectedFormat},
-	}
+	e := New(ErrCodeInvalidFormat, fmt.Sprintf("Invalid format for %s. Expected: %s", field, expectedFormat))
+	e.Violations = []Violation{{Field: field, Reason: ViolationInvalidFormat, Message: "expected " + expectedFormat}}
+	return e
 }
 
 // Unauthorized creates a new AppError for unauthorized access.
@@ -229,10 +271,7 @@ func Unauthorized(reason string) *AppError {
 	if reason == "" {
 		reason = "Authentication required."
 	}
-	return &AppError{
-		Code: ErrCodeUnauthorized, Message: reason,
-		HTTPStatus: http.StatusUnauthorized, Retryable: false,
-	}
+	return New(ErrCodeUnauthorized, reason)
 }
 
 // Forbidden creates a new AppError for forbidden access.
@@ -240,60 +279,46 @@ func Forbidden(reason string) *AppError {
 	if reason == "" {
 		reason = "You don't have permission to perform this action."
 	}
-	return &AppError{
-		Code: ErrCodeForbidden, Message: reason,
-		HTTPStatus: http.StatusForbidden, Retryable: false,
-	}
+	return New(ErrCodeForbidden, reason)
 }
 
 // TokenExpired creates a new AppError for an expired authentication token.
 func TokenExpired() *AppError {
-	return &AppError{
-		Code: ErrCodeTokenExpired, Message: "Your session has expired. Please log in again.",
-		HTTPStatus: http.StatusUnauthorized, Retryable: false,
-	}
+	return New(ErrCodeTokenExpired, "Your session has expired. Please log in again.")
 }
 
 // InvalidToken creates a new AppError for an invalid authentication token.
 func InvalidToken() *AppError {
-	return &AppError{
-		Code: ErrCodeInvalidToken, Message: "Invalid authentication token. Please log in again.",
-		HTTPStatus: http.StatusUnauthorized, Retryable: false,
-	}
+	return New(ErrCodeInvalidToken, "Invalid authentication token. Please log in again.")
 }
 
 // Internal creates a new AppError for an internal server error.
 func Internal(cause error) *AppError {
-	return &AppError{
-		Code: ErrCodeInternal, Message: "An unexpected error occurred. Please try again or contact support.",
-		HTTPStatus: http.StatusInternalServerError, Retryable: false, Cause: cause,
-	}
+	e := New(ErrCodeInternal, "An unexpected error occurred. Please try again or contact support.")
+	e.Cause = cause
+	return e
 }
 
 // DatabaseError creates a new AppError for a database error.
 func DatabaseError(cause error) *AppError {
-	return &AppError{
-		Code: ErrCodeDatabaseError, Message: "A database error occurred.",
-		HTTPStatus: http.StatusInternalServerError, Retryable: false, Cause: cause,
-	}
+	e := New(ErrCodeDatabaseError, "A database error occurred.")
+	e.Cause = cause
+	return e
 }
 
 // ExternalServiceError creates a new AppError for an error from an external service.
 func ExternalServiceError(service string, cause error) *AppError {
-	return &AppError{
-		Code: ErrCodeExternalService, Message: fmt.Sprintf("The %s service encountered an error. Please try again.", service),
-		HTTPStatus: http.StatusInternalServerError, Retryable: true,
-		Details: map[string]any{"service": service}, Cause: cause,
-	}
+	e := New(ErrCodeExternalService, fmt.Sprintf("The %s service encountered an error. Please try again.", service))
+	e.Details = map[string]any{"service": service}
+	e.Cause = cause
+	return e
 }
 
 // Canceled creates a new AppError for an operation that was canceled.
 func Canceled(operation string) *AppError {
-	return &AppError{
-		Code: ErrCodeCanceled, Message: fmt.Sprintf("The %s operation was canceled.", operation),
-		HTTPStatus: http.StatusRequestTimeout, Retryable: false,
-		Details: map[string]any{"operation": operation},
-	}
+	e := New(ErrCodeCanceled, fmt.Sprintf("The %s operation was canceled.", operation))
+	e.Details = map[string]any{"operation": operation}
+	return e
 }
 
 // Wrap converts a standard error to an AppError.

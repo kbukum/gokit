@@ -25,8 +25,8 @@ func requireNotFound(t *testing.T, err error) {
 	if appErr.Code != apperrors.ErrCodeNotFound {
 		t.Errorf("code = %s, want %s", appErr.Code, apperrors.ErrCodeNotFound)
 	}
-	if appErr.HTTPStatus != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", appErr.HTTPStatus, http.StatusNotFound)
+	if appErr.HTTPStatus() != http.StatusNotFound {
+		t.Errorf("status = %d, want %d", appErr.HTTPStatus(), http.StatusNotFound)
 	}
 }
 

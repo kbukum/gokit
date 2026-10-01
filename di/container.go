@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"sync"
 
@@ -144,14 +143,14 @@ func (c *Container) resolveKey(ctx context.Context, k typeKey) (any, error) {
 	e, ok := c.lookup(k)
 	if !ok {
 		return nil, apperr.New(apperr.ErrCodeNotFound,
-			fmt.Sprintf("di: %s not registered", k), http.StatusNotFound)
+			fmt.Sprintf("di: %s not registered", k))
 	}
 
 	chain, _ := ctx.Value(resKey{}).(*resNode)
 	if chain.contains(k) {
 		return nil, apperr.New(apperr.ErrCodeConflict,
 			fmt.Sprintf("di: circular dependency detected while resolving %s", k),
-			http.StatusConflict)
+		)
 	}
 	childCtx := context.WithValue(ctx, resKey{}, &resNode{key: k, parent: chain})
 

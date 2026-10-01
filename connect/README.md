@@ -21,7 +21,7 @@ log := logging.NewDefault("my-service")
 
 // Create Connect service handler with interceptors
 path, handler := userv1connect.NewUserServiceHandler(svc,
-    connect.WithInterceptors(goconnect.LoggingInterceptor(log), goconnect.ErrorInterceptor()),
+    connect.WithInterceptors(goconnect.LoggingInterceptor(log), goconnect.NormalizingInterceptor(log)),
 )
 
 // Mount on any server implementing HandlerMounter (e.g. gokit/server.Server)
@@ -48,6 +48,8 @@ httpClient, err := client.NewHTTPClient(cfg)
 opts := client.ClientOptions(cfg)
 svcClient := userv1connect.NewUserServiceClient(httpClient, cfg.BaseURL, opts...)
 ```
+
+The client uses native HTTP/2 transport controls. Enabled TLS requires `https://`; the default h2c mode requires `http://`. Each request, including redirects, is checked before dialing, so neither mode silently falls back to HTTP/1. Call `httpClient.CloseIdleConnections()` when its owner shuts down.
 
 ## JWT Authentication
 
@@ -89,7 +91,7 @@ path, handler := userv1connect.NewUserServiceHandler(
     connect.WithInterceptors(
         connect.JWTAuthInterceptor(jwtSvc),  // ← JWT validation
         connect.LoggingInterceptor(log),
-        connect.ErrorInterceptor(),
+        connect.NormalizingInterceptor(log),
     ),
 )
 ```
@@ -272,7 +274,7 @@ func main() {
         svc,
         connect.WithInterceptors(
             goconnect.LoggingInterceptor(log),
-            goconnect.ErrorInterceptor(),
+            goconnect.NormalizingInterceptor(log),
         ),
     )
 
@@ -282,7 +284,7 @@ func main() {
         connect.WithInterceptors(
             goconnect.JWTAuthInterceptor(jwtSvc),  // ← Require auth
             goconnect.LoggingInterceptor(log),
-            goconnect.ErrorInterceptor(),
+            goconnect.NormalizingInterceptor(log),
         ),
     )
 
@@ -310,17 +312,24 @@ func main() {
 | `Mount(srv, path, handler)` | Mount a single Connect handler on any HandlerMounter |
 | `MountServices(srv, ...Service)` | Mount multiple services at once |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
-| `ErrorInterceptor()` | Convert `*AppError` to Connect errors |
+| `NormalizingInterceptor(log)` | Convert any handler error to a coded Connect error (unary + streaming); already-coded errors pass through |
+| `ValidationInterceptor(v)` | Validate requests with an injected `protovalidate.Validator`, emitting shared violations |
+| `DeadlineInterceptor(max)` | Bound unary RPCs to a server maximum deadline |
 | `TokenAuthInterceptor(validator)` | Bearer token validation interceptor |
 | `JWTAuthInterceptor(jwtSvc)` | JWT-specific auth interceptor |
-| `ToConnectError(appErr)` | `*AppError` → `*connect.Error` |
-| `FromConnectError(err)` | `*connect.Error` → `*AppError` |
+| `ToConnectError(appErr, service)` | Encode shared google.rpc details; returns `(*connect.Error, error)` |
+| `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
+| `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
 | `client.Config` | Client config: BaseURL, Timeout, DialTimeout, Protocol, TLS |
-| `client.NewHTTPClient(cfg)` | Create HTTP client (h2c or TLS) for ConnectRPC |
+| `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
 | `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
 | `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |
 
 ---
+
+Install the normalizer outside validation: logging → normalization → server deadline → auth → validation → handler. Validation returns application errors so the outer boundary can log evaluation causes before serialization. Deadlines only cancel work that honors its context.
+
+The [shared error contract](../errors/README.md#shared-rpc-contract) defines namespaced identities, explicit retry verdicts, semantic violations, and HTTP-only extensions. Connect's HTTP status is protocol-owned. Client retry execution still requires idempotency and a bounded policy; `IsRetryable` alone does not authorize another attempt.
 
 [← Back to main gokit README](../README.md)

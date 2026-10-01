@@ -116,10 +116,14 @@ func TestPublicKeyConversions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ecdsa keygen: %v", err)
 	}
+	encoded, err := ecKey.PublicKey.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
 	ecJWK := &jwk{
 		Kty: "EC", Crv: "P-256",
-		X: base64.RawURLEncoding.EncodeToString(ecKey.X.Bytes()),
-		Y: base64.RawURLEncoding.EncodeToString(ecKey.Y.Bytes()),
+		X: base64.RawURLEncoding.EncodeToString(encoded[1:33]),
+		Y: base64.RawURLEncoding.EncodeToString(encoded[33:]),
 	}
 	if _, err := ecJWK.publicKey(); err != nil {
 		t.Fatalf("EC publicKey: %v", err)
@@ -147,6 +151,9 @@ func TestPublicKeyConversionErrors(t *testing.T) {
 		"ec-bad-x":      {Kty: "EC", Crv: "P-256", X: "!!!", Y: "AQAB"},
 		"ec-bad-y":      {Kty: "EC", Crv: "P-256", X: "AQAB", Y: "!!!"},
 		"ec-bad-curve":  {Kty: "EC", Crv: "P-999", X: "AQAB", Y: "AQAB"},
+		"ec-empty":      {Kty: "EC", Crv: "P-256"},
+		"ec-short":      {Kty: "EC", Crv: "P-256", X: "AQAB", Y: "AQAB"},
+		"ec-off-curve":  {Kty: "EC", Crv: "P-256", X: base64.RawURLEncoding.EncodeToString(make([]byte, 32)), Y: base64.RawURLEncoding.EncodeToString(make([]byte, 32))},
 		"okp-bad-curve": {Kty: "OKP", Crv: "X25519", X: "AQAB"},
 		"okp-bad-x":     {Kty: "OKP", Crv: "Ed25519", X: "!!!"},
 		"okp-short-x":   {Kty: "OKP", Crv: "Ed25519", X: base64.RawURLEncoding.EncodeToString([]byte("short"))},

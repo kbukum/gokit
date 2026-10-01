@@ -1,0 +1,37 @@
+{
+  "name": "conflict",
+  "httpStatus": 409,
+  "rpcCode": 9,
+  "vocabulary": {
+    "code": "CONFLICT",
+    "message": "state changed",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/conflict",
+    "title": "Conflict",
+    "status": 409,
+    "detail": "state changed",
+    "code": "CONFLICT",
+    "retryable": false
+  },
+  "grpcStatus": "CAkSDXN0YXRlIGNoYW5nZWQaewoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLkVycm9ySW5mbxJPCghDT05GTElDVBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ==",
+  "connectJson": {
+    "code": "failed_precondition",
+    "message": "state changed",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CghDT05GTElDVBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "CONFLICT",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

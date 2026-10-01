@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
 	"strings"
 
 	"github.com/kbukum/gokit/ai/chat"
@@ -42,7 +41,7 @@ type judgeReply struct {
 // unusable response.
 func invalidJudgeReply(msg string) *apperrors.AppError {
 	return apperrors.New(apperrors.ErrCodeExternalService,
-		"llm_judge: "+msg, http.StatusBadGateway)
+		"llm_judge: "+msg)
 }
 
 // judgeProviderError classifies a judge call failure by cause so consumers receive the actionable code: the metric's own timeout and cancellation surface as timeout/canceled rather than being blanket-labeled external-service. All preserve the cause.
@@ -54,7 +53,7 @@ func judgeProviderError(err error) error {
 		return apperrors.Canceled("llm_judge").WithCause(err)
 	default:
 		return apperrors.New(apperrors.ErrCodeExternalService,
-			"llm_judge: judge provider failed", http.StatusBadGateway).WithCause(err)
+			"llm_judge: judge provider failed").WithCause(err)
 	}
 }
 

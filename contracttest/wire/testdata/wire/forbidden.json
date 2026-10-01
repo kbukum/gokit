@@ -1,0 +1,37 @@
+{
+  "name": "forbidden",
+  "httpStatus": 403,
+  "rpcCode": 7,
+  "vocabulary": {
+    "code": "FORBIDDEN",
+    "message": "You don't have permission to perform this action.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/forbidden",
+    "title": "Forbidden",
+    "status": 403,
+    "detail": "You don't have permission to perform this action.",
+    "code": "FORBIDDEN",
+    "retryable": false
+  },
+  "grpcStatus": "CAcSMVlvdSBkb24ndCBoYXZlIHBlcm1pc3Npb24gdG8gcGVyZm9ybSB0aGlzIGFjdGlvbi4afAoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLkVycm9ySW5mbxJQCglGT1JCSURERU4SCWdva2l0LmRldhoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U=",
+  "connectJson": {
+    "code": "permission_denied",
+    "message": "You don't have permission to perform this action.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CglGT1JCSURERU4SCWdva2l0LmRldhoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U",
+        "debug": {
+          "reason": "FORBIDDEN",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -2,7 +2,6 @@ package fs
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 
 	apperrors "github.com/kbukum/gokit/errors"
@@ -19,16 +18,16 @@ import (
 func OpenAppend(path string) (*os.File, error) {
 	f, err := openAppendFile(path)
 	if err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, apperrors.New(code,
-			fmt.Sprintf("failed to open '%s': %v", path, err), status).WithCause(err)
+			"failed to open file").WithCause(err)
 	}
 	info, err := f.Stat()
 	if err != nil {
 		_ = f.Close()
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to inspect '%s': %v", path, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to inspect file",
+		).WithCause(err)
 	}
 	if !info.Mode().IsRegular() {
 		_ = f.Close()

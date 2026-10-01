@@ -37,8 +37,8 @@ func TestRuntimeSentinelsAreTypedAppErrors(t *testing.T) {
 			if appErr.Code != tc.code {
 				t.Fatalf("code = %q, want %q", appErr.Code, tc.code)
 			}
-			if appErr.HTTPStatus != tc.status {
-				t.Fatalf("status = %d, want %d", appErr.HTTPStatus, tc.status)
+			if appErr.HTTPStatus() != tc.status {
+				t.Fatalf("status = %d, want %d", appErr.HTTPStatus(), tc.status)
 			}
 		})
 	}
@@ -109,7 +109,7 @@ func TestRetryExhaustionReturnsMaxRetriesWithCause(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected AppError, got %T", err)
 	}
-	if appErr.Code != apperr.ErrCodeServiceUnavailable || appErr.HTTPStatus != 503 {
-		t.Fatalf("code/status = %q/%d, want SERVICE_UNAVAILABLE/503", appErr.Code, appErr.HTTPStatus)
+	if appErr.Code != apperr.ErrCodeServiceUnavailable || appErr.HTTPStatus() != 503 {
+		t.Fatalf("code/status = %q/%d, want SERVICE_UNAVAILABLE/503", appErr.Code, appErr.HTTPStatus())
 	}
 }

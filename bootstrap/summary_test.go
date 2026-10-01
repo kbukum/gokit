@@ -16,7 +16,7 @@ func TestDisplaySummaryEmptyComponents(t *testing.T) {
 	container := di.NewContainer()
 
 	// Should not panic with empty everything
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestDisplaySummaryZeroPort(t *testing.T) {
@@ -28,7 +28,7 @@ func TestDisplaySummaryZeroPort(t *testing.T) {
 	container := di.NewContainer()
 
 	// Should not panic and should not append ":0"
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestDisplaySummaryZeroDuration(t *testing.T) {
@@ -40,7 +40,7 @@ func TestDisplaySummaryZeroDuration(t *testing.T) {
 	container := di.NewContainer()
 
 	// Should render 0.00s without panic
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestDisplaySummaryNilContainer(t *testing.T) {
@@ -49,5 +49,5 @@ func TestDisplaySummaryNilContainer(t *testing.T) {
 
 	registry := component.NewRegistry()
 	// nil container
-	s.DisplaySummary(registry, nil, nil)
+	s.DisplaySummary(t.Context(), registry, nil, nil)
 }

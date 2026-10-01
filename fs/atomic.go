@@ -3,7 +3,6 @@ package fs
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,8 +30,8 @@ func WriteAtomicReplace(dest string, bytes []byte, tempPrefix string) error {
 func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting bool) error {
 	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to create parent directories for '%s': %v", dest, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to create parent directories",
+		).WithCause(err)
 	}
 
 	for attempt := 0; attempt < writeAtomicAttempts; attempt++ {
@@ -43,8 +42,8 @@ func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting b
 		}
 		if err != nil {
 			return apperrors.New(apperrors.ErrCodeInternal,
-				fmt.Sprintf("failed to create temp file '%s': %v", tempPath, err),
-				http.StatusInternalServerError).WithCause(err)
+				"failed to create temp file",
+			).WithCause(err)
 		}
 		if err := writeAndPersist(file, bytes, atomicTarget{tempPath: tempPath, dest: dest, replaceExisting: replaceExisting}); err != nil {
 			_ = os.Remove(tempPath)
@@ -54,8 +53,8 @@ func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting b
 	}
 
 	return apperrors.New(apperrors.ErrCodeInternal,
-		fmt.Sprintf("failed to create a unique temp file for '%s' after %d attempts", dest, writeAtomicAttempts),
-		http.StatusInternalServerError)
+		"failed to create a unique temp file",
+	).WithCause(fmt.Errorf("create temp file for %q after %d attempts: %w", dest, writeAtomicAttempts, os.ErrExist))
 }
 
 // atomicTarget describes the destination of an atomic write for writeAndPersist.
@@ -69,31 +68,31 @@ func writeAndPersist(file *os.File, bytes []byte, target atomicTarget) error {
 	if _, err := file.Write(bytes); err != nil {
 		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to write temp file '%s': %v", target.tempPath, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to write temp file",
+		).WithCause(err)
 	}
 	if err := file.Sync(); err != nil {
 		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to sync temp file '%s': %v", target.tempPath, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to sync temp file",
+		).WithCause(err)
 	}
 	if err := file.Close(); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to close temp file '%s': %v", target.tempPath, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to close temp file",
+		).WithCause(err)
 	}
 	if target.replaceExisting && runtime.GOOS == "windows" {
 		if err := os.Remove(target.dest); err != nil && !os.IsNotExist(err) {
 			return apperrors.New(apperrors.ErrCodeInternal,
-				fmt.Sprintf("failed to remove existing destination '%s': %v", target.dest, err),
-				http.StatusInternalServerError).WithCause(err)
+				"failed to remove existing destination",
+			).WithCause(err)
 		}
 	}
 	if err := os.Rename(target.tempPath, target.dest); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to rename temp file to '%s': %v", target.dest, err),
-			http.StatusInternalServerError).WithCause(err)
+			"failed to rename temp file",
+		).WithCause(err)
 	}
 	return nil
 }

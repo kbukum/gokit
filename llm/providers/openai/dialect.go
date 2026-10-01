@@ -3,7 +3,6 @@ package openai
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
@@ -73,7 +72,7 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 		body["tool_choice"] = encodeToolChoice(req.ToolChoice)
 	}
 	if err := dialect.MergeExtra(body, json.RawMessage(req.Extra)); err != nil {
-		return nil, errors.New(errors.ErrCodeInvalidInput, "openai: invalid request extra", http.StatusBadRequest).WithCause(err)
+		return nil, errors.New(errors.ErrCodeInvalidInput, "openai: invalid request extra").WithCause(err)
 	}
 
 	return body, nil
@@ -100,11 +99,11 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 	}
 
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, errors.New(errors.ErrCodeInvalidFormat, "openai: parse response", http.StatusBadGateway).WithCause(err)
+		return nil, errors.New(errors.ErrCodeExternalService, "openai: parse response").WithCause(err)
 	}
 
 	if len(raw.Choices) == 0 {
-		return nil, errors.New(errors.ErrCodeInvalidFormat, "openai: response has no choices", http.StatusBadGateway)
+		return nil, errors.New(errors.ErrCodeExternalService, "openai: response has no choices")
 	}
 
 	choice := raw.Choices[0]
@@ -155,7 +154,7 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	}
 
 	if err := json.Unmarshal(data, &chunk); err != nil {
-		return streamwire.Chunk{}, errors.New(errors.ErrCodeInvalidFormat, "openai: parse stream chunk", http.StatusBadGateway).WithCause(err)
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "openai: parse stream chunk").WithCause(err)
 	}
 
 	if len(chunk.Choices) == 0 {
@@ -248,7 +247,7 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 			"tool_call_id": msg.ToolUseID,
 		}, nil
 	default:
-		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("openai: unknown message type %T", m), http.StatusBadRequest)
+		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("openai: unknown message type %T", m))
 	}
 }
 

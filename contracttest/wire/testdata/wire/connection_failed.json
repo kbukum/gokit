@@ -1,0 +1,47 @@
+{
+  "name": "connection_failed",
+  "httpStatus": 502,
+  "rpcCode": 14,
+  "vocabulary": {
+    "code": "CONNECTION_FAILED",
+    "message": "Unable to connect to db. Please verify the service is running.",
+    "retryable": true
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/connection-failed",
+    "title": "Connection Failed",
+    "status": 502,
+    "detail": "Unable to connect to db. Please verify the service is running.",
+    "code": "CONNECTION_FAILED",
+    "retryable": true,
+    "details": {
+      "service": "db"
+    }
+  },
+  "grpcStatus": "CA4SPlVuYWJsZSB0byBjb25uZWN0IHRvIGRiLiBQbGVhc2UgdmVyaWZ5IHRoZSBzZXJ2aWNlIGlzIHJ1bm5pbmcuGoMBCih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElcKEUNPTk5FQ1RJT05fRkFJTEVEEglnb2tpdC5kZXYaEQoJcmV0cnlhYmxlEgR0cnVlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2UaLgoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLlJldHJ5SW5mbxICCgA=",
+  "connectJson": {
+    "code": "unavailable",
+    "message": "Unable to connect to db. Please verify the service is running.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "ChFDT05ORUNUSU9OX0ZBSUxFRBIJZ29raXQuZGV2GhEKCXJldHJ5YWJsZRIEdHJ1ZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNl",
+        "debug": {
+          "reason": "CONNECTION_FAILED",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "true",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.RetryInfo",
+        "value": "CgA",
+        "debug": {
+          "retryDelay": "0s"
+        }
+      }
+    ]
+  }
+}

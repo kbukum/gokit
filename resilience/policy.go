@@ -135,13 +135,33 @@ func (p *Policy) IsAvailable() bool {
 // Execute runs fn through the configured resilience stack.
 //
 // Execution order from outermost to innermost:
-// rate limiter → bulkhead → circuit breaker → timeout → retry → fn.
+// timeout → rate limiter → bulkhead → circuit breaker → retry → fn.
 func Execute[T any](ctx context.Context, p *Policy, fn func(ctx context.Context) (T, error)) (T, error) {
+	var retry *RetryConfig
+	if p != nil {
+		retry = p.Retry
+	}
+	return ExecuteWithRetry(ctx, p, retry, fn)
+}
+
+// ExecuteWithRetry selects the retry budget for one call without copying or resetting shared circuit-breaker, bulkhead or limiter state. A nil retry disables retries for that call.
+func ExecuteWithRetry[T any](ctx context.Context, p *Policy, retry *RetryConfig, fn func(ctx context.Context) (T, error)) (T, error) {
 	if p == nil {
-		return fn(ctx)
+		p = NewPolicy()
 	}
 
 	p.init()
+
+	_, hasDeadline := ctx.Deadline()
+	if p.Timeout > 0 && (p.timeoutMode != TimeoutIfUnset || !hasDeadline) {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, p.Timeout)
+		defer cancel()
+	}
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
+	}
 
 	if p.rl != nil {
 		if err := p.rl.Wait(ctx); err != nil {
@@ -151,26 +171,13 @@ func Execute[T any](ctx context.Context, p *Policy, fn func(ctx context.Context)
 	}
 
 	call := fn
-	if p.Retry != nil {
-		retryCfg := *p.Retry
+	if retry != nil {
+		retryCfg := *retry
 		inner := call
 		call = func(callCtx context.Context) (T, error) {
 			return Retry(callCtx, retryCfg, func() (T, error) {
 				return inner(callCtx)
 			})
-		}
-	}
-	if p.Timeout > 0 {
-		inner := call
-		call = func(callCtx context.Context) (T, error) {
-			if p.timeoutMode == TimeoutIfUnset {
-				if _, ok := callCtx.Deadline(); ok {
-					return inner(callCtx)
-				}
-			}
-			timeoutCtx, cancel := context.WithTimeout(callCtx, p.Timeout)
-			defer cancel()
-			return inner(timeoutCtx)
 		}
 	}
 	if p.cb != nil {

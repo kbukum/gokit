@@ -127,7 +127,7 @@ func ExtractZip(archivePath, dest string, limits ExtractLimits) ([]string, error
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, apperrors.InvalidInput("archive",
-				fmt.Sprintf("cannot open archive '%s': %v", archivePath, err)).WithCause(err)
+				"cannot open archive").WithCause(err)
 		}
 		return nil, archiveFormatError(archivePath, "open zip archive", err)
 	}
@@ -297,11 +297,11 @@ func openArchive(archivePath string) (*os.File, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, apperrors.InvalidInput("archive",
-				fmt.Sprintf("cannot open archive '%s': %v", archivePath, err)).WithCause(err)
+				"cannot open archive").WithCause(err)
 		}
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return nil, apperrors.New(code,
-			fmt.Sprintf("cannot open archive '%s': %v", archivePath, err), status).WithCause(err)
+			"cannot open archive").WithCause(err)
 	}
 	return file, nil
 }
@@ -355,39 +355,43 @@ func ensureLeafNotSymlink(archivePath, target, member string) error {
 func createAllDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("cannot create directory '%s': %v", dir, err), 500).WithCause(err)
+			"cannot create directory").WithCause(err)
 	}
 	return nil
 }
 
 func escapeError(archivePath, member string) error {
 	return apperrors.InvalidInput("archive",
-		fmt.Sprintf("archive '%s' contains an unsafe member path '%s'", archivePath, member))
+		"archive contains an unsafe member path").
+		WithCause(fmt.Errorf("archive %q contains unsafe member %q", archivePath, member))
 }
 
 func unsafeLinkError(archivePath, member string) error {
 	return apperrors.InvalidInput("archive",
-		fmt.Sprintf("archive '%s' contains a link member '%s', which is not permitted", archivePath, member))
+		"archive contains a link member, which is not permitted").
+		WithCause(fmt.Errorf("archive %q contains link member %q", archivePath, member))
 }
 
 func oversizeError(archivePath string, maxTotalBytes int64) error {
 	return apperrors.InvalidInput("archive",
-		fmt.Sprintf("archive '%s' exceeds the extraction limit of %d uncompressed bytes", archivePath, maxTotalBytes))
+		fmt.Sprintf("archive exceeds the extraction limit of %d uncompressed bytes", maxTotalBytes)).
+		WithCause(fmt.Errorf("archive %q exceeds byte limit %d", archivePath, maxTotalBytes))
 }
 
 func tooManyEntriesError(archivePath string, maxEntries int) error {
 	return apperrors.InvalidInput("archive",
-		fmt.Sprintf("archive '%s' exceeds the extraction limit of %d members", archivePath, maxEntries))
+		fmt.Sprintf("archive exceeds the extraction limit of %d members", maxEntries)).
+		WithCause(fmt.Errorf("archive %q exceeds member limit %d", archivePath, maxEntries))
 }
 
 func extractIOError(archivePath, action string, err error) error {
 	return apperrors.New(apperrors.ErrCodeInternal,
-		fmt.Sprintf("cannot %s for '%s': %v", action, archivePath, err), 500).WithCause(err)
+		"cannot "+action).WithCause(fmt.Errorf("%s for %q: %w", action, archivePath, err))
 }
 
 func archiveFormatError(archivePath, action string, err error) error {
 	return apperrors.InvalidInput("archive",
-		fmt.Sprintf("cannot %s for '%s': %v", action, archivePath, err)).WithCause(err)
+		"cannot "+action).WithCause(fmt.Errorf("%s for %q: %w", action, archivePath, err))
 }
 
 // archiveReadError classifies a failure encountered while reading a member from an

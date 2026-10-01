@@ -62,17 +62,3 @@ const (
 	// ErrCodeCanceled indicates the operation was canceled by the caller or system.
 	ErrCodeCanceled ErrorCode = "CANCELED"
 )
-
-var retryableCodes = map[ErrorCode]bool{
-	ErrCodeServiceUnavailable: true,
-	ErrCodeConnectionFailed:   true,
-	ErrCodeTimeout:            true,
-	ErrCodeRateLimited:        true,
-	ErrCodeExternalService:    true,
-	ErrCodeInternal:           false,
-}
-
-// IsRetryableCode returns true if the error code indicates a retryable error.
-func IsRetryableCode(code ErrorCode) bool {
-	return retryableCodes[code]
-}

@@ -26,6 +26,19 @@ Dependency-free modules:
 - `cli` — standard library only (`fmt`, `os`, `flag`-free custom parsing); the CLI is the one place stdout is expected.
 - `dataset` — standard library only.
 
+## Version constraints
+
+Go 1.27.1 is the minimum supported toolchain. Dependency updates are candidates, not automatic approvals: build, test, vulnerability, and license gates must pass before adopting them.
+
+| Dependency | Selected version | Constraint |
+|---|---|---|
+| `google.golang.org/grpc` | `v1.83.2` | Patched stable release. Newer `v1.84.0` is affected by [GO-2026-6443](https://pkg.go.dev/vuln/GO-2026-6443); do not move to it or an unreleased development fix. |
+| gRPC consumers | `grpc-gateway/v2 v2.30.0`, `proto/otlp v1.11.0`, `google.golang.org/api v0.297.0` | Retain versions compatible with the patched gRPC release. Newer versions require the affected line through minimum-version selection. |
+| `k8s.io/kube-openapi` | `v0.0.0-20260721132016-d427ff9ee9ad` | The revision required by [Kubernetes apimachinery v0.37.1](https://github.com/kubernetes/apimachinery/blob/v0.37.1/go.mod). Newer development snapshots use structured-merge-diff/v7, incompatible with the released libraries' v6 schema types. |
+| `github.com/segmentio/asm` | `v1.1.5` | Latest MIT-licensed patch used by MCP's JSON dependency. [v1.2.1 uses MIT-0](https://github.com/segmentio/asm/blob/v1.2.1/LICENSE), which the current scanner does not classify and the allow-list does not approve. This is a tooling/policy constraint, not a missing upstream license; adoption needs scanner support and maintainer approval. |
+
+Validation tools are pinned in CI: golangci-lint v2.14.0, govulncheck v1.8.0, and go-licenses/v2 v2.0.1. Build local copies with Go 1.27.1 or newer so the tools can analyze the repository's language version.
+
 ## Known suppressions
 
 `GO-2026-5932` (`golang.org/x/crypto/openpgp`) is suppressed across all modules: the flagged package is deprecated-by-design and never imported by gokit, so it is not reachable. See `.github/govulncheck-suppressions.json` for the full rationale and expiry.

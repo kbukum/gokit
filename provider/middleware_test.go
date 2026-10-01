@@ -78,6 +78,7 @@ type orderTracker[I, O any] struct {
 
 func (o *orderTracker[I, O]) Name() string                         { return o.inner.Name() }
 func (o *orderTracker[I, O]) IsAvailable(ctx context.Context) bool { return o.inner.IsAvailable(ctx) }
+
 func (o *orderTracker[I, O]) Execute(ctx context.Context, input I) (O, error) {
 	*o.order = append(*o.order, o.tag+":before")
 	result, err := o.inner.Execute(ctx, input)

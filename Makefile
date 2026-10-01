@@ -95,7 +95,12 @@ endif
 
 ## Update dependencies (M=<module>, W=core|contrib)
 update:
+ifeq ($(_FILTERED),)
+	@$(TOVEN) update
+	@$(TOVEN) tidy-fix
+else
 	@$(GOMOD) update $(_M) $(_W)
+endif
 
 ## Sync intra-repo replace directives so every gokit require resolves locally.
 ## Keeps `go mod tidy` working against unpublished versions during a release bump.
@@ -106,9 +111,9 @@ replace-sync:
 replace-check:
 	@$(GOMOD) replace-sync --check
 
-## Update Go version across modules (usage: make update-go VERSION=1.26.0 [W=core|contrib])
+## Update Go version across modules (usage: make update-go VERSION=1.27.1 [W=core|contrib])
 update-go:
-	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.26.0" && exit 1)
+	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.27.1" && exit 1)
 	@$(GOMOD) update-go $(VERSION) $(_W)
 
 ## Preview the release plan: selected modules, versions, tags, and order (read-only)

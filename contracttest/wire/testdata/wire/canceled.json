@@ -1,0 +1,40 @@
+{
+  "name": "canceled",
+  "httpStatus": 408,
+  "rpcCode": 1,
+  "vocabulary": {
+    "code": "CANCELED",
+    "message": "The request operation was canceled.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/canceled",
+    "title": "Canceled",
+    "status": 408,
+    "detail": "The request operation was canceled.",
+    "code": "CANCELED",
+    "retryable": false,
+    "details": {
+      "operation": "request"
+    }
+  },
+  "grpcStatus": "CAESI1RoZSByZXF1ZXN0IG9wZXJhdGlvbiB3YXMgY2FuY2VsZWQuGnsKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8STwoIQ0FOQ0VMRUQSCWdva2l0LmRldhoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U=",
+  "connectJson": {
+    "code": "canceled",
+    "message": "The request operation was canceled.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CghDQU5DRUxFRBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "CANCELED",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

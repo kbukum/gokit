@@ -23,6 +23,7 @@ type mockComponent struct {
 	startErr error
 	stopErr  error
 	health   component.Health
+	healthFn func(context.Context) component.Health
 	started  bool
 	stopped  bool
 }
@@ -39,6 +40,9 @@ func (m *mockComponent) Stop(ctx context.Context) error {
 }
 
 func (m *mockComponent) Health(ctx context.Context) component.Health {
+	if m.healthFn != nil {
+		return m.healthFn(ctx)
+	}
 	return m.health
 }
 
@@ -702,7 +706,7 @@ func TestSummaryDisplaySummary(t *testing.T) {
 	container := di.NewContainer()
 
 	// DisplaySummary should not panic
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestSummaryDisplaySummaryNilRegistry(t *testing.T) {
@@ -711,7 +715,7 @@ func TestSummaryDisplaySummaryNilRegistry(t *testing.T) {
 
 	// Should not panic with nil container (registry is required)
 	registry := component.NewRegistry()
-	s.DisplaySummary(registry, nil, nil)
+	s.DisplaySummary(t.Context(), registry, nil, nil)
 }
 
 func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
@@ -726,7 +730,7 @@ func TestSummaryDisplayWithDIRegistrations(t *testing.T) {
 	_ = di.Register(container, "cfg", di.WithName("config"))
 
 	// Should not panic
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestRegistrationStatus(t *testing.T) {
@@ -863,7 +867,7 @@ func TestSummaryCollectFromRegistry(t *testing.T) {
 	registry.Register(comp)
 
 	container := di.NewContainer()
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 
 	// Verify infrastructure was auto-discovered
 	if len(s.infrastructure) != 1 {
@@ -887,7 +891,7 @@ func TestSummaryDisplayWithUnhealthyComponents(t *testing.T) {
 
 	container := di.NewContainer()
 	// Should not panic and should show health issues
-	s.DisplaySummary(registry, container, nil)
+	s.DisplaySummary(t.Context(), registry, container, nil)
 }
 
 func TestRunTaskWithComponentStopError(t *testing.T) {

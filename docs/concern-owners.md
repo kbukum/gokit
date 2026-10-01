@@ -11,7 +11,8 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Filesystem / path safety / atomic writes | `fs` | raw `os` + `filepath.EvalSymlinks` + `Rel` escape checks, non-atomic `os.WriteFile` | path confinement, symlink-escape rejection, atomic writes |
 | Config loading / precedence | `config` | custom env/flag/file precedence logic | |
 | JSON Schema validation | `schema` | hand-rolled validation walks | |
-| Errors | `errors` | fresh sentinels / custom error structs for shared concerns | `AppError`, RFC 9457, typed codes, `errors.Is/As/Join` |
+| Errors | `errors` | fresh sentinels / custom error structs for shared concerns | `AppError`, RFC 9457, typed codes, `errors.Is/As/Join`; owns REST status, RPC classification, default transient hints and typed failure vocabulary. Explicit retry overrides do not grant idempotency. Core stays protobuf- and transport-library-free |
+| Transport error encoding (Connect / gRPC / problem+json) | `errors/rpc` + `connect` / `grpc` / `server` | competing detail encoders or application-local status mappings | `errors/rpc` owns shared protobuf semantics; adapters own transport mechanics. `DecodeError` returns remote errors, not approved public AppErrors. REST status comes from the code; retry hints are explicit and do not grant idempotency |
 | Logging | `logging` | `log`, `fmt.Print*` | `log/slog` via injected logger |
 | Resilience (retry/timeout/circuit-break) | `resilience` | hand-rolled loops, scattered `context.WithTimeout` + custom backoff | idempotent ops only, bounded + jittered |
 | HTTP client / server | `httpclient` / `server` | raw `http.Client{}` with custom retry/timeout | |
@@ -20,7 +21,7 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Observability (traces/metrics) | `observability` | direct exporter wiring, package-global meters | injected tracer/meter |
 | Encryption / secrets | `encryption` / `security` | ad-hoc crypto, custom header sets | current algorithms only; non-crypto secret redaction/masking lives in `util` (`SecretString`, `SecretKeyMatcher`) |
 | Git operations | `git` | bare `exec.Command("git", …)` | |
-| Validation | `validation` | inline boundary checks duplicated per package | |
+| Validation | `validation` | inline boundary checks duplicated per package | shared `errors.Violation` vocabulary; inject `StructValidator` (and the Connect/gRPC `protovalidate.Validator`), never a package-global validator singleton |
 | Token/identity validation | `auth` (`TokenValidator`) | a transport owning token validation or defining divergent per-transport validation semantics; reading credentials from the URL query string as the default | injected into transports (server/grpc/connect/sse) via a local structural interface — L5 never imports `auth` (L6); 401 missing/invalid vs 403 not-permitted. The identical structural injection seam repeated per transport is the approved layering exception, not a divergent contract. `grpc`/`connect`/`sse` are header-only; `server/middleware` adds an opt-in, path-whitelisted, audited query-token fallback (`WithQueryTokenParam`) for endpoints that cannot set headers |
 | Database persistence / GORM drivers | `database` (+ adapter sub-modules) | hand-wiring `gorm.io/driver/*` + a `golang-migrate` driver per consumer | `DialectRegistry`, repositories, `migration`; drivers live in adapters (`database/sqlite`, `database/postgres`), registered explicitly, no `init()` |
 | Eval run provenance / reproducibility | `bench` | ad-hoc seed/commit/host capture on benchmark results | `RunProvenance`, injected `ProvenanceProbe`, seeded `math/rand/v2`, order-independent dataset hash |

@@ -1,0 +1,47 @@
+{
+  "name": "service_unavailable_retry_no_delay",
+  "httpStatus": 503,
+  "rpcCode": 14,
+  "vocabulary": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "The db is temporarily unavailable. Please try again.",
+    "retryable": true
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/service-unavailable",
+    "title": "Service Unavailable",
+    "status": 503,
+    "detail": "The db is temporarily unavailable. Please try again.",
+    "code": "SERVICE_UNAVAILABLE",
+    "retryable": true,
+    "details": {
+      "service": "db"
+    }
+  },
+  "grpcStatus": "CA4SNFRoZSBkYiBpcyB0ZW1wb3JhcmlseSB1bmF2YWlsYWJsZS4gUGxlYXNlIHRyeSBhZ2Fpbi4ahQEKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SWQoTU0VSVklDRV9VTkFWQUlMQUJMRRIJZ29raXQuZGV2GhEKCXJldHJ5YWJsZRIEdHJ1ZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNlGi4KKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5SZXRyeUluZm8SAgoA",
+  "connectJson": {
+    "code": "unavailable",
+    "message": "The db is temporarily unavailable. Please try again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "ChNTRVJWSUNFX1VOQVZBSUxBQkxFEglnb2tpdC5kZXYaEQoJcmV0cnlhYmxlEgR0cnVlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U",
+        "debug": {
+          "reason": "SERVICE_UNAVAILABLE",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "true",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.RetryInfo",
+        "value": "CgA",
+        "debug": {
+          "retryDelay": "0s"
+        }
+      }
+    ]
+  }
+}

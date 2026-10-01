@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/auth"
 	"cloud.google.com/go/auth/credentials"
 	gcstorage "cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
@@ -138,16 +139,25 @@ type googleClient struct {
 }
 
 func newGoogleClient(ctx context.Context, cfg *Config) (*googleClient, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("storage: gcs config is nil")
+	}
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
 	var opts []option.ClientOption
 	if cfg.Endpoint != "" && cfg.Endpoint != DefaultEndpoint {
 		opts = append(opts, option.WithEndpoint(cfg.Endpoint))
 	}
 	if cfg.CredentialsFile != "" || len(cfg.CredentialsJSON) > 0 {
-		creds, err := credentials.DetectDefault(&credentials.DetectOptions{
-			Scopes:          []string{gcstorage.ScopeFullControl},
-			CredentialsFile: cfg.CredentialsFile,
-			CredentialsJSON: cfg.CredentialsJSON,
-		})
+		var creds *auth.Credentials
+		var err error
+		detect := &credentials.DetectOptions{Scopes: []string{gcstorage.ScopeFullControl}}
+		if cfg.CredentialsFile != "" {
+			creds, err = credentials.NewCredentialsFromFile(credentials.ServiceAccount, cfg.CredentialsFile, detect)
+		} else {
+			creds, err = credentials.NewCredentialsFromJSON(credentials.ServiceAccount, cfg.CredentialsJSON, detect)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("storage: load gcs credentials: %w", err)
 		}

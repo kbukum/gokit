@@ -80,7 +80,7 @@ func Absolute(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", apperrors.New(apperrors.ErrCodeInternal,
-			fmt.Sprintf("failed to make path absolute: %v", err), 500).WithCause(err)
+			"failed to make path absolute").WithCause(err)
 	}
 	return abs, nil
 }
@@ -109,7 +109,7 @@ func ResolveRootRelativeTo(field, baseDir, root string) (string, error) {
 	canonical, err := Canonicalize(resolved)
 	if err != nil {
 		return "", apperrors.InvalidInput(field,
-			fmt.Sprintf("failed to resolve %s '%s'", field, resolved)).WithCause(err)
+			"failed to resolve path").WithCause(err)
 	}
 	return canonical, nil
 }
@@ -149,7 +149,7 @@ func splitSegments(path string) []string {
 }
 
 func canonicalizeError(path string, err error) error {
-	code, status := osErrorCode(err)
+	code := osErrorCode(err)
 	return apperrors.New(code,
-		fmt.Sprintf("failed to canonicalize '%s': %v", path, err), status).WithCause(err)
+		"failed to canonicalize path").WithCause(fmt.Errorf("canonicalize %q: %w", path, err))
 }

@@ -1,0 +1,47 @@
+{
+  "name": "not_found_with_reason_and_trace",
+  "httpStatus": 404,
+  "rpcCode": 5,
+  "vocabulary": {
+    "code": "NOT_FOUND",
+    "message": "The requested user was not found.",
+    "reason": "USER_GONE",
+    "retryable": false,
+    "traceId": "trace-abc"
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/not-found",
+    "title": "Not Found",
+    "status": 404,
+    "detail": "The requested user was not found.",
+    "code": "NOT_FOUND",
+    "reason": "USER_GONE",
+    "retryable": false,
+    "traceId": "trace-abc",
+    "details": {
+      "id": "123",
+      "resource": "user"
+    }
+  },
+  "grpcStatus": "CAUSIVRoZSByZXF1ZXN0ZWQgdXNlciB3YXMgbm90IGZvdW5kLhqnAQoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLkVycm9ySW5mbxJ7CglOT1RfRk9VTkQSCWdva2l0LmRldhoTCgZyZWFzb24SCVVTRVJfR09ORRoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2UaFAoHdHJhY2VJZBIJdHJhY2UtYWJj",
+  "connectJson": {
+    "code": "not_found",
+    "message": "The requested user was not found.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CglOT1RfRk9VTkQSCWdva2l0LmRldhoTCgZyZWFzb24SCVVTRVJfR09ORRoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2UaFAoHdHJhY2VJZBIJdHJhY2UtYWJj",
+        "debug": {
+          "reason": "NOT_FOUND",
+          "domain": "gokit.dev",
+          "metadata": {
+            "reason": "USER_GONE",
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService",
+            "traceId": "trace-abc"
+          }
+        }
+      }
+    ]
+  }
+}

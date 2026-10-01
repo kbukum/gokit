@@ -114,8 +114,11 @@ type componentTestStore struct {
 func (s *componentTestStore) Get(context.Context, string) (value []byte, found bool, err error) {
 	return nil, false, nil
 }
+
 func (s *componentTestStore) Set(context.Context, string, []byte, time.Duration) error { return nil }
-func (s *componentTestStore) Delete(context.Context, string) error                     { return nil }
+
+func (s *componentTestStore) Delete(context.Context, string) error { return nil }
+
 func (s *componentTestStore) Exists(context.Context, string) (bool, error) {
 	return s.exists, s.existsErr
 }

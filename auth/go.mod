@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/auth
 
-go 1.26.7
+go 1.27.1
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1

@@ -29,8 +29,8 @@ func TestWrapResilienceError_CircuitOpen(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 503 {
-		t.Errorf("expected 503, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 503 {
+		t.Errorf("expected 503, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -40,8 +40,8 @@ func TestWrapResilienceError_RateLimited(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 429 {
-		t.Errorf("expected 429, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 429 {
+		t.Errorf("expected 429, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -51,8 +51,8 @@ func TestWrapResilienceError_BulkheadFull(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 429 {
-		t.Errorf("expected 429, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 429 {
+		t.Errorf("expected 429, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -62,8 +62,8 @@ func TestWrapResilienceError_BulkheadTimeout(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 429 {
-		t.Errorf("expected 429, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 429 {
+		t.Errorf("expected 429, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -73,8 +73,8 @@ func TestWrapResilienceError_ContextCanceled(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 504 {
-		t.Errorf("expected 504 (gateway timeout), got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 504 {
+		t.Errorf("expected 504 (gateway timeout), got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -84,8 +84,8 @@ func TestWrapResilienceError_DeadlineExceeded(t *testing.T) {
 	if !ok {
 		t.Fatal("expected AppError")
 	}
-	if appErr.HTTPStatus != 504 {
-		t.Errorf("expected 504 (gateway timeout), got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 504 {
+		t.Errorf("expected 504 (gateway timeout), got %d", appErr.HTTPStatus())
 	}
 }
 

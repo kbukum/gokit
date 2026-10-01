@@ -1,0 +1,37 @@
+{
+  "name": "internal_safe_message",
+  "httpStatus": 500,
+  "rpcCode": 13,
+  "vocabulary": {
+    "code": "INTERNAL_ERROR",
+    "message": "An unexpected error occurred. Please try again or contact support.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/internal-error",
+    "title": "Internal Error",
+    "status": 500,
+    "detail": "An unexpected error occurred. Please try again or contact support.",
+    "code": "INTERNAL_ERROR",
+    "retryable": false
+  },
+  "grpcStatus": "CA0SQkFuIHVuZXhwZWN0ZWQgZXJyb3Igb2NjdXJyZWQuIFBsZWFzZSB0cnkgYWdhaW4gb3IgY29udGFjdCBzdXBwb3J0LhqBAQoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLkVycm9ySW5mbxJVCg5JTlRFUk5BTF9FUlJPUhIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ==",
+  "connectJson": {
+    "code": "internal",
+    "message": "An unexpected error occurred. Please try again or contact support.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg5JTlRFUk5BTF9FUlJPUhIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "INTERNAL_ERROR",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

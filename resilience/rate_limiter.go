@@ -2,7 +2,6 @@ package resilience
 
 import (
 	"context"
-	"net/http"
 	"sync"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 // Common rate limiter errors. ErrRateLimited is a typed AppError so callers can
 // branch on the error code, while errors.Is still matches the sentinel.
 var (
-	ErrRateLimited = apperr.New(apperr.ErrCodeRateLimited, "rate limit exceeded", http.StatusTooManyRequests)
+	ErrRateLimited = apperr.New(apperr.ErrCodeRateLimited, "rate limit exceeded")
 )
 
 // RateLimiterConfig configures a rate limiter.

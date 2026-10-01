@@ -1,0 +1,46 @@
+{
+  "name": "rate_limited_retry_with_delay",
+  "httpStatus": 429,
+  "rpcCode": 8,
+  "vocabulary": {
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Please wait a moment and try again.",
+    "retryable": true,
+    "retryAfterMs": 1500
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/rate-limited",
+    "title": "Rate Limited",
+    "status": 429,
+    "detail": "Too many requests. Please wait a moment and try again.",
+    "code": "RATE_LIMITED",
+    "retryable": true,
+    "retryAfter": 1.5
+  },
+  "grpcStatus": "CAgSNlRvbyBtYW55IHJlcXVlc3RzLiBQbGVhc2Ugd2FpdCBhIG1vbWVudCBhbmQgdHJ5IGFnYWluLhp+Cih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElIKDFJBVEVfTElNSVRFRBIJZ29raXQuZGV2GhEKCXJldHJ5YWJsZRIEdHJ1ZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNlGjYKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5SZXRyeUluZm8SCgoICAEQgMq17gE=",
+  "connectJson": {
+    "code": "resource_exhausted",
+    "message": "Too many requests. Please wait a moment and try again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CgxSQVRFX0xJTUlURUQSCWdva2l0LmRldhoRCglyZXRyeWFibGUSBHRydWUaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "RATE_LIMITED",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "true",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.RetryInfo",
+        "value": "CggIARCAyrXuAQ",
+        "debug": {
+          "retryDelay": "1.500s"
+        }
+      }
+    ]
+  }
+}

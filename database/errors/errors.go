@@ -5,7 +5,6 @@ package errors
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"gorm.io/gorm"
@@ -89,30 +88,30 @@ func FromDatabase(err error, resource string) *apperrors.AppError {
 	// Duplicate key violation
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeAlreadyExists,
-			Message:    fmt.Sprintf("A %s with these details already exists.", resource),
-			HTTPStatus: http.StatusConflict,
-			Retryable:  false,
+			Code:    apperrors.ErrCodeAlreadyExists,
+			Message: fmt.Sprintf("A %s with these details already exists.", resource),
+
+			Retryable: false,
 		}).WithCause(err)
 	}
 
 	// Connection errors
 	if IsConnectionError(err) {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeDatabaseError,
-			Message:    "Database is temporarily unavailable. Please try again.",
-			HTTPStatus: http.StatusServiceUnavailable,
-			Retryable:  true,
+			Code:    apperrors.ErrCodeDatabaseError,
+			Message: "Database is temporarily unavailable. Please try again.",
+
+			Retryable: true,
 		}).WithCause(err)
 	}
 
 	// Retryable errors (deadlock, etc.)
 	if IsRetryableError(err) {
 		return (&apperrors.AppError{
-			Code:       apperrors.ErrCodeDatabaseError,
-			Message:    "Database operation failed. Please try again.",
-			HTTPStatus: http.StatusServiceUnavailable,
-			Retryable:  true,
+			Code:    apperrors.ErrCodeDatabaseError,
+			Message: "Database operation failed. Please try again.",
+
+			Retryable: true,
 		}).WithCause(err)
 	}
 

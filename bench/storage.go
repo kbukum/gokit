@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -147,7 +146,7 @@ func validateRunID(runID string) error {
 
 func invalidRunIDError(runID string, cause error) error {
 	return apperrors.New(apperrors.ErrCodeInvalidInput,
-		fmt.Sprintf("invalid benchmark run ID %q", runID), http.StatusBadRequest).WithCause(cause)
+		fmt.Sprintf("invalid benchmark run ID %q", runID)).WithCause(cause)
 }
 
 // Latest returns the most recent RunResult by timestamp.

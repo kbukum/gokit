@@ -3,7 +3,6 @@ package metric
 import (
 	"fmt"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -57,7 +56,7 @@ func validateThresholdRange(metric string, threshold, lo, hi float64) error {
 	if math.IsNaN(threshold) || math.IsInf(threshold, 0) || threshold < lo || threshold > hi {
 		return apperrors.New(apperrors.ErrCodeInvalidInput,
 			fmt.Sprintf("%s: threshold %v must be a finite value within [%v, %v]", metric, threshold, lo, hi),
-			http.StatusBadRequest)
+		)
 	}
 	return nil
 }

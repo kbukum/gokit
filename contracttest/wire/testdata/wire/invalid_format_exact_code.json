@@ -1,0 +1,64 @@
+{
+  "name": "invalid_format_exact_code",
+  "httpStatus": 422,
+  "rpcCode": 3,
+  "vocabulary": {
+    "code": "INVALID_FORMAT",
+    "message": "Invalid format for date. Expected: RFC3339",
+    "violations": [
+      {
+        "field": "date",
+        "reason": "INVALID_FORMAT",
+        "message": "expected RFC3339"
+      }
+    ],
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/invalid-format",
+    "title": "Invalid Format",
+    "status": 422,
+    "detail": "Invalid format for date. Expected: RFC3339",
+    "code": "INVALID_FORMAT",
+    "retryable": false,
+    "violations": [
+      {
+        "field": "date",
+        "reason": "INVALID_FORMAT",
+        "message": "expected RFC3339"
+      }
+    ]
+  },
+  "grpcStatus": "CAMSKkludmFsaWQgZm9ybWF0IGZvciBkYXRlLiBFeHBlY3RlZDogUkZDMzMzORqBAQoodHlwZS5nb29nbGVhcGlzLmNvbS9nb29nbGUucnBjLkVycm9ySW5mbxJVCg5JTlZBTElEX0ZPUk1BVBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZRpXCil0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuQmFkUmVxdWVzdBIqCigKBGRhdGUSEGV4cGVjdGVkIFJGQzMzMzkaDklOVkFMSURfRk9STUFU",
+  "connectJson": {
+    "code": "invalid_argument",
+    "message": "Invalid format for date. Expected: RFC3339",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "Cg5JTlZBTElEX0ZPUk1BVBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ",
+        "debug": {
+          "reason": "INVALID_FORMAT",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.BadRequest",
+        "value": "CigKBGRhdGUSEGV4cGVjdGVkIFJGQzMzMzkaDklOVkFMSURfRk9STUFU",
+        "debug": {
+          "fieldViolations": [
+            {
+              "field": "date",
+              "description": "expected RFC3339",
+              "reason": "INVALID_FORMAT"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

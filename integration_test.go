@@ -386,8 +386,8 @@ func TestIntegration_Validation_Errors_ProducesCorrectAppError(t *testing.T) {
 	if appErr.Code != appErrors.ErrCodeInvalidInput {
 		t.Errorf("expected INVALID_INPUT, got %s", appErr.Code)
 	}
-	if appErr.HTTPStatus != 422 {
-		t.Errorf("expected HTTP 422, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 422 {
+		t.Errorf("expected HTTP 422, got %d", appErr.HTTPStatus())
 	}
 }
 
@@ -404,9 +404,9 @@ func TestIntegration_Validation_Errors_MultipleFieldErrors(t *testing.T) {
 	if appErr.Code != appErrors.ErrCodeInvalidInput {
 		t.Errorf("expected INVALID_INPUT, got %s", appErr.Code)
 	}
-	// Details should contain field errors
-	if len(appErr.Details) == 0 {
-		t.Error("expected details with field errors")
+	// Violations should carry the per-field problems.
+	if len(appErr.Violations) == 0 {
+		t.Error("expected violations with field errors")
 	}
 }
 
@@ -912,8 +912,8 @@ func TestIntegration_Errors_FluentBuilder_AcrossModules(t *testing.T) {
 	if appErr.Code != appErrors.ErrCodeNotFound {
 		t.Errorf("expected NOT_FOUND, got %s", appErr.Code)
 	}
-	if appErr.HTTPStatus != 404 {
-		t.Errorf("expected 404, got %d", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != 404 {
+		t.Errorf("expected 404, got %d", appErr.HTTPStatus())
 	}
 	if appErr.Details["search_field"] != "email" {
 		t.Error("expected detail 'search_field' = 'email'")

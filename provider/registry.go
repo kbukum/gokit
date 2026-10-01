@@ -2,7 +2,6 @@ package provider
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"sync"
 
@@ -39,7 +38,7 @@ func (r *Registry[T]) Create(name string, cfg map[string]any) (T, error) {
 	if !ok {
 		var zero T
 		return zero, goerrors.New(goerrors.ErrCodeNotFound,
-			fmt.Sprintf("provider factory %q not registered", name), http.StatusNotFound)
+			fmt.Sprintf("provider factory %q not registered", name))
 	}
 	return factory(cfg)
 }

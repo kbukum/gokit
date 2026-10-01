@@ -18,8 +18,8 @@ func TestFromKafka_ConnectionError(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected non-nil AppError")
 	}
-	if appErr.HTTPStatus != http.StatusServiceUnavailable {
-		t.Errorf("HTTPStatus = %d, want 503", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusServiceUnavailable {
+		t.Errorf("HTTPStatus = %d, want 503", appErr.HTTPStatus())
 	}
 	if !appErr.Retryable {
 		t.Error("expected Retryable=true")
@@ -35,8 +35,8 @@ func TestFromKafka_NonRetryableError(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected non-nil AppError")
 	}
-	if appErr.HTTPStatus != http.StatusBadRequest {
-		t.Errorf("HTTPStatus = %d, want 400", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusUnprocessableEntity {
+		t.Errorf("HTTPStatus = %d, want 422", appErr.HTTPStatus())
 	}
 	if appErr.Retryable {
 		t.Error("expected Retryable=false")
@@ -49,8 +49,8 @@ func TestFromKafka_RetryableError(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected non-nil AppError")
 	}
-	if appErr.HTTPStatus != http.StatusServiceUnavailable {
-		t.Errorf("HTTPStatus = %d, want 503", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("external-service category status = %d, want 500", appErr.HTTPStatus())
 	}
 	if !appErr.Retryable {
 		t.Error("expected Retryable=true")
@@ -63,8 +63,8 @@ func TestFromKafka_UnknownError(t *testing.T) {
 	if appErr == nil {
 		t.Fatal("expected non-nil AppError")
 	}
-	if appErr.HTTPStatus != http.StatusInternalServerError {
-		t.Errorf("HTTPStatus = %d, want 500", appErr.HTTPStatus)
+	if appErr.HTTPStatus() != http.StatusInternalServerError {
+		t.Errorf("HTTPStatus = %d, want 500", appErr.HTTPStatus())
 	}
 }
 

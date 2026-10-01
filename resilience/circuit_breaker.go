@@ -3,7 +3,6 @@
 package resilience
 
 import (
-	"net/http"
 	"sync"
 	"time"
 
@@ -38,7 +37,7 @@ func (s State) String() string {
 
 // ErrCircuitOpen is a typed AppError so callers can branch on the error code and
 // map to an HTTP status, while errors.Is still matches the sentinel.
-var ErrCircuitOpen = apperr.New(apperr.ErrCodeServiceUnavailable, "circuit breaker is open", http.StatusServiceUnavailable)
+var ErrCircuitOpen = apperr.New(apperr.ErrCodeServiceUnavailable, "circuit breaker is open")
 
 // CircuitBreakerConfig configures a circuit breaker.
 type CircuitBreakerConfig struct {

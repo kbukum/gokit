@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"net/http"
 	"sort"
 	"sync/atomic"
 
@@ -30,7 +29,7 @@ func (s *PrioritySelector[T]) Select(ctx context.Context, providers map[string]T
 	}
 	var zero T
 	return zero, goerrors.New(goerrors.ErrCodeServiceUnavailable,
-		"no available provider found in priority list", http.StatusServiceUnavailable)
+		"no available provider found in priority list")
 }
 
 // RoundRobinSelector distributes requests across providers.
@@ -49,7 +48,7 @@ func (s *RoundRobinSelector[T]) Select(ctx context.Context, providers map[string
 	if len(names) == 0 {
 		var zero T
 		return zero, goerrors.New(goerrors.ErrCodeServiceUnavailable,
-			"no providers available", http.StatusServiceUnavailable)
+			"no providers available")
 	}
 
 	n := len(names)
@@ -63,7 +62,7 @@ func (s *RoundRobinSelector[T]) Select(ctx context.Context, providers map[string
 	}
 	var zero T
 	return zero, goerrors.New(goerrors.ErrCodeServiceUnavailable,
-		"no available provider found", http.StatusServiceUnavailable)
+		"no available provider found")
 }
 
 // HealthCheckSelector picks the first available provider by calling IsAvailable.
@@ -84,5 +83,5 @@ func (s *HealthCheckSelector[T]) Select(ctx context.Context, providers map[strin
 	}
 	var zero T
 	return zero, goerrors.New(goerrors.ErrCodeServiceUnavailable,
-		"no available provider found", http.StatusServiceUnavailable)
+		"no available provider found")
 }

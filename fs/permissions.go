@@ -87,15 +87,15 @@ func SetReadonly(path string, readonly bool) error {
 		mode |= 0o200
 	}
 	if err := os.Chmod(path, mode); err != nil {
-		code, status := osErrorCode(err)
+		code := osErrorCode(err)
 		return apperrors.New(code,
-			fmt.Sprintf("failed to set permissions for '%s': %v", path, err), status).WithCause(err)
+			"failed to set permissions").WithCause(err)
 	}
 	return nil
 }
 
 func accessError(context, path string, err error) error {
-	code, status := osErrorCode(err)
+	code := osErrorCode(err)
 	return apperrors.New(code,
-		fmt.Sprintf("failed to %s for '%s': %v", context, path, err), status).WithCause(err)
+		"failed to "+context).WithCause(fmt.Errorf("%s for %q: %w", context, path, err))
 }

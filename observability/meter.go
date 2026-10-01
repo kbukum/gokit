@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -19,7 +18,7 @@ import (
 // AppError, preserving the underlying cause so callers can branch on the code
 // and HTTP status while still unwrapping the OpenTelemetry error.
 func metricInitError(what string, cause error) error {
-	return apperr.New(apperr.ErrCodeInternal, "observability: "+what, http.StatusInternalServerError).WithCause(cause)
+	return apperr.New(apperr.ErrCodeInternal, "observability: "+what).WithCause(cause)
 }
 
 // MeterConfig configures the OpenTelemetry meter provider.

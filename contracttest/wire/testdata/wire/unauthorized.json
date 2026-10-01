@@ -1,0 +1,37 @@
+{
+  "name": "unauthorized",
+  "httpStatus": 401,
+  "rpcCode": 16,
+  "vocabulary": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required.",
+    "retryable": false
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/unauthorized",
+    "title": "Unauthorized",
+    "status": 401,
+    "detail": "Authentication required.",
+    "code": "UNAUTHORIZED",
+    "retryable": false
+  },
+  "grpcStatus": "CBASGEF1dGhlbnRpY2F0aW9uIHJlcXVpcmVkLhp/Cih0eXBlLmdvb2dsZWFwaXMuY29tL2dvb2dsZS5ycGMuRXJyb3JJbmZvElMKDFVOQVVUSE9SSVpFRBIJZ29raXQuZGV2GhIKCXJldHJ5YWJsZRIFZmFsc2UaJAoHc2VydmljZRIZZ29raXQudGVzdC52MS5UZXN0U2VydmljZQ==",
+  "connectJson": {
+    "code": "unauthenticated",
+    "message": "Authentication required.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "CgxVTkFVVEhPUklaRUQSCWdva2l0LmRldhoSCglyZXRyeWFibGUSBWZhbHNlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U",
+        "debug": {
+          "reason": "UNAUTHORIZED",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "false",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      }
+    ]
+  }
+}

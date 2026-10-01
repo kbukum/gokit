@@ -208,22 +208,22 @@ func (a *App[C]) startup(ctx context.Context) error {
 	// components (infrastructure + application) start in a single pass. A configure error is
 	// fatal and aborts startup.
 	if err := a.emitLifecycleHooks(ctx, EventConfigure); err != nil {
-		return a.abortStartup("configure hook failed", err)
+		return a.abortStartup(ctx, "configure hook failed", err)
 	}
 
 	// Phase: before_start — hooks run before any component is started.
 	if err := a.emitLifecycleHooks(ctx, EventBeforeStart); err != nil {
-		return a.abortStartup("onBeforeStart hook failed", err)
+		return a.abortStartup(ctx, "onBeforeStart hook failed", err)
 	}
 
 	// Phase: start — single-pass StartAll for all registered components.
 	if err := a.Components.StartAll(ctx); err != nil {
-		return a.abortStartup("component startup failed", err)
+		return a.abortStartup(ctx, "component startup failed", err)
 	}
 
 	// Phase: after_start — hooks run after all components are started, before the ready check.
 	if err := a.emitLifecycleHooks(ctx, EventAfterStart); err != nil {
-		return a.abortStartup("onAfterStart hook failed", err)
+		return a.abortStartup(ctx, "onAfterStart hook failed", err)
 	}
 
 	// Ready check — advisory health probe of all components. A failure is logged and startup
@@ -236,23 +236,23 @@ func (a *App[C]) startup(ctx context.Context) error {
 
 	// Phase: ready — hooks run after the ready check completes, before accepting traffic.
 	if err := a.emitLifecycleHooks(ctx, EventReady); err != nil {
-		return a.abortStartup("onReady hook failed", err)
+		return a.abortStartup(ctx, "onReady hook failed", err)
 	}
 
 	// Display startup summary
 	a.Summary.SetStartupDuration(time.Since(start))
-	a.DisplaySummary()
+	a.DisplaySummary(ctx)
 
 	return nil
 }
 
 // abortStartup tears down whatever earlier startup phases created after a fatal error and
 // returns the wrapped cause. Teardown runs through the normal shutdown sequence on a fresh
-// bounded context (via stop) because the startup context may already be canceled; StopAll
+// bounded context because the startup context may already be canceled; StopAll
 // skips components that never started, so this is safe regardless of how far startup reached.
-func (a *App[C]) abortStartup(phase string, cause error) error {
-	if err := a.stop(); err != nil {
-		a.Logger.ErrorCtx(context.Background(), "Startup rollback reported errors", map[string]any{
+func (a *App[C]) abortStartup(ctx context.Context, phase string, cause error) error {
+	if err := a.shutdownWith(context.WithoutCancel(ctx)); err != nil {
+		a.Logger.ErrorCtx(ctx, "Startup rollback reported errors", map[string]any{
 			"phase": phase,
 			"error": err.Error(),
 		})
@@ -262,8 +262,8 @@ func (a *App[C]) abortStartup(phase string, cause error) error {
 
 // DisplaySummary prints the startup summary. It auto-collects infrastructure, routes,
 // and health from the component registry and DI container.
-func (a *App[C]) DisplaySummary() {
-	a.Summary.DisplaySummary(a.Components, a.Container, a.Logger)
+func (a *App[C]) DisplaySummary(ctx context.Context) {
+	a.Summary.DisplaySummary(ctx, a.Components, a.Container, a.Logger)
 }
 
 // WaitForSignal blocks until an OS interrupt/term signal or context cancellation.

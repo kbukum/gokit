@@ -47,8 +47,8 @@ func TestTokenStatsRejectsNilCounter(t *testing.T) {
 		if appErr.Code != apperrors.ErrCodeInvalidInput {
 			t.Errorf("Code = %q, want %q", appErr.Code, apperrors.ErrCodeInvalidInput)
 		}
-		if appErr.HTTPStatus != http.StatusBadRequest {
-			t.Errorf("HTTPStatus = %d, want %d", appErr.HTTPStatus, http.StatusBadRequest)
+		if appErr.HTTPStatus() != http.StatusUnprocessableEntity {
+			t.Errorf("HTTPStatus = %d, want %d", appErr.HTTPStatus(), http.StatusUnprocessableEntity)
 		}
 	}
 

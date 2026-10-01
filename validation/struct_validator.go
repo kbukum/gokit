@@ -4,70 +4,68 @@ import (
 	stderrors "errors"
 	"reflect"
 	"strings"
-	"sync"
 
 	"github.com/go-playground/validator/v10"
 
 	"github.com/kbukum/gokit/errors"
 )
 
-var (
+// StructValidator validates structs by their `validate:"..."` tags and reports
+// failures as the shared errors.Violation shape. It owns its own underlying
+// validator instance, so callers inject it at the composition root instead of
+// reaching for a package-global singleton.
+type StructValidator struct {
 	validate *validator.Validate
-	once     sync.Once
-)
-
-// getValidator returns the singleton validator instance.
-func getValidator() *validator.Validate {
-	once.Do(func() {
-		validate = validator.New(validator.WithRequiredStructEnabled())
-
-		// Use json tag names for field names in error messages
-		validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
-			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-			if name == "-" || name == "" {
-				return fld.Name
-			}
-			return name
-		})
-	})
-	return validate
 }
 
-// Validate validates a struct using struct tags.
-// Uses tags like `validate:"required,email,max=255"`.
-func Validate(s any) error {
-	v := getValidator()
-	err := v.Struct(s)
+// NewStructValidator builds a StructValidator that reports field names from json
+// tags, matching how the fields travel on the wire.
+func NewStructValidator() *StructValidator {
+	validate := validator.New(validator.WithRequiredStructEnabled())
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" || name == "" {
+			return fld.Name
+		}
+		return name
+	})
+	return &StructValidator{validate: validate}
+}
+
+// Validate validates a struct using its tags and returns an AppError carrying the
+// violations, or nil when the struct is valid.
+func (sv *StructValidator) Validate(s any) *errors.AppError {
+	err := sv.validate.Struct(s)
 	if err == nil {
 		return nil
 	}
 
 	var validationErrors validator.ValidationErrors
-	ok := stderrors.As(err, &validationErrors)
-	if !ok {
-		return errors.Validation("validation failed")
+	if !stderrors.As(err, &validationErrors) {
+		return errors.Internal(err)
 	}
 
-	// Build detailed error message
-	fieldErrors := make([]FieldError, 0, len(validationErrors))
+	violations := make([]errors.Violation, 0, len(validationErrors))
 	messages := make([]string, 0, len(validationErrors))
-
 	for _, e := range validationErrors {
-		fieldName := e.Field()
+		field := violationField(e)
 		message := formatValidationError(e)
-		fieldErrors = append(fieldErrors, FieldError{
-			Field:   fieldName,
-			Message: message,
-		})
-		messages = append(messages, fieldName+": "+message)
+		violations = append(violations, errors.Violation{Field: field, Reason: ReasonForRule(e.Tag()), Message: message})
+		messages = append(messages, field+": "+message)
 	}
 
-	appErr := errors.Validation(strings.Join(messages, "; "))
-	appErr.Details = map[string]any{
-		"fields": fieldErrors,
-	}
+	return errors.Validation(strings.Join(messages, "; ")).WithViolations(violations...)
+}
 
-	return appErr
+// violationField returns the canonical, json-tag-aware path to the failing field
+// so nested and indexed fields stay unambiguous (for example "billing.email" or
+// "samples[2].prompt"), dropping only the leading root struct name.
+func violationField(e validator.FieldError) string {
+	ns := e.Namespace()
+	if idx := strings.IndexByte(ns, '.'); idx >= 0 {
+		return ns[idx+1:]
+	}
+	return e.Field()
 }
 
 // formatValidationError creates a human-readable error message.

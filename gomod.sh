@@ -3,8 +3,8 @@
 # Usage:
 #   ./gomod.sh tidy                              # go mod tidy all modules
 #   ./gomod.sh tidy -m messaging                  # go mod tidy messaging module
-#   ./gomod.sh update                            # go get -u ./... all modules
-#   ./gomod.sh update-go 1.26.0                  # update go version in all go.mod files
+#   ./gomod.sh update                            # go get -u -t ./... all modules
+#   ./gomod.sh update-go 1.27.1                  # update go version in all go.mod files
 #   ./gomod.sh cmd "go test ./..."               # run command in all modules
 #   ./gomod.sh cmd "go test ./..." -m messaging   # run command in messaging module only
 #   ./gomod.sh cmd "go test" -m httpclient/rest  # resolves to httpclient module, ./rest/... package
@@ -190,12 +190,12 @@ cmd_update() {
   if [ -n "$target" ]; then
     resolve_module "$target"
     validate_workspace_membership "$MOD_DIR"
-    echo "Running: go get -u in $MOD_DIR..."
-    run_in_module "$MOD_DIR/go.mod" "go get -u ./... && go mod tidy"
+    echo "Running: go get -u -t in $MOD_DIR..."
+    run_in_module "$MOD_DIR/go.mod" "go get -u -t ./... && go mod tidy"
   else
-    echo "Running: go get -u ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
+    echo "Running: go get -u -t ./... across ${WORKSPACE_TARGET:+$WORKSPACE_TARGET workspace }modules..."
     while IFS= read -r modfile; do
-      run_in_module "$modfile" "go get -u ./... && go mod tidy"
+      run_in_module "$modfile" "go get -u -t ./... && go mod tidy"
     done < <(find_modules)
   fi
 }
@@ -203,7 +203,7 @@ cmd_update() {
 cmd_update_go() {
   local version=$1
   if [[ -z "$version" ]]; then
-    echo -e "${RED}Error: Go version required. e.g. ./gomod.sh update-go 1.26.0${NC}"
+    echo -e "${RED}Error: Go version required. e.g. ./gomod.sh update-go 1.27.1${NC}"
     exit 1
   fi
 

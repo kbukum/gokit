@@ -1,0 +1,47 @@
+{
+  "name": "external_service_retryable_shared_code",
+  "httpStatus": 500,
+  "rpcCode": 13,
+  "vocabulary": {
+    "code": "EXTERNAL_SERVICE_ERROR",
+    "message": "The stripe service encountered an error. Please try again.",
+    "retryable": true
+  },
+  "problemJson": {
+    "type": "https://gokit.dev/errors/external-service-error",
+    "title": "External Service Error",
+    "status": 500,
+    "detail": "The stripe service encountered an error. Please try again.",
+    "code": "EXTERNAL_SERVICE_ERROR",
+    "retryable": true,
+    "details": {
+      "service": "stripe"
+    }
+  },
+  "grpcStatus": "CA0SOlRoZSBzdHJpcGUgc2VydmljZSBlbmNvdW50ZXJlZCBhbiBlcnJvci4gUGxlYXNlIHRyeSBhZ2Fpbi4aiAEKKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5FcnJvckluZm8SXAoWRVhURVJOQUxfU0VSVklDRV9FUlJPUhIJZ29raXQuZGV2GhEKCXJldHJ5YWJsZRIEdHJ1ZRokCgdzZXJ2aWNlEhlnb2tpdC50ZXN0LnYxLlRlc3RTZXJ2aWNlGi4KKHR5cGUuZ29vZ2xlYXBpcy5jb20vZ29vZ2xlLnJwYy5SZXRyeUluZm8SAgoA",
+  "connectJson": {
+    "code": "internal",
+    "message": "The stripe service encountered an error. Please try again.",
+    "details": [
+      {
+        "type": "google.rpc.ErrorInfo",
+        "value": "ChZFWFRFUk5BTF9TRVJWSUNFX0VSUk9SEglnb2tpdC5kZXYaEQoJcmV0cnlhYmxlEgR0cnVlGiQKB3NlcnZpY2USGWdva2l0LnRlc3QudjEuVGVzdFNlcnZpY2U",
+        "debug": {
+          "reason": "EXTERNAL_SERVICE_ERROR",
+          "domain": "gokit.dev",
+          "metadata": {
+            "retryable": "true",
+            "service": "gokit.test.v1.TestService"
+          }
+        }
+      },
+      {
+        "type": "google.rpc.RetryInfo",
+        "value": "CgA",
+        "debug": {
+          "retryDelay": "0s"
+        }
+      }
+    ]
+  }
+}

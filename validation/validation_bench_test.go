@@ -60,10 +60,11 @@ type benchUser struct {
 
 func BenchmarkValidateStruct(b *testing.B) {
 	u := benchUser{Name: "alice", Email: "alice@example.com", Age: 30}
+	sv := NewStructValidator()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := Validate(u); err != nil {
+		if err := sv.Validate(u); err != nil {
 			b.Fatalf("validate: %v", err)
 		}
 	}

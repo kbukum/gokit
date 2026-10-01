@@ -2,369 +2,218 @@ package grpc
 
 import (
 	"errors"
-	"fmt"
-	"net/http"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	errorrpc "github.com/kbukum/gokit/errors/rpc"
 )
 
-// ---------------------------------------------------------------------------
-// FromGRPC — nil / connection-error fast paths
-// ---------------------------------------------------------------------------
+const testDomain = "gokit.test.v1.TestService"
 
-func TestFromGRPC_NilError(t *testing.T) {
+func TestAppErrorToStatus_Nil(t *testing.T) {
 	t.Parallel()
-	assert.Nil(t, FromGRPC(nil, "svc"))
+	if mustEncode(t, nil, testDomain) != nil {
+		t.Fatal("expected nil for nil input")
+	}
 }
 
-func TestFromGRPC_ConnectionError(t *testing.T) {
+func TestStatusToAppError_Nil(t *testing.T) {
 	t.Parallel()
-	err := fmt.Errorf("dial tcp: connection refused")
-	appErr := FromGRPC(err, "payments")
-
-	assert.Equal(t, apperrors.ErrCodeServiceUnavailable, appErr.Code)
-	assert.True(t, appErr.Retryable)
-	require.Error(t, appErr.Cause)
+	if mustDecode(t, nil) != nil {
+		t.Fatal("expected nil for nil input")
+	}
 }
 
-func TestFromGRPC_NonStatusError(t *testing.T) {
+func TestStatusToAppError_NonStatusError(t *testing.T) {
 	t.Parallel()
-	// An error that is NOT a gRPC status and NOT a connection error
-	err := errors.New("some random failure")
-	appErr := FromGRPC(err, "svc")
-
-	assert.Equal(t, apperrors.ErrCodeInternal, appErr.Code)
+	appErr, err := DecodeError(errors.New("some random failure"))
+	if appErr != nil || err == nil {
+		t.Fatalf("expected explicit non-transport decode failure, got %v, %v", appErr, err)
+	}
 }
 
-// ---------------------------------------------------------------------------
-// FromGRPC — every gRPC status code
-// ---------------------------------------------------------------------------
+// TestWireRoundTrip proves every vocabulary field survives AppError → gRPC status
+// → AppError without loss, including codes that share one RPC status.
+func TestWireRoundTrip(t *testing.T) {
+	t.Parallel()
 
-func TestFromGRPC_StatusCodes(t *testing.T) {
+	cases := map[string]*apperrors.AppError{
+		"not found with reason and trace": apperrors.NotFound("user", "123").
+			WithReason("USER_GONE").WithTraceID("trace-abc"),
+		"validation with violations": apperrors.Validation("request failed validation").
+			WithViolations(
+				apperrors.Violation{Field: "email", Reason: "REQUIRED", Message: "is required"},
+				apperrors.Violation{Field: "age", Reason: "OUT_OF_RANGE", Message: "must be >= 18"},
+			).WithReason("FORM_INVALID"),
+		"rate limited retry with delay": apperrors.RateLimited().
+			WithRetryAfter(1500 * time.Millisecond),
+		"service unavailable retry no delay": apperrors.ServiceUnavailable("db"),
+		"missing field keeps exact code":     apperrors.MissingField("name"),
+		"invalid format keeps exact code":    apperrors.InvalidFormat("date", "RFC3339"),
+		"database error keeps exact code":    apperrors.DatabaseError(nil),
+		"external service keeps exact code":  apperrors.ExternalServiceError("stripe", nil),
+		"token expired keeps exact code":     apperrors.TokenExpired(),
+		"invalid token keeps exact code":     apperrors.InvalidToken(),
+		"conflict keeps exact code":          apperrors.Conflict("version mismatch"),
+		"already exists keeps exact code":    apperrors.AlreadyExists("user"),
+		"forbidden keeps exact code":         apperrors.Forbidden("no access"),
+		"canceled keeps exact code":          apperrors.Canceled("request"),
+		"timeout keeps exact code":           apperrors.Timeout("request"),
+		"internal keeps safe message":        apperrors.Internal(nil),
+		"retryable override survives wire":   apperrors.Internal(nil).WithRetryAfter(0),
+	}
+
+	for name, original := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			st := mustEncode(t, original, testDomain)
+			if st == nil {
+				t.Fatal("AppErrorToStatus returned nil")
+			}
+			if got, want := st.Code(), codes.Code(apperrors.RPCCodeFor(original.Code)); got != want {
+				t.Fatalf("grpc code = %v, want %v", got, want)
+			}
+
+			got := mustDecode(t, st.Err())
+			if got == nil {
+				t.Fatal("StatusToAppError returned nil")
+			}
+			if got.Code != original.Code {
+				t.Errorf("code = %q, want %q", got.Code, original.Code)
+			}
+			if got.Reason != original.Reason {
+				t.Errorf("reason = %q, want %q", got.Reason, original.Reason)
+			}
+			if got.Message != original.Message {
+				t.Errorf("message = %q, want %q", got.Message, original.Message)
+			}
+			if got.TraceID != original.TraceID {
+				t.Errorf("traceId = %q, want %q", got.TraceID, original.TraceID)
+			}
+			if got.Retryable != original.Retryable {
+				t.Errorf("retryable = %v, want %v", got.Retryable, original.Retryable)
+			}
+			if got.RetryAfter != original.RetryAfter {
+				t.Errorf("retryAfter = %v, want %v", got.RetryAfter, original.RetryAfter)
+			}
+			assertViolationsEqual(t, got.Violations, original.Violations)
+		})
+	}
+}
+
+func assertViolationsEqual(t *testing.T, got, want []apperrors.Violation) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("violations len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("violation[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// TestStatusToAppError_PlainStatusCodes proves a status without gokit details
+// (for example one produced by a third-party gRPC server) still decodes to a
+// sensible AppError using only the one code table.
+func TestStatusToAppError_PlainStatusCodes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		grpcCode     codes.Code
-		grpcMsg      string
-		wantCode     apperrors.ErrorCode
-		wantHTTP     int
-		wantRetry    bool
-		wantContains string // substring in message (optional)
+		code      codes.Code
+		wantCode  apperrors.ErrorCode
+		wantRetry bool
 	}{
-		{
-			name:      "Unavailable",
-			grpcCode:  codes.Unavailable,
-			wantCode:  apperrors.ErrCodeServiceUnavailable,
-			wantHTTP:  http.StatusServiceUnavailable,
-			wantRetry: true,
-		},
-		{
-			name:      "DeadlineExceeded",
-			grpcCode:  codes.DeadlineExceeded,
-			grpcMsg:   "context deadline exceeded",
-			wantCode:  apperrors.ErrCodeTimeout,
-			wantHTTP:  http.StatusGatewayTimeout,
-			wantRetry: true,
-		},
-		{
-			name:     "NotFound",
-			grpcCode: codes.NotFound,
-			wantCode: apperrors.ErrCodeNotFound,
-			wantHTTP: http.StatusNotFound,
-		},
-		{
-			name:         "InvalidArgument_WithMessage",
-			grpcCode:     codes.InvalidArgument,
-			grpcMsg:      "field 'email' is required",
-			wantCode:     apperrors.ErrCodeInvalidInput,
-			wantHTTP:     http.StatusBadRequest,
-			wantContains: "Invalid input: field 'email' is required",
-		},
-		{
-			name:         "InvalidArgument_EmptyMessage",
-			grpcCode:     codes.InvalidArgument,
-			grpcMsg:      "",
-			wantCode:     apperrors.ErrCodeInvalidInput,
-			wantHTTP:     http.StatusBadRequest,
-			wantContains: "Invalid input. Please check your request.",
-		},
-		{
-			name:     "AlreadyExists",
-			grpcCode: codes.AlreadyExists,
-			wantCode: apperrors.ErrCodeAlreadyExists,
-			wantHTTP: http.StatusConflict,
-		},
-		{
-			name:     "PermissionDenied",
-			grpcCode: codes.PermissionDenied,
-			wantCode: apperrors.ErrCodeForbidden,
-			wantHTTP: http.StatusForbidden,
-		},
-		{
-			name:     "Unauthenticated",
-			grpcCode: codes.Unauthenticated,
-			wantCode: apperrors.ErrCodeUnauthorized,
-			wantHTTP: http.StatusUnauthorized,
-		},
-		{
-			name:      "ResourceExhausted",
-			grpcCode:  codes.ResourceExhausted,
-			wantCode:  apperrors.ErrCodeRateLimited,
-			wantHTTP:  http.StatusTooManyRequests,
-			wantRetry: true,
-		},
-		{
-			name:     "FailedPrecondition",
-			grpcCode: codes.FailedPrecondition,
-			grpcMsg:  "version mismatch",
-			wantCode: apperrors.ErrCodeConflict,
-			wantHTTP: http.StatusConflict,
-		},
-		{
-			name:      "Aborted",
-			grpcCode:  codes.Aborted,
-			wantCode:  apperrors.ErrCodeConflict,
-			wantHTTP:  http.StatusConflict,
-			wantRetry: true,
-		},
-		{
-			name:     "Canceled",
-			grpcCode: codes.Canceled,
-			wantCode: apperrors.ErrCodeInternal,
-			wantHTTP: http.StatusRequestTimeout,
-		},
-		{
-			name:     "Internal",
-			grpcCode: codes.Internal,
-			wantCode: apperrors.ErrCodeInternal,
-			wantHTTP: http.StatusInternalServerError,
-		},
-		{
-			name:     "Unknown_DefaultCase",
-			grpcCode: codes.Unknown,
-			wantCode: apperrors.ErrCodeInternal,
-			wantHTTP: http.StatusInternalServerError,
-		},
-		{
-			name:     "DataLoss_DefaultCase",
-			grpcCode: codes.DataLoss,
-			wantCode: apperrors.ErrCodeInternal,
-			wantHTTP: http.StatusInternalServerError,
-		},
+		{codes.NotFound, apperrors.ErrCodeNotFound, false},
+		{codes.AlreadyExists, apperrors.ErrCodeAlreadyExists, false},
+		{codes.InvalidArgument, apperrors.ErrCodeInvalidInput, false},
+		{codes.Unauthenticated, apperrors.ErrCodeUnauthorized, false},
+		{codes.PermissionDenied, apperrors.ErrCodeForbidden, false},
+		{codes.FailedPrecondition, apperrors.ErrCodeConflict, false},
+		{codes.DeadlineExceeded, apperrors.ErrCodeTimeout, true},
+		{codes.ResourceExhausted, apperrors.ErrCodeRateLimited, true},
+		{codes.Unavailable, apperrors.ErrCodeServiceUnavailable, true},
+		{codes.Internal, apperrors.ErrCodeInternal, false},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.code.String(), func(t *testing.T) {
 			t.Parallel()
-			grpcErr := status.Error(tc.grpcCode, tc.grpcMsg)
-			appErr := FromGRPC(grpcErr, "test-svc")
-
-			require.NotNil(t, appErr)
-			assert.Equal(t, tc.wantCode, appErr.Code, "error code")
-			assert.Equal(t, tc.wantHTTP, appErr.HTTPStatus, "HTTP status")
-			assert.Equal(t, tc.wantRetry, appErr.Retryable, "retryable")
-			require.Error(t, appErr.Cause, "cause should be set")
-
-			if tc.wantContains != "" {
-				assert.Contains(t, appErr.Message, tc.wantContains, "message content")
+			appErr := mustDecode(t, status.Error(tc.code, "boom"))
+			if appErr.Code != tc.wantCode {
+				t.Errorf("code = %q, want %q", appErr.Code, tc.wantCode)
+			}
+			if appErr.HTTPStatus() != apperrors.HTTPStatusFor(tc.wantCode) {
+				t.Errorf("httpStatus = %d, want %d", appErr.HTTPStatus(), apperrors.HTTPStatusFor(tc.wantCode))
+			}
+			if appErr.Retryable != tc.wantRetry {
+				t.Errorf("retryable = %v, want %v", appErr.Retryable, tc.wantRetry)
+			}
+			if appErr.Unwrap() == nil {
+				t.Error("cause should be set for a status error")
 			}
 		})
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ToGRPCStatus
-// ---------------------------------------------------------------------------
-
-func TestToGRPCStatus_NilError(t *testing.T) {
+func TestAppErrorToStatus_MessagePreserved(t *testing.T) {
 	t.Parallel()
-	require.NoError(t, ToGRPCStatus(nil))
-}
-
-func TestToGRPCStatus_AllAppErrorCodes(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		appCode  apperrors.ErrorCode
-		wantGRPC codes.Code
-	}{
-		{"NotFound", apperrors.ErrCodeNotFound, codes.NotFound},
-		{"AlreadyExists", apperrors.ErrCodeAlreadyExists, codes.AlreadyExists},
-		{"InvalidInput", apperrors.ErrCodeInvalidInput, codes.InvalidArgument},
-		{"MissingField", apperrors.ErrCodeMissingField, codes.InvalidArgument},
-		{"InvalidFormat", apperrors.ErrCodeInvalidFormat, codes.InvalidArgument},
-		{"Unauthorized", apperrors.ErrCodeUnauthorized, codes.Unauthenticated},
-		{"TokenExpired", apperrors.ErrCodeTokenExpired, codes.Unauthenticated},
-		{"InvalidToken", apperrors.ErrCodeInvalidToken, codes.Unauthenticated},
-		{"Forbidden", apperrors.ErrCodeForbidden, codes.PermissionDenied},
-		{"Conflict", apperrors.ErrCodeConflict, codes.FailedPrecondition},
-		{"Timeout", apperrors.ErrCodeTimeout, codes.DeadlineExceeded},
-		{"RateLimited", apperrors.ErrCodeRateLimited, codes.ResourceExhausted},
-		{"ServiceUnavailable", apperrors.ErrCodeServiceUnavailable, codes.Unavailable},
-		{"ConnectionFailed", apperrors.ErrCodeConnectionFailed, codes.Unavailable},
-		{"DatabaseError", apperrors.ErrCodeDatabaseError, codes.Internal},
-		{"ExternalService", apperrors.ErrCodeExternalService, codes.Internal},
-		{"Internal", apperrors.ErrCodeInternal, codes.Internal},
-		{"UnknownCode_Default", apperrors.ErrorCode("DOES_NOT_EXIST"), codes.Internal},
+	st := mustEncode(t, apperrors.NotFound("user", "1"), testDomain)
+	if st.Message() == "" {
+		t.Fatal("expected a non-empty status message")
 	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			appErr := &apperrors.AppError{Code: tc.appCode, Message: "test msg"}
-			grpcErr := ToGRPCStatus(appErr)
-
-			require.Error(t, grpcErr)
-			st, ok := status.FromError(grpcErr)
-			require.True(t, ok, "should be a gRPC status")
-			assert.Equal(t, tc.wantGRPC, st.Code(), "gRPC code")
-			assert.Equal(t, "test msg", st.Message(), "message preserved")
-		})
+	if st.Code() != codes.NotFound {
+		t.Fatalf("code = %v, want NotFound", st.Code())
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Round-trip: AppError → gRPC → AppError preserves error code
-// ---------------------------------------------------------------------------
-
-func TestFromGRPC_RoundTrip(t *testing.T) {
+func TestIsRetryable(t *testing.T) {
 	t.Parallel()
 
-	roundTrips := []struct {
-		appCode  apperrors.ErrorCode
-		wantCode apperrors.ErrorCode
-	}{
-		{apperrors.ErrCodeNotFound, apperrors.ErrCodeNotFound},
-		{apperrors.ErrCodeInvalidInput, apperrors.ErrCodeInvalidInput},
-		{apperrors.ErrCodeForbidden, apperrors.ErrCodeForbidden},
-		{apperrors.ErrCodeTimeout, apperrors.ErrCodeTimeout},
-		{apperrors.ErrCodeRateLimited, apperrors.ErrCodeRateLimited},
-		{apperrors.ErrCodeAlreadyExists, apperrors.ErrCodeAlreadyExists},
+	if IsRetryable(nil) {
+		t.Error("nil is not retryable")
+	}
+	if IsRetryable(errors.New("plain error")) {
+		t.Error("a non-status error is not retryable")
 	}
 
-	for _, tc := range roundTrips {
-		t.Run(string(tc.appCode), func(t *testing.T) {
-			t.Parallel()
-			original := &apperrors.AppError{Code: tc.appCode, Message: "round-trip test"}
-			grpcErr := ToGRPCStatus(original)
-			result := FromGRPC(grpcErr, "svc")
+	retry := mustEncode(t, apperrors.ServiceUnavailable("db"), testDomain).Err()
+	if !IsRetryable(retry) {
+		t.Error("service unavailable should be retryable")
+	}
 
-			require.NotNil(t, result)
-			assert.Equal(t, tc.wantCode, result.Code, "code preserved after round-trip")
-		})
+	// ExternalService is retryable but shares codes.Internal; the exact code in
+	// ErrorInfo metadata must recover retryability.
+	external := mustEncode(t, apperrors.ExternalServiceError("stripe", nil).WithRetryable(true), testDomain).Err()
+	if !IsRetryable(external) {
+		t.Error("external service error should be retryable via exact code")
+	}
+
+	noRetry := mustEncode(t, apperrors.NotFound("user", "1"), testDomain).Err()
+	if IsRetryable(noRetry) {
+		t.Error("not found should not be retryable")
 	}
 }
 
-// ---------------------------------------------------------------------------
-// IsConnectionError
-// ---------------------------------------------------------------------------
-
-func TestIsConnectionError_NilError(t *testing.T) {
-	t.Parallel()
-	assert.False(t, IsConnectionError(nil))
-}
-
-func TestIsConnectionError_AllPatterns(t *testing.T) {
-	t.Parallel()
-
-	patterns := []struct {
-		name string
-		msg  string
-	}{
-		{"ConnectionRefused", "dial tcp 127.0.0.1:50051: connection refused"},
-		{"ConnectionReset", "read tcp: connection reset by peer"},
-		{"NoSuchHost", "dial tcp: lookup badhost: no such host"},
-		{"TransportClosing", "transport is closing"},
-		{"ConnectionClosed", "connection closed before server preface received"},
-		{"Unavailable", "the server is currently unavailable"},
-		{"UpperCase", "CONNECTION REFUSED"},
-		{"MixedCase", "Transport Is Closing"},
+func mustEncode(t *testing.T, err *apperrors.AppError, service string) *status.Status {
+	t.Helper()
+	result, encodeErr := AppErrorToStatus(err, service)
+	if encodeErr != nil {
+		t.Fatal(encodeErr)
 	}
+	return result
+}
 
-	for _, tc := range patterns {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			assert.True(t, IsConnectionError(errors.New(tc.msg)),
-				"should detect %q as connection error", tc.msg)
-		})
+func mustDecode(t *testing.T, err error) *errorrpc.Error {
+	t.Helper()
+	result, decodeErr := DecodeError(err)
+	if decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
-}
-
-func TestIsConnectionError_NonConnectionErrors(t *testing.T) {
-	t.Parallel()
-
-	nonConn := []string{
-		"permission denied",
-		"not found",
-		"invalid argument",
-		"deadline exceeded",
-		"internal error",
-		"",
-	}
-
-	for _, msg := range nonConn {
-		t.Run(msg, func(t *testing.T) {
-			t.Parallel()
-			if msg == "" {
-				assert.False(t, IsConnectionError(errors.New(msg)))
-			} else {
-				assert.False(t, IsConnectionError(errors.New(msg)),
-					"%q should NOT be a connection error", msg)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
-// sanitizeGRPCMessage (tested indirectly via FromGRPC InvalidArgument)
-// ---------------------------------------------------------------------------
-
-func TestFromGRPC_InvalidArgument_SanitizesEmptyMessage(t *testing.T) {
-	t.Parallel()
-	grpcErr := status.Error(codes.InvalidArgument, "")
-	appErr := FromGRPC(grpcErr, "svc")
-
-	assert.Equal(t, "Invalid input. Please check your request.", appErr.Message,
-		"empty gRPC message should produce generic sanitized message")
-}
-
-func TestFromGRPC_InvalidArgument_SanitizesNonEmptyMessage(t *testing.T) {
-	t.Parallel()
-	grpcErr := status.Error(codes.InvalidArgument, "name too long")
-	appErr := FromGRPC(grpcErr, "svc")
-
-	assert.Equal(t, "Invalid input: name too long", appErr.Message)
-}
-
-// ---------------------------------------------------------------------------
-// Security: no credentials leaked in error messages
-// ---------------------------------------------------------------------------
-
-func TestFromGRPC_NoCredentialsInErrorMessage(t *testing.T) {
-	t.Parallel()
-
-	grpcErr := status.Error(codes.Unauthenticated, "Bearer token=abc123secret")
-	appErr := FromGRPC(grpcErr, "auth-svc")
-
-	assert.NotContains(t, appErr.Message, "abc123secret",
-		"credentials must not leak into user-facing message")
-	assert.Equal(t, apperrors.ErrCodeUnauthorized, appErr.Code)
-}
-
-func TestFromGRPC_PermissionDenied_GenericMessage(t *testing.T) {
-	t.Parallel()
-
-	grpcErr := status.Error(codes.PermissionDenied, "user admin@corp.com lacks role X")
-	appErr := FromGRPC(grpcErr, "authz-svc")
-
-	assert.NotContains(t, appErr.Message, "admin@corp.com",
-		"internal details must not leak into user-facing message")
+	return result
 }

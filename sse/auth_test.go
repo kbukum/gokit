@@ -58,7 +58,7 @@ func TestBearerAuthenticator_HeaderOnly(t *testing.T) {
 				t.Fatalf("expected rejection, got success")
 			}
 			appErr, ok := apperrors.AsAppError(err)
-			if !ok || appErr.HTTPStatus != tc.wantStatus {
+			if !ok || appErr.HTTPStatus() != tc.wantStatus {
 				t.Fatalf("expected status %d, got %v", tc.wantStatus, err)
 			}
 		})
@@ -74,7 +74,7 @@ func TestBearerAuthenticator_InvalidToken(t *testing.T) {
 
 	_, err := auth.Authenticate(r)
 	appErr, ok := apperrors.AsAppError(err)
-	if !ok || appErr.HTTPStatus != http.StatusUnauthorized {
+	if !ok || appErr.HTTPStatus() != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for invalid token, got %v", err)
 	}
 }
@@ -134,7 +134,7 @@ func TestBearerAuthenticator_NilValidator(t *testing.T) {
 		t.Fatalf("expected nil identity from nil validator, got %v", identity)
 	}
 	appErr, ok := apperrors.AsAppError(err)
-	if !ok || appErr.HTTPStatus != http.StatusUnauthorized {
+	if !ok || appErr.HTTPStatus() != http.StatusUnauthorized {
 		t.Fatalf("expected 401 from nil validator, got %v", err)
 	}
 }
@@ -204,7 +204,7 @@ func TestBearerAuthenticator_TypedNilValidator(t *testing.T) {
 		if identity != nil {
 			t.Fatalf("expected nil identity from typed-nil validator, got %v", identity)
 		}
-		if appErr, ok := apperrors.AsAppError(err); !ok || appErr.HTTPStatus != http.StatusUnauthorized {
+		if appErr, ok := apperrors.AsAppError(err); !ok || appErr.HTTPStatus() != http.StatusUnauthorized {
 			t.Fatalf("expected 401 from typed-nil validator, got %v", err)
 		}
 	}
