@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "maxRefetches": 2,
+  "cases": [
+    {
+      "name": "acknowledge-only-applied-events-and-ignore-duplicates",
+      "operations": [
+        {"kind":"event","sequence":1},
+        {"kind":"reconnect","wantSequence":0},
+        {"kind":"apply","sequence":1},
+        {"kind":"event","sequence":1},
+        {"kind":"apply","sequence":1},
+        {"kind":"apply","sequence":4},
+        {"kind":"reconnect","wantSequence":4}
+      ],
+      "want":{"acknowledged":4,"applied":2,"generation":0,"refetches":0,"accepted":0,"dirty":true}
+    },
+    {
+      "name": "live-event-racing-snapshot-cannot-roll-back-state",
+      "operations": [
+        {"kind":"snapshotStart"},
+        {"kind":"apply","sequence":2},
+        {"kind":"snapshotComplete"},
+        {"kind":"snapshotStart"},
+        {"kind":"snapshotComplete"}
+      ],
+      "want":{"acknowledged":2,"applied":1,"generation":0,"refetches":2,"accepted":1,"dirty":false}
+    },
+    {
+      "name": "reset-during-refetch-invalidates-old-generation",
+      "operations": [
+        {"kind":"apply","sequence":5},
+        {"kind":"snapshotStart"},
+        {"kind":"reset"},
+        {"kind":"snapshotComplete"},
+        {"kind":"snapshotStart"},
+        {"kind":"snapshotComplete"}
+      ],
+      "want":{"acknowledged":0,"applied":1,"generation":1,"refetches":2,"accepted":1,"dirty":false}
+    },
+    {
+      "name": "repeated-resets-coalesce-one-refetch",
+      "operations": [
+        {"kind":"reset"},
+        {"kind":"reset"},
+        {"kind":"snapshotStart"},
+        {"kind":"snapshotStart"},
+        {"kind":"snapshotComplete"}
+      ],
+      "want":{"acknowledged":0,"applied":0,"generation":2,"refetches":1,"accepted":1,"dirty":false}
+    },
+    {
+      "name": "continuous-churn-stops-at-budget-with-stale-state",
+      "operations": [
+        {"kind":"snapshotStart"},
+        {"kind":"apply","sequence":1},
+        {"kind":"snapshotComplete"},
+        {"kind":"snapshotStart"},
+        {"kind":"reset"},
+        {"kind":"snapshotComplete"},
+        {"kind":"snapshotStart"}
+      ],
+      "want":{"acknowledged":0,"applied":1,"generation":1,"refetches":2,"accepted":0,"dirty":true}
+    }
+  ]
+}

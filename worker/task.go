@@ -13,6 +13,7 @@ type TaskHandle[O any] struct {
 	events chan Event[O]
 	done   chan struct{}
 	cancel context.CancelFunc
+	ctx    context.Context
 
 	mu     sync.Mutex
 	result O
@@ -20,19 +21,20 @@ type TaskHandle[O any] struct {
 	closed bool
 }
 
-func newTaskHandle[O any](cancel context.CancelFunc, eventBuffer int) *TaskHandle[O] {
+func newTaskHandle[O any](ctx context.Context, cancel context.CancelFunc, eventBuffer int) *TaskHandle[O] {
 	return &TaskHandle[O]{
 		id:     uuid.NewString(),
 		events: make(chan Event[O], eventBuffer),
 		done:   make(chan struct{}),
 		cancel: cancel,
+		ctx:    ctx,
 	}
 }
 
 // ID returns the unique task identifier.
 func (h *TaskHandle[O]) ID() string { return h.id }
 
-// Events returns a channel of events for this task. Closed when task completes.
+// Events returns the bounded task stream. While active, producers block when it is full. A consumer that stops reading must cancel the task; cancellation releases blocked sends. Result remains authoritative when canceled events cannot be delivered.
 func (h *TaskHandle[O]) Events() <-chan Event[O] { return h.events }
 
 // Done returns a channel that is closed when the task completes.
@@ -53,10 +55,7 @@ func (h *TaskHandle[O]) Result() (O, error) {
 	return h.result, h.err
 }
 
-// emit sends an event to the task's event channel. Safe to call concurrently; no-op after complete.
-// The lock is held during the channel send to prevent a TOCTOU race with complete() closing the channel.
-// The events channel is buffered, so this should not block under normal usage.
-// Handlers must not call emit after returning from Handle().
+// emit serializes send and close. Active tasks apply bounded backpressure; cancellation makes a full queue non-blocking. A terminal event can still enter an available slot after cancellation.
 func (h *TaskHandle[O]) emit(e Event[O]) {
 	e.TaskID = h.id
 
@@ -66,7 +65,15 @@ func (h *TaskHandle[O]) emit(e Event[O]) {
 	if h.closed {
 		return
 	}
-	h.events <- e
+	select {
+	case h.events <- e:
+		return
+	default:
+	}
+	select {
+	case h.events <- e:
+	case <-h.ctx.Done():
+	}
 }
 
 // complete finalizes the task handle.

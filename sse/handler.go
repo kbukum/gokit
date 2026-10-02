@@ -1,215 +1,174 @@
 package sse
 
 import (
-	"encoding/json"
-	"fmt"
+	"context"
+	"errors"
+	"io"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/kbukum/gokit/codec"
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/util"
 )
 
-const DefaultKeepAliveInterval = 30 * time.Second
-
-// ConnectedEvent is sent when a client successfully connects.
-type ConnectedEvent struct {
-	ClientID  string            `json:"client_id"`
-	UserID    string            `json:"user_id,omitempty"`
-	SessionID string            `json:"session_id,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
+// Handler serves scoped proto events with renewable write deadlines and owned teardown.
+type Handler struct {
+	bus *Bus
+	cfg HandlerConfig
 }
 
-// ServeSSE handles an SSE connection for a specific client.
-// This is the main entry point called from HTTP handlers.
-//
-// When a [WithAuthenticator] option is supplied, the connection is authenticated
-// before the stream opens: on rejection the handler writes the mapped 401/403
-// status and returns without registering a client or emitting any frame. Derive
-// credentials from the Authorization header only (see [BearerAuthenticator]) —
-// never the query string. A [WithClientIdentity] resolver can then attach a
-// per-principal routing key so broadcasts scope to the authenticated subject.
-// clientID is only the caller-supplied public id — the hub assigns its own
-// unique internal registration key — so it need not be unique, and several
-// concurrent streams for one principal coexist under one routing key.
-func ServeSSE(hub *Hub, w http.ResponseWriter, r *http.Request, clientID string, opts ...ServeOption) {
-	cfg := newServeConfig(opts...)
-
-	clientOpts := cfg.clientOpts
-	if cfg.authenticator != nil {
-		identity, err := cfg.authenticator.Authenticate(r)
-		if err == nil && identity == nil {
-			// An authenticator that returns (nil, nil) would admit the connection
-			// while IdentityFromContext reports it unauthenticated and any resolver
-			// that type-asserts the identity panics. Treat a missing identity as a
-			// rejection so success always carries a usable principal.
-			err = apperrors.Unauthorized("authenticator returned no identity")
-		}
-		if err != nil {
-			rejectConnection(hub, r, w, clientID, "[SSE] Authentication rejected", err)
-			return
-		}
-		r = r.WithContext(withIdentity(r.Context(), identity))
-		resolvedOpts, ok := resolveIdentity(hub, r, w, clientID, cfg, identity, clientOpts)
-		if !ok {
-			return
-		}
-		clientOpts = resolvedOpts
+// NewHandler requires explicit authorization, logger, clock, and positive budgets. Response writers must support deadlines and error-reporting flushes through ResponseController.
+func NewHandler(bus *Bus, cfg HandlerConfig) (*Handler, error) {
+	if bus == nil || cfg.Authorize == nil || cfg.Logger == nil || util.IsNil(cfg.Clock) || cfg.WriteTimeout <= 0 || cfg.Heartbeat <= 0 {
+		return nil, apperrors.InvalidInput("handler", "SSE bus, authorization, logger, clock, and positive timing budgets are required")
 	}
+	return &Handler{bus: bus, cfg: cfg}, nil
+}
 
-	// Check SSE support (requires http.Flusher interface)
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		hub.log.ErrorCtx(r.Context(), "[SSE] Streaming not supported", map[string]any{
-			"client_id": clientID,
-		})
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+// ServeHTTP authenticates before allocating subscription storage and returns immediately on any write, flush, cancellation, or terminal stream outcome.
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
-	// Disable write deadline for SSE connections using ResponseController.
-	// This is essential because SSE connections are long-lived
-	// and shouldn't be terminated by the server's WriteTimeout setting.
-	rc := http.NewResponseController(w)
-	if err := rc.SetWriteDeadline(time.Time{}); err != nil {
-		hub.log.WarnCtx(r.Context(), "[SSE] Could not disable write deadline", map[string]any{
-			"client_id": clientID,
-			"error":     err.Error(),
-		})
-		// Continue anyway - the connection might still work with keep-alives
+	access, err := h.cfg.Authorize(r)
+	if err != nil {
+		h.reject(w, r, err)
+		return
 	}
-
-	// Set SSE headers
+	if access.Lifetime != nil && access.Lifetime.Err() != nil {
+		h.reject(w, r, apperrors.Unauthorized(""))
+		return
+	}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	sub, err := h.bus.Subscribe(ctx, SubscribeRequest{Principal: access.Principal, Route: access.Route, Cursor: r.Header.Get("Last-Event-ID")})
+	if err != nil {
+		h.reject(w, r, err)
+		return
+	}
+	defer sub.Close()
+	rc := http.NewResponseController(w)
+	if deadlineErr := rc.SetWriteDeadline(h.cfg.Clock.Now().Add(h.cfg.WriteTimeout)); deadlineErr != nil {
+		h.reject(w, r, apperrors.Internal(deadlineErr))
+		return
+	}
+	// Cancellation interrupts a blocked network write as well as the event wait. Wait for the callback before returning the response writer to net/http.
+	stop := h.interruptOnCancel(ctx, rc)
+	defer stop()
+	if access.Lifetime != nil {
+		release := context.AfterFunc(access.Lifetime, cancel) //nolint:contextcheck // independent credential lifetime is deliberately joined to the request lifecycle
+		defer release()
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering
-
-	// Create and register client with options
-	client := NewClient(clientID, clientOpts...)
-	hub.Register(client)
-	defer func() {
-		hub.Unregister(client)
-	}()
-
-	// Send initial connection event
-	connectedEvent := ConnectedEvent{
-		ClientID:  clientID,
-		UserID:    client.UserID(),
-		SessionID: client.SessionID(),
-		Metadata:  client.Metadata(),
+	w.Header().Set("X-Accel-Buffering", "no")
+	connected, err := controlEvent("connected", sub.Connected())
+	if err == nil {
+		err = h.write(ctx, rc, w, connected.Wire())
 	}
-	connectedData, _ := json.Marshal(connectedEvent)
-	_, _ = fmt.Fprintf(w, "event: %s\n", EventTypeConnected)
-	_, _ = fmt.Fprintf(w, "data: %s\n\n", connectedData)
-	flusher.Flush()
+	if err == nil {
+		err = h.stream(ctx, rc, w, sub)
+	}
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, io.EOF) {
+		h.cfg.Logger.WarnCtx(r.Context(), "SSE stream ended", map[string]any{"error": err.Error()})
+	}
+}
 
-	hub.log.DebugCtx(r.Context(), "[SSE] Client connected", map[string]any{
-		"client_id":   clientID,
-		"user_id":     client.UserID(),
-		"session_id":  client.SessionID(),
-		"remote_addr": r.RemoteAddr,
+func (h *Handler) interruptOnCancel(ctx context.Context, rc *http.ResponseController) func() {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		if err := rc.SetWriteDeadline(h.cfg.Clock.Now()); err != nil {
+			h.cfg.Logger.WarnCtx(ctx, "SSE cancellation deadline failed", map[string]any{"error": err.Error()})
+		}
 	})
-
-	// Event loop - stream events to client Keep-alive interval should be less than proxy timeouts (typically 60s).
-	keepAlive := time.NewTicker(DefaultKeepAliveInterval)
-	defer keepAlive.Stop()
-
-	ctx := r.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			// Client disconnected (browser closed, network issue, etc.)
-			hub.log.DebugCtx(ctx, "[SSE] Client disconnected", map[string]any{
-				"client_id": clientID,
-				"reason":    ctx.Err().Error(),
-			})
-			return
-
-		case frame, ok := <-client.Events():
-			if !ok {
-				// Channel closed, client unregistered
-				hub.log.DebugCtx(ctx, "[SSE] Events channel closed", map[string]any{
-					"client_id": clientID,
-				})
-				return
-			}
-			// Send SSE frame: optional `event:` line + `data:` payload.
-			// Browser EventSource named-event listeners only fire when the frame includes an `event:` line matching the listener name.
-			if frame.Event != "" {
-				_, _ = fmt.Fprintf(w, "event: %s\n", frame.Event)
-			}
-			_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
-			flusher.Flush()
-			hub.log.DebugCtx(ctx, "[SSE] Event sent", map[string]any{
-				"client_id": clientID,
-				"event":     frame.Event,
-				"data_size": len(frame.Data),
-			})
-
-		case <-keepAlive.C:
-			// Send keep-alive comment (SSE spec: lines starting with : are comments) This keeps the connection alive through proxies
-			// and load balancers
-			_, _ = fmt.Fprintf(w, ": keepalive %d\n\n", time.Now().Unix())
-			flusher.Flush()
-			hub.log.DebugCtx(ctx, "[SSE] Keep-alive sent", map[string]any{
-				"client_id": clientID,
-			})
+	return func() {
+		if !stop() {
+			<-done
 		}
 	}
 }
 
-// resolveIdentity runs the optional [IdentityResolver] for an authenticated
-// request. It returns the client options to register with (resolver metadata
-// first, then the verified routing key last so per-principal scoping always wins)
-// and ok true; on a resolver rejection it writes the mapped 401/403 response and
-// returns ok false. When no resolver is configured it returns clientOpts
-// unchanged. The resolved value is a routing key, not a new connection id, so the
-// caller's clientID stays the unique per-connection registration key and
-// concurrent streams for one principal never evict one another.
-func resolveIdentity(hub *Hub, r *http.Request, w http.ResponseWriter, clientID string, cfg *serveConfig, identity any, clientOpts []ClientOption) ([]ClientOption, bool) {
-	if cfg.resolver == nil {
-		return clientOpts, true
+func (h *Handler) stream(ctx context.Context, rc *http.ResponseController, w http.ResponseWriter, sub *Subscription) error {
+	ticker := time.NewTicker(h.cfg.Heartbeat)
+	defer ticker.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		sub.bus.mu.Lock()
+		event, ready, err := sub.nextLocked()
+		sub.bus.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		if ready {
+			if err := h.write(ctx, rc, w, event.Wire()); err != nil {
+				return err
+			}
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-sub.wake:
+		case <-ticker.C:
+			if err := h.write(ctx, rc, w, ": keepalive\n\n"); err != nil {
+				return err
+			}
+		}
 	}
-	resolvedID, resolvedOpts, err := cfg.resolver(r, identity)
-	if err != nil {
-		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected", err)
-		return nil, false
-	}
-	// The resolved key is authoritative and becomes a broadcast-matching route, so
-	// validate it at this trust boundary. An empty key would silently fall back to
-	// the caller's (possibly shared) clientID, and a wildcard from a
-	// principal-derived value could over-deliver events to another subject; fail
-	// closed on either rather than scope the stream incorrectly.
-	if resolvedID == "" {
-		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected",
-			apperrors.Unauthorized("identity resolver returned an empty route"))
-		return nil, false
-	}
-	if util.HasWildcard(resolvedID) {
-		rejectConnection(hub, r, w, clientID, "[SSE] Identity resolution rejected",
-			apperrors.Unauthorized("identity resolver returned a route with glob metacharacters"))
-		return nil, false
-	}
-	clientOpts = append(clientOpts, resolvedOpts...)
-	clientOpts = append(clientOpts, WithRoute(resolvedID))
-	return clientOpts, true
 }
 
-// rejectConnection logs a rejection by its canonical code only (never the raw
-// error, which may carry credential or principal detail from an injected
-// implementation) and writes the mapped RFC 9457 problem response, logging a
-// failed body write on the runtime HTTP path.
-func rejectConnection(hub *Hub, r *http.Request, w http.ResponseWriter, clientID, msg string, err error) {
-	ctx := r.Context()
-	hub.log.WarnCtx(ctx, msg, map[string]any{
-		"client_id": clientID,
-		"reason":    canonicalAuthError(err).Code,
-	})
-	if werr := writeAuthError(w, err); werr != nil {
-		hub.log.ErrorCtx(ctx, "[SSE] Failed to write auth rejection", map[string]any{
-			"client_id": clientID,
-			"error":     werr.Error(),
-		})
+func (h *Handler) write(ctx context.Context, rc *http.ResponseController, w http.ResponseWriter, frame string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := rc.SetWriteDeadline(h.cfg.Clock.Now().Add(h.cfg.WriteTimeout)); err != nil {
+		return err
+	}
+	// Cancellation may race deadline renewal; recheck after setting the deadline so no new write starts on a revoked stream.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	n, err := io.WriteString(w, frame)
+	if err != nil {
+		return err
+	}
+	if n != len(frame) {
+		return io.ErrShortWrite
+	}
+	return rc.Flush()
+}
+
+func (h *Handler) reject(w http.ResponseWriter, r *http.Request, err error) {
+	failure := apperrors.Normalize(err)
+	h.cfg.Logger.WarnCtx(r.Context(), "SSE connection rejected", map[string]any{"code": failure.Code})
+	body, encodeErr := codec.Encode(codec.CompactJSON(), failure.ToProblemDetail())
+	if encodeErr != nil {
+		h.cfg.Logger.ErrorCtx(r.Context(), "SSE rejection encoding failed", map[string]any{"error": encodeErr.Error()})
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	if failure.HTTPStatus() == http.StatusUnauthorized {
+		if challenge := authChallengeFor(err); challenge != "" {
+			w.Header().Set("WWW-Authenticate", challenge)
+		}
+	}
+	if failure.Retryable && failure.RetryAfter > 0 {
+		seconds := failure.RetryAfter / time.Second
+		if failure.RetryAfter%time.Second != 0 {
+			seconds++
+		}
+		w.Header().Set("Retry-After", strconv.FormatInt(int64(seconds), 10))
+	}
+	w.WriteHeader(failure.HTTPStatus())
+	if _, writeErr := io.WriteString(w, body); writeErr != nil {
+		h.cfg.Logger.WarnCtx(r.Context(), "SSE rejection write failed", map[string]any{"error": writeErr.Error()})
 	}
 }

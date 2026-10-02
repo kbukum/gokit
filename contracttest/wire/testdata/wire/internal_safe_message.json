@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"INTERNAL_ERROR\",\"message\":\"An unexpected error occurred. Please try again or contact support.\",\"retryable\":false}\n\n"
 }

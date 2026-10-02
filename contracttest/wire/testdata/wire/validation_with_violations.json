@@ -78,5 +78,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"INVALID_INPUT\",\"message\":\"request failed validation\",\"reason\":\"FORM_INVALID\",\"retryable\":false,\"violations\":[{\"field\":\"email\",\"message\":\"is required\",\"reason\":\"REQUIRED\"},{\"field\":\"age\",\"message\":\"must be \\u003e= 18\",\"reason\":\"OUT_OF_RANGE\"}]}\n\n"
 }

@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"TOKEN_EXPIRED\",\"message\":\"Your session has expired. Please log in again.\",\"retryable\":false}\n\n"
 }

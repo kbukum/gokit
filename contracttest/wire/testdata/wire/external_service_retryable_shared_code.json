@@ -43,5 +43,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"EXTERNAL_SERVICE_ERROR\",\"message\":\"The stripe service encountered an error. Please try again.\",\"retryable\":true}\n\n"
 }

@@ -46,6 +46,9 @@ type AppError struct {
 
 // Error returns the string representation of the error.
 func (e *AppError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
 	if e.Cause != nil {
 		return fmt.Sprintf("%s: %s (cause: %v)", e.Code, e.Message, e.Cause)
 	}
@@ -53,7 +56,12 @@ func (e *AppError) Error() string {
 }
 
 // Unwrap returns the underlying cause of the error.
-func (e *AppError) Unwrap() error { return e.Cause }
+func (e *AppError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
 
 // Is reports whether target is this error or the canonical sentinel it was
 // derived from, so a shared sentinel still matches under errors.Is after
@@ -63,7 +71,7 @@ func (e *AppError) Is(target error) bool {
 	if !ok {
 		return false
 	}
-	return e == t || e.origin == t
+	return e == t || (e != nil && t != nil && e.origin == t)
 }
 
 // clone returns a shallow copy of e with an independent Details map. The

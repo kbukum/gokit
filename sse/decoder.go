@@ -3,7 +3,10 @@ package sse
 import (
 	"bufio"
 	"io"
+	"math"
 	"strings"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // DefaultMaxLineSize bounds the number of bytes the [Decoder] buffers for a
@@ -11,6 +14,9 @@ import (
 // decoded without the 64 KiB ceiling of the default [bufio.Scanner]; override it
 // with [WithMaxLineSize] when a stream carries larger lines.
 const DefaultMaxLineSize = 1 << 20
+
+// DefaultMaxFrameSize bounds an entire event block, including data-line overhead. CRLF and CR line endings are normalized to one byte.
+const DefaultMaxFrameSize = 1 << 20
 
 // DecodedEvent is a single event decoded from an SSE byte stream.
 //
@@ -39,16 +45,20 @@ type DecodedEvent struct {
 //
 // A Decoder is not safe for concurrent use; drive it from a single goroutine.
 type Decoder struct {
-	scanner     *bufio.Scanner
-	lastEventID string
-	atStart     bool
+	scanner      *bufio.Scanner
+	lastEventID  string
+	atStart      bool
+	maxFrameSize int
+	maxLineSize  int
+	err          error
 }
 
 // DecoderOption configures a [Decoder].
 type DecoderOption func(*decoderConfig)
 
 type decoderConfig struct {
-	maxLineSize int
+	maxLineSize  int
+	maxFrameSize int
 }
 
 // WithMaxLineSize sets the maximum number of bytes buffered for a single
@@ -62,26 +72,43 @@ func WithMaxLineSize(n int) DecoderOption {
 	}
 }
 
+// WithMaxFrameSize sets the aggregate event-block bound. Non-positive values retain the default. Exceeding the bound permanently terminates the decoder.
+func WithMaxFrameSize(n int) DecoderOption {
+	return func(c *decoderConfig) {
+		if n > 0 {
+			c.maxFrameSize = n
+		}
+	}
+}
+
 // NewDecoder returns a [Decoder] reading framed SSE events from r.
 func NewDecoder(r io.Reader, opts ...DecoderOption) *Decoder {
-	cfg := decoderConfig{maxLineSize: DefaultMaxLineSize}
+	cfg := decoderConfig{maxLineSize: DefaultMaxLineSize, maxFrameSize: DefaultMaxFrameSize}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	scannerLimit := math.MaxInt
+	if cfg.maxLineSize <= math.MaxInt-2 {
+		scannerLimit = cfg.maxLineSize + 2
+	}
 	s := bufio.NewScanner(r)
-	s.Buffer(make([]byte, 0, 4096), cfg.maxLineSize)
+	s.Buffer(make([]byte, 0, min(4096, scannerLimit)), scannerLimit)
 	s.Split(scanEventLines)
-	return &Decoder{scanner: s, atStart: true}
+	return &Decoder{scanner: s, atStart: true, maxFrameSize: cfg.maxFrameSize, maxLineSize: cfg.maxLineSize}
 }
 
 // Next reads and returns the next complete SSE event, blocking until a blank-line
 // frame boundary arrives. It returns [io.EOF] when the stream ends, discarding
 // any partially-read trailing block rather than returning a truncated event.
 func (d *Decoder) Next() (DecodedEvent, error) {
+	if d.err != nil {
+		return DecodedEvent{}, d.err
+	}
 	var (
 		name     string
 		data     []string
 		haveData bool
+		size     int
 	)
 	for {
 		if !d.scanner.Scan() {
@@ -93,12 +120,21 @@ func (d *Decoder) Next() (DecodedEvent, error) {
 			return DecodedEvent{}, io.EOF
 		}
 		line := d.scanner.Text()
+		if len(line) > d.maxLineSize {
+			d.err = apperrors.InvalidInput("line", "SSE line exceeds the decoder limit")
+			return DecodedEvent{}, d.err
+		}
 		if d.atStart {
 			// Ignore a single leading UTF-8 BOM at the very start of the stream so
 			// the first field is not mis-parsed as "\ufeffdata".
 			line = strings.TrimPrefix(line, "\ufeff")
 			d.atStart = false
 		}
+		if len(line)+1 > d.maxFrameSize-size {
+			d.err = apperrors.InvalidInput("frame", "SSE frame exceeds the decoder limit")
+			return DecodedEvent{}, d.err
+		}
+		size += len(line) + 1
 
 		if line == "" {
 			// Frame boundary. A block with no data field is not dispatched: an
@@ -106,6 +142,7 @@ func (d *Decoder) Next() (DecodedEvent, error) {
 			// last-event ID already applied below). Reset the per-block buffers and
 			// keep reading for the next dispatchable event.
 			if !haveData {
+				size = 0
 				name = ""
 				data = data[:0]
 				continue

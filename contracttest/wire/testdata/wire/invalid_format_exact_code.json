@@ -60,5 +60,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"INVALID_FORMAT\",\"message\":\"Invalid format for date. Expected: RFC3339\",\"retryable\":false,\"violations\":[{\"field\":\"date\",\"message\":\"expected RFC3339\",\"reason\":\"INVALID_FORMAT\"}]}\n\n"
 }

@@ -42,5 +42,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"RATE_LIMITED\",\"message\":\"Too many requests. Please wait a moment and try again.\",\"retryAfter\":1.5,\"retryable\":true}\n\n"
 }

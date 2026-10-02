@@ -36,5 +36,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"ALREADY_EXISTS\",\"message\":\"A user with these details already exists.\",\"retryable\":false}\n\n"
 }

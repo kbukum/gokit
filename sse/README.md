@@ -1,143 +1,100 @@
 # sse
 
-Server-Sent Events hub for real-time client communication with pattern-based broadcasting.
+Scoped, resumable Server-Sent Events for one service instance. One `Bus` owns replay, routing, connection admission, and live queues. Application messages use proto-JSON and their full protobuf message names. Slow clients receive a reset and disconnect instead of silently losing events.
 
-## Install
+## Wire an endpoint
 
-```bash
-go get github.com/kbukum/gokit
-```
-
-## Quick Start
+Create the bus at the composition root and inject it into publishers, the endpoint, and `NewComponent(bus)`. The bus needs no dispatcher goroutine.
 
 ```go
-package main
-
-import (
-    "errors"
-    "net/http"
-
-    "github.com/google/uuid"
-    "github.com/kbukum/gokit/sse"
-)
-
-// Claims is the caller-defined identity your validator returns.
-type Claims struct{ Subject string }
-
-// validator is any auth.TokenValidator (JWT, OIDC, API key, …). It is injected,
-// not imported: sse is a transport layer and never depends on the auth module.
-// This minimal stand-in keeps the example self-contained and compilable.
-type validator struct{}
-
-func (validator) ValidateToken(token string) (any, error) {
-    if token == "" {
-        return nil, errors.New("empty token")
+func endpoint(log *logging.Logger, authorize sse.Authorizer) (*sse.Bus, http.Handler, error) {
+    bus, err := sse.NewBus(sse.DefaultLimits())
+    if err != nil {
+        return nil, nil, err
     }
-    return &Claims{Subject: "user-1"}, nil // replace with real verification
-}
-
-func main() {
-    // internalToken gates the trusted broadcast endpoint below; load a real
-    // secret from configuration in production.
-    const internalToken = "replace-with-a-real-secret"
-
-    hub := sse.NewHub()
-    go hub.Run()
-
-    // SSE endpoint — authenticate from the Authorization header only.
-    http.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-        // Pass a unique per-connection id so concurrent streams for one principal
-        // never evict each other; WithClientIdentity sets the shared routing key.
-        sse.ServeSSE(hub, w, r, uuid.NewString(),
-            sse.WithAuthenticator(sse.BearerAuthenticator(validator{})),
-            sse.WithClientIdentity(func(_ *http.Request, identity any) (string, []sse.ClientOption, error) {
-                claims, ok := identity.(*Claims)
-                if !ok {
-                    return "", nil, errors.New("unexpected identity type")
-                }
-                // Derive the broadcast routing key from the verified principal.
-                return "user:" + claims.Subject, []sse.ClientOption{sse.WithUserID(claims.Subject)}, nil
-            }),
-        )
-    })
-
-    // Broadcast from trusted application logic once clients are connected.
-    // This endpoint fans out to every "user:*" stream, so it must be gated by
-    // your own authorization — never leave a broadcast trigger publicly
-    // reachable. Here a shared internal token stands in for that gate.
-    http.HandleFunc("/notify", func(w http.ResponseWriter, r *http.Request) {
-        if r.Header.Get("X-Internal-Token") != internalToken {
-            http.Error(w, "forbidden", http.StatusForbidden)
-            return
-        }
-        hub.BroadcastToPattern("user:*", []byte(`{"type":"update","data":"hello"}`))
-    })
-
-    http.ListenAndServe(":8080", nil)
+    cfg := sse.DefaultHandlerConfig()
+    cfg.Logger = log
+    cfg.Authorize = authorize
+    handler, err := sse.NewHandler(bus, cfg)
+    if err != nil {
+        bus.Close()
+        return nil, nil, err
+    }
+    return bus, handler, nil
 }
 ```
 
-> `validator` here is a stand-in for any `auth.TokenValidator` (JWT, OIDC, API key, …). It is injected, not imported: `sse` is a transport layer and never depends on the `auth` module.
+An `Authorizer` authenticates the request and returns a verified `Access{Principal, Route, Lifetime}`. `Principal` is the connection-limit key; `Route` is the authorized request scope. Neither comes directly from unverified request parameters. `Authenticated(authenticator, resolver)` composes an existing opaque-identity authenticator with a typed authorization resolver. `PublicAccess` explicitly exposes a public scope and shares one admission principal across its visitors. There is no implicit public fallback.
 
-## Authentication
+Use `Bus.Publish(ctx, pattern, message)` from trusted application adapters. `*` matches any route, including `/`; `?` matches one rune, and brackets are literal. Subscriber routes cannot contain wildcards. The same matching rule applies to replay. Publication errors are returned, including oversized messages and a closed bus. The caller owns error handling.
 
-`ServeSSE` accepts an injected `Authenticator` that gates the connection **before** the stream opens. On rejection it writes an RFC 9457 problem response with the mapped status and never starts the event loop — no partial stream is emitted.
+`sse/worker.Forward` maps worker events to a `Publication` through an explicit typed proto mapper. It runs in its caller's lifecycle, stops on mapping or publication failure, and does not create a goroutine or invent a JSON envelope. When forwarding `TaskHandle.Events`, cancel the task on early exit to release its bounded producer backpressure. Task cancellation interrupts full-channel sends; `Result` remains authoritative if cancellation prevents event delivery. Worker-pool aggregate event retention remains a separate upstream policy.
 
-| Option | Purpose |
-|--------|---------|
-| `WithAuthenticator(a)` | Gate the connection; run before the stream opens. |
-| `BearerAuthenticator(v)` | Adapt any `TokenValidator` to read `Authorization: Bearer <token>`. |
-| `WithClientIdentity(fn)` | Derive the per-principal routing key + metadata from the verified identity. |
-| `IdentityFromContext(ctx)` | Recover the resolved identity downstream. |
+## Wire contract
 
-Failure semantics are explicit:
+The cursor is `<epoch>:<sequence>`. An epoch is 32 lowercase hex characters generated per bus instance. A sequence is a canonical unsigned 64-bit decimal string, including `0`, with no sign or leading zeroes. Parse sequences as `bigint` in JavaScript, not `number`.
 
-- **Missing or invalid credential** → `401 Unauthorized` (`BearerAuthenticator`, or any authenticator returning a non-`Forbidden` error).
-- **Authenticated but not permitted** → `403 Forbidden` (return `errors.Forbidden(...)` from the authenticator or the `WithClientIdentity` resolver).
+| Frame | Payload | Cursor rule |
+| --- | --- | --- |
+| Full proto message name | Proto-JSON using the schema's JSON field names | `id:` contains the application cursor |
+| `connected` | `{"epoch":"…","cursor":"…"}` | Atomic subscription boundary, not acknowledged delivery |
+| `reset` | `{"reason":"epochChanged\|replayExpired\|overflow","cursor":"…"}` | New live boundary; invalidate snapshots |
+| `failure` | `code`, safe `message`, `retryable`, optional `reason`, `violations`, `retryAfter`, `traceId` | No ID; settle the connection, then EOF |
+| Comment | `: keepalive` | No application meaning |
 
-### Why header-only, never the query string
+Controls never carry `id:`. SSE decoders can carry forward the previous ID onto a control frame; clients must not treat it as a new acknowledgement. Failure JSON comes from `errors.Failure`, not direct `AppError` serialization. Retry delays are minimum seconds, including fractions. Explicit retry false is preserved. A retry hint never grants operation idempotency.
 
-The invariant is simple: **no credential is ever read from the URL query string** (`?token=…` / `?id=…`), because a token there leaks into access logs, proxy logs, the `Referer` header, and browser history. Everything below keeps the credential out of the URL.
+A missing `Last-Event-ID` starts live at the subscription boundary. A malformed cursor or a future sequence in the current epoch is rejected with HTTP 422 before allocating a queue. A foreign epoch or expired replay emits `reset` and starts live at a fresh boundary. Replay and live events use one global sequence; gaps caused by authorized filtering are valid, not evidence of loss. Changing authorized scope requires clearing the client cursor.
 
-The built-in `BearerAuthenticator` reads the token from the `Authorization` header **only**. The general `Authenticator` seam is broader — it receives the full `*http.Request`, so a custom authenticator may instead read an `HttpOnly; Secure` session cookie, which is also kept out of the URL. The native browser `EventSource` cannot set custom headers; for authenticated browser streams either use an `EventSource` polyfill built on `fetch` + `ReadableStream` (which can send `Authorization`), or authenticate from a secure cookie. Both honour the no-query invariant.
+If a subscriber's live queue fills, its queued data is discarded and a priority `overflow` reset is sent, followed by EOF. A replay reader overtaken by eviction gets `replayExpired` and EOF. Controls use a separate slot, not the data queue. `Bus.Fail` terminates matching active streams; `Subscription.Fail` terminates an in-process subscription. Failures are not replayed.
 
-## Testing
+## Recovery and snapshots
 
-`sse/testutil` provides a reusable harness so consumers test their wiring without hand-rolling SSE fakes: a call-counting `FakeAuthenticator` (`AllowAuthenticator`, `RejectUnauthorized`, `RejectForbidden`), a `Harness` (running hub + httptest server), and a `StreamClient` that decodes framed events and asserts on the 200/401/403 paths.
+Use a fetch-based SSE client when delivery acknowledgement matters. Native `EventSource` advances its internal reconnect ID on receipt, before asynchronous application delivery.
 
-## Key Types & Functions
+1. Retain only the last successfully applied application cursor. Ignore duplicate or older sequences in the same epoch; never require contiguous sequences.
+2. Subscribe before requesting a snapshot. On reset, clear the acknowledged cursor, discard buffered old-generation events, and invalidate any in-flight snapshot. An overflow-closed connection reopens without its old cursor.
+3. Coalesce refetch requests. Without an atomic snapshot watermark from the application, treat events as cache invalidations rather than replaying arbitrary deltas onto a racing snapshot.
+4. Accept a snapshot only if neither the connection generation nor the applied-event revision changed while it was fetched. Otherwise discard it and refetch within a finite budget. Once the budget is exhausted, keep the state visibly stale; do not report convergence.
 
-| Name | Description |
-|------|-------------|
-| `Hub` | Manages SSE client connections and broadcasting |
-| `Client` | Connected SSE client with metadata |
-| `NewHub()` / `Run()` | Create and start the hub |
-| `ServeSSE()` | HTTP handler for SSE connections (accepts `ServeOption`s) |
-| `Authenticator` / `AuthenticatorFunc` | Connection auth gate: `Authenticate(r) (identity, err)` |
-| `BearerAuthenticator()` | Header-only `Authorization: Bearer` adapter over a `TokenValidator` |
-| `WithAuthenticator()` / `WithClientIdentity()` | Serve options: auth gate, per-principal routing |
-| `IdentityFromContext()` | Recover the resolved identity downstream |
-| `BroadcastToPattern()` | Send data to clients matching a pattern |
-| `Broadcaster` | Interface for broadcasting events |
-| `WithClientOptions()` + `WithUserID()` / `WithSessionID()` / `WithMetadata()` | Client metadata options |
-| `EventType*` | Constants: connected, keepalive, message, error, metric |
+The [convergence fixtures](testdata/convergence.json) use a two-refetch budget and cover delivery acknowledgement, duplicates, filtered gaps, live/snapshot races, reset during refetch, repeated resets, and sustained churn. Their Go oracle specifies outcomes, not a shipped browser client. Consuming kits must execute them against their real cache and channel lifecycle.
 
-## Backpressure semantics
+## Resource bounds and ownership
 
-- `Hub` uses a bounded inbound broadcast queue of `DefaultBroadcastBufferSize`.
-- Each client uses a bounded delivery queue of `DefaultClientBufferSize`.
-- Delivery is best-effort, not durable: when a slow client's queue is full, the newest frame is dropped and `SendFrame` returns `false`.
-- Slow clients never block the hub or other subscribers; callers should rely on reconnect + replay from their own durable source when lossless delivery matters.
+| Resource | Default | Allowed configuration |
+| --- | --- | --- |
+| Replay events | 1,024 | 1–1,048,576 |
+| Replay bytes, including frames and routing patterns | 8 MiB | 256 B–1 GiB |
+| Live queue per subscription | 32 events | 1–65,536 |
+| Encoded application/failure frame | 64 KiB | 256 B–1 MiB |
+| Connections per instance | 1,024 | 1–1,048,576 |
+| Connections per principal | 8 | 1–instance limit |
+| Routing keys and patterns | 512 bytes | Fixed |
+| Renewable write deadline | 10 seconds | Positive duration |
+| Heartbeat interval | 30 seconds | Positive duration |
 
-## Operational notes
+Replay is a ring bounded by both count and bytes. Subscribers read replay directly from that ring, not from replay-sized private queues. Live queues store immutable frame strings. A conservative payload bound is replay bytes plus `connections × queue events × max frame bytes`, plus one control and one in-flight frame per connection. Ring slots and subscription metadata add fixed overhead. Proto encoding is serialized per bus; input wire size is checked before proto-JSON allocation and encoded size before retention. Configure all limits together for the deployment's memory budget.
 
-- `ServeSSE` sends keepalive comments every `DefaultKeepAliveInterval`.
-- `Hub.Stop()` disconnects all clients and makes subsequent broadcasts no-ops.
+Admission is checked before allocating a queue. An overflowed stream stays charged until its owner closes it, so repeated admission cannot bypass the bound while old handlers are unwinding. `Subscribe` callers close subscriptions; context cancellation also releases them. HTTP owns its subscription, heartbeat ticker, write, and cancellation callbacks.
 
-## Cross-kit parity
+Every frame and heartbeat renews its write deadline. Any write, short write, or flush error ends the handler. A response wrapper must support `ResponseController` deadlines and flushes, usually through `Unwrap`; unsupported deadlines fail closed. Middleware must not replace a streaming writer with an unbounded buffer.
 
-The header-only authentication seam is a gokit-side security correction. Its rskit counterpart (the SSE/streaming transport) should mirror the same concept under the same name: an injected authenticator that derives credentials from the `Authorization` header, rejects query-string tokens, and applies 401/403 semantics. Parity is scoped to the wire contract and the concept, not the Go option types.
+The generic decoder separately bounds normalized event-block bytes with `WithMaxFrameSize` and line bytes with `WithMaxLineSize`, both 1 MiB by default. Line limits exclude CR/LF delimiters but include a leading BOM. Limits smaller than the scanner's usual buffer are enforced exactly. A multi-line frame cannot bypass the aggregate bound.
 
----
+## Authentication and deployment
 
-[⬅ Back to main README](../README.md)
+Browser credentials belong in secure HttpOnly cookies; automation credentials belong in headers. `BearerAuthenticator` reads only the authorization header, never a URL parameter. Authentication and scope checks finish before streaming begins. Pre-stream failures use the shared RFC 9457 encoding and normalization rules; unknown errors are safe internal failures, not successful anonymous access.
+
+`Access.Lifetime` is an authoritative owner context. Its cancellation or expiry cancels the HTTP stream and interrupts a blocked write. Session implementations must return a lifetime tied atomically to their expiry/revocation state; checking a database row once without binding a lifetime is insufficient. SSE does not parse cookies, sessions, roles, or workspace membership. A closed connection alone is not proof that a browser is authenticated; terminal auth failures settle the session, and unexpected closes need a bounded reconnect/revalidation policy.
+
+Replay and subscribers exist in one instance's memory. Reconnecting to another instance changes epoch and requires reset/refetch. Cross-instance live delivery needs a shared bus behind the publisher seam; cross-instance session revocation additionally needs signalling or bounded revalidation with a declared SLA. `Component.Stop` closes the bus; composition owns HTTP draining and its shutdown budget.
+
+## Metrics and conformance
+
+`Bus.Stats` exposes coherent active-stream, queue-depth/bytes, replay-count/bytes, drop, reset, and rejected-connection measurements. `sse/metrics.Register(bus, meter)` exports these through an injected OpenTelemetry meter with no identity or raw-route labels. The composition root unregisters the callback before telemetry shutdown.
+
+The [protocol frames](testdata/protocol.json) cover scoped replay, malformed/future cursors, epoch changes, eviction, and overflow. Shared [failure fixtures](../contracttest/wire/testdata/wire/) include actual SSE frames for every application failure category, alongside Connect, gRPC, and problem JSON. Tests compare decoded proto-JSON semantically because insignificant whitespace is not part of protobuf's serialization guarantee.
+
+Consumers vendor these fixtures from an immutable gokit commit and record that commit plus file digests. `sourceBaseCommit` in the protocol fixture identifies the baseline used to develop this contract; it is not the publication commit. Do not pin a moving branch or claim downstream adoption from these Go tests alone.
+
+`sse/testutil` supplies the real HTTP harness, decoder client, authentication doubles, and deadline-aware fault-injecting response writer. Package tests use race/shuffle, virtual-time timer checks, exact boundary/overflow assertions, a never-reading peer with a 50 ms deadline and 2-second settling ceiling, and package-wide goleak.

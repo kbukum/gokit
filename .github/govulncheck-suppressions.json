@@ -17,6 +17,7 @@
         "connect/testutil",
         "dag/testutil",
         "database",
+        "database/postgres",
         "database/sqlite",
         "database/testutil",
         "dataset",
@@ -56,6 +57,7 @@
         "vectorstore",
         "vectorstore/qdrant",
         "workload",
+        "workload/dmr",
         "workload/testutil"
       ],
       "reason": "The golang.org/x/crypto/openpgp package is deprecated and unmaintained by design (Go issue 44226); the advisory covers the whole golang.org/x/crypto module and has no fixed version (Fixed in: N/A). gokit uses golang.org/x/crypto only for maintained subpackages (ssh, bcrypt, etc.) and never imports any openpgp subpackage in any module (verified: no 'crypto/openpgp' import in the tree). govulncheck flags this at the require/import level across every module that transitively links x/crypto; the vulnerable package is not imported or called, so it is not reachable. Nothing to bump. Revisit if a maintained openpgp replacement becomes a hard requirement.",

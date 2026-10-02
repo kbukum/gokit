@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"DATABASE_ERROR\",\"message\":\"A database error occurred.\",\"retryable\":false}\n\n"
 }

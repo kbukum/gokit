@@ -12,6 +12,9 @@ func Normalize(err error) *AppError {
 	}
 
 	if appErr, ok := AsAppError(err); ok {
+		if appErr == nil {
+			return Internal(nil)
+		}
 		return appErr
 	}
 

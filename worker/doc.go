@@ -5,6 +5,8 @@
 // and calls emit() to push events (progress, partial results, logs) back to the caller during execution.
 // Context carries cancellation.
 //
+// Task event queues apply bounded backpressure while a task is active. Consumers that stop reading must cancel the task; cancellation releases blocked event sends. Result remains the authoritative outcome if cancellation prevents terminal event delivery. Pool-level aggregate delivery has its own retention policy.
+//
 // # Handler
 //
 // The Handler interface is the unit of work:
