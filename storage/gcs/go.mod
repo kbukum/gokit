@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/storage v1.69.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
-	google.golang.org/api v0.297.0
+	google.golang.org/api v0.299.0
 )
 
 require (
