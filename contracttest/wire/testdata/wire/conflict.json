@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"CONFLICT\",\"message\":\"state changed\",\"retryable\":false}\n\n"
 }

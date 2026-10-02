@@ -36,5 +36,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"EXTERNAL_SERVICE_ERROR\",\"message\":\"The provider service encountered an error. Please try again.\",\"retryable\":false}\n\n"
 }

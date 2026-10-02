@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"INVALID_TOKEN\",\"message\":\"Invalid authentication token. Please log in again.\",\"retryable\":false}\n\n"
 }

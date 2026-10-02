@@ -1,239 +1,186 @@
 package sse
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"math"
 	"strconv"
 	"sync"
-	"time"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
-// MaxBusCapacity bounds the replay buffer and per-subscriber queue of a Bus.
-const MaxBusCapacity = 1 << 24
-
-// Event is a toolkit-native SSE event carrying replay metadata. The bus assigns
-// each event a monotonic ID used for Last-Event-ID resume.
-type Event[T any] struct {
-	// ID is the monotonic event identifier assigned by the bus.
-	ID string
-	// Name is the optional SSE event type.
-	Name string
-	// Retry is the optional client reconnection interval.
-	Retry time.Duration
-	// Data is the event payload.
-	Data T
+// Bus owns single-instance scoped replay and live delivery. Publishing is synchronous and bounded; no dispatcher goroutine or inbound queue is needed.
+type Bus struct {
+	mu         sync.Mutex
+	limits     Limits
+	epoch      string
+	sequence   uint64
+	replay     []record
+	head       int
+	count      int
+	replaySize int
+	subs       map[*Subscription]struct{}
+	principals map[string]int
+	closed     bool
+	stats      Stats
 }
 
-// Bus is a bounded, typed, multi-subscriber Server-Sent Events bus.
-//
-// Live fan-out and the replay buffer are both bounded by the configured
-// capacity. A slow subscriber never blocks the bus: once its queue is full,
-// newer live events are dropped for that subscriber (best-effort delivery). The
-// bounded replay buffer stores the most recent events so a reconnecting client
-// can resume after its Last-Event-ID.
-type Bus[T any] struct {
-	mu        sync.Mutex
-	capacity  int
-	retry     time.Duration
-	nextID    uint64
-	replay    []Event[T]
-	subs      map[int]*Subscription[T]
-	nextSubID int
-	closed    bool
+type record struct {
+	sequence uint64
+	pattern  string
+	event    Event
+	bytes    int
 }
 
-// BusOption configures a Bus.
-type BusOption func(*busOptions)
-
-type busOptions struct {
-	retry time.Duration
-}
-
-// WithRetry sets the reconnection interval attached to published events.
-func WithRetry(retry time.Duration) BusOption {
-	return func(o *busOptions) { o.retry = retry }
-}
-
-// NewBus creates a Bus with the given bounded capacity. Capacity must be greater
-// than zero and at most MaxBusCapacity.
-func NewBus[T any](capacity int, opts ...BusOption) (*Bus[T], error) {
-	if capacity <= 0 {
-		return nil, apperrors.InvalidInput("capacity", "SSE bus capacity must be greater than zero")
+// NewBus validates limits before allocating replay storage and creates a cryptographically random instance epoch.
+func NewBus(limits Limits) (*Bus, error) {
+	if err := limits.validate(); err != nil {
+		return nil, err
 	}
-	if capacity > MaxBusCapacity {
-		return nil, apperrors.InvalidInput("capacity", "SSE bus capacity must be at most "+strconv.Itoa(MaxBusCapacity))
+	var epoch [16]byte
+	if _, err := rand.Read(epoch[:]); err != nil {
+		return nil, apperrors.Internal(err)
 	}
-	var o busOptions
-	for _, opt := range opts {
-		opt(&o)
-	}
-	return &Bus[T]{
-		capacity: capacity,
-		retry:    o.retry,
-		nextID:   1,
-		replay:   make([]Event[T], 0, capacity),
-		subs:     make(map[int]*Subscription[T]),
+	return &Bus{
+		limits: limits, epoch: hex.EncodeToString(epoch[:]),
+		replay: make([]record, limits.ReplayEvents),
+		subs:   make(map[*Subscription]struct{}), principals: make(map[string]int),
 	}, nil
 }
 
-// Publish appends an event to the replay buffer and fans it out to all live
-// subscribers, returning the published event. Publishing without subscribers is
-// successful; the event remains available for bounded replay until evicted.
-func (b *Bus[T]) Publish(data T) Event[T] {
-	return b.publish("", data)
-}
-
-// PublishNamed publishes an event with an explicit SSE event type.
-func (b *Bus[T]) PublishNamed(name string, data T) Event[T] {
-	return b.publish(name, data)
-}
-
-func (b *Bus[T]) publish(name string, data T) Event[T] {
+// Cursor returns the current global high-water mark. It is not a snapshot transaction watermark or an acknowledgement of delivery.
+func (b *Bus) Cursor() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	event := Event[T]{
-		ID:    strconv.FormatUint(b.nextID, 10),
-		Name:  name,
-		Retry: b.retry,
-		Data:  data,
-	}
-	b.nextID++
-
-	if b.closed {
-		return event
-	}
-
-	b.pushReplay(event)
-	for _, sub := range b.subs {
-		sub.deliver(event)
-	}
-	return event
+	return b.cursor()
 }
 
-// pushReplay appends to the bounded replay buffer, evicting the oldest event
-// when the buffer is full. Callers must hold b.mu.
-func (b *Bus[T]) pushReplay(event Event[T]) {
-	if len(b.replay) == b.capacity {
-		copy(b.replay, b.replay[1:])
-		b.replay[len(b.replay)-1] = event
-		return
+func (b *Bus) cursor() string { return b.epoch + ":" + strconv.FormatUint(b.sequence, 10) }
+
+// Publish encodes a proto message once and atomically appends it to replay and matching live queues. Patterns use util.GlobMatch; subscriber routes never contain wildcards.
+func (b *Bus) Publish(ctx context.Context, pattern string, message proto.Message) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	b.replay = append(b.replay, event)
-}
-
-// Subscribe returns a live subscription that receives events published after
-// the call. It does not replay buffered events.
-func (b *Bus[T]) Subscribe() *Subscription[T] {
-	return b.subscribe(nil, false)
-}
-
-// SubscribeAfter returns a subscription that first replays buffered events with
-// an ID greater than lastEventID, then delivers live events. An empty or
-// unparseable lastEventID replays the entire buffer before going live.
-func (b *Bus[T]) SubscribeAfter(lastEventID string) *Subscription[T] {
-	last, ok := parseEventID(lastEventID)
-	return b.subscribe(&last, ok)
-}
-
-func (b *Bus[T]) subscribe(after *uint64, hasBound bool) *Subscription[T] {
+	if err := validateKey(pattern, true); err != nil {
+		return err
+	}
+	if util.IsNil(message) {
+		return apperrors.InvalidInput("message", "SSE message is required")
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-
-	sub := &Subscription[T]{
-		bus: b,
-		ch:  make(chan Event[T], b.capacity),
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-
-	if b.closed {
-		close(sub.ch)
-		return sub
+	if b.closed || b.sequence == math.MaxUint64 {
+		return apperrors.ServiceUnavailable("SSE bus is closed or exhausted")
 	}
-
-	if after != nil {
-		for _, event := range b.replay {
-			if hasBound {
-				if id, err := strconv.ParseUint(event.ID, 10, 64); err != nil || id <= *after {
-					continue
-				}
-			}
-			sub.deliver(event)
+	// Reject oversized input before proto-JSON allocation. Encoding is serialized so concurrent publishers cannot multiply temporary frame allocations.
+	if proto.Size(message) > b.limits.MaxEventBytes {
+		return apperrors.InvalidInput("message", "SSE event exceeds the frame limit")
+	}
+	data, err := protojson.Marshal(message)
+	if err != nil {
+		return apperrors.InvalidInput("message", "SSE message cannot be encoded").WithCause(err)
+	}
+	event := Event{
+		ID:   b.epoch + ":" + strconv.FormatUint(b.sequence+1, 10),
+		Name: string(message.ProtoReflect().Descriptor().FullName()), Data: string(data),
+	}
+	size := event.size()
+	if size > b.limits.MaxEventBytes || size+len(pattern) > b.limits.ReplayBytes {
+		return apperrors.InvalidInput("message", "SSE event exceeds the frame or replay byte limit")
+	}
+	b.sequence++
+	rec := record{sequence: b.sequence, pattern: pattern, event: event, bytes: size}
+	b.appendReplay(rec)
+	for sub := range b.subs {
+		if !sub.terminal && util.GlobMatch(pattern, sub.route) {
+			sub.enqueue(rec)
 		}
 	}
-
-	sub.id = b.nextSubID
-	b.nextSubID++
-	b.subs[sub.id] = sub
-	return sub
+	return nil
 }
 
-// SubscriberCount returns the number of active subscribers.
-func (b *Bus[T]) SubscriberCount() int {
+func (b *Bus) appendReplay(rec record) {
+	size := rec.bytes + len(rec.pattern)
+	for b.count == len(b.replay) || b.replaySize+size > b.limits.ReplayBytes {
+		old := &b.replay[b.head]
+		b.replaySize -= old.bytes + len(old.pattern)
+		*old = record{}
+		b.head = (b.head + 1) % len(b.replay)
+		b.count--
+	}
+	b.replay[(b.head+b.count)%len(b.replay)] = rec
+	b.count++
+	b.replaySize += size
+}
+
+// SubscribeRequest contains verified routing and admission identity, never credentials. Cursor is untrusted. Changing authorized scope requires the consumer to clear its cursor.
+type SubscribeRequest struct {
+	Principal string
+	Route     string
+	Cursor    string
+}
+
+// Subscribe atomically captures a replay boundary and registers live delivery. Admission and cursor validation precede queue allocation. The caller owns Close; ctx cancellation also releases the subscription.
+func (b *Bus) Subscribe(ctx context.Context, req SubscribeRequest) (*Subscription, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := validateKey(req.Principal, false); err != nil {
+		return nil, err
+	}
+	if err := validateKey(req.Route, false); err != nil {
+		return nil, err
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return len(b.subs)
+	if b.closed {
+		return nil, apperrors.ServiceUnavailable("SSE bus is closed")
+	}
+	after, reset, err := b.resume(req.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	if len(b.subs) >= b.limits.MaxConnections || b.principals[req.Principal] >= b.limits.MaxPerPrincipal {
+		b.stats.RejectedConnections++
+		return nil, apperrors.ServiceUnavailable("SSE connection limit reached")
+	}
+	s := &Subscription{
+		bus: b, principal: req.Principal, route: req.Route,
+		boundary: b.cursor(), replayAfter: after, replayUntil: b.sequence,
+		queue: make([]record, b.limits.QueueEvents), wake: make(chan struct{}, 1),
+	}
+	if reset != "" {
+		s.control = resetEvent(reset, b.cursor())
+		b.stats.Resets++
+	}
+	b.subs[s] = struct{}{}
+	b.principals[req.Principal]++
+	b.stats.AllocatedQueues++
+	s.stop = context.AfterFunc(ctx, s.Close)
+	return s, nil
 }
 
-// Close removes all subscribers and closes their channels. Subsequent Subscribe
-// calls return an already-closed subscription and Publish becomes a no-op fan-out.
-func (b *Bus[T]) Close() {
+// Close stops acceptance and wakes all readers. It does not wait for HTTP handlers; each handler owns its bounded write and teardown.
+func (b *Bus) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
 		return
 	}
 	b.closed = true
-	for id, sub := range b.subs {
-		close(sub.ch)
-		delete(b.subs, id)
+	for sub := range b.subs {
+		sub.closeLocked()
 	}
-}
-
-func (b *Bus[T]) removeSub(id int) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if sub, ok := b.subs[id]; ok {
-		delete(b.subs, id)
-		close(sub.ch)
-	}
-}
-
-func parseEventID(lastEventID string) (uint64, bool) {
-	if lastEventID == "" {
-		return 0, false
-	}
-	id, err := strconv.ParseUint(lastEventID, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return id, true
-}
-
-// Subscription is a single subscriber's stream of events from a Bus.
-type Subscription[T any] struct {
-	bus       *Bus[T]
-	id        int
-	ch        chan Event[T]
-	closeOnce sync.Once
-}
-
-// Events returns the receive-only channel of events. The channel is closed when
-// the subscription is closed or the bus is closed.
-func (s *Subscription[T]) Events() <-chan Event[T] { return s.ch }
-
-// Close unsubscribes from the bus and closes the event channel. It is safe to
-// call multiple times.
-func (s *Subscription[T]) Close() {
-	s.closeOnce.Do(func() {
-		s.bus.removeSub(s.id)
-	})
-}
-
-// deliver performs a non-blocking send; a full queue drops the event to keep the
-// bus bounded and non-blocking. Callers must hold the bus lock.
-func (s *Subscription[T]) deliver(event Event[T]) {
-	select {
-	case s.ch <- event:
-	default:
-	}
+	clear(b.replay)
+	b.count, b.replaySize = 0, 0
 }

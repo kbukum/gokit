@@ -3,78 +3,56 @@ package sse
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/kbukum/gokit/component"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// Component wraps an SSE Hub as a lifecycle-managed component.
-// Register it with the component registry so Start/Stop are handled automatically.
-type Component struct {
-	hub  *Hub
-	wg   sync.WaitGroup
-	mu   sync.Mutex
-	path string
+// Component binds an injected Bus to the composition-root lifecycle without a dispatcher goroutine.
+type Component struct{ bus *Bus }
+
+// NewComponent requires the same Bus instance used by the endpoint and publishers.
+func NewComponent(bus *Bus) (*Component, error) {
+	if bus == nil {
+		return nil, apperrors.InvalidInput("bus", "SSE bus is required")
+	}
+	return &Component{bus: bus}, nil
 }
 
-// ensure Component satisfies component.Component and Describable.
+func (c *Component) Name() string { return "sse" }
+
+func (c *Component) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.bus.mu.Lock()
+	defer c.bus.mu.Unlock()
+	if c.bus.closed {
+		return apperrors.ServiceUnavailable("SSE bus")
+	}
+	return nil
+}
+
+func (c *Component) Stop(context.Context) error {
+	c.bus.Close()
+	return nil
+}
+
+func (c *Component) Health(context.Context) component.Health {
+	c.bus.mu.Lock()
+	defer c.bus.mu.Unlock()
+	status := component.StatusHealthy
+	if c.bus.closed {
+		status = component.StatusUnhealthy
+	}
+	return component.Health{Name: c.Name(), Status: status, Message: fmt.Sprintf("%d streams", len(c.bus.subs))}
+}
+
+func (c *Component) Describe() component.Description {
+	return component.Description{Name: "SSE Bus", Type: "sse", Details: "Single-instance scoped replay"}
+}
+
 var (
 	_ component.Component   = (*Component)(nil)
 	_ component.Describable = (*Component)(nil)
 )
-
-// NewComponent creates a new SSE component with a fresh Hub.
-func NewComponent(path string) *Component {
-	return &Component{
-		hub:  NewHub(),
-		path: path,
-	}
-}
-
-// Hub returns the underlying Hub for event broadcasting and client management.
-func (c *Component) Hub() *Hub { return c.hub }
-
-// Name returns the component name.
-func (c *Component) Name() string { return "sse" }
-
-// Start launches the Hub's event loop in a background goroutine.
-func (c *Component) Start(_ context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.wg.Add(1)
-	go func() { //nolint:contextcheck // hub event loop is long-lived and outlives the caller context
-		defer c.wg.Done()
-		c.hub.Run()
-	}()
-
-	return nil
-}
-
-// Stop signals the Hub to shut down and waits for Run to return.
-func (c *Component) Stop(_ context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.hub.Stop()
-	c.wg.Wait()
-	return nil
-}
-
-// Health returns the health status of the SSE hub.
-func (c *Component) Health(_ context.Context) component.Health {
-	return component.Health{
-		Name:    c.Name(),
-		Status:  component.StatusHealthy,
-		Message: fmt.Sprintf("%d clients connected", c.hub.GetClientCount()),
-	}
-}
-
-// Describe returns infrastructure summary info for the bootstrap display.
-func (c *Component) Describe() component.Description {
-	return component.Description{
-		Name:    "SSE Hub",
-		Type:    "sse",
-		Details: fmt.Sprintf("Path: %s", c.path),
-	}
-}

@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required.\",\"retryable\":false}\n\n"
 }

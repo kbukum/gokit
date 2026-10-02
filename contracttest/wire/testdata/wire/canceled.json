@@ -36,5 +36,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"CANCELED\",\"message\":\"The request operation was canceled.\",\"retryable\":false}\n\n"
 }

@@ -5,51 +5,38 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
-	"sync/atomic"
 	"testing"
 
 	"github.com/kbukum/gokit/security"
 	"github.com/kbukum/gokit/sse"
 )
 
-// Harness runs an [sse.Hub] behind an httptest.Server that serves a single SSE
-// endpoint configured with caller-supplied [sse.ServeOption]s. The hub loop and
-// server are torn down automatically via t.Cleanup.
+// Harness serves an SSE Bus and endpoint with automatic teardown.
 type Harness struct {
-	// Hub is the running hub; broadcast to it to drive connected streams.
-	Hub *sse.Hub
+	// Bus publishes events and exposes resource accounting.
+	Bus *sse.Bus
 	// Server is the backing httptest.Server.
 	Server *httptest.Server
 }
 
-// New starts a Harness serving ServeSSE at the server root with the given base
-// clientID and options. Each connection receives a unique per-connection id
-// derived from baseClientID so concurrent streams never evict one another; when
-// the options include an [sse.WithClientIdentity] resolver, the resolved routing
-// key becomes the broadcast-matching key while the unique id is preserved.
-func New(t *testing.T, baseClientID string, opts ...sse.ServeOption) *Harness {
+// New serves a real endpoint with the supplied limits and authorization.
+func New(t *testing.T, limits sse.Limits, cfg sse.HandlerConfig) *Harness {
 	t.Helper()
-
-	hub := sse.NewHub()
-	go hub.Run()
-
-	var conns atomic.Int64
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		clientID := baseClientID + "#" + strconv.FormatInt(conns.Add(1), 10)
-		sse.ServeSSE(hub, w, r, clientID, opts...)
-	})
+	bus, err := sse.NewBus(limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := sse.NewHandler(bus, cfg)
+	if err != nil {
+		bus.Close()
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(handler)
-
 	t.Cleanup(func() {
-		// Stop the hub before closing the server: hub.Stop closes the client
-		// event channels so open SSE handlers return, and httptest.Server.Close
-		// blocks on active handlers — closing the server first can hang cleanup
-		// when a test leaves a stream open.
-		hub.Stop()
+		bus.Close()
 		server.Close()
 	})
-	return &Harness{Hub: hub, Server: server}
+	return &Harness{Bus: bus, Server: server}
 }
 
 // Connect opens an SSE connection. When token is non-empty it is sent as an
@@ -58,12 +45,20 @@ func New(t *testing.T, baseClientID string, opts ...sse.ServeOption) *Harness {
 // callers can assert on both accepted (200) and rejected (401/403) connections;
 // close it when done.
 func (h *Harness) Connect(ctx context.Context, token string) (*StreamClient, error) {
+	return h.Resume(ctx, token, "")
+}
+
+// Resume sends an acknowledged application cursor in Last-Event-ID.
+func (h *Harness) Resume(ctx context.Context, token, cursor string) (*StreamClient, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.Server.URL, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
 	if token != "" {
 		req.Header.Set("Authorization", security.BearerAuthScheme+" "+token)
+	}
+	if cursor != "" {
+		req.Header.Set("Last-Event-ID", cursor)
 	}
 	resp, err := h.Server.Client().Do(req) //nolint:bodyclose // body ownership transfers to StreamClient; closed via StreamClient.Close (or RequireStatus for rejections).
 	if err != nil {

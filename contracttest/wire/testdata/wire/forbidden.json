@@ -33,5 +33,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"FORBIDDEN\",\"message\":\"You don't have permission to perform this action.\",\"retryable\":false}\n\n"
 }

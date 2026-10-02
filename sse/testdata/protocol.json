@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "sourceBaseCommit": "3ed912ac3b4fa19d830bc84a7df57167c9b77dae",
+  "epoch": "00000000000000000000000000000001",
+  "cases": [
+    {"name":"connected","cursor":"","status":200,"wire":"event: connected\ndata: {\"cursor\":\"00000000000000000000000000000001:2\",\"epoch\":\"00000000000000000000000000000001\"}\n\n"},
+    {"name":"authorized-replay","cursor":"00000000000000000000000000000001:0","status":200,"wire":"id: 00000000000000000000000000000001:2\nevent: google.protobuf.Method\ndata: {\"name\":\"visible\",\"requestTypeUrl\":\"request\"}\n\n"},
+    {"name":"malformed","cursor":"invalid","status":422,"wire":""},
+    {"name":"future","cursor":"00000000000000000000000000000001:3","status":422,"wire":""},
+    {"name":"second-instance","cursor":"00000000000000000000000000000002:2","status":200,"wire":"event: reset\ndata: {\"reason\":\"epochChanged\",\"cursor\":\"00000000000000000000000000000001:2\"}\n\n"},
+    {"name":"evicted","cursor":"00000000000000000000000000000001:0","status":200,"wire":"event: reset\ndata: {\"reason\":\"replayExpired\",\"cursor\":\"00000000000000000000000000000001:3\"}\n\n"},
+    {"name":"overflow","cursor":"","status":200,"wire":"event: reset\ndata: {\"reason\":\"overflow\",\"cursor\":\"00000000000000000000000000000001:4\"}\n\n"}
+  ]
+}

@@ -60,5 +60,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"MISSING_FIELD\",\"message\":\"Missing required field: name\",\"retryable\":false,\"violations\":[{\"field\":\"name\",\"message\":\"is required\",\"reason\":\"REQUIRED\"}]}\n\n"
 }

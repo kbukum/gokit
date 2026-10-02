@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 
 	apperrors "github.com/kbukum/gokit/errors"
 	errorrpc "github.com/kbukum/gokit/errors/rpc"
+	"github.com/kbukum/gokit/sse"
 )
 
 // wireFixtures holds the published golden wire fixtures. They are committed JSON
@@ -56,6 +58,7 @@ type Fixture struct {
 	// GRPCStatus is a base64-encoded binary google.rpc.Status in JSON fixtures.
 	GRPCStatus  []byte          `json:"grpcStatus"`
 	ConnectJSON json.RawMessage `json:"connectJson"`
+	SSEFrame    string          `json:"sseFrame"`
 }
 
 // WireCases returns the canonical failures, built with the ordinary constructors
@@ -143,6 +146,10 @@ func RenderFixture(c WireCase) (Fixture, error) {
 	if err != nil {
 		return Fixture{}, err
 	}
+	frame, err := renderSSE(c.Err)
+	if err != nil {
+		return Fixture{}, err
+	}
 	return Fixture{
 		Name:       c.Name,
 		HTTPStatus: apperrors.HTTPStatusFor(c.Err.Code),
@@ -159,7 +166,30 @@ func RenderFixture(c WireCase) (Fixture, error) {
 		ProblemJSON: body,
 		GRPCStatus:  statusBytes,
 		ConnectJSON: connectJSON,
+		SSEFrame:    frame,
 	}, nil
+}
+
+func renderSSE(err error) (string, error) {
+	bus, createErr := sse.NewBus(sse.DefaultLimits())
+	if createErr != nil {
+		return "", createErr
+	}
+	defer bus.Close()
+	ctx := context.Background()
+	sub, subscribeErr := bus.Subscribe(ctx, sse.SubscribeRequest{Principal: "fixture", Route: "fixture"})
+	if subscribeErr != nil {
+		return "", subscribeErr
+	}
+	defer sub.Close()
+	if failErr := sub.Fail(err); failErr != nil {
+		return "", failErr
+	}
+	frame, nextErr := sub.Next(ctx)
+	if nextErr != nil {
+		return "", nextErr
+	}
+	return frame.Wire(), nil
 }
 
 // LoadFixtures reads the committed golden fixtures keyed by name.

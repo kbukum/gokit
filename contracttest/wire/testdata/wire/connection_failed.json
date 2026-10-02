@@ -43,5 +43,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"CONNECTION_FAILED\",\"message\":\"Unable to connect to db. Please verify the service is running.\",\"retryable\":true}\n\n"
 }

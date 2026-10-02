@@ -43,5 +43,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"NOT_FOUND\",\"message\":\"The requested user was not found.\",\"reason\":\"USER_GONE\",\"retryable\":false,\"traceId\":\"trace-abc\"}\n\n"
 }

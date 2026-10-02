@@ -43,5 +43,6 @@
         }
       }
     ]
-  }
+  },
+  "sseFrame": "event: failure\ndata: {\"code\":\"SERVICE_UNAVAILABLE\",\"message\":\"The db is temporarily unavailable. Please try again.\",\"retryable\":true}\n\n"
 }
