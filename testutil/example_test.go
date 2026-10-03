@@ -28,19 +28,17 @@ func ExampleSetup() {
 	// Output: healthy
 }
 
-// ExampleT demonstrates automatic cleanup with testing.T
-func ExampleT() {
-	t := &testing.T{} // In real tests, this comes from the test function
-
+func TestExampleTHelper(t *testing.T) {
+	t.Parallel()
 	// Setup with automatic cleanup
 	comp := newMockComponent("my-service")
 	testutil.T(t).Setup(comp)
 
 	// Component is started and will be automatically cleaned up when test ends
 	health := comp.Health(context.Background())
-	fmt.Println(health.Status)
-
-	// Output: healthy
+	if health.Status != component.StatusHealthy {
+		t.Fatalf("health = %s", health.Status)
+	}
 }
 
 // ExampleManager demonstrates managing multiple components
@@ -92,9 +90,8 @@ func ExampleManager_resetAll() {
 	// Output: Components reset successfully
 }
 
-// ExampleTHelper_snapshot demonstrates state snapshot and restore
-func ExampleTHelper_snapshot() {
-	t := &testing.T{} // In real tests, this comes from the test function
+func TestExampleTHelperSnapshot(t *testing.T) {
+	t.Parallel()
 	comp := newMockComponent("stateful-service")
 
 	testutil.T(t).Setup(comp)
@@ -107,9 +104,9 @@ func ExampleTHelper_snapshot() {
 	// Restore to previous state
 	testutil.T(t).Restore(comp, snapshot)
 
-	fmt.Println("State restored successfully")
-
-	// Output: State restored successfully
+	if comp.restoreData == nil {
+		t.Fatal("snapshot was not restored")
+	}
 }
 
 // ExampleTestComponent demonstrates implementing a custom test component

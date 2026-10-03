@@ -13,6 +13,8 @@ type PersistentStartErrorKind string
 const (
 	// PersistentStartSpawnFailed indicates the persistent process could not be spawned.
 	PersistentStartSpawnFailed PersistentStartErrorKind = "spawn_failed"
+	// PersistentStartObservationFailed indicates native child inspection failed after spawning.
+	PersistentStartObservationFailed PersistentStartErrorKind = "observation_failed"
 	// PersistentStartReadinessTimedOut indicates the process did not become ready before
 	// the readiness timeout elapsed.
 	PersistentStartReadinessTimedOut PersistentStartErrorKind = "readiness_timed_out"
@@ -36,6 +38,7 @@ func StartErrorKind(err error) (PersistentStartErrorKind, bool) {
 	}
 	switch kind := PersistentStartErrorKind(raw); kind {
 	case PersistentStartSpawnFailed,
+		PersistentStartObservationFailed,
 		PersistentStartReadinessTimedOut,
 		PersistentStartExitedBeforeReadiness,
 		PersistentStartOutputEndedBeforeReadiness:

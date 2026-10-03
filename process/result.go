@@ -26,6 +26,8 @@ type Result struct {
 	TimedOut bool
 	// Canceled reports whether the process was killed because the context was canceled by the caller.
 	Canceled bool
+	// Forced reports forced termination rather than a graceful exit.
+	Forced bool
 }
 
 // StdoutString returns the captured standard output as a string. The conversion is lossless:
@@ -38,7 +40,7 @@ func (r *Result) StderrString() string { return string(r.Stderr) }
 
 // Success reports whether the process exited cleanly with exit code 0.
 func (r *Result) Success() bool {
-	return r.ExitCode != nil && *r.ExitCode == 0
+	return !r.Canceled && !r.TimedOut && !r.Forced && r.ExitCode != nil && *r.ExitCode == 0
 }
 
 // ExitCodeOr returns the process exit code, or fallback when the process was killed and
@@ -61,6 +63,8 @@ func (r *Result) Check() error {
 		return goerrors.Canceled("process")
 	case r.TimedOut:
 		return goerrors.Timeout("process")
+	case r.Forced:
+		return goerrors.Internal(fmt.Errorf("process required forced termination")).WithDetail("forced", true)
 	case r.ExitCode == nil:
 		return goerrors.Internal(fmt.Errorf("process killed")).
 			WithDetail("killed", true)

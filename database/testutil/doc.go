@@ -4,6 +4,8 @@
 // and testutil.TestComponent interfaces, along with fixture helpers for loading test data
 // and managing database state.
 //
+// The default memory/AutoMigrate fixture does not prove production migrations or pooling. WithDatabase and WithInitializer inject owned production pools and real SQL migrations. Operations honor cancellation with a 30-second ceiling. Reset preserves schema_migrations and foreign keys; fixtures and small SQLite snapshots are limited to 32 tables, 1,000 rows, and 1 MiB encoded data. Recreate owned state for production-sized or Postgres fixtures.
+//
 // # Quick Start
 //
 // Create a test database with automatic cleanup:

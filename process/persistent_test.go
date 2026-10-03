@@ -13,7 +13,7 @@ import (
 func TestStartPersistentReadyImmediate(t *testing.T) {
 	t.Parallel()
 
-	run, err := process.StartPersistent(t.Context(), process.Command{
+	run, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "sleep",
 		Args:   []string{"60"},
 	}, process.DefaultPersistentConfig())
@@ -40,7 +40,7 @@ func TestStartPersistentReadyImmediateHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	run, err := process.StartPersistent(ctx, process.Command{
+	run, err := startTestPersistent(t, ctx, process.Command{
 		Binary: "sleep",
 		Args:   []string{"60"},
 	}, process.DefaultPersistentConfig())
@@ -58,7 +58,7 @@ func TestStartPersistentReadyAfterDelayClassifiesContextDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
 	defer cancel()
 
-	_, err := process.StartPersistent(ctx, process.Command{
+	_, err := startTestPersistent(t, ctx, process.Command{
 		Binary: "sleep",
 		Args:   []string{"60"},
 	}, process.PersistentConfig{
@@ -84,7 +84,7 @@ func TestStartPersistentReadyOnOutput(t *testing.T) {
 	cfg.OutputMarker = "READY"
 	cfg.ReadinessTimeout = 5 * time.Second
 
-	run, err := process.StartPersistent(t.Context(), process.Command{
+	run, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "sh",
 		Args:   []string{"-c", "echo READY; sleep 60"},
 	}, cfg)
@@ -106,7 +106,7 @@ func TestStartPersistentReadinessTimedOut(t *testing.T) {
 	cfg.OutputMarker = "NEVER"
 	cfg.ReadinessTimeout = 150 * time.Millisecond
 
-	_, err := process.StartPersistent(t.Context(), process.Command{
+	_, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "sleep",
 		Args:   []string{"60"},
 	}, cfg)
@@ -127,7 +127,7 @@ func TestStartPersistentExitedBeforeReadiness(t *testing.T) {
 	cfg.OutputMarker = "NEVER"
 	cfg.ReadinessTimeout = 5 * time.Second
 
-	_, err := process.StartPersistent(t.Context(), process.Command{
+	_, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "sh",
 		Args:   []string{"-c", "exit 3"},
 	}, cfg)
@@ -143,7 +143,7 @@ func TestStartPersistentExitedBeforeReadiness(t *testing.T) {
 func TestStartPersistentSpawnFailed(t *testing.T) {
 	t.Parallel()
 
-	_, err := process.StartPersistent(t.Context(), process.Command{
+	_, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "nonexistent_binary_xyz_99999",
 	}, process.DefaultPersistentConfig())
 	if err == nil {
@@ -167,19 +167,18 @@ func TestStartPersistentWaitNaturalExit(t *testing.T) {
 	cfg.OutputMarker = "up"
 	cfg.ReadinessTimeout = 5 * time.Second
 
-	run, err := process.StartPersistent(t.Context(), process.Command{
+	run, err := startTestPersistent(t, t.Context(), process.Command{
 		Binary: "sh",
 		Args:   []string{"-c", "echo up; exit 0"},
 	}, cfg)
 	if err != nil {
 		t.Fatalf("StartPersistent: %v", err)
 	}
-	if err := run.Process.Wait(); err != nil {
+	if _, err := run.Process.Wait(t.Context()); err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	// A second lifecycle call must be rejected.
-	if _, err := run.Process.Shutdown(t.Context()); err == nil {
-		t.Fatal("expected conflict on Shutdown after Wait")
+	if outcome, err := run.Process.Shutdown(t.Context()); err != nil || !outcome.AlreadyExited {
+		t.Fatalf("cleanup after Wait: %+v %v", outcome, err)
 	}
 }
 
@@ -189,13 +188,28 @@ func TestStartPersistentEmptyMarkerRejected(t *testing.T) {
 	cfg := process.DefaultPersistentConfig()
 	cfg.Readiness = process.ReadyOnOutput
 
-	_, err := process.StartPersistent(t.Context(), process.Command{Binary: "sleep", Args: []string{"1"}}, cfg)
+	_, err := startTestPersistent(t, t.Context(), process.Command{Binary: "sleep", Args: []string{"1"}}, cfg)
 	if err == nil {
 		t.Fatal("expected invalid input error for empty marker")
 	}
 	if appErr, ok := goerrors.AsAppError(err); !ok || appErr.Code != goerrors.ErrCodeInvalidInput {
 		t.Fatalf("error = %v, want INVALID_INPUT", err)
 	}
+}
+
+func startTestPersistent(t *testing.T, ctx context.Context, command process.Command, cfg process.PersistentConfig) (*process.PersistentRun, error) {
+	t.Helper()
+	run, err := process.StartPersistent(ctx, command, cfg)
+	if run != nil {
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 10*time.Second)
+			defer cancel()
+			if _, cleanupErr := run.Process.Shutdown(cleanupCtx); cleanupErr != nil {
+				t.Error(cleanupErr)
+			}
+		})
+	}
+	return run, err
 }
 
 func assertProcessAppErrorCode(t *testing.T, err error, want goerrors.ErrorCode) {

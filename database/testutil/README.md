@@ -2,6 +2,10 @@
 
 Testing utilities for the `database` module, providing an in-memory SQLite test database component and fixture helpers.
 
+The default is a **small unit fixture**, not proof of production pooling, durable restart, or SQL migrations. Inject a production opener with `WithDatabase(func(context.Context) (*database.DB, error))` and run real migrations with `WithInitializer(func(context.Context, *gorm.DB) error)`. The component owns the returned database and closes both pools, including when initialization fails. See [`sqlite/test_environment_test.go`](../sqlite/test_environment_test.go) for the complete file-backed consumer and [`postgres/testutil`](../postgres/testutil) for required Docker provisioning.
+
+All fixture operations take a context and apply a 30-second ceiling. Fixture insertion is transactional and rejects more than 1,000 rows or 1 MiB encoded data. Reset clears at most 32 application tables in one transaction, preserving `schema_migrations` and foreign-key enforcement. Snapshots are opaque, component-owned, and limited to SQLite, 32 tables, 128 columns per table, 1,000 total rows, and 1 MiB encoded data. Oversized snapshots fail before returning captured data; failed restore rolls back the clear and inserts. For production-sized or Postgres fixtures, recreate isolated owned state instead of snapshotting the whole database.
+
 ## Features
 
 - **TestComponent**: In-memory SQLite database with full TestComponent lifecycle support
@@ -59,8 +63,8 @@ func TestWithModels(t *testing.T) {
 
 The database `Component` implements `testutil.TestComponent`:
 
-- **Reset()**: Clears all data from all tables while preserving schema
-- **Snapshot()**: Captures current database state (all tables and rows)
+- **Reset()**: Clears application data while preserving schema and migration metadata
+- **Snapshot()**: Captures small bounded SQLite application fixtures
 - **Restore(snapshot)**: Restores database to a previous snapshot
 
 ### State Management Example
@@ -101,7 +105,7 @@ func TestWithFixtures(t *testing.T) {
     db.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
     
     // Load fixture data
-    dbtestutil.LoadFixture(db.DB(), "users", []map[string]any{
+    dbtestutil.LoadFixture(t.Context(), db.DB(), "users", []map[string]any{
         {"name": "Alice", "email": "alice@example.com"},
         {"name": "Bob", "email": "bob@example.com"},
     })
@@ -117,21 +121,21 @@ func TestWithFixtures(t *testing.T) {
 
 ```go
 // Check if table exists
-if dbtestutil.TableExists(db.DB(), "users") {
+if exists, err := dbtestutil.TableExists(ctx, db.DB(), "users"); err == nil && exists {
     // ...
 }
 
 // Get all table names
-tables, err := dbtestutil.GetTableNames(db.DB())
+tables, err := dbtestutil.GetTableNames(ctx, db.DB())
 
 // Count rows
-count, err := dbtestutil.CountRows(db.DB(), "users")
+count, err := dbtestutil.CountRows(ctx, db.DB(), "users")
 
 // Truncate a table
-dbtestutil.TruncateTable(db.DB(), "users")
+dbtestutil.TruncateTable(ctx, db.DB(), "users")
 
 // Truncate all tables
-dbtestutil.TruncateAllTables(db.DB())
+dbtestutil.TruncateAllTables(ctx, db.DB())
 ```
 
 ### Assertions

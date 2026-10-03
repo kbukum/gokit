@@ -8,6 +8,7 @@ require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/database v0.3.0-alpha.1
 	github.com/kbukum/gokit/database/testutil v0.3.0-alpha.1
+	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	github.com/mattn/go-sqlite3 v1.14.52
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
@@ -27,7 +28,6 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/kbukum/gokit/testutil v0.3.0-alpha.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect

@@ -5,8 +5,7 @@
 //
 // Determinism: each test provisions its own ephemeral PostgreSQL server via testcontainers-go with
 // a digest-pinned image, so runs never depend on a developer's or CI runner's local Postgres or on
-// a mutable tag. The suite skips only when no Docker provider is healthy; once Docker is reachable,
-// any container startup failure fails the test rather than silently skipping.
+// a mutable tag. Missing Docker, startup failure, and termination failure all fail this required gate.
 package postgres_test
 
 import (
@@ -16,8 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/testcontainers/testcontainers-go"
-	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -25,56 +22,31 @@ import (
 	"github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/migration"
 	"github.com/kbukum/gokit/database/postgres"
+	pgtest "github.com/kbukum/gokit/database/postgres/testutil"
 	"github.com/kbukum/gokit/database/query"
 	"github.com/kbukum/gokit/database/repository"
 	dbtestutil "github.com/kbukum/gokit/database/testutil"
 	"github.com/kbukum/gokit/logging"
 )
 
-// postgresImage is pinned by immutable digest so the integration environment is deterministic and
-// cannot silently change or run an unreviewed image; bump the digest deliberately. The digest is
-// the multi-arch index for postgres:17-alpine, so it resolves on both amd64 and arm64 runners.
-const postgresImage = "postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73"
-
-// setupTimeout bounds container image-pull and startup so a stalled daemon or registry fails the
-// test instead of hanging the suite indefinitely.
-const setupTimeout = 3 * time.Minute
-
 //go:embed testdata/migrations/*.sql
 var migrationsFS embed.FS
 
-// newDSN starts an ephemeral PostgreSQL container and returns a connection DSN. It skips only when
-// no Docker provider is healthy; once Docker is reachable, a container startup failure fails the
-// test so a bad image or PostgreSQL regression cannot leave CI green.
+// newDSN consumes the adapter-owned fixture; Docker and successful termination are required.
 func newDSN(t *testing.T) string {
 	t.Helper()
-	testcontainers.SkipIfProviderIsNotHealthy(t)
-
-	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
-	defer cancel()
-
-	container, err := tcpostgres.Run(ctx, postgresImage,
-		tcpostgres.WithDatabase("app"),
-		tcpostgres.WithUsername("app"),
-		tcpostgres.WithPassword("secret"),
-		tcpostgres.BasicWaitStrategies(),
-		tcpostgres.WithSQLDriver("pgx"),
-	)
+	fixture, err := pgtest.Start(t.Context())
 	if err != nil {
 		t.Fatalf("start postgres container: %v", err)
 	}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := container.Terminate(ctx); err != nil {
-			t.Logf("terminate container: %v", err)
+		if err := fixture.Close(ctx); err != nil {
+			t.Errorf("terminate container: %v", err)
 		}
 	})
-	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("connection string: %v", err)
-	}
-	return dsn
+	return fixture.DSN
 }
 
 type widget struct {

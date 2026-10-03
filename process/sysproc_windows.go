@@ -4,8 +4,19 @@ package process
 
 import (
 	stderrors "errors"
+	"os"
 	"os/exec"
+	"syscall"
 )
+
+const (
+	gracefulTerminationSupported = false
+	terminationSignal            = syscall.SIGTERM
+)
+
+func wasForced(state *os.ProcessState) bool {
+	return false
+}
 
 // ConfigureSysProcAttr is a no-op on Windows:
 // there is no Setpgid equivalent in the standard library
