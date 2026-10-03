@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -87,7 +88,7 @@ type MapReduceConfig[I, O, R any] struct {
 // it is reused across invocations (caller manages its lifecycle).
 // Otherwise a temporary pool is created and stopped per call.
 func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
-	return HandlerFunc[I, R](func(ctx context.Context, task I, emit func(Event[R])) error {
+	return HandlerFunc[I, R](func(ctx context.Context, task I, emit func(Event[R])) (resultErr error) {
 		subtasks := cfg.Split(task)
 
 		pool := cfg.Pool
@@ -103,7 +104,7 @@ func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
 				EventBuffer: 64,
 			})
 			// Ensure temporary pool is always stopped to prevent goroutine leaks.
-			defer func() { _ = pool.Stop(ctx) }()
+			defer func() { resultErr = errors.Join(resultErr, pool.Stop(ctx)) }()
 		}
 
 		handles, err := pool.SubmitBatch(ctx, subtasks)
@@ -111,14 +112,18 @@ func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
 			return err
 		}
 
-		// Forward pool events in a synchronized goroutine.
-		// emitMu protects calls to emit from concurrent access.
-		var emitMu sync.Mutex
-		var eventWg sync.WaitGroup
-		eventWg.Add(1)
-		go func() {
-			defer eventWg.Done()
-			for e := range pool.Events() {
+		defer func() {
+			for _, handle := range handles {
+				handle.Cancel()
+			}
+			for _, handle := range handles {
+				<-handle.Done()
+			}
+		}()
+
+		partials := make([]R, len(handles))
+		for i, h := range handles {
+			for e := range h.Events() {
 				fwd := Event[R]{
 					Type:      e.Type,
 					WorkerID:  e.WorkerID,
@@ -126,28 +131,17 @@ func NewMapReduce[I, O, R any](cfg MapReduceConfig[I, O, R]) Handler[I, R] {
 					Progress:  e.Progress,
 					Metadata:  e.Metadata,
 					Timestamp: e.Timestamp,
+					Error:     e.Error,
+					Data:      e.Data,
 				}
-				emitMu.Lock()
 				emit(fwd)
-				emitMu.Unlock()
 			}
-		}()
-
-		// Collect results
-		partials := make([]R, len(handles))
-		for i, h := range handles {
 			result, herr := h.Result()
 			if herr != nil {
 				return herr
 			}
 			partials[i] = result
 		}
-
-		// Stop temporary pool and wait for event forwarding goroutine to drain
-		if ownPool {
-			_ = pool.Stop(ctx)
-		}
-		eventWg.Wait()
 
 		combined, err := cfg.Combine(partials)
 		if err != nil {

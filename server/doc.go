@@ -49,8 +49,11 @@
 //
 //   - /health: Health check aggregation
 //   - /info: Application information
-//   - /metrics: Prometheus metrics
 //   - /liveness: Kubernetes liveness probe
 //   - /readiness: Kubernetes readiness probe
 //   - /version: Build version information
+//
+// Prometheus metrics are not a public endpoint. Enable the private admin
+// listener (Config.Admin) to expose /metrics and pprof on a separate,
+// trusted-network address.
 package server

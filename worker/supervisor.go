@@ -155,8 +155,5 @@ func (s *supervisor[I, O]) backoff(workerIdx int) time.Duration {
 func (s *supervisor[I, O]) emitLog(msg string) {
 	e := LogEvent[O](msg, map[string]any{"source": "supervisor"})
 	e.WorkerID = "supervisor"
-	select {
-	case s.pool.events <- e:
-	default:
-	}
+	s.pool.events.emit(e)
 }

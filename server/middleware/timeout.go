@@ -4,12 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
 
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/logging"
 )
+
+// MaxBufferedResponseBytes bounds REST timeout buffering. Streaming responses must bypass this middleware.
+const MaxBufferedResponseBytes = 10 * 1024 * 1024
 
 // Timeout returns middleware that bounds each request to d. When the deadline
 // elapses the request context is canceled — so downstream calls that honor the
@@ -29,7 +34,7 @@ func Timeout(d time.Duration) Middleware {
 			ctx, cancel := context.WithTimeout(r.Context(), d)
 			defer cancel()
 
-			buf := &bufferedResponseWriter{header: make(http.Header), status: http.StatusOK}
+			buf := &bufferedResponseWriter{header: make(http.Header), status: http.StatusOK, ctx: ctx, cancel: cancel, overflow: make(chan struct{})}
 			done := make(chan struct{})
 			go func() {
 				defer close(done)
@@ -38,22 +43,42 @@ func Timeout(d time.Duration) Middleware {
 
 			select {
 			case <-done:
-				buf.flushTo(w)
 			case <-ctx.Done():
-				writeTimeout(w, r)
+			case <-buf.overflow:
+			}
+			if err := buf.finish(ctx.Err()); err != nil {
+				failure := apperrors.New(apperrors.ErrCodeServiceUnavailable, "request timeout")
+				if !errors.Is(err, http.ErrHandlerTimeout) {
+					failure = apperrors.New(apperrors.ErrCodeServiceUnavailable, "response exceeds buffering limit")
+				}
+				if err := writeTimeoutFailure(w, r, failure); err != nil {
+					logTimeoutWrite(r.Context(), err)
+				}
+			} else if err := buf.flushTo(w); err != nil {
+				logTimeoutWrite(r.Context(), err)
 			}
 		})
 	}
 }
 
-// writeTimeout emits the 503 Problem Details response for an elapsed deadline.
-func writeTimeout(w http.ResponseWriter, r *http.Request) {
-	pd := apperrors.New(apperrors.ErrCodeServiceUnavailable, "request timeout").ToProblemDetail()
+func writeTimeoutFailure(w http.ResponseWriter, r *http.Request, failure *apperrors.AppError) error {
+	pd := failure.ToProblemDetail()
 	pd.Instance = r.URL.Path
+	body, err := json.Marshal(pd)
+	if err != nil {
+		http.Error(w, "failed to encode timeout response", http.StatusInternalServerError)
+		return err
+	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusServiceUnavailable)
-	body, _ := json.Marshal(pd)
-	_, _ = w.Write(body)
+	_, err = w.Write(body)
+	return err
+}
+
+func logTimeoutWrite(ctx context.Context, err error) {
+	if logger, ok := logging.LoggerFromContext(ctx); ok {
+		logger.ErrorCtx(ctx, "Timeout response write failed", map[string]any{"error": err.Error()})
+	}
 }
 
 // bufferedResponseWriter records a handler's response so the timeout middleware
@@ -66,6 +91,11 @@ type bufferedResponseWriter struct {
 	body        bytes.Buffer
 	status      int
 	wroteHeader bool
+	ctx         context.Context
+	cancel      context.CancelFunc
+	overflow    chan struct{}
+	closed      bool
+	err         error
 }
 
 func (b *bufferedResponseWriter) Header() http.Header { return b.header }
@@ -73,7 +103,7 @@ func (b *bufferedResponseWriter) Header() http.Header { return b.header }
 func (b *bufferedResponseWriter) WriteHeader(status int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.wroteHeader {
+	if b.wroteHeader || b.closed {
 		return
 	}
 	b.status = status
@@ -83,12 +113,39 @@ func (b *bufferedResponseWriter) WriteHeader(status int) {
 func (b *bufferedResponseWriter) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.err != nil {
+		return 0, b.err
+	}
+	if b.closed || b.ctx.Err() != nil {
+		return 0, http.ErrHandlerTimeout
+	}
+	if len(p) > MaxBufferedResponseBytes-b.body.Len() {
+		b.err = apperrors.New(apperrors.ErrCodeServiceUnavailable, "response exceeds buffering limit")
+		b.closed = true
+		b.body = bytes.Buffer{}
+		close(b.overflow)
+		b.cancel()
+		return 0, b.err
+	}
 	b.wroteHeader = true
 	return b.body.Write(p)
 }
 
+func (b *bufferedResponseWriter) finish(contextErr error) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.closed = true
+	if b.err == nil && contextErr != nil {
+		b.err = http.ErrHandlerTimeout
+	}
+	if b.err != nil {
+		b.body = bytes.Buffer{}
+	}
+	return b.err
+}
+
 // flushTo replays the recorded response onto the real writer.
-func (b *bufferedResponseWriter) flushTo(w http.ResponseWriter) {
+func (b *bufferedResponseWriter) flushTo(w http.ResponseWriter) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	dst := w.Header()
@@ -96,5 +153,6 @@ func (b *bufferedResponseWriter) flushTo(w http.ResponseWriter) {
 		dst[k] = vv
 	}
 	w.WriteHeader(b.status)
-	_, _ = w.Write(b.body.Bytes())
+	_, err := w.Write(b.body.Bytes())
+	return err
 }

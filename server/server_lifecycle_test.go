@@ -251,13 +251,11 @@ func TestMounts_EmptyByDefault(t *testing.T) {
 func TestApplyMiddleware_ChangesHandler(t *testing.T) {
 	s := newTestServer(t)
 
-	before := s.Handler()
 	s.ApplyMiddleware()
-	after := s.Handler()
-
-	// After applying middleware the handler should be a new wrapped handler
-	if fmt.Sprintf("%p", before) == fmt.Sprintf("%p", after) {
-		t.Error("handler should be different after ApplyMiddleware")
+	response := httptest.NewRecorder()
+	s.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+	if response.Header().Get("X-Request-ID") == "" {
+		t.Error("middleware did not attach a request ID")
 	}
 }
 
@@ -551,14 +549,8 @@ func TestRegisterDefaultEndpoints_Metrics(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status: want 200, got %d", resp.StatusCode)
-	}
-
-	var result map[string]any
-	json.NewDecoder(resp.Body).Decode(&result)
-	if _, ok := result["goroutines"]; !ok {
-		t.Error("expected goroutines in metrics response")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("public metrics: want 404, got %d", resp.StatusCode)
 	}
 }
 
@@ -576,7 +568,7 @@ func TestApplyDefaults_RegistersEndpointsAndMiddleware(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 
-	for _, path := range []string{"/health", "/info", "/metrics"} {
+	for _, path := range []string{"/health", "/info"} {
 		resp, err := http.Get(ts.URL + path)
 		if err != nil {
 			t.Fatalf("GET %s: %v", path, err)

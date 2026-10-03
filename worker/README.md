@@ -15,7 +15,7 @@
 - **Composition** — FanOut, MapReduce, and Pipeline for combining handlers
 - **Provider bridges** — `FromProvider` / `AsProvider` for interop with `provider.RequestResponse`
 - **Subprocess handler** — wraps `process.Command` with line-by-line stdout/stderr streaming
-- **Lock-free hot path** — atomic stats, no mutex on Submit/dispatch/runWorker
+- **Bounded delivery** — task execution never waits for an event reader
 
 ## Install
 
@@ -24,6 +24,14 @@ go get github.com/kbukum/gokit@latest
 ```
 
 Worker is part of the core module — no separate sub-module import needed.
+
+## Event delivery and lifetime
+
+`EventBuffer` bounds queued data events per task; the aggregate stream has `EventBuffer * Size` data slots. Each stream reserves one extra control slot. If its data queue fills, it emits `EventError` with `ErrEventOverflow` and closes. Consumers must handle this as incomplete delivery, not normal completion. The aggregate stream stays closed for the pool's lifetime after overflow.
+
+Overflow does not cancel or fail a task. `TaskHandle.Result()` remains authoritative and returns the last emitted result when the handler succeeds. Task cancellation callbacks are removed on completion and rejected submission; `PoolStats.CancellationCallbacks` exposes outstanding registrations.
+
+Pools can be registered directly with `component.Registry`. Construction does not start goroutines; registry `Start` or the first direct `Submit` starts workers. This keeps unstarted pools from leaking on startup failure. `Quiesce` stops admission, `Drain` finishes or cancels accepted tasks, and `Stop` joins workers and supervision. Handlers must return when their context is canceled. Map-reduce consumes only its own task handles, never the shared aggregate stream, so reusable pools do not tie a request's lifetime to pool shutdown.
 
 ## Quick Start
 

@@ -3,12 +3,13 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/pprof"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -20,15 +21,24 @@ import (
 
 // Server is a unified HTTP server backed by Gin with optional support for additional http.Handler mounts (e.g. Connect-Go / gRPC) on the same port.
 type Server struct {
-	httpServer  *http.Server
-	engine      *gin.Engine
-	mux         *http.ServeMux
-	restHandler http.Handler // Gin engine, optionally wrapped with the per-request timeout
-	config      Config
-	log         *logging.Logger
-	mounts      []MountedHandler      // tracked for summary display
-	listener    net.Listener          // set by Start(); used by ListenAddr()
-	secHeaders  middleware.Middleware // built once from config; no-op when disabled
+	httpServer     *http.Server
+	engine         *gin.Engine
+	mux            *http.ServeMux
+	restHandler    http.Handler // Gin engine, optionally wrapped with the per-request timeout
+	config         Config
+	log            *logging.Logger
+	mounts         []MountedHandler      // tracked for summary display
+	listener       net.Listener          // set by Start(); used by ListenAddr()
+	secHeaders     middleware.Middleware // built once from config; no-op when disabled
+	adminServer    *http.Server
+	adminListener  net.Listener
+	serveWG        sync.WaitGroup
+	cancelRequests context.CancelFunc
+	admissionMu    sync.Mutex
+	closing        bool
+	active         int
+	drained        chan struct{}
+	metricsMW      middleware.Middleware
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -55,6 +65,10 @@ func New(cfg *Config, log *logging.Logger) *Server {
 	}
 
 	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		middleware.SetMetricRoute(c.Request, c.FullPath())
+		c.Next()
+	})
 	mux := http.NewServeMux()
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
@@ -114,6 +128,7 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		config:     *cfg,
 		log:        log,
 		secHeaders: secHeaders,
+		drained:    make(chan struct{}),
 	}
 	// Default the REST handler to the bare Gin engine; ApplyMiddleware may wrap
 	// it with the per-request timeout. Mount an indirection at "/" so that later
@@ -122,6 +137,7 @@ func New(cfg *Config, log *logging.Logger) *Server {
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		srv.restHandler.ServeHTTP(w, r)
 	}))
+	srv.httpServer.Handler = srv.admit(mux)
 	return srv
 }
 
@@ -140,7 +156,10 @@ func (s *Server) Logger() *logging.Logger {
 // Use this to add Connect-Go or any other handler alongside Gin.
 // The pattern must include a trailing slash for subtree matches (e.g. "/grpc.health.v1.Health/").
 func (s *Server) Handle(pattern string, handler http.Handler) {
-	s.mux.Handle(pattern, handler)
+	s.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		middleware.SetMetricRoute(r, pattern)
+		handler.ServeHTTP(w, r)
+	}))
 	s.mounts = append(s.mounts, MountedHandler{Pattern: pattern})
 	s.log.Debug("Handler mounted", map[string]any{
 		"pattern": pattern,
@@ -162,6 +181,14 @@ func (s *Server) Handler() http.Handler {
 // Start binds the port and begins serving. It returns once the listener is bound
 // so the caller knows the port is ready; serving continues in a goroutine.
 func (s *Server) Start(ctx context.Context) error {
+	if err := s.config.Validate(); err != nil {
+		return err
+	}
+	if s.config.TLS != nil && s.config.TLS.IsEnabled() && s.httpServer.TLSConfig == nil {
+		if _, err := s.config.TLS.Build(); err != nil {
+			return err
+		}
+	}
 	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]any{
 		"addr": s.httpServer.Addr,
 	})
@@ -172,8 +199,16 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server failed to bind %s: %w", s.httpServer.Addr, err)
 	}
 	s.listener = listener
+	if err := s.startAdmin(ctx); err != nil {
+		return errors.Join(err, listener.Close())
+	}
+	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
+	s.cancelRequests = cancelRequests
+	s.httpServer.BaseContext = func(net.Listener) context.Context { return requestCtx }
 
+	s.serveWG.Add(1)
 	go func() { //nolint:contextcheck // serve goroutine outlives the Start ctx
+		defer s.serveWG.Done()
 		var serveErr error
 		if s.httpServer.TLSConfig != nil {
 			serveErr = s.httpServer.ServeTLS(listener, "", "")
@@ -196,24 +231,14 @@ func (s *Server) Start(ctx context.Context) error {
 // Stop gracefully shuts down the server, waiting up to the configured
 // shutdown_timeout for in-flight requests to drain.
 func (s *Server) Stop(ctx context.Context) error {
-	s.log.DebugCtx(ctx, "Shutting down HTTP server")
-
-	timeout := time.Duration(s.config.ShutdownTimeout) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-	shutdownCtx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := s.shutdownContext(ctx)
 	defer cancel()
-
-	if err := s.httpServer.Shutdown(shutdownCtx); err != nil {
-		s.log.ErrorCtx(ctx, "Server shutdown error", map[string]any{
-			"error": err.Error(),
-		})
-		return fmt.Errorf("server shutdown error: %w", err)
-	}
-
-	s.log.DebugCtx(ctx, "HTTP server shut down successfully")
-	return nil
+	publicCtx, publicCancel := context.WithTimeout(ctx, remainingBudget(ctx)/2)
+	publicErr := s.drain(publicCtx)
+	publicCancel()
+	adminErr := s.stopAdmin(ctx)
+	s.serveWG.Wait()
+	return errors.Join(publicErr, adminErr)
 }
 
 // Addr returns the configured listen address.
@@ -253,13 +278,16 @@ func (s *Server) ApplyMiddleware() {
 	// timeout. RPC/streaming mounts keep serving through the bare mux.
 	s.restHandler = s.engine
 	if s.config.RequestTimeout > 0 {
-		s.restHandler = middleware.Timeout(time.Duration(s.config.RequestTimeout) * time.Second)(s.engine)
+		s.restHandler = middleware.Timeout(time.Duration(s.config.RequestTimeout) * time.Second)(middleware.Recovery(s.log)(s.admit(s.engine)))
 	}
 
 	stack := []middleware.Middleware{
 		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
+	}
+	if s.metricsMW != nil {
+		stack = append([]middleware.Middleware{s.metricsMW}, stack...)
 	}
 	if s.secHeaders != nil {
 		stack = append(stack, s.secHeaders)
@@ -272,7 +300,7 @@ func (s *Server) ApplyMiddleware() {
 		stack = append(stack, middleware.BodySizeLimit(s.config.MaxBodyBytes))
 	}
 
-	s.httpServer.Handler = middleware.Chain(stack...)(s.mux)
+	s.httpServer.Handler = s.admit(middleware.Chain(stack...)(s.mux))
 }
 
 // RegisterDefaultEndpoints registers the standard observability endpoints:
@@ -281,7 +309,6 @@ func (s *Server) ApplyMiddleware() {
 //   - GET /livez    — liveness probe (process is up)
 //   - GET /readyz   — readiness probe (component-aware)
 //   - GET /info     — build/runtime info
-//   - GET /metrics  — Prometheus exposition
 func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.HealthChecker) {
 	healthHandler := endpoint.Health(serviceName, checker)
 	s.engine.GET("/health", healthHandler)
@@ -289,25 +316,6 @@ func (s *Server) RegisterDefaultEndpoints(serviceName string, checker endpoint.H
 	s.engine.GET("/livez", endpoint.Liveness(serviceName))
 	s.engine.GET("/readyz", endpoint.Readiness(serviceName, checker))
 	s.engine.GET("/info", endpoint.Info(serviceName))
-	s.engine.GET("/metrics", endpoint.Metrics())
-}
-
-// RegisterPprof mounts net/http/pprof handlers under /debug/pprof.
-// Only enable in non-public environments (the handlers expose runtime state).
-func (s *Server) RegisterPprof() {
-	pprofGroup := s.engine.Group("/debug/pprof")
-	pprofGroup.GET("/", gin.WrapF(pprof.Index))
-	pprofGroup.GET("/cmdline", gin.WrapF(pprof.Cmdline))
-	pprofGroup.GET("/profile", gin.WrapF(pprof.Profile))
-	pprofGroup.POST("/symbol", gin.WrapF(pprof.Symbol))
-	pprofGroup.GET("/symbol", gin.WrapF(pprof.Symbol))
-	pprofGroup.GET("/trace", gin.WrapF(pprof.Trace))
-	pprofGroup.GET("/allocs", gin.WrapH(pprof.Handler("allocs")))
-	pprofGroup.GET("/block", gin.WrapH(pprof.Handler("block")))
-	pprofGroup.GET("/goroutine", gin.WrapH(pprof.Handler("goroutine")))
-	pprofGroup.GET("/heap", gin.WrapH(pprof.Handler("heap")))
-	pprofGroup.GET("/mutex", gin.WrapH(pprof.Handler("mutex")))
-	pprofGroup.GET("/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
 }
 
 // MountDocsFromConfig mounts interactive API documentation using Scalar UI based on the server's DocsConfig.

@@ -38,6 +38,12 @@ func (c *Component) Stop(context.Context) error {
 	return nil
 }
 
+// Quiesce stops subscription admission and cancels streams before HTTP draining.
+func (c *Component) Quiesce() error {
+	c.bus.Close()
+	return nil
+}
+
 func (c *Component) Health(context.Context) component.Health {
 	c.bus.mu.Lock()
 	defer c.bus.mu.Unlock()

@@ -54,13 +54,12 @@ func TestRegisterDefaultEndpoints(t *testing.T) {
 
 func TestRegisterPprof(t *testing.T) {
 	s := newTestServer(t)
-	s.RegisterPprof()
 	s.ApplyMiddleware()
 
 	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/heap", http.NoBody)
 	w := httptest.NewRecorder()
 	s.Handler().ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
+	if w.Code != http.StatusNotFound {
 		t.Fatalf("pprof heap: status %d", w.Code)
 	}
 }

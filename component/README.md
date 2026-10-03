@@ -57,6 +57,14 @@ func main() {
 | `NewRegistry()` | Create component registry |
 | `StartAll()` / `StopAll()` / `HealthAll()` | Batch lifecycle operations |
 
+## Coordinated shutdown
+
+Start order remains registration order. Shutdown first calls each optional `Quiescer`, then drains `DrainIngress` before `DrainWorkers`. No clients or databases close until those drains return. `Stop` then releases `PhaseResources`, `PhaseTelemetry`, and `PhaseAdmin`, reversing registration order within each phase.
+
+Use `RegisterInPhase` for telemetry and admin resources, or let a component declare `ShutdownPhase()`. Most components use the default resource phase. `bootstrap.App` places DI-container cleanup between resource components and telemetry. `Registry.Shutdown` exposes the same boundary to hosts that manage their own container.
+
+Shutdown uses one bounded context and gives each operation a share of the remaining time. Quiescers must be prompt and idempotent; drain/stop methods must honor their context and release owned goroutines. No detached timeout wrapper can safely kill code that ignores cancellation. `StopAllDetailed` reports quiesce, drain, and stop errors for each component.
+
 ---
 
 [⬅ Back to main README](../README.md)

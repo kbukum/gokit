@@ -52,6 +52,23 @@ type InstrumentOption func(*instrumentOptions)
 type instrumentOptions struct {
 	description string
 	unit        string
+	meter       metric.Meter
+}
+
+// WithMeter binds an instrument to an injected meter instead of the global provider.
+func WithMeter(meter metric.Meter) InstrumentOption {
+	return func(opts *instrumentOptions) { opts.meter = meter }
+}
+
+func instrumentMeter(name string, opts []InstrumentOption) metric.Meter {
+	var cfg instrumentOptions
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.meter != nil {
+		return cfg.meter
+	}
+	return Meter(name)
 }
 
 // WithInstrumentDescription sets the instrument description.
@@ -105,7 +122,7 @@ type Int64Counter struct {
 
 // NewInt64Counter creates an int64 counter from the named meter.
 func NewInt64Counter(meterName, instrumentName string, opts ...InstrumentOption) (*Int64Counter, error) {
-	counter, err := Meter(meterName).Int64Counter(instrumentName, counterOptions(opts)...)
+	counter, err := instrumentMeter(meterName, opts).Int64Counter(instrumentName, counterOptions(opts)...)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +143,7 @@ type Float64Histogram struct {
 
 // NewFloat64Histogram creates a float64 histogram from the named meter.
 func NewFloat64Histogram(meterName, instrumentName string, opts ...InstrumentOption) (*Float64Histogram, error) {
-	histogram, err := Meter(meterName).Float64Histogram(instrumentName, histogramOptions(opts)...)
+	histogram, err := instrumentMeter(meterName, opts).Float64Histogram(instrumentName, histogramOptions(opts)...)
 	if err != nil {
 		return nil, err
 	}

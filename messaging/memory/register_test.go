@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -33,8 +34,16 @@ func TestRegisterMemoryAdapterConstructsFactories(t *testing.T) {
 	if consumer.Topic() != "events" {
 		t.Fatalf("consumer topic = %q, want events", consumer.Topic())
 	}
-	if broker.MessageCount("events") != 1 {
-		t.Fatalf("message count = %d, want 1", broker.MessageCount("events"))
+	ctx, cancel := context.WithCancel(t.Context())
+	err = consumer.Consume(ctx, func(_ context.Context, message messaging.Message) error {
+		if message.Key != "k" {
+			t.Errorf("key = %q", message.Key)
+		}
+		cancel()
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("consume: %v", err)
 	}
 }
 

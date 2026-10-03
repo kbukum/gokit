@@ -6,11 +6,22 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/metric/noop"
+
 	"github.com/kbukum/gokit/server/middleware"
 )
 
+func testMetrics(t *testing.T, name string) middleware.Middleware {
+	t.Helper()
+	mw, err := middleware.PrometheusMetrics(name, noop.NewMeterProvider().Meter(name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mw
+}
+
 func TestPrometheusMetrics_PassesThrough(t *testing.T) {
-	handler := middleware.PrometheusMetrics("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := testMetrics(t, "test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("hello"))
 	}))
@@ -40,7 +51,7 @@ func TestPrometheusMetrics_CapturesStatusCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := middleware.PrometheusMetrics("test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handler := testMetrics(t, "test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
 			}))
 
@@ -56,7 +67,7 @@ func TestPrometheusMetrics_CapturesStatusCode(t *testing.T) {
 }
 
 func TestPrometheusMetrics_HandlesWriteBody(t *testing.T) {
-	handler := middleware.PrometheusMetrics("test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := testMetrics(t, "test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("response body content"))
 	}))
 
@@ -94,7 +105,7 @@ func TestMetricsWriter_Flush(t *testing.T) {
 		onFlush:        func() { flushed = true },
 	}
 
-	handler := middleware.PrometheusMetrics("test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := testMetrics(t, "test")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}

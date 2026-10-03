@@ -9,6 +9,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/bridge"
 	"github.com/kbukum/gokit/messaging/memory"
+	"github.com/kbukum/gokit/messaging/testutil"
 )
 
 func TestProducerAsSink(t *testing.T) {
@@ -41,9 +42,7 @@ func TestProducerAsSink(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			broker := memory.NewBroker()
-			defer broker.Close()
-			producer := broker.Producer()
+			producer := &testutil.MockProducer{}
 
 			sink := bridge.ProducerAsSink("test-sink", producer, tt.topic)
 
@@ -58,7 +57,7 @@ func TestProducerAsSink(t *testing.T) {
 				t.Fatalf("Send() error: %v", err)
 			}
 
-			msgs := broker.Messages(tt.topic)
+			msgs := producer.MessagesForTopic(tt.topic)
 			if len(msgs) != 1 {
 				t.Fatalf("expected 1 message on topic %q, got %d", tt.topic, len(msgs))
 			}
@@ -72,9 +71,7 @@ func TestProducerAsSink(t *testing.T) {
 func TestEventProducerAsSink(t *testing.T) {
 	t.Parallel()
 
-	broker := memory.NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
+	producer := &testutil.MockProducer{}
 
 	sink := bridge.EventProducerAsSink("event-sink", producer, "domain-events")
 
@@ -91,7 +88,7 @@ func TestEventProducerAsSink(t *testing.T) {
 		t.Fatalf("Send() error: %v", err)
 	}
 
-	msgs := broker.Messages("domain-events")
+	msgs := producer.MessagesForTopic("domain-events")
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}

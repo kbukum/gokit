@@ -43,9 +43,17 @@ func (sc *Component) Stop(ctx context.Context) error {
 	return sc.server.Stop(ctx)
 }
 
+func (sc *Component) Quiesce() error                         { return sc.server.Quiesce() }
+func (sc *Component) DrainPhase() component.DrainPhase       { return component.DrainIngress }
+func (sc *Component) ShutdownPhase() component.ShutdownPhase { return component.PhaseAdmin }
+func (sc *Component) Drain(ctx context.Context) error        { return sc.server.drain(ctx) }
+
 // Health returns the health status of the server.
 func (sc *Component) Health(ctx context.Context) component.Health {
-	if sc.server.httpServer != nil {
+	sc.server.admissionMu.Lock()
+	closing := sc.server.closing
+	sc.server.admissionMu.Unlock()
+	if sc.server.httpServer != nil && !closing {
 		return component.Health{
 			Name:   componentName,
 			Status: component.StatusHealthy,

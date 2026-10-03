@@ -19,6 +19,7 @@ const DefaultStopTimeout = 10 * time.Second
 type componentEntry struct {
 	component Component
 	state     State
+	phase     ShutdownPhase
 }
 
 // Registry manages component lifecycle with deterministic ordering.
@@ -57,6 +58,18 @@ func NewRegistryWithConfig(cfg RegistryConfig) *Registry {
 // Register adds a component to the registry.
 // Components are started in the order they are registered, so register dependencies first.
 func (r *Registry) Register(c Component) error {
+	phase := PhaseResources
+	if phased, ok := c.(interface{ ShutdownPhase() ShutdownPhase }); ok {
+		phase = phased.ShutdownPhase()
+	}
+	return r.RegisterInPhase(c, phase)
+}
+
+// RegisterInPhase assigns the dependency-release phase; start order remains registration order.
+func (r *Registry) RegisterInPhase(c Component, phase ShutdownPhase) error {
+	if phase < PhaseResources || phase > PhaseAdmin {
+		return fmt.Errorf("component: invalid shutdown phase %d", phase)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -65,7 +78,7 @@ func (r *Registry) Register(c Component) error {
 		return fmt.Errorf("component %s already registered", name)
 	}
 
-	entry := &componentEntry{component: c, state: StateCreated}
+	entry := &componentEntry{component: c, state: StateCreated, phase: phase}
 	r.entries = append(r.entries, entry)
 	r.lookup[name] = entry
 
@@ -379,97 +392,15 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 	}
 }
 
-// StopAll gracefully stops all running components in reverse registration order.
-//
-// Each Component.Stop runs with the caller's ctx; if ctx has no deadline,
-// DefaultStopTimeout is applied per-component as a safety net.
-// Errors are aggregated via errors.Join
-// so callers can inspect individual failures with errors.Is/errors.As.
+// StopAll quiesces ingress first, drains accepted work, then releases resources, telemetry, and admin. Registration order is reversed within each phase. The configured stop timeout bounds the whole operation when ctx has no deadline; errors preserve all causes through errors.Join.
 func (r *Registry) StopAll(ctx context.Context) error {
-	r.lifecycleMu.Lock()
-	defer r.lifecycleMu.Unlock()
-
-	// Snapshot started entries (reverse order) under the read lock.
-	r.mu.RLock()
-	toStop := make([]*componentEntry, 0, len(r.entries))
-	for i := len(r.entries) - 1; i >= 0; i-- {
-		if r.entries[i].state == StateRunning {
-			toStop = append(toStop, r.entries[i])
-		}
-	}
-	r.mu.RUnlock()
-
-	r.log.InfoCtx(ctx, "Stopping all components")
-
-	var errs []error
-	for _, entry := range toStop {
-		name := entry.component.Name()
-
-		r.mu.Lock()
-		entry.state = StateStopping
-		r.mu.Unlock()
-
-		r.log.DebugCtx(ctx, "Stopping component", map[string]any{"component": name})
-
-		stopCtx, cancel := r.stopContext(ctx)
-		if err := entry.component.Stop(stopCtx); err != nil {
-			errs = append(errs, fmt.Errorf("failed to stop %s: %w", name, err))
-			r.log.ErrorCtx(ctx, "Component stop failed", map[string]any{
-				"component": name,
-				"error":     err.Error(),
-			})
-		} else {
-			r.log.InfoCtx(ctx, "Component stopped", map[string]any{"component": name})
-		}
-		cancel()
-
-		r.mu.Lock()
-		entry.state = StateStopped
-		r.mu.Unlock()
-	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-
-	r.log.InfoCtx(ctx, "All components stopped successfully")
-	return nil
+	return r.Shutdown(ctx, nil)
 }
 
 // StopAllDetailed gracefully stops all running components and returns per-component results.
 // This provides structured error information for callers that need to know which specific components failed.
 func (r *Registry) StopAllDetailed(ctx context.Context) []StopResult {
-	r.lifecycleMu.Lock()
-	defer r.lifecycleMu.Unlock()
-
-	r.mu.RLock()
-	toStop := make([]*componentEntry, 0, len(r.entries))
-	for i := len(r.entries) - 1; i >= 0; i-- {
-		if r.entries[i].state == StateRunning {
-			toStop = append(toStop, r.entries[i])
-		}
-	}
-	r.mu.RUnlock()
-
-	results := make([]StopResult, 0, len(toStop))
-	for _, entry := range toStop {
-		name := entry.component.Name()
-
-		r.mu.Lock()
-		entry.state = StateStopping
-		r.mu.Unlock()
-
-		stopCtx, cancel := r.stopContext(ctx)
-		err := entry.component.Stop(stopCtx)
-		cancel()
-
-		r.mu.Lock()
-		entry.state = StateStopped
-		r.mu.Unlock()
-
-		results = append(results, StopResult{Name: name, Err: err})
-	}
-	return results
+	return r.shutdown(ctx, nil)
 }
 
 // stopContext returns a context for an individual Component.Stop call.
