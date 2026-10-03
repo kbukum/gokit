@@ -1,0 +1,37 @@
+[
+  {
+    "name": "offset-default",
+    "mode": "offset",
+    "page": 0,
+    "pageSize": 0,
+    "expected": {"data":[{"id":1},{"id":2},{"id":3}],"pagination":{"page":1,"pageSize":20,"total":3,"totalPages":1}}
+  },
+  {
+    "name": "negative-size-is-default",
+    "mode": "offset",
+    "page": 1,
+    "pageSize": -1,
+    "expected": {"data":[{"id":1},{"id":2},{"id":3}],"pagination":{"page":1,"pageSize":20,"total":3,"totalPages":1}}
+  },
+  {
+    "name": "oversize-is-clamped",
+    "mode": "offset",
+    "page": 1,
+    "pageSize": 101,
+    "expected": {"data":[{"id":1},{"id":2},{"id":3}],"pagination":{"page":1,"pageSize":100,"total":3,"totalPages":1}}
+  },
+  {
+    "name": "empty-offset-page",
+    "mode": "offset",
+    "page": 3,
+    "pageSize": 2,
+    "expected": {"data":[],"pagination":{"page":3,"pageSize":2,"total":3,"totalPages":2}}
+  },
+  {
+    "name": "terminal-cursor-is-absent",
+    "mode": "cursor",
+    "page": 0,
+    "pageSize": 3,
+    "expected": {"data":[{"id":1},{"id":2},{"id":3}],"pagination":{"pageSize":3}}
+  }
+]

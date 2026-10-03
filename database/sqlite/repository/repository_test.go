@@ -50,7 +50,7 @@ func TestRepository_WrapsDatabaseErrorsAfterDropTable(t *testing.T) {
 	if err := repo.Delete(ctx, "1"); err == nil {
 		t.Error("expected delete error after dropping table")
 	}
-	if _, err := repo.FindAllBy(ctx, "name", "Alice"); err == nil {
+	if _, err := repo.List(ctx, query.Params{}, query.Config{}); err == nil {
 		t.Error("expected find-all error after dropping table")
 	}
 	if _, err := repo.FindOneBy(ctx, "name", "Alice"); err == nil {
@@ -165,12 +165,14 @@ func TestRepository_InheritsWriteAndRead(t *testing.T) {
 		t.Errorf("FindOneBy ID = %q, want %q", got.ID, "i1")
 	}
 
-	all, err := repo.FindAllBy(ctx, "age", 1)
+	params := query.Params{}
+	params.AddCondition("age", query.OpEq, "1")
+	all, err := repo.List(ctx, params, query.Config{})
 	if err != nil {
-		t.Fatalf("FindAllBy: %v", err)
+		t.Fatalf("List: %v", err)
 	}
-	if len(all) != 2 {
-		t.Errorf("FindAllBy len = %d, want 2", len(all))
+	if len(all.Data) != 2 {
+		t.Errorf("List len = %d, want 2", len(all.Data))
 	}
 
 	// Write methods (from WriteRepository)

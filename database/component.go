@@ -113,7 +113,7 @@ func (c *Component) Start(ctx context.Context) error {
 	c.db = db
 
 	if c.cfg.AutoMigrate && len(c.models) > 0 {
-		if err := c.db.AutoMigrate(c.models...); err != nil { //nolint:contextcheck // AutoMigrate is a synchronous schema operation without a request context
+		if err := c.db.AutoMigrate(ctx, c.models...); err != nil {
 			// The registry only calls Stop for components whose Start fails with a context
 			// error, so release the pool we just opened before returning any other failure.
 			if closeErr := c.db.Close(); closeErr != nil { //nolint:contextcheck // cleanup on the failure path, no request context

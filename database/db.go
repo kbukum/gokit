@@ -15,11 +15,13 @@ import (
 
 // DB wraps a GORM database with gokit logging.
 type DB struct {
-	GormDB *gorm.DB
-	log    *logging.Logger
-	cfg    Config
-	closed bool
-	mu     sync.Mutex
+	GormDB   *gorm.DB
+	reader   *gorm.DB
+	queryLog *gormLoggerAdapter
+	log      *logging.Logger
+	cfg      Config
+	closed   bool
+	mu       sync.Mutex
 }
 
 // Option customizes how a database connection is opened.
@@ -46,23 +48,24 @@ func New(cfg Config, log *logging.Logger, dialector gorm.Dialector, opts ...Opti
 // NewWithContext creates a database connection with context-aware retry logic. Connection attempts
 // run through a resilience.Policy (canonical retry/backoff/timeout owner) rather than a bespoke
 // loop; the context cancels attempts and their backoff waits.
-func NewWithContext(ctx context.Context, dialector any, cfg Config, log *logging.Logger, opts ...Option) (*DB, error) {
+func NewWithContext(ctx context.Context, dialector gorm.Dialector, cfg Config, log *logging.Logger, opts ...Option) (*DB, error) {
 	cfg.ApplyDefaults()
 
 	slowThreshold, _ := time.ParseDuration(cfg.SlowQueryThreshold)
 	logLevel := parseLogLevel(cfg.LogLevel)
 
+	queryLog := newGormLogger(log, slowThreshold, logLevel)
 	gormCfg := &gorm.Config{
-		Logger: newGormLogger(log, slowThreshold, logLevel),
+		Logger: queryLog,
 		// connectOnce owns the sole, context-cancellable liveness check via PingContext. Disabling
 		// GORM's own context-free Ping keeps a stalled server from blocking uncancellably inside
 		// gorm.Open and ensures the pool-cleanup branch here is the one that closes failed pools.
 		DisableAutomaticPing: true,
 	}
 
-	d, ok := dialector.(gorm.Dialector)
-	if !ok {
-		return nil, fmt.Errorf("invalid dialector type: expected gorm.Dialector, got %T", dialector)
+	d := dialector
+	if d == nil {
+		return nil, fmt.Errorf("database dialector is required")
 	}
 
 	options := connectOptions{}
@@ -99,8 +102,17 @@ func NewWithContext(ctx context.Context, dialector any, cfg Config, log *logging
 		return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", attempt, err)
 	}
 
+	result := &DB{GormDB: db, log: log, cfg: cfg, queryLog: queryLog}
+	if split, ok := d.(ReadPoolDialect); ok {
+		if reader := split.ReadDialector(); reader != nil {
+			result.reader, err = connectOnce(ctx, reader, gormCfg, cfg, log, 1)
+			if err != nil {
+				return nil, errors.Join(err, result.Close())
+			}
+		}
+	}
 	log.InfoCtx(ctx, "Database connection established", map[string]any{"attempt": attempt})
-	return &DB{GormDB: db, log: log, cfg: cfg}, nil
+	return result, nil
 }
 
 // defaultConnectPolicy builds the connection retry policy from Config.MaxRetries. It reuses the
@@ -166,6 +178,9 @@ func connectOnce(
 	if idleTime, parseErr := time.ParseDuration(cfg.ConnMaxIdleTime); parseErr == nil {
 		sqlDB.SetConnMaxIdleTime(idleTime)
 	}
+	if poolConfig, ok := d.(PoolConfigurer); ok {
+		poolConfig.ConfigurePool(sqlDB)
+	}
 	return db, nil
 }
 
@@ -184,7 +199,15 @@ func (d *DB) Close() error {
 	}
 	d.log.Debug("Closing database connection") //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 	d.closed = true
-	return sqlDB.Close()
+	err = sqlDB.Close()
+	if d.reader != nil {
+		readDB, readErr := d.reader.DB()
+		if readErr != nil {
+			return errors.Join(err, readErr)
+		}
+		err = errors.Join(err, readDB.Close())
+	}
+	return err
 }
 
 // PingContext verifies the database connection is alive, respecting the context.
@@ -201,65 +224,19 @@ func (d *DB) WithContext(ctx context.Context) *gorm.DB {
 	return d.GormDB.WithContext(ctx)
 }
 
-// AutoMigrate runs GORM auto-migration for the given models.
-func (d *DB) AutoMigrate(models ...any) error {
-	d.log.Info("Running auto-migration", map[string]any{
+// AutoMigrate runs context-bound GORM schema migration. Models are opaque GORM model definitions.
+func (d *DB) AutoMigrate(ctx context.Context, models ...any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	d.log.InfoCtx(ctx, "Running auto-migration", map[string]any{
 		"models": len(models),
 	})
 	for _, model := range models {
-		if err := d.GormDB.AutoMigrate(model); err != nil {
+		if err := d.GormDB.WithContext(ctx).AutoMigrate(model); err != nil {
 			return fmt.Errorf("failed to migrate %T: %w", model, err)
 		}
 	}
-	d.log.Info("Auto-migration completed") //nolint:contextcheck // AutoMigrate is a synchronous schema operation without a request context
+	d.log.InfoCtx(ctx, "Auto-migration completed")
 	return nil
-}
-
-// Transaction executes fn inside a database transaction.
-func (d *DB) Transaction(fn func(*gorm.DB) error) error {
-	return d.GormDB.Transaction(fn)
-}
-
-// TransactionFunc defines a function that runs within a transaction.
-type TransactionFunc func(tx *gorm.DB) error
-
-// WithTransaction executes fn within a transaction with panic recovery.
-func (d *DB) WithTransaction(ctx context.Context, fn TransactionFunc) error {
-	tx := d.GormDB.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return fmt.Errorf("failed to begin transaction: %w", tx.Error)
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			d.log.ErrorCtx(ctx, "Transaction rolled back due to panic", map[string]any{
-				"panic": fmt.Sprintf("%v", r),
-			})
-			panic(r)
-		}
-	}()
-
-	if err := fn(tx); err != nil {
-		if rbErr := tx.Rollback().Error; rbErr != nil {
-			return fmt.Errorf("transaction failed: %w (rollback also failed: %w)", err, rbErr)
-		}
-		return err
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-	return nil
-}
-
-// WithReadOnlyTransaction executes fn in a read-only transaction (always rolls back).
-func (d *DB) WithReadOnlyTransaction(ctx context.Context, fn TransactionFunc) error {
-	tx := d.GormDB.WithContext(ctx).Begin()
-	if tx.Error != nil {
-		return fmt.Errorf("failed to begin read-only transaction: %w", tx.Error)
-	}
-	defer tx.Rollback()
-
-	return fn(tx)
 }

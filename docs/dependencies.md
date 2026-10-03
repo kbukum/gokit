@@ -30,6 +30,8 @@ Dependency-free modules:
 
 Go 1.27.1 is the minimum supported toolchain. Dependency updates are candidates, not automatic approvals: build, test, vulnerability, and license gates must pass before adopting them.
 
+`toven vuln` and CI use the same suppression-aware scanner. It scans each selected module independently (`GOWORK=off`) using symbol-level source analysis and fails on unsuppressed imported advisories as well as reachable ones. The wrapper controls the scan level and mode and verifies them in the output, so reduced-detail scans cannot bypass reachable-advisory controls. Malformed or incomplete scanner output fails the gate. Security, licenses, fuzz smoke tests, and integration tests run on pull requests, merge queues, and main; the aggregate gate rejects skipped jobs when Go or CI inputs changed. Temporary Dependabot ignores prevent the known affected versions below from being proposed again; they do not replace the security gate or block future patched releases.
+
 | Dependency | Selected version | Constraint |
 |---|---|---|
 | `google.golang.org/grpc` | `v1.83.2` | Patched stable release. Newer `v1.84.0` is affected by [GO-2026-6443](https://pkg.go.dev/vuln/GO-2026-6443); do not move to it or an unreleased development fix. |

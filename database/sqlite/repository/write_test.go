@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kbukum/gokit/database/query"
 	repository "github.com/kbukum/gokit/database/repository"
 )
 
@@ -85,12 +86,14 @@ func TestWriteRepository_InheritsRead(t *testing.T) {
 		t.Errorf("Count = %d, want 2", count)
 	}
 
-	results, err := repo.FindAllBy(ctx, "age", 30)
+	params := query.Params{}
+	params.AddCondition("age", query.OpEq, "30")
+	results, err := repo.List(ctx, params, query.Config{})
 	if err != nil {
-		t.Fatalf("FindAllBy failed: %v", err)
+		t.Fatalf("List failed: %v", err)
 	}
-	if len(results) != 2 {
-		t.Errorf("FindAllBy returned %d, want 2", len(results))
+	if len(results.Data) != 2 {
+		t.Errorf("List returned %d, want 2", len(results.Data))
 	}
 }
 

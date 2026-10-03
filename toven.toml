@@ -163,7 +163,8 @@ selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.vuln]
-argv = ["govulncheck", "-C", "{module.root}", "{args}", "{module.selector}"]
+argv = ["python3", "{workspace.root}/scripts/govulncheck.py", "--module", "{module.root}", "--", "{args}", "{module.selector}"]
+cacheable = false
 fan_out = "per-module"
 selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]

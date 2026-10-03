@@ -71,7 +71,17 @@ func (r *ReadRepository[T, ID]) GetByID(ctx context.Context, id ID) (*T, error) 
 // List retrieves entities using the gokit query builder for pagination, filtering, sorting,
 // and facets.
 func (r *ReadRepository[T, ID]) List(ctx context.Context, params query.Params, config query.Config) (*query.Result[T], error) {
-	result, err := query.ApplyToGorm[T](r.db.WithContext(ctx).Model(new(T)), params, config)
+	result, err := query.ApplyToGorm[T](ctx, r.db.WithContext(ctx).Model(new(T)), params, config)
+	if err != nil {
+		return nil, dberrors.FromDatabase(err, r.resource)
+	}
+
+	return result, nil
+}
+
+// ListCursor retrieves a bounded keyset page with server-owned ordering and scope.
+func (r *ReadRepository[T, ID]) ListCursor(ctx context.Context, params query.CursorParams, config query.CursorConfig) (*query.CursorResult[T], error) {
+	result, err := query.ApplyCursorToGorm[T](ctx, r.db.WithContext(ctx).Model(new(T)), params, config)
 	if err != nil {
 		return nil, dberrors.FromDatabase(err, r.resource)
 	}
@@ -100,13 +110,4 @@ func (r *ReadRepository[T, ID]) FindOneBy(ctx context.Context, field string, val
 		return nil, dberrors.FromDatabase(err, r.resource)
 	}
 	return &entity, nil
-}
-
-// FindAllBy retrieves all entities matching field == value.
-func (r *ReadRepository[T, ID]) FindAllBy(ctx context.Context, field string, value any) ([]T, error) {
-	var entities []T
-	if err := r.db.WithContext(ctx).Where(fmt.Sprintf("%s = ?", field), value).Find(&entities).Error; err != nil {
-		return nil, dberrors.FromDatabase(err, r.resource)
-	}
-	return entities, nil
 }

@@ -1,13 +1,17 @@
 package database
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
+
+	"github.com/kbukum/gokit/logging"
 )
 
 func TestParseLogLevel(t *testing.T) {
@@ -49,4 +53,22 @@ func TestGormLoggerAdapterMethods(t *testing.T) {
 func TestGormLoggerTraceFastQueryLogsAtDebug(t *testing.T) {
 	log := newGormLogger(testLogger(), time.Hour, gormlogger.Info)
 	log.Trace(context.Background(), time.Now(), func() (string, int64) { return "SELECT 1", 1 }, nil)
+}
+
+func TestQueryLogsDoNotExposeValues(t *testing.T) {
+	t.Parallel()
+	for _, queryErr := range []error{nil, errors.New("duplicate secret-token-123")} {
+		var output bytes.Buffer
+		log, err := logging.New(&logging.Config{Level: "debug", Format: "json"}, "test", logging.WithWriter(&output))
+		if err != nil {
+			t.Fatal(err)
+		}
+		adapter := newGormLogger(log, time.Hour, gormlogger.Info)
+		adapter.Trace(t.Context(), time.Now(), func() (string, int64) {
+			return "INSERT INTO credentials VALUES ('secret-token-123')", 1
+		}, queryErr)
+		if output.Len() == 0 || strings.Contains(output.String(), "secret-token-123") {
+			t.Fatalf("query log exposes values or is missing: %s", output.String())
+		}
+	}
 }

@@ -14,7 +14,7 @@ var safeIdentifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Z
 // so they are interpolated into query fragments directly.
 // Every such interpolation is gated on this whitelist
 // so a caller-supplied field can never inject SQL;
-// clauses with an unsafe identifier are skipped by the builder (fail closed).
+// Clauses with an unsafe identifier return an error rather than broadening the query.
 func isSafeIdentifier(field string) bool {
 	return safeIdentifier.MatchString(field)
 }

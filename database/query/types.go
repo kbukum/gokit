@@ -56,13 +56,12 @@ type FilterQuery struct {
 
 // Params holds parsed query parameters.
 type Params struct {
-	Page         int
-	PageSize     int
-	NoPagination bool
-	SortBy       string
-	SortOrder    string
-	Query        FilterQuery
-	Includes     IncludeSet
+	Page      int
+	PageSize  int
+	SortBy    string
+	SortOrder string
+	Query     FilterQuery
+	Includes  IncludeSet
 }
 
 // AddCondition appends a condition to the query.
@@ -99,20 +98,22 @@ type Config struct {
 	FacetFields       []string
 	FacetLabels       map[string]string
 	IncludeConfig     IncludeConfig
+	// MaxFacetValues bounds distinct values returned per facet. Zero uses MaxPageSize.
+	MaxFacetValues int
 }
 
 // defaultPageSize returns the configured default or the global DefaultPageSize.
 func (c Config) defaultPageSize() int {
 	if c.DefaultPageSize > 0 {
-		return c.DefaultPageSize
+		return min(c.DefaultPageSize, c.maxPageSize())
 	}
-	return DefaultPageSize
+	return min(DefaultPageSize, c.maxPageSize())
 }
 
 // maxPageSize returns the configured max or the global MaxPageSize.
 func (c Config) maxPageSize() int {
 	if c.MaxPageSize > 0 {
-		return c.MaxPageSize
+		return min(c.MaxPageSize, MaxPageSize)
 	}
 	return MaxPageSize
 }

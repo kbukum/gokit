@@ -10,7 +10,7 @@ Why not just use `govulncheck` directly?
     still flags as reachable — explicitly opted-in via `accept_reachable`
     with a tracking issue in `references`.
 
-Usage (from a module directory):
+Usage (from the repository root):
     scripts/govulncheck.py --module workload -- ./...
 
 Suppression file:
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -88,8 +89,8 @@ def applicable_suppression(suppressions: list[dict], module: str, osv_id: str) -
 
 
 def run_govulncheck(extra_args: list[str]) -> tuple[int, str, str]:
-    cmd = ["govulncheck", "-format", "json", *extra_args]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    cmd = ["govulncheck", "-format", "json", "-mode", "source", "-scan", "symbol", *extra_args]
+    proc = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, "GOWORK": "off"})
     return proc.returncode, proc.stdout, proc.stderr
 
 
@@ -98,8 +99,7 @@ def parse_ndjson(stream: str) -> Iterable[dict]:
 
     govulncheck emits a *stream* of pretty-printed JSON objects (not NDJSON):
     each top-level object spans multiple lines. We use raw_decode to peel them
-    off one at a time. Defensive: skip past any non-JSON noise on a line so
-    the wrapper never crashes the CI on a malformed message.
+    off one at a time. Malformed or incomplete output is a scan failure.
     """
     decoder = json.JSONDecoder()
     idx = 0
@@ -109,14 +109,9 @@ def parse_ndjson(stream: str) -> Iterable[dict]:
             idx += 1
         if idx >= n:
             break
-        try:
-            obj, end = decoder.raw_decode(stream, idx)
-        except json.JSONDecodeError:
-            nl = stream.find("\n", idx)
-            if nl == -1:
-                break
-            idx = nl + 1
-            continue
+        obj, end = decoder.raw_decode(stream, idx)
+        if not isinstance(obj, dict):
+            raise ValueError("scanner message must be a JSON object")
         yield obj
         idx = end
 
@@ -124,12 +119,23 @@ def parse_ndjson(stream: str) -> Iterable[dict]:
 def collect_findings(messages: Iterable[dict]) -> dict[str, list[dict]]:
     by_id: dict[str, list[dict]] = {}
     for msg in messages:
-        finding = msg.get("finding")
-        if not finding:
+        if "finding" not in msg:
             continue
+        finding = msg["finding"]
+        if not isinstance(finding, dict):
+            raise ValueError("finding must be a JSON object")
         osv = finding.get("osv")
-        if not osv:
-            continue
+        if not isinstance(osv, str) or not osv.strip():
+            raise ValueError("finding must have a non-empty OSV identifier")
+        trace = finding.get("trace")
+        if not isinstance(trace, list) or not trace:
+            raise ValueError("finding must have a non-empty trace")
+        for frame in trace:
+            if not isinstance(frame, dict) or not isinstance(frame.get("module"), str):
+                raise ValueError("trace frame must be an object with a module string")
+            for key in ("version", "package", "function", "receiver"):
+                if key in frame and not isinstance(frame[key], str):
+                    raise ValueError(f"trace frame {key} must be a string")
         by_id.setdefault(osv, []).append(finding)
     return by_id
 
@@ -145,7 +151,7 @@ def is_called(findings: list[dict]) -> bool:
 
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description="govulncheck wrapper with suppression support")
-    p.add_argument("--module", required=True, help="module name as referenced in suppressions[].modules")
+    p.add_argument("--module", required=True, help="module directory, absolute or relative to the repository root")
     p.add_argument(
         "--suppressions",
         default=None,
@@ -160,6 +166,11 @@ def main(argv: list[str]) -> int:
     args = p.parse_args(argv)
 
     repo_root = find_repo_root(pathlib.Path.cwd())
+    module_root = (repo_root / args.module).resolve()
+    if not module_root.is_relative_to(repo_root) or not (module_root / "go.mod").is_file():
+        print(f"::error::invalid Go module directory: {args.module}", file=sys.stderr)
+        return 1
+    args.module = module_root.relative_to(repo_root).as_posix()
     sup_path = pathlib.Path(args.suppressions) if args.suppressions else repo_root / ".github" / "govulncheck-suppressions.json"
     suppressions = load_suppressions(sup_path)
 
@@ -177,14 +188,29 @@ def main(argv: list[str]) -> int:
         extra = extra[1:]
     if not extra:
         extra = ["./..."]
+    if any(arg.lstrip("-").split("=")[0] in ("format", "C", "scan", "mode") for arg in extra):
+        print("::error::scanner format, module directory, scan level and mode are controlled by this wrapper", file=sys.stderr)
+        return 1
 
-    rc, stdout, stderr = run_govulncheck(extra)
+    rc, stdout, stderr = run_govulncheck(["-C", str(module_root), *extra])
     if rc not in (0, 3):
         sys.stderr.write(stderr)
         sys.stdout.write(stdout)
         return 2
 
-    by_id = collect_findings(parse_ndjson(stdout))
+    try:
+        messages = list(parse_ndjson(stdout))
+        configs = [message["config"] for message in messages if "config" in message]
+        if len(configs) != 1 or not isinstance(configs[0], dict):
+            raise ValueError("scanner output must contain exactly one configuration message")
+        if configs[0].get("scan_level") != "symbol" or configs[0].get("scan_mode") != "source":
+            raise ValueError("scanner output must report symbol-level source analysis")
+        by_id = collect_findings(messages)
+        if rc == 3 and not by_id:
+            raise ValueError("scanner reported vulnerabilities without decoded findings")
+    except ValueError as err:
+        print(f"::error::invalid govulncheck output: {err}", file=sys.stderr)
+        return 2
 
     suppressed: list[tuple[str, dict]] = []
     unsuppressed: list[tuple[str, list[dict]]] = []

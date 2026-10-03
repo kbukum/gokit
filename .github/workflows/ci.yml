@@ -60,11 +60,16 @@ jobs:
               - '**/go.mod'
               - '**/go.sum'
               - 'go.work'
+              - '*.go.work'
+              - 'go.work.sum'
+              - 'toven.toml'
               - 'gomod.sh'
               - 'scripts/**'
               - 'Makefile'
               - '.golangci.yml'
               - '.github/workflows/ci.yml'
+              - '.github/govulncheck-suppressions.json'
+              - '.github/dependabot.yml'
 
       - name: Detect affected domains
         id: domains
@@ -106,6 +111,11 @@ jobs:
 
       - name: Validate CHANGELOG unreleased heading
         run: ./scripts/check_changelog_unreleased.sh
+
+      - name: Test CI guardrails
+        run: |
+          python3 -m pip install -r scripts/requirements-test.txt
+          python3 -m pytest scripts/test_govulncheck.py scripts/test_module_replaces.py -q
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
@@ -281,7 +291,7 @@ jobs:
   security:
     name: Security
     needs: changes
-    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -316,7 +326,7 @@ jobs:
   fuzz:
     name: Fuzz Smoke
     needs: changes
-    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -387,7 +397,7 @@ jobs:
   licenses:
     name: Licenses
     needs: changes
-    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -406,14 +416,12 @@ jobs:
         run: ./scripts/check-licenses.sh
 
   # ── Stage 3g: Integration suite (gated by //go:build integration) ─────────
-  # Slow / dependency-heavy cross-package tests live under the `integration`
-  # build tag (F-019 #49). They are NOT part of the default `check` job so
-  # PR feedback stays fast; this dedicated job runs on merge queue / push but
-  # does not block merge via the aggregate gate (initially advisory).
+  # Slow / dependency-heavy tests run separately from the default check job.
+  # Pull requests and main require the same result before reporting success.
   integration:
     name: Integration
     needs: changes
-    if: needs.changes.outputs.go-code == 'true' && (github.event_name == 'merge_group' || github.event_name == 'push')
+    if: needs.changes.outputs.go-code == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -425,8 +433,14 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run integration tests
-        run: go test -race -count=1 -timeout=20m -tags=integration ./...
+      - name: Install the pinned Toven release
+        id: toven
+        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
+        with:
+          version: ${{ env.TOVEN_VERSION }}
+
+      - name: Run integration tests in every module
+        run: '"${{ steps.toven.outputs.toven }}" run test -- -race -count=1 -timeout=20m -tags=integration'
 
   # ── Gate: Aggregate status for branch protection ──────────────────────────
   ci-status:
@@ -447,7 +461,7 @@ jobs:
                    "${{ needs.licenses.result }}" \
                    "${{ needs.integration.result }}")
           for r in "${results[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+            if [[ "$r" == "failure" || "$r" == "cancelled" || ("${{ needs.changes.outputs.go-code }}" == "true" && "$r" != "success") ]]; then
               echo "::error::CI failed — one or more jobs did not succeed."
               exit 1
             fi

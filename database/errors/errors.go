@@ -3,6 +3,7 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -78,6 +79,13 @@ func IsDuplicateError(err error) bool {
 func FromDatabase(err error, resource string) *apperrors.AppError {
 	if err == nil {
 		return nil
+	}
+	var appErr *apperrors.AppError
+	if errors.As(err, &appErr) && appErr != nil {
+		return appErr
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return apperrors.Normalize(err)
 	}
 
 	// Record not found

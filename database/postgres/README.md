@@ -2,7 +2,7 @@
 
 PostgreSQL driver adapter for `github.com/kbukum/gokit/database`.
 
-The core `database` module owns the database component, repository helpers, `DialectRegistry`, and the driver-agnostic `migration` package. This adapter owns the PostgreSQL driver dependency (`gorm.io/driver/postgres`) and its golang-migrate driver, and registers itself only when the application explicitly calls `Register` — there is no import-time registration.
+The core `database` module owns the database component, repository helpers, `DialectRegistry`, and the driver-agnostic `migration` package. This adapter owns the PostgreSQL driver dependency (`gorm.io/driver/postgres`) and context-bound migration backend. It registers itself only when the application explicitly calls `Register`.
 
 Postgres is the standard cloud backend; `database/sqlite` is the local/dev counterpart. Both are selected through the same registry, so an application chooses its backend by configuration.
 
@@ -60,7 +60,7 @@ A zero `Port` defaults to `5432` and an absent `Options["sslmode"]` to `verify-f
 
 ## Migrations
 
-The core `migration` package is driver-agnostic and needs a backend-specific golang-migrate driver. `MigrateDriver` supplies the PostgreSQL one, keyed to the same connection GORM manages:
+`MigrateDriver` supplies a context-bound PostgreSQL migration session, borrowing a connection from GORM's pool:
 
 ```go
 cfg := migration.Config{
@@ -69,17 +69,24 @@ cfg := migration.Config{
     Path:   "migrations",
     Driver: postgres.MigrateDriver(),
 }
-if err := cfg.Up(); err != nil {
+if err := cfg.Up(ctx); err != nil {
     return err
 }
+return cfg.Ready(ctx, expectedVersion)
 ```
+
+Concurrent startup is serialized with a database-scoped advisory lock. Lock acquisition and migration statements honor cancellation. Cleanup releases the lock and borrowed connection; an uncertain lock release discards the physical connection rather than returning a locked session to the pool.
+
+## Pool and timeout budget
+
+Each new connection receives a 30-second statement timeout and a 10-second idle-in-transaction timeout. These settings are enforced by the adapter rather than inherited from an unbounded server default. Shorter request deadlines still take precedence. The core pool defaults to 25 open and 5 idle connections per instance; include migration sessions in that budget and leave room for administration when sizing `instances × maxOpenConns` against the server limit.
 
 ## Testing
 
 Integration tests live in `*_integration_test.go` behind the `integration` build tag and provision an ephemeral PostgreSQL server with [`testcontainers-go`](https://golang.testcontainers.org/), so they never depend on a local Postgres and skip when no Docker daemon is reachable:
 
 ```bash
-go test -tags=integration ./database/postgres/...
+toven test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1
 ```
 
 Importing this package has no side effects. Applications own the registry and choose the driver through configuration.

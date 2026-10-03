@@ -160,8 +160,7 @@ func TestNewWithContext_InvalidType(t *testing.T) {
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
 
-	invalidDialector := "not-a-dialector"
-	db, err := NewWithContext(context.Background(), invalidDialector, cfg, log)
+	db, err := NewWithContext(context.Background(), nil, cfg, log)
 
 	if err == nil {
 		t.Error("NewWithContext() should return an error for invalid dialector type")

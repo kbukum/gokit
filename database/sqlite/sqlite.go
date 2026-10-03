@@ -3,7 +3,6 @@ package sqlite
 import (
 	"github.com/kbukum/gokit/database"
 
-	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -23,7 +22,7 @@ func (dialect) Name() string { return Name }
 
 // Open returns a SQLite GORM dialector for the given DSN. It is the low-level primitive; most
 // callers select the backend through Dialect or Register instead.
-func Open(dsn string) gorm.Dialector { return gormsqlite.Open(dsn) }
+func Open(dsn string) gorm.Dialector { return &dialector{dsn: dsn} }
 
 // Open returns a SQLite GORM dialector for the given DSN.
 func (dialect) Open(dsn string) gorm.Dialector { return Open(dsn) }

@@ -1,14 +1,25 @@
 package query
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"gorm.io/gorm"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // ApplyToGorm applies params to a GORM query and returns a paginated result.
-func ApplyToGorm[T any](db *gorm.DB, params Params, config Config) (*Result[T], error) {
+func ApplyToGorm[T any](ctx context.Context, db *gorm.DB, params Params, config Config) (*Result[T], error) {
+	params.PageSize = pageSize(params.PageSize, config)
+	params.Page = max(params.Page, 1)
+	if params.Page-1 > math.MaxInt/params.PageSize {
+		return nil, apperrors.InvalidInput("page", "page offset is too large")
+	}
+	db = db.WithContext(ctx)
 	q := db.Session(&gorm.Session{})
 
 	// Free text search
@@ -28,42 +39,44 @@ func ApplyToGorm[T any](db *gorm.DB, params Params, config Config) (*Result[T], 
 	}
 
 	// Facets (cross-filtered against the unfiltered base)
-	facets := ComputeFacetsWithFilters(db, config.FacetFields, params.Query.Conditions, config)
+	facets, err := ComputeFacetsWithFilters(ctx, db, config.FacetFields, params.Query.Conditions, config)
+	if err != nil {
+		return nil, err
+	}
 
 	// Sort
 	q = applySort(q, params.SortBy, params.SortOrder, config)
 
 	// Paginate
-	if !params.NoPagination {
-		offset := (params.Page - 1) * params.PageSize
-		q = q.Offset(offset).Limit(params.PageSize)
-	}
+	offset := (params.Page - 1) * params.PageSize
+	q = q.Offset(offset).Limit(params.PageSize)
 
-	var data []T
+	data := make([]T, 0)
 	if err := q.Find(&data).Error; err != nil {
 		return nil, fmt.Errorf("query: %w", err)
 	}
 
-	var totalPages, pageSize int
-	if params.NoPagination {
-		totalPages = 1
-		pageSize = int(total)
-	} else {
-		totalPages = (int(total) + params.PageSize - 1) / params.PageSize
-		if totalPages < 1 {
-			totalPages = 1
-		}
-		pageSize = params.PageSize
+	totalPages := int(total / int64(params.PageSize))
+	if total%int64(params.PageSize) != 0 {
+		totalPages++
 	}
+	totalPages = max(totalPages, 1)
 
 	return &Result[T]{
 		Data: data,
 		Pagination: Pagination{
-			Page: params.Page, PageSize: pageSize,
+			Page: params.Page, PageSize: params.PageSize,
 			Total: int(total), TotalPages: totalPages,
 		},
 		Facets: facets,
 	}, nil
+}
+
+func pageSize(size int, config Config) int {
+	if size <= 0 {
+		return config.defaultPageSize()
+	}
+	return min(size, config.maxPageSize())
 }
 
 func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
@@ -72,7 +85,7 @@ func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
 	args := make([]any, 0, len(fields))
 	for _, f := range fields {
 		if !isSafeIdentifier(f) {
-			continue
+			return invalidQuery(db, "search", "invalid search field")
 		}
 		conds = append(conds, fmt.Sprintf("LOWER(%s) LIKE ?", f))
 		args = append(args, pattern)
@@ -85,8 +98,8 @@ func applySearch(db *gorm.DB, search string, fields []string) *gorm.DB {
 
 func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 	field := config.ResolveField(cond.Field)
-	if !isSafeIdentifier(field) {
-		return db
+	if !isSafeIdentifier(field) || !cond.Operator.IsValid() || !isFieldAllowed(cond.Field, config.AllowedFilters) {
+		return invalidQuery(db, "filter", "invalid filter field or operator")
 	}
 
 	switch cond.Operator {
@@ -131,7 +144,13 @@ func applyCondition(db *gorm.DB, cond Condition, config Config) *gorm.DB {
 	case OpNotNull:
 		return db.Where(fmt.Sprintf("%s IS NOT NULL", field))
 	}
-	return db
+	return invalidQuery(db, "filter", "filter values are required")
+}
+
+func invalidQuery(db *gorm.DB, field, message string) *gorm.DB {
+	result := db.Session(&gorm.Session{})
+	result.Error = errors.Join(result.Error, apperrors.InvalidInput(field, message))
+	return result
 }
 
 func applySort(db *gorm.DB, sortBy, sortOrder string, config Config) *gorm.DB {
@@ -142,7 +161,7 @@ func applySort(db *gorm.DB, sortBy, sortOrder string, config Config) *gorm.DB {
 			}
 			col := config.ResolveField(sortBy)
 			if !isSafeIdentifier(col) {
-				break
+				return invalidQuery(db, "sort", "invalid sort field")
 			}
 			order := col
 			if sortOrder == "desc" {
@@ -168,14 +187,22 @@ func ApplyConditions(db *gorm.DB, conditions []Condition, config Config) *gorm.D
 // --- Facets ---
 
 // ComputeFacetsWithFilters computes facet counts with cross-filtering.
+//
+//nolint:nilnil // No configured facets means no optional facet result.
 func ComputeFacetsWithFilters(
+	ctx context.Context,
 	db *gorm.DB,
 	facetFields []string,
 	conditions []Condition,
 	config Config,
-) map[string]map[string]int {
+) (map[string]map[string]int, error) {
 	if len(facetFields) == 0 {
-		return nil
+		return nil, nil
+	}
+	db = db.WithContext(ctx)
+	limit := config.MaxFacetValues
+	if limit <= 0 || limit > MaxPageSize {
+		limit = MaxPageSize
 	}
 
 	facets := make(map[string]map[string]int)
@@ -183,7 +210,7 @@ func ComputeFacetsWithFilters(
 	for _, field := range facetFields {
 		col := config.ResolveField(field)
 		if !isSafeIdentifier(col) {
-			continue
+			return nil, apperrors.InvalidInput("facets", "invalid facet field")
 		}
 		facetKey := config.ResolveFacetLabel(field)
 		facets[facetKey] = make(map[string]int)
@@ -192,7 +219,9 @@ func ComputeFacetsWithFilters(
 		baseQuery := buildBaseQuery(db, otherConds, config)
 
 		var total int64
-		baseQuery.Count(&total)
+		if err := baseQuery.Count(&total).Error; err != nil {
+			return nil, fmt.Errorf("facet count: %w", err)
+		}
 		facets[facetKey]["_total"] = int(total)
 
 		groupQuery := buildBaseQuery(db, otherConds, config)
@@ -201,15 +230,20 @@ func ComputeFacetsWithFilters(
 			Count int
 		}
 		var counts []facetCount
-		groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", col)).
-			Group(col).Scan(&counts)
+		if err := groupQuery.Select(fmt.Sprintf("%s as value, COUNT(*) as count", col)).
+			Group(col).Limit(limit + 1).Scan(&counts).Error; err != nil {
+			return nil, fmt.Errorf("facet query: %w", err)
+		}
+		if len(counts) > limit {
+			return nil, apperrors.InvalidInput("facets", "facet has too many distinct values")
+		}
 
 		for _, c := range counts {
 			facets[facetKey][c.Value] = c.Count
 		}
 	}
 
-	return facets
+	return facets, nil
 }
 
 func buildBaseQuery(db *gorm.DB, conditions []Condition, config Config) *gorm.DB {

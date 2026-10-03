@@ -483,35 +483,35 @@ func TestParseFromRequest_PageDefaultsTo1(t *testing.T) {
 	}
 }
 
-func TestParseFromRequest_NoPagination_LimitMinus1(t *testing.T) {
+func TestParseFromRequest_BoundedDefault_LimitMinus1(t *testing.T) {
 	cfg := Config{}
 	params := ParseFromRequest(makeRequest("limit=-1"), cfg)
-	if !params.NoPagination {
-		t.Error("NoPagination should be true for limit=-1")
+	if params.PageSize != DefaultPageSize {
+		t.Error("limit=-1 must use the bounded default")
 	}
 }
 
-func TestParseFromRequest_NoPagination_LimitAll(t *testing.T) {
+func TestParseFromRequest_BoundedDefault_LimitAll(t *testing.T) {
 	cfg := Config{}
 	params := ParseFromRequest(makeRequest("limit=all"), cfg)
-	if !params.NoPagination {
-		t.Error("NoPagination should be true for limit=all")
+	if params.PageSize != DefaultPageSize {
+		t.Error("limit=all must use the bounded default")
 	}
 }
 
-func TestParseFromRequest_NoPagination_PageSizeMinus1(t *testing.T) {
+func TestParseFromRequest_BoundedDefault_PageSizeMinus1(t *testing.T) {
 	cfg := Config{}
 	params := ParseFromRequest(makeRequest("pageSize=-1"), cfg)
-	if !params.NoPagination {
-		t.Error("NoPagination should be true for pageSize=-1")
+	if params.PageSize != DefaultPageSize {
+		t.Error("pageSize=-1 must use the bounded default")
 	}
 }
 
-func TestParseFromRequest_NoPagination_PageSizeAll(t *testing.T) {
+func TestParseFromRequest_BoundedDefault_PageSizeAll(t *testing.T) {
 	cfg := Config{}
 	params := ParseFromRequest(makeRequest("pageSize=all"), cfg)
-	if !params.NoPagination {
-		t.Error("NoPagination should be true for pageSize=all")
+	if params.PageSize != DefaultPageSize {
+		t.Error("pageSize=all must use the bounded default")
 	}
 }
 
