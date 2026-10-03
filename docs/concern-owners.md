@@ -17,6 +17,10 @@ This map names *who* owns each concern; the *how to judge* procedure (reuse / en
 | Logging | `logging` | `log`, `fmt.Print*` | `log/slog` via injected logger |
 | Resilience (retry/timeout/circuit-break) | `resilience` | hand-rolled loops, scattered `context.WithTimeout` + custom backoff | idempotent ops only, bounded + jittered |
 | HTTP client / server | `httpclient` / `server` | raw `http.Client{}` with custom retry/timeout | |
+| Process shutdown | `component` + `bootstrap` | application-local shutdown ordering and detached timeout wrappers | Quiesce admission, drain ingress/workers, release resources/container, then telemetry/admin; reverse registration within phases and share one deadline |
+| SPA delivery and diagnostics | `server/spa` + `server` | application-local fallbacks, public metrics/pprof routes | Confined build filesystem, explicit API/asset exclusions, bounded nonce-rendered index, manifest-selected immutable assets; optional private admin listener |
+| Strict nonce CSP | `security.NonceCSP` | static nonce reuse or application-specific CSP construction | Fresh cryptographic nonce per HTML response; script nonces and strict-dynamic, restricted object/base/frame sources |
+| Messaging test recording | `messaging/testutil` | unbounded publication history in the runtime memory broker | MockProducer owns full test recording and assertions; runtime subscriptions own bounded live queues |
 | Subprocess | `process` | bare `exec.Command` | argv-only, no shell |
 | Dependency injection | `di` | service-locator / string-keyed resolution | typed resolution |
 | Observability (traces/metrics) | `observability` | direct exporter wiring, package-global meters | injected tracer/meter |

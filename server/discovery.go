@@ -58,6 +58,33 @@ func NewDiscoveryServerComponent(
 // ensure DiscoveryServerComponent satisfies component.Component.
 var _ component.Component = (*DiscoveryServerComponent)(nil)
 
+// ensure the discovery wrapper forwards the inner server's shutdown capabilities,
+// so a discovery-enabled server still quiesces, drains with ingress, and releases
+// in the admin phase under coordinated shutdown.
+var (
+	_ component.Quiescer = (*DiscoveryServerComponent)(nil)
+	_ component.Drainer  = (*DiscoveryServerComponent)(nil)
+)
+
+// Quiesce forwards to the inner server so it stops accepting new requests first.
+func (dsc *DiscoveryServerComponent) Quiesce() error { return dsc.inner.Quiesce() }
+
+// Drain forwards to the inner server's graceful HTTP drain.
+func (dsc *DiscoveryServerComponent) Drain(ctx context.Context) error {
+	return dsc.inner.Drain(ctx)
+}
+
+// DrainPhase forwards the inner server's drain phase (ingress).
+func (dsc *DiscoveryServerComponent) DrainPhase() component.DrainPhase {
+	return dsc.inner.DrainPhase()
+}
+
+// ShutdownPhase forwards the inner server's shutdown phase (admin), so the
+// listener is released last even when wrapped for discovery.
+func (dsc *DiscoveryServerComponent) ShutdownPhase() component.ShutdownPhase {
+	return dsc.inner.ShutdownPhase()
+}
+
 // Name returns the component name.
 func (dsc *DiscoveryServerComponent) Name() string {
 	return "discovery-server"

@@ -240,57 +240,6 @@ func TestBroker_MultipleConsumers(t *testing.T) {
 	}
 }
 
-// ── Message history & topic helpers ──────────────────────────────────────────
-
-func TestBroker_Messages(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	_ = producer.PublishBinary(context.Background(), "t1", "k1", []byte("a"))
-	_ = producer.PublishBinary(context.Background(), "t1", "k2", []byte("b"))
-	_ = producer.PublishBinary(context.Background(), "t2", "k3", []byte("c"))
-
-	msgs := broker.Messages("t1")
-	if len(msgs) != 2 {
-		t.Fatalf("Messages(t1) = %d, want 2", len(msgs))
-	}
-	if string(msgs[0].Payload) != "a" || string(msgs[1].Payload) != "b" {
-		t.Errorf("unexpected values: %q, %q", msgs[0].Payload, msgs[1].Payload)
-	}
-
-	all := broker.AllMessages()
-	if len(all) != 3 {
-		t.Fatalf("AllMessages() = %d, want 3", len(all))
-	}
-}
-
-func TestBroker_MessageCount(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	if broker.MessageCount("t1") != 0 {
-		t.Fatal("expected 0 before publishing")
-	}
-	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("x"))
-	if broker.MessageCount("t1") != 1 {
-		t.Fatalf("MessageCount(t1) = %d, want 1", broker.MessageCount("t1"))
-	}
-}
-
-func TestBroker_Reset(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("x"))
-	broker.Reset()
-	if broker.MessageCount("t1") != 0 {
-		t.Fatal("expected 0 after Reset()")
-	}
-}
-
 func TestBroker_CreateTopic(t *testing.T) {
 	broker := NewBroker()
 	defer broker.Close()
@@ -322,54 +271,6 @@ func TestBroker_TopicsSorted(t *testing.T) {
 	}
 }
 
-// ── Assertion helpers ───────────────────────────────────────────────────────
-
-func TestAssertPublished(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	_ = producer.PublishBinary(context.Background(), "t1", "k1", []byte("hello"))
-	_ = producer.PublishBinary(context.Background(), "t1", "k2", []byte("world"))
-
-	AssertPublished(t, broker, "t1", func(m messaging.Message) bool {
-		return string(m.Payload) == "world"
-	})
-}
-
-func TestAssertPublishedN(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("a"))
-	_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("b"))
-
-	AssertPublishedN(t, broker, "t1", 2)
-}
-
-func TestAssertNoMessages(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	AssertNoMessages(t, broker, "empty-topic")
-}
-
-func TestWaitForMessage(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	producer := broker.Producer()
-
-	go func() {
-		time.Sleep(20 * time.Millisecond)
-		_ = producer.PublishBinary(context.Background(), "t1", "k", []byte("delayed"))
-	}()
-
-	msg := WaitForMessage(t, broker, "t1", 2*time.Second)
-	if string(msg.Payload) != "delayed" {
-		t.Errorf("WaitForMessage value = %q, want delayed", msg.Payload)
-	}
-}
-
 func TestBrokerWithBuffer(t *testing.T) {
 	broker := NewBrokerWithBuffer(1)
 	defer broker.Close()
@@ -386,73 +287,10 @@ func TestBrokerWithBuffer(t *testing.T) {
 	}
 }
 
-func TestConsumerRequeueBlocksUntilBufferHasCapacity(t *testing.T) {
-	broker := NewBrokerWithBuffer(1)
-	defer broker.Close()
-	producer := broker.Producer()
-	consumer := broker.consumer("t", messaging.CommitAfterHandlerSuccess)
-
-	if err := producer.Send(context.Background(), messaging.Message{Topic: "t", Key: "first"}); err != nil {
-		t.Fatalf("send first: %v", err)
-	}
-
-	handlerStarted := make(chan struct{})
-	releaseHandler := make(chan struct{})
-	handlerErr := errors.New("handler failed")
-	consumeDone := make(chan error, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	go func() {
-		consumeDone <- consumer.Consume(ctx, func(context.Context, messaging.Message) error {
-			close(handlerStarted)
-			<-releaseHandler
-			return handlerErr
-		})
-	}()
-
-	select {
-	case <-handlerStarted:
-	case <-ctx.Done():
-		t.Fatal("handler was not called")
-	}
-
-	if err := producer.Send(context.Background(), messaging.Message{Topic: "t", Key: "second"}); err != nil {
-		t.Fatalf("send second: %v", err)
-	}
-	close(releaseHandler)
-
-	select {
-	case msg := <-consumer.ch:
-		if msg.Key != "second" {
-			t.Fatalf("first queued message = %q, want second", msg.Key)
-		}
-	case <-ctx.Done():
-		t.Fatal("requeue did not wait with the original buffered message preserved")
-	}
-
-	select {
-	case err := <-consumeDone:
-		if !errors.Is(err, handlerErr) {
-			t.Fatalf("Consume() error = %v, want handler error", err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Consume() did not return after requeue capacity became available")
-	}
-
-	select {
-	case msg := <-consumer.ch:
-		if msg.Key != "first" {
-			t.Fatalf("requeued message = %q, want first", msg.Key)
-		}
-	default:
-		t.Fatal("expected failed message to be requeued")
-	}
-}
-
 func TestBroker_SendBatch(t *testing.T) {
 	broker := NewBroker()
 	defer broker.Close()
+	consumer := broker.Consumer("batch")
 
 	producer := broker.Producer()
 	msgs := []messaging.Message{
@@ -462,8 +300,8 @@ func TestBroker_SendBatch(t *testing.T) {
 	if err := producer.SendBatch(context.Background(), msgs); err != nil {
 		t.Fatalf("SendBatch() error: %v", err)
 	}
-	if broker.MessageCount("batch") != 2 {
-		t.Fatalf("message count = %d, want 2", broker.MessageCount("batch"))
+	if len(consumer.ch) != 2 {
+		t.Fatalf("queued messages = %d, want 2", len(consumer.ch))
 	}
 }
 
@@ -515,12 +353,13 @@ func TestBroker_PublishDerivesKeyFromArgAndID(t *testing.T) {
 	broker := NewBroker()
 	defer broker.Close()
 	producer := broker.Producer()
+	consumer := broker.Consumer("topic")
 
 	keyed := messaging.Event{ID: "id-1", Type: "t", Source: "s"}
 	if err := producer.Publish(context.Background(), "topic", keyed, "explicit-key"); err != nil {
 		t.Fatalf("Publish() error: %v", err)
 	}
-	if got := broker.Messages("topic")[0].Key; got != "explicit-key" {
+	if got := (<-consumer.ch).Key; got != "explicit-key" {
 		t.Fatalf("key = %q, want explicit-key", got)
 	}
 
@@ -528,7 +367,7 @@ func TestBroker_PublishDerivesKeyFromArgAndID(t *testing.T) {
 	if err := producer.Publish(context.Background(), "topic", idOnly); err != nil {
 		t.Fatalf("Publish() error: %v", err)
 	}
-	if got := broker.Messages("topic")[1].Key; got != "id-2" {
+	if got := (<-consumer.ch).Key; got != "id-2" {
 		t.Fatalf("key = %q, want id-2", got)
 	}
 }
@@ -583,10 +422,9 @@ func TestConsumerRequeueFailsWhenBrokerClosed(t *testing.T) {
 	if err := broker.Producer().Send(context.Background(), messaging.Message{Topic: "t", Key: "k"}); err != nil {
 		t.Fatalf("send: %v", err)
 	}
-	broker.Close()
-
 	handlerErr := errors.New("handler failed")
 	err := consumer.Consume(context.Background(), func(context.Context, messaging.Message) error {
+		broker.Close()
 		return handlerErr
 	})
 	if !errors.Is(err, handlerErr) {
@@ -594,62 +432,6 @@ func TestConsumerRequeueFailsWhenBrokerClosed(t *testing.T) {
 	}
 	if !errors.Is(err, messaging.ErrClosed) {
 		t.Fatalf("Consume() error = %v, want ErrClosed joined", err)
-	}
-}
-
-func TestConsumerRequeueHonorsContextCancellation(t *testing.T) {
-	broker := NewBrokerWithBuffer(1)
-	defer broker.Close()
-	broker.consumer("t", messaging.CommitAuto) // subscribe so requeue has a target channel
-	if err := broker.Producer().Send(context.Background(), messaging.Message{Topic: "t"}); err != nil {
-		t.Fatalf("fill subscriber buffer: %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := broker.requeue(ctx, "t", messaging.Message{Topic: "t"})
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("requeue() error = %v, want context.Canceled", err)
-	}
-}
-
-type recorderTB struct {
-	testing.TB
-	failed bool
-}
-
-func (r *recorderTB) Helper()               {}
-func (r *recorderTB) Errorf(string, ...any) { r.failed = true }
-func (r *recorderTB) Fatalf(string, ...any) { r.failed = true }
-
-func TestAssertionFailurePaths(t *testing.T) {
-	broker := NewBroker()
-	defer broker.Close()
-	if err := broker.Producer().PublishBinary(context.Background(), "topic", "k", []byte("v")); err != nil {
-		t.Fatalf("publish: %v", err)
-	}
-
-	rec := &recorderTB{}
-	AssertPublished(rec, broker, "topic", func(messaging.Message) bool { return false })
-	if !rec.failed {
-		t.Fatal("AssertPublished should fail when predicate never matches")
-	}
-
-	rec = &recorderTB{}
-	AssertPublishedN(rec, broker, "topic", 5)
-	if !rec.failed {
-		t.Fatal("AssertPublishedN should fail on count mismatch")
-	}
-
-	rec = &recorderTB{}
-	AssertNoMessages(rec, broker, "topic")
-	if !rec.failed {
-		t.Fatal("AssertNoMessages should fail when messages exist")
-	}
-
-	rec = &recorderTB{}
-	WaitForMessage(rec, broker, "empty", time.Millisecond)
-	if !rec.failed {
-		t.Fatal("WaitForMessage should fail on timeout")
 	}
 }
 

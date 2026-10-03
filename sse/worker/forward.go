@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
@@ -21,7 +22,7 @@ type Publication struct {
 // Mapper is an application-owned projection to its proto contract. Normalize event errors before including their approved public fields.
 type Mapper[O any] func(worker.Event[O]) (Publication, error)
 
-// Forward runs in the caller's lifecycle until cancellation, input closure, or the first mapping/publication error. It never starts a detached goroutine, substitutes a success-shaped payload, or retries. When consuming TaskHandle.Events, the caller must cancel that task if forwarding exits early, releasing producer backpressure. Upstream pool-wide event retention is owned by the worker pool.
+// Forward runs in the caller's lifecycle until cancellation, input closure, overflow, or the first mapping/publication error. It never detaches work or retries. Event overflow is a delivery failure, not task failure; the task owner decides whether to cancel execution.
 func Forward[O any](ctx context.Context, events <-chan worker.Event[O], publisher sse.Publisher, mapper Mapper[O]) error {
 	if events == nil || util.IsNil(publisher) || mapper == nil {
 		return apperrors.InvalidInput("bridge", "worker events, publisher, and proto mapper are required")
@@ -36,6 +37,9 @@ func Forward[O any](ctx context.Context, events <-chan worker.Event[O], publishe
 		case event, ok := <-events:
 			if !ok {
 				return nil
+			}
+			if errors.Is(event.Error, worker.ErrEventOverflow) {
+				return worker.ErrEventOverflow
 			}
 			publication, err := mapper(event)
 			if err != nil {

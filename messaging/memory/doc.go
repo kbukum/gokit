@@ -1,5 +1,2 @@
-// Package memory provides an in-memory message broker for tests and local development.
-//
-// [NewBroker] returns an [InMemoryBroker] implementing the messaging contract without external infrastructure,
-// and the Assert* / WaitFor* helpers make publish/consume behavior straightforward to assert in tests.
+// Package memory provides a live, bounded in-memory broker for local development without publication history. Consumers own their subscriptions; closing a consumer or broker interrupts blocked reads. Use messaging/testutil.MockProducer and its assertion helpers for full recording in tests.
 package memory

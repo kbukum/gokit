@@ -4,11 +4,11 @@ import (
 	"strings"
 )
 
-// System route paths registered by gokit (health, info, metrics).
+// System route paths registered by gokit on the public listener (health, info).
+// Metrics live on the private admin listener, not here.
 var systemPaths = map[string]bool{
-	"/health":  true,
-	"/info":    true,
-	"/metrics": true,
+	"/health": true,
+	"/info":   true,
 }
 
 // formatHandlerName extracts a clean handler name from Gin's full handler path.

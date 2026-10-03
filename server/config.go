@@ -24,6 +24,7 @@ type Config struct {
 	// Zero value yields secure defaults; set Disabled to opt out.
 	SecurityHeaders security.HeadersConfig `yaml:"security_headers" mapstructure:"security_headers"`
 	Docs            DocsConfig             `yaml:"docs" mapstructure:"docs"`
+	Admin           *AdminConfig           `yaml:"admin" mapstructure:"admin"`
 	Enabled         bool                   `yaml:"enabled" mapstructure:"enabled"`
 }
 
@@ -85,6 +86,11 @@ func (c *Config) H2CEnabled() bool {
 
 // Validate checks the configuration for invalid values.
 func (c *Config) Validate() error {
+	if c.Admin != nil {
+		if err := c.Admin.Validate(); err != nil {
+			return err
+		}
+	}
 	if c.Port < 0 || c.Port > 65535 {
 		return fmt.Errorf("server.port must be between 0 and 65535 (got: %d)", c.Port)
 	}

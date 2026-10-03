@@ -124,7 +124,7 @@ func (a *App[C]) ReadyCheck(ctx context.Context) error {
 }
 
 // Run executes the full application lifecycle for long-running services:
-// Configure → OnBeforeStart hooks → StartAll → OnAfterStart hooks → ReadyCheck → OnReady hooks → Block on signal → OnBeforeStop hooks → StopAll → OnAfterStop hooks → Graceful Shutdown.
+// Configure → OnBeforeStart hooks → StartAll → OnAfterStart hooks → ReadyCheck → OnReady hooks → Block on signal → Quiesce → OnBeforeStop hooks → Drain and release dependencies → OnAfterStop hooks.
 func (a *App[C]) Run(ctx context.Context) error {
 	if err := a.startup(ctx); err != nil {
 		return err
@@ -307,50 +307,42 @@ func (a *App[C]) stop() error {
 	return a.shutdownWith(ctx)
 }
 
-// shutdownWith runs the actual shutdown sequence. If ctx has no deadline,
-// gracefulTimeout is applied so a misbehaving Stop cannot block forever.
+// shutdownWith bounds cooperative teardown by the shorter of the caller's deadline and gracefulTimeout.
 func (a *App[C]) shutdownWith(parent context.Context) error {
 	a.Logger.InfoCtx(parent, "Shutting down application", map[string]any{
 		"timeout": a.gracefulTimeout.String(),
 	})
 
-	ctx := parent
-	var cancel context.CancelFunc
-	if _, hasDeadline := parent.Deadline(); !hasDeadline {
-		ctx, cancel = context.WithTimeout(parent, a.gracefulTimeout)
-		defer cancel()
-	}
+	ctx, cancel := context.WithTimeout(parent, a.gracefulTimeout)
+	defer cancel()
 
 	var shutdownErrs []error
+	if err := a.Components.QuiesceAll(); err != nil {
+		shutdownErrs = append(shutdownErrs, err)
+	}
 
 	// Phase: before_stop — hooks run before stopping components — collect all errors.
-	if err := a.emitLifecycleHooks(ctx, EventBeforeStop); err != nil {
+	deadline, _ := ctx.Deadline()
+	hookCtx, hookCancel := context.WithTimeout(ctx, max(time.Until(deadline)/4, 0))
+	if err := a.emitLifecycleHooks(hookCtx, EventBeforeStop); err != nil {
 		a.Logger.ErrorCtx(ctx, "OnBeforeStop hook error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
 	}
+	hookCancel()
 
-	// Stop all components (reverse order)
-	if err := a.Components.StopAll(ctx); err != nil {
+	// Drain work, release components and container resources, then stop telemetry/admin.
+	if err := a.Components.Shutdown(ctx, a.Container.Close); err != nil {
 		a.Logger.ErrorCtx(ctx, "Shutdown completed with errors", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)
 	}
 
-	// Phase: after_stop — hooks run after all components are stopped, before DI teardown.
+	// Phase: after_stop — components and container resources have been released.
 	if err := a.emitLifecycleHooks(ctx, EventAfterStop); err != nil {
 		a.Logger.ErrorCtx(ctx, "OnAfterStop hook error", map[string]any{
-			"error": err.Error(),
-		})
-		shutdownErrs = append(shutdownErrs, err)
-	}
-
-	// Close DI container:
-	// runs disposers for container-owned resources (RegisterCloseable / RegisterSingletonCloseable) in reverse order.
-	if err := a.Container.Close(ctx); err != nil {
-		a.Logger.ErrorCtx(ctx, "DI container close error", map[string]any{
 			"error": err.Error(),
 		})
 		shutdownErrs = append(shutdownErrs, err)

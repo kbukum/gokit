@@ -2,6 +2,20 @@
 
 Gin-based HTTP server with h2c support, built-in middleware, health/info endpoints, and component lifecycle.
 
+## SPA, diagnostics, and shutdown
+
+`MountSPA(files, spa.Config{...})` serves a trusted `fs.FS` behind registered API routes. Use an embedded filesystem in an image or `os.OpenRoot(...).FS()` for confined on-disk assets; keep the root open until the server stops. HTML navigation falls back to `index.html`, but API namespaces, asset namespaces, and missing file paths return 404. Add application-specific API prefixes through `ReservedPrefixes`.
+
+List fingerprinted files from the build manifest in `ImmutableAssets` to cache them for one year. Other assets revalidate. The index is limited to 1 MiB and uses `no-cache, no-store`. Put `{nonce}` in script/style nonce attributes; each index response gets a fresh cryptographic nonce and a matching strict CSP. `spa.Config.CSP` can replace the policy template, but cannot enable unsafe scripts or weaken its base/object/frame restrictions.
+
+Diagnostics are never registered by `RegisterDefaultEndpoints`. Set `Config.Admin` with `Enabled: true` to bind a separate listener; its default host is loopback and port zero selects an ephemeral port. `/metrics` exposes instance-owned Go/process metrics. `AdminConfig.Metrics` accepts an application-owned exporter handler, and `Pprof: true` enables profiling on that listener only. Restrict the admin listener to a trusted network. `AdminAddr()` reports its actual address.
+
+Call `Instrument(meter)` before `ApplyDefaults` to record HTTP metrics through an injected OpenTelemetry meter. Route labels use registered Gin/RPC patterns; unknown routes and methods use fixed labels. `http_requests_active` tracks in-flight requests. Register `sse/metrics` against the same application meter for active streams and queue gauges, then unregister it during resource cleanup before telemetry stops.
+
+Register `NewComponent(srv)` in the component registry for coordinated shutdown. The kit rejects new requests first, cancels SSE subscriptions, drains HTTP, then drains workers before closing clients and telemetry. The admin listener stops last. Each operation receives a share of the remaining total shutdown budget; HTTP reserves one fifth of its share for force-close and handler cleanup. A forced close returns the deadline error. Handlers and workers must honor cancellation: Go cannot terminate arbitrary application code.
+
+REST request timeouts buffer at most 10 MiB of response body. Exceeding that limit returns a 503 and cancels the handler; writes after cancellation fail. Actual REST handler cleanup remains tracked after the timeout response, so dependency teardown waits for it. Mount streaming endpoints outside this buffering middleware.
+
 ## Install
 
 ```bash

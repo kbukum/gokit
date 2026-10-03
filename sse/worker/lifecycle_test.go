@@ -31,6 +31,7 @@ func TestForwardFailureDoesNotStrandProducer(t *testing.T) {
 						}
 						emit(worker.Event[int]{Type: worker.EventProgress, Data: i})
 					}
+					<-ctx.Done()
 					return ctx.Err()
 				})
 				pool := worker.NewPool(handler, worker.PoolConfig{Name: "forward-owner", Size: 1, EventBuffer: 1, GracePeriod: 10 * time.Millisecond})
@@ -38,6 +39,7 @@ func TestForwardFailureDoesNotStrandProducer(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+
 				bus, err := sse.NewBus(sse.DefaultLimits())
 				if err != nil {
 					t.Fatal(err)

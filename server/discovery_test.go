@@ -329,3 +329,32 @@ func TestDiscoveryServerComponent_MultipleInstances(t *testing.T) {
 
 	assert.Empty(t, registry.registered)
 }
+
+// TestDiscoveryServerComponent_ForwardsLifecycle verifies the discovery wrapper
+// exposes the inner server's coordinated-shutdown capabilities, so a
+// discovery-enabled server is quiesced, drained with ingress, and released in
+// the admin phase instead of defaulting to the resource phase.
+func TestDiscoveryServerComponent_ForwardsLifecycle(t *testing.T) {
+	log := logging.NewDefault("test")
+	srv := New(&Config{Host: "localhost", Port: 0}, log)
+	dsc, err := NewDiscoveryServerComponent(
+		NewComponent(srv),
+		newMockRegistry(),
+		discovery.ServiceInfo{ID: "svc", Name: "svc", Address: "127.0.0.1", Port: 0},
+		log,
+	)
+	require.NoError(t, err)
+
+	var _ component.Quiescer = dsc
+	var drainer component.Drainer = dsc
+	assert.Equal(t, component.DrainIngress, drainer.DrainPhase())
+
+	phased, ok := component.Component(dsc).(interface {
+		ShutdownPhase() component.ShutdownPhase
+	})
+	require.True(t, ok, "wrapper must declare a shutdown phase")
+	assert.Equal(t, component.PhaseAdmin, phased.ShutdownPhase())
+
+	require.NoError(t, dsc.Quiesce())
+	assert.NoError(t, drainer.Drain(context.Background()))
+}

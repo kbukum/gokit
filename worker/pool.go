@@ -15,7 +15,7 @@ type PoolConfig struct {
 	Size        int               `yaml:"size"         mapstructure:"size"`         // fixed pool size (default: runtime.NumCPU)
 	QueueSize   int               `yaml:"queue_size"   mapstructure:"queue_size"`   // bounded task queue (0 = unbuffered)
 	Overflow    OverflowPolicy    `yaml:"overflow"     mapstructure:"overflow"`     // block | reject | drop_oldest (default: block)
-	EventBuffer int               `yaml:"event_buffer" mapstructure:"event_buffer"` // event channel buffer per task (default: 64)
+	EventBuffer int               `yaml:"event_buffer" mapstructure:"event_buffer"` // data events per task (default: 64), plus one overflow control slot
 	GracePeriod time.Duration     `yaml:"grace_period" mapstructure:"grace_period"` // shutdown grace (default: 5s)
 	Dispatch    DispatchStrategy  `yaml:"dispatch"     mapstructure:"dispatch"`     // round_robin | least_loaded (default: round_robin)
 	Supervisor  *SupervisorConfig `yaml:"supervisor,omitempty" mapstructure:"supervisor"`
@@ -39,11 +39,12 @@ func (c PoolConfig) withDefaults() PoolConfig {
 
 // PoolStats reports pool utilization.
 type PoolStats struct {
-	Active int `json:"active"` // workers currently executing tasks
-	Idle   int `json:"idle"`   // workers waiting for tasks
-	Queued int `json:"queued"` // tasks waiting in the queue
-	Total  int `json:"total"`  // total tasks submitted
-	Failed int `json:"failed"` // tasks that returned an error
+	CancellationCallbacks int `json:"cancellation_callbacks"` // retained per-task cancellation registrations
+	Active                int `json:"active"`                 // workers currently executing tasks
+	Idle                  int `json:"idle"`                   // workers waiting for tasks
+	Queued                int `json:"queued"`                 // tasks waiting in the queue
+	Total                 int `json:"total"`                  // total tasks submitted
+	Failed                int `json:"failed"`                 // tasks that returned an error
 }
 
 // taskEnvelope wraps a task submission for internal dispatch.
@@ -66,7 +67,7 @@ type Pool[I, O any] struct {
 	stats      []workerStats
 
 	// Aggregated event channel from all workers
-	events chan Event[O]
+	events *eventQueue[O]
 
 	// Pool lifecycle
 	acceptCancel context.CancelFunc
@@ -76,13 +77,16 @@ type Pool[I, O any] struct {
 	wg           sync.WaitGroup // tracks worker goroutines
 	supWg        sync.WaitGroup // tracks supervisor goroutine
 	taskWg       sync.WaitGroup // tracks accepted tasks until completion or cancellation
+	submitWg     sync.WaitGroup // admission attempts must settle before draining queues
 
 	stopped    atomic.Bool
 	totalTasks atomic.Int64
 	failCount  atomic.Int64
+	callbacks  atomic.Int64
 
 	// mu serializes Stop with task acceptance so taskWg cannot race with shutdown waits.
 	mu         sync.Mutex
+	started    bool
 	supervisor *supervisor[I, O]
 }
 
@@ -99,7 +103,7 @@ func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 		queue:        make(chan taskEnvelope[I, O], cfg.QueueSize),
 		affinities:   make([]chan taskEnvelope[I, O], cfg.Size),
 		stats:        make([]workerStats, cfg.Size),
-		events:       make(chan Event[O], cfg.EventBuffer*cfg.Size),
+		events:       newEventQueue[O](cfg.EventBuffer * cfg.Size),
 		acceptCancel: acceptCancel,
 		acceptCtx:    acceptCtx,
 		cancel:       cancel,
@@ -108,17 +112,10 @@ func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 
 	for i := range cfg.Size {
 		p.affinities[i] = make(chan taskEnvelope[I, O], 1)
-		p.wg.Add(1)
-		go p.runWorker(i)
 	}
 
 	if cfg.Supervisor != nil {
 		p.supervisor = newSupervisor(p, *cfg.Supervisor)
-		p.supWg.Add(1)
-		go func() {
-			defer p.supWg.Done()
-			p.supervisor.run(poolCtx)
-		}()
 	}
 
 	return p
@@ -126,25 +123,34 @@ func NewPool[I, O any](handler Handler[I, O], cfg PoolConfig) *Pool[I, O] {
 
 // Submit sends a task to the pool. Returns a handle to track the task.
 func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error) {
-	if p.stopped.Load() {
+	if p.stopped.Load() || p.acceptCtx.Err() != nil {
 		return nil, p.stoppedError()
 	}
 
 	// Task context is canceled if either the caller cancels or the pool shuts down.
 	taskCtx, taskCancel := context.WithCancel(ctx)
-	context.AfterFunc(p.poolCtx, taskCancel) //nolint:contextcheck // pool ctx is intentionally separate to allow shutdown to cancel in-flight tasks
-	handle := newTaskHandle[O](taskCtx, taskCancel, p.cfg.EventBuffer)
+	unlink := context.AfterFunc(p.poolCtx, taskCancel) //nolint:contextcheck // pool shutdown also cancels task work
+	p.callbacks.Add(1)
+	release := sync.OnceFunc(func() {
+		unlink()
+		taskCancel()
+		p.callbacks.Add(-1)
+	})
+	handle := newTaskHandle[O](taskCancel, release, p.cfg.EventBuffer)
 	env := taskEnvelope[I, O]{task: task, handle: handle, ctx: taskCtx}
 
 	p.mu.Lock()
-	if p.stopped.Load() {
+	if p.stopped.Load() || p.acceptCtx.Err() != nil {
 		p.mu.Unlock()
-		taskCancel()
+		release()
 		return nil, p.stoppedError()
 	}
+	p.startLocked()
 	p.taskWg.Add(1)
+	p.submitWg.Add(1)
 	p.totalTasks.Add(1)
 	p.mu.Unlock()
+	defer p.submitWg.Done()
 
 	var (
 		submitted *TaskHandle[O]
@@ -155,13 +161,14 @@ func (p *Pool[I, O]) Submit(ctx context.Context, task I) (*TaskHandle[O], error)
 	} else {
 		idx := p.pickWorkerForRouting()
 		if idx < 0 {
-			taskCancel()
+			release()
 			p.taskWg.Done()
 			return nil, fmt.Errorf("worker: pool %q has no healthy workers", p.cfg.Name)
 		}
 		submitted, err = p.enqueueAffinity(ctx, idx, env)
 	}
 	if err != nil {
+		release()
 		p.taskWg.Done()
 	}
 	return submitted, err
@@ -184,9 +191,9 @@ func (p *Pool[I, O]) SubmitBatch(ctx context.Context, tasks []I) ([]*TaskHandle[
 	return handles, nil
 }
 
-// Events returns an aggregated event channel from all workers.
+// Events returns the bounded aggregate stream. Overflow emits ErrEventOverflow and closes this stream for the pool lifetime; tasks keep executing. Consumers must handle error events.
 func (p *Pool[I, O]) Events() <-chan Event[O] {
-	return p.events
+	return p.events.events
 }
 
 // Stop performs graceful shutdown: stops accepting tasks,
@@ -200,6 +207,7 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 	p.mu.Unlock()
 
 	p.acceptCancel()
+	p.submitWg.Wait()
 
 	tasksDone := make(chan struct{})
 	go func() {
@@ -226,7 +234,7 @@ func (p *Pool[I, O]) Stop(ctx context.Context) error {
 	p.wg.Wait()
 	p.supWg.Wait()
 
-	close(p.events)
+	p.events.close()
 	return nil
 }
 
@@ -240,11 +248,12 @@ func (p *Pool[I, O]) Stats() PoolStats {
 	}
 
 	return PoolStats{
-		Active: active,
-		Idle:   p.cfg.Size - active,
-		Queued: queued,
-		Total:  int(p.totalTasks.Load()),
-		Failed: int(p.failCount.Load()),
+		CancellationCallbacks: int(p.callbacks.Load()),
+		Active:                active,
+		Idle:                  p.cfg.Size - active,
+		Queued:                queued,
+		Total:                 int(p.totalTasks.Load()),
+		Failed:                int(p.failCount.Load()),
 	}
 }
 
@@ -339,6 +348,8 @@ func (p *Pool[I, O]) stoppedError() error {
 // executeTask runs a single task within a worker goroutine.
 func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O]) {
 	handle := env.handle
+	var result O
+	var resultMu sync.Mutex
 
 	// Apply supervisor backoff delay if this worker has recent failures
 	if p.supervisor != nil {
@@ -356,19 +367,19 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 
 	// Build emit function that tags events with worker/task IDs and forwards
 	emit := func(e Event[O]) {
+		if e.Type == EventResult {
+			resultMu.Lock()
+			result = e.Data
+			resultMu.Unlock()
+			return
+		}
 		e.WorkerID = workerID
 		e.TaskID = handle.ID()
 
 		// Forward to task handle
 		handle.emit(e)
 
-		// Forward to pool-level aggregated channel (non-blocking)
-		select {
-		case p.events <- e:
-		default:
-			// Pool event channel full — drop to avoid blocking worker.
-			// TaskHandle channel still receives the event.
-		}
+		p.events.emit(e)
 	}
 
 	// Catch panics so the worker goroutine survives and the task handle is always completed —
@@ -377,7 +388,7 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 	// so supervisor state is consistent when callers observe task completion.
 	defer func() {
 		if r := recover(); r != nil {
-			var result O
+			var zero O
 			var err error
 			switch v := r.(type) {
 			case error:
@@ -390,18 +401,21 @@ func (p *Pool[I, O]) executeTask(workerID string, idx int, env taskEnvelope[I, O
 			if p.supervisor != nil {
 				p.supervisor.reportCrash(idx, r)
 			}
-			handle.complete(result, err)
+			handle.complete(zero, err)
 		}
 	}()
 
-	var result O
 	err := p.handler.Handle(env.ctx, env.task, emit)
 
 	if err != nil {
 		p.failCount.Add(1)
 		emit(errorEvent[O](err))
 	} else {
-		emit(resultEvent(result))
+		event := resultEvent(result)
+		event.WorkerID = workerID
+		event.TaskID = handle.ID()
+		handle.emit(event)
+		p.events.emit(event)
 	}
 
 	handle.complete(result, err)

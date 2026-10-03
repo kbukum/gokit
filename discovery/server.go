@@ -48,6 +48,45 @@ func NewDiscoveryServer(name string, inner component.Component, registry Registr
 
 var _ component.Component = (*DiscoveryServer)(nil)
 
+// Quiesce forwards to the inner component when it stops accepting work, so a
+// discovery-wrapped component still participates in coordinated shutdown. A
+// non-quiescing inner is a no-op.
+func (s *DiscoveryServer) Quiesce() error {
+	if q, ok := s.inner.(component.Quiescer); ok {
+		return q.Quiesce()
+	}
+	return nil
+}
+
+// Drain forwards to the inner component's drain when it implements one; a
+// non-draining inner is a no-op.
+func (s *DiscoveryServer) Drain(ctx context.Context) error {
+	if d, ok := s.inner.(component.Drainer); ok {
+		return d.Drain(ctx)
+	}
+	return nil
+}
+
+// DrainPhase forwards the inner component's drain phase, defaulting to
+// DrainIngress when the inner does not drain.
+func (s *DiscoveryServer) DrainPhase() component.DrainPhase {
+	if d, ok := s.inner.(component.Drainer); ok {
+		return d.DrainPhase()
+	}
+	return component.DrainIngress
+}
+
+// ShutdownPhase forwards the inner component's shutdown phase, defaulting to
+// PhaseResources when the inner does not declare one.
+func (s *DiscoveryServer) ShutdownPhase() component.ShutdownPhase {
+	if p, ok := s.inner.(interface {
+		ShutdownPhase() component.ShutdownPhase
+	}); ok {
+		return p.ShutdownPhase()
+	}
+	return component.PhaseResources
+}
+
 // Name returns the wrapper component name.
 func (s *DiscoveryServer) Name() string { return s.name }
 

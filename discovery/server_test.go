@@ -170,3 +170,61 @@ func TestDiscoveryServer_HealthReflectsInner(t *testing.T) {
 		t.Errorf("health = %v, want unhealthy", h.Status)
 	}
 }
+
+// lifecycleInner is a fakeInner that also implements the optional coordinated
+// shutdown capabilities, so tests can assert the wrapper forwards them.
+type lifecycleInner struct {
+	fakeInner
+	quiesced, drained bool
+	drainErr          error
+}
+
+func (l *lifecycleInner) Quiesce() error { l.quiesced = true; return nil }
+func (l *lifecycleInner) Drain(context.Context) error {
+	l.drained = true
+	return l.drainErr
+}
+func (l *lifecycleInner) DrainPhase() component.DrainPhase       { return component.DrainWorkers }
+func (l *lifecycleInner) ShutdownPhase() component.ShutdownPhase { return component.PhaseTelemetry }
+
+func TestDiscoveryServer_ForwardsLifecycleCapabilities(t *testing.T) {
+	t.Parallel()
+	inner := &lifecycleInner{}
+	ds, err := NewDiscoveryServer("ds", inner, &fakeRegistry{}, testService(), nil)
+	if err != nil {
+		t.Fatalf("NewDiscoveryServer: %v", err)
+	}
+
+	if err := ds.Quiesce(); err != nil || !inner.quiesced {
+		t.Fatalf("Quiesce not forwarded: err=%v quiesced=%v", err, inner.quiesced)
+	}
+	if err := ds.Drain(context.Background()); err != nil || !inner.drained {
+		t.Fatalf("Drain not forwarded: err=%v drained=%v", err, inner.drained)
+	}
+	if ds.DrainPhase() != component.DrainWorkers {
+		t.Fatalf("DrainPhase = %v, want DrainWorkers", ds.DrainPhase())
+	}
+	if ds.ShutdownPhase() != component.PhaseTelemetry {
+		t.Fatalf("ShutdownPhase = %v, want PhaseTelemetry", ds.ShutdownPhase())
+	}
+}
+
+func TestDiscoveryServer_DefaultsForPlainInner(t *testing.T) {
+	t.Parallel()
+	ds, err := NewDiscoveryServer("ds", &fakeInner{}, &fakeRegistry{}, testService(), nil)
+	if err != nil {
+		t.Fatalf("NewDiscoveryServer: %v", err)
+	}
+	if err := ds.Quiesce(); err != nil {
+		t.Fatalf("Quiesce: %v", err)
+	}
+	if err := ds.Drain(context.Background()); err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if ds.DrainPhase() != component.DrainIngress {
+		t.Fatalf("DrainPhase = %v, want DrainIngress", ds.DrainPhase())
+	}
+	if ds.ShutdownPhase() != component.PhaseResources {
+		t.Fatalf("ShutdownPhase = %v, want PhaseResources", ds.ShutdownPhase())
+	}
+}

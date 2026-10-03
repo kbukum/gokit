@@ -28,7 +28,9 @@ An `Authorizer` authenticates the request and returns a verified `Access{Princip
 
 Use `Bus.Publish(ctx, pattern, message)` from trusted application adapters. `*` matches any route, including `/`; `?` matches one rune, and brackets are literal. Subscriber routes cannot contain wildcards. The same matching rule applies to replay. Publication errors are returned, including oversized messages and a closed bus. The caller owns error handling.
 
-`sse/worker.Forward` maps worker events to a `Publication` through an explicit typed proto mapper. It runs in its caller's lifecycle, stops on mapping or publication failure, and does not create a goroutine or invent a JSON envelope. When forwarding `TaskHandle.Events`, cancel the task on early exit to release its bounded producer backpressure. Task cancellation interrupts full-channel sends; `Result` remains authoritative if cancellation prevents event delivery. Worker-pool aggregate event retention remains a separate upstream policy.
+`sse/worker.Forward` maps worker events to a `Publication` through an explicit typed proto mapper. It runs in its caller's lifecycle and stops on cancellation, mapping/publication failure, or `worker.ErrEventOverflow`. Overflow is incomplete delivery, not normal completion. Worker execution does not wait for event readers; the task owner decides whether forwarding failure should cancel execution. `Result` remains authoritative.
+
+Register the same bus through `sse.NewComponent` and mount its handler on the HTTP server. Registry quiescing closes the bus before HTTP draining begins. Unregister metric callbacks during resource cleanup, before closing the meter provider.
 
 ## Wire contract
 

@@ -7,8 +7,10 @@ import (
 )
 
 var (
-	_ encoding.TextMarshaler   = OverflowPolicy("")
-	_ encoding.TextUnmarshaler = (*OverflowPolicy)(nil)
+	// ErrEventOverflow terminates an incomplete event stream; the task result is independent of event delivery.
+	ErrEventOverflow                          = gkerrors.New(gkerrors.ErrCodeRateLimited, "worker event stream overflowed")
+	_                encoding.TextMarshaler   = OverflowPolicy("")
+	_                encoding.TextUnmarshaler = (*OverflowPolicy)(nil)
 )
 
 // OverflowPolicy controls what happens when the pool queue is full.

@@ -2,6 +2,10 @@
 
 Transport-agnostic message producer/consumer abstraction with explicit adapter registration, in-memory broker for testing, and composable middleware.
 
+The local `memory` broker delivers only to current subscribers. It retains no message history, and publishing to a topic without subscribers does not allocate persistent topic storage. Subscriber queues default to 256 messages; a full queue returns an error. Close consumers to release their subscriptions, and close the broker to interrupt all blocked reads. For complete publication recording and assertions, use `messaging/testutil.MockProducer`, `MessagesForTopic`, and the testutil assertion helpers.
+
+With `CommitAfterHandlerSuccess`, a failed delivery stays in one consumer-owned retry slot and `Consume` returns the handler error immediately. The next `Consume` retries it before queued messages, without waiting for queue space or redelivering it to other subscribers. Each consumer permits one active `Consume` call. The live retention bound is its configured queue capacity plus this single retry slot.
+
 ## Overview
 
 The `messaging` module provides a unified interface for publishing and consuming messages across different transports. It defines core types (`Message`, `Event`), producer/consumer interfaces, and higher-level patterns like routing, batching, and managed consumers — all independent of any specific broker.
