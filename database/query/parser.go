@@ -21,14 +21,12 @@ func ParseFromRequest(r *http.Request, config Config) Params {
 	maxPS := config.maxPageSize()
 
 	limitStr := q.Get("limit")
-	noPagination := limitStr == "-1" || limitStr == "all"
 
 	params := Params{
-		Page:         intOrDefault(q.Get("page"), 1),
-		PageSize:     clamp(intOrDefault(limitStr, defPS), 1, maxPS),
-		NoPagination: noPagination,
-		SortBy:       q.Get("sortBy"),
-		SortOrder:    normalizeSortOrder(q.Get("order")),
+		Page:      intOrDefault(q.Get("page"), 1),
+		PageSize:  clamp(intOrDefault(limitStr, defPS), 1, maxPS),
+		SortBy:    q.Get("sortBy"),
+		SortOrder: normalizeSortOrder(q.Get("order")),
 		Query: FilterQuery{
 			Conditions: []Condition{},
 			FreeText:   strings.TrimSpace(q.Get("search")),
@@ -41,11 +39,7 @@ func ParseFromRequest(r *http.Request, config Config) Params {
 		if ps == "" {
 			continue
 		}
-		if ps == "-1" || ps == "all" {
-			params.NoPagination = true
-		} else {
-			params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
-		}
+		params.PageSize = clamp(intOrDefault(ps, defPS), 1, maxPS)
 		break
 	}
 

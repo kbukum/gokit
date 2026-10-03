@@ -1,6 +1,7 @@
 package testutil_test
 
 import (
+	"context"
 	"embed"
 	"strings"
 	"testing"
@@ -46,10 +47,10 @@ func TestMigrationDriver_UpRecordsVersionAndRuns(t *testing.T) {
 	driver := dbtestutil.NewMigrationDriver()
 	cfg := migrationConfig(t, driver)
 
-	if err := cfg.Up(); err != nil {
+	if err := cfg.Up(context.Background()); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
-	version, dirty, err := cfg.Version()
+	version, dirty, err := cfg.Version(context.Background())
 	if err != nil {
 		t.Fatalf("Version: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestMigrationDriver_UpRecordsVersionAndRuns(t *testing.T) {
 	if driver.Runs() != 2 {
 		t.Fatalf("Runs = %d, want 2", driver.Runs())
 	}
-	if err := cfg.Up(); err != nil {
+	if err := cfg.Up(context.Background()); err != nil {
 		t.Fatalf("second Up should suppress no-change: %v", err)
 	}
 }
@@ -67,7 +68,7 @@ func TestMigrationDriver_UpRecordsVersionAndRuns(t *testing.T) {
 func TestMigrationDriver_FailRunSurfacesWrappedError(t *testing.T) {
 	t.Parallel()
 	driver := dbtestutil.NewMigrationDriver().FailRun()
-	if err := migrationConfig(t, driver).Up(); err == nil || !strings.Contains(err.Error(), "migrate up") {
+	if err := migrationConfig(t, driver).Up(context.Background()); err == nil || !strings.Contains(err.Error(), "migrate up") {
 		t.Fatalf("Up error = %v, want wrapped 'migrate up'", err)
 	}
 }
@@ -75,7 +76,7 @@ func TestMigrationDriver_FailRunSurfacesWrappedError(t *testing.T) {
 func TestMigrationDriver_FailDropSurfacesWrappedError(t *testing.T) {
 	t.Parallel()
 	driver := dbtestutil.NewMigrationDriver().FailDrop()
-	err := migrationConfig(t, driver).Reset()
+	err := migrationConfig(t, driver).Reset(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "migrate drop") {
 		t.Fatalf("Reset error = %v, want wrapped 'migrate drop'", err)
 	}
@@ -84,7 +85,7 @@ func TestMigrationDriver_FailDropSurfacesWrappedError(t *testing.T) {
 func TestMigrationDriver_FailSetVersionSurfacesWrappedError(t *testing.T) {
 	t.Parallel()
 	driver := dbtestutil.NewMigrationDriver().FailSetVersion()
-	if err := migrationConfig(t, driver).Steps(1); err == nil || !strings.Contains(err.Error(), "migrate steps") {
+	if err := migrationConfig(t, driver).Steps(context.Background(), 1); err == nil || !strings.Contains(err.Error(), "migrate steps") {
 		t.Fatalf("Steps error = %v, want wrapped 'migrate steps'", err)
 	}
 }
@@ -92,7 +93,7 @@ func TestMigrationDriver_FailSetVersionSurfacesWrappedError(t *testing.T) {
 func TestMigrationDriver_DriverFuncReturnsUsableDriver(t *testing.T) {
 	t.Parallel()
 	driver := dbtestutil.NewMigrationDriver()
-	got, err := driver.DriverFunc()(nil)
+	got, err := driver.DriverFunc()(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("DriverFunc returned error: %v", err)
 	}

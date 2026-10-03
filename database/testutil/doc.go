@@ -61,9 +61,9 @@
 //
 //	driver := testutil.NewMigrationDriver()
 //	cfg := migration.Config{DB: db, FS: fs, Path: "migrations", Driver: driver.DriverFunc()}
-//	if err := cfg.Up(); err != nil { ... }
+//	if err := cfg.Up(ctx); err != nil { ... }
 //
 //	// Prove a failing rollback is surfaced, not swallowed:
 //	driver.FailRun()
-//	err := cfg.Down() // wrapped "migrate down" error
+//	err := cfg.Down(ctx) // wrapped "migrate down" error
 package testutil

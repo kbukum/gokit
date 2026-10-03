@@ -79,7 +79,7 @@ func TestApplyToGorm_PaginatesAndCounts(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
 	params := query.Params{Page: 1, PageSize: 2}
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), params, fullConfig())
+	res, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), params, fullConfig())
 	if err != nil {
 		t.Fatalf("ApplyToGorm: %v", err)
 	}
@@ -94,14 +94,14 @@ func TestApplyToGorm_PaginatesAndCounts(t *testing.T) {
 	}
 }
 
-func TestApplyToGorm_NoPagination(t *testing.T) {
+func TestApplyToGorm_DefaultPagination(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{NoPagination: true}, fullConfig())
+	res, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{}, fullConfig())
 	if err != nil {
 		t.Fatalf("ApplyToGorm: %v", err)
 	}
-	if len(res.Data) != 4 || res.Pagination.TotalPages != 1 || res.Pagination.PageSize != 4 {
+	if len(res.Data) != 4 || res.Pagination.TotalPages != 1 || res.Pagination.PageSize != query.DefaultPageSize {
 		t.Fatalf("no-pagination = %+v / len=%d", res.Pagination, len(res.Data))
 	}
 }
@@ -110,7 +110,7 @@ func TestApplyToGorm_FreeTextSearch(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
 	params := query.Params{Page: 1, PageSize: 10, Query: query.FilterQuery{FreeText: "ALP"}}
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), params, fullConfig())
+	res, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), params, fullConfig())
 	if err != nil {
 		t.Fatalf("ApplyToGorm: %v", err)
 	}
@@ -123,14 +123,14 @@ func TestApplyToGorm_SortAscDesc(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
 	cfg := fullConfig()
-	desc, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "price", SortOrder: "desc"}, cfg)
+	desc, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "price", SortOrder: "desc"}, cfg)
 	if err != nil {
 		t.Fatalf("desc: %v", err)
 	}
 	if desc.Data[0].Price != 40 {
 		t.Fatalf("desc first price = %d", desc.Data[0].Price)
 	}
-	asc, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "price", SortOrder: "asc"}, cfg)
+	asc, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "price", SortOrder: "asc"}, cfg)
 	if err != nil {
 		t.Fatalf("asc: %v", err)
 	}
@@ -143,14 +143,14 @@ func TestApplyToGorm_DefaultSortAndNoMatch(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
 	cfg := query.Config{DefaultSort: "price DESC"}
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "unknown"}, cfg)
+	res, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "unknown"}, cfg)
 	if err != nil {
 		t.Fatalf("default sort: %v", err)
 	}
 	if res.Data[0].Price != 40 {
 		t.Fatalf("default sort not applied: %d", res.Data[0].Price)
 	}
-	untouched, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
+	untouched, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
 	if err != nil {
 		t.Fatalf("untouched sort: %v", err)
 	}
@@ -166,12 +166,9 @@ func TestApplyToGorm_UnsafeSortAliasFailsClosed(t *testing.T) {
 		AllowedSortFields: []string{"evil"},
 		FieldAliases:      map[string]string{"evil": "price; DROP TABLE widgets;--"},
 	}
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "evil", SortOrder: "asc"}, cfg)
-	if err != nil {
-		t.Fatalf("unsafe sort: %v", err)
-	}
-	if len(res.Data) != 4 {
-		t.Fatalf("expected fail-closed to return all rows, got %d", len(res.Data))
+	_, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), query.Params{Page: 1, PageSize: 10, SortBy: "evil", SortOrder: "asc"}, cfg)
+	if err == nil {
+		t.Fatal("unsafe sort must return an error")
 	}
 }
 
@@ -233,11 +230,8 @@ func TestApplyCondition_UnsafeFieldFailsClosed(t *testing.T) {
 	malicious := query.Condition{Field: "price); DROP TABLE widgets;--", Operator: query.OpEq, Value: "10"}
 	var out []widget
 	q := query.ApplyConditions(db.Model(&widget{}), []query.Condition{malicious}, query.Config{})
-	if err := q.Find(&out).Error; err != nil {
-		t.Fatalf("find: %v", err)
-	}
-	if len(out) != 4 {
-		t.Fatalf("expected fail-closed to return all rows, got %d", len(out))
+	if err := q.Find(&out).Error; err == nil {
+		t.Fatal("unsafe filter must return an error")
 	}
 	var count int64
 	if err := db.Model(&widget{}).Count(&count).Error; err != nil || count != 4 {
@@ -250,12 +244,9 @@ func TestApplySearch_UnsafeFieldSkipped(t *testing.T) {
 	db := newQueryTestDB(t)
 	params := query.Params{Page: 1, PageSize: 10, Query: query.FilterQuery{FreeText: "x"}}
 	cfg := query.Config{SearchFields: []string{"name); DROP TABLE widgets;--"}}
-	res, err := query.ApplyToGorm[widget](db.Model(&widget{}), params, cfg)
-	if err != nil {
-		t.Fatalf("ApplyToGorm: %v", err)
-	}
-	if len(res.Data) != 4 {
-		t.Fatalf("expected 4 rows, got %d", len(res.Data))
+	_, err := query.ApplyToGorm[widget](context.Background(), db.Model(&widget{}), params, cfg)
+	if err == nil {
+		t.Fatal("unsafe search field must return an error")
 	}
 }
 
@@ -264,7 +255,10 @@ func TestComputeFacetsWithFilters_CrossFilter(t *testing.T) {
 	db := newQueryTestDB(t)
 	conds := []query.Condition{{Field: "category", Operator: query.OpEq, Value: "tools"}}
 	cfg := query.Config{FacetFields: []string{"category"}, FacetLabels: map[string]string{"category": "Category"}}
-	facets := query.ComputeFacetsWithFilters(db.Model(&widget{}), cfg.FacetFields, conds, cfg)
+	facets, err := query.ComputeFacetsWithFilters(context.Background(), db.Model(&widget{}), cfg.FacetFields, conds, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if facets["Category"]["tools"] != 2 || facets["Category"]["toys"] != 2 {
 		t.Fatalf("cross-filter facets = %+v", facets)
 	}
@@ -273,12 +267,12 @@ func TestComputeFacetsWithFilters_CrossFilter(t *testing.T) {
 func TestComputeFacetsWithFilters_NilAndUnsafe(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
-	if query.ComputeFacetsWithFilters(db.Model(&widget{}), nil, nil, query.Config{}) != nil {
+	if result, err := query.ComputeFacetsWithFilters(context.Background(), db.Model(&widget{}), nil, nil, query.Config{}); result != nil || err != nil {
 		t.Fatal("expected nil for no facet fields")
 	}
-	f := query.ComputeFacetsWithFilters(db.Model(&widget{}), []string{"cat; DROP--"}, nil, query.Config{})
-	if len(f) != 0 {
-		t.Fatalf("unsafe facet field should be skipped, got %+v", f)
+	f, err := query.ComputeFacetsWithFilters(context.Background(), db.Model(&widget{}), []string{"cat; DROP--"}, nil, query.Config{})
+	if err == nil || f != nil {
+		t.Fatalf("unsafe facet field must return an error, got %+v, %v", f, err)
 	}
 }
 
@@ -291,7 +285,10 @@ func TestComputeFacetsWithFilters_AliasedField(t *testing.T) {
 		FieldAliases: map[string]string{"cat": "category"},
 		FacetLabels:  map[string]string{"cat": "Category"},
 	}
-	facets := query.ComputeFacetsWithFilters(db.Model(&widget{}), cfg.FacetFields, conds, cfg)
+	facets, err := query.ComputeFacetsWithFilters(context.Background(), db.Model(&widget{}), cfg.FacetFields, conds, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// The facet's own condition must be excluded from cross-filtering, so both
 	// categories are counted despite the resolved-column alias.
 	if facets["Category"]["tools"] != 2 || facets["Category"]["toys"] != 2 {
@@ -395,7 +392,7 @@ func TestApplyToGorm_CountError(t *testing.T) {
 	t.Parallel()
 	db := newQueryTestDB(t)
 	type missing struct{ ID uint }
-	_, err := query.ApplyToGorm[missing](db.Model(&missing{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
+	_, err := query.ApplyToGorm[missing](context.Background(), db.Model(&missing{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
 	if err == nil {
 		t.Fatal("expected count error on missing table")
 	}
@@ -408,7 +405,7 @@ func TestApplyToGorm_FindError(t *testing.T) {
 		ID  uint
 		Bad complex128
 	}
-	_, err := query.ApplyToGorm[mismatch](db.Model(&mismatch{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
+	_, err := query.ApplyToGorm[mismatch](context.Background(), db.Model(&mismatch{}), query.Params{Page: 1, PageSize: 10}, query.Config{})
 	if err == nil {
 		t.Fatal("expected error for unmigrated destination")
 	}

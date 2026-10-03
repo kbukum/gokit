@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/storage v1.69.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
-	google.golang.org/api v0.299.0
+	google.golang.org/api v0.297.0
 )
 
 require (
@@ -73,7 +73,7 @@ require (
 	google.golang.org/genproto v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
-	google.golang.org/grpc v1.84.0 // indirect
+	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 

@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io"
@@ -54,7 +55,12 @@ func (d *MigrationDriver) Runs() int {
 
 // DriverFunc adapts the fake to a migration.DriverFunc, ignoring the *sql.DB it is handed.
 func (d *MigrationDriver) DriverFunc() migration.DriverFunc {
-	return func(*sql.DB) (migratedb.Driver, error) { return d, nil }
+	return func(ctx context.Context, _ *sql.DB) (migratedb.Driver, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		return d, nil
+	}
 }
 
 // Open implements migratedb.Driver; it returns the receiver unchanged.

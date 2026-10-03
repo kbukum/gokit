@@ -188,10 +188,10 @@ func TestMigrationsUpAndDown(t *testing.T) {
 		Driver: postgres.MigrateDriver(),
 	}
 
-	if err := cfg.Up(); err != nil {
+	if err := cfg.Up(context.Background()); err != nil {
 		t.Fatalf("Up: %v", err)
 	}
-	version, dirty, err := cfg.Version()
+	version, dirty, err := cfg.Version(context.Background())
 	if err != nil {
 		t.Fatalf("Version: %v", err)
 	}
@@ -202,14 +202,14 @@ func TestMigrationsUpAndDown(t *testing.T) {
 		t.Fatal("expected price column after Up")
 	}
 
-	if err := cfg.Steps(-1); err != nil {
+	if err := cfg.Steps(context.Background(), -1); err != nil {
 		t.Fatalf("Steps down: %v", err)
 	}
 	if db.Migrator().HasColumn(&widget{}, "price") {
 		t.Fatal("price column should be gone after rolling back one step")
 	}
 
-	if err := cfg.Down(); err != nil {
+	if err := cfg.Down(context.Background()); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	if db.Migrator().HasTable(&widget{}) {
@@ -217,7 +217,7 @@ func TestMigrationsUpAndDown(t *testing.T) {
 	}
 
 	// A second Down is a no-op, not an error.
-	if err := cfg.Down(); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := cfg.Down(context.Background()); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("second Down should suppress no-change: %v", err)
 	}
 }

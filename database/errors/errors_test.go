@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,20 @@ import (
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
+
+func TestFromDatabasePreservesApplicationAndContextErrors(t *testing.T) {
+	t.Parallel()
+	input := apperrors.InvalidInput("cursor", "malformed cursor")
+	if got := FromDatabase(input, "list"); got != input {
+		t.Fatalf("application error remapped: %+v", got)
+	}
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		got := FromDatabase(cause, "list")
+		if got.Code != apperrors.Normalize(cause).Code || !errors.Is(got, cause) {
+			t.Fatalf("context failure remapped: %+v", got)
+		}
+	}
+}
 
 // --- IsConnectionError ---
 

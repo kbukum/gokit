@@ -1,7 +1,4 @@
 // Package migration runs schema migrations against a database.
 //
-// [Config] carries the GORM database, embedded source, path, and [DriverFunc]; its Up, Down, Steps,
-// Version, and Reset methods drive a migration source through the driver,
-// giving composition roots explicit,
-// ordered control over schema evolution instead of implicit auto-migration.
+// Config carries the database, filesystem source, path and context-bound DriverFunc. Operations execute synchronously without prefetch goroutines, bound each SQL file, and preserve dirty state on failure. Ready checks an expected schema version in addition to connectivity.
 package migration

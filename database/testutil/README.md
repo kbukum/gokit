@@ -245,13 +245,13 @@ func TestMigrations(t *testing.T) {
     driver := dbtestutil.NewMigrationDriver()
     cfg := migration.Config{DB: db, FS: migrationsFS, Path: "migrations", Driver: driver.DriverFunc()}
 
-    if err := cfg.Up(); err != nil {
+    if err := cfg.Up(context.Background()); err != nil {
         t.Fatalf("Up: %v", err)
     }
 
     // Prove a failing rollback is surfaced, not swallowed.
     driver.FailRun()
-    if err := cfg.Down(); err == nil {
+    if err := cfg.Down(context.Background()); err == nil {
         t.Fatal("expected wrapped 'migrate down' error")
     }
 }

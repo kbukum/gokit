@@ -39,9 +39,9 @@ type testItem struct {
 func TestTransaction_CommitOnSuccess(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err := db.WithTransaction(context.Background(), func(tx *gorm.DB) error {
 		return tx.Create(&testItem{ID: 1, Name: "committed"}).Error
 	})
 	if err != nil {
@@ -60,10 +60,10 @@ func TestTransaction_CommitOnSuccess(t *testing.T) {
 func TestTransaction_RollbackOnError(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
 	sentinelErr := errors.New("forced error")
-	err := db.Transaction(func(tx *gorm.DB) error {
+	err := db.WithTransaction(context.Background(), func(tx *gorm.DB) error {
 		tx.Create(&testItem{ID: 1, Name: "should-rollback"})
 		return sentinelErr
 	})
@@ -83,7 +83,7 @@ func TestTransaction_RollbackOnError(t *testing.T) {
 func TestWithTransaction_CommitOnSuccess(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
 	err := db.WithTransaction(context.Background(), func(tx *gorm.DB) error {
 		return tx.Create(&testItem{ID: 1, Name: "via-with-tx"}).Error
@@ -104,7 +104,7 @@ func TestWithTransaction_CommitOnSuccess(t *testing.T) {
 func TestWithTransaction_RollbackOnError(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
 	sentinelErr := errors.New("tx-fail")
 	err := db.WithTransaction(context.Background(), func(tx *gorm.DB) error {
@@ -125,7 +125,7 @@ func TestWithTransaction_RollbackOnError(t *testing.T) {
 func TestWithTransaction_PanicRecovery(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
 	// Insert a row first to verify rollback on panic
 	db.GormDB.Create(&testItem{ID: 99, Name: "pre-existing"})
@@ -166,7 +166,7 @@ func TestWithTransaction_PanicRecovery(t *testing.T) {
 func TestWithReadOnlyTransaction_AlwaysRollsBack(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	db.AutoMigrate(&testItem{})
+	db.AutoMigrate(context.Background(), &testItem{})
 
 	err := db.WithReadOnlyTransaction(context.Background(), func(tx *gorm.DB) error {
 		return tx.Create(&testItem{ID: 1, Name: "read-only-row"}).Error
@@ -220,7 +220,7 @@ func TestAutoMigrate_CreatesTable(t *testing.T) {
 		Title string
 	}
 
-	if err := db.AutoMigrate(&Product{}); err != nil {
+	if err := db.AutoMigrate(context.Background(), &Product{}); err != nil {
 		t.Fatalf("AutoMigrate() error: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func TestAutoMigrate_MultipleModels(t *testing.T) {
 		ID uint
 	}
 
-	if err := db.AutoMigrate(&Alpha{}, &Beta{}); err != nil {
+	if err := db.AutoMigrate(context.Background(), &Alpha{}, &Beta{}); err != nil {
 		t.Fatalf("AutoMigrate() error: %v", err)
 	}
 
@@ -276,7 +276,7 @@ func TestConcurrentQueries(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := db.AutoMigrate(&testItem{}); err != nil {
+	if err := db.AutoMigrate(context.Background(), &testItem{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 
@@ -408,7 +408,7 @@ func TestNewWithContext_CanceledBeforeFirstAttempt(t *testing.T) {
 
 func TestOperationsFailOnClosedDB(t *testing.T) {
 	db := newTestDB(t)
-	if err := db.AutoMigrate(&testItem{}); err != nil {
+	if err := db.AutoMigrate(context.Background(), &testItem{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 	if err := db.Close(); err != nil {
@@ -425,7 +425,7 @@ func TestOperationsFailOnClosedDB(t *testing.T) {
 	if err := db.WithReadOnlyTransaction(ctx, func(*gorm.DB) error { return nil }); err == nil {
 		t.Error("WithReadOnlyTransaction on closed DB should fail to begin")
 	}
-	if err := db.AutoMigrate(&testItem{}); err == nil {
+	if err := db.AutoMigrate(context.Background(), &testItem{}); err == nil {
 		t.Error("AutoMigrate on closed DB should fail")
 	}
 }
@@ -433,7 +433,7 @@ func TestOperationsFailOnClosedDB(t *testing.T) {
 func TestWithTransaction_RepanicsAfterRollback(t *testing.T) {
 	db := newTestDB(t)
 	defer db.Close()
-	if err := db.AutoMigrate(&testItem{}); err != nil {
+	if err := db.AutoMigrate(context.Background(), &testItem{}); err != nil {
 		t.Fatalf("AutoMigrate: %v", err)
 	}
 

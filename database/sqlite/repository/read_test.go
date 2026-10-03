@@ -2,11 +2,64 @@ package repository_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/kbukum/gokit/database/query"
 	repository "github.com/kbukum/gokit/database/repository"
 )
+
+func TestReadRepositoryConcurrentScopedLists(t *testing.T) {
+	t.Parallel()
+	db := setupTestDB(t)
+	pool, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := pool.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	seedModel(t, db, "1", "tenant-a", 30)
+	seedModel(t, db, "2", "tenant-a", 40)
+	seedModel(t, db, "3", "tenant-b", 50)
+	scoped := db.Where("name = ?", "tenant-a")
+	repo := repository.NewReadRepository[testModel, string](scoped, "test")
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range 10 {
+				page, err := repo.List(t.Context(), query.Params{}, query.Config{})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if len(page.Data) != 2 || page.Pagination.Total != 2 {
+					t.Errorf("offset scope lost: %+v", page)
+					return
+				}
+				cursor, err := repo.ListCursor(t.Context(), query.CursorParams{}, query.CursorConfig{
+					Scope: "tenant-a", OrderBy: "age", UniqueBy: "id",
+				})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if len(cursor.Data) != 2 {
+					t.Errorf("cursor scope lost: %+v", cursor)
+					return
+				}
+				count, err := repo.Count(t.Context())
+				if err != nil || count != 2 {
+					t.Errorf("count scope lost: %d, %v", count, err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+}
 
 func TestReadRepository_ListUsesQueryBuilder(t *testing.T) {
 	db := setupTestDB(t)
@@ -82,7 +135,7 @@ func TestReadRepository_FindOneBy(t *testing.T) {
 	})
 }
 
-func TestReadRepository_FindAllBy(t *testing.T) {
+func TestReadRepository_ListFiltered(t *testing.T) {
 	db := setupTestDB(t)
 	repo := repository.NewReadRepository[testModel, string](db, "test")
 	seedModel(t, db, "r1", "Alice", 30)
@@ -91,12 +144,14 @@ func TestReadRepository_FindAllBy(t *testing.T) {
 
 	ctx := context.Background()
 
-	got, err := repo.FindAllBy(ctx, "age", 30)
+	params := query.Params{}
+	params.AddCondition("age", query.OpEq, "30")
+	got, err := repo.List(ctx, params, query.Config{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(got) != 2 {
-		t.Errorf("got %d results, want 2", len(got))
+	if len(got.Data) != 2 {
+		t.Errorf("got %d results, want 2", len(got.Data))
 	}
 }
 
