@@ -1,0 +1,1 @@
+{"status":"authenticated","identity":{"subject":"service-123","kind":"service","restrictions":{"mode":"restricted","resources":["resource-one"],"scopes":["read"]}},"expiresAt":"2026-01-01T01:00:00Z","csrfToken":"<signed-generation-bound-token>"}

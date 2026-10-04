@@ -10,6 +10,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/auth"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 func testHasher(t *testing.T) *Hasher {
@@ -101,21 +104,20 @@ func (s *memStore) Create(_ context.Context, key *Key) error {
 	return nil
 }
 
-func (s *memStore) ListByPrefix(_ context.Context, keyPrefix string) ([]*Key, error) {
+func (s *memStore) GetByDigest(_ context.Context, digest string) (*Key, error) {
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	keys := make([]*Key, 0)
 	for _, record := range s.byID {
-		if record.KeyPrefix == keyPrefix {
+		if record.KeyDigest == digest {
 			copyKey := *record
 			copyKey.Scopes = slices.Clone(record.Scopes)
-			keys = append(keys, &copyKey)
+			return &copyKey, nil
 		}
 	}
-	return keys, nil
+	return nil, apperrors.New(apperrors.ErrCodeNotFound, "Key not found")
 }
 
 func (s *memStore) GetByID(_ context.Context, id string) (*Key, error) {
@@ -177,7 +179,7 @@ func TestManagerIssueValidateAndRotate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateKey: %v", err)
 	}
-	if validated.OwnerID != "user-1" || validated.LastUsedAt == nil {
+	if validated.OwnerID != "user-1" || validated.LastUsedAt != nil {
 		t.Fatalf("validated = %+v", validated)
 	}
 	if _, validateErr := manager.ValidateKey(context.Background(), issued.PlainKey, "write"); validateErr == nil {
@@ -220,7 +222,7 @@ func TestManagerValidateRejectsExpiredKey(t *testing.T) {
 	}
 }
 
-func TestMiddleware(t *testing.T) {
+func TestRequestAuthentication(t *testing.T) {
 	t.Parallel()
 
 	manager := NewManager(newMemStore(), testHasher(t))
@@ -228,59 +230,53 @@ func TestMiddleware(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
 	}
+	chain := auth.NewChain(nil, manager)
 
-	t.Run("accepts missing credentials", func(t *testing.T) {
+	t.Run("reports genuinely absent credentials without an identity", func(t *testing.T) {
 		t.Parallel()
-		nextCalled := false
-		handler := Middleware(manager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusNoContent)
-		}))
-
-		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		if !nextCalled || rec.Code != http.StatusNoContent {
-			t.Fatalf("unexpected response: called=%v code=%d", nextCalled, rec.Code)
+		p, present, err := chain.Authenticate(httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+		if err != nil || present || p.Subject != "" {
+			t.Fatalf("absent credentials: principal=%+v present=%v err=%v", p, present, err)
 		}
 	})
 
-	t.Run("rejects invalid credentials", func(t *testing.T) {
+	t.Run("authenticates a valid key as a typed principal", func(t *testing.T) {
 		t.Parallel()
-		handler := Middleware(manager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}))
-
-		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-		req.Header.Set("X-API-Key", "pk.invalid")
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusUnauthorized {
-			t.Fatalf("code = %d, want 401", rec.Code)
-		}
-	})
-
-	t.Run("stores validated key in context", func(t *testing.T) {
-		t.Parallel()
-		handler := Middleware(manager)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			key := FromContext(r.Context())
-			if key == nil || key.OwnerID != "user-1" {
-				t.Fatalf("unexpected context key: %+v", key)
-			}
-			w.WriteHeader(http.StatusNoContent)
-		}))
-
 		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		req.Header.Set("X-API-Key", issued.PlainKey)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("code = %d, want 204", rec.Code)
+		p, present, err := chain.Authenticate(req)
+		if err != nil || !present || p.Subject != "user-1" || p.Credential != auth.APIKey || p.Reference == issued.PlainKey {
+			t.Fatalf("valid key: principal=%+v err=%v", p, err)
 		}
 	})
+
+	rejected := map[string]func(*http.Request){
+		"invalid key": func(r *http.Request) { r.Header.Set("X-API-Key", "pk.invalid") },
+		"empty key":   func(r *http.Request) { r.Header["X-Api-Key"] = []string{""} },
+		"duplicate key fields": func(r *http.Request) {
+			r.Header["X-Api-Key"] = []string{issued.PlainKey, issued.PlainKey}
+		},
+		"case-aliased key fields": func(r *http.Request) {
+			r.Header["X-Api-Key"] = []string{issued.PlainKey}
+			r.Header["x-api-key"] = []string{issued.PlainKey}
+		},
+		"mixed key and session cookie": func(r *http.Request) {
+			r.Header.Set("X-API-Key", issued.PlainKey)
+			r.Header.Set("Cookie", auth.SessionCookie+"=opaque")
+		},
+		"key in authorization header": func(r *http.Request) { r.Header.Set("Authorization", issued.PlainKey) },
+	}
+	for name, mutate := range rejected {
+		t.Run("rejects "+name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			mutate(req)
+			_, present, err := chain.Authenticate(req)
+			if err == nil || !present || apperrors.Normalize(err).Code != apperrors.ErrCodeUnauthorized {
+				t.Fatalf("expected unauthorized, got %v", err)
+			}
+		})
+	}
 }
 
 func TestValidatePrefixRejectsInvalid(t *testing.T) {
@@ -412,7 +408,7 @@ func TestIssueKeyPropagatesCreateError(t *testing.T) {
 	}
 }
 
-func TestValidateKeyPropagatesUpdateLastUsedError(t *testing.T) {
+func TestValidateKeyIndependentOfUsageObservation(t *testing.T) {
 	t.Parallel()
 	store := &failingStore{memStore: newMemStore()}
 	manager := NewManager(store, testHasher(t))
@@ -421,8 +417,13 @@ func TestValidateKeyPropagatesUpdateLastUsedError(t *testing.T) {
 		t.Fatalf("IssueKey: %v", err)
 	}
 	store.updateUsedErr = errors.New("update failed")
-	if _, err := manager.ValidateKey(context.Background(), issued.PlainKey); err == nil {
-		t.Fatal("expected UpdateLastUsed error to propagate")
+	validated, err := manager.ValidateKey(context.Background(), issued.PlainKey)
+	if err != nil || validated.LastUsedAt != nil {
+		t.Fatal("metadata observation affected validity", err)
+	}
+	stored, err := store.GetByID(context.Background(), "k1")
+	if err != nil || stored.LastUsedAt != nil {
+		t.Fatal("authentication mutated usage metadata", err)
 	}
 }
 

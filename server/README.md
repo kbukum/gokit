@@ -116,7 +116,11 @@ server.MountDocs(engine, log,
 
 | Function | Description |
 |---|---|
-| `Auth(AuthConfig)` | Token-based authentication |
+| `HTTPAuth[T](authenticator, setClaims, ...HTTPAuthOption)` | Authenticate the original HTTP request and propagate its typed identity before HTTP, Connect, or SSE dispatch |
+| `WithAuthErrorWriter(writer)` | Inject protocol-aware rejection encoding; the default is safe RFC 9457 problem+json |
+| `WithMissingPolicy(policy)` | `RejectMissing` (default) or `AcceptMissing`, which dispatches credential-less requests without an identity |
+| `Auth[T](validator, setClaims)` | Require a header-only bearer credential in Gin; validation receives the request context |
+| `OptionalAuth[T](validator, setClaims)` | Accept a missing header, never malformed or invalid presented credentials |
 | `CORS(CORSConfig)` | Cross-origin resource sharing |
 | `Recovery()` | Panic recovery |
 
@@ -132,6 +136,10 @@ When composing transport concerns, keep the shared order explicit:
 6. metrics
 
 Apply recovery outside that chain so panics from any layer are captured consistently.
+
+Use `HTTPAuth` for a cookie/API-key authenticator chain: the injected `Authenticate(*http.Request) (T, bool, error)` implementation sees the original method, repeated headers, and cookies and owns credential ambiguity, CSRF, expiry, and revocation checks. Pair its setter with the same typed context getter in downstream handlers. Apply the middleware to protected handlers only. Authentication errors default to safe RFC 9457 responses; unknown provider/store failures never become anonymous success. The boolean reports whether any credential was presented: missing credentials are rejected unless `WithMissingPolicy(AcceptMissing)` is set, in which case the request continues with no identity in context, so required guards such as Connect `RequireAuth` still reject it. `WithAuthErrorWriter(func(http.ResponseWriter, *http.Request, error))` injects transport-specific encoding for a shared HTTP boundary. The writer receives the original request and error; it must normalize private diagnostics before serialization and preserve the target protocol's status and error envelope. Rejections set `Cache-Control: no-store` before invoking either writer.
+
+The Gin bearer middleware uses a context-aware `TokenValidator[T]` and accepts exactly one bounded `Authorization: Bearer …` credential. Empty, duplicate, oversized, or invalid headers are rejected even by `OptionalAuth`. URL query tokens and custom header/scheme fallbacks are not supported.
 
 ### TLS policy
 

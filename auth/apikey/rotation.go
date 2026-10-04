@@ -30,6 +30,8 @@ type RotationResult struct {
 
 // RotateKey generates a replacement key and moves the old one into a grace window.
 func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationConfig) (*RotationResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 	if cfg.NewKeyID == "" {
 		return nil, fmt.Errorf("apikey: NewKeyID is required for rotation")
 	}
@@ -38,8 +40,8 @@ func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationCo
 	if err != nil {
 		return nil, err
 	}
-	if validateErr := Validate(oldKey); validateErr != nil {
-		return nil, validateErr
+	if oldKey == nil || !oldKey.IsActive || oldKey.expired(m.clock.Now()) {
+		return nil, fmt.Errorf("apikey: invalid key")
 	}
 
 	grace := cfg.GracePeriod
@@ -65,18 +67,19 @@ func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationCo
 	}
 
 	issued, record, err := m.IssueKey(ctx, IssueRequest{
-		KeyID:     cfg.NewKeyID,
-		OwnerID:   ownerID,
-		Name:      name,
-		Prefix:    prefix,
-		Scopes:    scopes,
+		KeyID:   cfg.NewKeyID,
+		OwnerID: ownerID,
+		Name:    name,
+		Prefix:  prefix,
+		Scopes:  scopes,
+		Kind:    oldKey.Kind, RestrictionMode: oldKey.RestrictionMode, Resources: slices.Clone(oldKey.Resources),
 		ExpiresAt: cfg.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	graceEndsAt := time.Now().Add(grace)
+	graceEndsAt := m.clock.Now().Add(grace)
 	if err := m.store.SetRotation(ctx, oldKeyID, graceEndsAt, record.ID); err != nil {
 		return nil, err
 	}

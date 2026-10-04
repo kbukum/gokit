@@ -31,9 +31,9 @@ func TestBearerAuthenticationHeaderAndChallenge(t *testing.T) {
 			t.Parallel()
 			b := endpointBus(t)
 			cfg := handlerConfig()
-			cfg.Authorize = sse.Authenticated(sse.BearerAuthenticator(testutil.TokenValidator{Claims: "alice"}),
-				func(r *http.Request, identity any) (sse.Access, error) {
-					seen, ok := sse.IdentityFromContext(r.Context())
+			cfg.Authorize = sse.Authenticated(sse.BearerAuthenticator(testutil.TokenValidator[string]{Claims: "alice"}),
+				func(r *http.Request, identity string) (sse.Access, error) {
+					seen, ok := sse.IdentityFromContext[string](r.Context())
 					if !ok || seen != identity {
 						return sse.Access{}, apperrors.Unauthorized("")
 					}
@@ -55,6 +55,9 @@ func TestBearerAuthenticationHeaderAndChallenge(t *testing.T) {
 			if tc.want == 401 && w.Header().Get("WWW-Authenticate") != security.BearerAuthScheme {
 				t.Fatal("missing bearer challenge")
 			}
+			if tc.want == 401 && w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("authentication failure is cacheable")
+			}
 		})
 	}
 }
@@ -64,13 +67,16 @@ func TestBearerFailurePreservesCauseWithoutExposure(t *testing.T) {
 	cause := errors.New("credential diagnostic")
 	r := httptest.NewRequest("GET", "/", http.NoBody)
 	r.Header.Set("Authorization", security.BearerAuthScheme+" token")
-	auth := sse.BearerAuthenticator(testutil.TokenValidator{Err: cause})
+	auth := sse.BearerAuthenticator(testutil.TokenValidator[string]{Err: cause})
 	_, err := auth.Authenticate(r)
 	if !errors.Is(err, cause) {
 		t.Fatal("validator cause lost")
 	}
 	cfg := handlerConfig()
-	cfg.Authorize = sse.Authenticated(auth, func(*http.Request, any) (sse.Access, error) { t.Fatal("unexpected resolver"); return sse.Access{}, nil })
+	cfg.Authorize = sse.Authenticated(auth, func(*http.Request, string) (sse.Access, error) {
+		t.Fatal("unexpected resolver")
+		return sse.Access{}, nil
+	})
 	h, createErr := sse.NewHandler(endpointBus(t), cfg)
 	if createErr != nil {
 		t.Fatal(createErr)
@@ -87,16 +93,16 @@ func TestBearerFailurePreservesCauseWithoutExposure(t *testing.T) {
 
 func TestAuthenticationNilWiringAndIdentity(t *testing.T) {
 	t.Parallel()
-	var nilValidator *testutil.TokenValidator
-	var nilAuthenticator sse.AuthenticatorFunc
+	var nilValidator *testutil.TokenValidator[*string]
+	var nilAuthenticator sse.AuthenticatorFunc[*string]
 	var nilClaims *string
-	for _, auth := range []sse.Authenticator{
-		sse.BearerAuthenticator(nil), sse.BearerAuthenticator(nilValidator),
-		sse.BearerAuthenticator(testutil.TokenValidator{Claims: nilClaims}),
-		nilAuthenticator, testutil.AllowAuthenticator(nil),
+	for _, auth := range []sse.Authenticator[*string]{
+		sse.BearerAuthenticator[*string](nil), sse.BearerAuthenticator(nilValidator),
+		sse.BearerAuthenticator(testutil.TokenValidator[*string]{Claims: nilClaims}),
+		nilAuthenticator, testutil.AllowAuthenticator(nilClaims),
 	} {
 		cfg := handlerConfig()
-		cfg.Authorize = sse.Authenticated(auth, func(*http.Request, any) (sse.Access, error) {
+		cfg.Authorize = sse.Authenticated(auth, func(*http.Request, *string) (sse.Access, error) {
 			return sse.Access{Principal: "a", Route: "a"}, nil
 		})
 		h, err := sse.NewHandler(endpointBus(t), cfg)
@@ -111,7 +117,7 @@ func TestAuthenticationNilWiringAndIdentity(t *testing.T) {
 			t.Fatalf("nil auth admitted: %d", w.Code)
 		}
 	}
-	if _, ok := sse.IdentityFromContext(context.Background()); ok {
+	if _, ok := sse.IdentityFromContext[string](context.Background()); ok {
 		t.Fatal("unexpected identity")
 	}
 }

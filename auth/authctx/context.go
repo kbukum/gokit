@@ -20,21 +20,17 @@ import (
 )
 
 // contextKey is an unexported type to prevent collisions with other packages.
-type contextKey struct{}
+type contextKey[T any] struct{}
 
-// claimsKey is the single key used to store claims in context.
-var claimsKey = contextKey{}
-
-// Set stores authentication claims in the context. The claims can be any type —
-// the project defines its own claims struct.
-func Set(ctx context.Context, claims any) context.Context {
-	return context.WithValue(ctx, claimsKey, claims)
+// Set stores typed authentication claims under the key paired with their exact type.
+func Set[T any](ctx context.Context, claims T) context.Context {
+	return context.WithValue(ctx, contextKey[T]{}, claims)
 }
 
 // Get retrieves typed authentication claims from the context. Returns the claims and true if found
 // and of the correct type, or zero value and false otherwise.
 func Get[T any](ctx context.Context) (T, bool) {
-	val := ctx.Value(claimsKey)
+	val := ctx.Value(contextKey[T]{})
 	if val == nil {
 		var zero T
 		return zero, false

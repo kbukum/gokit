@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -14,6 +15,27 @@ import (
 // the HTTP transport so the wire parser can be exercised in isolation.
 func parserFrom(raw string) *StreamClient {
 	return &StreamClient{dec: sse.NewDecoder(strings.NewReader(raw))}
+}
+
+func TestStreamClientCloseWithoutBody(t *testing.T) {
+	t.Parallel()
+	for _, client := range []*StreamClient{{}, {resp: &http.Response{}}} {
+		if err := client.Close(); err != nil {
+			t.Fatalf("empty stream close: %v", err)
+		}
+	}
+}
+
+func TestStreamClientRequireJSONSkipsHandshake(t *testing.T) {
+	t.Parallel()
+	client := parserFrom("event: connected\ndata: {}\n\nevent: identity\ndata: {\"subject\":\"alice\"}\n\n")
+	var identity struct {
+		Subject string `json:"subject"`
+	}
+	event := client.RequireJSON(t, "identity", &identity)
+	if event.Name != "identity" || identity.Subject != "alice" {
+		t.Fatalf("identity event: %+v, %+v", event, identity)
+	}
 }
 
 // drain reads every dispatchable event until EOF, returning them in order. Any

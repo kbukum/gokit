@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/kbukum/gokit/codec"
+	"github.com/kbukum/gokit/database/migration"
 )
 
 const (
@@ -49,7 +50,7 @@ func LoadFixture(ctx context.Context, db *gorm.DB, table string, data []map[stri
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if table == "schema_migrations" {
+	if migration.IsVersionTable(table) {
 		return fmt.Errorf("migration metadata is not application fixture data")
 	}
 	if err := validateFixture(data); err != nil {
@@ -81,7 +82,7 @@ func MustLoadFixture(t *testing.T, db *gorm.DB, table string, data []map[string]
 func TruncateTable(ctx context.Context, db *gorm.DB, table string) error {
 	ctx, cancel := operationContext(ctx)
 	defer cancel()
-	if table == "schema_migrations" {
+	if migration.IsVersionTable(table) {
 		return fmt.Errorf("cannot clear migration metadata")
 	}
 	return db.WithContext(ctx).Exec("DELETE FROM " + quoteTable(db, table)).Error
@@ -160,9 +161,9 @@ func GetTableNames(ctx context.Context, db *gorm.DB) ([]string, error) {
 	var query string
 	switch db.Name() {
 	case "sqlite":
-		query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'schema_migrations' ORDER BY name LIMIT ?"
+		query = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name <> 'schema_migrations' AND name NOT LIKE '%\\_schema\\_migrations' ESCAPE '\\' ORDER BY name LIMIT ?"
 	case "postgres":
-		query = "SELECT tablename FROM pg_tables WHERE schemaname=current_schema() AND tablename <> 'schema_migrations' ORDER BY tablename LIMIT ?"
+		query = "SELECT tablename FROM pg_tables WHERE schemaname=current_schema() AND tablename <> 'schema_migrations' AND tablename NOT LIKE '%\\_schema\\_migrations' ESCAPE '\\' ORDER BY tablename LIMIT ?"
 	default:
 		return nil, fmt.Errorf("fixture tables do not support dialect %q", db.Name())
 	}

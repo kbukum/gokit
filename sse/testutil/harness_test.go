@@ -25,8 +25,8 @@ func TestAuthenticatedScopedReplayAndConcurrentStreams(t *testing.T) {
 	t.Parallel()
 	auth := testutil.AllowAuthenticator("alice")
 	h := testutil.New(t, sse.DefaultLimits(), testConfig(sse.Authenticated(auth,
-		func(r *http.Request, id any) (sse.Access, error) {
-			seen, ok := sse.IdentityFromContext(r.Context())
+		func(r *http.Request, id string) (sse.Access, error) {
+			seen, ok := sse.IdentityFromContext[string](r.Context())
 			if !ok || seen != id {
 				return sse.Access{}, apperrors.Unauthorized("")
 			}
@@ -72,23 +72,22 @@ func TestAuthenticatedScopedReplayAndConcurrentStreams(t *testing.T) {
 
 func TestAuthenticationFailures(t *testing.T) {
 	t.Parallel()
-	resolve := func(*http.Request, any) (sse.Access, error) {
+	resolve := func(*http.Request, string) (sse.Access, error) {
 		return sse.Access{Principal: "a", Route: "a"}, nil
 	}
-	var typedNil sse.AuthenticatorFunc
+	var typedNil sse.AuthenticatorFunc[string]
 	for _, tc := range []struct {
 		name   string
 		auth   sse.Authorizer
 		status int
 	}{
-		{"missing", sse.Authenticated(sse.BearerAuthenticator(nil), resolve), 401},
-		{"unauthorized", sse.Authenticated(testutil.RejectUnauthorized("safe"), resolve), 401},
-		{"forbidden", sse.Authenticated(testutil.RejectForbidden("safe"), resolve), 403},
+		{"missing", sse.Authenticated(sse.BearerAuthenticator[string](nil), resolve), 401},
+		{"unauthorized", sse.Authenticated(testutil.RejectUnauthorized[string]("safe"), resolve), 401},
+		{"forbidden", sse.Authenticated(testutil.RejectForbidden[string]("safe"), resolve), 403},
 		{"nil", sse.Authenticated(nil, resolve), 401},
 		{"typed nil", sse.Authenticated(typedNil, resolve), 401},
-		{"nil identity", sse.Authenticated(testutil.AllowAuthenticator(nil), resolve), 401},
 		{"nil resolver", sse.Authenticated(testutil.AllowAuthenticator("a"), nil), 401},
-		{"resolver forbidden", sse.Authenticated(testutil.AllowAuthenticator("a"), func(*http.Request, any) (sse.Access, error) {
+		{"resolver forbidden", sse.Authenticated(testutil.AllowAuthenticator("a"), func(*http.Request, string) (sse.Access, error) {
 			return sse.Access{}, apperrors.Forbidden("")
 		}), 403},
 	} {

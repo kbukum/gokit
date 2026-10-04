@@ -88,13 +88,13 @@ func TestConfigValidateRejectsMismatchedKeyTypes(t *testing.T) {
 
 	cases := map[string]*Config{
 		"rs256-bad-private":   {Method: RS256, Issuer: "i", Audience: []string{"a"}, PrivateKey: ecKey},
-		"rs256-bad-public":    {Method: RS256, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey, PublicKey: ecKey.Public()},
+		"rs256-bad-public":    {Method: RS256, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey, PublicKey: &ecKey.PublicKey},
 		"es256-bad-private":   {Method: ES256, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey},
-		"es256-bad-public":    {Method: ES256, Issuer: "i", Audience: []string{"a"}, PrivateKey: ecKey, PublicKey: rsaKey.Public()},
+		"es256-bad-public":    {Method: ES256, Issuer: "i", Audience: []string{"a"}, PrivateKey: ecKey, PublicKey: &rsaKey.PublicKey},
 		"eddsa-missing-key":   {Method: EdDSA, Issuer: "i", Audience: []string{"a"}},
 		"eddsa-bad-private":   {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey},
 		"eddsa-short-private": {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: ed25519.PrivateKey("short")},
-		"eddsa-bad-public":    {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: edPriv, PublicKey: rsaKey.Public()},
+		"eddsa-bad-public":    {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: edPriv, PublicKey: &rsaKey.PublicKey},
 		"eddsa-short-public":  {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: edPriv, PublicKey: ed25519.PublicKey("short")},
 	}
 	_ = edPub
@@ -186,11 +186,11 @@ func TestVerifyKeyFallbacks(t *testing.T) {
 	if got := (&Config{Method: "unknown", Secret: "s"}).verifyKey().([]byte); string(got) != "s" {
 		t.Fatalf("unknown verifyKey = %q, want s", got)
 	}
-	// Asymmetric methods without a usable typed private key return it verbatim.
+	// Asymmetric methods without a configured key return nil.
 	for _, method := range []SigningMethod{RS256, ES256, EdDSA} {
-		cfg := &Config{Method: method, PrivateKey: "raw-key-material"}
-		if got, ok := cfg.verifyKey().(string); !ok || got != "raw-key-material" {
-			t.Fatalf("%s verifyKey fallback = %v, want raw-key-material", method, cfg.verifyKey())
+		cfg := &Config{Method: method}
+		if got := cfg.verifyKey(); got != nil {
+			t.Fatalf("%s verifyKey fallback = %v, want nil", method, cfg.verifyKey())
 		}
 	}
 	// refreshVerifyKey with HS256 refresh secret returns the refresh secret.

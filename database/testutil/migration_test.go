@@ -93,7 +93,7 @@ func TestMigrationDriver_FailSetVersionSurfacesWrappedError(t *testing.T) {
 func TestMigrationDriver_DriverFuncReturnsUsableDriver(t *testing.T) {
 	t.Parallel()
 	driver := dbtestutil.NewMigrationDriver()
-	got, err := driver.DriverFunc()(context.Background(), nil)
+	got, err := driver.DriverFunc()(context.Background(), nil, "")
 	if err != nil {
 		t.Fatalf("DriverFunc returned error: %v", err)
 	}

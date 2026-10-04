@@ -6,12 +6,16 @@
 //   - auth/password   — Password hashing (bcrypt, argon2id) and secure token generation
 //   - auth/authctx    — Type-safe request context propagation for claims
 //   - auth/oidc       — OIDC/OAuth2 building blocks (discovery, verification, PKCE)
+//   - auth/apikey     — Indexed HMAC-protected header credentials
+//   - auth/session    — Opaque browser sessions, CSRF, family revocation and stream lifetimes
 //
 // The top-level package provides shared contracts:
 //
-//   - TokenValidator  — interface for validating tokens (JWT, OIDC, API key, etc.)
-//   - TokenGenerator  — interface for generating signed tokens
-//   - Registry        — thread-safe registry of named TokenValidator instances
+//   - TokenValidator[T] — typed, context-aware token validation
+//   - TokenGenerator[T] — typed, context-aware signed token generation
+//   - Registry[T]       — thread-safe registry of named typed validators
+//   - Principal         — one identity with explicit credential ceilings
+//   - RequestAuthenticator — a shared request authentication seam
 //   - Config          — composable configuration with pointer sub-configs
 //
 // For authorization (permission checking, RBAC), see github.com/kbukum/gokit/authz.
@@ -24,15 +28,16 @@
 //	auth:
 //	  enabled: true
 //	  jwt:
-//	    secret: "my-secret"
+//	    method: "EdDSA"
+//	    issuer: "https://auth.example.com"
+//	    audience: ["api"]
 //	    access_token_ttl: "15m"
 //	  password:
-//	    algorithm: "bcrypt"
-//	    bcrypt_cost: 12
+//	    algorithm: "argon2id"
 //
 // Register validators for use with middleware:
 //
-//	reg := auth.NewRegistry()
-//	reg.Register("jwt", jwtSvc.AsValidator())
+//	reg := auth.NewRegistry[*MyClaims]()
+//	reg.Register("jwt", auth.NewValidator(jwtSvc.ValidatorFunc()))
 //	validator, _ := reg.Default()
 package auth

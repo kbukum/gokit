@@ -45,7 +45,7 @@ When using gokit in production:
 - Configure TLS via the `security` package for all network communication — never set `InsecureSkipVerify: true` in production.
 - Never commit secrets — use environment variables or secret managers.
 - Review `gosec` and `govulncheck` findings regularly (`make lint` includes `gosec`; CI runs `govulncheck` per module on every push).
-- For HTTP authentication, prefer the secure-by-default `Auth`/`OptionalAuth` middleware. Avoid enabling `WithQueryTokenParam` unless absolutely necessary, and always pair it with `WithQueryTokenAllowedPaths` and `WithQueryTokenWarningLogger`.
+- Authenticate the original request with the typed auth chain before HTTP/Connect/SSE dispatch. Credentials belong in secure host-only session cookies or supported headers, never URLs. Optional authentication accepts missing credentials only; invalid, duplicate or mixed credentials fail closed. Unsafe cookie requests require signed CSRF.
 
 ## Supply Chain
 
@@ -53,4 +53,3 @@ When using gokit in production:
 - Dependency updates are automated via Dependabot (`.github/dependabot.yml`).
 - Module Go versions are kept consistent across all sub-modules; the CI `version-check` job enforces this invariant.
 - Every dependency's license is checked against an allow-list on each push (`scripts/check-licenses.sh`); strong copyleft (GPL/LGPL/AGPL) and unknown licenses fail CI. New direct dependencies are justified and audited in [`docs/dependencies.md`](docs/dependencies.md).
-

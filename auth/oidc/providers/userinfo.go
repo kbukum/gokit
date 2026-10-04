@@ -14,7 +14,7 @@ import (
 // result is a deliberate opaque value:
 // it is a JSON unmarshal target whose concrete shape is provider-specific,
 // so it cannot be given a closed type here (same contract as [json.Unmarshal]).
-func FetchJSON(ctx context.Context, req FetchRequest, result any) error {
+func FetchJSON[T any](ctx context.Context, req FetchRequest, result *T) error {
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, req.Endpoint, http.NoBody)
 	if err != nil {
 		return err
@@ -39,29 +39,29 @@ func FetchJSON(ctx context.Context, req FetchRequest, result any) error {
 
 // StrVal extracts a string value from a JSON-decoded map. Returns "" if the key is missing
 // or not a string.
-func StrVal(m map[string]any, key string) string {
-	v, _ := m[key].(string)
+func StrVal[T any](m map[string]T, key string) string {
+	v, _ := any(m[key]).(string)
 	return v
 }
 
 // BoolVal extracts a bool value from a JSON-decoded map. Returns false if the key is missing
 // or not a bool.
-func BoolVal(m map[string]any, key string) bool {
-	v, _ := m[key].(bool)
+func BoolVal[T any](m map[string]T, key string) bool {
+	v, _ := any(m[key]).(bool)
 	return v
 }
 
 // NestedMap traverses a dot-separated path in a JSON-decoded map. For example,
 // NestedMap(m, "data.user") returns m["data"]["user"]. Returns nil if any segment is missing
 // or not a map.
-func NestedMap(m map[string]any, path string) map[string]any {
+func NestedMap[T any](m map[string]T, path string) map[string]T {
 	if path == "" {
 		return m
 	}
 	parts := strings.Split(path, ".")
 	current := m
 	for _, part := range parts {
-		next, ok := current[part].(map[string]any)
+		next, ok := any(current[part]).(map[string]T)
 		if !ok {
 			return nil
 		}

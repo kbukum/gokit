@@ -41,6 +41,7 @@ vendor/
 # Build output
 bin/
 dist/
+target/
 
 # Docs generated artifacts
 docs/testutil*.md

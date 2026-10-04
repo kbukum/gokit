@@ -1,6 +1,6 @@
 // Package connect provides Connect-Go RPC integration for gokit services.
 //
-// It includes JWT authentication interceptors, service mounting helpers, error mapping,
+// It includes typed authentication guards, service mounting helpers, error mapping,
 // logging interceptors, and configuration for Connect-Go handlers.
 //
 // # Server-side (Handlers)
@@ -21,8 +21,10 @@
 //
 // # Authentication
 //
-// JWT authentication is provided through Connect interceptors:
+// Authenticate the complete request in an outer HTTP middleware before dispatching to Connect. Inject the same typed identity getter into service handlers and the guard:
 //
-//   - TokenAuthInterceptor: Rejects unauthenticated requests
-//   - OptionalTokenAuthInterceptor: Allows unauthenticated requests but extracts claims if present
+//   - AuthInterceptor: Rejects requests without an already-verified identity.
+//   - RequireAuth: Retrieves the verified identity using an injected ClaimsGetter.
+//
+// Credential parsing, cookie checks, CSRF, and session revocation belong to the injected authentication provider, not to unary interceptors.
 package connect

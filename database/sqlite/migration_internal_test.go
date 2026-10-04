@@ -37,7 +37,7 @@ func TestFailedResetRestoresSchemaAndConstraintTiming(t *testing.T) {
 		t.Fatal(err)
 	}
 	failure := errors.New("reset aborted")
-	driver, err := migration.NewSQLDriver(t.Context(), pool, failingResetBackend{failure: failure})
+	driver, err := migration.NewSQLDriver(t.Context(), pool, failingResetBackend{failure: failure}, migration.DefaultVersionTable)
 	if err != nil {
 		t.Fatal(err)
 	}

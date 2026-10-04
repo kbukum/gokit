@@ -137,6 +137,8 @@ Scope commands to what changed; the full workspace gates are for audits/CI sign-
 
 Runtime test-environment changes need real adapter proof, not only unit/build success. Reuse `testutil` for fresh bounded cleanup and rollback, `component/testutil` for deterministic lifecycle failures, and adapter test helpers for real loopback/file/container checks. Reset fixture data with requests quiesced; do not erase handlers or migration metadata. Required PostgreSQL checks fail on missing Docker; fake migration drivers and in-memory AutoMigrate certify orchestration/unit behavior only. Use `process` with isolated environment and bounded output, inspect forced shutdown as a failure, and record final commands, declared limits, and cleanup outcomes. See [`testutil/README.md`](../testutil/README.md).
 
+Authentication changes must prove the real HTTP/Connect/SSE session lifecycle through [`auth/testhost`](../auth/testhost/README.md). Use trusted HTTPS without verification bypass or weaker cookies. Reset before sign-in; never restore saved browser credentials against reset state. Check duplicate/mixed/invalid credentials, unsafe cookie CSRF, unavailable authoritative storage, rotation/logout races and local/cross-instance stream teardown. Keep credentials/private keys out of logs and retained artifacts. The fixture's scenario controls belong only to its test module, never production routing; frontend acceptance remains the browser consumer's responsibility.
+
 ```bash
 make lint M=<module>                 # golangci-lint, one module
 make test M=<module> T=<pattern>     # scoped tests (-race -count=1)

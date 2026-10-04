@@ -91,20 +91,12 @@ func TestFullFlowGoogleLike(t *testing.T) {
 func TestFullFlowTikTokLike(t *testing.T) {
 	srv := testutil.NewMockOAuthServer()
 	defer srv.Close()
-	srv.SetTokenResponse(map[string]any{
-		"access_token": "tiktok-token",
-		"token_type":   "Bearer",
-		"scope":        "user.info.basic,video.list",
-	})
-	srv.SetUserResponse(map[string]any{
-		"data": map[string]any{
-			"user": map[string]any{
-				"open_id":      "tk-789",
-				"display_name": "TikToker",
-				"avatar_url":   "https://tiktok.photo",
-			},
-		},
-	})
+	if err := srv.SetTokenResponse([]byte(`{"access_token":"tiktok-token","token_type":"Bearer","scope":"user.info.basic,video.list"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.SetUserResponse([]byte(`{"data":{"user":{"open_id":"tk-789","display_name":"TikToker","avatar_url":"https://tiktok.photo"}}}`)); err != nil {
+		t.Fatal(err)
+	}
 
 	p := NewGeneric(GenericConfig{
 		ProviderConfig: ProviderConfig{
@@ -188,10 +180,9 @@ func TestMockServerCustomResponses(t *testing.T) {
 	srv := testutil.NewMockOAuthServer()
 	defer srv.Close()
 
-	srv.SetTokenResponse(map[string]any{
-		"access_token": "custom-token",
-		"token_type":   "Bearer",
-	})
+	if err := srv.SetTokenResponse([]byte(`{"access_token":"custom-token","token_type":"Bearer"}`)); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := mockProviderConfig()
 	tok, err := ExchangeCode(context.Background(), ExchangeRequest{TokenURL: srv.TokenURL(), Config: cfg, Code: "code"})

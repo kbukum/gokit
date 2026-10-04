@@ -48,6 +48,10 @@ func TestResetPreservesMigrationMetadataAndForeignKeys(t *testing.T) {
 		"PRAGMA foreign_keys=ON",
 		"CREATE TABLE schema_migrations(version INTEGER, dirty BOOLEAN)",
 		"INSERT INTO schema_migrations VALUES(1, false)",
+		"CREATE TABLE auth_session_schema_migrations(version INTEGER, dirty BOOLEAN)",
+		"INSERT INTO auth_session_schema_migrations VALUES(1, false)",
+		"CREATE TABLE other_schemaxmigrations(id INTEGER)",
+		"INSERT INTO other_schemaxmigrations VALUES(1)",
 		`CREATE TABLE "parent table"(id INTEGER PRIMARY KEY)`,
 		`CREATE TABLE children(id INTEGER PRIMARY KEY, parent INTEGER REFERENCES "parent table"(id))`,
 		`INSERT INTO "parent table" VALUES(1)`,
@@ -60,11 +64,16 @@ func TestResetPreservesMigrationMetadataAndForeignKeys(t *testing.T) {
 	if err := c.Reset(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	var version int
-	if err := db.Raw("SELECT version FROM schema_migrations").Scan(&version).Error; err != nil || version != 1 {
-		t.Fatalf("metadata erased: %d %v", version, err)
+	for _, table := range []string{"schema_migrations", "auth_session_schema_migrations"} {
+		var version int
+		if err := db.Raw("SELECT version FROM " + table).Scan(&version).Error; err != nil || version != 1 {
+			t.Fatalf("%s metadata erased: %d %v", table, version, err)
+		}
+		if err := TruncateTable(t.Context(), db, table); err == nil {
+			t.Fatalf("%s metadata truncated", table)
+		}
 	}
-	for _, table := range []string{"parent table", "children"} {
+	for _, table := range []string{"parent table", "children", "other_schemaxmigrations"} {
 		count, err := CountRows(t.Context(), db, table)
 		if err != nil || count != 0 {
 			t.Fatalf("table %s: %d %v", table, count, err)

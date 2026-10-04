@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -12,18 +13,18 @@ import (
 func TestTokenValidatorAndGeneratorAdapters(t *testing.T) {
 	t.Parallel()
 
-	validator := NewValidator(func(token string) (any, error) {
+	validator := NewValidator(func(_ context.Context, token string) (string, error) {
 		return "claims:" + token, nil
 	})
-	claims, err := validator.ValidateToken("abc")
-	if err != nil || claims.(string) != "claims:abc" {
+	claims, err := validator.ValidateToken(context.Background(), "abc")
+	if err != nil || claims != "claims:abc" {
 		t.Fatalf("unexpected validator result: %v %v", claims, err)
 	}
 
-	generator := TokenGeneratorFunc(func(claims any) (string, error) {
-		return claims.(string) + "-token", nil
+	generator := TokenGeneratorFunc[string](func(_ context.Context, claims string) (string, error) {
+		return claims + "-token", nil
 	})
-	token, err := generator.GenerateToken("access")
+	token, err := generator.GenerateToken(context.Background(), "access")
 	if err != nil || token != "access-token" {
 		t.Fatalf("unexpected generator result: %q %v", token, err)
 	}
@@ -32,9 +33,9 @@ func TestTokenValidatorAndGeneratorAdapters(t *testing.T) {
 func TestRegistry_DefaultAndSetDefault(t *testing.T) {
 	t.Parallel()
 
-	reg := NewRegistry()
-	first := TokenValidatorFunc(func(token string) (any, error) { return token, nil })
-	second := TokenValidatorFunc(func(token string) (any, error) { return token + "-2", nil })
+	reg := NewRegistry[string]()
+	first := TokenValidatorFunc[string](func(_ context.Context, token string) (string, error) { return token, nil })
+	second := TokenValidatorFunc[string](func(_ context.Context, token string) (string, error) { return token + "-2", nil })
 
 	if err := reg.Register("first", first); err != nil {
 		t.Fatalf("Register first: %v", err)
@@ -44,7 +45,7 @@ func TestRegistry_DefaultAndSetDefault(t *testing.T) {
 	}
 	if got, ok := reg.Get("first"); !ok {
 		t.Fatal("expected first validator to be retrievable")
-	} else if value, err := got.ValidateToken("t"); err != nil || value.(string) != "t" {
+	} else if value, err := got.ValidateToken(context.Background(), "t"); err != nil || value != "t" {
 		t.Fatalf("unexpected Get result: %v %v", value, err)
 	}
 	names := reg.Names()
@@ -56,8 +57,8 @@ func TestRegistry_DefaultAndSetDefault(t *testing.T) {
 	if !ok {
 		t.Fatal("expected default validator")
 	}
-	got, err := def.ValidateToken("t")
-	if err != nil || got.(string) != "t" {
+	got, err := def.ValidateToken(context.Background(), "t")
+	if err != nil || got != "t" {
 		t.Fatalf("unexpected default validator result: %v %v", got, err)
 	}
 
@@ -65,8 +66,8 @@ func TestRegistry_DefaultAndSetDefault(t *testing.T) {
 		t.Fatalf("SetDefault: %v", setErr)
 	}
 	def, _ = reg.Default()
-	got, err = def.ValidateToken("t")
-	if err != nil || got.(string) != "t-2" {
+	got, err = def.ValidateToken(context.Background(), "t")
+	if err != nil || got != "t-2" {
 		t.Fatalf("unexpected updated default validator result: %v %v", got, err)
 	}
 }
@@ -74,7 +75,7 @@ func TestRegistry_DefaultAndSetDefault(t *testing.T) {
 func TestRegistry_SetDefaultMissing(t *testing.T) {
 	t.Parallel()
 
-	reg := NewRegistry()
+	reg := NewRegistry[string]()
 	if err := reg.SetDefault("missing"); err == nil {
 		t.Fatal("expected missing validator error")
 	}
@@ -129,8 +130,8 @@ func TestTokenValidatorFunc_ErrorPropagation(t *testing.T) {
 	t.Parallel()
 
 	want := errors.New("boom")
-	validator := TokenValidatorFunc(func(token string) (any, error) { return nil, want })
-	if _, err := validator.ValidateToken("x"); !errors.Is(err, want) {
+	validator := TokenValidatorFunc[string](func(_ context.Context, token string) (string, error) { return "", want })
+	if _, err := validator.ValidateToken(context.Background(), "x"); !errors.Is(err, want) {
 		t.Fatalf("expected propagated error, got %v", err)
 	}
 }

@@ -25,20 +25,36 @@ type sqlDriver struct {
 	ctx     context.Context
 	conn    *sql.Conn
 	backend SQLBackend
+	queries versionQueries
 	locked  bool
 	discard bool
 }
 
-// NewSQLDriver borrows one connection for a context-bound migration session. Close returns it to the pool; it never closes the pool.
-func NewSQLDriver(ctx context.Context, pool *sql.DB, backend SQLBackend) (migratedb.Driver, error) {
+// NewSQLDriver borrows one connection for a context-bound migration session that records its version in versionTable (see IsVersionTable). Close returns the connection to the pool; it never closes the pool.
+func NewSQLDriver(ctx context.Context, pool *sql.DB, backend SQLBackend, versionTable string) (migratedb.Driver, error) {
 	if pool == nil || backend == nil {
 		return nil, apperrors.InvalidInput("migration", "pool and SQL backend are required")
+	}
+	if !IsVersionTable(versionTable) {
+		return nil, apperrors.InvalidInput("version_table", "invalid migration version table")
 	}
 	conn, err := pool.Conn(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &sqlDriver{ctx: ctx, conn: conn, backend: backend}, nil
+	return &sqlDriver{ctx: ctx, conn: conn, backend: backend, queries: newVersionQueries(versionTable)}, nil
+}
+
+// versionQueries holds the version-table statements. The table name is validated by IsVersionTable before interpolation; SQL parameters cannot bind identifiers.
+type versionQueries struct{ create, read, clear, write string }
+
+func newVersionQueries(table string) versionQueries {
+	return versionQueries{
+		create: "CREATE TABLE IF NOT EXISTS " + table + " (version BIGINT NOT NULL PRIMARY KEY, dirty BOOLEAN NOT NULL)",
+		read:   "SELECT version, dirty FROM " + table + " LIMIT 1",
+		clear:  "DELETE FROM " + table,
+		write:  "INSERT INTO " + table + "(version, dirty) VALUES ($1, $2)",
+	}
 }
 
 func (*sqlDriver) Open(string) (migratedb.Driver, error) {
@@ -90,12 +106,12 @@ func (d *sqlDriver) Unlock() error {
 }
 
 func (d *sqlDriver) ensureVersionTable() error {
-	_, err := d.conn.ExecContext(d.ctx, "CREATE TABLE IF NOT EXISTS schema_migrations (version BIGINT NOT NULL PRIMARY KEY, dirty BOOLEAN NOT NULL)")
+	_, err := d.conn.ExecContext(d.ctx, d.queries.create)
 	return err
 }
 
 func (d *sqlDriver) Version() (version int, dirty bool, err error) {
-	err = d.conn.QueryRowContext(d.ctx, "SELECT version, dirty FROM schema_migrations LIMIT 1").Scan(&version, &dirty)
+	err = d.conn.QueryRowContext(d.ctx, d.queries.read).Scan(&version, &dirty)
 	if errors.Is(err, sql.ErrNoRows) {
 		return migratedb.NilVersion, false, nil
 	}
@@ -104,11 +120,11 @@ func (d *sqlDriver) Version() (version int, dirty bool, err error) {
 
 func (d *sqlDriver) SetVersion(version int, dirty bool) error {
 	return d.transaction(func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(d.ctx, "DELETE FROM schema_migrations"); err != nil {
+		if _, err := tx.ExecContext(d.ctx, d.queries.clear); err != nil {
 			return err
 		}
 		if version >= 0 || dirty {
-			_, err := tx.ExecContext(d.ctx, "INSERT INTO schema_migrations(version, dirty) VALUES ($1, $2)", version, dirty)
+			_, err := tx.ExecContext(d.ctx, d.queries.write, version, dirty)
 			return err
 		}
 		return nil

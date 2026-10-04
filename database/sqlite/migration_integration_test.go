@@ -125,7 +125,7 @@ func TestMigrationResetReapplyFailureIsSurfaced(t *testing.T) {
 
 func TestMigrationWrapsMigratorCreationErrors(t *testing.T) {
 	db := newMigrationDB(t)
-	cfg := migration.Config{DB: db, FS: migrationsFS, Path: "testdata/migrations", Driver: func(context.Context, *sql.DB) (migratedb.Driver, error) {
+	cfg := migration.Config{DB: db, FS: migrationsFS, Path: "testdata/migrations", Driver: func(context.Context, *sql.DB, string) (migratedb.Driver, error) {
 		return nil, errors.New("driver failed")
 	}}
 	if err := cfg.Up(context.Background()); err == nil || !strings.Contains(err.Error(), "create database driver") {

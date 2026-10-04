@@ -157,12 +157,9 @@ func TestManagerExchangeAndUserInfo_IDTokenFallback(t *testing.T) {
 	// Fail userinfo to trigger fallback
 	srv.FailUserInfo(true)
 	// Set ID token claims on the token response
-	srv.SetIDTokenClaims(map[string]any{
-		"sub":            "apple-user-456",
-		"email":          "apple@example.com",
-		"email_verified": true,
-		"name":           "Apple User",
-	})
+	if err := srv.SetIDTokenClaims([]byte(`{"sub":"apple-user-456","email":"apple@example.com","email_verified":true,"name":"Apple User"}`)); err != nil {
+		t.Fatal(err)
+	}
 
 	// Apple-like provider: no userinfo endpoint, uses ID token
 	p := NewGeneric(GenericConfig{

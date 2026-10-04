@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,19 +21,45 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// DriverFunc creates an owned migration session. Every driver operation must use the supplied context; Close must release only the session, never the shared pool.
-type DriverFunc func(context.Context, *sql.DB) (migratedb.Driver, error)
+// DriverFunc creates an owned migration session that records its version in versionTable. Every driver operation must use the supplied context; Close must release only the session, never the shared pool.
+type DriverFunc func(ctx context.Context, pool *sql.DB, versionTable string) (migratedb.Driver, error)
 
 // Config defines a synchronous migration run. SQL files use VERSION_name.up.sql and VERSION_name.down.sql. Timeout defaults to two minutes; each file is limited to 1 MiB.
+//
+// VersionTable isolates independently owned migration sets that share one database: each set keeps its own version sequence. It defaults to DefaultVersionTable and must be DefaultVersionTable or end in "_schema_migrations".
 type Config struct {
-	DB      *gorm.DB
-	FS      fs.FS
-	Path    string
-	Driver  DriverFunc
-	Timeout time.Duration
+	DB           *gorm.DB
+	FS           fs.FS
+	Path         string
+	Driver       DriverFunc
+	Timeout      time.Duration
+	VersionTable string
 }
 
-const maxMigrationBytes = 1 << 20
+// DefaultVersionTable stores the application's migration version.
+const DefaultVersionTable = "schema_migrations"
+
+const (
+	maxMigrationBytes  = 1 << 20
+	versionTableSuffix = "_" + DefaultVersionTable
+)
+
+var versionTablePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+// IsVersionTable reports whether name follows the migration version-table naming convention.
+func IsVersionTable(name string) bool {
+	return versionTablePattern.MatchString(name) && (name == DefaultVersionTable || strings.HasSuffix(name, versionTableSuffix))
+}
+
+func (c Config) versionTable() (string, error) {
+	if c.VersionTable == "" {
+		return DefaultVersionTable, nil
+	}
+	if !IsVersionTable(c.VersionTable) {
+		return "", apperrors.InvalidInput("version_table", `version table must be a lowercase identifier of at most 63 characters ending in "schema_migrations"`)
+	}
+	return c.VersionTable, nil
+}
 
 // Up applies pending migrations in source order.
 func (c Config) Up(ctx context.Context) error {
@@ -93,7 +120,7 @@ func (c Config) Ready(ctx context.Context, expected uint) error {
 	return nil
 }
 
-// Reset destroys all application tables and reapplies migrations. Use only in development and tests.
+// Reset destroys every table in the database, including other migration sets and their version tables, then reapplies this set. Use only in development and tests.
 func (c Config) Reset(ctx context.Context) error {
 	return c.run(ctx, "migrate reset", func(s source.Driver, d migratedb.Driver) error {
 		if err := d.Drop(); err != nil {
@@ -110,12 +137,16 @@ func (c Config) run(ctx context.Context, operation string, fn func(source.Driver
 	if c.DB == nil || c.Driver == nil || c.FS == nil || c.Path == "" || c.Timeout < 0 {
 		return apperrors.InvalidInput("migration", "database, source, path and driver are required; timeout cannot be negative")
 	}
+	versionTable, err := c.versionTable()
+	if err != nil {
+		return err
+	}
 	timeout := c.Timeout
 	if timeout == 0 {
 		timeout = 2 * time.Minute
 	}
-	_, err := resilience.Execute(ctx, resilience.NewPolicy().WithTimeout(timeout), func(ctx context.Context) (struct{}, error) {
-		return struct{}{}, c.execute(ctx, fn)
+	_, err = resilience.Execute(ctx, resilience.NewPolicy().WithTimeout(timeout), func(ctx context.Context) (struct{}, error) {
+		return struct{}{}, c.execute(ctx, versionTable, fn)
 	})
 	if err != nil {
 		return fmt.Errorf("%s: %w", operation, err)
@@ -123,7 +154,7 @@ func (c Config) run(ctx context.Context, operation string, fn func(source.Driver
 	return nil
 }
 
-func (c Config) execute(ctx context.Context, fn func(source.Driver, migratedb.Driver) error) (err error) {
+func (c Config) execute(ctx context.Context, versionTable string, fn func(source.Driver, migratedb.Driver) error) (err error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
@@ -136,7 +167,7 @@ func (c Config) execute(ctx context.Context, fn func(source.Driver, migratedb.Dr
 	if err != nil {
 		return err
 	}
-	d, err := c.Driver(ctx, pool)
+	d, err := c.Driver(ctx, pool, versionTable)
 	if err != nil {
 		return fmt.Errorf("create database driver: %w", err)
 	}

@@ -1,0 +1,46 @@
+{
+  "protocol": "gokit.session.v1",
+  "readiness": {
+    "method": "GET",
+    "path": "/_test/ready",
+    "status": 200,
+    "schemaVersion": 1,
+    "requiredIdentityFields": ["protocol", "runId", "buildId", "schemaVersion"]
+  },
+  "rpc": {
+    "procedure": "/gokit.auth.v1.IdentityService/WhoAmI",
+    "input": "google.protobuf.Empty",
+    "output": "google.protobuf.StringValue",
+    "result": "user:fixture-user"
+  },
+  "events": {
+    "method": "GET",
+    "path": "/events",
+    "contentType": "text/event-stream",
+    "localReleaseMs": 1000,
+    "crossInstanceReleaseMs": 4000
+  },
+  "browser": {
+    "cookie": {
+      "name": "__Host-session",
+      "path": "/",
+      "secure": true,
+      "httpOnly": true,
+      "sameSite": "Strict",
+      "domain": ""
+    },
+    "csrfHeader": "X-CSRF-Token",
+    "login": "/auth/login",
+    "status": "/auth/session",
+    "logout": "/auth/logout",
+    "refreshEndpoint": null,
+    "resetBeforeSignIn": true,
+    "separateBrowserContextPerWorker": true
+  },
+  "control": {
+    "header": "X-Test-Control",
+    "reset": "/_test/reset",
+    "scenario": "/_test/scenario",
+    "scenarios": ["unavailable-store", "healthy-store", "expired", "hold-status", "release-status"]
+  }
+}

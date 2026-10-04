@@ -20,8 +20,9 @@ func (SystemClock) Now() time.Time {
 
 // FakeClock is a deterministic clock for tests.
 type FakeClock struct {
-	mu  sync.Mutex
-	now time.Time
+	mu     sync.Mutex
+	now    time.Time
+	timers map[*fakeTimer]time.Time
 }
 
 // NewFakeClock creates a FakeClock starting at the given time. If zero,
@@ -30,7 +31,7 @@ func NewFakeClock(initial time.Time) *FakeClock {
 	if initial.IsZero() {
 		initial = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	}
-	return &FakeClock{now: initial}
+	return &FakeClock{now: initial, timers: make(map[*fakeTimer]time.Time)}
 }
 
 // Now returns the fake clock's current time.
@@ -45,6 +46,7 @@ func (c *FakeClock) Advance(d time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.now = c.now.Add(d)
+	c.fireTimers()
 }
 
 // Set sets the clock to an absolute time.
@@ -52,4 +54,5 @@ func (c *FakeClock) Set(t time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.now = t
+	c.fireTimers()
 }

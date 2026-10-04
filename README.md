@@ -45,6 +45,7 @@ CI still runs full-workspace validation; on pull requests the `changes` job also
 - **Lifecycle-managed components** — uniform `Component` interface (start / stop / health) and `bootstrap.App` orchestrator with graceful shutdown.
 - **Production resilience** — circuit breakers, retries with backoff + jitter, bulkheads, rate limiting, OpenTelemetry tracing & metrics.
 - **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`, and `Duplex` traits with composable middleware and sink combinators.
+- **Typed authentication** — one principal across HTTP, Connect and SSE, with separate application authorization and credential ceilings. [Opaque browser sessions](auth/README.md) keep credentials in secure host-only cookies and validate database state on every request; automation uses header API keys.
 - **Per-module versioning** — every module has its own matching tag, while normal releases are cut in lock-step for convenience. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
 - **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust).
 

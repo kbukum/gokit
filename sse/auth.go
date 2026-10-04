@@ -4,44 +4,50 @@ import (
 	"context"
 	stderrors "errors"
 	"net/http"
-	"strings"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/security"
 	"github.com/kbukum/gokit/util"
 )
 
-// Authenticator verifies a header or cookie credential before opening a stream. Its identity is genuinely opaque and owned by the injected authentication provider, not by this transport.
-type Authenticator interface {
-	Authenticate(r *http.Request) (identity any, err error)
+// Authenticator verifies a header or cookie credential before opening a stream and returns the application's typed identity.
+type Authenticator[T any] interface {
+	Authenticate(*http.Request) (T, error)
 }
 
 // AuthenticatorFunc adapts an authentication function.
-type AuthenticatorFunc func(*http.Request) (any, error)
+type AuthenticatorFunc[T any] func(*http.Request) (T, error)
 
-func (f AuthenticatorFunc) Authenticate(r *http.Request) (any, error) { return f(r) }
+func (f AuthenticatorFunc[T]) Authenticate(r *http.Request) (T, error) {
+	if f == nil {
+		var zero T
+		return zero, apperrors.Unauthorized("")
+	}
+	return f(r)
+}
 
-// TokenValidator is the structural bearer-token validation seam. Opaque claims are interpreted by the application's authorization resolver.
-type TokenValidator interface {
-	ValidateToken(token string) (any, error)
+// TokenValidator is the context-aware structural bearer-token validation seam. The application's authorization resolver interprets its typed identity.
+type TokenValidator[T any] interface {
+	ValidateToken(context.Context, string) (T, error)
 }
 
 // BearerAuthenticator accepts exactly one authorization-header token. Missing, invalid, or query-only tokens fail closed. Validation diagnostics remain in the cause, never the public message.
-func BearerAuthenticator(v TokenValidator) Authenticator {
-	return AuthenticatorFunc(func(r *http.Request) (any, error) {
+func BearerAuthenticator[T any](v TokenValidator[T]) Authenticator[T] {
+	return AuthenticatorFunc[T](func(r *http.Request) (T, error) {
+		var zero T
 		if util.IsNil(v) {
-			return nil, WithChallenge(apperrors.Unauthorized(""), security.BearerAuthScheme)
+			return zero, WithChallenge(apperrors.Unauthorized(""), security.BearerAuthScheme)
 		}
-		fields := strings.Fields(r.Header.Get("Authorization"))
-		if len(fields) != 2 || !strings.EqualFold(fields[0], security.BearerAuthScheme) {
-			return nil, WithChallenge(apperrors.Unauthorized(""), security.BearerAuthScheme)
+		token, present, err := security.ParseBearerHeader(r.Header)
+		if err != nil || !present {
+			return zero, WithChallenge(apperrors.Unauthorized("").WithCause(err), security.BearerAuthScheme)
 		}
-		claims, err := v.ValidateToken(fields[1])
+		claims, err := v.ValidateToken(r.Context(), token)
 		if err != nil {
-			return nil, WithChallenge(apperrors.Unauthorized("").WithCause(err), security.BearerAuthScheme)
+			return zero, WithChallenge(apperrors.Unauthorized("").WithCause(err), security.BearerAuthScheme)
 		}
 		if util.IsNil(claims) {
-			return nil, WithChallenge(apperrors.Unauthorized(""), security.BearerAuthScheme)
+			return zero, WithChallenge(apperrors.Unauthorized(""), security.BearerAuthScheme)
 		}
 		return claims, nil
 	})
@@ -75,14 +81,14 @@ func authChallengeFor(err error) string {
 	return ""
 }
 
-type identityKey struct{}
+type identityKey[T any] struct{}
 
-func withIdentity(ctx context.Context, identity any) context.Context {
-	return context.WithValue(ctx, identityKey{}, identity)
+func withIdentity[T any](ctx context.Context, identity T) context.Context {
+	return context.WithValue(ctx, identityKey[T]{}, identity)
 }
 
-// IdentityFromContext returns the opaque identity supplied to an Authenticated authorization resolver.
-func IdentityFromContext(ctx context.Context) (any, bool) {
-	v := ctx.Value(identityKey{})
-	return v, !util.IsNil(v)
+// IdentityFromContext returns the identity supplied to an Authenticated authorization resolver. Distinct identity types have distinct context keys.
+func IdentityFromContext[T any](ctx context.Context) (T, bool) {
+	v, ok := ctx.Value(identityKey[T]{}).(T)
+	return v, ok && !util.IsNil(v)
 }

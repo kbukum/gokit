@@ -217,6 +217,16 @@ linters:
               desc: "protobuf error details belong in errors/rpc, not core errors or validation."
             - pkg: github.com/kbukum/gokit/errors/rpc
               desc: "core error and validation types must not import the wire adapter."
+        auth-core-no-database:
+          list-mode: lax
+          files:
+            - "$gokit/auth/**/*.go"
+            - "!$gokit/auth/session/database/**/*.go"
+            - "!$gokit/auth/testhost/**/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/kbukum/gokit/database
+              desc: "auth core injects session.Store; only the opt-in session database adapter may consume its L6 database peer."
 
 issues:
   max-issues-per-linter: 0

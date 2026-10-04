@@ -5,6 +5,7 @@
        release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump examples
 
 GOMOD := ./gomod.sh
+AUTH_HOST_ARGS ?=
 # Candidate Toven binary for the read-only self-hosting canary. Defaults to a
 # `toven` on PATH; point it at a freshly built binary to dogfood a candidate,
 # e.g. `make TOVEN=../toven/target/release/toven toven-canary`.
@@ -26,6 +27,21 @@ _FILTERED = $(strip $(M)$(W))
 
 ## Default target
 all: check
+
+.PHONY: auth-host-build auth-host auth-integration
+
+## Build the test-only HTTPS host; production auth/server modules never import it.
+auth-host-build:
+	@mkdir -p auth/testhost/target
+	@go build -o auth/testhost/target/auth-host ./auth/testhost/cmd/auth-host
+
+## Run one owned host with explicit TLS, fixture, state and readiness identity flags.
+auth-host: auth-host-build
+	@auth/testhost/target/auth-host $(AUTH_HOST_ARGS)
+
+## Real production-adapter session and process proof. Docker is required for PostgreSQL.
+auth-integration: auth-host-build
+	@GOKIT_AUTH_HOST_BINARY="$(CURDIR)/auth/testhost/target/auth-host" go test ./auth/... ./auth/session/database/... ./auth/testhost/... -tags=integration -race -shuffle=on -count=1 -timeout=10m
 
 ## Build packages. Unfiltered → Toven (whole workspace); M=/W= → native gomod.sh.
 build:

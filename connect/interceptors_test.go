@@ -307,8 +307,11 @@ func TestComposedChain(t *testing.T) {
 
 	t.Run("auth failure stays unauthenticated", func(t *testing.T) {
 		t.Parallel()
-		validator := stubTokenValidator{err: stderrors.New("bad")}
-		handler := normalizing.WrapUnary(TokenAuthInterceptor(validator).WrapUnary(unaryHandler(okResp(), nil)))
+		auth, buildErr := AuthInterceptor(getTestClaims)
+		if buildErr != nil {
+			t.Fatal(buildErr)
+		}
+		handler := normalizing.WrapUnary(auth.WrapUnary(unaryHandler(okResp(), nil)))
 		_, err := handler(context.Background(), newProtoRequest())
 		if connectrpc.CodeOf(err) != connectrpc.CodeUnauthenticated {
 			t.Fatalf("code = %v, want unauthenticated", connectrpc.CodeOf(err))
@@ -327,17 +330,6 @@ func TestComposedChain(t *testing.T) {
 			t.Fatal("expected violations to survive the chain")
 		}
 	})
-}
-
-type stubTokenValidator struct {
-	err error
-}
-
-func (s stubTokenValidator) ValidateToken(string) (any, error) {
-	if s.err != nil {
-		return nil, s.err
-	}
-	return struct{}{}, nil
 }
 
 // ---------------------------------------------------------------------------
