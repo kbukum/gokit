@@ -18,11 +18,13 @@ import (
 // Component is a test server component backed by httptest.Server.
 // It implements both component.Component and testutil.TestComponent.
 type Component struct {
-	srv     *server.Server
-	ts      *httptest.Server
-	log     *logging.Logger
-	started bool
-	mu      sync.RWMutex
+	srv        *server.Server
+	ts         *httptest.Server
+	log        *logging.Logger
+	started    bool
+	configured bool
+	mu         sync.RWMutex
+	lifecycle  sync.Mutex
 }
 
 var (
@@ -77,31 +79,42 @@ func (c *Component) BaseURL() string {
 
 func (c *Component) Name() string { return "server-test" }
 
-func (c *Component) Start(_ context.Context) error {
+func (c *Component) Start(ctx context.Context) error {
+	c.lifecycle.Lock()
+	defer c.lifecycle.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	if c.started {
 		return fmt.Errorf("component already started")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// Apply middleware and get the final handler
-	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
+	if !c.configured {
+		c.srv.ApplyMiddleware() //nolint:contextcheck // route setup has no request-scoped operation
+		c.configured = true
+	}
 	c.ts = httptest.NewServer(c.srv.Handler())
 	c.started = true
 	return nil
 }
 
-func (c *Component) Stop(_ context.Context) error {
+func (c *Component) Stop(ctx context.Context) error {
+	c.lifecycle.Lock()
+	defer c.lifecycle.Unlock()
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if !c.started || c.ts == nil {
+		c.mu.Unlock()
 		return nil
 	}
-	c.ts.Close()
+	srv := c.ts
+	c.ts = nil
 	c.started = false
-	return nil
+	c.mu.Unlock()
+	return testutil.CloseHTTPServer(ctx, srv)
 }
 
 func (c *Component) Health(_ context.Context) component.Health {
@@ -115,8 +128,10 @@ func (c *Component) Health(_ context.Context) component.Health {
 
 // --- testutil.TestComponent ---
 
-// Reset recreates the server with a fresh Gin engine and routes.
+// Reset preserves this stateless server's handlers and origin. Reset application fixtures separately, with requests quiesced; use Stop/Start for an owned restart.
 func (c *Component) Reset(ctx context.Context) error {
+	c.lifecycle.Lock()
+	defer c.lifecycle.Unlock()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -124,19 +139,7 @@ func (c *Component) Reset(ctx context.Context) error {
 		return fmt.Errorf("component not started")
 	}
 
-	// Close existing
-	if c.ts != nil {
-		c.ts.Close()
-	}
-
-	// Recreate server
-	cfg := &server.Config{Host: "127.0.0.1", Port: 0, Enabled: true}
-	cfg.ApplyDefaults()
-	c.srv = server.New(cfg, c.log) //nolint:contextcheck // default logger construction has no request-scoped operation
-
-	c.srv.ApplyMiddleware() //nolint:contextcheck // default logger construction has no request-scoped operation
-	c.ts = httptest.NewServer(c.srv.Handler())
-	return nil
+	return ctx.Err()
 }
 
 // Snapshot is a no-op for the server component (servers are stateless).

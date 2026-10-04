@@ -93,4 +93,6 @@ toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` 
 
 For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`, `check` (vet), and `test -- -race -count=1 -shuffle=on` on the affected modules. Escalate to a full-tree run only when the affected set is genuinely tree-wide or you are preparing a release.
 
+For test-environment/runtime ownership changes, also run the real loopback, file-backed SQLite, owned-process, and required Postgres consumers described in [`testutil/README.md`](../../../testutil/README.md). Declare numeric setup, output, fixture, drain, and cleanup budgets before implementation. Unit doubles and the fake migration driver prove failure orchestration, not production adapters. Missing Docker or a forced/failed teardown cannot certify acceptance. Record final source identity, exact commands, failure cases, measured limits, and resource cleanup; leave incomplete prerequisites explicitly blocked.
+
 Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.

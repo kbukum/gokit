@@ -7,6 +7,7 @@ require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/server v0.3.0-alpha.1
 	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
+	go.uber.org/goleak v1.3.0
 )
 
 require (

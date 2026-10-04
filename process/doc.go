@@ -18,6 +18,17 @@
 // startup failure carries a machine-readable classification retrievable via StartErrorKind.
 // The InterruptGroup, TerminateGroup, and KillGroup helpers signal a command's process group.
 //
+// Persistent lifetime capture defaults to 64 KiB per stream. Shutdown returns forced
+// termination as an error, distinguishes cancellation/deadline, and exposes Complete
+// for group release and completed Wait/output collection. An unreaped leader reserves
+// its original group identity until cleanup; released groups are never reacquired by
+// numeric PID. Incomplete cleanup stays owned for retry, preserving historical errors.
+// StartPersistent can return an owning run with an error when failed-start cleanup is
+// incomplete; callers must retain and clean that lease.
+// Supervisor reports every child across partial retries. Wait observes exit without
+// stopping a live child, then drains and reaps. Owned observation supports Linux,
+// Darwin, and Windows; Windows termination is forced and bare-PID cleanup unsupported.
+//
 // Pseudoterminal (PTY) execution is intentionally not provided here: it is a heavy, Unix-only
 // capability that would pull a platform dependency into the root module.
 package process

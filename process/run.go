@@ -66,6 +66,7 @@ func Run(ctx context.Context, cmd Command) (*Result, error) {
 	result := &Result{
 		ExitCode: exitCodeOf(c.ProcessState),
 		Duration: duration,
+		Forced:   wasForced(c.ProcessState),
 	}
 	if stdout != nil {
 		result.Stdout = stdout.Bytes()

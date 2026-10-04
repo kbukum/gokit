@@ -16,7 +16,7 @@ func TestLoadFixture(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
 
 	// Load fixture data
-	err := LoadFixture(db, "users", []map[string]any{
+	err := LoadFixture(t.Context(), db, "users", []map[string]any{
 		{"name": "Alice", "email": "alice@example.com"},
 		{"name": "Bob", "email": "bob@example.com"},
 	})
@@ -47,7 +47,7 @@ func TestLoadFixture_EmptyData(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
 
 	// Should handle empty data gracefully
-	err := LoadFixture(db, "users", []map[string]any{})
+	err := LoadFixture(t.Context(), db, "users", []map[string]any{})
 	if err != nil {
 		t.Errorf("LoadFixture() with empty data failed: %v", err)
 	}
@@ -66,7 +66,7 @@ func TestLoadFixture_InvalidTable(t *testing.T) {
 	db := tc.DB()
 
 	// Should fail for non-existent table
-	err := LoadFixture(db, "nonexistent", []map[string]any{
+	err := LoadFixture(t.Context(), db, "nonexistent", []map[string]any{
 		{"name": "Alice"},
 	})
 	if err == nil {
@@ -93,7 +93,7 @@ func TestTruncateTable(t *testing.T) {
 	}
 
 	// Truncate table
-	if err := TruncateTable(db, "users"); err != nil {
+	if err := TruncateTable(t.Context(), db, "users"); err != nil {
 		t.Fatalf("TruncateTable() failed: %v", err)
 	}
 
@@ -111,7 +111,7 @@ func TestTruncateTable_InvalidTable(t *testing.T) {
 	db := tc.DB()
 
 	// Should fail gracefully for non-existent table
-	err := TruncateTable(db, "nonexistent")
+	err := TruncateTable(t.Context(), db, "nonexistent")
 	if err == nil {
 		t.Error("TruncateTable() with invalid table should fail")
 	}
@@ -130,7 +130,7 @@ func TestTruncateAllTables(t *testing.T) {
 	db.Exec("INSERT INTO posts (title) VALUES (?)", "Post 1")
 
 	// Truncate all tables
-	if err := TruncateAllTables(db); err != nil {
+	if err := TruncateAllTables(t.Context(), db); err != nil {
 		t.Fatalf("TruncateAllTables() failed: %v", err)
 	}
 
@@ -157,13 +157,13 @@ func TestTableExists(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY)")
 
 	// Should return true for existing table
-	if !TableExists(db, "users") {
-		t.Error("TableExists(users) = false, want true")
+	if exists, err := TableExists(t.Context(), db, "users"); err != nil || !exists {
+		t.Errorf("TableExists(users) = %v, %v", exists, err)
 	}
 
 	// Should return false for non-existent table
-	if TableExists(db, "nonexistent") {
-		t.Error("TableExists(nonexistent) = true, want false")
+	if exists, err := TableExists(t.Context(), db, "nonexistent"); err != nil || exists {
+		t.Errorf("TableExists(nonexistent) = %v, %v", exists, err)
 	}
 }
 
@@ -174,7 +174,7 @@ func TestGetTableNames(t *testing.T) {
 	db := tc.DB()
 
 	// Initially no tables
-	tables, err := GetTableNames(db)
+	tables, err := GetTableNames(t.Context(), db)
 	if err != nil {
 		t.Fatalf("GetTableNames() failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestGetTableNames(t *testing.T) {
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY)")
 	db.Exec("CREATE TABLE posts (id INTEGER PRIMARY KEY)")
 
-	tables, err = GetTableNames(db)
+	tables, err = GetTableNames(t.Context(), db)
 	if err != nil {
 		t.Fatalf("GetTableNames() failed: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestCountRows(t *testing.T) {
 	db.Exec("INSERT INTO users (name) VALUES (?)", "Bob")
 	db.Exec("INSERT INTO users (name) VALUES (?)", "Charlie")
 
-	count, err := CountRows(db, "users")
+	count, err := CountRows(t.Context(), db, "users")
 	if err != nil {
 		t.Fatalf("CountRows() failed: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestCountRows_EmptyTable(t *testing.T) {
 
 	db.Exec("CREATE TABLE users (id INTEGER PRIMARY KEY)")
 
-	count, err := CountRows(db, "users")
+	count, err := CountRows(t.Context(), db, "users")
 	if err != nil {
 		t.Fatalf("CountRows() failed: %v", err)
 	}
@@ -255,7 +255,7 @@ func TestCountRows_InvalidTable(t *testing.T) {
 
 	db := tc.DB()
 
-	_, err := CountRows(db, "nonexistent")
+	_, err := CountRows(t.Context(), db, "nonexistent")
 	if err == nil {
 		t.Error("CountRows(nonexistent) should fail")
 	}

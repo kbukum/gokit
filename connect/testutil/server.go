@@ -22,10 +22,11 @@ var (
 // Mount Connect handlers before starting the server,
 // then use BaseURL() to create real ConnectRPC clients for testing.
 type Server struct {
-	mux     *http.ServeMux
-	ts      *httptest.Server
-	started bool
-	mu      sync.RWMutex
+	mux       *http.ServeMux
+	ts        *httptest.Server
+	started   bool
+	mu        sync.RWMutex
+	lifecycle sync.Mutex
 }
 
 // NewServer creates a new test Connect server.
@@ -72,12 +73,17 @@ func (s *Server) Client() *http.Client {
 
 func (s *Server) Name() string { return "connect-test-server" }
 
-func (s *Server) Start(_ context.Context) error {
+func (s *Server) Start(ctx context.Context) error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.started {
 		return fmt.Errorf("connect test server already started")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	s.ts = httptest.NewUnstartedServer(s.mux)
@@ -87,17 +93,19 @@ func (s *Server) Start(_ context.Context) error {
 	return nil
 }
 
-func (s *Server) Stop(_ context.Context) error {
+func (s *Server) Stop(ctx context.Context) error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if !s.started || s.ts == nil {
+		s.mu.Unlock()
 		return nil
 	}
-	s.ts.Close()
+	srv := s.ts
 	s.ts = nil
 	s.started = false
-	return nil
+	s.mu.Unlock()
+	return testutil.CloseHTTPServer(ctx, srv)
 }
 
 func (s *Server) Health(_ context.Context) component.Health {
@@ -111,17 +119,17 @@ func (s *Server) Health(_ context.Context) component.Health {
 
 // --- testutil.TestComponent ---
 
-// Reset stops the existing server and creates a new one with a fresh mux.
+// Reset preserves this stateless server's mounted handlers and origin. Reset application fixtures separately, with requests quiesced; use Stop/Start for an owned restart.
 func (s *Server) Reset(ctx context.Context) error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.ts != nil {
-		s.ts.Close()
+	if !s.started {
+		return fmt.Errorf("connect test server not started")
 	}
-	s.mux = http.NewServeMux()
-	s.started = false
-	return nil
+	return ctx.Err()
 }
 
 // Snapshot is a no-op (servers are stateless).

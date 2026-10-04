@@ -3,8 +3,10 @@ package process
 import (
 	"context"
 	stderrors "errors"
+	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 
@@ -22,17 +24,40 @@ import (
 type Supervisor struct {
 	policy LifecyclePolicy
 
-	mu       sync.Mutex
-	nextID   int
-	children map[int]*trackedChild
+	mu         sync.Mutex
+	nextID     int
+	children   map[int]*trackedChild
+	shutdownMu sync.Mutex
+	lastReport ShutdownReport
+	lastErr    error
+	outcomes   map[int]ChildOutcome
+	errors     map[int]error
+	retrying   bool
 }
 
 type trackedChild struct {
-	cmd *exec.Cmd // nil for pid-only tracking
-	pid int
+	cmd         *exec.Cmd // nil for pid-only tracking
+	pid         int
+	reaped      bool
+	owned       *ownedChild
+	outcome     ShutdownOutcome
+	shutdownErr error
 }
 
-// TrackHandle identifies a tracked child so it can be released after normal completion.
+// ChildOutcome reports one child's shutdown. Reaped is false for signal-only TrackPid registrations.
+type ChildOutcome struct {
+	PID    int
+	Reaped bool
+	ShutdownOutcome
+}
+
+// ShutdownReport records the outcomes of a supervised teardown in registration order.
+type ShutdownReport struct {
+	Reason   string
+	Children []ChildOutcome
+}
+
+// TrackHandle identifies a tracked child for explicit ownership transfer before cleanup.
 type TrackHandle int
 
 // NewSupervisor creates a Supervisor governed by the given lifecycle policy. A zero-value
@@ -48,10 +73,10 @@ func NewSupervisor(policy LifecyclePolicy) *Supervisor {
 }
 
 // Track registers a started command for supervised shutdown and hands its reaping to the
-// supervisor. The returned handle can be passed to Release once the caller has observed
-// the child exit on its own. Track returns a zero handle when cmd has not started.
+// supervisor. The caller must successfully Release before calling cmd.Wait itself.
+// Track returns a zero handle when cmd has not started or has already been reaped.
 func (s *Supervisor) Track(cmd *exec.Cmd) TrackHandle {
-	if cmd == nil || cmd.Process == nil {
+	if cmd == nil || cmd.Process == nil || cmd.ProcessState != nil {
 		return 0
 	}
 	return s.add(&trackedChild{cmd: cmd, pid: cmd.Process.Pid})
@@ -69,18 +94,30 @@ func (s *Supervisor) TrackPid(pid int) TrackHandle {
 func (s *Supervisor) add(child *trackedChild) TrackHandle {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for id, registered := range s.children {
+		if child.cmd != nil && registered.cmd == child.cmd {
+			return TrackHandle(id)
+		}
+	}
 	s.nextID++
 	id := s.nextID
 	s.children[id] = child
 	return TrackHandle(id)
 }
 
-// Release removes a tracked child from supervision, for use when the caller has already
-// reaped it. It is a no-op for an unknown or zero handle.
-func (s *Supervisor) Release(handle TrackHandle) {
+// Release transfers a tracked child's ownership back to the caller before cleanup starts.
+// Once cleanup owns the command, Release returns an error rather than abandoning it.
+// It is a no-op for an unknown or zero handle.
+func (s *Supervisor) Release(handle TrackHandle) error {
+	s.shutdownMu.Lock()
+	defer s.shutdownMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if child := s.children[int(handle)]; child != nil && child.owned != nil {
+		return goerrors.InvalidInput("handle", "cleanup owns this command; retry Shutdown before releasing")
+	}
 	delete(s.children, int(handle))
+	return nil
 }
 
 // Len reports the number of children currently tracked.
@@ -91,87 +128,102 @@ func (s *Supervisor) Len() int {
 }
 
 // Shutdown terminates every still-tracked child and drains each to completion. It is
-// idempotent and returns the joined error of any child that could not be torn down. The
-// context bounds the whole operation; when it is done, remaining children are force-killed.
-func (s *Supervisor) Shutdown(ctx context.Context, reason string) error {
+// idempotent and returns each child's outcome plus joined failures, including forced termination. The context bounds graceful waiting; remaining owned children are then force-killed and reaped.
+func (s *Supervisor) Shutdown(ctx context.Context, reason string) (ShutdownReport, error) {
+	s.shutdownMu.Lock()
+	defer s.shutdownMu.Unlock()
 	s.mu.Lock()
-	children := s.children
-	s.children = make(map[int]*trackedChild)
+	children := maps.Clone(s.children)
 	s.mu.Unlock()
 
 	if len(children) == 0 {
-		return nil
+		return s.lastReport, s.lastErr
 	}
-
-	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		errs []error
-	)
-	for _, child := range children {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	ids := make([]int, 0, len(children))
+	for id := range children {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	if !s.retrying {
+		s.outcomes = make(map[int]ChildOutcome)
+		s.errors = make(map[int]error)
+	} else {
+		reason = s.lastReport.Reason
+	}
+	results := make([]ChildOutcome, len(ids))
+	childErrors := make([]error, len(ids))
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		child := children[id]
 		wg.Add(1)
-		go func(child *trackedChild) {
+		go func() {
 			defer wg.Done()
-			if err := s.terminate(ctx, child); err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
+			outcome, err := s.terminate(ctx, child)
+			results[i] = ChildOutcome{PID: child.pid, Reaped: child.reaped, ShutdownOutcome: outcome}
+			childErrors[i] = err
+			if child.cmd == nil || outcome.Complete {
+				s.mu.Lock()
+				delete(s.children, id)
+				s.mu.Unlock()
 			}
-		}(child)
+		}()
 	}
 	wg.Wait()
-
-	if len(errs) > 0 {
-		return goerrors.Internal(stderrors.Join(errs...))
+	for i, id := range ids {
+		s.outcomes[id], s.errors[id] = results[i], childErrors[i]
 	}
-	return nil
+	ids = ids[:0]
+	for id := range s.outcomes {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	report := ShutdownReport{Reason: reason, Children: make([]ChildOutcome, len(ids))}
+	errs := make([]error, len(ids))
+	for i, id := range ids {
+		report.Children[i], errs[i] = s.outcomes[id], s.errors[id]
+	}
+	s.lastReport, s.lastErr = report, stderrors.Join(errs...)
+	s.mu.Lock()
+	s.retrying = len(s.children) != 0
+	s.mu.Unlock()
+	return s.lastReport, s.lastErr
 }
 
 // terminate signals one child, waits the grace period, and escalates to a force kill.
-func (s *Supervisor) terminate(ctx context.Context, child *trackedChild) error {
+func (s *Supervisor) terminate(ctx context.Context, child *trackedChild) (ShutdownOutcome, error) {
 	group := s.policy.targetsGroup()
 	grace := s.policy.grace()
 
 	if child.cmd != nil {
-		return s.terminateOwned(ctx, child.cmd, group, grace)
+		if child.owned == nil {
+			child.owned = newOwnedChild(child.cmd)
+		}
+		outcome, err := shutdownOwned(ctx, child.owned, s.policy, grace)
+		preserveShutdownFlags(child.outcome.Result, outcome.Result)
+		err = stderrors.Join(child.shutdownErr, err)
+		select {
+		case <-child.owned.done:
+			child.reaped = true
+			err = stderrors.Join(err, unexpectedWaitError(child.owned.waitErr))
+		default:
+		}
+		child.outcome, child.shutdownErr = outcome, err
+		return outcome, err
 	}
 	return s.terminatePid(ctx, child.pid, group, grace)
 }
 
-// terminateOwned tears down a child the supervisor owns and reaps it via Wait.
-func (s *Supervisor) terminateOwned(ctx context.Context, cmd *exec.Cmd, group bool, grace time.Duration) error {
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-
-	signal := TerminateGroup
-	if !group {
-		signal = func(c *exec.Cmd) error { return c.Process.Kill() }
-	}
-	if err := signal(cmd); err != nil && !isExited(err) {
-		_ = KillGroup(cmd) // fall back to a hard kill when graceful signaling fails
-	}
-
-	timer := time.NewTimer(grace)
-	defer timer.Stop()
-
-	select {
-	case <-done:
-		return nil
-	case <-timer.C:
-	case <-ctx.Done():
-	}
-
-	if s.policy.KillAfterGrace || ctx.Err() != nil {
-		_ = KillGroup(cmd)
-	}
-	<-done
-	return nil
-}
-
 // terminatePid tears down a pid-only child by signaling and polling liveness.
-func (s *Supervisor) terminatePid(ctx context.Context, pid int, group bool, grace time.Duration) error {
+func (s *Supervisor) terminatePid(ctx context.Context, pid int, group bool, grace time.Duration) (ShutdownOutcome, error) {
+	outcome := ShutdownOutcome{Result: &Result{}}
 	if err := terminatePIDGroup(pid, group); err != nil {
-		return err
+		if isExited(err) {
+			outcome.AlreadyExited = true
+			return outcome, nil
+		}
+		return outcome, err
 	}
 
 	deadline := time.NewTimer(grace)
@@ -183,16 +235,18 @@ func (s *Supervisor) terminatePid(ctx context.Context, pid int, group bool, grac
 		select {
 		case <-poll.C:
 			if !pidGroupAlive(pid, group) {
-				return nil
+				return outcome, nil
 			}
 		case <-deadline.C:
 			if s.policy.KillAfterGrace {
-				_ = killPIDGroup(pid, group)
+				outcome.Result.Forced = true
+				return outcome, stderrors.Join(killPIDGroup(pid, group), outcome.Result.Check())
 			}
-			return nil
 		case <-ctx.Done():
-			_ = killPIDGroup(pid, group)
-			return nil
+			outcome.Result.Forced = true
+			outcome.Result.Canceled = stderrors.Is(ctx.Err(), context.Canceled)
+			outcome.Result.TimedOut = stderrors.Is(ctx.Err(), context.DeadlineExceeded)
+			return outcome, stderrors.Join(killPIDGroup(pid, group), ctx.Err())
 		}
 	}
 }

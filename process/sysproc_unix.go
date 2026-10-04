@@ -4,9 +4,25 @@ package process
 
 import (
 	stderrors "errors"
+	"os"
 	"os/exec"
 	"syscall"
+
+	goerrors "github.com/kbukum/gokit/errors"
 )
+
+const (
+	gracefulTerminationSupported = true
+	terminationSignal            = syscall.SIGTERM
+)
+
+func wasForced(state *os.ProcessState) bool {
+	if state == nil {
+		return false
+	}
+	status, ok := state.Sys().(syscall.WaitStatus)
+	return ok && status.Signaled() && status.Signal() == syscall.SIGKILL
+}
 
 // ConfigureSysProcAttr places the child in its own process group
 // so we can signal the entire tree on cancellation.
@@ -25,7 +41,10 @@ func TerminateGracefully(c *exec.Cmd) error {
 
 // signalGroup sends sig to the child's process group.
 func signalGroup(c *exec.Cmd, sig syscall.Signal) error {
-	return syscall.Kill(-c.Process.Pid, sig)
+	if c == nil || c.Process == nil {
+		return goerrors.MissingField("process")
+	}
+	return signalPID(c.Process.Pid, sig, true)
 }
 
 func interruptGroup(c *exec.Cmd) error { return signalGroup(c, syscall.SIGINT) }
@@ -51,6 +70,9 @@ func pidGroupAlive(pid int, group bool) bool {
 }
 
 func signalPID(pid int, sig syscall.Signal, group bool) error {
+	if pid <= 0 {
+		return goerrors.InvalidInput("pid", "process ID must be positive")
+	}
 	target := pid
 	if group {
 		target = -pid

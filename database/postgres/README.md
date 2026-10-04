@@ -83,10 +83,12 @@ Each new connection receives a 30-second statement timeout and a 10-second idle-
 
 ## Testing
 
-Integration tests live in `*_integration_test.go` behind the `integration` build tag and provision an ephemeral PostgreSQL server with [`testcontainers-go`](https://golang.testcontainers.org/), so they never depend on a local Postgres and skip when no Docker daemon is reachable:
+Integration tests live behind the `integration` build tag and consume `database/postgres/testutil.Start(ctx)`. This test-only package provisions a separate database/container with a digest-pinned PostgreSQL 17 image. Startup is capped at three minutes, Docker preflight at five seconds, and `fixture.Close(ctx)` gets a fresh thirty-second termination budget even after cancellation. Missing Docker, failed startup, and failed termination are **test failures**, never implicit skips:
 
 ```bash
-toven test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1
+toven --no-cache test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
 ```
 
 Importing this package has no side effects. Applications own the registry and choose the driver through configuration.
+
+Import `postgres/testutil` only from tests. Register cleanup immediately after successful Start, report any Close error with `t.Error`, and close database clients before the container. The fixture DSN contains generated test credentials; do not log or retain it. Runtime `postgres` and core `database` do not import container provisioning.

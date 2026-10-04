@@ -3,6 +3,9 @@ package testutil
 import (
 	"context"
 	"testing"
+	"time"
+
+	kitcomponent "github.com/kbukum/gokit/component"
 )
 
 // CleanupFunc is a function that performs cleanup, typically stopping a component.
@@ -18,31 +21,32 @@ type CleanupFunc func() error
 //	    t.Fatal(err)
 //	}
 //	defer cleanup()
-func Setup(component TestComponent) (CleanupFunc, error) {
-	return SetupWithContext(context.Background(), component)
+func Setup(comp kitcomponent.Component, opts ...Option) (CleanupFunc, error) {
+	return SetupWithContext(context.Background(), comp, opts...)
 }
 
 // SetupWithContext starts a test component with a custom context and returns a cleanup function.
-func SetupWithContext(ctx context.Context, component TestComponent) (CleanupFunc, error) {
-	if err := component.Start(ctx); err != nil {
+func SetupWithContext(ctx context.Context, comp kitcomponent.Component, opts ...Option) (CleanupFunc, error) {
+	manager := NewManager(ctx, opts...)
+	if err := manager.Add(comp); err != nil {
 		return nil, err
 	}
-
-	cleanup := func() error {
-		return component.Stop(ctx)
+	if err := manager.StartAll(); err != nil { //nolint:contextcheck // Manager owns the supplied setup context and fresh cleanup contexts.
+		return nil, err
 	}
-
-	return cleanup, nil
+	return manager.Cleanup, nil
 }
 
 // Teardown stops a test component. This is the inverse of Setup and is provided for symmetry.
-func Teardown(component TestComponent) error {
-	return TeardownWithContext(context.Background(), component)
+func Teardown(comp kitcomponent.Component) error {
+	return TeardownWithContext(context.Background(), comp)
 }
 
 // TeardownWithContext stops a test component with a custom context.
-func TeardownWithContext(ctx context.Context, component TestComponent) error {
-	return component.Stop(ctx)
+func TeardownWithContext(ctx context.Context, comp kitcomponent.Component) error {
+	ctx, cancel := cleanupContext(ctx, lifecycleBudgets(nil).Cleanup)
+	defer cancel()
+	return comp.Stop(ctx)
 }
 
 // ResetComponent resets a test component to its initial state.
@@ -52,6 +56,8 @@ func ResetComponent(component TestComponent) error {
 
 // ResetComponentWithContext resets a test component with a custom context.
 func ResetComponentWithContext(ctx context.Context, component TestComponent) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	return component.Reset(ctx)
 }
 
@@ -73,7 +79,7 @@ type THelper struct {
 func T(t *testing.T) *THelper {
 	return &THelper{
 		t:   t,
-		ctx: context.Background(),
+		ctx: t.Context(),
 	}
 }
 
@@ -85,28 +91,31 @@ func (h *THelper) WithContext(ctx context.Context) *THelper {
 
 // Setup starts a component and registers cleanup with testing.T.
 // The component will be automatically stopped when the test ends.
-func (h *THelper) Setup(component TestComponent) {
-	if err := component.Start(h.ctx); err != nil {
-		h.t.Fatalf("failed to start component %s: %v", component.Name(), err)
+func (h *THelper) Setup(comp kitcomponent.Component) {
+	cleanup, err := SetupWithContext(h.ctx, comp)
+	if err != nil {
+		h.t.Fatalf("failed to start component %s: %v", comp.Name(), err)
 	}
 
 	h.t.Cleanup(func() {
-		if err := component.Stop(h.ctx); err != nil {
-			h.t.Errorf("failed to stop component %s: %v", component.Name(), err)
+		if err := cleanup(); err != nil {
+			h.t.Errorf("failed to stop component %s: %v", comp.Name(), err)
 		}
 	})
 }
 
 // Reset resets a component to its initial state.
 func (h *THelper) Reset(component TestComponent) {
-	if err := component.Reset(h.ctx); err != nil {
+	if err := ResetComponentWithContext(h.ctx, component); err != nil {
 		h.t.Fatalf("failed to reset component %s: %v", component.Name(), err)
 	}
 }
 
 // Snapshot captures the current state of a component.
 func (h *THelper) Snapshot(component TestComponent) any {
-	snapshot, err := component.Snapshot(h.ctx)
+	ctx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+	defer cancel()
+	snapshot, err := component.Snapshot(ctx)
 	if err != nil {
 		h.t.Fatalf("failed to snapshot component %s: %v", component.Name(), err)
 	}
@@ -115,7 +124,9 @@ func (h *THelper) Snapshot(component TestComponent) any {
 
 // Restore restores a component to a previously captured state.
 func (h *THelper) Restore(component TestComponent, snapshot any) {
-	if err := component.Restore(h.ctx, snapshot); err != nil {
+	ctx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
+	defer cancel()
+	if err := component.Restore(ctx, snapshot); err != nil {
 		h.t.Fatalf("failed to restore component %s: %v", component.Name(), err)
 	}
 }

@@ -135,6 +135,8 @@ When adding a new module:
 
 Scope commands to what changed; the full workspace gates are for audits/CI sign-off:
 
+Runtime test-environment changes need real adapter proof, not only unit/build success. Reuse `testutil` for fresh bounded cleanup and rollback, `component/testutil` for deterministic lifecycle failures, and adapter test helpers for real loopback/file/container checks. Reset fixture data with requests quiesced; do not erase handlers or migration metadata. Required PostgreSQL checks fail on missing Docker; fake migration drivers and in-memory AutoMigrate certify orchestration/unit behavior only. Use `process` with isolated environment and bounded output, inspect forced shutdown as a failure, and record final commands, declared limits, and cleanup outcomes. See [`testutil/README.md`](../testutil/README.md).
+
 ```bash
 make lint M=<module>                 # golangci-lint, one module
 make test M=<module> T=<pattern>     # scoped tests (-race -count=1)

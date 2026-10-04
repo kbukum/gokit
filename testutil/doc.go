@@ -3,6 +3,8 @@
 // The testutil package extends gokit's component lifecycle pattern with testing-specific capabilities,
 // enabling easy setup, teardown, and state management for test components.
 //
+// Manager and Setup accept component.Component directly. Startup/reset use a 30-second default budget; rollback and cleanup preserve values but detach cancellation and use a fresh 10-second budget. Startup failure unwinds successful starts in reverse and joins cleanup errors. A failing component releases its own partial acquisition. Cleanup is serialized and repeated calls return the recorded outcome.
+//
 // # Quick Start
 //
 // Basic usage with automatic cleanup:

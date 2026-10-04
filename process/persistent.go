@@ -1,7 +1,6 @@
 package process
 
 import (
-	"bytes"
 	"context"
 	stderrors "errors"
 	"fmt"
@@ -37,7 +36,7 @@ type PersistentConfig struct {
 	ReadinessTimeout time.Duration
 	// ShutdownGracePeriod is the wait after graceful termination before a force kill. Defaults to 5s.
 	ShutdownGracePeriod time.Duration
-	// MaxCaptureBytes bounds retained startup output per stream. Zero or negative means unbounded.
+	// MaxCaptureBytes bounds retained lifetime output per stream. Nonpositive values use Command.MaxOutputBytes, or 64 KiB if neither limit is positive.
 	MaxCaptureBytes int
 	// Lifecycle configures process-group isolation and shutdown escalation.
 	Lifecycle LifecyclePolicy
@@ -51,6 +50,7 @@ func DefaultPersistentConfig() PersistentConfig {
 		ReadinessTimeout:    30 * time.Second,
 		ShutdownGracePeriod: DefaultGracePeriod,
 		Lifecycle:           DefaultLifecyclePolicy(),
+		MaxCaptureBytes:     64 * 1024,
 	}
 }
 
@@ -99,34 +99,14 @@ type ShutdownOutcome struct {
 	AlreadyExited bool
 	// Result is the completed process result.
 	Result *Result
-}
-
-// guardedBuffer is a limitedBuffer safe for concurrent writes and snapshots.
-type guardedBuffer struct {
-	mu  sync.Mutex
-	buf *limitedBuffer
-}
-
-func newGuardedBuffer(limit int) *guardedBuffer {
-	return &guardedBuffer{buf: newLimitedBuffer(limit)}
-}
-
-func (g *guardedBuffer) Write(p []byte) (int, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.buf.Write(p)
-}
-
-func (g *guardedBuffer) snapshot() ([]byte, bool) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	b := append([]byte(nil), g.buf.Bytes()...)
-	return b, g.buf.Truncated()
+	// Complete confirms owned group release and completed Wait/output collection. Signal-only registrations cannot establish this.
+	Complete bool
 }
 
 // PersistentProcess is a running long-lived subprocess with graceful shutdown.
 type PersistentProcess struct {
 	cmd    *exec.Cmd
+	owned  *ownedChild
 	policy LifecyclePolicy
 	grace  time.Duration
 	start  time.Time
@@ -136,19 +116,34 @@ type PersistentProcess struct {
 
 	waitCh chan struct{} // closed when cmd.Wait returns
 
-	mu      sync.Mutex
-	stopped bool
+	outcome     ShutdownOutcome
+	shutdownErr error
+	shutdownMu  sync.Mutex
 }
 
 // StartPersistent spawns a long-lived subprocess and waits for it to become ready per cfg.
 // On success it returns the startup output snapshot and a handle for waiting or shutting
-// the process down. On failure it tears the process down and returns a classified AppError
-// whose kind is retrievable via StartErrorKind.
+// the process down. On failure it attempts cleanup and returns a classified AppError
+// whose kind is retrievable via StartErrorKind. Incomplete cleanup also returns a non-nil
+// owning run; callers must retain it and retry Shutdown until its outcome is Complete.
 func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*PersistentRun, error) {
+	return startPersistent(ctx, cmd, cfg, newOwnedChild)
+}
+
+func startPersistent(ctx context.Context, cmd Command, cfg PersistentConfig, acquire func(*exec.Cmd) *ownedChild) (*PersistentRun, error) {
 	if cmd.Binary == "" {
 		return nil, goerrors.MissingField("binary")
 	}
 	cfg = cfg.normalized()
+	if !childObservationSupported {
+		return nil, goerrors.InvalidInput("platform", "owned persistent processes require Linux, Darwin, or Windows")
+	}
+	if cfg.MaxCaptureBytes <= 0 {
+		cfg.MaxCaptureBytes = cmd.MaxOutputBytes
+		if cfg.MaxCaptureBytes <= 0 {
+			cfg.MaxCaptureBytes = 64 * 1024
+		}
+	}
 	if cfg.Readiness == ReadyOnOutput && cfg.OutputMarker == "" {
 		return nil, goerrors.InvalidInput("readiness.output_marker", "output readiness marker must not be empty")
 	}
@@ -199,8 +194,9 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 		grace:  cfg.ShutdownGracePeriod,
 		stdout: newGuardedBuffer(cfg.MaxCaptureBytes),
 		stderr: newGuardedBuffer(cfg.MaxCaptureBytes),
-		waitCh: make(chan struct{}),
 	}
+	p.owned = acquire(c)
+	p.waitCh = p.owned.done
 	p.start = time.Now()
 
 	readyCh := make(chan struct{})
@@ -217,14 +213,21 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 	go func() {
 		readersWG.Wait()
 		close(readersDone)
-		_ = c.Wait()
-		close(p.waitCh)
 	}()
+	p.owned.readersDone = readersDone
+	p.owned.closeReaders = func() error {
+		return stderrors.Join(stdoutPipe.Close(), stderrPipe.Close())
+	}
 
 	if err := p.awaitReady(ctx, cfg, readyCh, readersDone); err != nil {
-		_ = KillGroup(c)
-		<-p.waitCh
-		return nil, err
+		p.outcome, p.shutdownErr = shutdownOwned(context.WithoutCancel(ctx), p.owned, cfg.Lifecycle, cfg.ShutdownGracePeriod)
+		shutdownErr := p.shutdownErr
+		if p.outcome.Complete {
+			shutdownErr = stderrors.Join(shutdownErr, unexpectedWaitError(p.owned.waitErr), p.stdout.error(), p.stderr.error())
+		} else {
+			return &PersistentRun{Process: p}, stderrors.Join(err, shutdownErr)
+		}
+		return nil, stderrors.Join(err, shutdownErr)
 	}
 
 	stdout, stdoutTrunc := p.stdout.snapshot()
@@ -241,41 +244,11 @@ func StartPersistent(ctx context.Context, cmd Command, cfg PersistentConfig) (*P
 	}, nil
 }
 
-// readInto copies a pipe into a guarded buffer, signaling readiness when the marker appears.
-// Marker detection scans only each freshly read chunk plus a small carry of the previous
-// chunk's trailing bytes (so a marker split across reads is still found), keeping the scan
-// linear in total output rather than rescanning the whole accumulated buffer per read.
-func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, marker []byte, signalReady func(), wg *sync.WaitGroup) {
-	defer wg.Done()
-	buf := make([]byte, 32*1024)
-	found := len(marker) == 0
-	var carry []byte
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			_, _ = dst.Write(buf[:n])
-			if !found {
-				window := make([]byte, 0, len(carry)+n)
-				window = append(window, carry...)
-				window = append(window, buf[:n]...)
-				if bytes.Contains(window, marker) {
-					found = true
-					carry = nil
-					signalReady()
-				} else {
-					keep := min(len(marker)-1, len(window))
-					carry = append(carry[:0], window[len(window)-keep:]...)
-				}
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
 // awaitReady blocks until the configured readiness condition, a terminal state, or timeout.
 func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig, readyCh, readersDone chan struct{}) error {
+	if err := p.owned.observationError(); err != nil {
+		return withStartErrorKind(goerrors.Internal(err), PersistentStartObservationFailed)
+	}
 	timeout := time.NewTimer(cfg.ReadinessTimeout)
 	defer timeout.Stop()
 
@@ -295,8 +268,8 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		select {
 		case <-delay.C:
 			return nil
-		case <-p.waitCh:
-			return p.exitedBeforeReadyErr()
+		case <-p.owned.observed:
+			return p.observedBeforeReadyErr()
 		case <-timeout.C:
 			return p.readinessTimedOutErr()
 		case <-ctx.Done():
@@ -306,15 +279,42 @@ func (p *PersistentProcess) awaitReady(ctx context.Context, cfg PersistentConfig
 		select {
 		case <-readyCh:
 			return nil
-		case <-p.waitCh:
-			return p.exitedBeforeReadyErr()
+		case <-p.owned.observed:
+			if err := p.owned.observationError(); err != nil {
+				return p.observedBeforeReadyErr()
+			}
+			select {
+			case <-readyCh:
+				return nil
+			case <-readersDone:
+				select {
+				case <-readyCh:
+					return nil
+				default:
+					return p.exitedBeforeReadyErr()
+				}
+			case <-timeout.C:
+				return p.readinessTimedOutErr()
+			case <-ctx.Done():
+				return persistentStartupContextError(ctx)
+			}
 		case <-readersDone:
 			// Output ended without the marker; give the exit path a brief moment to win.
 			select {
 			case <-readyCh:
 				return nil
-			case <-p.waitCh:
-				return p.exitedBeforeReadyErr()
+			default:
+			}
+			select {
+			case <-readyCh:
+				return nil
+			case <-p.owned.observed:
+				select {
+				case <-readyCh:
+					return nil
+				default:
+				}
+				return p.observedBeforeReadyErr()
 			case <-time.After(200 * time.Millisecond):
 				return withStartErrorKind(
 					goerrors.Internal(nil),
@@ -347,88 +347,16 @@ func (p *PersistentProcess) exitedBeforeReadyErr() error {
 	)
 }
 
+func (p *PersistentProcess) observedBeforeReadyErr() error {
+	if err := p.owned.observationError(); err != nil {
+		return withStartErrorKind(goerrors.Internal(err), PersistentStartObservationFailed)
+	}
+	return p.exitedBeforeReadyErr()
+}
+
 func (p *PersistentProcess) readinessTimedOutErr() error {
 	return withStartErrorKind(
 		goerrors.Timeout("persistent process readiness"),
 		PersistentStartReadinessTimedOut,
 	)
-}
-
-// Pid returns the process id, or -1 if the process is not running.
-func (p *PersistentProcess) Pid() int {
-	if p.cmd.Process == nil {
-		return -1
-	}
-	return p.cmd.Process.Pid
-}
-
-// Wait blocks until the persistent process exits on its own and returns its result.
-func (p *PersistentProcess) Wait() error {
-	p.mu.Lock()
-	if p.stopped {
-		p.mu.Unlock()
-		return goerrors.Conflict("persistent process already stopped")
-	}
-	p.stopped = true
-	p.mu.Unlock()
-
-	<-p.waitCh
-	return nil
-}
-
-// Shutdown gracefully stops the persistent process, escalating to a force kill after the
-// grace period, and returns the completed result. It reports AlreadyExited when the process
-// had already ended. The context bounds the graceful wait before escalation.
-func (p *PersistentProcess) Shutdown(ctx context.Context) (ShutdownOutcome, error) {
-	p.mu.Lock()
-	if p.stopped {
-		p.mu.Unlock()
-		return ShutdownOutcome{}, goerrors.Conflict("persistent process already stopped")
-	}
-	p.stopped = true
-	p.mu.Unlock()
-
-	select {
-	case <-p.waitCh:
-		return ShutdownOutcome{AlreadyExited: true, Result: p.result()}, nil
-	default:
-	}
-
-	if p.policy.targetsGroup() {
-		_ = TerminateGroup(p.cmd)
-	} else {
-		_ = p.cmd.Process.Kill()
-	}
-
-	timer := time.NewTimer(p.grace)
-	defer timer.Stop()
-	select {
-	case <-p.waitCh:
-		return ShutdownOutcome{Result: p.result()}, nil
-	case <-timer.C:
-	case <-ctx.Done():
-	}
-
-	if p.policy.KillAfterGrace || ctx.Err() != nil {
-		_ = KillGroup(p.cmd)
-	}
-	<-p.waitCh
-	return ShutdownOutcome{Result: p.result()}, nil
-}
-
-func (p *PersistentProcess) exitCode() *int {
-	return exitCodeOf(p.cmd.ProcessState)
-}
-
-func (p *PersistentProcess) result() *Result {
-	stdout, stdoutTrunc := p.stdout.snapshot()
-	stderr, stderrTrunc := p.stderr.snapshot()
-	return &Result{
-		Stdout:          stdout,
-		StdoutTruncated: stdoutTrunc,
-		Stderr:          stderr,
-		StderrTruncated: stderrTrunc,
-		ExitCode:        p.exitCode(),
-		Duration:        time.Since(p.start),
-	}
 }

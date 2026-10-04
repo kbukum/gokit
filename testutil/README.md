@@ -2,6 +2,70 @@
 
 The `testutil` package provides a comprehensive testing infrastructure for gokit components, following the same lifecycle patterns as production components. It enables easy setup, teardown, and management of test components with support for state snapshots and resets.
 
+## Owned environments
+
+`Manager` and `Setup` accept production `component.Component` implementations as well as test adapters. Register dependencies first. Startup failure unwinds only successful starts in reverse order; the failing component must release its own partial acquisition. Startup and cleanup errors are joined, so `errors.Is` can inspect both.
+
+```go
+manager := testutil.NewManager(t.Context(), testutil.WithBudgets(testutil.Budgets{
+    Setup: 30 * time.Second,
+    Cleanup: 10 * time.Second,
+}))
+if err := manager.Add(dbComponent); err != nil {
+    t.Fatal(err)
+}
+if err := manager.Add(serverComponent); err != nil {
+    t.Fatal(err)
+}
+t.Cleanup(func() {
+    if err := manager.Cleanup(); err != nil {
+        t.Error(err)
+    }
+})
+if err := manager.StartAll(); err != nil {
+    t.Fatal(err)
+}
+```
+
+Setup/reset defaults to 30 seconds. Cleanup preserves context values but gets a **fresh 10-second budget**, independent of test cancellation. Components share the remaining cleanup time. Lifecycle operations are serialized; duplicate names, registration while running, and double startup are errors. Repeated cleanup returns the recorded result without repeating teardown. A stopped manager can be started explicitly again; it never restarts automatically.
+
+```mermaid
+flowchart LR
+    A[Start dependencies] --> B[Start server]
+    B -->|failure| C[Fresh cleanup budget]
+    C --> D[Stop started dependencies in reverse]
+    D --> E[Return setup and cleanup errors]
+```
+
+A failed start returns both the original failure and rollback failures.
+
+**Reset is not restart.** Server and Connect fixtures preserve handlers and the live origin on reset. Clear application data separately, with requests quiesced, and reset before signing in. Use Stop/Start for an owned restart. HTTP teardown drains for at most the stop deadline (10 seconds without a shorter deadline), then closes remaining owned connections and returns the deadline/cancellation error. Handlers must honor request cancellation: Go cannot forcibly stop arbitrary handler code.
+
+| Proof | Helper and boundary |
+|---|---|
+| Deterministic lifecycle failures | `component/testutil.Component` doubles; no database or network claim |
+| HTTP/SSE and Connect | `server/testutil` and TLS/HTTP2 `connect/testutil`; real loopback connections, not a consumer binary |
+| Small SQL unit fixtures | `database/testutil` in-memory SQLite/AutoMigrate; not production migration or persistence proof |
+| Production SQLite | Inject `database/sqlite` and actual SQL migrations into `database/testutil.Component`, using `t.TempDir()` |
+| Production PostgreSQL | `database/postgres/testutil.Start`; isolated, digest-pinned container; Docker absence fails |
+| Owned child processes | `process.StartPersistent` and `Supervisor`; argv-only, isolated environment, explicit shutdown outcome |
+
+Run these gates from the repository root with Go 1.27.1, a C compiler for SQLite, and a reachable Docker daemon for PostgreSQL:
+
+```sh
+toven --no-cache test --module go:testutil --module go:server-testutil --module go:connect-testutil --module go:database-testutil --module go:database-sqlite -- -race -shuffle=on -count=1 -timeout=3m
+go test ./process -race -shuffle=on -count=1 -timeout=3m
+toven --no-cache test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
+```
+
+The local-only commands do **not** certify PostgreSQL. The required integration command fails on missing Docker, failed provisioning, or failed termination; no implicit skip is allowed. Lifecycle, loopback, SQLite, and process packages run leak checks. Live-connection tests use a 50 ms drain and 2-second settling ceiling; process tests use 50 ms grace and a 2-second reaping ceiling. Small snapshots/fixtures are limited to 32 tables, 1,000 rows, and 1 MiB encoded data.
+
+Use unique temporary paths and actual bound ports. `process.StartPersistent` retains at most 64 KiB per output stream by default; set positive `Command.MaxOutputBytes` for Run/Stream and `EnvEmpty` with explicit environment values for test children. `Shutdown` reports forced termination as an error, never successful graceful teardown. Linux and Darwin support graceful SIGTERM and process groups; Windows supports forced owned-process termination but not this Unix graceful contract or bare-PID ownership.
+
+Process cleanup keeps the original leader unreaped until its group is released, avoiding numeric PID reuse. `ShutdownOutcome.Complete` distinguishes released resources from a pending retry; historical errors remain even after completion. Failed startup can return an error with a still-owning run when cleanup is incomplete: retain and clean that lease, not just the error. Native owned observation supports Linux with `/proc`, Darwin, and Windows. Graceful waiting is capped at 10 seconds, forced settling at a fresh two seconds, and failed native inspections at eight per wait. Arbitrary kernel stalls or non-cooperative caller I/O remain explicit cleanup failures.
+
+Temporary state belongs to the test. Retained evidence is separate: keep only bounded, synthetic diagnostics in a gitignored artifact directory; never retain DSNs, session credentials, or raw private payloads. These helpers do not retain gate artifacts for you.
+
 ## Features
 
 - **TestComponent Interface**: Extends `component.Component` with testing-specific methods (Reset, Snapshot, Restore)
@@ -28,7 +92,11 @@ func TestMyFeature(t *testing.T) {
     if err != nil {
         t.Fatal(err)
     }
-    defer cleanup()
+    defer func() {
+        if err := cleanup(); err != nil {
+            t.Error(err)
+        }
+    }()
     
     // Your test code here...
 }
@@ -46,19 +114,24 @@ func TestMyFeatureAutoCleanup(t *testing.T) {
 
 ```go
 func TestIntegration(t *testing.T) {
-    ctx := context.Background()
-    manager := testutil.NewManager(ctx)
+    manager := testutil.NewManager(t.Context())
     
     // Add components
-    manager.Add(databaseComponent)
-    manager.Add(redisComponent)
-    manager.Add(kafkaComponent)
+    for _, dependency := range []component.Component{databaseComponent, cacheComponent, messagingComponent} {
+        if err := manager.Add(dependency); err != nil {
+            t.Fatal(err)
+        }
+    }
+    t.Cleanup(func() {
+        if err := manager.Cleanup(); err != nil {
+            t.Error(err)
+        }
+    })
     
     // Start all components
     if err := manager.StartAll(); err != nil {
         t.Fatal(err)
     }
-    defer manager.Cleanup()
     
     // Your integration test here...
 }
@@ -124,8 +197,8 @@ This hybrid approach provides:
 
 The `Manager` coordinates lifecycle operations across multiple components:
 
-- **StartAll()**: Starts all components in order
-- **StopAll()**: Stops all components in reverse order (LIFO)
+- **StartAll()**: Starts components in order and rolls back successful starts on failure
+- **StopAll()**: Stops successful starts in reverse order (LIFO) with a fresh bounded context
 - **ResetAll()**: Resets all components to initial state
 - **Get(name)**: Retrieve a specific component by name
 - **Cleanup()**: Alias for StopAll() for defer usage
@@ -135,18 +208,18 @@ The `Manager` coordinates lifecycle operations across multiple components:
 #### Setup/Teardown
 
 ```go
-// Setup starts a component and returns cleanup function
-cleanup, err := testutil.Setup(component)
-defer cleanup()
-
-// With custom context
-cleanup, err := testutil.SetupWithContext(ctx, component)
-defer cleanup()
-
-// Teardown stops a component
-err := testutil.Teardown(component)
-err := testutil.TeardownWithContext(ctx, component)
+cleanup, err := testutil.SetupWithContext(t.Context(), myComponent)
+if err != nil {
+    t.Fatal(err)
+}
+t.Cleanup(func() {
+    if err := cleanup(); err != nil {
+        t.Error(err)
+    }
+})
 ```
+
+`Setup(component)` uses the default setup context. `Teardown(component)` and `TeardownWithContext(ctx, component)` stop a component with a fresh cleanup budget and return any failure.
 
 #### Reset
 
@@ -184,7 +257,11 @@ cleanup, err := testutil.Setup(component)
 if err != nil {
     t.Fatal(err)
 }
-defer cleanup()
+defer func() {
+    if err := cleanup(); err != nil {
+        t.Error(err)
+    }
+}()
 
 // Avoid ✗ - easy to forget cleanup
 component.Start(ctx)
@@ -198,14 +275,20 @@ When testing with multiple components, use `Manager` to coordinate them:
 
 ```go
 manager := testutil.NewManager(ctx)
-manager.Add(db)
-manager.Add(redis)
-manager.Add(kafka)
+for _, dependency := range []component.Component{db, cache, messaging} {
+    if err := manager.Add(dependency); err != nil {
+        t.Fatal(err)
+    }
+}
+t.Cleanup(func() {
+    if err := manager.Cleanup(); err != nil {
+        t.Error(err)
+    }
+})
 
 if err := manager.StartAll(); err != nil {
     t.Fatal(err)
 }
-defer manager.Cleanup()
 ```
 
 ### 3. Reset Between Test Cases
@@ -255,20 +338,7 @@ testutil.T(t).Restore(dbComponent, snapshot)
 
 ### 5. Follow LIFO Order
 
-When manually managing cleanup, always cleanup in reverse order (LIFO):
-
-```go
-cleanup1, _ := testutil.Setup(component1)
-cleanup2, _ := testutil.Setup(component2)
-cleanup3, _ := testutil.Setup(component3)
-
-// Cleanup in reverse order
-defer cleanup3()
-defer cleanup2()
-defer cleanup1()
-
-// Or use Manager which handles this automatically
-```
+Register dependencies before their consumers. `Manager` stops successful starts in reverse order and rolls them back on later startup failure. Prefer this over handwritten defer chains, which can hide setup/cleanup errors or reverse the intended order.
 
 ## Creating Test Components
 

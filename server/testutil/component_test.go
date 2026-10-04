@@ -2,9 +2,11 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -95,16 +97,64 @@ func TestComponent_Reset(t *testing.T) {
 		t.Errorf("before Reset: status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 
-	// Reset clears routes
+	// Reset preserves mounted routes and the current origin.
+	origin := comp.BaseURL()
 	if err := comp.Reset(ctx); err != nil {
 		t.Fatalf("Reset() failed: %v", err)
 	}
 
-	// Old route should be gone (404)
+	if comp.BaseURL() != origin {
+		t.Fatal("reset changed the owned origin")
+	}
 	req, _ = http.NewRequestWithContext(ctx, http.MethodGet, comp.BaseURL()+"/before", http.NoBody)
 	resp, _ = http.DefaultClient.Do(req)
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("after Reset: status = %d, want %d", resp.StatusCode, http.StatusNotFound)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("after Reset: status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+}
+
+func TestStopAllowsCanceledHandlerToReadHealth(t *testing.T) {
+	t.Parallel()
+	c := NewComponent()
+	exited := make(chan struct{})
+	c.Handle("/stream", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer close(exited)
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+		c.Health(context.Background())
+		c.BaseURL()
+	}))
+	if err := c.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL()+"/stream", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	stopCtx, stopCancel := context.WithTimeout(ctx, 50*time.Millisecond)
+	defer stopCancel()
+	stopped := make(chan error, 1)
+	go func() { stopped <- c.Stop(stopCtx) }()
+	select {
+	case err := <-stopped:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("drain failure: %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("teardown deadlocked a cancellation-cooperative handler")
+	}
+	select {
+	case <-exited:
+	case <-ctx.Done():
+		t.Fatal("handler retained")
 	}
 }

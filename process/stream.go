@@ -124,6 +124,7 @@ func Stream(ctx context.Context, cmd Command, emit func(StreamChunk)) (*Result, 
 		StderrTruncated: stderr.Truncated(),
 		ExitCode:        exitCodeOf(c.ProcessState),
 		Duration:        duration,
+		Forced:          wasForced(c.ProcessState),
 	}
 
 	if copyErr != nil {

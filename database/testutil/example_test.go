@@ -116,18 +116,18 @@ func Example_fixtures() {
 	db.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)")
 
 	// Load fixture data
-	dbtestutil.LoadFixture(db.DB(), "users", []map[string]any{
+	dbtestutil.LoadFixture(context.TODO(), db.DB(), "users", []map[string]any{
 		{"name": "Alice", "email": "alice@example.com"},
 		{"name": "Bob", "email": "bob@example.com"},
 	})
 
-	count, _ := dbtestutil.CountRows(db.DB(), "users")
+	count, _ := dbtestutil.CountRows(context.TODO(), db.DB(), "users")
 	fmt.Println("User count:", count)
 
 	// Truncate table
-	dbtestutil.TruncateTable(db.DB(), "users")
+	dbtestutil.TruncateTable(context.TODO(), db.DB(), "users")
 
-	count, _ = dbtestutil.CountRows(db.DB(), "users")
+	count, _ = dbtestutil.CountRows(context.TODO(), db.DB(), "users")
 	fmt.Println("After truncate:", count)
 
 	// Output:
@@ -150,7 +150,7 @@ func Example_testManager() {
 	dbComp := manager.Get("database-test").(*dbtestutil.Component)
 	dbComp.DB().Exec("CREATE TABLE users (id INTEGER PRIMARY KEY)")
 
-	exists := dbtestutil.TableExists(dbComp.DB(), "users")
+	exists, _ := dbtestutil.TableExists(context.TODO(), dbComp.DB(), "users")
 	fmt.Println("Table exists:", exists)
 
 	// Output:
