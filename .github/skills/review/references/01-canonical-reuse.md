@@ -2,10 +2,7 @@
 
 gokit *is* the canonical toolkit, so the duplication risk is internal: **did the change reimplement something an existing package (or the standard library) already owns?** Vibe-coded code reaches for a fresh local helper instead of the owner — assume duplication until proven otherwise. Treat findings here as a blocker class.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* for each new type/helper in the diff, name the concern and find its owner. *Project mode:* sweep the tree for the patterns below and check each against the owning package — long-lived internal forks are exactly what this pass exists to surface.
 

@@ -1,163 +1,31 @@
 # gokit
 
-Multi-module Go library providing foundational infrastructure for service development. A sibling kit to rskit (Rust): the same capabilities and the same engineering baseline, idiomatic per language. Parity is tracked against rskit — for each capability, whichever kit has the stronger implementation is the one the other mirrors, so parity levels the kits up (never down) and stays scoped rather than symbol-for-symbol.
+Multi-module Go infrastructure kit. Core packages share the root `go.mod`; heavy adapters have their own modules. Versions and tools come from `go.mod`, CI, and the Makefile, not copied version lists.
 
-**Priority order:** up-to-date, idiomatic Go best practices outrank parity. Parity is a nice-to-have — pursue it only when it doesn't compromise practices, development ergonomics, or the tech stack; when the idiomatic Go approach is more efficient or correct, take it and let parity stay scoped to wire/contract compatibility, not internal types. Above both, **consistency across the project wins**: apply the same choice everywhere so the codebase reads as one coherent whole rather than a patchwork of locally-optimal decisions.
+## Invariants
 
-## Engineering principles
+- Pre-stable: redesign root causes, not compatibility shims. Choose Redesign / Align / Enhance / Drop for defects; leave sound code alone. Keep changes and dependent callers within the requested scope.
+- Reuse the [canonical concern owner](../docs/concern-owners.md). Imports point downward; `depguard` enforces boundaries. Implement lower-layer contracts and inject behavior at composition. No kit runtime imports another kit. Internal consistency and idiomatic Go outrank symbol parity.
+- Public APIs are typed and minimal; use generics where useful, small interfaces, `...Option` or cohesive request structs. Keep `context.Context` first. Document genuinely opaque `any`. Return cause-preserving `AppError`; no runtime panics, ignored errors, or success-shaped fallbacks.
+- Config selects explicitly registered adapters. Inject logger, telemetry, policies, and clients; no mutable global registry or `init()` I/O. Provider shapes: RequestResponse, Stream, Sink, Duplex.
+- Validate boundaries; no secrets in source/logs, credential URLs, SQL interpolation, or shell-built subprocesses. Bound calls/retries/buffers; every goroutine owns cancellation and shutdown.
+- Use focused concern-named files and declare-only `doc.go`. Follow gofmt, golangci-lint, and current stdlib idioms. Split mixed concerns, not files merely exceeding a line count.
+- Test-first, deterministic behavior/failures; reuse `testutil`, inject clocks, preserve race/shuffle safety. Coverage: >=80% per package, >=85% overall and for errors/auth/authz/security/resilience/encryption. Never weaken integration gates.
+- Markdown and Go comment prose have no arbitrary column wrapping. Describe current behavior, not implementation history.
 
-Shared engineering baseline — apply to all work here:
+## Work and validation
 
-- **Phases:** discover → decide (Redesign / Align / Enhance / Drop / Leave) → implement completely → validate.
-  Prefer root-cause redesign over symptom patches; no compatibility shims in pre-stable code.
-  Implement the *simplest* design that fully solves it — flexible, extensible, and scalable — on current idiomatic best practices, not folklore; complexity must earn its place.
-- **Layering & reuse:** explicit, acyclic dependency direction —
-  lower layers never import higher (enforced by `depguard`). Reuse
-  or enhance the canonical owner before writing new code;
-  never duplicate shared concerns (errors, config, logging, auth, retries, observability, HTTP, registries).
-  Consult [`docs/concern-owners.md`](../docs/concern-owners.md) for the canonical owner of each shared concern (formats → `codec`, helpers → `util`, paths → `fs`, …) before writing new code.
-- **APIs:** typed and minimal; generics-first,
-  no `interface{}`/`any` in public surfaces (except genuinely opaque values, documented);
-  actionable typed errors that preserve cause.
-- **Errors & resilience:** no `panic()` / `log.Fatal` / ignored errors (`_ =`) / unchecked type assertions on runtime paths;
-  no success-shaped fallbacks; timeout every remote call via `context.Context`;
-  bounded jittered retries for idempotent ops only; circuit-break and degrade gracefully.
-- **Concurrency:** every goroutine has ownership, cancellation (context), timeout, and shutdown;
-  bound channels / buffers / concurrency with documented backpressure; drain on shutdown;
-  no goroutine leaks.
-- **Security & privacy:** validate at every trust boundary; least-privilege and secure-by-default;
-  parameterized queries and argv-only subprocess (via `process`); tokens in headers,
-  not query strings; current crypto only; minimize, redact, and retention-bound sensitive data.
-- **Composition:** explicit injected registries and config-driven selection;
-  no `init()` side effects, no mutable package-global registries;
-  inject logger / tracer / policies rather than reaching for globals.
-- **Tests:** behavioral and deterministic; **test-first** (failing test → minimal code → refactor while green);
-  green under `-race -shuffle=on -count=1`;
-  cover failure paths; injected clocks (never `time.Sleep`); fixtures over embedded config;
-  regression-test every fix.
-- **AI / model features:** treat model output and retrieved context as untrusted;
-  enforce structured outputs; least-privilege tool calls with a human gate on destructive actions;
-  version prompts / models and gate changes on evals.
-- **Supply chain:** pin CI actions by SHA; scan dependencies (`govulncheck` + licenses);
-  sign release artifacts; attach SBOM and provenance.
-- **Up-to-date:** use current Go idioms and standards, not folklore — `log/slog`,
-  `errors.Is/As/Join`, `slices`/`maps`/`cmp`, `any` over `interface{}`;
-  verify the dependency is maintained, the stdlib doesn't already cover it, and no open CVE applies.
+Read only the matching [skill](skills/README.md) and needed reference sections. Do not preload other skills or all prior plan steps. Preserve user edits/index; commit, amend, push, or open draft PRs only when authorized. Multi-step state belongs in `tmp/plans/<task>/handoff.md`.
 
-Standing,
-re-runnable development skills encoding this baseline live in [`.github/skills/`](skills/README.md)
-— the `review` skill runs the review passes in a fresh, clean-context agent after every change set
-and before releases (reviewing the change's **blast radius** — surrounding and related code, not just the diff — and reporting/fixing the pre-existing problems it surfaces, redesign over patch); `create-branch`, `create-plan`, `apply-plan`, `apply-step`, `create-pr`,
-`validate`, `new-module`, `new-backend`, `parity`, and `release` cover the rest of the workflow.
-Validation is driven through `toven` (see `toven.toml`).
+From this repository: `make test M=<module> T=<pattern>`, `make lint M=<module>`, `make test-affected`, or `make check-<domain>` during implementation; `make check` for required full acceptance. See [validate](skills/validate/SKILL.md) for Toven selectors and additional gates. Documentation-only edits need link/metadata checks, not application builds.
 
-## Build, Test, and Lint
+## Load before the relevant change
 
-```bash
-make check              # Build + vet + test (full validation)
-make build              # Build (M=<module> for specific module)
-make test               # Test with -race -count=1 (M=<module>, T=<pattern>)
-make test-coverage      # Test with coverage report
-make lint               # golangci-lint (M=<module>)
-make fmt                # gofmt -s -w
-make tidy               # go mod tidy across all modules
-```
+| Change | Reference |
+|---|---|
+| API/error contracts, signatures, package layout | [Code style](engineering.md#code-style) |
+| Runtime test environments or auth/session/SSE | [Validation scope](engineering.md#validation-scope); real adapter/session proof is mandatory |
+| New module or provider | [Module structure](engineering.md#module-structure), then `new-module` or `new-backend` |
+| AI, security, dependencies, release | [Engineering principles](engineering.md#engineering-principles), then the matching review/release checklist |
 
-Cross-module operations use `./gomod.sh`:
-```bash
-./gomod.sh tidy         # Tidy all modules
-./gomod.sh cmd "go test -race -count=1"   # Run command in all modules
-./gomod.sh cmd "go test" -m messaging      # Run in specific module
-```
-
-Requires: Go 1.27.1+,
-golangci-lint (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`).
-
-## Module Structure
-
-Multi-module monorepo. Core packages share the root `go.mod`.
-Packages with heavy external dependencies have their own `go.mod` as sub-modules.
-
-- **Root module** (`github.com/kbukum/gokit`): config, logger, errors, validation, encryption,
-  component, di, resilience, observability, provider, pipeline, dag, security, bootstrap, sse, util,
-  version, bench
-- **Sub-modules** (own `go.mod`): auth, authz, database, cache, httpclient, messaging, storage,
-  server, grpc, connect, discovery, workload, llm, media, stateful, testutil
-
-When adding a new module:
-1. No heavy deps → add under root module, no new `go.mod`
-2. Heavy deps → create sub-module with own `go.mod`, `replace` directive to `../` for local dev
-3. Always create `doc.go` with package documentation
-
-## Code Style
-
-- `gofmt -s` + `golangci-lint` (`.golangci.yml` at root; `depguard` enforces layer direction).
-- Generics-first: all public APIs use Go generics.
-  No `interface{}`/`any` in public APIs (except genuinely opaque values — JSON body, `ctx.Value`, DB scan — documented).
-- Interfaces have 1–3 methods. Components opt-in to capabilities via separate interfaces.
-- Constructors accept `...Option` for extensibility (functional options pattern).
-- **Signatures, not columns.** Go has no line-length cap and `gofmt` does not wrap signatures,
-  so an over-long signature is a design signal, not a wrap target —
-  reduce parameters with a typed request/options struct
-  or functional options (prefer the owning package's existing `Config`/`...Option` pattern) rather than hand-wrapping.
-  `context.Context` stays the first parameter and is never folded into a struct.
-  When a multi-line signature is genuinely warranted,
-  use the gofmt-stable one-param-per-line form with a trailing comma and `)` closing at column 0.
-- Package names: lowercase, single-word, no plurals.
-- Every package has a `doc.go`.
-- Exported interfaces + factory functions; concrete implementations unexported.
-- Errors: RFC 9457 `AppError` with typed error codes.
-- Error contracts: `errors.New(code, message)` derives REST status; do not add status overrides. `errors/rpc` owns shared protobuf details for Connect and gRPC. Validation exposes semantic violation reasons, not validator IDs. Remote decoded failures are not trusted public AppErrors. Retry hints require operation idempotency and one bounded retry owner; server delays are minimums.
-- Tests: parallel, table-driven, use `testutil` helpers; deterministic under `-race -shuffle`.
-- **Readability & structure (load-bearing, not cosmetic):** organize by focused,
-  well-named files within a package — never pile unrelated concerns into one large file.
-  Split by concern (types, options, registry, middleware, adapter) into separate files
-  so the next reader can navigate by filename.
-  When a single non-test `.go` file grows past roughly **300–400 code lines** (code only —
-  excluding test files, comments, and blank lines; a soft average, not a strict cutoff),
-  check whether distinct concerns are piled together; if so it is a refactor signal, not a
-  normal state. Length alone is never the verdict — a cohesive single-concern file is fine
-  at any size; concern-mixing is the real signal.
-  Reorg is not only about one oversized file: when a single package/folder accumulates
-  **more than ~10 non-test files** (excluding `_test.go`) that fall into **2–3+ separable
-  concern groups**, lift each cohesive group into its own concern-named sub-package (sub-folder with
-  its own declare-only `doc.go`), so a reader lands in the right file *and folder* from the layout alone
-  (as in `agent/{memory}`, `cli/{theme,render,…}`, `dataset/{payload,record,stage,…}`).
-  Keep it criteria-driven — only where the groups are genuinely separable and it improves
-  readability, maintainability, scalability, extendability, and reusability without causing
-  other issues (import cycles, over-fragmentation).
-- **Declare-only aggregator.** `doc.go` holds the package clause and package documentation only —
-  no `func`/`method`/`type`/`var`/`const` declarations and no imports;
-  split code by concern into named sibling files (as in `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`).
-  Reported (advisory, never gating) by the ast-grep rule `scripts/sg-rules/declare-only-aggregator.yml` via `make structure`.
-
-## Validation scope
-
-Scope commands to what changed; the full workspace gates are for audits/CI sign-off:
-
-Runtime test-environment changes need real adapter proof, not only unit/build success. Reuse `testutil` for fresh bounded cleanup and rollback, `component/testutil` for deterministic lifecycle failures, and adapter test helpers for real loopback/file/container checks. Reset fixture data with requests quiesced; do not erase handlers or migration metadata. Required PostgreSQL checks fail on missing Docker; fake migration drivers and in-memory AutoMigrate certify orchestration/unit behavior only. Use `process` with isolated environment and bounded output, inspect forced shutdown as a failure, and record final commands, declared limits, and cleanup outcomes. See [`testutil/README.md`](../testutil/README.md).
-
-Authentication changes must prove the real HTTP/Connect/SSE session lifecycle through [`auth/testhost`](../auth/testhost/README.md). Use trusted HTTPS without verification bypass or weaker cookies. Reset before sign-in; never restore saved browser credentials against reset state. Check duplicate/mixed/invalid credentials, unsafe cookie CSRF, unavailable authoritative storage, rotation/logout races and local/cross-instance stream teardown. Keep credentials/private keys out of logs and retained artifacts. The fixture's scenario controls belong only to its test module, never production routing; frontend acceptance remains the browser consumer's responsibility.
-
-```bash
-make lint M=<module>                 # golangci-lint, one module
-make test M=<module> T=<pattern>     # scoped tests (-race -count=1)
-make test-affected                   # only modules the diff touches
-make check-<domain>                  # per-domain gate: core|patterns|crosscutting|composition|
-                                     #   transport|auth|data|ai|media|infra
-make check                           # full canonical gate (build + vet + test) — audit/CI
-```
-
-## Key Patterns
-
-- **Provider pattern**: `RequestResponse[I,O]`, `Stream[I,O]`, `Sink[I]`,
-  `Duplex[I,O]` with Registry/Manager/Selector.
-- **Pipeline pattern**: Lazy pull-based `Iterator[T]` with composable operators.
-- **Component lifecycle**: `Start/Stop/Health` with deterministic ordering via Registry.
-- **Middleware composition**: `Middleware[I, O]` chains for cross-cutting concerns.
-
-## Documentation
-
-- Write Markdown paragraphs as natural, continuous source lines. Do not hard-wrap prose to a column limit or insert source newlines for visual presentation; Markdown renderers handle viewport-aware wrapping. Keep intentional structure such as paragraph breaks, headings, lists, blockquotes, tables, and fenced code blocks.
-- Apply the same rule to prose in `doc.go`, godoc, and `//` comments: do not introduce arbitrary column-based breaks. Preserve Go formatting conventions for code examples and directives.
-- Comments and godoc describe the code as it is now — not history, plans, or the process that produced it.
+Read sections, not the whole reference. A unit test does not certify real driver, TLS, process, or browser behavior.

@@ -1,11 +1,6 @@
 ---
 name: new-backend
-description: >-
-    Add a pluggable backend/adapter (storage, vectorstore, messaging, cache, llm, inference, …)
-    to gokit the canonical way — a nested contrib sub-module with an explicit typed
-    Register(registry, cfg) factory, no init() side effects, and the in-memory/local default kept
-    in core. Use when integrating a provider like S3, GCS, Qdrant, Kafka, NATS, Redis, or a new
-    LLM/inference provider into an existing gokit registry.
+description: "gokit: Add an opt-in, config-selected backend implementing the owning module's typed contract."
 user-invocable: true
 ---
 

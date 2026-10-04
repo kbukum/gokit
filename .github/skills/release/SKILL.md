@@ -1,11 +1,6 @@
 ---
 name: release
-description: >-
-    Cut a release of the gokit multi-module monorepo — decide the semver bump, update the
-    CHANGELOG, run the full pre-release gates (build/vet/test/lint/vuln) via toven, then stage the
-    version bump through a PR (Phase 1) and cut every module tag plus the hosted Release with
-    `toven release` (Phase 2). Use when preparing or publishing a gokit release, tagging modules,
-    or checking release readiness.
+description: "gokit: Prepare or publish a release through the repository's version, validation, and supply-chain gates."
 user-invocable: true
 ---
 
@@ -36,7 +31,7 @@ toven vuln                  # govulncheck across all modules
 toven tidy                  # go mod tidy -diff — must be clean
 ```
 
-The dependency **license** gate (`scripts/check-licenses.sh`) stays native (network-bound, not a Toven task) — run it separately. Also run the `review` project audit in a fresh agent before a release. Treat green gates as necessary but not sufficient.
+The dependency **license** gate (`scripts/check-licenses.sh`) stays native (network-bound, not a Toven task) — run it separately. Also run the `review` project audit directly (use an independent agent only when requested) before a release. Treat green gates as necessary but not sufficient.
 
 ## Step 2 — Decide the version
 

@@ -1,72 +1,19 @@
 ---
 name: docs
-description: >-
-    Review and update gokit's documentation so it reads naturally and reflects the toolkit as it is
-    today — keep Markdown paragraphs flowing without hard column wrapping, preserve intentional
-    document structure, sync commands, module structure, and examples with the actual code, fix stale
-    links and dead references, drop history/plan narration, keep prose humanized and scannable with
-    a task-first quickstart, and add mermaid diagrams where they clarify architecture or flow. Use when writing or auditing docs,
-    repairing AI-generated hard wraps, after a change that makes docs outdated, or before a release.
+description: "gokit: Update or audit documentation for accuracy, clear prose, working examples, and links."
 user-invocable: true
 ---
 
-# Reviewing and updating gokit's docs
+# Documentation
 
-Documentation goes stale in two ways: it stops following the **style rules** (arbitrary source line breaks, history narration, dead links), and it becomes **outdated** (commands, module lists, package structure, and examples that no longer match the code). This skill sweeps both. gokit aligns with its sibling kit rskit capability by capability, so a stale doc misleads consumers and parity work alike — keep it accurate. Run it over the whole `docs/` tree, a single file, or the docs touched by a change set.
+Apply the [baseline](../../copilot-instructions.md). Scope to the requested docs and directly affected references, including godoc and agent docs; do not sweep unrelated files.
 
-The authoritative doc policy lives in the Documentation section of [`.github/copilot-instructions.md`](../../copilot-instructions.md). The baseline wins over any local habit.
+1. **Verify facts.** Check commands against Makefile/Toven, modules against `go.mod`/`go.work`, ownership against `docs/concern-owners.md`, and APIs against source. Use the parity skill only for parity claims.
+2. **Write for the task.** Lead how-to pages with a working example. Use plain active sentences, focused headings, and tables for dense options. Add a small captioned Mermaid diagram only when it replaces harder prose.
+3. **Preserve structure.** Markdown and Go comment prose have no arbitrary column wrapping. Keep paragraphs, lists, code, directives, HTML, and meaningful hard breaks distinct; do not blindly join lines.
+4. **Remove stale guidance.** Describe current behavior, not implementation history. Preserve historical changelogs and accepted ADRs. Do not link stable docs to temporary plans.
+5. **Check the result.** Resolve relative links and anchors. Compile changed executable examples; use scoped `go vet` for changed godoc source. Prose-only edits do not require an application build.
 
-## The doc surface
+For instruction/skill edits, keep always-loaded rules short and self-contained. A description states when to use the skill; the body states actions and acceptance. Link task-specific detail without recursively loading it. Preserve hard requirements and check metadata/link validity.
 
-Sweep every committed prose surface, not just `docs/`:
-
-- `docs/**` — `PACKAGES.md`, `MODULE-INDEX.md`, `concern-owners.md`, `EXAMPLES.md`, `VERSIONING*.md`, `RELEASING.md`, `security-model.md`, and the ADRs under `docs/adr/`.
-- `README.md`, `CHANGELOG.md`, `MAINTAINERS.md`, and any top-level `*.md`.
-- `.github/skills/**/SKILL.md` and their `references/*.md`.
-- `doc.go` package documentation and `//` comments in the packages in scope (these are docs too).
-
-Never touch `tmp/` (gitignored scratch) and never add a committed doc that references it.
-
-## Pass 1 — Standards (how it reads)
-
-- **Flowing Markdown prose.** A Markdown paragraph is one continuous source line. Do not hard-wrap prose to a column limit or add source newlines to control how it looks at one editor width; GitHub and other renderers wrap it for the reader's viewport. Collapse AI-generated hard wraps only within the same logical paragraph.
-- **Preserve intentional structure.** Keep blank-line paragraph boundaries, headings, list items, blockquotes, tables, link definitions, HTML blocks, mermaid diagrams, and fenced or indented code blocks. Never join separate list items or paragraphs. Preserve hard line breaks that are semantically meaningful (`<br>` or two trailing spaces).
-- **Go documentation.** Write `doc.go`, godoc, and `//` prose naturally without arbitrary column-based breaks. Preserve Go directives, headings, lists, and indented code examples. Do not join separate comment paragraphs.
-- **No history/plan/process narration.** A doc or comment describes the system as it is now, not how it got here or what a future plan intends. Delete "previously…", "we changed…", batch/plan/PR references, and TODO-narration.
-- **`tmp/` stays uncommitted.** No committed doc references a `tmp/` plan or handoff note.
-- **Frontmatter exemption.** YAML folded scalars (e.g. a skill's `description: >-`) already collapse to one logical line — leave their wrapping alone.
-
-## Pass 2 — Up-to-date check (whether it's still true)
-
-Verify each doc against the code it describes; a doc that lies is worse than no doc:
-
-- **Commands & gates** match how the repo actually builds — the `Makefile` targets and the argv-first `toven` planner the repo drives tasks through (`make check`, `make lint M=<module>`, `make test M=<module>`, `make check-<domain>`, `make test-affected`). No renamed or removed target/verb lingers in the docs.
-- **Module & package structure** matches reality: the module lists in `PACKAGES.md`/`MODULE-INDEX.md`, `go.work` membership, and the layer direction (`depguard`) match the tree; every package still has a `doc.go`; renamed/added/dropped modules are reflected everywhere they appear (including `concern-owners.md`).
-- **Parity tracking** is current: rskit parity is tracked through tracking issues in the rskit repo (see the `parity` skill), including deliberate light-version or rskit-only decisions.
-- **Examples build.** Code/command examples reflect current behavior and compile.
-- **Links resolve.** Internal relative links and cross-references point at files that exist; other-repo references use full URLs, never bare `#123`.
-
-## Pass 3 — Clarity & developer experience (does it actually help the reader?)
-
-Standards and accuracy make a doc correct; this pass makes it *usable*. Judge every doc by whether a developer under time pressure finds what they need and gets running fast — a correct doc nobody can skim has still failed.
-
-- **Humanized, plain language.** Write for a developer skimming, not a spec lawyer. One idea per sentence; keep sentences short. Use active voice and direct instructions ("Call `New`", "Send a GET request"), never passive throat-clearing ("a request should be sent"). Cut filler and hedging. Prefer the plain word over jargon; define an unavoidable term the first time it appears.
-- **Scannable, uncrowded structure.** Let the reader find the answer by scanning, not by reading top to bottom. Break content with meaningful headings, short lists, and tables; bold the load-bearing terms; keep paragraphs to a few sentences. Whitespace and sectioning carry meaning — never a wall of text.
-- **Task-first, quickstart up top.** Order each doc by what the reader wants to do, most common first (inverted pyramid). Lead with the shortest copy-pasteable path to a first working result, before deep reference. Know which of the four Diátaxis modes each page is — tutorial, how-to, reference, or explanation — and don't blend them on one page.
-- **Real, runnable examples.** Every non-trivial capability shows a real, copy-pasteable snippet that compiles against the current API — never pseudo-code. Show the common path first, then the important options and failure cases. Prefer runnable godoc `Example` functions so the compiler keeps them honest.
-- **Diagrams where prose is the wrong tool.** When a doc explains architecture, layer/dependency direction, a request or data flow, a state machine, or component interaction, add a focused `mermaid` diagram right where the concept is introduced — a diagram earns its place only by replacing a paragraph the reader would otherwise assemble in their head. Keep each diagram to one idea (prefer several small diagrams over one crowded one), pair it with a one-line caption so it degrades where mermaid isn't rendered, and keep it in sync with the code like any other doc. Don't diagram the trivial.
-- **Every element earns its place.** Delete restated-obvious prose, duplicate explanations, and decoration that doesn't help someone build. Meaning over volume.
-
-## Apply, then validate
-
-Fix every instance of a pattern across the whole surface in scope, not just the first hit. When repairing hard wraps, read and judge the Markdown structure rather than applying a blind line-joining script. Then validate what you touched:
-
-```bash
-go vet ./...                                        # validates the packages whose doc.go / comments changed compile
-```
-
-Docs/prose-only changes need no build/test gate beyond a `go vet`/`go build` of a package whose `doc.go` changed. Verify internal links by path before finishing.
-
-## Commit
-
-Use the [`commit`](../commit/SKILL.md) skill — one compact `docs:` Conventional-Commit line stating the change (e.g. `docs: repair hard-wrapped prose and sync PACKAGES.md`). No `Co-authored-by` trailer, no plan/batch/tool narration. Group by intent when it aids the reader (a prose-flow repair and an accuracy update read as separate commits).
+Commit only if explicitly requested, using the commit skill.

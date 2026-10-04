@@ -2,10 +2,7 @@
 
 Confirm every touched (or, in project mode, every existing) item lives in the right module, package, and layer, and that the dependency direction stays acyclic. This is the first gate: misplaced code makes every later pass moot, so reject on failure here before going further.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* check the packages the diff touches plus the affected area — a change to a core package's public surface fans out to every sub-module, nested adapter, and downstream consumer. *Project mode:* sweep each module's packages and dependency edges; the placement and acyclicity rules below are invariants for the whole toolkit.
 

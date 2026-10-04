@@ -1,10 +1,6 @@
 ---
 name: new-module
-description: >-
-    Scaffold a new package or module in the gokit multi-module monorepo the canonical way —
-    decide root package vs sub-module, wire go.mod + replace directive, doc.go, domains.toml, and
-    the right go.work file. Use when adding a new capability, package, or
-    module to gokit, or when unsure whether new code belongs in the root module or its own go.mod.
+description: "gokit: Add a Go package or module with layer, workspace, documentation, and test wiring."
 user-invocable: true
 ---
 

@@ -2,10 +2,7 @@
 
 The final pass, and a subtle one: comments and godoc are trusted by future readers and by pkg.go.dev, so a **wrong** comment is worse than no comment. Vibe-coded comments tend to narrate the obvious, restate the code, or describe what the code *used to* do. This pass keeps prose truthful and useful.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* read every comment and godoc line in the diff against the code beside it. *Project mode:* sample doc comments across packages, prioritizing public API godoc that pkg.go.dev renders.
 
