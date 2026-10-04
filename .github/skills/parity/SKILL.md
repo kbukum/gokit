@@ -1,11 +1,6 @@
 ---
 name: parity
-description: >-
-    Align gokit with its sibling kit rskit by capability, not blindly — mirror the
-    strongest existing implementation for a given scope, keep gokit idiomatic Go, and track parity
-    through rskit tracking issues. Use when porting or aligning a module with a sibling
-    counterpart, deciding whether something should be shared or stay kit-only, or when touching
-    anything that has a cross-kit parity row.
+description: "gokit: Align a capability with sibling kits while preserving idiomatic APIs and tracking deliberate gaps."
 user-invocable: true
 ---
 

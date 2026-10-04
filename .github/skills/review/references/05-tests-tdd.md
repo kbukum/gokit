@@ -2,10 +2,7 @@
 
 Behavior is only real if a test proves it. Vibe-coded changes routinely ship without tests, or with tests that assert implementation detail instead of behavior. This pass verifies the change is covered, deterministic, and race-clean.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* every behavioral change in the diff has a test in the same change; every bug fix has a regression test. *Project mode:* assess coverage against the gates and hunt for flaky/implementation-coupled tests across the suite.
 

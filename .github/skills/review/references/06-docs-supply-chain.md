@@ -2,10 +2,7 @@
 
 Docs drift and dependency risk are the quiet failures — the code works, so nobody notices the stale godoc or the unvetted new dependency until much later. This pass keeps the published surface honest and the dependency set clean.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* check the docs and deps the diff touches or invalidates. *Project mode:* audit every module's `doc.go`, READMEs, `go.mod`/`go.sum`, and the CI/release wiring for the invariants below.
 

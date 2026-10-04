@@ -2,10 +2,7 @@
 
 This is the pass the user cares about most: **is the code readable, maintainable, and well organized — or is it piled into one file?** Correctness passes (`02`, `03`) can be green while the code is still a maintenance liability. Vibe-coded output tends to grow one giant file with a few 300-line functions; this pass rejects that.
 
-> **Run in a separate, clean-context agent** — never inline in the session that wrote the code.
-> An independent reviewer re-derives every judgment from the code
-> and the principles instead of trusting prior reasoning.
-> A plan/spec may be passed in as a scope checklist only; it never excuses a baseline violation.
+Use the [review skill](../SKILL.md) for scope, execution, and finding format. This checklist does not require a separate agent.
 
 **Scope note.** *Changes mode:* judge the readability of the touched files and functions. *Project mode:* sweep for oversized files, god-packages, and duplicated logic across the tree.
 
