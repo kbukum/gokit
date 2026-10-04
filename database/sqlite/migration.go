@@ -11,9 +11,9 @@ import (
 
 // MigrateDriver creates a context-bound migration session. SQLite is single-process; one connection serializes migrations and writes on this pool.
 func MigrateDriver() migration.DriverFunc {
-	return func(ctx context.Context, pool *sql.DB) (migratedb.Driver, error) {
+	return func(ctx context.Context, pool *sql.DB, versionTable string) (migratedb.Driver, error) {
 		pool.SetMaxOpenConns(1)
-		return migration.NewSQLDriver(ctx, pool, migrationBackend{})
+		return migration.NewSQLDriver(ctx, pool, migrationBackend{}, versionTable)
 	}
 }
 

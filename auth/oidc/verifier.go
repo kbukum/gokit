@@ -127,13 +127,22 @@ func (v *Verifier) Verify(ctx context.Context, rawIDToken string) (*IDToken, err
 	if err != nil {
 		return nil, fmt.Errorf("oidc: decode payload: %w", err)
 	}
+	rawClaims, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: encode claims: %w", err)
+	}
 
 	token := &IDToken{
 		Issuer:   getString(payload, "iss"),
 		Subject:  getString(payload, "sub"),
 		Audience: getAudience(payload),
 		Nonce:    getString(payload, "nonce"),
-		Claims:   payload,
+		Claims:   rawClaims,
+		userInfo: &UserInfo{
+			Subject: getString(payload, "sub"), Email: getString(payload, "email"), EmailVerified: getBool(payload, "email_verified"),
+			Name: getString(payload, "name"), GivenName: getString(payload, "given_name"), FamilyName: getString(payload, "family_name"),
+			Picture: getString(payload, "picture"), Locale: getString(payload, "locale"), Raw: rawClaims,
+		},
 	}
 
 	if exp, ok := getFloat64(payload, "exp"); ok {
@@ -186,7 +195,8 @@ type IDToken struct {
 	Nonce string
 
 	// Claims holds all token claims for project-specific extraction.
-	Claims map[string]any
+	Claims   json.RawMessage
+	userInfo *UserInfo
 }
 
 // VerifyExpectations captures caller-side replay-protection expectations.
@@ -196,17 +206,12 @@ type VerifyExpectations struct {
 
 // ToUserInfo extracts standard OIDC UserInfo claims from the ID token.
 func (t *IDToken) ToUserInfo() *UserInfo {
-	return &UserInfo{
-		Subject:       t.Subject,
-		Email:         getString(t.Claims, "email"),
-		EmailVerified: getBool(t.Claims, "email_verified"),
-		Name:          getString(t.Claims, "name"),
-		GivenName:     getString(t.Claims, "given_name"),
-		FamilyName:    getString(t.Claims, "family_name"),
-		Picture:       getString(t.Claims, "picture"),
-		Locale:        getString(t.Claims, "locale"),
-		Raw:           t.Claims,
+	info := UserInfo{Subject: t.Subject}
+	if t.userInfo != nil {
+		info = *t.userInfo
 	}
+	info.Raw = append(json.RawMessage(nil), t.Claims...)
+	return &info
 }
 
 // --- Discovery ---

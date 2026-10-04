@@ -345,11 +345,9 @@ func TestFetchJSON(t *testing.T) {
 func TestCommaSeparatedScopesInResponse(t *testing.T) {
 	srv := testutil.NewMockOAuthServer()
 	defer srv.Close()
-	srv.SetTokenResponse(map[string]any{
-		"access_token": "tok",
-		"token_type":   "Bearer",
-		"scope":        "user.info.basic,video.list",
-	})
+	if err := srv.SetTokenResponse([]byte(`{"access_token":"tok","token_type":"Bearer","scope":"user.info.basic,video.list"}`)); err != nil {
+		t.Fatal(err)
+	}
 
 	p := NewGeneric(GenericConfig{
 		ProviderConfig:     mockProviderConfig(),

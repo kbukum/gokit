@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -165,7 +166,10 @@ func (p *GenericProvider) UserInfo(ctx context.Context, accessToken string) (*oi
 		return nil, fmt.Errorf("%s userinfo: %w", p.cfg.ProviderName, err)
 	}
 
-	info := p.mapUserInfo(raw)
+	info, err := p.mapUserInfo(raw)
+	if err != nil {
+		return nil, err
+	}
 
 	// Run post-userinfo hook if configured (e.g., GitHub email fallback)
 	if p.cfg.PostUserInfoHook != nil {
@@ -211,7 +215,7 @@ func (p *GenericProvider) ProviderType() string { return p.cfg.Type }
 // --- Internal helpers ---
 
 // mapUserInfo extracts standard fields from a raw JSON response using the configured mapping.
-func (p *GenericProvider) mapUserInfo(raw map[string]any) *oidc.UserInfo {
+func (p *GenericProvider) mapUserInfo(raw map[string]any) (*oidc.UserInfo, error) {
 	m := p.cfg.UserInfo
 	data := raw
 
@@ -222,7 +226,11 @@ func (p *GenericProvider) mapUserInfo(raw map[string]any) *oidc.UserInfo {
 		}
 	}
 
-	info := &oidc.UserInfo{Raw: raw}
+	rawJSON, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("oidc: encode user info: %w", err)
+	}
+	info := &oidc.UserInfo{Raw: rawJSON}
 
 	if m.SubjectKey != "" {
 		info.Subject = StrVal(data, m.SubjectKey)
@@ -255,7 +263,7 @@ func (p *GenericProvider) mapUserInfo(raw map[string]any) *oidc.UserInfo {
 		info.Locale = StrVal(data, m.LocaleKey)
 	}
 
-	return info
+	return info, nil
 }
 
 // Compile-time checks.

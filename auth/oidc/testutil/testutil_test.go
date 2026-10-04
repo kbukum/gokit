@@ -65,11 +65,15 @@ func TestMockOAuthServer_Flows(t *testing.T) {
 		t.Fatal("expected URL helpers to be populated")
 	}
 
-	srv.SetIDTokenClaims(map[string]any{
-		"sub": "user-1",
-	})
-	srv.SetTokenResponse(map[string]any{"access_token": "custom-token"})
-	srv.SetUserResponse(map[string]any{"sub": "override-user"})
+	if err := srv.SetIDTokenClaims(json.RawMessage(`{"sub":"user-1"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.SetTokenResponse(json.RawMessage(`{"access_token":"custom-token"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.SetUserResponse(json.RawMessage(`{"sub":"override-user"}`)); err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := http.PostForm(srv.TokenURL(), url.Values{
 		"grant_type": {"authorization_code"},

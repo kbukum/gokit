@@ -28,7 +28,7 @@ func PublicAccess(principal, route string) Authorizer {
 }
 
 // Authenticated composes an injected authenticator with a typed authorization resolver. Neither nil wiring nor a missing identity can open the endpoint.
-func Authenticated(auth Authenticator, resolve func(*http.Request, any) (Access, error)) Authorizer {
+func Authenticated[T any](auth Authenticator[T], resolve func(*http.Request, T) (Access, error)) Authorizer {
 	return func(r *http.Request) (Access, error) {
 		if util.IsNil(auth) || resolve == nil {
 			return Access{}, apperrors.Unauthorized("")

@@ -146,6 +146,7 @@ func (h *Handler) write(ctx context.Context, rc *http.ResponseController, w http
 }
 
 func (h *Handler) reject(w http.ResponseWriter, r *http.Request, err error) {
+	w.Header().Set("Cache-Control", "no-store")
 	failure := apperrors.Normalize(err)
 	h.cfg.Logger.WarnCtx(r.Context(), "SSE connection rejected", map[string]any{"code": failure.Code})
 	body, encodeErr := codec.Encode(codec.CompactJSON(), failure.ToProblemDetail())

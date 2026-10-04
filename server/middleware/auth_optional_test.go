@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,85 +10,33 @@ import (
 )
 
 type fakeTokenValidator struct {
-	claims any
+	claims string
 	err    error
 }
 
-func (f fakeTokenValidator) ValidateToken(string) (any, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	return f.claims, nil
+func (f fakeTokenValidator) ValidateToken(context.Context, string) (string, error) {
+	return f.claims, f.err
 }
 
 type ctxClaimsKey struct{}
 
-// storeClaims is a test ClaimsSetter that records claims under a local key so
-// tests can inject a setter without importing the auth module.
-func storeClaims(ctx context.Context, claims any) context.Context {
+func storeClaims(ctx context.Context, claims string) context.Context {
 	return context.WithValue(ctx, ctxClaimsKey{}, claims)
-}
-
-func TestOptionalAuth_RejectInvalidTokens(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	// OptionalAuth always rejects a present-but-invalid token (secure-by-default).
-	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")}, storeClaims)
-	if err != nil {
-		t.Fatalf("OptionalAuth() error: %v", err)
-	}
-	r.Use(h)
-	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
-
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	req.Header.Set("Authorization", "Bearer bad")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
-	}
-}
-
-func TestOptionalAuth_NoTokenPasses(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	h, err := OptionalAuth(fakeTokenValidator{err: errors.New("invalid")}, storeClaims)
-	if err != nil {
-		t.Fatalf("OptionalAuth() error: %v", err)
-	}
-	r.Use(h)
-	r.GET("/", func(c *gin.Context) { c.Status(http.StatusOK) })
-
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
-	}
 }
 
 func BenchmarkMiddlewareStackExecution(b *testing.B) {
 	b.ReportAllocs()
-	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	warn := func(_ *gin.Context, _ string) {}
-	h, err := Auth(
-		fakeTokenValidator{claims: map[string]string{"sub": "user"}}, storeClaims,
-		WithQueryTokenParam("token"),
-		WithQueryTokenAllowedPaths("/bench"),
-		WithQueryTokenWarningLogger(warn),
-	)
+	h, err := Auth(fakeTokenValidator{claims: "user"}, storeClaims)
 	if err != nil {
-		b.Fatalf("Auth() error: %v", err)
+		b.Fatal(err)
 	}
 	r.Use(h)
 	r.GET("/bench", func(c *gin.Context) { c.Status(http.StatusOK) })
-
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/bench?token=abc", http.NoBody)
+	for b.Loop() {
+		req := httptest.NewRequest(http.MethodGet, "/bench", http.NoBody)
+		req.Header.Set("Authorization", "Bearer "+"test-token")
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {

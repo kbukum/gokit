@@ -147,7 +147,7 @@ func TestSQLiteMigrationResetAndDriverLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver, err := sqlite.MigrateDriver()(ctx, pool)
+	driver, err := sqlite.MigrateDriver()(ctx, pool, migration.DefaultVersionTable)
 	if err != nil {
 		t.Fatal(err)
 	}

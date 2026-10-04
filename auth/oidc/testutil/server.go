@@ -80,25 +80,40 @@ func (m *MockOAuthServer) UserInfoURL() string { return m.server.URL + "/userinf
 // --- Configuration ---
 
 // SetTokenResponse overrides the token endpoint response.
-func (m *MockOAuthServer) SetTokenResponse(resp map[string]any) {
+func (m *MockOAuthServer) SetTokenResponse(resp json.RawMessage) error {
+	var fields map[string]any
+	if err := json.Unmarshal(resp, &fields); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.tokenResponse = resp
+	m.tokenResponse = fields
+	return nil
 }
 
 // SetUserResponse overrides the userinfo endpoint response.
-func (m *MockOAuthServer) SetUserResponse(resp map[string]any) {
+func (m *MockOAuthServer) SetUserResponse(resp json.RawMessage) error {
+	var fields map[string]any
+	if err := json.Unmarshal(resp, &fields); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.userResponse = resp
+	m.userResponse = fields
+	return nil
 }
 
 // SetIDTokenClaims sets claims that will be encoded as an ID token in the token response. When set,
 // the token response will include an "id_token" field containing a JWT with these claims (unsigned, for testing only).
-func (m *MockOAuthServer) SetIDTokenClaims(claims map[string]any) {
+func (m *MockOAuthServer) SetIDTokenClaims(claims json.RawMessage) error {
+	var fields map[string]any
+	if err := json.Unmarshal(claims, &fields); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.idTokenClaims = claims
+	m.idTokenClaims = fields
+	return nil
 }
 
 // FailToken makes the token endpoint return an error response.
@@ -219,7 +234,7 @@ func (m *MockOAuthServer) handleUserInfo(w http.ResponseWriter, r *http.Request)
 
 // BuildTestIDToken creates an unsigned JWT with the given claims.
 // Exported for use in tests that need to construct ID tokens directly.
-func BuildTestIDToken(claims map[string]any) string {
+func BuildTestIDToken[T any](claims map[string]T) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
 	payload, _ := json.Marshal(claims)
 	payloadB64 := base64.RawURLEncoding.EncodeToString(payload)

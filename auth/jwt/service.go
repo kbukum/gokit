@@ -21,6 +21,7 @@
 package jwt
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -126,21 +127,30 @@ func (s *Service[T]) parseWithKey(tokenString string, verifyKey any) (T, error) 
 	return parsed, nil
 }
 
-// ValidatorFunc returns a function that validates a token string
-// and returns the parsed claims as any.
-// This bridges the typed JWT service with generic middleware that doesn't know about the specific claims type.
-//
-// To get an auth.TokenValidator interface, wrap with auth.TokenValidatorFunc:
-//
-//	validator := auth.TokenValidatorFunc(svc.ValidatorFunc())
-//
-// Or use the convenience helper:
-//
-//	validator := auth.NewJWTValidator(svc)
-func (s *Service[T]) ValidatorFunc() func(string) (any, error) {
-	return func(token string) (any, error) {
-		return s.Parse(token)
+// ValidatorFunc preserves the claims type and caller cancellation.
+func (s *Service[T]) ValidatorFunc() func(context.Context, string) (T, error) {
+	return s.ValidateToken
+}
+
+// ValidateToken implements the structural typed token validator contract.
+func (s *Service[T]) ValidateToken(ctx context.Context, token string) (T, error) {
+	var zero T
+	if err := ctx.Err(); err != nil {
+		return zero, err
 	}
+	claims, err := s.Parse(token)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return zero, ctxErr
+	}
+	return claims, err
+}
+
+// GenerateToken implements the structural typed token generator contract.
+func (s *Service[T]) GenerateToken(ctx context.Context, claims T) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return s.Generate(claims)
 }
 
 // keyFunc is the jwt.Keyfunc used during token parsing.

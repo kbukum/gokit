@@ -45,7 +45,7 @@ This file is the bird's-eye index.
 
 | Module | Import | Description |
 |---|---|---|
-| `auth` | `gokit/auth` | JWT, OIDC, password hashing, token validation |
+| `auth` | `gokit/auth` | Typed principal/credential chain, opaque sessions, JWT/OIDC and password hashing |
 | `authz` | `gokit/authz` | Permission checking, wildcard pattern matching |
 | `database` | `gokit/database` | Explicit-driver database component — pooling, migrations, health |
 | `cache` | `gokit/cache` | Cache abstraction with memory default and opt-in Redis adapter |
@@ -83,6 +83,7 @@ This file is the bird's-eye index.
 | `cache/redis` | `gokit/cache/redis` | Redis cache adapter |
 | `database/postgres` | `gokit/database/postgres` | PostgreSQL database driver |
 | `database/sqlite` | `gokit/database/sqlite` | SQLite database driver |
+| `auth/session/database` | `gokit/auth/session/database` | Opt-in authoritative session persistence with real SQLite/PostgreSQL SQL migrations |
 | `llm/providers` | `gokit/llm/providers` | LLM provider adapters |
 | `llm/tokenizer/tiktoken` | `gokit/llm/tokenizer/tiktoken` | OpenAI BPE token counter (offline vocab) |
 | `llm/tokenizer/huggingface` | `gokit/llm/tokenizer/huggingface` | Hugging Face `tokenizer.json` token counter |
@@ -102,6 +103,7 @@ This file is the bird's-eye index.
 | Module | Import | Description |
 |---|---|---|
 | `connect/testutil` | `gokit/connect/testutil` | ConnectRPC test helpers |
+| `auth/testhost` | `gokit/auth/testhost` | Isolated trusted HTTPS auth/Connect/SSE fixture; test-only controls and owned teardown |
 | `dag/testutil` | `gokit/dag/testutil` | DAG test helpers |
 | `database/testutil` | `gokit/database/testutil` | Database test helpers |
 | `discovery/testutil` | `gokit/discovery/testutil` | Discovery test helpers |

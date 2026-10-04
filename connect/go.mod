@@ -6,9 +6,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
 	buf.build/go/protovalidate v1.4.0
 	connectrpc.com/connect v1.21.0
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/kbukum/gokit v0.3.0-alpha.1
-	github.com/kbukum/gokit/auth v0.3.0-alpha.1
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc
 	google.golang.org/protobuf v1.36.12
 )
@@ -54,5 +52,3 @@ require (
 )
 
 replace github.com/kbukum/gokit => ../
-
-replace github.com/kbukum/gokit/auth => ../auth

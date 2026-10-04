@@ -1,6 +1,9 @@
 package oidc
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // TokenResult holds the tokens returned from an OAuth2/OIDC exchange.
 type TokenResult struct {
@@ -52,5 +55,5 @@ type UserInfo struct {
 	Locale string `json:"locale,omitempty"`
 
 	// Raw holds all claims from the provider for project-specific extraction.
-	Raw map[string]any `json:"raw,omitempty"`
+	Raw json.RawMessage `json:"raw,omitempty"`
 }

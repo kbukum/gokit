@@ -11,10 +11,9 @@ type Store interface {
 	// Create persists a new API key.
 	Create(ctx context.Context, key *Key) error
 
-	// ListByPrefix retrieves candidate keys that share the human-readable prefix (the segment before the first "." in the plaintext key, e.g. "myapp").
-	// The result set is used for constant-time digest comparison;
-	// callers should enforce a minimum prefix length to keep the candidate set small.
-	ListByPrefix(ctx context.Context, keyPrefix string) ([]*Key, error)
+	// GetByDigest uses a unique indexed protected digest, never an unbounded prefix scan.
+	// Missing digests return an AppError with NOT_FOUND code; infrastructure failures must remain distinct.
+	GetByDigest(ctx context.Context, digest string) (*Key, error)
 
 	// GetByID retrieves a key by its unique identifier.
 	GetByID(ctx context.Context, id string) (*Key, error)

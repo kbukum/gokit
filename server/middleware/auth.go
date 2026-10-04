@@ -2,153 +2,91 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/security"
+	"github.com/kbukum/gokit/util"
 )
 
-// TokenValidator validates a bearer token and returns the parsed claims. It is declared locally
-// so the transport layer (L5) never imports the auth module (L6):
-// any concrete validator with this method — including auth.TokenValidator —
-// satisfies it structurally and is injected by the composing application.
-type TokenValidator interface {
-	// ValidateToken parses and verifies token, returning opaque claims. The
-	// claims type is genuinely caller-defined, so any is the documented
-	// opaque-value exception here; downstream handlers recover the concrete
-	// type through the ClaimsSetter's paired getter.
-	ValidateToken(token string) (any, error)
+// TokenValidator validates a bearer credential using the request context. Authentication providers satisfy this local contract without an upward transport dependency.
+type TokenValidator[T any] interface {
+	ValidateToken(context.Context, string) (T, error)
 }
 
-// PermissionChecker reports whether a subject holds a permission.
-// Declared locally to keep L5 free of the authz module (L6);
-// any authz.Checker satisfies it structurally.
+// ClaimsSetter stores a typed identity in a derived request context. Inject the authentication provider's paired setter and getter at composition time.
+type ClaimsSetter[T any] func(context.Context, T) context.Context
+
+// PermissionChecker reports whether a subject holds a permission without importing an authorization implementation.
 type PermissionChecker interface {
 	HasPermission(subject, permission string) bool
 }
 
-// ClaimsSetter stores validated claims on ctx, returning the derived context.
-// It is injected rather than imported
-// so the server never depends on the auth module's context package;
-// pass auth/authctx.Set (or an equivalent) from the composing application.
-// The claims value is opaque by design.
-type ClaimsSetter func(ctx context.Context, claims any) context.Context
-
-// QueryTokenWarningFunc logs a warning whenever query-token authentication is used.
-type QueryTokenWarningFunc func(c *gin.Context, tokenParam string)
-
-// AuthOption configures the Auth middleware.
+// AuthOption configures bearer authentication.
 type AuthOption func(*authOptions)
 
 type authOptions struct {
-	skipPaths               []string
-	headerName              string
-	scheme                  string
-	queryTokenParam         string
-	queryTokenAllowedPaths  []string
-	queryTokenWarningLogger QueryTokenWarningFunc
+	skipPaths []string
 }
 
-// WithSkipPaths skips authentication for requests whose path starts with any of the given prefixes.
+// WithSkipPaths explicitly bypasses authentication for the supplied path prefixes.
 func WithSkipPaths(paths ...string) AuthOption {
-	return func(o *authOptions) { o.skipPaths = paths }
+	return func(o *authOptions) { o.skipPaths = append([]string(nil), paths...) }
 }
 
-// WithHeaderName sets the header to read the token from (default: "Authorization").
-func WithHeaderName(name string) AuthOption {
-	return func(o *authOptions) { o.headerName = name }
+// Auth requires a valid bearer header and stores its typed identity. Cookie/session authentication belongs in HTTPAuth, where the injected authenticator sees the complete request.
+func Auth[T any](validator TokenValidator[T], setClaims ClaimsSetter[T], opts ...AuthOption) (gin.HandlerFunc, error) {
+	return newAuthHandler(validator, setClaims, RejectMissing, opts...)
 }
 
-// WithScheme sets the expected token scheme (default: "Bearer").
-// Set to empty string to read the raw header value without scheme parsing.
-func WithScheme(scheme string) AuthOption {
-	return func(o *authOptions) { o.scheme = scheme }
+// OptionalAuth accepts a missing Authorization header. Every presented but malformed or invalid credential is rejected; query parameters are never credentials.
+func OptionalAuth[T any](validator TokenValidator[T], setClaims ClaimsSetter[T], opts ...AuthOption) (gin.HandlerFunc, error) {
+	return newAuthHandler(validator, setClaims, AcceptMissing, opts...)
 }
 
-// WithQueryTokenParam enables token extraction from a URL query parameter as a fallback when the header is missing.
-func WithQueryTokenParam(param string) AuthOption {
-	return func(o *authOptions) { o.queryTokenParam = param }
-}
-
-// WithQueryTokenAllowedPaths sets explicit endpoint paths where query token auth is allowed.
-func WithQueryTokenAllowedPaths(paths ...string) AuthOption {
-	return func(o *authOptions) { o.queryTokenAllowedPaths = paths }
-}
-
-// WithQueryTokenWarningLogger configures an optional hook invoked each time a token is extracted from a query parameter.
-// Use this for audit logging when query-token auth is a fallback rather than the primary mechanism.
-func WithQueryTokenWarningLogger(fn QueryTokenWarningFunc) AuthOption {
-	return func(o *authOptions) { o.queryTokenWarningLogger = fn }
-}
-
-// Auth returns a Gin middleware that validates tokens
-// and stores the parsed claims in the request context.
-//
-// It applies [RejectMissing]: requests without credentials are rejected with 401.
-// A present-but-invalid token is always rejected. setClaims is the injected sink
-// for validated claims (typically auth/authctx.Set), keeping the transport layer
-// decoupled from the auth module. Both validator and setClaims must be non-nil.
-func Auth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
-	return newAuthHandler("Auth", validator, setClaims, RejectMissing, opts...)
-}
-
-// OptionalAuth validates a token if present
-// but allows unauthenticated requests (no Authorization header / empty token) to proceed.
-// It applies [AcceptMissing]. A *present but invalid* token is always rejected with 401 —
-// this is a deliberate secure-by-default contract:
-// callers that want pass-through-on-failure should use no auth middleware at all.
-//
-// setClaims is the injected sink for validated claims. Both validator
-// and setClaims must be non-nil.
-func OptionalAuth(validator TokenValidator, setClaims ClaimsSetter, opts ...AuthOption) (gin.HandlerFunc, error) {
-	return newAuthHandler("OptionalAuth", validator, setClaims, AcceptMissing, opts...)
-}
-
-// newAuthHandler builds the token-authentication middleware shared by Auth and OptionalAuth.
-// policy governs only the missing-credential case; an invalid token is always rejected.
-func newAuthHandler(name string, validator TokenValidator, setClaims ClaimsSetter, policy MissingTokenPolicy, opts ...AuthOption) (gin.HandlerFunc, error) {
-	if validator == nil {
-		return nil, fmt.Errorf("middleware/auth: %s requires a non-nil TokenValidator", name)
+func newAuthHandler[T any](validator TokenValidator[T], setClaims ClaimsSetter[T], policy MissingTokenPolicy, opts ...AuthOption) (gin.HandlerFunc, error) {
+	if util.IsNil(validator) {
+		return nil, apperrors.InvalidInput("validator", "a non-nil TokenValidator is required")
 	}
 	if setClaims == nil {
-		return nil, fmt.Errorf("middleware/auth: %s requires a non-nil ClaimsSetter", name)
+		return nil, apperrors.InvalidInput("setClaims", "a non-nil ClaimsSetter is required")
 	}
-	o := buildAuthOptions(opts...)
-	if err := o.validateQueryTokenConfig(); err != nil {
-		return nil, err
+	o := &authOptions{}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, apperrors.InvalidInput("options", "authentication options must not be nil")
+		}
+		opt(o)
 	}
-
 	return func(c *gin.Context) {
-		path := c.Request.URL.Path
 		for _, skip := range o.skipPaths {
-			if strings.HasPrefix(path, skip) {
+			if strings.HasPrefix(c.Request.URL.Path, skip) {
 				c.Next()
 				return
 			}
 		}
-
-		token, ok := extractToken(c, o)
-		if !ok {
-			if policy == AcceptMissing {
-				c.Next()
-				return
-			}
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authorization required"})
+		token, present, err := security.ParseBearerHeader(c.Request.Header)
+		if !present && err == nil && policy == AcceptMissing {
+			c.Next()
 			return
 		}
-
-		claims, err := validator.ValidateToken(token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		if err != nil || !present {
+			c.Abort()
+			c.Header("WWW-Authenticate", security.BearerAuthScheme)
+			writeAuthFailure(c.Writer, c.Request, apperrors.Unauthorized(""))
 			return
 		}
-
-		ctx := setClaims(c.Request.Context(), claims)
-		c.Request = c.Request.WithContext(ctx)
+		claims, err := validator.ValidateToken(c.Request.Context(), token)
+		if err != nil || util.IsNil(claims) {
+			c.Abort()
+			c.Header("WWW-Authenticate", security.BearerAuthScheme)
+			writeAuthFailure(c.Writer, c.Request, apperrors.Unauthorized("").WithCause(err))
+			return
+		}
+		c.Request = c.Request.WithContext(setClaims(c.Request.Context(), claims))
 		c.Next()
 	}, nil
 }
@@ -174,51 +112,4 @@ func RequirePermission(checker PermissionChecker, required string, subjectExtrac
 		}
 		c.Next()
 	}
-}
-
-func buildAuthOptions(opts ...AuthOption) *authOptions {
-	o := &authOptions{headerName: "Authorization", scheme: security.BearerAuthScheme}
-	for _, opt := range opts {
-		opt(o)
-	}
-	return o
-}
-
-func (o *authOptions) validateQueryTokenConfig() error {
-	if o.queryTokenParam == "" {
-		return nil
-	}
-	if len(o.queryTokenAllowedPaths) == 0 {
-		return fmt.Errorf("middleware/auth: query token extraction requires explicit WithQueryTokenAllowedPaths")
-	}
-	return nil
-}
-
-// extractToken reads the token from the request based on options.
-func extractToken(c *gin.Context, o *authOptions) (string, bool) {
-	header := c.GetHeader(o.headerName)
-	if header != "" {
-		if o.scheme == "" {
-			return header, true
-		}
-		parts := strings.SplitN(header, " ", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], o.scheme) {
-			return parts[1], true
-		}
-	}
-
-	if o.queryTokenParam != "" && slices.Contains(o.queryTokenAllowedPaths, c.Request.URL.Path) {
-		if token := c.Query(o.queryTokenParam); token != "" {
-			if o.queryTokenWarningLogger != nil {
-				o.queryTokenWarningLogger(c, o.queryTokenParam)
-			}
-			// Strip the token from the URL so it is not logged, cached, or forwarded.
-			q := c.Request.URL.Query()
-			q.Del(o.queryTokenParam)
-			c.Request.URL.RawQuery = q.Encode()
-			return token, true
-		}
-	}
-
-	return "", false
 }

@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
@@ -296,13 +297,9 @@ func TestValidatorFunc(t *testing.T) {
 	token, _ := svc.GenerateAccess(&testClaims{UserID: "user-1"})
 	validator := svc.ValidatorFunc()
 
-	result, err := validator(token)
+	parsed, err := validator(context.Background(), token)
 	if err != nil {
 		t.Fatalf("ValidatorFunc: %v", err)
-	}
-	parsed, ok := result.(*testClaims)
-	if !ok {
-		t.Fatal("expected *testClaims from ValidatorFunc")
 	}
 	if parsed.UserID != "user-1" {
 		t.Errorf("expected UserID 'user-1', got '%s'", parsed.UserID)
@@ -577,7 +574,7 @@ func TestGenerateReturnsSignError(t *testing.T) {
 	t.Parallel()
 	// A Service configured for RS256 but given a non-RSA sign key forces
 	// SignedString to fail without going through NewService validation.
-	svc := &Service[*testClaims]{cfg: Config{Method: RS256, PrivateKey: "not-a-key"}, newEmpty: func() *testClaims { return &testClaims{} }}
+	svc := &Service[*testClaims]{cfg: Config{Method: RS256}, newEmpty: func() *testClaims { return &testClaims{} }}
 	if _, err := svc.Generate(&testClaims{UserID: "u1"}); err == nil {
 		t.Fatal("expected sign error from Generate")
 	}

@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/rsa"
@@ -78,11 +79,15 @@ type Config struct {
 	// --- Runtime fields (not from config files) ---
 
 	// PrivateKey is the parsed RSA, ECDSA, or Ed25519 private key (set programmatically).
-	PrivateKey any `mapstructure:"-"`
+	PrivateKey crypto.Signer `mapstructure:"-"`
 
 	// PublicKey is the parsed RSA, ECDSA, or Ed25519 public key (set programmatically).
-	PublicKey any `mapstructure:"-"`
+	PublicKey VerificationKey `mapstructure:"-"`
 }
+
+// VerificationKey is the equality contract implemented by RSA, ECDSA and Ed25519 public keys.
+// crypto.PublicKey in Equal follows the standard-library cryptographic key contract.
+type VerificationKey interface{ Equal(crypto.PublicKey) bool }
 
 // ApplyDefaults sets sensible defaults for zero-valued fields.
 func (c *Config) ApplyDefaults() {

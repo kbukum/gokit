@@ -9,10 +9,10 @@ import (
 	"github.com/kbukum/gokit/database/migration"
 )
 
-// MigrateDriver creates a context-bound migration session with a database-scoped advisory lock.
+// MigrateDriver creates a context-bound migration session with a database-scoped advisory lock shared by every migration set, so concurrent sets serialize.
 func MigrateDriver() migration.DriverFunc {
-	return func(ctx context.Context, pool *sql.DB) (migratedb.Driver, error) {
-		return migration.NewSQLDriver(ctx, pool, migrationBackend{})
+	return func(ctx context.Context, pool *sql.DB, versionTable string) (migratedb.Driver, error) {
+		return migration.NewSQLDriver(ctx, pool, migrationBackend{}, versionTable)
 	}
 }
 
