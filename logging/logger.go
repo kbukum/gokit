@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -26,10 +27,17 @@ type Logger struct {
 	slog    *slog.Logger
 	service string
 	level   *slog.LevelVar
-	// otlp is non-nil only on the root logger returned by a constructor, so
-	// Close shuts the exporter down exactly once.
+	// release is non-nil only on the root logger returned by a constructor, so
+	// owned sinks and the exporter are released exactly once.
+	release *release
+}
+
+// release owns the root logger's sinks and exporter and records the outcome of releasing them.
+type release struct {
+	once    sync.Once
 	otlp    *OTLPProvider
 	closers []io.Closer
+	err     error
 }
 
 // New builds a Logger from cfg for the named service. Options customize the
@@ -49,8 +57,7 @@ func New(cfg *Config, serviceName string, opts ...Option) (*Logger, error) {
 		slog:    slog.New(p.handler),
 		service: serviceName,
 		level:   p.level,
-		otlp:    p.otlp,
-		closers: p.closers,
+		release: &release{otlp: p.otlp, closers: p.closers},
 	}, nil
 }
 
@@ -118,26 +125,38 @@ func (l *Logger) Level() slog.Level {
 	return l.level.Level()
 }
 
-// Close shuts down owned sinks and the OTLP exporter, flushing pending logs. The OTLP flush is bounded by [otlpShutdownTimeout] so an unavailable collector cannot stall shutdown.
+// Close releases owned sinks and the OTLP exporter like [Logger.Shutdown], bounding the OTLP flush by [otlpShutdownTimeout].
 func (l *Logger) Close() error {
-	var errs []error
-	if l.otlp != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
-		defer cancel()
-		if err := l.otlp.Shutdown(ctx); err != nil {
-			errs = append(errs, err)
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), otlpShutdownTimeout)
+	defer cancel()
+	return l.Shutdown(ctx)
+}
+
+// Shutdown flushes and shuts down the OTLP exporter within ctx, then closes owned sinks. Only the root logger returned by a constructor owns them; derived loggers release nothing. The first call releases; repeated calls return the recorded outcome. Records written after release are dropped.
+func (l *Logger) Shutdown(ctx context.Context) error {
+	r := l.release
+	if r == nil {
+		return nil
 	}
-	for _, closer := range l.closers {
-		if err := closer.Close(); err != nil {
-			errs = append(errs, err)
+	r.once.Do(func() {
+		var errs []error
+		if r.otlp != nil {
+			if err := r.otlp.Shutdown(ctx); err != nil {
+				errs = append(errs, err)
+			}
 		}
-	}
-	return stderrors.Join(errs...)
+		for _, closer := range r.closers {
+			if err := closer.Close(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		r.err = stderrors.Join(errs...)
+	})
+	return r.err
 }
 
 // derive returns a Logger backed by a new *slog.Logger, sharing the level var
-// but not the OTLP ownership (Close stays bound to the constructed root).
+// but not sink or exporter ownership (release stays bound to the constructed root).
 func (l *Logger) derive(s *slog.Logger) *Logger {
 	return &Logger{slog: s, service: l.service, level: l.level}
 }

@@ -56,6 +56,9 @@ func main() {
 | `BaseLazyComponent` | Thread-safe lazy initialization wrapper |
 | `NewRegistry()` | Create component registry |
 | `StartAll()` / `StopAll()` / `HealthAll()` | Batch lifecycle operations |
+| `StartError` | Start failure: the failed `Component`, its `Cause`, and any `Rollback` stop failures |
+
+`Register` rejects empty and duplicate names. When a start fails, `StartAll` and `StartAllConcurrent` stop the components that already started and return a `*StartError`. Rollback stop failures are returned in `Rollback`, not only logged.
 
 ## Coordinated shutdown
 

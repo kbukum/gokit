@@ -148,7 +148,7 @@ func (r *BenchRunner[L]) Run(parent context.Context, dataset Dataset[L]) (result
 	if describeErr != nil {
 		return nil, describeErr
 	}
-	result = &RunResult{ID: w.id, Timestamp: start, Tag: r.cfg.tag, Branches: make(map[string]BranchResult)}
+	result = &RunResult{ID: w.id, Timestamp: start.UTC(), Tag: r.cfg.tag, Branches: make(map[string]BranchResult)}
 	tokenizers := make(map[string]bool)
 	for idx, b := range r.branches {
 		warmupFailures, err := r.warmup(ctx, dataset, b)

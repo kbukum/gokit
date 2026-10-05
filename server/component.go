@@ -9,7 +9,8 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
-const componentName = "http-server"
+// DefaultComponentName is the registry name of a Component created without WithName.
+const DefaultComponentName = "http-server"
 
 // Ensure *Server satisfies component.Component at compile time.
 var _ component.Component = (*Component)(nil)
@@ -23,15 +24,28 @@ var _ component.RouteProvider = (*Component)(nil)
 // Component wraps Server to implement component.Component.
 type Component struct {
 	server *Server
+	name   string
 }
 
-// NewComponent returns a component.Component backed by the given Server.
-func NewComponent(s *Server) *Component {
-	return &Component{server: s}
+// ComponentOption configures a Component.
+type ComponentOption func(*Component)
+
+// WithName sets the component's registry and health name. Give each server a distinct name when one registry hosts several servers. The registry rejects an empty name.
+func WithName(name string) ComponentOption {
+	return func(c *Component) { c.name = name }
+}
+
+// NewComponent returns a component.Component backed by the given Server, named [DefaultComponentName] unless WithName is given.
+func NewComponent(s *Server, opts ...ComponentOption) *Component {
+	c := &Component{server: s, name: DefaultComponentName}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
 }
 
 // Name returns the component name used for registration.
-func (sc *Component) Name() string { return componentName }
+func (sc *Component) Name() string { return sc.name }
 
 // Start starts the underlying HTTP server.
 func (sc *Component) Start(ctx context.Context) error {
@@ -55,12 +69,12 @@ func (sc *Component) Health(ctx context.Context) component.Health {
 	sc.server.admissionMu.Unlock()
 	if sc.server.httpServer != nil && !closing {
 		return component.Health{
-			Name:   componentName,
+			Name:   sc.name,
 			Status: component.StatusHealthy,
 		}
 	}
 	return component.Health{
-		Name:    componentName,
+		Name:    sc.name,
 		Status:  component.StatusUnhealthy,
 		Message: "HTTP server not initialized",
 	}

@@ -122,18 +122,18 @@ if err != nil {
     return err
 }
 
-_ = app.RegisterComponent(db)    // component.Component
-_ = app.RegisterComponent(cache) // component.Component
+if err := app.RegisterComponent(db); err != nil { // component.Component
+    return err
+}
 
 app.OnConfigure(func(ctx context.Context, app *bootstrap.App[*AppConfig]) error {
-    // All components started — set up routes, handlers, business logic
-    return nil
+    // Register more components and wire business logic — they start right after configure
+    return app.RegisterComponent(cache)
 })
 
-// Run: Init → Start → Configure → Ready → wait for signal → Stop
-if err := app.Run(ctx); err != nil {
-    log.Fatal("app failed", map[string]any{"error": err})
-}
+// Run: Configure → Start → Ready → wait for signal → Shutdown.
+// It returns a typed *StartupError or *ShutdownError; the App's own logger is already released.
+return app.Run(ctx)
 ```
 
 ## Agent Loop

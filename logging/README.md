@@ -54,6 +54,8 @@ if err != nil {
 defer log.Close()
 ```
 
+`Close` and `Shutdown(ctx)` release the logger once: they flush OTLP export within the deadline, then close the file sink. If the deadline has already passed, the flush is skipped but the exporter still stops. Later calls return the first result. Loggers derived with `WithComponent`, `WithFields`, `WithError`, or `WithContext` share the parent's sinks and release nothing; close the root logger.
+
 For configurations known-good at author time (no OTLP, or a config validated elsewhere) and for tests, use `MustNew` — the sanctioned Must-twin that panics instead of returning an error, mirroring `regexp.MustCompile`. Do not use it on runtime or user-supplied config paths.
 
 ```go

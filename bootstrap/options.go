@@ -27,8 +27,9 @@ func resolveOptions(opts []Option) *appOptions {
 	return o
 }
 
-// WithLogger sets a custom logger for the application. If not set,
-// the logger is auto-initialized from the config's Logging field.
+// WithLogger sets a borrowed logger for the application. The App never closes it; the caller
+// closes it after the App shuts down. If not set, the App creates a logger from the config's
+// Logging field, owns it, and releases it as the last step of shutdown.
 func WithLogger(l *logging.Logger) Option {
 	return func(o *appOptions) {
 		o.logger = l
@@ -42,7 +43,8 @@ func WithGracefulTimeout(d time.Duration) Option {
 	}
 }
 
-// WithContainer sets a custom DI container for the application.
+// WithContainer sets a custom DI container for the application. Ownership moves to the App,
+// which closes the container during shutdown like its default container.
 func WithContainer(c *di.Container) Option {
 	return func(o *appOptions) {
 		o.container = c

@@ -10,17 +10,23 @@
 //
 // # Server Example
 //
-//	app, _ := bootstrap.NewApp(&cfg)
+//	app, err := bootstrap.NewApp(&cfg)
+//	if err != nil {
+//	    return err
+//	}
 //	app.OnConfigure(func(ctx context.Context, a *bootstrap.App[*MyConfig]) error {
 //	    // wire up services, routes, etc.
 //	    return nil
 //	})
-//	app.Run(ctx) // blocks until SIGINT/SIGTERM
+//	return app.Run(ctx) // blocks until SIGINT/SIGTERM
 //
 // # Task Example
 //
-//	app, _ := bootstrap.NewApp(&cfg)
-//	app.RunTask(ctx, func(ctx context.Context) error {
+//	app, err := bootstrap.NewApp(&cfg)
+//	if err != nil {
+//	    return err
+//	}
+//	return app.RunTask(ctx, func(ctx context.Context) error {
 //	    return processData(ctx) // runs to completion, then shuts down
 //	})
 package bootstrap
