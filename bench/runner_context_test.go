@@ -52,7 +52,7 @@ func TestRunnerRunsContextMetricsAfterSyncMetrics(t *testing.T) {
 	}
 
 	runner := bench.NewBenchRunner(
-		bench.WithMetrics(metric.AsRunMetric[string](mustBinaryClassification[string](t, "positive"))),
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithMetrics(metric.AsRunMetric[string](mustBinaryClassification[string](t, "positive"))),
 		bench.WithContextMetrics(metric.AsRunContextMetric[string](semantic)),
 	)
 	runner.Register("model", bench.EvaluatorFunc("m", func(_ context.Context, _ []byte) (bench.Prediction[string], error) {
@@ -64,12 +64,12 @@ func TestRunnerRunsContextMetricsAfterSyncMetrics(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if len(result.Metrics) != 2 {
-		t.Fatalf("len(Metrics) = %d, want 2", len(result.Metrics))
+	if len(result.Metrics) != 7 {
+		t.Fatalf("len(Metrics) = %d, want 7", len(result.Metrics))
 	}
 	// Sync metric first in registration order, context metric after.
-	if result.Metrics[len(result.Metrics)-1].Name != "semantic_similarity[test-embed:t0.8]" {
-		t.Errorf("last metric = %q, want semantic_similarity[test-embed:t0.8] (context metric runs after sync)", result.Metrics[len(result.Metrics)-1].Name)
+	if result.Metrics[1].Name != "semantic_similarity[test-embed:t0.8]" {
+		t.Errorf("second metric = %q, want semantic_similarity[test-embed:t0.8] (context metric runs after sync)", result.Metrics[1].Name)
 	}
 	// Provenance metric names include both phases.
 	found := false
@@ -89,7 +89,7 @@ func TestRunnerFailsWhenContextMetricErrors(t *testing.T) {
 
 	loader := writeContextDataset(t)
 	runner := bench.NewBenchRunner(
-		bench.WithContextMetrics[string](&failingContextMetric{name: "boom"}),
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithContextMetrics[string](&failingContextMetric{name: "boom"}),
 	)
 	runner.Register("model", bench.EvaluatorFunc("m", func(_ context.Context, _ []byte) (bench.Prediction[string], error) {
 		return bench.Prediction[string]{Label: "positive"}, nil
@@ -103,6 +103,9 @@ func TestRunnerFailsWhenContextMetricErrors(t *testing.T) {
 type failingContextMetric struct{ name string }
 
 func (m *failingContextMetric) Name() string { return m.name }
+func (m *failingContextMetric) Identity() bench.MetricIdentity {
+	return bench.MetricIdentity{Name: m.name, Version: "1"}
+}
 
 func (m *failingContextMetric) Compute(context.Context, []bench.ScoredSample[string]) (bench.MetricResult, error) {
 	return bench.MetricResult{}, context.DeadlineExceeded

@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -18,15 +19,29 @@ type tableReporter struct{}
 
 func (r *tableReporter) Name() string { return "table" }
 
-func (r *tableReporter) Generate(w io.Writer, result *bench.RunResult) error {
+func (r *tableReporter) Generate(ctx context.Context, w io.Writer, input Input) error {
+	if err := validateInput(ctx, input); err != nil {
+		return err
+	}
+	result := input.Result
+	rows, err := preview(ctx, input, maxTableSamples)
+	if err != nil {
+		return err
+	}
 	var b strings.Builder
 
 	r.writeHeader(&b, result)
 	r.writeMetrics(&b, result)
 	r.writeBranches(&b, result)
-	r.writeSamples(&b, result)
+	r.writeSamples(&b, rows)
+	if input.Store != nil && result.Dataset.SampleCount > len(rows) {
+		fmt.Fprintf(&b, "\n... showing %d of %d samples\n", len(rows), result.Dataset.SampleCount)
+	}
+	if input.Diff != nil {
+		b.WriteString("\n" + input.Diff.Summary())
+	}
 
-	_, err := io.WriteString(w, b.String())
+	_, err = io.WriteString(w, b.String())
 	return err
 }
 
@@ -52,7 +67,8 @@ func (r *tableReporter) writeMetrics(b *strings.Builder, result *bench.RunResult
 
 	// Compute column widths.
 	nameW := len("Metric")
-	for _, m := range result.Metrics {
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
 		if len(m.Name) > nameW {
 			nameW = len(m.Name)
 		}
@@ -65,7 +81,8 @@ func (r *tableReporter) writeMetrics(b *strings.Builder, result *bench.RunResult
 	b.WriteString("  " + sep)
 	fmt.Fprintf(b, "  | %-*s | %*s | %-30s |\n", nameW, "Metric", valW, "Value", "Details")
 	b.WriteString("  " + sep)
-	for _, m := range result.Metrics {
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
 		detail := ""
 		if m.Values != nil {
 			parts := formatValues(m.Values)
@@ -115,12 +132,12 @@ func (r *tableReporter) writeBranches(b *strings.Builder, result *bench.RunResul
 
 const maxTableSamples = 20
 
-func (r *tableReporter) writeSamples(b *strings.Builder, result *bench.RunResult) {
-	if len(result.Samples) == 0 {
+func (r *tableReporter) writeSamples(b *strings.Builder, samples []bench.SampleResult) {
+	if len(samples) == 0 {
 		return
 	}
 
-	count := len(result.Samples)
+	count := len(samples)
 	truncated := false
 	if count > maxTableSamples {
 		truncated = true
@@ -131,7 +148,7 @@ func (r *tableReporter) writeSamples(b *strings.Builder, result *bench.RunResult
 	idW := len("ID")
 	labelW := len("Label")
 	predW := len("Predicted")
-	for _, s := range result.Samples[:count] {
+	for _, s := range samples[:count] {
 		if len(s.ID) > idW {
 			idW = len(s.ID)
 		}
@@ -150,7 +167,7 @@ func (r *tableReporter) writeSamples(b *strings.Builder, result *bench.RunResult
 	b.WriteString("  " + sep)
 	fmt.Fprintf(b, "  | %-*s | %-*s | %-*s | Score  |    |\n", idW, "ID", labelW, "Label", predW, "Predicted")
 	b.WriteString("  " + sep)
-	for _, s := range result.Samples[:count] {
+	for _, s := range samples[:count] {
 		icon := "✅"
 		if !s.Correct {
 			icon = "❌"
@@ -163,7 +180,7 @@ func (r *tableReporter) writeSamples(b *strings.Builder, result *bench.RunResult
 	}
 	b.WriteString("  " + sep)
 	if truncated {
-		fmt.Fprintf(b, "  ... showing %d of %d samples\n", count, len(result.Samples))
+		fmt.Fprintf(b, "  ... showing %d of %d samples\n", count, len(samples))
 	}
 	b.WriteString("\n")
 }

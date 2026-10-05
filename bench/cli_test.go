@@ -12,7 +12,7 @@ func TestNewCLIRunnerDefaults(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	cli := NewCLIRunner(storage)
 
 	// Default output should not be nil.
@@ -25,7 +25,7 @@ func TestNewCLIRunnerWithOutput(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	var buf bytes.Buffer
 	cli := NewCLIRunner(storage, WithOutput(&buf))
 
@@ -38,7 +38,7 @@ func TestCLIRunnerListRunsEmpty(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	var buf bytes.Buffer
 	cli := NewCLIRunner(storage, WithOutput(&buf))
 
@@ -56,7 +56,7 @@ func TestCLIRunnerListRuns(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r1 := makeTestResult("run-alpha", "v1", "my-dataset")
@@ -91,7 +91,7 @@ func TestCLIRunnerListRunsWithTag(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r := makeTestResult("run-tagged", "special", "ds")
@@ -115,7 +115,7 @@ func TestCLIRunnerShowRun(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r := makeTestResult("run-show", "v1", "test-dataset")
@@ -149,7 +149,7 @@ func TestCLIRunnerShowRunNotFound(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	var buf bytes.Buffer
 	cli := NewCLIRunner(storage, WithOutput(&buf))
 
@@ -163,26 +163,18 @@ func TestCLIRunnerCompareRuns(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	base := makeTestResult("run-base", "", "ds")
 	base.Metrics = []MetricResult{
 		{Name: "f1", Value: 0.80, Values: map[string]float64{"f1": 0.80}},
 	}
-	base.Samples = []SampleResult{
-		{ID: "s1", Correct: true},
-		{ID: "s2", Correct: false},
-	}
 	storage.Save(ctx, base)
 
 	target := makeTestResult("run-target", "", "ds")
 	target.Metrics = []MetricResult{
 		{Name: "f1", Value: 0.90, Values: map[string]float64{"f1": 0.90}},
-	}
-	target.Samples = []SampleResult{
-		{ID: "s1", Correct: true},
-		{ID: "s2", Correct: true},
 	}
 	storage.Save(ctx, target)
 
@@ -210,7 +202,7 @@ func TestCLIRunnerCompareRunsNotFound(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	var buf bytes.Buffer
 	cli := NewCLIRunner(storage, WithOutput(&buf))
 
@@ -224,7 +216,7 @@ func TestCLIRunnerCompareLatest(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r1 := makeTestResult("run-older", "", "ds")
@@ -255,7 +247,7 @@ func TestCLIRunnerCompareLatestNotEnoughRuns(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r1 := makeTestResult("run-only", "", "ds")
@@ -277,7 +269,7 @@ func TestCLIRunnerShowRunWithMetrics(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r := makeTestResult("run-metrics", "", "ds")

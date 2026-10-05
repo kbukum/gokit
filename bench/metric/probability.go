@@ -47,7 +47,7 @@ func (m *aucroc[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	// Walk through sorted samples, accumulating TPR/FPR at each threshold.
 	fprSlice := []float64{0}
 	tprSlice := []float64{0}
-	thresholds := []float64{math.Inf(1)}
+	thresholds := []float64{math.MaxFloat64}
 
 	tp, fp := 0, 0
 	for _, s := range sorted {
@@ -71,7 +71,7 @@ func (m *aucroc[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	return Result{
 		Name:  "aucroc",
 		Value: auc,
-		Detail: bench.ROCCurve{
+		ROC: &bench.ROCCurve{
 			FPR:        fprSlice,
 			TPR:        tprSlice,
 			Thresholds: thresholds,
@@ -206,7 +206,7 @@ func (m *calibration[L]) Compute(scored []bench.ScoredSample[L]) Result {
 		Name:      "calibration",
 		Value:     ece,
 		Direction: bench.LowerIsBetter,
-		Detail: bench.CalibrationCurve{
+		Calibration: &bench.CalibrationCurve{
 			PredictedProbability: predictedProb,
 			ActualFrequency:      actualFreq,
 			BinCount:             binCount,

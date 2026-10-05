@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,8 +22,25 @@ type vegaLiteReporter struct{}
 
 func (r *vegaLiteReporter) Name() string { return "vegalite" }
 
-func (r *vegaLiteReporter) Generate(w io.Writer, result *bench.RunResult) error {
-	specs := VegaLiteSpecs(result)
+func (r *vegaLiteReporter) Generate(ctx context.Context, w io.Writer, input Input) error {
+	if err := validateInput(ctx, input); err != nil {
+		return err
+	}
+	result := input.Result
+	specs, err := VegaLiteSpecs(result)
+	if err != nil {
+		return err
+	}
+	if input.Diff != nil {
+		comparison, err := json.Marshal(struct {
+			Eligibility bench.Eligibility `json:"eligibility"`
+			Verdict     string            `json:"verdict"`
+		}{input.Diff.Eligibility, input.Diff.Verdict()})
+		if err != nil {
+			return err
+		}
+		specs["comparison"] = comparison
+	}
 	if len(specs) == 0 {
 		_, err := io.WriteString(w, "{}\n")
 		return err
@@ -33,9 +51,20 @@ func (r *vegaLiteReporter) Generate(w io.Writer, result *bench.RunResult) error 
 	return enc.Encode(specs)
 }
 
-// VegaLiteSpecs generates individual Vega-Lite specs from run results.
-// Returns a map of filename → JSON spec.
-func VegaLiteSpecs(result *bench.RunResult) map[string]any {
+// VegaLiteSpecs returns opaque JSON visualization documents, rejecting non-JSON values.
+func VegaLiteSpecs(result *bench.RunResult) (map[string]json.RawMessage, error) {
+	specs := make(map[string]json.RawMessage)
+	for name, spec := range vegaLiteSpecs(result) {
+		raw, err := json.Marshal(spec)
+		if err != nil {
+			return nil, fmt.Errorf("bench: encode chart %s: %w", name, err)
+		}
+		specs[name] = raw
+	}
+	return specs, nil
+}
+
+func vegaLiteSpecs(result *bench.RunResult) map[string]any {
 	specs := make(map[string]any)
 
 	if spec := rocSpec(result); spec != nil {
@@ -60,81 +89,51 @@ func VegaLiteSpecs(result *bench.RunResult) map[string]any {
 	return specs
 }
 
-// findCurve looks for a named curve in the Curves map, then scans MetricResult.Detail
-// for a matching type. Returns nil if not found.
-func findCurve[T any](result *bench.RunResult, curveKey string) *T {
-	if result.Curves != nil {
-		if v, ok := result.Curves[curveKey]; ok {
-			if typed, ok := v.(T); ok {
-				return &typed
-			}
-			if typed, ok := v.(*T); ok {
-				return typed
-			}
+// findCurve finds typed result or metric curves.
+func findCurve[T any](result *bench.RunResult) *T {
+	for _, value := range []any{result.ROC, result.Confusion, result.Calibration, result.ThresholdSweep} {
+		if typed, ok := value.(*T); ok && typed != nil {
+			return typed
 		}
-	}
-	for _, m := range result.Metrics {
-		if m.Detail == nil {
-			continue
-		}
-		if typed, ok := m.Detail.(T); ok {
+		if typed, ok := value.(T); ok {
 			return &typed
 		}
-		if typed, ok := m.Detail.(*T); ok {
-			return typed
+	}
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
+		for _, value := range []any{m.ROC, m.Confusion, m.Calibration, m.ThresholdSweep} {
+			if typed, ok := value.(*T); ok && typed != nil {
+				return typed
+			}
+			if typed, ok := value.(T); ok {
+				return &typed
+			}
 		}
 	}
 	return nil
 }
 
-// findAllCurves collects all instances of a type from Curves and MetricResult.Detail.
+// findAllCurves collects typed distribution or threshold data.
 //
 //nolint:gocritic // typeAssertChain: type switches cannot be used with generic type parameters
 func findAllCurves[T any](result *bench.RunResult) []T {
 	var out []T
-	if result.Curves != nil {
-		for _, v := range result.Curves {
-			out = appendTyped(out, v)
-			if sl, ok := v.([]T); ok {
-				out = append(out, sl...)
-			}
-			if sl, ok := v.([]any); ok {
-				for _, item := range sl {
-					out = appendTyped(out, item)
-				}
-			}
-		}
-	}
-	for _, m := range result.Metrics {
-		if m.Detail == nil {
-			continue
-		}
-		out = appendTyped(out, m.Detail)
-		if sl, ok := m.Detail.([]T); ok {
+	for _, v := range []any{result.ScoreDistributions, result.ThresholdSweep} {
+		if sl, ok := v.([]T); ok {
 			out = append(out, sl...)
 		}
-		if sl, ok := m.Detail.([]any); ok {
-			for _, item := range sl {
-				out = appendTyped(out, item)
-			}
+	}
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
+		if sl, ok := any(m.ThresholdSweep).([]T); ok {
+			out = append(out, sl...)
 		}
-	}
-	return out
-}
-
-// appendTyped appends v to out if v is T or *T.
-func appendTyped[T any](out []T, v any) []T {
-	if typed, ok := v.(T); ok {
-		return append(out, typed)
-	}
-	if typed, ok := v.(*T); ok {
-		return append(out, *typed)
 	}
 	return out
 }
 
 func rocSpec(result *bench.RunResult) map[string]any {
-	roc := findCurve[bench.ROCCurve](result, "roc")
+	roc := findCurve[bench.ROCCurve](result)
 	if roc == nil || len(roc.FPR) == 0 {
 		return nil
 	}
@@ -201,7 +200,7 @@ func rocSpec(result *bench.RunResult) map[string]any {
 }
 
 func confusionMatrixSpec(result *bench.RunResult) map[string]any {
-	cm := findCurve[bench.ConfusionMatrixDetail](result, "confusion_matrix")
+	cm := findCurve[bench.ConfusionMatrixDetail](result)
 	if cm == nil || len(cm.Labels) == 0 {
 		return nil
 	}
@@ -315,7 +314,7 @@ func thresholdSweepSpec(result *bench.RunResult) map[string]any {
 }
 
 func calibrationSpec(result *bench.RunResult) map[string]any {
-	cal := findCurve[bench.CalibrationCurve](result, "calibration")
+	cal := findCurve[bench.CalibrationCurve](result)
 	if cal == nil || len(cal.PredictedProbability) == 0 {
 		return nil
 	}
@@ -458,10 +457,6 @@ func scoreDistributionSpec(result *bench.RunResult) map[string]any {
 	// First try ScoreDistribution curves.
 	dists := findAllCurves[bench.ScoreDistribution](result)
 
-	// If no explicit distributions, build from samples.
-	if len(dists) == 0 && len(result.Samples) > 0 {
-		return scoreDistributionFromSamples(result)
-	}
 	if len(dists) == 0 {
 		return nil
 	}
@@ -503,48 +498,6 @@ func scoreDistributionSpec(result *bench.RunResult) map[string]any {
 				"type":  "quantitative",
 				"title": "Count",
 				"stack": nil,
-			},
-			"color": map[string]any{
-				"field": "label",
-				"type":  "nominal",
-				"title": "Label",
-			},
-		},
-	}
-}
-
-func scoreDistributionFromSamples(result *bench.RunResult) map[string]any {
-	values := make([]map[string]any, 0, len(result.Samples))
-	for _, s := range result.Samples {
-		values = append(values, map[string]any{
-			"score": s.Score,
-			"label": s.Label,
-		})
-	}
-	if len(values) == 0 {
-		return nil
-	}
-
-	return map[string]any{
-		"$schema":     vegaLiteSchema,
-		"title":       "Score Distribution by Label",
-		"width":       400,
-		"height":      300,
-		"description": "Histogram of prediction scores per label",
-		"data":        map[string]any{"values": values},
-		"mark":        map[string]any{"type": "bar", "tooltip": true, "opacity": 0.7},
-		"encoding": map[string]any{
-			"x": map[string]any{
-				"field": "score",
-				"type":  "quantitative",
-				"title": "Score",
-				"bin":   true,
-			},
-			"y": map[string]any{
-				"aggregate": "count",
-				"type":      "quantitative",
-				"title":     "Count",
-				"stack":     nil,
 			},
 			"color": map[string]any{
 				"field": "label",

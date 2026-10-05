@@ -44,7 +44,9 @@ type simpleMetric struct {
 	name string
 }
 
-func (m *simpleMetric) Name() string { return m.name }
+func (m *simpleMetric) Name() string             { return m.name }
+func (m *simpleMetric) Identity() MetricIdentity { return MetricIdentity{Name: m.name, Version: "1"} }
+
 func (m *simpleMetric) Compute(scored []ScoredSample[string]) MetricResult {
 	correct := 0
 	for _, s := range scored {
@@ -68,7 +70,7 @@ func TestBenchRunnerBasic(t *testing.T) {
 
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithMetrics(&simpleMetric{name: "accuracy"}),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithMetrics(&simpleMetric{name: "accuracy"}),
 	)
 	runner.Register("perfect-model", EvaluatorFunc("perfect", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		// This evaluator always returns "positive" with score 0.9.
@@ -90,11 +92,11 @@ func TestBenchRunnerBasic(t *testing.T) {
 	if result.Dataset.SampleCount != 4 {
 		t.Errorf("Dataset.SampleCount = %d, want 4", result.Dataset.SampleCount)
 	}
-	if len(result.Samples) != 4 {
-		t.Errorf("len(Samples) = %d, want 4", len(result.Samples))
+	if len(sampleResults(t, runner.cfg.store, result)) != 4 {
+		t.Errorf("len(Samples) = %d, want 4", len(sampleResults(t, runner.cfg.store, result)))
 	}
-	if len(result.Metrics) != 1 {
-		t.Errorf("len(Metrics) = %d, want 1", len(result.Metrics))
+	if len(result.Metrics) != 6 {
+		t.Errorf("len(Metrics) = %d, want quality plus five performance metrics", len(result.Metrics))
 	}
 	// 2 out of 4 samples are "positive", so accuracy = 0.5
 	if result.Metrics[0].Value != 0.5 {
@@ -107,7 +109,7 @@ func TestBenchRunnerMultipleBranches(t *testing.T) {
 
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithMetrics(&simpleMetric{name: "accuracy"}),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithMetrics(&simpleMetric{name: "accuracy"}),
 	)
 
 	// Branch 1: always predicts positive
@@ -142,7 +144,7 @@ func TestBenchRunnerWithConcurrency(t *testing.T) {
 
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithMetrics(&simpleMetric{name: "accuracy"}),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithMetrics(&simpleMetric{name: "accuracy"}),
 		WithConcurrency[string](4),
 	)
 	runner.Register("concurrent", EvaluatorFunc("model", func(ctx context.Context, input []byte) (Prediction[string], error) {
@@ -157,8 +159,8 @@ func TestBenchRunnerWithConcurrency(t *testing.T) {
 	if result.Dataset.SampleCount != 4 {
 		t.Errorf("SampleCount = %d, want 4", result.Dataset.SampleCount)
 	}
-	if len(result.Samples) != 4 {
-		t.Errorf("len(Samples) = %d, want 4", len(result.Samples))
+	if len(sampleResults(t, runner.cfg.store, result)) != 4 {
+		t.Errorf("len(Samples) = %d, want 4", len(sampleResults(t, runner.cfg.store, result)))
 	}
 }
 
@@ -167,7 +169,7 @@ func TestBenchRunnerWithTag(t *testing.T) {
 
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithTag[string]("v1-experiment"),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithTag[string]("v1-experiment"),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		return Prediction[string]{Label: "positive", Score: 0.5}, nil
@@ -187,7 +189,7 @@ func TestBenchRunnerNoBranches(t *testing.T) {
 	t.Parallel()
 
 	loader := setupTestDataset(t)
-	runner := NewBenchRunner[string]()
+	runner := NewBenchRunner[string](WithStore[string](NewResultStore(NewDirStore(t.TempDir()))))
 
 	ctx := context.Background()
 	_, err := runner.Run(ctx, loader)
@@ -211,7 +213,7 @@ func TestBenchRunnerEmptyDataset(t *testing.T) {
 	}
 
 	loader := NewDatasetLoader(dir, func(s string) (string, error) { return s, nil })
-	runner := NewBenchRunner[string]()
+	runner := NewBenchRunner[string](WithStore[string](NewResultStore(NewDirStore(t.TempDir()))))
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		return Prediction[string]{}, nil
 	}))
@@ -229,9 +231,9 @@ func TestBenchRunnerWithStorage(t *testing.T) {
 	storageDir := t.TempDir()
 	loader := setupTestDataset(t)
 
-	storage := NewFileStorage(storageDir)
+	storage := NewResultStore(NewDirStore(storageDir))
 	runner := NewBenchRunner(
-		WithStorage[string](storage),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithStore[string](storage),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {
 		return Prediction[string]{Label: "positive", Score: 0.5}, nil
@@ -259,7 +261,7 @@ func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
 	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithClock[string](clock),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithClock[string](clock),
 		WithIDSuffix[string](func() string { return "fixedsfx" }),
 		WithTag[string]("deterministic"),
 	)
@@ -281,7 +283,7 @@ func TestBenchRunnerWithClockMakesRunDeterministic(t *testing.T) {
 	if result.Duration != 0 {
 		t.Errorf("Duration = %s, want 0", result.Duration)
 	}
-	for _, sample := range result.Samples {
+	for _, sample := range sampleResults(t, runner.cfg.store, result) {
 		if sample.Duration != 0 {
 			t.Errorf("sample %s Duration = %s, want 0", sample.ID, sample.Duration)
 		}
@@ -299,7 +301,7 @@ func TestBenchRunnerUntaggedRunIsDeterministicWithInjectedSources(t *testing.T) 
 	clock := util.NewFakeClock(time.Date(2026, 8, 23, 4, 30, 54, 0, time.UTC))
 	loader := setupTestDataset(t)
 	runner := NewBenchRunner(
-		WithClock[string](clock),
+		WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithClock[string](clock),
 		WithIDSuffix[string](func() string { return "fixedsfx" }),
 	)
 	runner.Register("model", EvaluatorFunc("m", func(ctx context.Context, input []byte) (Prediction[string], error) {

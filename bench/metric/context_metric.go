@@ -12,7 +12,7 @@ import (
 //
 // Pure, deterministic offline metrics implement [Metric] instead. A resolved context-metric result can also be surfaced as a pure [Metric] with [AsSync] (the precompute path), and adapted to the runner's [bench.RunContextMetric] with [AsRunContextMetric].
 type ContextMetric[L comparable] interface {
-	Name() string
+	Identity() bench.MetricIdentity
 	Compute(ctx context.Context, scored []bench.ScoredSample[L]) (Result, error)
 }
 
@@ -35,20 +35,14 @@ func AsRunContextMetrics[L comparable](metrics ...ContextMetric[L]) []bench.RunC
 	return out
 }
 
-func (a *runContextMetricAdapter[L]) Name() string { return a.m.Name() }
+func (a *runContextMetricAdapter[L]) Identity() bench.MetricIdentity { return a.m.Identity() }
 
 func (a *runContextMetricAdapter[L]) Compute(ctx context.Context, scored []bench.ScoredSample[L]) (bench.MetricResult, error) {
 	r, err := a.m.Compute(ctx, scored)
 	if err != nil {
 		return bench.MetricResult{}, err
 	}
-	return bench.MetricResult{
-		Name:      r.Name,
-		Value:     r.Value,
-		Values:    r.Values,
-		Detail:    r.Detail,
-		Direction: r.Direction,
-	}, nil
+	return r, nil
 }
 
 // AsSync surfaces an already-resolved [Result] as a pure [Metric] (the precompute path): its Compute ignores its input and returns the precomputed result. Use it when a context-metric result has been computed out of band and should join a [Suite] of deterministic metrics; the context-metric and precompute paths yield an identical [Result].
@@ -61,5 +55,9 @@ type precomputedMetric[L comparable] struct {
 }
 
 func (m *precomputedMetric[L]) Name() string { return m.result.Name }
+
+func (m *precomputedMetric[L]) Identity() bench.MetricIdentity {
+	return bench.MetricIdentity{Name: m.result.Name}
+}
 
 func (m *precomputedMetric[L]) Compute([]bench.ScoredSample[L]) Result { return m.result }

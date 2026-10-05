@@ -81,9 +81,9 @@ func TestAUCROCHasROCCurve(t *testing.T) {
 	m := AUCROC[string]("pos")
 	r := m.Compute(scored)
 
-	roc, ok := r.Detail.(bench.ROCCurve)
+	roc, ok := r.ROC, r.ROC != nil
 	if !ok {
-		t.Fatalf("Detail is not ROCCurve, got %T", r.Detail)
+		t.Fatalf("Detail is not ROCCurve, got %T", r.ROC)
 	}
 	if len(roc.FPR) == 0 {
 		t.Error("ROCCurve.FPR is empty")

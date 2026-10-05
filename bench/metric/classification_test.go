@@ -101,9 +101,9 @@ func TestBinaryClassificationThresholdIsProvenanceNotValue(t *testing.T) {
 	if _, ok := r.Values["threshold"]; ok {
 		t.Error("threshold must not appear in Values: it is a configuration input, not a quality signal")
 	}
-	detail, ok := r.Detail.(bench.ConfusionMatrixDetail)
+	detail, ok := r.Confusion, r.Confusion != nil
 	if !ok {
-		t.Fatalf("Detail type = %T, want bench.ConfusionMatrixDetail", r.Detail)
+		t.Fatalf("Detail type = %T, want bench.ConfusionMatrixDetail", r.Confusion)
 	}
 	if detail.Threshold == nil {
 		t.Fatal("Detail.Threshold = nil, want a recorded 0.7")
@@ -172,9 +172,9 @@ func TestThresholdSweep(t *testing.T) {
 		t.Errorf("Name = %q, want %q", r.Name, "threshold_sweep")
 	}
 
-	points, ok := r.Detail.([]bench.ThresholdPoint)
+	points, ok := r.ThresholdSweep, r.ThresholdSweep != nil
 	if !ok {
-		t.Fatalf("Detail is not []ThresholdPoint, got %T", r.Detail)
+		t.Fatalf("Detail is not []ThresholdPoint, got %T", r.Confusion)
 	}
 	if len(points) != 3 {
 		t.Fatalf("len(points) = %d, want 3", len(points))
@@ -251,9 +251,9 @@ func TestConfusionMatrix(t *testing.T) {
 		t.Errorf("Name = %q, want %q", r.Name, "confusion_matrix")
 	}
 
-	cm, ok := r.Detail.(bench.ConfusionMatrixDetail)
+	cm, ok := r.Confusion, r.Confusion != nil
 	if !ok {
-		t.Fatalf("Detail is not ConfusionMatrixDetail, got %T", r.Detail)
+		t.Fatalf("Detail is not ConfusionMatrixDetail, got %T", r.Confusion)
 	}
 	if cm.Threshold != nil {
 		t.Errorf("multi-label confusion matrix Threshold = %v, want nil (no threshold)", *cm.Threshold)
@@ -302,11 +302,11 @@ func TestBinaryClassificationThresholdIdentity(t *testing.T) {
 	lo := mustBinaryClassification[string](t, "pos", WithThreshold(0.3))
 	hi := mustBinaryClassification[string](t, "pos", WithThreshold(0.7))
 
-	if lo.Name() != "classification[t0.3]" {
-		t.Errorf("low Name = %q, want %q", lo.Name(), "classification[t0.3]")
+	if lo.Identity().Name != "classification[t0.3]" {
+		t.Errorf("low Name = %q, want %q", lo.Identity().Name, "classification[t0.3]")
 	}
-	if hi.Name() != "classification[t0.7]" {
-		t.Errorf("high Name = %q, want %q", hi.Name(), "classification[t0.7]")
+	if hi.Identity().Name != "classification[t0.7]" {
+		t.Errorf("high Name = %q, want %q", hi.Identity().Name, "classification[t0.7]")
 	}
 	if lo.Compute(scored).Name == hi.Compute(scored).Name {
 		t.Error("runs at different thresholds must not share a Result.Name")

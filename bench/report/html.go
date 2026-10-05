@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -21,8 +22,19 @@ type htmlReporter struct{}
 
 func (r *htmlReporter) Name() string { return "html" }
 
-func (r *htmlReporter) Generate(w io.Writer, result *bench.RunResult) error {
-	specs := VegaLiteSpecs(result)
+func (r *htmlReporter) Generate(ctx context.Context, w io.Writer, input Input) error {
+	if err := validateInput(ctx, input); err != nil {
+		return err
+	}
+	result := input.Result
+	rows, err := preview(ctx, input, maxMarkdownSamples)
+	if err != nil {
+		return err
+	}
+	specs, err := VegaLiteSpecs(result)
+	if err != nil {
+		return err
+	}
 
 	var b strings.Builder
 	b.WriteString(htmlHead(result))
@@ -30,10 +42,13 @@ func (r *htmlReporter) Generate(w io.Writer, result *bench.RunResult) error {
 	b.WriteString(htmlMetrics(result))
 	b.WriteString(htmlCharts(specs))
 	b.WriteString(htmlBranches(result))
-	b.WriteString(htmlSamples(result))
+	b.WriteString(htmlSamples(rows))
+	if input.Diff != nil {
+		b.WriteString("<pre>" + html.EscapeString(input.Diff.Summary()) + "</pre>")
+	}
 	b.WriteString(htmlFooter(specs))
 
-	_, err := io.WriteString(w, b.String())
+	_, err = io.WriteString(w, b.String())
 	return err
 }
 
@@ -104,17 +119,6 @@ func htmlSummary(result *bench.RunResult) string {
 		b.WriteString(`<tr><th>Labels</th><td>` + strings.Join(parts, ", ") + `</td></tr>`)
 	}
 
-	correct := 0
-	for _, s := range result.Samples {
-		if s.Correct {
-			correct++
-		}
-	}
-	if len(result.Samples) > 0 {
-		pct := float64(correct) / float64(len(result.Samples)) * 100
-		_, _ = fmt.Fprintf(&b, `<tr><th>Accuracy</th><td>%d / %d (%.1f%%)</td></tr>`, correct, len(result.Samples), pct)
-	}
-
 	b.WriteString(`</table></div></section>`)
 	return b.String()
 }
@@ -126,7 +130,8 @@ func htmlMetrics(result *bench.RunResult) string {
 	var b strings.Builder
 	b.WriteString(`<section><h2>Metrics</h2><div class="card"><table>`)
 	b.WriteString(`<tr><th>Metric</th><th>Value</th><th>Per-Label</th></tr>`)
-	for _, m := range result.Metrics {
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
 		perLabel := "—"
 		if len(m.Values) > 0 {
 			keys := make([]string, 0, len(m.Values))
@@ -147,7 +152,7 @@ func htmlMetrics(result *bench.RunResult) string {
 	return b.String()
 }
 
-func htmlCharts(specs map[string]any) string {
+func htmlCharts(specs map[string]json.RawMessage) string {
 	if len(specs) == 0 {
 		return ""
 	}
@@ -167,8 +172,7 @@ func htmlCharts(specs map[string]any) string {
 		name = strings.ReplaceAll(name, "_", " ")
 		_, _ = fmt.Fprintf(&b, `<div class="chart-card"><h3>%s</h3><div id="%s"></div>`, html.EscapeString(name), chartID) //nolint:gocritic // HTML attribute quoting, not Go string quoting
 
-		specJSON, _ := json.Marshal(specs[fn])
-		_, _ = fmt.Fprintf(&b, `<script type="application/json" id="%s-spec">%s</script>`, chartID, string(specJSON))
+		_, _ = fmt.Fprintf(&b, `<script type="application/json" id="%s-spec">%s</script>`, chartID, string(specs[fn]))
 		b.WriteString(`</div>`)
 	}
 
@@ -223,15 +227,15 @@ func htmlBranches(result *bench.RunResult) string {
 	return b.String()
 }
 
-func htmlSamples(result *bench.RunResult) string {
-	if len(result.Samples) == 0 {
+func htmlSamples(samples []bench.SampleResult) string {
+	if len(samples) == 0 {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString(`<section><h2>Sample Details</h2><div class="card samples-table"><table>`)
 	b.WriteString(`<tr><th>ID</th><th>Label</th><th>Predicted</th><th>Score</th><th>Correct</th><th>Duration</th><th>Error</th></tr>`)
 
-	for _, s := range result.Samples {
+	for _, s := range samples {
 		correctClass := "correct"
 		correctBadge := "badge-ok"
 		correctText := "✓"
@@ -254,7 +258,7 @@ func htmlSamples(result *bench.RunResult) string {
 	return b.String()
 }
 
-func htmlFooter(specs map[string]any) string {
+func htmlFooter(specs map[string]json.RawMessage) string {
 	var b strings.Builder
 
 	// Render each chart with vegaEmbed.

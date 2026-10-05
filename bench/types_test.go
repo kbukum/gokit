@@ -2,6 +2,7 @@ package bench
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 )
 
@@ -47,7 +48,7 @@ func TestSampleWithMetadata(t *testing.T) {
 		ID:       "m1",
 		Label:    "positive",
 		Source:   "test-set",
-		Metadata: map[string]any{"lang": "en", "score": 0.9},
+		Metadata: map[string]json.RawMessage{"lang": json.RawMessage(`"en"`), "score": json.RawMessage(`0.9`)},
 	}
 	if s.ID != "m1" {
 		t.Errorf("ID = %q, want %q", s.ID, "m1")
@@ -58,7 +59,7 @@ func TestSampleWithMetadata(t *testing.T) {
 	if s.Source != "test-set" {
 		t.Errorf("Source = %q, want %q", s.Source, "test-set")
 	}
-	if s.Metadata["lang"] != "en" {
+	if string(s.Metadata["lang"]) != `"en"` {
 		t.Errorf("Metadata[lang] = %v, want %q", s.Metadata["lang"], "en")
 	}
 }

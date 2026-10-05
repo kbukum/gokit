@@ -20,6 +20,7 @@ func makeTestResult() *bench.RunResult {
 			SampleCount:       5,
 			LabelDistribution: map[string]int{"positive": 3, "negative": 2},
 		},
+		ScoreDistributions: []bench.ScoreDistribution{{Label: "positive", Bins: []float64{0, .5, 1}, Counts: []int{1, 2}}},
 		Metrics: []bench.MetricResult{
 			{
 				Name:  "f1",
@@ -28,7 +29,7 @@ func makeTestResult() *bench.RunResult {
 					"positive": 0.90,
 					"negative": 0.85,
 				},
-				Detail: &bench.ConfusionMatrixDetail{
+				Confusion: &bench.ConfusionMatrixDetail{
 					Labels: []string{"positive", "negative"},
 					Matrix: [][]int{
 						{40, 5},
@@ -62,25 +63,17 @@ func makeTestResult() *bench.RunResult {
 				Errors:           1,
 			},
 		},
-		Samples: []bench.SampleResult{
-			{ID: "s1", Label: "positive", Predicted: "positive", Score: 0.95, Correct: true, Duration: 100 * time.Millisecond},
-			{ID: "s2", Label: "positive", Predicted: "positive", Score: 0.82, Correct: true, Duration: 120 * time.Millisecond},
-			{ID: "s3", Label: "positive", Predicted: "negative", Score: 0.45, Correct: false, Duration: 110 * time.Millisecond},
-			{ID: "s4", Label: "negative", Predicted: "negative", Score: 0.88, Correct: true, Duration: 90 * time.Millisecond},
-			{ID: "s5", Label: "negative", Predicted: "positive", Score: 0.55, Correct: false, Duration: 95 * time.Millisecond},
+
+		ROC: &bench.ROCCurve{
+			FPR:        []float64{0.0, 0.1, 0.3, 0.5, 1.0},
+			TPR:        []float64{0.0, 0.5, 0.7, 0.9, 1.0},
+			Thresholds: []float64{1.0, 0.8, 0.5, 0.3, 0.0},
+			AUC:        0.92,
 		},
-		Curves: map[string]any{
-			"roc": bench.ROCCurve{
-				FPR:        []float64{0.0, 0.1, 0.3, 0.5, 1.0},
-				TPR:        []float64{0.0, 0.5, 0.7, 0.9, 1.0},
-				Thresholds: []float64{1.0, 0.8, 0.5, 0.3, 0.0},
-				AUC:        0.92,
-			},
-			"calibration": bench.CalibrationCurve{
-				PredictedProbability: []float64{0.1, 0.3, 0.5, 0.7, 0.9},
-				ActualFrequency:      []float64{0.12, 0.28, 0.52, 0.68, 0.91},
-				BinCount:             []int{10, 12, 15, 11, 8},
-			},
+		Calibration: &bench.CalibrationCurve{
+			PredictedProbability: []float64{0.1, 0.3, 0.5, 0.7, 0.9},
+			ActualFrequency:      []float64{0.12, 0.28, 0.52, 0.68, 0.91},
+			BinCount:             []int{10, 12, 15, 11, 8},
 		},
 	}
 }
@@ -552,7 +545,8 @@ func TestExtractDistributions(t *testing.T) {
 	t.Run("from samples", func(t *testing.T) {
 		t.Parallel()
 		result := makeTestResult()
-		result.Curves = nil // Force building from samples
+		result.ROC = nil
+		result.Calibration = nil // Force building from samples
 		dists := extractDistributions(result)
 		if len(dists) == 0 {
 			t.Fatal("expected distributions built from samples")

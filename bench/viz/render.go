@@ -2,7 +2,6 @@ package viz
 
 import (
 	"encoding/json"
-	"sort"
 
 	"github.com/kbukum/gokit/bench"
 )
@@ -70,24 +69,23 @@ func RenderAll(result *bench.RunResult, opts ...RenderOption) map[string]string 
 
 func extractConfusionMatrix(r *bench.RunResult) *bench.ConfusionMatrixDetail {
 	// Search metric details for a ConfusionMatrixDetail.
-	for _, m := range r.Metrics {
-		if cm := decodeAs[bench.ConfusionMatrixDetail](m.Detail); cm != nil {
+	for metricIndex := range r.Metrics {
+		m := &r.Metrics[metricIndex]
+		if cm := m.Confusion; cm != nil {
 			return cm
 		}
 	}
 	// Also check curves map.
-	if raw, ok := r.Curves["confusion_matrix"]; ok {
-		return decodeAs[bench.ConfusionMatrixDetail](raw)
-	}
-	return nil
+	return r.Confusion
 }
 
 func extractROC(r *bench.RunResult) *bench.ROCCurve {
-	if raw, ok := r.Curves["roc"]; ok {
-		return decodeAs[bench.ROCCurve](raw)
+	if r.ROC != nil {
+		return r.ROC
 	}
-	for _, m := range r.Metrics {
-		if roc := decodeAs[bench.ROCCurve](m.Detail); roc != nil {
+	for metricIndex := range r.Metrics {
+		m := &r.Metrics[metricIndex]
+		if roc := m.ROC; roc != nil {
 			return roc
 		}
 	}
@@ -95,11 +93,12 @@ func extractROC(r *bench.RunResult) *bench.ROCCurve {
 }
 
 func extractCalibration(r *bench.RunResult) *bench.CalibrationCurve {
-	if raw, ok := r.Curves["calibration"]; ok {
-		return decodeAs[bench.CalibrationCurve](raw)
+	if r.Calibration != nil {
+		return r.Calibration
 	}
-	for _, m := range r.Metrics {
-		if cal := decodeAs[bench.CalibrationCurve](m.Detail); cal != nil {
+	for metricIndex := range r.Metrics {
+		m := &r.Metrics[metricIndex]
+		if cal := m.Calibration; cal != nil {
 			return cal
 		}
 	}
@@ -108,58 +107,10 @@ func extractCalibration(r *bench.RunResult) *bench.CalibrationCurve {
 
 func extractDistributions(r *bench.RunResult) []bench.ScoreDistribution {
 	// Check curves map.
-	if raw, ok := r.Curves["score_distribution"]; ok {
-		if dists := decodeAs[[]bench.ScoreDistribution](raw); dists != nil {
-			return *dists
-		}
+	if len(r.ScoreDistributions) > 0 {
+		return r.ScoreDistributions
 	}
-	// Build from samples if available.
-	if len(r.Samples) == 0 {
-		return nil
-	}
-	return buildDistributions(r.Samples)
-}
-
-// buildDistributions creates score distributions from sample results.
-func buildDistributions(samples []bench.SampleResult) []bench.ScoreDistribution {
-	const numBins = 10
-
-	byLabel := make(map[string][]float64)
-	for _, s := range samples {
-		byLabel[s.Label] = append(byLabel[s.Label], s.Score)
-	}
-
-	labels := make([]string, 0, len(byLabel))
-	for l := range byLabel {
-		labels = append(labels, l)
-	}
-	sort.Strings(labels)
-
-	dists := make([]bench.ScoreDistribution, 0, len(labels))
-	for _, label := range labels {
-		scores := byLabel[label]
-		bins := make([]float64, numBins+1)
-		for i := range bins {
-			bins[i] = float64(i) / float64(numBins)
-		}
-		counts := make([]int, numBins)
-		for _, sc := range scores {
-			idx := int(sc * float64(numBins))
-			if idx >= numBins {
-				idx = numBins - 1
-			}
-			if idx < 0 {
-				idx = 0
-			}
-			counts[idx]++ //nolint:gosec // idx is bounds-checked above
-		}
-		dists = append(dists, bench.ScoreDistribution{
-			Label:  label,
-			Bins:   bins,
-			Counts: counts,
-		})
-	}
-	return dists
+	return nil
 }
 
 // decodeAs attempts to convert v into type T. It handles the case where v is already T, *T,

@@ -154,12 +154,12 @@ func TestEndToEnd(t *testing.T) {
 	loader := bench.NewDatasetLoader(dataDir, stringMapper)
 
 	// Sanity-check the manifest loads.
-	manifest, err := loader.Manifest()
+	manifest, err := loader.Describe(ctx)
 	if err != nil {
 		t.Fatalf("Manifest() error: %v", err)
 	}
-	if len(manifest.Samples) != 10 {
-		t.Fatalf("manifest sample count = %d, want 10", len(manifest.Samples))
+	if manifest.Name != "e2e-dataset" {
+		t.Fatalf("dataset name = %q, want e2e-dataset", manifest.Name)
 	}
 
 	// ── 3 & 4. Evaluators with middleware ──
@@ -169,13 +169,13 @@ func TestEndToEnd(t *testing.T) {
 	// ── 5. Create runner (run 1) ──
 	// Use BinaryClassification and ExactMatch for storage-safe runs
 	// (AUCROC/BrierScore can produce +Inf which is not JSON-serializable).
-	storage := bench.NewFileStorage(storageDir)
+	storage := bench.NewResultStore(bench.NewDirStore(storageDir))
 	runner1 := bench.NewBenchRunner(
-		bench.WithMetrics(metric.AsRunMetrics(
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithMetrics(metric.AsRunMetrics(
 			mustBinaryClassification[string](t, "ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
-		bench.WithStorage[string](storage),
+		bench.WithStore[string](storage),
 		bench.WithConcurrency[string](2),
 		bench.WithTag[string]("e2e-test-v1"),
 	)
@@ -202,8 +202,8 @@ func TestEndToEnd(t *testing.T) {
 		if result1.Dataset.Name != "e2e-dataset" {
 			t.Errorf("Dataset.Name = %q, want %q", result1.Dataset.Name, "e2e-dataset")
 		}
-		if len(result1.Samples) != 10 {
-			t.Errorf("len(Samples) = %d, want 10", len(result1.Samples))
+		if len(externalSampleResults(t, storage, result1)) != 10 {
+			t.Errorf("len(Samples) = %d, want 10", len(externalSampleResults(t, storage, result1)))
 		}
 		if len(result1.Metrics) == 0 {
 			t.Fatal("no metrics in result")
@@ -218,7 +218,7 @@ func TestEndToEnd(t *testing.T) {
 		}
 
 		// Every sample should have a prediction label.
-		for _, s := range result1.Samples {
+		for _, s := range externalSampleResults(t, storage, result1) {
 			if s.Predicted == "" {
 				t.Errorf("sample %s has empty Predicted label", s.ID)
 			}
@@ -253,11 +253,11 @@ func TestEndToEnd(t *testing.T) {
 	})
 
 	runner2 := bench.NewBenchRunner(
-		bench.WithMetrics(metric.AsRunMetrics(
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithMetrics(metric.AsRunMetrics(
 			mustBinaryClassification[string](t, "ai_generated"),
 			metric.ExactMatch[string](),
 		)...),
-		bench.WithStorage[string](storage),
+		bench.WithStore[string](storage),
 		bench.WithConcurrency[string](2),
 		bench.WithTag[string]("e2e-test-v2"),
 	)
@@ -337,7 +337,7 @@ func TestEndToEnd(t *testing.T) {
 		"markdown": report.Markdown(),
 		"table":    report.Table(),
 		"csv":      report.CSV(),
-		"junit":    report.JUnit(report.WithTargets(map[string]float64{"binary_classification": 0.5})),
+		"junit":    report.JUnit(report.WithBounds(bench.Bound{Metric: "classification[t0.5]", Kind: bench.Min, Limit: 0.5})),
 		"vegalite": report.VegaLite(),
 		"html":     report.HTML(),
 	}
@@ -345,7 +345,7 @@ func TestEndToEnd(t *testing.T) {
 	for name, r := range reporters {
 		t.Run("report_"+name, func(t *testing.T) {
 			var buf bytes.Buffer
-			if err := r.Generate(&buf, result1); err != nil {
+			if err := r.Generate(ctx, &buf, report.Input{Result: result1, Store: storage}); err != nil {
 				t.Fatalf("%s Generate() error: %v", name, err)
 			}
 			output := buf.String()
@@ -410,7 +410,7 @@ func TestEndToEnd(t *testing.T) {
 	// ── 13. Probability metrics (AUCROC, BrierScore) without storage ──
 	t.Run("probability_metrics", func(t *testing.T) {
 		probRunner := bench.NewBenchRunner(
-			bench.WithMetrics(metric.AsRunMetrics(
+			bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithMetrics(metric.AsRunMetrics(
 				metric.AUCROC("ai_generated"),
 				metric.BrierScore("ai_generated"),
 			)...),
@@ -483,8 +483,9 @@ func TestEndToEndWithRegression(t *testing.T) {
 	)
 
 	// Run baseline.
+	comparisonStore := bench.NewResultStore(bench.NewDirStore(t.TempDir()))
 	baseRunner := bench.NewBenchRunner(
-		bench.WithMetrics(metrics...),
+		bench.WithStore[string](comparisonStore), bench.WithMetrics(metrics...),
 		bench.WithTag[string]("baseline"),
 	)
 	baseRunner.Register("model", goodEval)
@@ -496,7 +497,7 @@ func TestEndToEndWithRegression(t *testing.T) {
 
 	// Run target with worse model.
 	targetRunner := bench.NewBenchRunner(
-		bench.WithMetrics(metrics...),
+		bench.WithStore[string](comparisonStore), bench.WithMetrics(metrics...),
 		bench.WithTag[string]("regression-target"),
 	)
 	targetRunner.Register("model", badEval)
@@ -507,8 +508,10 @@ func TestEndToEndWithRegression(t *testing.T) {
 	}
 
 	// Compare and detect regression.
-	comparator := bench.NewRunComparator()
-	diff := comparator.Compare(baseResult, targetResult)
+	diff, err := bench.CompareSamples(ctx, comparisonStore, comparisonStore, baseResult, targetResult)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Logf("Regression diff summary:\n%s", diff.Summary())
 

@@ -83,11 +83,8 @@ func TestFuzzyMatchExact(t *testing.T) {
 	if _, ok := r.Values["threshold"]; ok {
 		t.Error("threshold must not appear in Values: it is a configuration input, not a quality signal")
 	}
-	detail, ok := r.Detail.(map[string]any)
-	if !ok {
-		t.Fatalf("Detail type = %T, want map[string]any", r.Detail)
-	}
-	if detail["threshold"] != 0.8 {
+	detail := m.Identity().Config
+	if detail["threshold"] != "0.8" {
 		t.Errorf("Detail[threshold] = %v, want 0.8", detail["threshold"])
 	}
 }
@@ -137,11 +134,8 @@ func TestFuzzyMatchEmpty(t *testing.T) {
 	if r.Name != "fuzzy_match[t0.5]" {
 		t.Errorf("empty Name = %q, want %q", r.Name, "fuzzy_match[t0.5]")
 	}
-	detail, ok := r.Detail.(map[string]any)
-	if !ok {
-		t.Fatalf("empty Detail type = %T, want map[string]any", r.Detail)
-	}
-	if detail["threshold"] != 0.5 {
+	detail := m.Identity().Config
+	if detail["threshold"] != "0.5" {
 		t.Errorf("empty Detail[threshold] = %v, want 0.5", detail["threshold"])
 	}
 }
@@ -187,11 +181,11 @@ func TestFuzzyMatchThresholdIdentity(t *testing.T) {
 	lo := mustFuzzyMatch(t, 0.5)
 	hi := mustFuzzyMatch(t, 0.9)
 
-	if lo.Name() != "fuzzy_match[t0.5]" {
-		t.Errorf("low Name = %q, want %q", lo.Name(), "fuzzy_match[t0.5]")
+	if lo.Identity().Name != "fuzzy_match[t0.5]" {
+		t.Errorf("low Name = %q, want %q", lo.Identity().Name, "fuzzy_match[t0.5]")
 	}
-	if hi.Name() != "fuzzy_match[t0.9]" {
-		t.Errorf("high Name = %q, want %q", hi.Name(), "fuzzy_match[t0.9]")
+	if hi.Identity().Name != "fuzzy_match[t0.9]" {
+		t.Errorf("high Name = %q, want %q", hi.Identity().Name, "fuzzy_match[t0.9]")
 	}
 	if lo.Compute(scored).Name == hi.Compute(scored).Name {
 		t.Error("runs at different thresholds must not share a Result.Name")

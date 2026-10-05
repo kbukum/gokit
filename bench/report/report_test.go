@@ -34,7 +34,7 @@ func makeTestResult() *bench.RunResult {
 					"positive": 0.90,
 					"negative": 0.85,
 				},
-				Detail: &bench.ConfusionMatrixDetail{
+				Confusion: &bench.ConfusionMatrixDetail{
 					Labels: []string{"positive", "negative"},
 					Matrix: [][]int{
 						{40, 5},
@@ -68,42 +68,34 @@ func makeTestResult() *bench.RunResult {
 				Errors:           1,
 			},
 		},
-		Samples: []bench.SampleResult{
-			{ID: "s1", Label: "positive", Predicted: "positive", Score: 0.95, Correct: true, Duration: 100 * time.Millisecond},
-			{ID: "s2", Label: "positive", Predicted: "positive", Score: 0.82, Correct: true, Duration: 120 * time.Millisecond},
-			{ID: "s3", Label: "positive", Predicted: "negative", Score: 0.45, Correct: false, Duration: 110 * time.Millisecond},
-			{ID: "s4", Label: "negative", Predicted: "negative", Score: 0.88, Correct: true, Duration: 90 * time.Millisecond},
-			{ID: "s5", Label: "negative", Predicted: "positive", Score: 0.55, Correct: false, Duration: 95 * time.Millisecond, Error: "low confidence"},
+
+		ROC: &bench.ROCCurve{
+			FPR:        []float64{0.0, 0.1, 0.3, 0.5, 1.0},
+			TPR:        []float64{0.0, 0.5, 0.7, 0.9, 1.0},
+			Thresholds: []float64{1.0, 0.8, 0.5, 0.3, 0.0},
+			AUC:        0.92,
 		},
-		Curves: map[string]any{
-			"roc": bench.ROCCurve{
-				FPR:        []float64{0.0, 0.1, 0.3, 0.5, 1.0},
-				TPR:        []float64{0.0, 0.5, 0.7, 0.9, 1.0},
-				Thresholds: []float64{1.0, 0.8, 0.5, 0.3, 0.0},
-				AUC:        0.92,
+		Calibration: &bench.CalibrationCurve{
+			PredictedProbability: []float64{0.1, 0.3, 0.5, 0.7, 0.9},
+			ActualFrequency:      []float64{0.12, 0.28, 0.52, 0.68, 0.91},
+			BinCount:             []int{10, 12, 15, 11, 8},
+		},
+		ScoreDistributions: []bench.ScoreDistribution{
+			{
+				Label:  "positive",
+				Bins:   []float64{0.0, 0.2, 0.4, 0.6, 0.8, 1.0},
+				Counts: []int{1, 2, 5, 8, 4},
 			},
-			"calibration": bench.CalibrationCurve{
-				PredictedProbability: []float64{0.1, 0.3, 0.5, 0.7, 0.9},
-				ActualFrequency:      []float64{0.12, 0.28, 0.52, 0.68, 0.91},
-				BinCount:             []int{10, 12, 15, 11, 8},
+			{
+				Label:  "negative",
+				Bins:   []float64{0.0, 0.2, 0.4, 0.6, 0.8, 1.0},
+				Counts: []int{6, 4, 2, 1, 0},
 			},
-			"score_distribution": []bench.ScoreDistribution{
-				{
-					Label:  "positive",
-					Bins:   []float64{0.0, 0.2, 0.4, 0.6, 0.8, 1.0},
-					Counts: []int{1, 2, 5, 8, 4},
-				},
-				{
-					Label:  "negative",
-					Bins:   []float64{0.0, 0.2, 0.4, 0.6, 0.8, 1.0},
-					Counts: []int{6, 4, 2, 1, 0},
-				},
-			},
-			"threshold_sweep": []bench.ThresholdPoint{
-				{Threshold: 0.3, Precision: 0.70, Recall: 0.95, F1: 0.81, Accuracy: 0.75},
-				{Threshold: 0.5, Precision: 0.85, Recall: 0.80, F1: 0.82, Accuracy: 0.84},
-				{Threshold: 0.7, Precision: 0.92, Recall: 0.60, F1: 0.73, Accuracy: 0.80},
-			},
+		},
+		ThresholdSweep: []bench.ThresholdPoint{
+			{Threshold: 0.3, Precision: 0.70, Recall: 0.95, F1: 0.81, Accuracy: 0.75},
+			{Threshold: 0.5, Precision: 0.85, Recall: 0.80, F1: 0.82, Accuracy: 0.84},
+			{Threshold: 0.7, Precision: 0.92, Recall: 0.60, F1: 0.73, Accuracy: 0.80},
 		},
 	}
 }
@@ -141,7 +133,7 @@ func TestJSONReporter(t *testing.T) {
 	result := makeTestResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -183,15 +175,13 @@ func TestJSONReporter(t *testing.T) {
 		t.Errorf("expected 2 branches, got %v", branches)
 	}
 
-	// Samples
-	samples, ok := parsed["samples"].([]any)
-	if !ok || len(samples) != 5 {
-		t.Errorf("expected 5 samples, got %v", samples)
+	if _, ok := parsed["samples"]; ok {
+		t.Error("summary must not retain samples")
 	}
 
 	// Curves
-	if _, ok := parsed["curves"]; !ok {
-		t.Error("missing 'curves' section")
+	if _, ok := parsed["roc"]; !ok {
+		t.Error("missing typed ROC")
 	}
 }
 
@@ -207,7 +197,7 @@ func TestMarkdownReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -252,7 +242,7 @@ func TestTableReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -291,7 +281,7 @@ func TestCSVReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -339,7 +329,7 @@ func TestJUnitReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -410,20 +400,20 @@ func TestJUnitReporterWithTargets(t *testing.T) {
 			wantFailures: 2,
 		},
 		{
-			name:         "unmatched target ignored",
+			name:         "missing metric fails closed",
 			targets:      map[string]float64{"nonexistent": 0.5},
-			wantTests:    0,
-			wantFailures: 0,
+			wantTests:    1,
+			wantFailures: 1,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			r := JUnit(WithTargets(tt.targets))
+			r := JUnit(WithBounds(testBounds(tt.targets)...))
 
 			var buf bytes.Buffer
-			if err := r.Generate(&buf, result); err != nil {
+			if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 				t.Fatalf("Generate() error: %v", err)
 			}
 			out := buf.String()
@@ -469,7 +459,7 @@ func TestVegaLiteReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -499,7 +489,7 @@ func TestVegaLiteReporter(t *testing.T) {
 func TestVegaLiteSpecs(t *testing.T) {
 	t.Parallel()
 	result := makeTestResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	for name, spec := range specs {
 		specMap, ok := spec.(map[string]any)
@@ -520,7 +510,7 @@ func TestVegaLiteSpecs(t *testing.T) {
 func TestVegaLiteSpecsROC(t *testing.T) {
 	t.Parallel()
 	result := makeTestResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	spec, ok := specs["roc_curve.vl.json"]
 	if !ok {
@@ -539,7 +529,7 @@ func TestVegaLiteSpecsROC(t *testing.T) {
 func TestVegaLiteSpecsConfusionMatrix(t *testing.T) {
 	t.Parallel()
 	result := makeTestResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	spec, ok := specs["confusion_matrix.vl.json"]
 	if !ok {
@@ -554,7 +544,7 @@ func TestVegaLiteSpecsConfusionMatrix(t *testing.T) {
 func TestVegaLiteSpecsBranchComparison(t *testing.T) {
 	t.Parallel()
 	result := makeTestResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	if _, ok := specs["branch_comparison.vl.json"]; !ok {
 		t.Fatal("missing branch_comparison spec")
@@ -565,8 +555,9 @@ func TestVegaLiteSpecsScoreDistribution(t *testing.T) {
 	t.Parallel()
 	// Test with samples but no explicit score_distribution curve
 	result := makeTestResult()
-	result.Curves = nil // Remove explicit curves; should fall back to samples
-	specs := VegaLiteSpecs(result)
+	result.ROC = nil
+	result.Calibration = nil // Remove explicit curves; should fall back to samples
+	specs := testVegaLiteSpecs(t, result)
 
 	if _, ok := specs["score_distribution.vl.json"]; !ok {
 		t.Fatal("missing score_distribution spec from samples fallback")
@@ -576,7 +567,7 @@ func TestVegaLiteSpecsScoreDistribution(t *testing.T) {
 func TestVegaLiteSpecsEmpty(t *testing.T) {
 	t.Parallel()
 	result := makeEmptyResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 	if len(specs) != 0 {
 		t.Errorf("expected 0 specs for empty result, got %d", len(specs))
 	}
@@ -594,7 +585,7 @@ func TestHTMLReporter(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -633,7 +624,7 @@ func TestHTMLReporterWithEmptyCharts(t *testing.T) {
 	result := makeMinimalResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -689,7 +680,7 @@ func TestReportersWithEmptyResult(t *testing.T) {
 		t.Run(r.Name(), func(t *testing.T) {
 			t.Parallel()
 			var buf bytes.Buffer
-			if err := r.Generate(&buf, result); err != nil {
+			if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 				t.Fatalf("%s: Generate() error: %v", r.Name(), err)
 			}
 			if buf.Len() == 0 {
@@ -711,7 +702,7 @@ func TestReportersWithMinimalResult(t *testing.T) {
 		t.Run(r.Name(), func(t *testing.T) {
 			t.Parallel()
 			var buf bytes.Buffer
-			if err := r.Generate(&buf, result); err != nil {
+			if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 				t.Fatalf("%s: Generate() error: %v", r.Name(), err)
 			}
 			if buf.Len() == 0 {
@@ -729,7 +720,7 @@ func TestCSVReporterNoMetrics(t *testing.T) {
 	result := makeEmptyResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -751,7 +742,7 @@ func TestMarkdownWithoutTag(t *testing.T) {
 	result.Tag = ""
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -775,10 +766,10 @@ func TestTableTruncation(t *testing.T) {
 			Score: 0.9, Correct: true,
 		}
 	}
-	result.Samples = samples
+	result.Dataset.SampleCount = len(samples)
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -800,10 +791,10 @@ func TestMarkdownTruncation(t *testing.T) {
 			Score: 0.9, Correct: true,
 		}
 	}
-	result.Samples = samples
+	result.Dataset.SampleCount = len(samples)
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -818,7 +809,7 @@ func TestJUnitWithTag(t *testing.T) {
 	result := makeTestResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -834,7 +825,7 @@ func TestJUnitWithoutTag(t *testing.T) {
 	result.Tag = ""
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -859,7 +850,7 @@ func TestJUnitWithoutTag(t *testing.T) {
 func TestVegaLiteCalibrationSpec(t *testing.T) {
 	t.Parallel()
 	result := makeTestResult()
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	spec, ok := specs["calibration.vl.json"]
 	if !ok {
@@ -880,12 +871,12 @@ func TestVegaLiteThresholdSweep(t *testing.T) {
 	result.Metrics = append(result.Metrics, bench.MetricResult{
 		Name:  "threshold_sweep",
 		Value: 0,
-		Detail: []bench.ThresholdPoint{
+		ThresholdSweep: []bench.ThresholdPoint{
 			{Threshold: 0.3, Precision: 0.70, Recall: 0.95, F1: 0.81, Accuracy: 0.75},
 			{Threshold: 0.5, Precision: 0.85, Recall: 0.80, F1: 0.82, Accuracy: 0.84},
 		},
 	})
-	specs := VegaLiteSpecs(result)
+	specs := testVegaLiteSpecs(t, result)
 
 	if _, ok := specs["threshold_sweep.vl.json"]; !ok {
 		t.Fatal("missing threshold_sweep spec")
@@ -899,7 +890,7 @@ func TestHTMLEscaping(t *testing.T) {
 	result.Tag = "test<script>alert(1)</script>"
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	out := buf.String()
@@ -915,7 +906,7 @@ func TestJSONBranchSorting(t *testing.T) {
 	result := makeTestResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -933,7 +924,7 @@ func TestJSONBranchSorting(t *testing.T) {
 
 	// The output is stable across repeated generation.
 	var buf2 bytes.Buffer
-	if err := r.Generate(&buf2, result); err != nil {
+	if err := r.Generate(t.Context(), &buf2, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 	if raw != buf2.String() {

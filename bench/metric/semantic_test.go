@@ -44,7 +44,7 @@ func TestSemanticSimilarityNameEmbedsModel(t *testing.T) {
 	t.Parallel()
 
 	m := newSemantic(t, inmem.New(8))
-	if got, want := m.Name(), "semantic_similarity[test-embed:t0.8]"; got != want {
+	if got, want := m.Identity().Name, "semantic_similarity[test-embed:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -56,11 +56,11 @@ func TestSemanticSimilarityThresholdChangesIdentity(t *testing.T) {
 
 	a := newSemantic(t, inmem.New(8), metric.WithSemanticThreshold[string](0.7))
 	b := newSemantic(t, inmem.New(8), metric.WithSemanticThreshold[string](0.9))
-	if a.Name() == b.Name() {
-		t.Errorf("names must differ by threshold, both = %q", a.Name())
+	if a.Identity().Name == b.Identity().Name {
+		t.Errorf("names must differ by threshold, both = %q", a.Identity().Name)
 	}
-	if !strings.Contains(a.Name(), ":t0.7]") {
-		t.Errorf("Name() = %q, want threshold t0.7 in identity", a.Name())
+	if !strings.Contains(a.Identity().Name, ":t0.7]") {
+		t.Errorf("Name() = %q, want threshold t0.7 in identity", a.Identity().Name)
 	}
 }
 
@@ -112,9 +112,6 @@ func TestSemanticSimilarityIdenticalTextsScoreOne(t *testing.T) {
 	if res.Values["match_rate"] != 1.0 {
 		t.Errorf("match_rate = %f, want 1.0", res.Values["match_rate"])
 	}
-	if got := res.Detail.(map[string]any)["samples"]; got != 2 {
-		t.Errorf("Detail[samples] = %v, want 2", got)
-	}
 	if res.Direction != bench.HigherIsBetter {
 		t.Errorf("Direction = %v, want HigherIsBetter (semantic similarity measures quality)", res.Direction)
 	}
@@ -139,7 +136,7 @@ func TestSemanticSimilarityThresholdMatchRate(t *testing.T) {
 	if _, ok := res.Values["threshold"]; ok {
 		t.Error("threshold must not appear in Values: it is a configuration input, not a quality signal")
 	}
-	if got := res.Detail.(map[string]any)["threshold"]; got != 0.99 {
+	if got := m.Identity().Config["threshold"]; got != "0.99" {
 		t.Errorf("Detail[threshold] = %v, want 0.99", got)
 	}
 }
@@ -176,7 +173,7 @@ func TestSemanticSimilarityEmptyInputIsZeroedNoCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	if res.Value != 0 || res.Detail.(map[string]any)["samples"] != 0 {
+	if res.Value != 0 || res.Values["match_rate"] != 0 {
 		t.Errorf("empty result = %+v, want zeroed", res)
 	}
 	if provider.Calls() != 0 {
@@ -312,7 +309,7 @@ func TestSemanticSimilarityIdentityIncludesProviderAndVersion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), "semantic_similarity[openai/text-embedding-3-small@v1:t0.8]"; got != want {
+	if got, want := m.Identity().Name, "semantic_similarity[openai/text-embedding-3-small@v1:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -326,7 +323,7 @@ func TestSemanticSimilarityIdentityEscapesSeparators(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), `semantic_similarity[a\/b\@c\]:t0.8]`; got != want {
+	if got, want := m.Identity().Name, `semantic_similarity[a\/b\@c\]:t0.8]`; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -340,7 +337,7 @@ func TestSemanticSimilarityIdentityFallsBackToProviderName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SemanticSimilarity: %v", err)
 	}
-	if got, want := m.Name(), "semantic_similarity[embed-fake:t0.8]"; got != want {
+	if got, want := m.Identity().Name, "semantic_similarity[embed-fake:t0.8]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }

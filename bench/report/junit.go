@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -13,18 +14,16 @@ type JUnitOption func(*junitReporter)
 
 // WithTargets sets metric targets.
 // Each metric with a matching entry becomes a test case that passes if the metric value >= the target.
-func WithTargets(targets map[string]float64) JUnitOption {
+func WithBounds(bounds ...bench.Bound) JUnitOption {
 	return func(r *junitReporter) {
-		r.targets = targets
+		r.bounds = bounds
 	}
 }
 
 // JUnit returns a reporter that outputs JUnit XML for CI/CD integration.
 // Metrics with configured targets become test cases: pass if value >= target.
 func JUnit(opts ...JUnitOption) Reporter {
-	r := &junitReporter{
-		targets: make(map[string]float64),
-	}
+	r := &junitReporter{}
 	for _, opt := range opts {
 		opt(r)
 	}
@@ -32,13 +31,16 @@ func JUnit(opts ...JUnitOption) Reporter {
 }
 
 type junitReporter struct {
-	targets map[string]float64
+	bounds []bench.Bound
 }
 
 func (r *junitReporter) Name() string { return "junit" }
 
-func (r *junitReporter) Generate(w io.Writer, result *bench.RunResult) error {
-	suite := r.buildSuite(result)
+func (r *junitReporter) Generate(ctx context.Context, w io.Writer, input Input) error {
+	if err := validateInput(ctx, input); err != nil {
+		return err
+	}
+	suite := r.buildSuite(input)
 
 	if _, err := io.WriteString(w, xml.Header); err != nil {
 		return err
@@ -82,29 +84,33 @@ type junitFailure struct {
 	Body    string `xml:",chardata"`
 }
 
-func (r *junitReporter) buildSuite(result *bench.RunResult) junitTestSuites {
+func (r *junitReporter) buildSuite(input Input) junitTestSuites {
+	result := input.Result
 	var cases []junitTestCase
 	failures := 0
 
-	for _, m := range result.Metrics {
-		target, hasTarget := r.targets[m.Name]
-		if !hasTarget {
-			continue
-		}
-
+	for _, check := range bench.CheckBounds(result, r.bounds) {
 		tc := junitTestCase{
-			Name:      m.Name,
+			Name:      check.Bound.Metric,
 			ClassName: "bench.metrics",
 			Time:      "0",
 		}
 
-		if m.Value < target {
+		if !check.Passed {
 			failures++
 			tc.Failure = &junitFailure{
-				Message: fmt.Sprintf("%s: %.4f < %.4f (target)", m.Name, m.Value, target),
-				Type:    "BelowTarget",
-				Body:    fmt.Sprintf("Metric %q scored %.6f, below target %.6f", m.Name, m.Value, target),
+				Message: check.Reason,
+				Type:    "BoundViolation",
+				Body:    check.Reason,
 			}
+		}
+		cases = append(cases, tc)
+	}
+	if input.Diff != nil {
+		tc := junitTestCase{Name: "eligibility", ClassName: "bench.comparison", Time: "0"}
+		if !input.Diff.Eligibility.Eligible {
+			failures++
+			tc.Failure = &junitFailure{Message: input.Diff.Summary(), Type: "Ineligible"}
 		}
 		cases = append(cases, tc)
 	}
@@ -114,6 +120,9 @@ func (r *junitReporter) buildSuite(result *bench.RunResult) junitTestSuites {
 		{Name: "dataset", Value: result.Dataset.Name},
 		{Name: "dataset_version", Value: result.Dataset.Version},
 		{Name: "timestamp", Value: result.Timestamp.Format("2006-01-02T15:04:05Z07:00")},
+	}
+	if input.Diff != nil {
+		props = append(props, junitProperty{Name: "verdict", Value: input.Diff.Verdict()}, junitProperty{Name: "eligibility", Value: fmt.Sprint(input.Diff.Eligibility.Eligible)})
 	}
 	if result.Tag != "" {
 		props = append(props, junitProperty{Name: "tag", Value: result.Tag})

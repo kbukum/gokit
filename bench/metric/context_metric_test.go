@@ -16,6 +16,9 @@ type staticContextMetric struct {
 }
 
 func (m *staticContextMetric) Name() string { return m.name }
+func (m *staticContextMetric) Identity() bench.MetricIdentity {
+	return bench.MetricIdentity{Name: m.name, Version: "1"}
+}
 
 func (m *staticContextMetric) Compute(_ context.Context, _ []bench.ScoredSample[string]) (metric.Result, error) {
 	m.calls++
@@ -35,8 +38,8 @@ func TestAsSyncEqualsContextMetricResult(t *testing.T) {
 
 	// The precompute path must yield an identical Result to the context-metric path.
 	sync := metric.AsSync[string](got)
-	if sync.Name() != want.Name {
-		t.Errorf("AsSync Name = %q, want %q", sync.Name(), want.Name)
+	if sync.Identity().Name != want.Name {
+		t.Errorf("AsSync Name = %q, want %q", sync.Identity().Name, want.Name)
 	}
 	syncRes := sync.Compute([]bench.ScoredSample[string]{{}})
 	if syncRes.Value != want.Value || syncRes.Values["avg_similarity"] != 0.75 {

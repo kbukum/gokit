@@ -38,7 +38,8 @@ func RenderComparison(branches map[string]bench.BranchResult, opts ...RenderOpti
 
 	// Collect the union of metric names.
 	metricSet := make(map[string]struct{})
-	for _, br := range branches {
+	for branchName := range branches {
+		br := branches[branchName]
 		for m := range br.Metrics {
 			metricSet[m] = struct{}{}
 		}
@@ -62,7 +63,8 @@ func RenderComparison(branches map[string]bench.BranchResult, opts ...RenderOpti
 
 	// Find max value for scaling.
 	maxVal := 1.0
-	for _, br := range branches {
+	for branchName := range branches {
+		br := branches[branchName]
 		for _, v := range br.Metrics {
 			if v > maxVal {
 				maxVal = v

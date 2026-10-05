@@ -30,7 +30,7 @@ func TestTokenStatsNameEmbedsCounter(t *testing.T) {
 	t.Parallel()
 
 	m := newTokenStats(t, llm.HeuristicTokenCounter{})
-	if got, want := m.Name(), "token_stats[heuristic]"; got != want {
+	if got, want := m.Identity().Name, "token_stats[heuristic]"; got != want {
 		t.Errorf("Name() = %q, want %q", got, want)
 	}
 }
@@ -93,7 +93,8 @@ func TestTokenStatsCountsPredictedAndReference(t *testing.T) {
 		tokenScored("abcdefgh", "xy"),
 		tokenScored("abcd", "z"),
 	}
-	res := newTokenStats(t, llm.HeuristicTokenCounter{}).Compute(scored)
+	m := newTokenStats(t, llm.HeuristicTokenCounter{})
+	res := m.Compute(scored)
 
 	if got := res.Values["predicted_tokens_total"]; got != 3 {
 		t.Errorf("predicted_tokens_total = %v, want 3", got)
@@ -110,8 +111,8 @@ func TestTokenStatsCountsPredictedAndReference(t *testing.T) {
 	if res.Direction != bench.Neutral {
 		t.Errorf("Direction = %v, want Neutral (TokenStats summarizes usage)", res.Direction)
 	}
-	if detail, ok := res.Detail.(map[string]string); !ok || detail["counter"] != "heuristic" {
-		t.Errorf("Detail = %v, want counter=heuristic", res.Detail)
+	if m.Identity().Config["counter"] != "heuristic" {
+		t.Errorf("Config = %v, want counter=heuristic", m.Identity().Config)
 	}
 }
 
@@ -147,10 +148,6 @@ func TestTokenStatsRecordsCounterErrors(t *testing.T) {
 	}
 	if res.Value != 0 {
 		t.Errorf("Value = %v, want 0", res.Value)
-	}
-	detail, ok := res.Detail.(map[string]string)
-	if !ok || detail["counter_errors"] != "2" {
-		t.Errorf("Detail = %v, want counter_errors=2", res.Detail)
 	}
 }
 

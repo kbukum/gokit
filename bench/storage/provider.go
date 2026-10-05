@@ -3,150 +3,100 @@ package storage
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"sort"
+	"io"
+	"slices"
 	"strings"
 
 	"github.com/kbukum/gokit/bench"
+	gofs "github.com/kbukum/gokit/fs"
 	gostorage "github.com/kbukum/gokit/storage"
 )
 
-// Option configures a ProviderStorage.
+// Option configures the storage adapter namespace.
 type Option func(*ProviderStorage)
 
-// WithPrefix sets the key prefix for stored results. Default is "bench/".
-func WithPrefix(prefix string) Option {
-	return func(s *ProviderStorage) { s.prefix = prefix }
-}
+// WithPrefix sets the caller-owned object namespace, including its trailing separator.
+func WithPrefix(prefix string) Option { return func(s *ProviderStorage) { s.prefix = prefix } }
 
-// ProviderStorage implements bench.RunStorage using a gokit/storage.Storage backend.
+// ProviderStorage adapts kit storage to the bounded benchmark object port.
 type ProviderStorage struct {
 	store  gostorage.Storage
 	prefix string
 }
 
-// NewProviderStorage creates a new ProviderStorage wrapping the given storage backend.
+// NewProviderStorage wraps a backend with the default "bench/" namespace.
 func NewProviderStorage(store gostorage.Storage, opts ...Option) *ProviderStorage {
-	s := &ProviderStorage{
-		store:  store,
-		prefix: "bench/",
-	}
-	for _, o := range opts {
-		o(s)
+	s := &ProviderStorage{store: store, prefix: "bench/"}
+	for _, opt := range opts {
+		opt(s)
 	}
 	return s
 }
 
-// key builds the full storage path for a run ID.
-func (s *ProviderStorage) key(runID string) string {
-	return s.prefix + runID + ".json"
+func (s *ProviderStorage) key(key string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("bench/storage: object key must not be empty")
+	}
+	if err := gofs.ValidateRelativePath(key); err != nil {
+		return "", err
+	}
+	return s.prefix + key, nil
 }
 
-// Save persists a RunResult to the storage backend.
-func (s *ProviderStorage) Save(ctx context.Context, result *bench.RunResult) (string, error) {
-	data, err := json.Marshal(result)
+func (s *ProviderStorage) Put(ctx context.Context, key string, data []byte) error {
+	path, err := s.key(key)
 	if err != nil {
-		return "", fmt.Errorf("bench/storage: marshal result: %w", err)
+		return err
 	}
-	if err := s.store.Upload(ctx, s.key(result.ID), bytes.NewReader(data)); err != nil {
-		return "", fmt.Errorf("bench/storage: upload result: %w", err)
-	}
-	return result.ID, nil
+	return s.store.Upload(ctx, path, bytes.NewReader(data))
 }
 
-// Load retrieves a RunResult by run ID.
-func (s *ProviderStorage) Load(ctx context.Context, runID string) (*bench.RunResult, error) {
-	rc, err := s.store.Download(ctx, s.key(runID))
-	if err != nil {
-		return nil, fmt.Errorf("bench/storage: download result %s: %w", runID, err)
+func (s *ProviderStorage) Get(ctx context.Context, key string, limit int64) ([]byte, error) {
+	if limit < 1 {
+		return nil, fmt.Errorf("bench/storage: positive read limit required")
 	}
-	defer func() { _ = rc.Close() }()
-
-	var result bench.RunResult
-	if err := json.NewDecoder(rc).Decode(&result); err != nil {
-		return nil, fmt.Errorf("bench/storage: decode result %s: %w", runID, err)
-	}
-	return &result, nil
-}
-
-// Latest returns the most recent RunResult by listing and sorting stored results.
-func (s *ProviderStorage) Latest(ctx context.Context) (*bench.RunResult, error) {
-	summaries, err := s.List(ctx, bench.WithLimit(1))
+	path, err := s.key(key)
 	if err != nil {
 		return nil, err
 	}
-	if len(summaries) == 0 {
-		return nil, fmt.Errorf("bench/storage: no results found")
-	}
-	return s.Load(ctx, summaries[0].ID)
-}
-
-// List returns summaries of stored results, sorted by timestamp descending.
-func (s *ProviderStorage) List(ctx context.Context, opts ...bench.ListOption) ([]bench.RunSummary, error) {
-	params := bench.ResolveListOptions(opts...)
-
-	files, err := s.store.List(ctx, s.prefix)
+	reader, err := s.store.Download(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("bench/storage: list results: %w", err)
+		return nil, err
 	}
-
-	var summaries []bench.RunSummary
-	for _, f := range files {
-		if !strings.HasSuffix(f.Path, ".json") {
-			continue
-		}
-
-		rc, err := s.store.Download(ctx, f.Path)
-		if err != nil {
-			continue
-		}
-
-		var result bench.RunResult
-		decErr := json.NewDecoder(rc).Decode(&result)
-		_ = rc.Close()
-		if decErr != nil {
-			continue
-		}
-
-		if params.Tag != "" && result.Tag != params.Tag {
-			continue
-		}
-		if params.Dataset != "" && result.Dataset.Name != params.Dataset {
-			continue
-		}
-
-		var f1 float64
-		for _, m := range result.Metrics {
-			if v, ok := m.Values["f1"]; ok {
-				f1 = v
-				break
-			}
-			if m.Name == "classification" || m.Name == "multi_class_classification" {
-				f1 = m.Value
-				break
-			}
-		}
-
-		summaries = append(summaries, bench.RunSummary{
-			ID:        result.ID,
-			Timestamp: result.Timestamp,
-			Tag:       result.Tag,
-			Dataset:   result.Dataset.Name,
-			F1:        f1,
-		})
+	data, readErr := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err := errors.Join(readErr, reader.Close(), ctx.Err()); err != nil {
+		return nil, err
 	}
-
-	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].Timestamp.After(summaries[j].Timestamp)
-	})
-
-	if params.Limit > 0 && len(summaries) > params.Limit {
-		summaries = summaries[:params.Limit]
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("bench/storage: object exceeds read limit %d", limit)
 	}
-
-	return summaries, nil
+	return data, nil
 }
 
-// Compile-time assertion that ProviderStorage implements bench.RunStorage.
-var _ bench.RunStorage = (*ProviderStorage)(nil)
+func (s *ProviderStorage) Delete(ctx context.Context, key string) error {
+	path, err := s.key(key)
+	if err != nil {
+		return err
+	}
+	return s.store.Delete(ctx, path)
+}
+
+func (s *ProviderStorage) List(ctx context.Context, prefix string) ([]string, error) {
+	objects, err := s.store.List(ctx, s.prefix+prefix)
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(objects))
+	for _, object := range objects {
+		if !strings.HasPrefix(object.Path, s.prefix+prefix) {
+			return nil, fmt.Errorf("bench/storage: backend returned object outside prefix")
+		}
+		keys = append(keys, strings.TrimPrefix(object.Path, s.prefix))
+	}
+	slices.Sort(keys)
+	return keys, nil
+}
+
+var _ bench.ObjectStore = (*ProviderStorage)(nil)

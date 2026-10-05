@@ -3,6 +3,7 @@ module github.com/kbukum/gokit/bench/storage
 go 1.27.1
 
 require (
+	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/bench v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
 )
@@ -18,7 +19,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
-	github.com/kbukum/gokit v0.3.0-alpha.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/prometheus/client_golang v1.24.1 // indirect

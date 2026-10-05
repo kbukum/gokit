@@ -2,6 +2,7 @@ package metric
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kbukum/gokit/bench"
@@ -14,6 +15,9 @@ func Weighted[L comparable](weights map[Metric[L]]float64) Metric[L] {
 	for m, w := range weights {
 		entries = append(entries, weightedEntry[L]{metric: m, weight: w})
 	}
+	slices.SortFunc(entries, func(a, b weightedEntry[L]) int {
+		return strings.Compare(a.metric.Identity().Name, b.metric.Identity().Name)
+	})
 	return &weightedMetric[L]{entries: entries}
 }
 
@@ -29,7 +33,7 @@ type weightedMetric[L comparable] struct {
 func (m *weightedMetric[L]) Name() string {
 	names := make([]string, 0, len(m.entries))
 	for _, e := range m.entries {
-		names = append(names, fmt.Sprintf("%s*%.2f", e.metric.Name(), e.weight))
+		names = append(names, fmt.Sprintf("%s*%.2f", e.metric.Identity().Name, e.weight))
 	}
 	return "weighted(" + strings.Join(names, "+") + ")"
 }
@@ -67,7 +71,7 @@ func (m *weightedMetric[L]) Compute(scored []bench.ScoredSample[L]) Result {
 		Direction:  compositeDirection(effective),
 		Values:     values,
 		Directions: directions,
-		Detail:     details,
+		Components: details,
 	}
 }
 

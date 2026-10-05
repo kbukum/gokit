@@ -36,18 +36,14 @@ func makeTestResult(id, tag, dataset string) *RunResult {
 		Branches: map[string]BranchResult{
 			"main": {Name: "main", Tier: 0, Metrics: map[string]float64{"f1": 0.85}},
 		},
-		Samples: []SampleResult{
-			{ID: "s1", Label: "positive", Predicted: "positive", Score: 0.95, Correct: true},
-			{ID: "s2", Label: "negative", Predicted: "positive", Score: 0.6, Correct: false},
-		},
 	}
 }
 
-func TestFileStorageSaveAndLoad(t *testing.T) {
+func TestResultStoreSaveAndLoad(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	result := makeTestResult("run-001", "test", "my-dataset")
@@ -72,16 +68,13 @@ func TestFileStorageSaveAndLoad(t *testing.T) {
 	if len(loaded.Metrics) != len(result.Metrics) {
 		t.Errorf("len(Metrics) = %d, want %d", len(loaded.Metrics), len(result.Metrics))
 	}
-	if len(loaded.Samples) != len(result.Samples) {
-		t.Errorf("len(Samples) = %d, want %d", len(loaded.Samples), len(result.Samples))
-	}
 }
 
-func TestFileStorageLoadNotFound(t *testing.T) {
+func TestResultStoreLoadNotFound(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	_, err := storage.Load(ctx, "nonexistent")
@@ -90,11 +83,11 @@ func TestFileStorageLoadNotFound(t *testing.T) {
 	}
 }
 
-func TestFileStorageLatest(t *testing.T) {
+func TestResultStoreLatest(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	r1 := makeTestResult("run-old", "v1", "ds")
@@ -114,11 +107,11 @@ func TestFileStorageLatest(t *testing.T) {
 	}
 }
 
-func TestFileStorageList(t *testing.T) {
+func TestResultStoreList(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	for i, id := range []string{"run-a", "run-b", "run-c"} {
@@ -140,11 +133,11 @@ func TestFileStorageList(t *testing.T) {
 	}
 }
 
-func TestFileStorageListWithLimit(t *testing.T) {
+func TestResultStoreListWithLimit(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	for i, id := range []string{"run-1", "run-2", "run-3"} {
@@ -162,11 +155,11 @@ func TestFileStorageListWithLimit(t *testing.T) {
 	}
 }
 
-func TestFileStorageListWithTagFilter(t *testing.T) {
+func TestResultStoreListWithTagFilter(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	storage.Save(ctx, makeTestResult("run-a", "v1", "ds"))
@@ -182,11 +175,11 @@ func TestFileStorageListWithTagFilter(t *testing.T) {
 	}
 }
 
-func TestFileStorageListWithDatasetFilter(t *testing.T) {
+func TestResultStoreListWithDatasetFilter(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	storage.Save(ctx, makeTestResult("run-a", "", "dataset-a"))
@@ -201,11 +194,11 @@ func TestFileStorageListWithDatasetFilter(t *testing.T) {
 	}
 }
 
-func TestFileStorageEmptyDirectory(t *testing.T) {
+func TestResultStoreEmptyDirectory(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	summaries, err := storage.List(ctx)
@@ -217,11 +210,11 @@ func TestFileStorageEmptyDirectory(t *testing.T) {
 	}
 }
 
-func TestFileStorageLatestEmpty(t *testing.T) {
+func TestResultStoreLatestEmpty(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	storage := NewFileStorage(dir)
+	storage := newFixtureStore(dir)
 	ctx := context.Background()
 
 	_, err := storage.Latest(ctx)
@@ -254,10 +247,10 @@ func TestResolveListOptionsDefaults(t *testing.T) {
 	}
 }
 
-func TestFileStorageAllowsDottedRunID(t *testing.T) {
+func TestResultStoreAllowsDottedRunID(t *testing.T) {
 	t.Parallel()
 
-	storage := NewFileStorage(t.TempDir())
+	storage := newFixtureStore(t.TempDir())
 	result := makeTestResult("release..candidate", "test", "dataset")
 
 	if _, err := storage.Save(context.Background(), result); err != nil {
@@ -272,10 +265,10 @@ func TestFileStorageAllowsDottedRunID(t *testing.T) {
 	}
 }
 
-func TestFileStorageRejectsTraversalRunID(t *testing.T) {
+func TestResultStoreRejectsTraversalRunID(t *testing.T) {
 	t.Parallel()
 
-	storage := NewFileStorage(t.TempDir())
+	storage := newFixtureStore(t.TempDir())
 	result := makeTestResult("../evil", "test", "dataset")
 
 	_, err := storage.Save(context.Background(), result)
@@ -291,10 +284,10 @@ func TestFileStorageRejectsTraversalRunID(t *testing.T) {
 	}
 }
 
-func TestFileStorageRejectsSeparatorRunID(t *testing.T) {
+func TestResultStoreRejectsSeparatorRunID(t *testing.T) {
 	t.Parallel()
 
-	storage := NewFileStorage(t.TempDir())
+	storage := newFixtureStore(t.TempDir())
 
 	_, err := storage.Load(context.Background(), "a/b")
 	if err == nil {

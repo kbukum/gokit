@@ -34,11 +34,14 @@ func NewRunComparator(opts ...CompareOption) *RunComparator {
 
 // RunDiff holds the comparison result between two benchmark runs.
 type RunDiff struct {
-	BaseID    string
-	TargetID  string
-	Changes   []MetricChange
-	Fixed     []string // sample IDs that went from wrong to correct
-	Regressed []string // sample IDs that went from correct to wrong
+	Eligibility    Eligibility `json:"eligibility"`
+	FixedCount     int         `json:"fixed_count"`
+	RegressedCount int         `json:"regressed_count"`
+	BaseID         string
+	TargetID       string
+	Changes        []MetricChange
+	Fixed          []string // sample IDs that went from wrong to correct
+	Regressed      []string // sample IDs that went from correct to wrong
 	// Incompatible lists judge metrics whose two runs were scored by different
 	// backend judges under the same metric name — the same requested model/prompt
 	// resolved to different backend models — so their scores are not directly
@@ -78,13 +81,15 @@ type MetricChange struct {
 // Compare compares two RunResults and returns the diff.
 func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 	diff := &RunDiff{
-		BaseID:   base.ID,
-		TargetID: target.ID,
+		BaseID:      base.ID,
+		TargetID:    target.ID,
+		Eligibility: compareIdentity(base.Evaluation, target.Evaluation),
 	}
 
 	// Compare top-level metrics.
 	baseMetrics := make(map[string]float64, len(base.Metrics))
-	for _, m := range base.Metrics {
+	for metricIndex := range base.Metrics {
+		m := &base.Metrics[metricIndex]
 		baseMetrics[m.Name] = m.Value
 		for k, v := range m.Values {
 			baseMetrics[metricValueKey(m.Name, k)] = v
@@ -92,7 +97,8 @@ func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 	}
 
 	seen := make(map[string]bool)
-	for _, m := range target.Metrics {
+	for metricIndex := range target.Metrics {
+		m := &target.Metrics[metricIndex]
 		// Compare top-level value.
 		if oldVal, ok := baseMetrics[m.Name]; ok && !seen[m.Name] {
 			diff.Changes = append(diff.Changes, c.metricChange(m.Name, oldVal, m.Value, m.Direction))
@@ -117,24 +123,6 @@ func (c *RunComparator) Compare(base, target *RunResult) *RunDiff {
 		}
 	}
 
-	// Compare per-sample correctness.
-	baseSamples := make(map[string]bool, len(base.Samples))
-	for _, s := range base.Samples {
-		baseSamples[s.ID] = s.Correct
-	}
-
-	for _, s := range target.Samples {
-		baseCorrect, ok := baseSamples[s.ID]
-		if !ok {
-			continue
-		}
-		if !baseCorrect && s.Correct {
-			diff.Fixed = append(diff.Fixed, s.ID)
-		} else if baseCorrect && !s.Correct {
-			diff.Regressed = append(diff.Regressed, s.ID)
-		}
-	}
-
 	// Flag judge metrics whose two runs resolved to different backend models: the
 	// metric names match but the scores were produced by different judges, so the
 	// delta above is not a like-for-like comparison.
@@ -152,13 +140,16 @@ func judgeIncompatibilities(base, target []JudgeProvenance) []JudgeIncompatibili
 	if len(base) == 0 || len(target) == 0 {
 		return nil
 	}
-	byMetric := make(map[string]JudgeProvenance, len(base))
-	for _, j := range base {
-		byMetric[j.Metric] = j
+	type key struct{ branch, metric string }
+	byMetric := make(map[key]JudgeProvenance, len(base))
+	for i := range base {
+		j := &base[i]
+		byMetric[key{j.Branch, j.Metric}] = *j
 	}
 	var out []JudgeIncompatibility
-	for _, tj := range target {
-		bj, ok := byMetric[tj.Metric]
+	for i := range target {
+		tj := &target[i]
+		bj, ok := byMetric[key{tj.Branch, tj.Metric}]
 		if !ok {
 			continue
 		}
@@ -190,6 +181,7 @@ func (c *RunComparator) metricChange(name string, oldVal, newVal float64, dir Di
 // Summary returns a human-readable summary of the comparison.
 func (d *RunDiff) Summary() string {
 	var b strings.Builder
+	fmt.Fprintf(&b, "Eligibility: %t (complete: %t, reasons: %v)\nVerdict: %s\n", d.Eligibility.Eligible, d.Eligibility.Complete, d.Eligibility.Reasons, d.Verdict())
 
 	for _, ch := range d.Changes {
 		icon := "➖"
@@ -220,40 +212,23 @@ func (d *RunDiff) Summary() string {
 	return b.String()
 }
 
-// HasRegression returns true if any metric changed significantly in its worse
-// direction — a decrease for a higher-is-better metric, an increase for a
-// lower-is-better metric; a neutral metric never regresses. Judge metrics
-// flagged as incompatible — the two runs resolved the same requested
-// model/prompt to different backend judges — are excluded (along with their
-// per-key subvalues), so a non-like-for-like judge delta is never treated as a
-// real regression by an automated gate. Their deltas are still reported in
-// [RunDiff.Changes] for display.
+// HasRegression reports significant changes in a worse direction. Eligibility is separate; use Verdict before treating a comparison as a verified pass.
 func (d *RunDiff) HasRegression() bool {
-	incompatible := make(map[string]struct{}, len(d.Incompatible))
-	for _, inc := range d.Incompatible {
-		incompatible[inc.Metric] = struct{}{}
-	}
 	for _, ch := range d.Changes {
-		if ch.Significant && ch.Direction.IsRegression(ch.Delta) && !isIncompatibleChange(ch.Name, incompatible) {
+		if ch.Significant && ch.Direction.IsRegression(ch.Delta) {
 			return true
 		}
 	}
 	return false
 }
 
-// isIncompatibleChange reports whether a metric change name belongs to an
-// incompatible judge metric — either the metric's top-level value (an exact name
-// match) or one of its per-key subvalues (name "<metric>.<key>"). The judge
-// metric name itself contains dots (for example the ":t0.5" threshold), so the
-// match is anchored on the full metric name rather than split on the first dot.
-func isIncompatibleChange(name string, incompatible map[string]struct{}) bool {
-	if _, ok := incompatible[name]; ok {
-		return true
+// Verdict never presents missing or incompatible identity as a verified pass.
+func (d *RunDiff) Verdict() string {
+	if !d.Eligibility.Eligible {
+		return "ineligible"
 	}
-	for metric := range incompatible {
-		if strings.HasPrefix(name, metric+".") {
-			return true
-		}
+	if d.HasRegression() {
+		return "regressed"
 	}
-	return false
+	return "passed"
 }

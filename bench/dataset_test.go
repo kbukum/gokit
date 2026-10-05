@@ -3,11 +3,80 @@ package bench
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/kbukum/gokit/stream"
 	"github.com/kbukum/gokit/util"
 )
+
+func TestDatasetIteratorValidatesTail(t *testing.T) {
+	t.Parallel()
+	for _, text := range []string{
+		`{"samples":[{"id":"a","label":"yes"}]`,
+		`{"samples":[{"id":"a","label":"yes"}]} true`,
+		`{"samples":[{"id":"a","label":"yes"}],"other":`,
+	} {
+		t.Run(text, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			if err := util.WriteFile(filepath.Join(dir, "manifest.json"), []byte(text)); err != nil {
+				t.Fatal(err)
+			}
+			_, err := stream.Collect(t.Context(), NewDatasetLoader(dir, stringMapper).Pipeline())
+			if err == nil {
+				t.Fatal("malformed manifest tail accepted")
+			}
+		})
+	}
+}
+
+func TestDatasetFilteredSampleDoesNotInheritMetadata(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	raw := `{"samples":[{"id":"skip","label":"yes","source":"private","metadata":{"key":1}},{"id":"keep","label":"yes"}]}`
+	if err := util.WriteFile(filepath.Join(dir, "manifest.json"), []byte(raw)); err != nil {
+		t.Fatal(err)
+	}
+	loader := NewDatasetLoader(dir, stringMapper).Filter(func(s ManifestSample) bool { return s.ID == "keep" })
+	samples, err := stream.Collect(t.Context(), loader.Pipeline())
+	if err != nil || len(samples) != 1 {
+		t.Fatalf("samples=%v err=%v", samples, err)
+	}
+	if samples[0].Metadata != nil || samples[0].Source != "" {
+		t.Fatal("filtered sample fields leaked to the next record")
+	}
+}
+
+func TestDatasetRejectsEscapingPaths(t *testing.T) {
+	t.Parallel()
+	dir, outside := t.TempDir(), t.TempDir()
+	writeSampleFile(t, outside, "outside.txt", "outside")
+	if err := os.Symlink(filepath.Join(outside, "outside.txt"), filepath.Join(dir, "link")); err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(t, dir, DatasetManifest{Samples: []ManifestSample{{ID: "a", Label: "yes", File: "link"}}})
+	if _, err := stream.Collect(t.Context(), NewDatasetLoader(dir, stringMapper).Pipeline()); err == nil {
+		t.Fatal("sample symlink escape accepted")
+	}
+	loader := NewDatasetLoader(dir, stringMapper, WithManifestFile("../manifest.json"))
+	if _, err := loader.Describe(t.Context()); err == nil {
+		t.Fatal("manifest traversal accepted")
+	}
+}
+
+func FuzzManifestJSON(f *testing.F) {
+	f.Add(`{"samples":[{"id":"a"}]}`)
+	f.Add(`{"metadata":[true,null,{"x":2}]}`)
+	f.Fuzz(func(t *testing.T, raw string) {
+		if len(raw) > 4096 {
+			t.Skip()
+		}
+		_ = skipJSON(t.Context(), json.NewDecoder(strings.NewReader(raw)))
+	})
+}
 
 func writeManifest(t *testing.T, dir string, m DatasetManifest) {
 	t.Helper()
@@ -47,7 +116,7 @@ func TestNewDatasetLoader(t *testing.T) {
 	loader := NewDatasetLoader(dir, stringMapper)
 
 	ctx := context.Background()
-	samples, err := loader.All(ctx)
+	samples, err := stream.Collect(ctx, loader.Pipeline())
 	if err != nil {
 		t.Fatalf("All() error: %v", err)
 	}
@@ -76,7 +145,7 @@ func TestDatasetLoaderManifest(t *testing.T) {
 	})
 
 	loader := NewDatasetLoader(dir, stringMapper)
-	m, err := loader.Manifest()
+	m, err := loader.Describe(context.Background())
 	if err != nil {
 		t.Fatalf("Manifest() error: %v", err)
 	}
@@ -153,7 +222,7 @@ func TestDatasetLoaderFilter(t *testing.T) {
 	})
 
 	ctx := context.Background()
-	samples, err := filtered.All(ctx)
+	samples, err := stream.Collect(ctx, filtered.Pipeline())
 	if err != nil {
 		t.Fatalf("All() error: %v", err)
 	}
@@ -185,7 +254,7 @@ func TestDatasetLoaderCustomManifestFile(t *testing.T) {
 	}
 
 	loader := NewDatasetLoader(dir, stringMapper, WithManifestFile("custom.json"))
-	manifest, err := loader.Manifest()
+	manifest, err := loader.Describe(context.Background())
 	if err != nil {
 		t.Fatalf("Manifest() error: %v", err)
 	}
@@ -201,7 +270,7 @@ func TestDatasetLoaderMissingManifest(t *testing.T) {
 	loader := NewDatasetLoader(dir, stringMapper)
 
 	ctx := context.Background()
-	_, err := loader.All(ctx)
+	_, err := stream.Collect(ctx, loader.Pipeline())
 	if err == nil {
 		t.Fatal("expected error for missing manifest, got nil")
 	}
@@ -217,7 +286,7 @@ func TestDatasetLoaderBadJSON(t *testing.T) {
 
 	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
-	_, err := loader.All(ctx)
+	_, err := stream.Collect(ctx, loader.Pipeline())
 	if err == nil {
 		t.Fatal("expected error for bad JSON, got nil")
 	}
@@ -237,7 +306,7 @@ func TestDatasetLoaderMissingFile(t *testing.T) {
 
 	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
-	_, err := loader.All(ctx)
+	_, err := stream.Collect(ctx, loader.Pipeline())
 	if err == nil {
 		t.Fatal("expected error for missing sample file, got nil")
 	}
@@ -256,7 +325,7 @@ func TestDatasetLoaderSampleWithMetadata(t *testing.T) {
 				File:   "s1.txt",
 				Label:  "pos",
 				Source: "train",
-				Meta:   map[string]any{"lang": "en"},
+				Meta:   map[string]json.RawMessage{"lang": json.RawMessage(`"en"`)},
 			},
 		},
 	})
@@ -264,14 +333,14 @@ func TestDatasetLoaderSampleWithMetadata(t *testing.T) {
 
 	loader := NewDatasetLoader(dir, stringMapper)
 	ctx := context.Background()
-	samples, err := loader.All(ctx)
+	samples, err := stream.Collect(ctx, loader.Pipeline())
 	if err != nil {
 		t.Fatalf("All() error: %v", err)
 	}
 	if samples[0].Source != "train" {
 		t.Errorf("Source = %q, want %q", samples[0].Source, "train")
 	}
-	if samples[0].Metadata["lang"] != "en" {
+	if string(samples[0].Metadata["lang"]) != `"en"` {
 		t.Errorf("Metadata[lang] = %v, want %q", samples[0].Metadata["lang"], "en")
 	}
 }

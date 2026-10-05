@@ -221,7 +221,7 @@ func (m *llmJudge[L]) Compute(ctx context.Context, scored []bench.ScoredSample[L
 			"avg_score": avg,
 			"pass_rate": float64(matches) / n,
 		},
-		Detail: m.detail(resolvedModel),
+		Judge: m.detail(resolvedModel),
 	}, nil
 }
 
@@ -360,21 +360,22 @@ func (m *llmJudge[L]) zeroed() Result {
 		Name:   m.name,
 		Value:  0,
 		Values: map[string]float64{"avg_score": 0, "pass_rate": 0},
-		Detail: m.detail(""),
+		Judge:  m.detail(""),
 	}
 }
 
 // detail records the judge model and prompt identity so a persisted result carries its scoring provenance and the runner can lift it into [bench.RunProvenance]. When the provider resolved the request to a single backend model that differs from the requested one, that resolved id is recorded too, so provenance reflects the model that actually produced the scores.
-func (m *llmJudge[L]) detail(resolvedModel string) map[string]any {
-	d := map[string]any{
-		bench.DetailJudgeProvider:          m.provider.Name(),
-		bench.DetailJudgeModel:             m.model,
-		bench.DetailJudgePromptID:          m.prompt.id,
-		bench.DetailJudgePromptVersion:     m.prompt.version,
-		bench.DetailJudgePromptFingerprint: m.prompt.fingerprint(),
+func (m *llmJudge[L]) detail(resolvedModel string) *bench.JudgeProvenance {
+	d := &bench.JudgeProvenance{
+		Metric:            m.name,
+		Provider:          m.provider.Name(),
+		Model:             m.model,
+		PromptID:          m.prompt.id,
+		PromptVersion:     m.prompt.version,
+		PromptFingerprint: m.prompt.fingerprint(),
 	}
 	if resolvedModel != "" && resolvedModel != m.model {
-		d[bench.DetailJudgeResolvedModel] = resolvedModel
+		d.ResolvedModel = resolvedModel
 	}
 	return d
 }

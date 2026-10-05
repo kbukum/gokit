@@ -16,10 +16,6 @@ func TestRunComparatorImprovement(t *testing.T) {
 			{Name: "f1", Value: 0.80},
 			{Name: "accuracy", Value: 0.75},
 		},
-		Samples: []SampleResult{
-			{ID: "s1", Correct: false},
-			{ID: "s2", Correct: true},
-		},
 	}
 	target := &RunResult{
 		ID:        "target-run",
@@ -27,10 +23,6 @@ func TestRunComparatorImprovement(t *testing.T) {
 		Metrics: []MetricResult{
 			{Name: "f1", Value: 0.90},
 			{Name: "accuracy", Value: 0.85},
-		},
-		Samples: []SampleResult{
-			{ID: "s1", Correct: true}, // fixed
-			{ID: "s2", Correct: true},
 		},
 	}
 
@@ -51,13 +43,6 @@ func TestRunComparatorImprovement(t *testing.T) {
 		}
 	}
 
-	// s1 was fixed.
-	if len(diff.Fixed) != 1 || diff.Fixed[0] != "s1" {
-		t.Errorf("Fixed = %v, want [s1]", diff.Fixed)
-	}
-	if len(diff.Regressed) != 0 {
-		t.Errorf("Regressed = %v, want []", diff.Regressed)
-	}
 	if diff.HasRegression() {
 		t.Error("HasRegression() = true, want false")
 	}
@@ -100,19 +85,11 @@ func TestRunComparatorRegression(t *testing.T) {
 		Metrics: []MetricResult{
 			{Name: "f1", Value: 0.90},
 		},
-		Samples: []SampleResult{
-			{ID: "s1", Correct: true},
-			{ID: "s2", Correct: true},
-		},
 	}
 	target := &RunResult{
 		ID: "target",
 		Metrics: []MetricResult{
 			{Name: "f1", Value: 0.70},
-		},
-		Samples: []SampleResult{
-			{ID: "s1", Correct: true},
-			{ID: "s2", Correct: false}, // regressed
 		},
 	}
 
@@ -121,9 +98,6 @@ func TestRunComparatorRegression(t *testing.T) {
 
 	if !diff.HasRegression() {
 		t.Error("HasRegression() = false, want true")
-	}
-	if len(diff.Regressed) != 1 || diff.Regressed[0] != "s2" {
-		t.Errorf("Regressed = %v, want [s2]", diff.Regressed)
 	}
 }
 
@@ -539,8 +513,8 @@ func TestRunComparatorExcludesIncompatibleJudgeFromRegression(t *testing.T) {
 	if len(diff.Incompatible) != 1 {
 		t.Fatalf("Incompatible = %d entries, want 1", len(diff.Incompatible))
 	}
-	if diff.HasRegression() {
-		t.Error("HasRegression() = true, want false for an incompatible judge's decreased score")
+	if !diff.HasRegression() || diff.Verdict() != "ineligible" {
+		t.Error("measured regression must remain visible without presenting an eligible verdict")
 	}
 
 	// The same decrease between judges that resolved identically is a real regression.

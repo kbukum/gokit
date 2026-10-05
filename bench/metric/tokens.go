@@ -100,10 +100,6 @@ func (m *tokenStats[L]) result(predictedTotal, referenceTotal, counted, errors i
 		predictedAvg = float64(predictedTotal) / float64(counted)
 		referenceAvg = float64(referenceTotal) / float64(counted)
 	}
-	detail := map[string]string{"counter": m.counter.Name()}
-	if errors > 0 {
-		detail["counter_errors"] = fmt.Sprintf("%d", errors)
-	}
 	return Result{
 		Name:  m.name,
 		Value: predictedAvg,
@@ -114,7 +110,6 @@ func (m *tokenStats[L]) result(predictedTotal, referenceTotal, counted, errors i
 			"reference_tokens_avg":   referenceAvg,
 			"counter_errors":         float64(errors),
 		},
-		Detail:    detail,
 		Direction: bench.Neutral,
 	}
 }
