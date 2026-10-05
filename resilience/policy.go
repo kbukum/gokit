@@ -145,62 +145,19 @@ func Execute[T any](ctx context.Context, p *Policy, fn func(ctx context.Context)
 }
 
 // ExecuteWithRetry selects the retry budget for one call without copying or resetting shared circuit-breaker, bulkhead or limiter state. A nil retry disables retries for that call.
-func ExecuteWithRetry[T any](ctx context.Context, p *Policy, retry *RetryConfig, fn func(ctx context.Context) (T, error)) (T, error) {
-	if p == nil {
-		p = NewPolicy()
+func ExecuteWithRetry[T any](ctx context.Context, p *Policy, retry *RetryConfig, fn func(ctx context.Context) (T, error)) (result T, err error) {
+	callCtx, finish, err := p.Acquire(ctx)
+	if err != nil {
+		return result, err
 	}
+	defer func() { err = finish(err) }()
+	// A callback that panics must release admission without reporting success.
+	err = context.Canceled
 
-	p.init()
-
-	_, hasDeadline := ctx.Deadline()
-	if p.Timeout > 0 && (p.timeoutMode != TimeoutIfUnset || !hasDeadline) {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, p.Timeout)
-		defer cancel()
+	if retry == nil {
+		return fn(callCtx)
 	}
-	if err := ctx.Err(); err != nil {
-		var zero T
-		return zero, err
-	}
-
-	if p.rl != nil {
-		if err := p.rl.Wait(ctx); err != nil {
-			var zero T
-			return zero, err
-		}
-	}
-
-	call := fn
-	if retry != nil {
-		retryCfg := *retry
-		inner := call
-		call = func(callCtx context.Context) (T, error) {
-			return Retry(callCtx, retryCfg, func() (T, error) {
-				return inner(callCtx)
-			})
-		}
-	}
-	if p.cb != nil {
-		inner := call
-		call = func(callCtx context.Context) (T, error) {
-			var result T
-			var resultErr error
-			cbErr := p.cb.Execute(func() error {
-				result, resultErr = inner(callCtx)
-				return resultErr
-			})
-			if cbErr != nil && resultErr == nil {
-				return result, cbErr
-			}
-			return result, resultErr
-		}
-	}
-	if p.bh != nil {
-		inner := call
-		return ExecuteWithResult(ctx, p.bh, func() (T, error) {
-			return inner(ctx)
-		})
-	}
-
-	return call(ctx)
+	return Retry(callCtx, *retry, func() (T, error) {
+		return fn(callCtx)
+	})
 }

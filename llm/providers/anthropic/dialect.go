@@ -95,7 +95,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 			Input json.RawMessage `json:"input,omitempty"`
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
-		Usage      struct {
+		Usage      *struct {
 			InputTokens  int `json:"input_tokens"`
 			OutputTokens int `json:"output_tokens"`
 		} `json:"usage"`
@@ -120,32 +120,47 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		}
 	}
 
-	return &llm.CompletionResponse{
-		Message: msg,
-		Model:   raw.Model,
-		Usage: llm.Usage{
+	result := &llm.CompletionResponse{
+		Message:    msg,
+		Model:      raw.Model,
+		ID:         raw.ID,
+		StopReason: mapStopReason(raw.StopReason),
+	}
+	if raw.Usage != nil {
+		result.UsageReported = true
+		result.Usage = llm.Usage{
 			InputTokens:  raw.Usage.InputTokens,
 			OutputTokens: raw.Usage.OutputTokens,
-		},
-		StopReason: mapStopReason(raw.StopReason),
-	}, nil
+		}
+	}
+	return result, nil
 }
 
 // ParseStreamChunk extracts content from an Anthropic SSE data payload.
 func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var event struct {
-		Type  string `json:"type"`
-		Index int    `json:"index,omitempty"`
+		Type    string `json:"type"`
+		Index   int    `json:"index,omitempty"`
+		Message struct {
+			ID    string       `json:"id"`
+			Model string       `json:"model"`
+			Usage *streamUsage `json:"usage"`
+		} `json:"message"`
+		Usage *streamUsage `json:"usage"`
 		Delta struct {
 			Type        string `json:"type"`
 			Text        string `json:"text"`
 			PartialJSON string `json:"partial_json,omitempty"`
+			Thinking    string `json:"thinking"`
+			StopReason  string `json:"stop_reason"`
 		} `json:"delta,omitempty"`
 		ContentBlock struct {
-			Type  string `json:"type"`
-			ID    string `json:"id,omitempty"`
-			Name  string `json:"name,omitempty"`
-			Input any    `json:"input,omitempty"`
+			Type     string `json:"type"`
+			ID       string `json:"id,omitempty"`
+			Name     string `json:"name,omitempty"`
+			Text     string `json:"text"`
+			Thinking string `json:"thinking"`
+			Input    any    `json:"input,omitempty"`
 		} `json:"content_block,omitempty"`
 	}
 
@@ -154,6 +169,16 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	}
 
 	switch event.Type {
+	case "error":
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "anthropic: upstream stream failure")
+	case "message_start":
+		return streamwire.Chunk{Metadata: &chat.MessageStart{ID: event.Message.ID, Model: event.Message.Model}, Usage: event.Message.Usage.update()}, nil
+	case "message_delta":
+		chunk := streamwire.Chunk{Usage: event.Usage.update()}
+		if event.Delta.StopReason != "" {
+			chunk.StopReason = mapStopReason(event.Delta.StopReason)
+		}
+		return chunk, nil
 	case "content_block_start":
 		if event.ContentBlock.Type == "tool_use" {
 			return streamwire.Chunk{
@@ -164,10 +189,13 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 				}},
 			}, nil
 		}
-		return streamwire.Chunk{}, nil
+		return streamwire.Chunk{Content: event.ContentBlock.Text, Reasoning: event.ContentBlock.Thinking}, nil
 	case "content_block_delta":
 		if event.Delta.Type == "text_delta" {
 			return streamwire.Chunk{Content: event.Delta.Text}, nil
+		}
+		if event.Delta.Type == "thinking_delta" {
+			return streamwire.Chunk{Reasoning: event.Delta.Thinking}, nil
 		}
 		if event.Delta.Type == "input_json_delta" {
 			return streamwire.Chunk{

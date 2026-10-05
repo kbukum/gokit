@@ -5,13 +5,47 @@ import (
 	"fmt"
 
 	"github.com/kbukum/gokit/ai"
+	"github.com/kbukum/gokit/ai/chat"
 )
 
 type Chunk struct {
-	Content   string     `json:"content"`
-	Done      bool       `json:"done"`
-	Err       error      `json:"-"`
-	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+	Content    string             `json:"content"`
+	Done       bool               `json:"done"`
+	Err        error              `json:"-"`
+	ToolCalls  []ToolCall         `json:"tool_calls,omitempty"`
+	Reasoning  string             `json:"reasoning,omitempty"`
+	Metadata   *chat.MessageStart `json:"metadata,omitempty"`
+	Usage      *UsageUpdate       `json:"usage,omitempty"`
+	StopReason chat.FinishReason  `json:"stop_reason,omitempty"`
+}
+
+// UsageUpdate carries cumulative provider accounting. Nil fields were not reported.
+type UsageUpdate struct {
+	InputTokens     *int
+	OutputTokens    *int
+	CachedTokens    *int
+	ReasoningTokens *int
+}
+
+// Apply merges only reported counters; providers may report input and output separately.
+func (u UsageUpdate) Apply(dst *ai.Usage) error {
+	for _, pair := range []struct {
+		src *int
+		dst *int
+	}{
+		{u.InputTokens, &dst.InputTokens},
+		{u.OutputTokens, &dst.OutputTokens},
+		{u.CachedTokens, &dst.CachedTokens},
+		{u.ReasoningTokens, &dst.ReasoningTokens},
+	} {
+		if pair.src != nil {
+			if *pair.src < 0 {
+				return fmt.Errorf("streamwire: negative token usage")
+			}
+			*pair.dst = *pair.src
+		}
+	}
+	return nil
 }
 
 type ToolCall struct {
@@ -22,47 +56,46 @@ type ToolCall struct {
 }
 
 func MergeToolDelta(calls []ToolCall, delta ToolCall) []ToolCall {
-	if delta.ID != "" {
-		for i := range calls {
-			if calls[i].ID == delta.ID {
-				if delta.Name != "" {
-					calls[i].Name = delta.Name
-				}
-				if delta.Index >= 0 {
-					calls[i].Index = delta.Index
-				}
-				calls[i].InputDelta += delta.InputDelta
-				return calls
-			}
+	if i := FindTool(calls, delta); i >= 0 {
+		if delta.ID != "" {
+			calls[i].ID = delta.ID
 		}
-		return append(calls, delta)
+		if delta.Name != "" {
+			calls[i].Name = delta.Name
+		}
+		if delta.Index >= 0 {
+			calls[i].Index = delta.Index
+		}
+		calls[i].InputDelta += delta.InputDelta
+		return calls
 	}
-	if delta.Index >= 0 {
-		for i := range calls {
-			if calls[i].Index == delta.Index {
-				if delta.Name != "" {
-					calls[i].Name = delta.Name
-				}
-				calls[i].InputDelta += delta.InputDelta
-				return calls
-			}
+	return append(calls, delta)
+}
+
+// FindTool resolves a delta without allocating a new accumulated tool.
+func FindTool(calls []ToolCall, delta ToolCall) int {
+	for i := range calls {
+		if delta.ID != "" && calls[i].ID == delta.ID {
+			return i
 		}
-		return append(calls, delta)
+	}
+	for i := range calls {
+		if delta.Index >= 0 && calls[i].Index == delta.Index && (delta.ID == "" || calls[i].ID == "") {
+			return i
+		}
+	}
+	if delta.ID != "" || delta.Index >= 0 {
+		return -1
 	}
 	if delta.Name != "" {
 		for i := range calls {
 			if calls[i].Name == delta.Name {
-				calls[i].InputDelta += delta.InputDelta
-				return calls
+				return i
 			}
 		}
-		return append(calls, delta)
+		return -1
 	}
-	if len(calls) > 0 {
-		calls[len(calls)-1].InputDelta += delta.InputDelta
-		return calls
-	}
-	return append(calls, delta)
+	return len(calls) - 1
 }
 
 // MaxToolArgsBytes bounds the total accumulated tool-call argument bytes for a single streamed message.

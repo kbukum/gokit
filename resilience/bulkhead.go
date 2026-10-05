@@ -64,23 +64,9 @@ func NewBulkhead(config BulkheadConfig) *Bulkhead {
 // or ErrBulkheadTimeout if no slot is available.
 func (b *Bulkhead) Execute(ctx context.Context, fn func() error) error {
 	if err := b.acquire(ctx); err != nil {
-		if b.config.OnReject != nil {
-			b.config.OnReject(b.config.Name)
-		}
 		return err
 	}
-
-	if b.config.OnAcquire != nil {
-		b.config.OnAcquire(b.config.Name)
-	}
-
-	defer func() {
-		b.release()
-		if b.config.OnRelease != nil {
-			b.config.OnRelease(b.config.Name)
-		}
-	}()
-
+	defer b.release()
 	return fn()
 }
 
@@ -97,6 +83,22 @@ func ExecuteWithResult[T any](ctx context.Context, b *Bulkhead, fn func() (T, er
 
 // acquire tries to acquire a slot in the bulkhead.
 func (b *Bulkhead) acquire(ctx context.Context) error {
+	if err := b.acquireSlot(ctx); err != nil {
+		if b.config.OnReject != nil {
+			b.config.OnReject(b.config.Name)
+		}
+		return err
+	}
+	if b.config.OnAcquire != nil {
+		b.config.OnAcquire(b.config.Name)
+	}
+	return nil
+}
+
+func (b *Bulkhead) acquireSlot(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	// Try immediate acquire
 	select {
 	case b.sem <- struct{}{}:
@@ -126,6 +128,9 @@ func (b *Bulkhead) acquire(ctx context.Context) error {
 // release releases a slot back to the bulkhead.
 func (b *Bulkhead) release() {
 	<-b.sem
+	if b.config.OnRelease != nil {
+		b.config.OnRelease(b.config.Name)
+	}
 }
 
 // Available returns the number of available slots.

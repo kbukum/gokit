@@ -1,7 +1,9 @@
 package httpclient
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -23,6 +25,8 @@ type Request struct {
 	Body any
 	// Auth overrides the client-level auth for this request.
 	Auth *AuthConfig
+	// RequireStreamCompletion delegates success to the protocol owner. It must call Complete after its reader exits, even on cancellation. EOF alone cannot certify protocol success.
+	RequireStreamCompletion bool
 }
 
 // Response is the result of an HTTP request.
@@ -66,14 +70,23 @@ type StreamResponse struct {
 	// Body is the raw streaming body (for non-SSE streams).
 	Body io.ReadCloser
 	// rawResp holds the original response for cleanup.
-	rawResp *http.Response
+	rawResp  *http.Response
+	lifetime *streamLifetime
 }
 
 // Close releases all resources associated with the stream.
 func (r *StreamResponse) Close() error {
+	if r.lifetime != nil {
+		err := r.Complete(context.Canceled)
+		if errors.Is(err, context.Canceled) {
+			return r.lifetime.closeErr
+		}
+		return err
+	}
 	if r.SSE != nil {
 		return r.SSE.Close()
 	}
+
 	if r.Body != nil {
 		return r.Body.Close()
 	}
@@ -81,4 +94,29 @@ func (r *StreamResponse) Close() error {
 		return r.rawResp.Body.Close()
 	}
 	return nil
+}
+
+// Complete closes the body, waits for active reads and budget cleanup, then reports the terminal protocol outcome exactly once. Nil means validated protocol success.
+func (r *StreamResponse) Complete(err error) error {
+	if r.lifetime == nil {
+		return errors.Join(err, r.Close())
+	}
+	r.lifetime.finish(err)
+	<-r.lifetime.watched
+	return r.lifetime.outcome
+}
+
+// Context is canceled on caller cancellation or any stream budget expiry.
+func (r *StreamResponse) Context() context.Context {
+	if r.lifetime == nil {
+		return context.Background()
+	}
+	return r.lifetime.ctx
+}
+
+// Progress reports one valid protocol chunk. Model progress ends the first-progress wait; subsequent chunks renew idle. Call only after decoding, never for partial bytes or heartbeats.
+func (r *StreamResponse) Progress(model bool) {
+	if r.lifetime != nil {
+		r.lifetime.progress(model)
+	}
 }

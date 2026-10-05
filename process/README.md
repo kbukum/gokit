@@ -72,6 +72,8 @@ Executes the command, captures output, and returns a `*Result` (always populated
 
 `StartPersistent` owns a long-lived child until you call `Shutdown`. Startup readiness uses an output marker or an explicit stabilization delay; immediate readiness certifies only spawn. Configure the child with an isolated working directory, `EnvEmpty`, explicit environment values, and a positive output limit. Lifetime capture defaults to 64 KiB per stream and reports truncation.
 
+Emit the readiness marker only after the child has installed shutdown handling and initialized any required descendants. A shell printing a marker before starting another program does not establish that program's readiness; immediate shutdown can race its creation and require forced cleanup.
+
 ```go
 cfg := process.DefaultPersistentConfig()
 cfg.Readiness = process.ReadyOnOutput

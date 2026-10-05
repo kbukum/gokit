@@ -9,17 +9,18 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kbukum/gokit/httpclient/sse"
 	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/util"
 )
 
 // Adapter is a configurable HTTP adapter with built-in auth, TLS, and resilience.
 // It can be used as a simple HTTP client
 // or as a provider.RequestResponse for composition with the provider framework (WithResilience, Manager, Registry, etc.).
 type Adapter struct {
-	httpClient *http.Client
-	baseURL    string
-	config     Config
+	httpClient  *http.Client
+	baseURL     string
+	config      Config
+	streamClock util.TimerClock
 }
 
 // New creates a new HTTP adapter with the given configuration.
@@ -47,8 +48,9 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 			Transport: transport,
 			Timeout:   cfg.Timeout,
 		},
-		baseURL: cfg.BaseURL,
-		config:  cfg,
+		baseURL:     cfg.BaseURL,
+		config:      cfg,
+		streamClock: util.MonotonicClock{},
 	}
 
 	// A retry block loaded from config carries no predicate (RetryIf is not
@@ -129,56 +131,6 @@ func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, e
 	}
 
 	return result, nil
-}
-
-// doStream builds and sends a streaming HTTP request.
-func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, error) {
-	// Use a client without timeout for streaming — context handles cancellation.
-	httpReq, err := c.buildRequest(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a transport-only client for streaming (no global timeout)
-	streamClient := &http.Client{
-		Transport: c.httpClient.Transport,
-	}
-
-	resp, err := streamClient.Do(httpReq)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, NewTimeoutError(err)
-		}
-		return nil, NewConnectionError(err)
-	}
-
-	// Check for error status before starting to stream
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, c.config.MaxResponseBodyBytes))
-		_ = resp.Body.Close()
-		return nil, ClassifyStatusCode(resp.StatusCode, body)
-	}
-
-	headers := flattenHeaders(resp.Header)
-
-	// Detect SSE from content-type
-	ct := resp.Header.Get("Content-Type")
-	if strings.Contains(ct, "text/event-stream") {
-		return &StreamResponse{
-			StatusCode: resp.StatusCode,
-			Headers:    headers,
-			SSE:        sse.NewReader(resp.Body),
-			rawResp:    resp,
-		}, nil
-	}
-
-	// Non-SSE streaming (ndjson, raw bytes, etc)
-	return &StreamResponse{
-		StatusCode: resp.StatusCode,
-		Headers:    headers,
-		Body:       resp.Body,
-		rawResp:    resp,
-	}, nil
 }
 
 // buildRequest constructs an *http.Request from the adapter config and request.

@@ -3,6 +3,8 @@
 package resilience
 
 import (
+	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -79,6 +81,7 @@ type CircuitBreaker struct {
 	successes       int
 	lastFailureTime time.Time
 	halfOpenCalls   int
+	generation      uint64
 }
 
 // NewCircuitBreaker creates a new circuit breaker.
@@ -99,22 +102,24 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	}
 }
 
-// Execute runs the given function through the circuit breaker.
-// Returns ErrCircuitOpen if the circuit is open.
-func (cb *CircuitBreaker) Execute(fn func() error) error {
-	if !cb.allowRequest() {
+// Execute runs fn through the circuit breaker or returns ErrCircuitOpen when admission is unavailable. Wrapped context.Canceled leaves breaker health unchanged and returns probe capacity. A panic propagates without recording success or retaining a probe.
+func (cb *CircuitBreaker) Execute(fn func() error) (err error) {
+	generation, allowed := cb.allowRequest()
+	if !allowed {
 		return ErrCircuitOpen
 	}
 
-	err := fn()
-	cb.recordResult(err)
+	// Preserve a panicking callback's panic while returning its probe capacity.
+	err = context.Canceled
+	defer func() { cb.recordResult(generation, err) }()
+	err = fn()
 	return err
 }
 
 // State returns the current circuit breaker state.
 func (cb *CircuitBreaker) State() State {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 	return cb.currentState()
 }
 
@@ -123,6 +128,7 @@ func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 	cb.toState(StateClosed)
+	cb.generation++
 	cb.failures = 0
 	cb.successes = 0
 	cb.halfOpenCalls = 0
@@ -136,7 +142,7 @@ func (cb *CircuitBreaker) Failures() int {
 }
 
 // allowRequest checks if a request should be allowed.
-func (cb *CircuitBreaker) allowRequest() bool {
+func (cb *CircuitBreaker) allowRequest() (uint64, bool) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -144,25 +150,35 @@ func (cb *CircuitBreaker) allowRequest() bool {
 
 	switch state {
 	case StateClosed:
-		return true
+		return cb.generation, true
 	case StateOpen:
-		return false
+		return cb.generation, false
 	case StateHalfOpen:
 		if cb.halfOpenCalls < cb.config.HalfOpenMaxCalls {
 			cb.halfOpenCalls++
-			return true
+			return cb.generation, true
 		}
-		return false
+		return cb.generation, false
 	default:
-		return false
+		return cb.generation, false
 	}
 }
 
 // recordResult records the result of a request.
-func (cb *CircuitBreaker) recordResult(err error) {
+func (cb *CircuitBreaker) recordResult(generation uint64, err error) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	state := cb.currentState()
+	if generation != cb.generation {
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		if state == StateHalfOpen {
+			cb.halfOpenCalls--
+		}
+		return
+	}
 	if err != nil {
 		cb.onFailure()
 	} else {
@@ -219,6 +235,7 @@ func (cb *CircuitBreaker) toState(to State) {
 
 	from := cb.state
 	cb.state = to
+	cb.generation++
 
 	// Reset counters on state change
 	switch to {

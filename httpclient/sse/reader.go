@@ -36,8 +36,8 @@ type reader struct {
 // share one spec-correct parser (CR/LF/CRLF line endings, a single leading BOM
 // ignored, comment lines skipped, NUL ids ignored, and a truncated trailing
 // block discarded at EOF rather than surfaced as a partial event).
-func NewReader(body io.ReadCloser) Reader {
-	return &reader{dec: rootsse.NewDecoder(body), body: body}
+func NewReader(body io.ReadCloser, opts ...rootsse.DecoderOption) Reader {
+	return &reader{dec: rootsse.NewDecoder(body, opts...), body: body}
 }
 
 // Next returns the next SSE event. Returns io.EOF when the stream ends.

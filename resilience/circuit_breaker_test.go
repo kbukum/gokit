@@ -433,10 +433,9 @@ func TestCB_ExecuteWithPanic(t *testing.T) {
 		_ = cb.Execute(func() error { panic("boom") })
 	}()
 
-	// The CB should still be usable. The panic prevented recordResult from
-	// running so the failure counter should still be 0.
+	// An aborted callback leaves breaker health unchanged.
 	if cb.Failures() != 0 {
-		t.Logf("failures after panic: %d (panic bypassed recordResult)", cb.Failures())
+		t.Fatalf("failures after panic: %d, want 0", cb.Failures())
 	}
 	// Must not deadlock.
 	err := cb.Execute(func() error { return nil })

@@ -5,6 +5,7 @@ go 1.27.1
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
+	go.uber.org/goleak v1.3.0
 )
 
 require (

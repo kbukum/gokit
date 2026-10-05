@@ -55,9 +55,14 @@ type client struct {
 func newClient(cfg *Config) (*client, error) {
 	base := cfg.normalizedBaseURL()
 	hc, err := httpclient.New(httpclient.Config{
-		Name:                 "dmr",
-		BaseURL:              base,
-		Timeout:              cfg.Timeout,
+		Name:    "dmr",
+		BaseURL: base,
+		Timeout: cfg.Timeout,
+		Stream: httpclient.StreamConfig{
+			TotalTimeout:         cfg.PullTimeout,
+			FirstProgressTimeout: cfg.PullTimeout,
+			IdleTimeout:          cfg.PullTimeout,
+		},
 		ResiliencePolicy:     cfg.ResiliencePolicy,
 		MaxResponseBodyBytes: maxModelBody,
 		DefaultHeaders:       map[string]string{"Accept": "application/json"},
@@ -168,9 +173,7 @@ type backendStatus struct {
 // body must be drained to completion; failures after the initial 200 are reported
 // in the stream rather than the status code.
 //
-// A pull can be long-running and the underlying stream carries no request
-// timeout, so when the caller's context has no deadline a configurable
-// pullTimeout is applied; an earlier caller deadline is preserved.
+// Pulls use the configured pull budget rather than the HTTP adapter's shorter inference defaults. An earlier caller deadline is preserved.
 func (c *client) pull(ctx context.Context, ref string) error {
 	if _, ok := ctx.Deadline(); !ok && c.pullTimeout > 0 {
 		var cancel context.CancelFunc

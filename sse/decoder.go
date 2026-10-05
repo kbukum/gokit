@@ -2,6 +2,7 @@ package sse
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"math"
 	"strings"
@@ -113,6 +114,10 @@ func (d *Decoder) Next() (DecodedEvent, error) {
 	for {
 		if !d.scanner.Scan() {
 			if err := d.scanner.Err(); err != nil {
+				if errors.Is(err, bufio.ErrTooLong) {
+					d.err = apperrors.InvalidInput("line", "SSE line exceeds the decoder limit").WithCause(err)
+					return DecodedEvent{}, d.err
+				}
 				return DecodedEvent{}, err
 			}
 			// The stream ended. A partial trailing block (no terminating blank

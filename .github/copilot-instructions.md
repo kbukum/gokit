@@ -15,7 +15,7 @@ Multi-module Go infrastructure kit. Core packages share the root `go.mod`; heavy
 
 ## Work and validation
 
-Read only the matching [skill](skills/README.md) and needed reference sections. Do not preload other skills or all prior plan steps. Preserve user edits/index; commit, amend, push, or open draft PRs only when authorized. Multi-step state belongs in `tmp/plans/<task>/handoff.md`.
+Read only the matching [skill](skills/README.md) and needed reference sections. Preserve user edits/index; commit, amend, push, or open draft PRs only when authorized. Keep plans in `tmp/<plan>/`, reusing existing folders. Apply each selected step fully; record progress in the step, not routine handoffs.
 
 From this repository: `make test M=<module> T=<pattern>`, `make lint M=<module>`, `make test-affected`, or `make check-<domain>` during implementation; `make check` for required full acceptance. See [validate](skills/validate/SKILL.md) for Toven selectors and additional gates. Documentation-only edits need link/metadata checks, not application builds.
 

@@ -165,12 +165,9 @@ func TestStream_NDJSON_NilBody(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ch := make(chan streamChunk, 1)
-	go a.readNDJSONStream(context.Background(), nil, ch)
-
-	chunk := <-ch
-	if !errors.Is(chunk.Err, ErrNoStreamBody) {
-		t.Errorf("expected ErrNoStreamBody, got %v", chunk.Err)
+	_, err = a.streamDecoder(&httpclient.StreamResponse{})
+	if !errors.Is(err, ErrNoStreamBody) {
+		t.Errorf("expected ErrNoStreamBody, got %v", err)
 	}
 }
 
@@ -181,12 +178,9 @@ func TestStream_SSE_NilReader(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ch := make(chan streamChunk, 1)
-	go a.readSSEStream(context.Background(), nil, ch)
-
-	chunk := <-ch
-	if !errors.Is(chunk.Err, ErrNoSSEReader) {
-		t.Errorf("expected ErrNoSSEReader, got %v", chunk.Err)
+	_, err = a.streamDecoder(&httpclient.StreamResponse{})
+	if !errors.Is(err, ErrNoSSEReader) {
+		t.Errorf("expected ErrNoSSEReader, got %v", err)
 	}
 }
 
@@ -197,22 +191,8 @@ func TestStream_UnsupportedFormat_CtxCancelDoesNotBlock(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	ch := make(chan streamChunk) // unbuffered, no consumer: an unguarded send would deadlock
-	done := make(chan struct{})
-	go func() {
-		a.readStream(ctx, &httpclient.StreamResponse{}, ch)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("readStream blocked on an abandoned channel after context cancel")
-	}
-	if _, open := <-ch; open {
-		t.Fatal("expected channel to be closed without an emitted chunk")
+	if _, err := a.streamDecoder(&httpclient.StreamResponse{}); err == nil {
+		t.Fatal("expected unsupported format error")
 	}
 }
 
@@ -223,19 +203,8 @@ func TestStream_NDJSON_NilBody_CtxCancelDoesNotBlock(t *testing.T) {
 		t.Fatalf("setup: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	ch := make(chan streamChunk) // unbuffered, no consumer
-	done := make(chan struct{})
-	go func() {
-		a.readNDJSONStream(ctx, nil, ch)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("readNDJSONStream blocked on an abandoned channel after context cancel")
+	if _, err := a.streamDecoder(&httpclient.StreamResponse{}); !errors.Is(err, ErrNoStreamBody) {
+		t.Fatalf("expected immediate body error: %v", err)
 	}
 }
 

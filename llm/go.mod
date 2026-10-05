@@ -6,6 +6,7 @@ require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/ai v0.3.0-alpha.1
 	github.com/kbukum/gokit/httpclient v0.3.0-alpha.1
+	go.uber.org/goleak v1.3.0
 	go.yaml.in/yaml/v3 v3.0.5
 )
 

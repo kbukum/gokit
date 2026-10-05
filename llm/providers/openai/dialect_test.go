@@ -110,7 +110,7 @@ func TestDialect_ParseResponseReasoningContentAndFinishReasons(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseResponse: %v", err)
 			}
-			if resp.Text() != "thinking" || resp.StopReason != tt.wantReason {
+			if resp.Text() != "" || resp.Reasoning != "thinking" || resp.StopReason != tt.wantReason {
 				t.Fatalf("response = text %q reason %v", resp.Text(), resp.StopReason)
 			}
 		})
@@ -129,8 +129,8 @@ func TestDialect_ParseStreamChunkReasoningEmptyAndMalformed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseStreamChunk reasoning: %v", err)
 	}
-	if chunk.Content != "think" {
-		t.Fatalf("content = %q", chunk.Content)
+	if chunk.Content != "" || chunk.Reasoning != "think" {
+		t.Fatalf("reasoning = %q, content = %q", chunk.Reasoning, chunk.Content)
 	}
 	chunk, err = d.ParseStreamChunk([]byte(`{"choices":[]}`))
 	if err != nil {

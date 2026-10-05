@@ -2,84 +2,57 @@ package llm
 
 import (
 	"context"
-	"sync/atomic"
+	"errors"
+	"strings"
 	"testing"
-	"time"
+	"testing/synctest"
 
-	"github.com/kbukum/gokit/llm/internal/streamwire"
+	"github.com/kbukum/gokit/httpclient"
 )
 
-func TestStreamEventsFromChunksPropagatesToolUseDecodeError(t *testing.T) {
-	chunkCh := make(chan streamChunk, 1)
-	chunkCh <- streamChunk{
-		ToolCalls: []streamwire.ToolCall{{
-			ID:         "call_1",
-			Name:       "broken",
-			InputDelta: `{"a":`,
-		}},
-		Done: true,
+func TestStreamAssemblerPropagatesToolUseDecodeError(t *testing.T) {
+	a := newStreamAssembler("test", defaultStreamLimits())
+	err := a.add(streamChunk{ToolCalls: []streamToolCall{{ID: "1", Name: "broken", InputDelta: `{"a":`}}, Done: true}, func(StreamEvent) error { return nil })
+	if err != nil {
+		t.Fatal(err)
 	}
-	close(chunkCh)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	events := streamEventsFromChunks(ctx, chunkCh, "test-model", cancel)
-	var (
-		sawError    bool
-		sawComplete bool
-	)
-	for event := range events {
-		switch event.(type) {
-		case StreamError:
-			sawError = true
-		case MessageComplete:
-			sawComplete = true
-		}
-	}
-	if !sawError {
-		t.Fatal("expected StreamError")
-	}
-	if sawComplete {
-		t.Fatal("did not expect MessageComplete after decode error")
+	if _, err := a.complete(); err == nil {
+		t.Fatal("expected tool decode error")
 	}
 }
 
-// TestStreamEventsFromChunksUnwindsOnContextCancel proves the emitter goroutine
-// does not leak when a consumer abandons the event stream: once it cancels the
-// context, every send unblocks, the emitter returns, closes the event channel,
-// and invokes cancel to tear the producer down.
-func TestStreamEventsFromChunksUnwindsOnContextCancel(t *testing.T) {
-	// Queue more chunks than the event channel buffer (16) so the emitter
-	// blocks on a send once the consumer stops reading.
-	chunkCh := make(chan streamChunk, 64)
-	for i := 0; i < 64; i++ {
-		chunkCh <- streamChunk{Content: "x"}
-	}
-	close(chunkCh)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	var canceled atomic.Bool
-	events := streamEventsFromChunks(ctx, chunkCh, "test-model", func() {
-		canceled.Store(true)
+func TestStreamDeliveryUnwindsOnContextCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		a, err := NewWithDialect(testDialect{}, Config{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := &testStreamBody{Reader: strings.NewReader(strings.Repeat("{\"content\":\"x\"}\n", 64))}
+		resp := &httpclient.StreamResponse{Body: body}
+		out := make(chan StreamEvent, 1)
+		// Consume through the public HTTP response context below; an unmanaged response has no cancellation seam, so exercise the send callback directly.
+		done := make(chan error, 1)
+		go func() {
+			_, err := a.consumeStream(resp, "m", func(e StreamEvent) error {
+				select {
+				case out <- e:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			})
+			done <- err
+		}()
+		<-out
 		cancel()
-	})
-
-	// Read a single event, then abandon the stream by canceling the context.
-	<-events
-	cancel()
-
-	done := make(chan struct{})
-	go func() {
-		for range events { //nolint:revive // draining until closed
+		synctest.Wait()
+		if err := <-done; !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancellation: %v", err)
 		}
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("emitter did not unwind after context cancel (goroutine leak)")
-	}
-	if !canceled.Load() {
-		t.Fatal("expected cancel to be invoked when the emitter unwinds")
-	}
+	})
 }
+
+type testStreamBody struct{ *strings.Reader }
+
+func (*testStreamBody) Close() error { return nil }

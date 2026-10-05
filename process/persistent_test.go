@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -79,22 +80,32 @@ func TestStartPersistentReadyAfterDelayClassifiesContextDeadline(t *testing.T) {
 func TestStartPersistentReadyOnOutput(t *testing.T) {
 	t.Parallel()
 
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := process.DefaultPersistentConfig()
 	cfg.Readiness = process.ReadyOnOutput
 	cfg.OutputMarker = "READY"
 	cfg.ReadinessTimeout = 5 * time.Second
+	cfg.MaxCaptureBytes = 128 * 1024
 
 	run, err := startTestPersistent(t, t.Context(), process.Command{
-		Binary: "sh",
-		Args:   []string{"-c", "echo READY; sleep 60"},
+		Binary:    binary,
+		Args:      []string{"-test.run=^TestOwnedProcessChild$"},
+		EnvPolicy: process.EnvEmpty,
+		Env:       map[string]string{"GOKIT_OWNED_CHILD": "graceful", "GORACE": "atexit_sleep_ms=0"},
 	}, cfg)
 	if err != nil {
 		t.Fatalf("StartPersistent: %v", err)
 	}
-	defer func() { _, _ = run.Process.Shutdown(t.Context()) }()
 
 	if !strings.Contains(string(run.Startup.Stdout), "READY") {
 		t.Fatalf("startup stdout = %q, want to contain READY", run.Startup.Stdout)
+	}
+	outcome, err := run.Process.Shutdown(t.Context())
+	if err != nil || !outcome.Complete || outcome.Result == nil || outcome.Result.Forced {
+		t.Fatalf("ready child did not shut down gracefully: %+v %v", outcome, err)
 	}
 }
 

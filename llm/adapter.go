@@ -31,11 +31,12 @@ var (
 //   - provider.Streamable[CompletionRequest, CompletionResponse, StreamEvent]
 //   - provider.Closeable
 type Adapter struct {
-	rest      *rest.Client
-	dialect   Dialect
-	model     string
-	temp      float64
-	maxTokens int
+	rest         *rest.Client
+	dialect      Dialect
+	model        string
+	temp         float64
+	maxTokens    int
+	streamLimits StreamLimits
 }
 
 // New creates an LLM adapter from config using the supplied dialect registry.
@@ -70,6 +71,9 @@ func NewWithDialect(dialect Dialect, cfg Config) (*Adapter, error) {
 }
 
 func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
+	if err := cfg.StreamLimits.validate(); err != nil {
+		return nil, err
+	}
 	restCfg := httpclient.Config{
 		BaseURL:        cfg.BaseURL,
 		Name:           cfg.Name,
@@ -77,6 +81,7 @@ func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 		Auth:           cfg.Auth,
 		TLS:            cfg.TLS,
 		DefaultHeaders: cfg.Headers,
+		Stream:         cfg.Stream,
 	}
 	if cfg.ResiliencePolicy != nil {
 		restCfg.ResiliencePolicy = cfg.ResiliencePolicy
@@ -87,11 +92,12 @@ func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 	}
 
 	return &Adapter{
-		rest:      client,
-		dialect:   dialect,
-		model:     cfg.Model,
-		temp:      cfg.Temperature,
-		maxTokens: cfg.MaxTokens,
+		rest:         client,
+		dialect:      dialect,
+		model:        cfg.Model,
+		temp:         cfg.Temperature,
+		maxTokens:    cfg.MaxTokens,
+		streamLimits: cfg.StreamLimits,
 	}, nil
 }
 
@@ -143,42 +149,38 @@ func (a *Adapter) Execute(ctx context.Context, req CompletionRequest) (Completio
 // Stream sends a completion request and returns canonical stream events.
 // The channel is closed when the stream ends or an error occurs.
 func (a *Adapter) Stream(ctx context.Context, req CompletionRequest) (<-chan StreamEvent, error) {
-	chunkCh, model, streamCtx, cancel, err := a.streamChunks(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return streamEventsFromChunks(streamCtx, chunkCh, model, cancel), nil
+	return a.stream(ctx, req, nil)
 }
 
-// streamChunks starts the upstream stream and returns the chunk channel,
-// the cancelable stream context, and a cancel func that tears down the producer goroutine
-// and underlying connection. To stop early,
-// callers cancel the context passed to Stream (or the returned streamCtx);
-// every send in the pipeline selects on that context
-// so no goroutine blocks on an abandoned channel.
-func (a *Adapter) streamChunks(ctx context.Context, req CompletionRequest) (chunkCh <-chan streamChunk, model string, streamCtx context.Context, cancel context.CancelFunc, err error) {
+func (a *Adapter) stream(ctx context.Context, req CompletionRequest, finished func(error)) (<-chan StreamEvent, error) {
+	// Keep final event delivery bounded even after HTTP completion cancels its transport context.
+	ctx, cancel := context.WithTimeout(ctx, a.rest.HTTP().GetConfig().Stream.TotalTimeout)
 	a.applyDefaults(&req)
 	req.Stream = true
 
 	body, err := a.dialect.BuildRequest(req)
 	if err != nil {
-		return nil, "", nil, nil, fmt.Errorf("llm: build stream request: %w", err)
+		cancel()
+		return nil, fmt.Errorf("llm: build stream request: %w", err)
 	}
 
-	streamCtx, cancel = context.WithCancel(ctx)
-	streamResp, err := a.rest.HTTP().DoStream(streamCtx, httpclient.Request{
-		Method: http.MethodPost,
-		Path:   a.dialect.ChatPath(),
-		Body:   body,
+	streamResp, err := a.rest.HTTP().DoStream(ctx, httpclient.Request{
+		Method:                  http.MethodPost,
+		Path:                    a.dialect.ChatPath(),
+		Body:                    body,
+		RequireStreamCompletion: true,
 	})
 	if err != nil {
 		cancel()
-		return nil, "", nil, nil, fmt.Errorf("llm: stream: %w", err)
+		return nil, fmt.Errorf("llm: stream: %w", err)
 	}
 
-	ch := make(chan streamChunk, 1)
-	go a.readStream(streamCtx, streamResp, ch)
-	return ch, req.Model, streamCtx, cancel, nil
+	ch := make(chan StreamEvent, 1)
+	go func() {
+		defer cancel()
+		a.runStream(ctx, streamResp, req.Model, ch, finished)
+	}()
+	return ch, nil
 }
 
 // --- Accessors ---
