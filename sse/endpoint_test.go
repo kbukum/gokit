@@ -164,7 +164,7 @@ func TestEndpointOverloadAndRetryFailure(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/", http.NoBody))
-	if w.Code != 503 || b.Stats().AllocatedQueues != 1 || !strings.Contains(w.Body.String(), `"retryable":true`) {
+	if w.Code != 503 || w.Header().Get("Retry-After") != "1" || b.Stats().AllocatedQueues != 1 || !strings.Contains(w.Body.String(), `"retryable":true`) {
 		t.Fatalf("overload: %d %s %+v", w.Code, w.Body, b.Stats())
 	}
 	cfg := handlerConfig()

@@ -45,7 +45,7 @@ func HTTPAuth[T any](auth Authenticator[T], setClaims ClaimsSetter[T], opts ...H
 	if setClaims == nil {
 		return nil, apperrors.InvalidInput("setClaims", "a non-nil ClaimsSetter is required")
 	}
-	o := &httpAuthOptions{writeError: writeAuthFailure}
+	o := &httpAuthOptions{writeError: WriteProblem}
 	for _, option := range opts {
 		if option == nil {
 			return nil, apperrors.InvalidInput("options", "authentication options must not be nil")
@@ -78,16 +78,24 @@ func HTTPAuth[T any](auth Authenticator[T], setClaims ClaimsSetter[T], opts ...H
 	}, nil
 }
 
-func writeAuthFailure(w http.ResponseWriter, r *http.Request, err error) {
+// WriteProblem writes err as an application/problem+json response with Cache-Control: no-store. The error is
+// normalized first, so causes and unknown errors never reach the client; a nil or invalid error becomes Internal.
+func WriteProblem(w http.ResponseWriter, r *http.Request, err error) {
 	w.Header().Set("Cache-Control", "no-store")
 	failure := apperrors.Normalize(err)
-	if validationErr := failure.Validate(); validationErr != nil {
+	if failure == nil {
+		failure = apperrors.Internal(nil)
+	} else if validationErr := failure.Validate(); validationErr != nil {
 		failure = apperrors.Internal(validationErr)
 	}
 	body, encodeErr := codec.Encode(codec.CompactJSON(), failure.ToProblemDetail())
 	if encodeErr != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		// Details may hold values JSON cannot encode; a bare Internal problem always encodes.
+		failure = apperrors.Internal(encodeErr)
+		if body, encodeErr = codec.Encode(codec.CompactJSON(), failure.ToProblemDetail()); encodeErr != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	if failure.Retryable && failure.RetryAfter > 0 {

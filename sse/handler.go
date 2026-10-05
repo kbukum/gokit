@@ -13,7 +13,8 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// Handler serves scoped proto events with renewable write deadlines and owned teardown.
+// Handler serves scoped proto events with per-write deadlines and owned teardown. Idle waits between frames carry no
+// write deadline.
 type Handler struct {
 	bus *Bus
 	cfg HandlerConfig
@@ -142,7 +143,12 @@ func (h *Handler) write(ctx context.Context, rc *http.ResponseController, w http
 	if n != len(frame) {
 		return io.ErrShortWrite
 	}
-	return rc.Flush()
+	if err := rc.Flush(); err != nil {
+		return err
+	}
+	// The budget bounds this write only. HTTP/2 resets a stream whose deadline expires while idle, so disarm it until
+	// the next write renews it; cancellation still interrupts any blocked write through interruptOnCancel.
+	return rc.SetWriteDeadline(time.Time{})
 }
 
 func (h *Handler) reject(w http.ResponseWriter, r *http.Request, err error) {

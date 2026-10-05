@@ -182,7 +182,11 @@ func (h *Host) mount(ctx context.Context) error {
 		}
 		return auth.Principal{Subject: "fixture-user", Kind: auth.User, Restrictions: auth.Restrictions{Mode: auth.Unrestricted}}, nil
 	})
-	handlers, err := session.NewHandler(h.manager, verify, h.origin, h.writeError)
+	backend, err := session.NewLocalBackend(h.manager, verify)
+	if err != nil {
+		return err
+	}
+	handlers, err := session.NewHandler(backend, session.HandlerConfig{Origin: h.origin, Errors: h.writeError, Clock: h.clock})
 	if err != nil {
 		return err
 	}

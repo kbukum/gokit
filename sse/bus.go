@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -152,7 +153,9 @@ func (b *Bus) Subscribe(ctx context.Context, req SubscribeRequest) (*Subscriptio
 	}
 	if len(b.subs) >= b.limits.MaxConnections || b.principals[req.Principal] >= b.limits.MaxPerPrincipal {
 		b.stats.RejectedConnections++
-		return nil, apperrors.ServiceUnavailable("SSE connection limit reached")
+		// Capacity frees as soon as a relevant stream ends (any stream for the global limit, one of this principal's for the
+		// per-principal limit), so clients get a short, explicit retry hint.
+		return nil, apperrors.ServiceUnavailable("SSE connection limit reached").WithRetryAfter(time.Second)
 	}
 	s := &Subscription{
 		bus: b, principal: req.Principal, route: req.Route,

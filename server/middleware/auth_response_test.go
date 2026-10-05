@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -51,5 +52,36 @@ func TestHTTPAuthFailedResponseWriteDoesNotRetry(t *testing.T) {
 	})).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/", http.NoBody))
 	if w.Code != http.StatusUnauthorized || w.writes != 1 {
 		t.Fatalf("write retried: status=%d writes=%d", w.Code, w.writes)
+	}
+}
+
+func TestWriteProblemNormalizesAndHintsRetry(t *testing.T) {
+	t.Parallel()
+	w := httptest.NewRecorder()
+	WriteProblem(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody), apperrors.ServiceUnavailable("peer").WithRetryAfter(1500*time.Millisecond).WithCause(errors.New("dial 10.0.0.1")))
+	if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != "2" || w.Header().Get("Cache-Control") != "no-store" || strings.Contains(w.Body.String(), "10.0.0.1") {
+		t.Fatalf("problem = %d %v %s", w.Code, w.Header(), w.Body)
+	}
+
+	w = httptest.NewRecorder()
+	WriteProblem(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody), errors.New("private detail"))
+	if w.Code != http.StatusInternalServerError || w.Header().Get("Content-Type") != "application/problem+json" || strings.Contains(w.Body.String(), "private") {
+		t.Fatalf("problem = %d %v %s", w.Code, w.Header(), w.Body)
+	}
+
+	w = httptest.NewRecorder()
+	WriteProblem(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody), nil)
+	if w.Code != http.StatusInternalServerError || w.Header().Get("Content-Type") != "application/problem+json" {
+		t.Fatalf("nil problem = %d %v %s", w.Code, w.Header(), w.Body)
+	}
+}
+
+func TestWriteProblemFallsBackWhenDetailsCannotEncode(t *testing.T) {
+	t.Parallel()
+	w := httptest.NewRecorder()
+	failure := apperrors.InvalidInput("field", "bad").WithDetails(map[string]any{"fn": func() {}})
+	WriteProblem(w, httptest.NewRequest(http.MethodGet, "/", http.NoBody), failure)
+	if w.Code != http.StatusInternalServerError || w.Header().Get("Content-Type") != "application/problem+json" || w.Body.Len() == 0 {
+		t.Fatalf("problem = %d %v %q", w.Code, w.Header(), w.Body)
 	}
 }

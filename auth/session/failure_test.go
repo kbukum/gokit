@@ -23,7 +23,7 @@ func errorWriter(w http.ResponseWriter, r *http.Request, err error) {
 
 func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	h, err := NewHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
+	h, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 		t.Fatal("status failure renewed cookie")
 	}
 	for _, origin := range []string{"http://example.test", "https://example.test/", "https://u@example.test", "https://example.test?q=x"} {
-		if _, err := NewHandler(m, LoginVerifierFunc(nil), origin, errorWriter); err == nil {
+		if _, err := newLocalHandler(m, LoginVerifierFunc(nil), origin, errorWriter); err == nil {
 			t.Fatal("invalid origin accepted")
 		}
 	}
@@ -89,7 +89,7 @@ func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 
 func TestHTTPSessionResponseAndUnsafeCSRF(t *testing.T) {
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	h, _ := NewHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
+	h, _ := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
 	r := httptest.NewRequest("POST", "https://example.test/auth/login", strings.NewReader(`{"username":"u","password":"p"}`))
 	r.Header.Set("Origin", "https://example.test")
 	r.Header.Set("Content-Type", "application/json")

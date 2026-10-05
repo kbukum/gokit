@@ -52,11 +52,14 @@ fmt.Printf("Running %s on %s:%d in %s mode\n",
 | `ServiceConfig` | Common fields: Name, Environment, Version, Address, Port, Debug, Logging |
 | `LoadConfig()` | Load config from YAML + env with auto-resolution |
 | `Resolver` | Resolves config and .env file paths |
-| `WithConfigFile()` | Option to specify config file path |
-| `WithEnvFile()` | Option to specify .env file path |
-| `WithProfile()` | Option to load profile-specific env file |
+| `WithConfigFile()` | Option to specify a config file path; it must exist |
+| `WithEnvFile()` | Option to specify a .env file path; it must exist |
+| `WithProfile()` | Option to load a profile env file; a named profile must exist, an `ENVIRONMENT`-derived one is optional |
+| `WithProfileDir()` | Option to make one directory the only place searched for `<profile>.env` |
+| `WithoutDiscovery()` | Option to skip the working-directory search, so only explicit inputs load |
+| `ErrFileNotFound` / `ErrInvalidProfile` | Errors for a missing explicit input or a profile name outside `^[a-z0-9][a-z0-9_-]*$` |
 | `WithFileSystem()` | Option to inject custom filesystem |
-| `FileSystem` | Interface for file existence and env loading |
+| `FileSystem` | Interface for file existence and env loading; `Exists` returns an error for probe failures other than "not found" |
 | `LoadStrict[T]()` / `LoadStrictWithCodec[T]()` | Load into `T`, rejecting unknown keys instead of ignoring them |
 | `AppConfig` | Typed contract: embed `*ServiceConfig` and implement `ApplyDefaults` + `Validate` |
 | `ConfigSink` / `NewInMemoryConfigSink()` / `NewFileConfigSink()` | Persist runtime configuration entries (in-memory or file-backed) |
@@ -68,6 +71,8 @@ fmt.Printf("Running %s on %s:%d in %s mode\n",
 2. Profile env file (`config/profiles/{profile}.env`)
 3. `.env` file
 4. Environment variables
+
+**Explicit inputs fail loudly:** a missing explicit file or named profile returns `ErrFileNotFound` instead of falling back to defaults. Discovered files stay optional. Env files are loaded into the process environment and never override a variable that is already set.
 
 ### ServiceConfig Fields
 

@@ -72,14 +72,14 @@ The [convergence fixtures](testdata/convergence.json) use a two-refetch budget a
 | Connections per instance | 1,024 | 1–1,048,576 |
 | Connections per principal | 8 | 1–instance limit |
 | Routing keys and patterns | 512 bytes | Fixed |
-| Renewable write deadline | 10 seconds | Positive duration |
+| Per-write deadline | 10 seconds | Positive duration |
 | Heartbeat interval | 30 seconds | Positive duration |
 
 Replay is a ring bounded by both count and bytes. Subscribers read replay directly from that ring, not from replay-sized private queues. Live queues store immutable frame strings. A conservative payload bound is replay bytes plus `connections × queue events × max frame bytes`, plus one control and one in-flight frame per connection. Ring slots and subscription metadata add fixed overhead. Proto encoding is serialized per bus; input wire size is checked before proto-JSON allocation and encoded size before retention. Configure all limits together for the deployment's memory budget.
 
 Admission is checked before allocating a queue. An overflowed stream stays charged until its owner closes it, so repeated admission cannot bypass the bound while old handlers are unwinding. `Subscribe` callers close subscriptions; context cancellation also releases them. HTTP owns its subscription, heartbeat ticker, write, and cancellation callbacks.
 
-Every frame and heartbeat renews its write deadline. Any write, short write, or flush error ends the handler. A response wrapper must support `ResponseController` deadlines and flushes, usually through `Unwrap`; unsupported deadlines fail closed. Middleware must not replace a streaming writer with an unbounded buffer.
+Every frame and heartbeat gets its own write deadline, which is cleared once the frame is flushed, so a quiet stream (including HTTP/2) stays open between heartbeats. Any write, short write, or flush error ends the handler. A response wrapper must support `ResponseController` deadlines and flushes, usually through `Unwrap`; unsupported deadlines fail closed. Middleware must not replace a streaming writer with an unbounded buffer.
 
 The generic decoder separately bounds normalized event-block bytes with `WithMaxFrameSize` and line bytes with `WithMaxLineSize`, both 1 MiB by default. Line limits exclude CR/LF delimiters but include a leading BOM. Limits smaller than the scanner's usual buffer are enforced exactly. A multi-line frame cannot bypass the aggregate bound.
 

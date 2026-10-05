@@ -189,11 +189,11 @@ func (m *Manager) Authenticate(r *http.Request) (auth.Principal, error) {
 		return auth.Principal{}, err
 	}
 	if unsafe(r.Method) {
-		values := r.Header.Values("X-CSRF-Token")
-		if len(values) != 1 {
-			return auth.Principal{}, apperrors.New(apperrors.ErrCodeForbidden, "CSRF verification failed").WithReason("CSRF_INVALID")
+		token, csrfErr := RequestCSRF(r)
+		if csrfErr != nil {
+			return auth.Principal{}, csrfErr
 		}
-		if err := m.csrf.Verify(row.Reference, values[0]); err != nil {
+		if err := m.csrf.Verify(row.Reference, token); err != nil {
 			return auth.Principal{}, err
 		}
 	}
