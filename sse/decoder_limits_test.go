@@ -1,9 +1,21 @@
 package sse
 
 import (
+	"bufio"
+	"errors"
 	"strings"
 	"testing"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
+
+func TestDecoderUnterminatedLineReturnsTypedLimit(t *testing.T) {
+	d := NewDecoder(strings.NewReader(strings.Repeat("x", 128)), WithMaxLineSize(16))
+	_, err := d.Next()
+	if _, ok := apperrors.AsAppError(err); !ok || !errors.Is(err, bufio.ErrTooLong) {
+		t.Fatalf("untyped overflow: %v", err)
+	}
+}
 
 func TestDecoderBoundsMultilineFrames(t *testing.T) {
 	t.Parallel()

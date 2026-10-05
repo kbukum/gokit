@@ -31,7 +31,9 @@ type Config struct {
 	MaxTokens int `yaml:"max_tokens" json:"max_tokens"`
 
 	// Timeout for HTTP requests. Defaults to 120s.
-	Timeout time.Duration `yaml:"timeout" json:"timeout"`
+	Timeout      time.Duration           `yaml:"timeout" json:"timeout"`
+	Stream       httpclient.StreamConfig `yaml:"stream" json:"stream"`
+	StreamLimits StreamLimits            `yaml:"stream_limits" json:"stream_limits"`
 
 	// Auth configures authentication (Bearer token, API key, etc.).
 	Auth *httpclient.AuthConfig `yaml:"auth" json:"auth"`
@@ -51,6 +53,8 @@ type Config struct {
 
 // applyDefaults sets default values for unset config fields.
 func (c *Config) applyDefaults() {
+	c.Stream.ApplyDefaults()
+	c.StreamLimits.applyDefaults()
 	if c.Timeout == 0 {
 		c.Timeout = 120 * time.Second
 	}

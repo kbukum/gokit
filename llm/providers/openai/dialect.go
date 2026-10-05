@@ -52,6 +52,9 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 		"messages": messages,
 		"stream":   req.Stream,
 	}
+	if req.Stream {
+		body["stream_options"] = map[string]bool{"include_usage": true}
+	}
 
 	if req.Temperature != nil {
 		body["temperature"] = *req.Temperature
@@ -91,7 +94,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
-		Usage struct {
+		Usage *struct {
 			PromptTokenCount     int `json:"prompt_tokens"`
 			CompletionTokenCount int `json:"completion_tokens"`
 			TotalTokens          int `json:"total_tokens"`
@@ -111,9 +114,6 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 
 	if choice.Message.Content != nil && *choice.Message.Content != "" {
 		msg.Content = ai.TextContent(*choice.Message.Content)
-	} else if choice.Message.ReasoningContent != nil && *choice.Message.ReasoningContent != "" {
-		// Some servers (DMR/llama.cpp with thinking models like qwen3, o1) emit text under reasoning_content when content is empty.
-		msg.Content = ai.TextContent(*choice.Message.ReasoningContent)
 	}
 
 	for _, tc := range choice.Message.ToolCalls {
@@ -124,15 +124,23 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		})
 	}
 
-	return &llm.CompletionResponse{
-		Message: msg,
-		Model:   raw.Model,
-		Usage: llm.Usage{
+	result := &llm.CompletionResponse{
+		Message:    msg,
+		Model:      raw.Model,
+		ID:         raw.ID,
+		StopReason: mapFinishReason(choice.FinishReason),
+	}
+	if choice.Message.ReasoningContent != nil {
+		result.Reasoning = *choice.Message.ReasoningContent
+	}
+	if raw.Usage != nil {
+		result.UsageReported = true
+		result.Usage = llm.Usage{
 			InputTokens:  raw.Usage.PromptTokenCount,
 			OutputTokens: raw.Usage.CompletionTokenCount,
-		},
-		StopReason: mapFinishReason(choice.FinishReason),
-	}, nil
+		}
+	}
+	return result, nil
 }
 
 // ParseStreamChunk extracts content and tool calls from an SSE data payload.
@@ -143,6 +151,19 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	}
 
 	var chunk struct {
+		ID    string          `json:"id"`
+		Model string          `json:"model"`
+		Error json.RawMessage `json:"error"`
+		Usage *struct {
+			Input         *int `json:"prompt_tokens"`
+			Output        *int `json:"completion_tokens"`
+			PromptDetails struct {
+				Cached *int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+			CompletionDetails struct {
+				Reasoning *int `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
+		} `json:"usage"`
 		Choices []struct {
 			Delta struct {
 				Content          string          `json:"content"`
@@ -156,13 +177,24 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "openai: parse stream chunk").WithCause(err)
 	}
-
+	if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "openai: upstream stream failure")
+	}
+	result := streamwire.Chunk{}
+	if chunk.ID != "" || chunk.Model != "" {
+		result.Metadata = &chat.MessageStart{ID: chunk.ID, Model: chunk.Model}
+	}
+	if chunk.Usage != nil {
+		result.Usage = &streamwire.UsageUpdate{InputTokens: chunk.Usage.Input, OutputTokens: chunk.Usage.Output, CachedTokens: chunk.Usage.PromptDetails.Cached, ReasoningTokens: chunk.Usage.CompletionDetails.Reasoning}
+	}
 	if len(chunk.Choices) == 0 {
-		return streamwire.Chunk{}, nil
+		return result, nil
 	}
 
 	c := chunk.Choices[0]
-	done := c.FinishReason != nil && *c.FinishReason != ""
+	if c.FinishReason != nil && *c.FinishReason != "" {
+		result.StopReason = mapFinishReason(*c.FinishReason)
+	}
 
 	var toolCalls []streamwire.ToolCall
 	for _, tc := range c.Delta.ToolCalls {
@@ -174,16 +206,10 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 		})
 	}
 
-	content := c.Delta.Content
-	if content == "" && c.Delta.ReasoningContent != "" {
-		content = c.Delta.ReasoningContent
-	}
-
-	return streamwire.Chunk{
-		Content:   content,
-		ToolCalls: toolCalls,
-		Done:      done,
-	}, nil
+	result.Content = c.Delta.Content
+	result.Reasoning = c.Delta.ReasoningContent
+	result.ToolCalls = toolCalls
+	return result, nil
 }
 
 // rawStreamTool is the wire format for streaming tool call deltas.

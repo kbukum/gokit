@@ -35,10 +35,14 @@ type CompletionRequest struct {
 }
 
 type CompletionResponse struct {
-	Message    chat.AssistantMessage `json:"message"`
-	Model      string                `json:"model"`
-	Usage      Usage                 `json:"usage"`
-	StopReason chat.FinishReason     `json:"stop_reason,omitempty"`
+	Message chat.AssistantMessage `json:"message"`
+	Model   string                `json:"model"`
+	Usage   Usage                 `json:"usage"`
+	// UsageReported distinguishes absent provider accounting from a reported zero.
+	UsageReported bool              `json:"usage_reported"`
+	Reasoning     string            `json:"reasoning,omitempty"`
+	ID            string            `json:"id,omitempty"`
+	StopReason    chat.FinishReason `json:"stop_reason,omitempty"`
 }
 
 func (r *CompletionResponse) Text() string { return r.Message.Text() }

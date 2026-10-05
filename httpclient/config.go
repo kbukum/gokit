@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/kbukum/gokit/resilience"
@@ -30,6 +31,9 @@ type Config struct {
 	// Timeout is the default request timeout. Defaults to 30s.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
 
+	// Stream configures finite streaming budgets and frame limits independently of buffered requests.
+	Stream StreamConfig `yaml:"stream" mapstructure:"stream"`
+
 	// Auth configures default authentication applied to all requests.
 	// Individual requests can override this.
 	Auth *AuthConfig `yaml:"-" mapstructure:"-"`
@@ -40,9 +44,7 @@ type Config struct {
 	// DefaultHeaders are default headers applied to all requests.
 	DefaultHeaders map[string]string `yaml:"default_headers" mapstructure:"default_headers"`
 
-	// ResiliencePolicy configures the retry / circuit-breaker / rate-limiter
-	// stack applied to buffered requests. Nil disables resilience. It is loaded
-	// from the shared resilience.Policy config vocabulary.
+	// ResiliencePolicy configures shared admission and breaker accounting. Streams hold admission until terminal cleanup and never retry. Buffered requests also use the retry policy. Nil disables resilience, not finite transport budgets.
 	ResiliencePolicy *resilience.Policy `yaml:"resilience_policy" mapstructure:"resilience_policy"`
 
 	// MaxResponseBodyBytes bounds the buffered response body read into memory by Do.
@@ -52,6 +54,7 @@ type Config struct {
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
+	c.Stream.ApplyDefaults()
 	if c.Timeout <= 0 {
 		c.Timeout = defaultTimeout
 	}
@@ -62,8 +65,16 @@ func (c *Config) ApplyDefaults() {
 
 // Validate checks that the configuration is valid.
 func (c *Config) Validate() error {
+	stream := c.Stream
+	stream.ApplyDefaults()
+	if err := stream.Validate(); err != nil {
+		return err
+	}
 	if c.Timeout <= 0 {
 		return fmt.Errorf("httpclient: timeout must be positive")
+	}
+	if c.MaxResponseBodyBytes == math.MaxInt64 {
+		return NewValidationError("max_response_body_bytes must leave room for overflow detection")
 	}
 	if c.TLS != nil {
 		if err := c.TLS.Validate(); err != nil {

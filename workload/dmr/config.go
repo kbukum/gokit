@@ -19,11 +19,7 @@ const DefaultBaseURL = "http://localhost:12434"
 // Model pulls stream progress and are governed by the request context instead.
 const DefaultTimeout = 30 * time.Second
 
-// DefaultPullTimeout bounds a model pull when the caller's context carries no
-// deadline. A pull streams progress and can be long-running (multi-gigabyte
-// downloads), so this is generous; a caller that supplies its own deadline takes
-// precedence, and a byte cap alone cannot bound an idle stream that stalls
-// without producing bytes.
+// DefaultPullTimeout bounds the full model-pull lifetime. Pulls can download multi-gigabyte models; earlier caller deadlines still take precedence.
 const DefaultPullTimeout = 30 * time.Minute
 
 // Config holds Docker Model Runner backend configuration.
@@ -35,15 +31,10 @@ type Config struct {
 	// Timeout bounds each non-streaming request. Defaults to [DefaultTimeout].
 	Timeout time.Duration `mapstructure:"timeout" json:"timeout"`
 
-	// PullTimeout bounds a model pull when the incoming context has no deadline,
-	// so a stalled create stream cannot hang a deadline-less context forever.
-	// Defaults to [DefaultPullTimeout]; an earlier caller deadline is preserved.
+	// PullTimeout bounds model-pull transport and progress. Defaults to [DefaultPullTimeout]; an earlier caller deadline is preserved.
 	PullTimeout time.Duration `mapstructure:"pull_timeout" json:"pull_timeout"`
 
-	// ResiliencePolicy optionally wraps non-streaming requests with retry,
-	// circuit-breaking, and rate limiting. Timeout/retry/circuit-break are owned
-	// by the canonical resilience package; leave nil for a plain
-	// timeout-bounded client.
+	// ResiliencePolicy configures admission and circuit breaking for all requests, and retries for non-streaming requests only. Streaming pulls never retry.
 	ResiliencePolicy *resilience.Policy `mapstructure:"-" json:"-"`
 }
 

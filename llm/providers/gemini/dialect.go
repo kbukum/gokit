@@ -134,7 +134,7 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 			} `json:"content"`
 			FinishReason string `json:"finishReason"`
 		} `json:"candidates"`
-		UsageMetadata struct {
+		UsageMetadata *struct {
 			PromptTokenCount     int `json:"promptTokenCount"`
 			CandidatesTokenCount int `json:"candidatesTokenCount"`
 			TotalTokenCount      int `json:"totalTokenCount"`
@@ -171,15 +171,19 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 		model = "gemini"
 	}
 
-	return &llm.CompletionResponse{
-		Message: msg,
-		Model:   model,
-		Usage: llm.Usage{
+	result := &llm.CompletionResponse{
+		Message:    msg,
+		Model:      model,
+		StopReason: mapFinishReason(candidate.FinishReason),
+	}
+	if raw.UsageMetadata != nil {
+		result.UsageReported = true
+		result.Usage = llm.Usage{
 			InputTokens:  raw.UsageMetadata.PromptTokenCount,
 			OutputTokens: raw.UsageMetadata.CandidatesTokenCount,
-		},
-		StopReason: mapFinishReason(candidate.FinishReason),
-	}, nil
+		}
+	}
+	return result, nil
 }
 
 // ParseStreamChunk extracts content from a Gemini SSE data payload.
@@ -188,13 +192,23 @@ func (d *Dialect) ParseResponse(body []byte) (*llm.CompletionResponse, error) {
 // Each chunk is a full candidates array with partial content.
 func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	var chunk struct {
+		Error        json.RawMessage `json:"error"`
+		ModelVersion string          `json:"modelVersion"`
+		ResponseID   string          `json:"responseId"`
+		Usage        *struct {
+			Input     *int `json:"promptTokenCount"`
+			Output    *int `json:"candidatesTokenCount"`
+			Cached    *int `json:"cachedContentTokenCount"`
+			Reasoning *int `json:"thoughtsTokenCount"`
+		} `json:"usageMetadata"`
 		Candidates []struct {
 			Content struct {
 				Parts []struct {
 					Text         string `json:"text,omitempty"`
+					Thought      bool   `json:"thought"`
 					FunctionCall *struct {
-						Name string         `json:"name"`
-						Args map[string]any `json:"args,omitempty"`
+						Name string          `json:"name"`
+						Args json.RawMessage `json:"args,omitempty"`
 					} `json:"functionCall,omitempty"`
 				} `json:"parts"`
 			} `json:"content"`
@@ -205,33 +219,45 @@ func (d *Dialect) ParseStreamChunk(data []byte) (streamwire.Chunk, error) {
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "gemini: parse stream chunk").WithCause(err)
 	}
-
+	if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+		return streamwire.Chunk{}, errors.New(errors.ErrCodeExternalService, "gemini: upstream stream failure")
+	}
+	result := streamwire.Chunk{}
+	if chunk.ModelVersion != "" || chunk.ResponseID != "" {
+		result.Metadata = &chat.MessageStart{ID: chunk.ResponseID, Model: chunk.ModelVersion}
+	}
+	if chunk.Usage != nil {
+		result.Usage = &streamwire.UsageUpdate{InputTokens: chunk.Usage.Input, OutputTokens: chunk.Usage.Output, CachedTokens: chunk.Usage.Cached, ReasoningTokens: chunk.Usage.Reasoning}
+	}
 	if len(chunk.Candidates) == 0 {
-		return streamwire.Chunk{}, nil
+		return result, nil
 	}
 
 	candidate := chunk.Candidates[0]
-	var text string
 	var toolCalls []streamwire.ToolCall
 	for i, part := range candidate.Content.Parts {
-		text += part.Text
+		if part.Thought {
+			result.Reasoning += part.Text
+		} else {
+			result.Content += part.Text
+		}
 		if part.FunctionCall != nil {
-			argsJSON, _ := json.Marshal(part.FunctionCall.Args)
 			toolCalls = append(toolCalls, streamwire.ToolCall{
 				Index:      i,
 				ID:         fmt.Sprintf("call_%d", i),
 				Name:       part.FunctionCall.Name,
-				InputDelta: string(argsJSON),
+				InputDelta: string(ai.NormalizeToolInput(part.FunctionCall.Args)),
 			})
 		}
 	}
 
 	done := candidate.FinishReason != "" && candidate.FinishReason != "NONE"
-	return streamwire.Chunk{
-		Content:   text,
-		ToolCalls: toolCalls,
-		Done:      done,
-	}, nil
+	result.ToolCalls = toolCalls
+	result.Done = done
+	if done {
+		result.StopReason = mapFinishReason(candidate.FinishReason)
+	}
+	return result, nil
 }
 
 // --- internal helpers ---

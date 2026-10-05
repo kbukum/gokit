@@ -65,6 +65,9 @@ stream, err := client.DoStream(ctx, httpclient.Request{
     Method: http.MethodGet,
     Path:   "/events",
 })
+if err != nil {
+    return err
+}
 defer stream.Close()
 
 for {
@@ -72,9 +75,18 @@ for {
     if err == io.EOF {
         break
     }
+    if err != nil {
+        return err
+    }
     fmt.Println(event.Event, event.Data)
 }
 ```
+
+Streaming requests acquire the configured rate limiter, bulkhead and circuit breaker once. They hold capacity through response-body cleanup and never retry. Raw EOF is success; early close and caller cancellation are breaker-neutral. Timeouts and decoding failures count as failures.
+
+`Config.Stream` defaults to 10s connect/TLS, 30s headers, 60s first progress, 30s idle after first progress, 5m total including admission, and 1 MiB per SSE event block. Zero selects defaults; negative limits are rejected. Caller and policy deadlines can shorten the call. Buffered `Config.Timeout` remains independent.
+
+A protocol consumer sets `Request.RequireStreamCompletion` and must call `StreamResponse.Complete(err)` after its reader exits on every path. Only validated protocol completion passes nil; incomplete EOF must pass an error. `Progress(true)` marks content/reasoning/tool progress; later valid chunks call `Progress(false)` to renew idle. Partial bytes and heartbeats do not count. `Context()` signals budget exhaustion, which closes the body but retains admission until the protocol owner completes cleanup. Generic raw/SSE readers report progress and completion automatically. Callers must close streams they abandon.
 
 ## Key Types & Functions
 

@@ -243,8 +243,8 @@ func TestDialect_ParseStreamChunk_FinishReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseStreamChunk: %v", err)
 	}
-	if !chunk.Done {
-		t.Error("expected done=true for finish_reason=stop")
+	if chunk.Done || chunk.StopReason != chat.FinishReasonStop {
+		t.Error("finish_reason must preserve reason without cutting off usage before [DONE]")
 	}
 }
 
