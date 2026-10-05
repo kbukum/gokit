@@ -718,6 +718,26 @@ func TestComponent_Name(t *testing.T) {
 	}
 }
 
+func TestComponent_WithNameAllowsSeveralServersInOneRegistry(t *testing.T) {
+	public := server.NewComponent(newTestServer(t), server.WithName("public"))
+	internal := server.NewComponent(newTestServer(t), server.WithName("internal"))
+	registry := component.NewRegistry()
+	for _, c := range []*server.Component{public, internal} {
+		if err := registry.Register(c); err != nil {
+			t.Fatalf("register %s: %v", c.Name(), err)
+		}
+	}
+	if public.Name() != "public" || internal.Name() != "internal" {
+		t.Fatalf("names = %q, %q", public.Name(), internal.Name())
+	}
+	if h := internal.Health(t.Context()); h.Name != "internal" {
+		t.Errorf("health name = %q, want internal", h.Name)
+	}
+	if err := registry.Register(server.NewComponent(newTestServer(t), server.WithName(""))); err == nil {
+		t.Error("registering an empty server name succeeded")
+	}
+}
+
 func TestComponent_ImplementsInterface(t *testing.T) {
 	s := newTestServer(t)
 	c := server.NewComponent(s)

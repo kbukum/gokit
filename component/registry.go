@@ -74,6 +74,9 @@ func (r *Registry) RegisterInPhase(c Component, phase ShutdownPhase) error {
 	defer r.mu.Unlock()
 
 	name := c.Name()
+	if name == "" {
+		return errors.New("component: name must not be empty")
+	}
 	if _, exists := r.lookup[name]; exists {
 		return fmt.Errorf("component %s already registered", name)
 	}
@@ -107,7 +110,8 @@ func (r *Registry) State(name string) (State, bool) {
 //
 // If a component fails to start,
 // all components that were successfully started during this call are rolled back (stopped in reverse order).
-// Components started by a previous call are NOT rolled back.
+// Components started by a previous call are NOT rolled back. The returned *StartError keeps
+// the start failure and any rollback failure separately inspectable.
 //
 // The Component.Start call runs without holding any registry lock
 // so readers (Get / All / HealthAll)
@@ -154,7 +158,8 @@ func (r *Registry) StartAll(ctx context.Context) error {
 		r.mu.Unlock()
 
 		r.log.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
-		if err := r.startOne(ctx, entry); err != nil {
+		err, cleanupErr := r.startOne(ctx, entry)
+		if err != nil {
 			r.mu.Lock()
 			entry.state = StateFailed
 			r.mu.Unlock()
@@ -163,8 +168,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 				"component": name,
 				"error":     err.Error(),
 			})
-			r.rollback(ctx, startedThisCall)
-			return fmt.Errorf("failed to start %s: %w", name, err)
+			return newStartError(name, err, cleanupErr, r.rollback(ctx, startedThisCall))
 		}
 
 		r.mu.Lock()
@@ -181,14 +185,15 @@ func (r *Registry) StartAll(ctx context.Context) error {
 
 // startOne starts a single component, bounding the Start call with the configured
 // StartTimeout when ctx has no deadline. On a start timeout it attempts a bounded Stop
-// cleanup so a partially-initialized component can release resources before rollback.
-func (r *Registry) startOne(ctx context.Context, entry *componentEntry) error {
+// cleanup so a partially-initialized component can release resources before rollback,
+// and returns that cleanup failure separately from the start failure.
+func (r *Registry) startOne(ctx context.Context, entry *componentEntry) (err, cleanupErr error) {
 	startCtx, cancel := r.startContext(ctx)
 	defer cancel()
 
-	err := entry.component.Start(startCtx)
+	err = entry.component.Start(startCtx)
 	if err == nil {
-		return nil
+		return nil, nil
 	}
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		// Detach cleanup from ctx: on the concurrent path ctx is the shared run context
@@ -198,14 +203,11 @@ func (r *Registry) startOne(ctx context.Context, entry *componentEntry) error {
 		// resources before rollback.
 		stopCtx, stopCancel := r.stopContext(context.WithoutCancel(ctx))
 		if stopErr := entry.component.Stop(stopCtx); stopErr != nil {
-			r.log.ErrorCtx(ctx, "Cleanup stop failed after start timeout", map[string]any{
-				"component": entry.component.Name(),
-				"error":     stopErr.Error(),
-			})
+			cleanupErr = fmt.Errorf("cleanup %s after start timeout: %w", entry.component.Name(), stopErr)
 		}
 		stopCancel()
 	}
-	return err
+	return err, cleanupErr
 }
 
 // startContext returns a context for an individual Component.Start call.
@@ -222,7 +224,8 @@ func (r *Registry) startContext(parent context.Context) (context.Context, contex
 // RegistryConfig.Concurrency (zero means no limit). Unlike StartAll it does not impose a
 // registration order between components, so use it only when the registered components have
 // no inter-dependencies. On any failure it stops every component started during this call
-// (in reverse completion order) and returns the first start error.
+// (in reverse completion order) and returns a *StartError holding the first start error and
+// any rollback failures.
 func (r *Registry) StartAllConcurrent(ctx context.Context) error {
 	r.lifecycleMu.Lock()
 	defer r.lifecycleMu.Unlock()
@@ -258,16 +261,18 @@ func (r *Registry) StartAllConcurrent(ctx context.Context) error {
 
 	sem := make(chan struct{}, limit)
 	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		firstErr error
-		started  []*componentEntry
+		wg          sync.WaitGroup
+		mu          sync.Mutex
+		firstName   string
+		firstErr    error
+		cleanupErrs []error
+		started     []*componentEntry
 	)
 
-	setFirstErr := func(err error) {
+	setFirstErr := func(name string, err error) {
 		mu.Lock()
 		if firstErr == nil {
-			firstErr = err
+			firstName, firstErr = name, err
 		}
 		mu.Unlock()
 	}
@@ -291,7 +296,7 @@ launch:
 				}
 			}
 			r.mu.Unlock()
-			setFirstErr(runCtx.Err())
+			setFirstErr("", runCtx.Err())
 			break launch
 		}
 
@@ -307,7 +312,7 @@ launch:
 				}
 			}
 			r.mu.Unlock()
-			setFirstErr(runCtx.Err())
+			setFirstErr("", runCtx.Err())
 			break launch
 		}
 
@@ -323,11 +328,12 @@ launch:
 				r.mu.Lock()
 				entry.state = StateFailed
 				r.mu.Unlock()
-				setFirstErr(runCtx.Err())
+				setFirstErr("", runCtx.Err())
 				return
 			}
 			r.log.DebugCtx(ctx, "Starting component", map[string]any{"component": name})
-			if err := r.startOne(runCtx, entry); err != nil {
+			err, cleanupErr := r.startOne(runCtx, entry)
+			if err != nil {
 				r.mu.Lock()
 				entry.state = StateFailed
 				r.mu.Unlock()
@@ -335,7 +341,12 @@ launch:
 					"component": name,
 					"error":     err.Error(),
 				})
-				setFirstErr(fmt.Errorf("failed to start %s: %w", name, err))
+				if cleanupErr != nil {
+					mu.Lock()
+					cleanupErrs = append(cleanupErrs, cleanupErr)
+					mu.Unlock()
+				}
+				setFirstErr(name, err)
 				cancel()
 				return
 			}
@@ -352,18 +363,18 @@ launch:
 	wg.Wait()
 
 	if firstErr != nil {
-		r.rollback(ctx, started)
-		return firstErr
+		return newStartError(firstName, firstErr, append(cleanupErrs, r.rollback(ctx, started))...)
 	}
 
 	r.log.InfoCtx(ctx, "All components started successfully")
 	return nil
 }
 
-// rollback stops the given entries in reverse order.
+// rollback stops the given entries in reverse order and joins their stop failures.
 // lifecycleMu is already held by the caller (StartAll / StartAllConcurrent);
 // no other Start/Stop can interleave.
-func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
+func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) error {
+	var errs []error
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
 		name := entry.component.Name()
@@ -379,10 +390,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 		// startOne's cleanup path.
 		stopCtx, cancel := r.stopContext(context.WithoutCancel(ctx))
 		if err := entry.component.Stop(stopCtx); err != nil {
-			r.log.ErrorCtx(ctx, "Rollback stop failed", map[string]any{
-				"component": name,
-				"error":     err.Error(),
-			})
+			errs = append(errs, fmt.Errorf("stop %s: %w", name, err))
 		}
 		cancel()
 
@@ -390,6 +398,7 @@ func (r *Registry) rollback(ctx context.Context, entries []*componentEntry) {
 		entry.state = StateStopped
 		r.mu.Unlock()
 	}
+	return errors.Join(errs...)
 }
 
 // StopAll quiesces ingress first, drains accepted work, then releases resources, telemetry, and admin. Registration order is reversed within each phase. The configured stop timeout bounds the whole operation when ctx has no deadline; errors preserve all causes through errors.Join.

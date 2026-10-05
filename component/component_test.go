@@ -734,34 +734,6 @@ func TestContextCancelMidStartAll(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GAP 11: Empty name registration
-// ---------------------------------------------------------------------------
-
-func TestEmptyNameRegistration(t *testing.T) {
-	t.Parallel()
-	r := NewRegistry()
-	err := r.Register(&mockComponent{name: ""})
-	// Current impl allows empty name — verify it's retrievable
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	got := r.Get("")
-	if got == nil {
-		t.Error("expected to retrieve component with empty name")
-	}
-}
-
-func TestEmptyNameDuplicate(t *testing.T) {
-	t.Parallel()
-	r := NewRegistry()
-	r.Register(&mockComponent{name: ""})
-	err := r.Register(&mockComponent{name: ""})
-	if err == nil {
-		t.Error("expected error for duplicate empty name")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // GAP 12: Component Name with special chars / unicode
 // ---------------------------------------------------------------------------
 

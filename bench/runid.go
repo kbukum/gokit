@@ -10,7 +10,7 @@ import (
 // when untagged) followed by a compact UTC timestamp and a short unique suffix, so two runs that
 // share a tag and second still map to distinct storage files.
 func (r *BenchRunner[L]) generateID() string {
-	ts := r.cfg.clock.Now().Format("20060102-150405")
+	ts := r.cfg.clock.Now().UTC().Format("20060102-150405")
 	name := r.cfg.tag
 	if name == "" {
 		name = "run"

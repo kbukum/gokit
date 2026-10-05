@@ -69,6 +69,8 @@ package main
 
 import (
     "context"
+    "fmt"
+    "os"
 
     "github.com/kbukum/gokit/bootstrap"
     "github.com/kbukum/gokit/config"
@@ -79,22 +81,28 @@ type Config struct {
 }
 
 func main() {
+    // Run releases the App's own logger, so report its error another way.
+    if err := run(context.Background()); err != nil {
+        fmt.Fprintf(os.Stderr, "app failed: %v\n", err)
+        os.Exit(1)
+    }
+}
+
+func run(ctx context.Context) error {
     cfg := &Config{ServiceConfig: config.ServiceConfig{Name: "my-service", Version: "1.0.0"}}
 
     app, err := bootstrap.NewApp(cfg)
     if err != nil {
-        panic(err)
+        return err
     }
 
     app.OnConfigure(func(ctx context.Context, app *bootstrap.App[*Config]) error {
-        // wire routes, handlers, business logic — components are already started
+        // register components and wire business logic — they start right after configure
         return nil
     })
 
-    // Init → Start → Configure → Ready → wait for signal → Stop
-    if err := app.Run(context.Background()); err != nil {
-        app.Logger.Fatal("app failed", map[string]any{"error": err})
-    }
+    // Configure → Start → Ready → wait for signal → Shutdown.
+    return app.Run(ctx)
 }
 ```
 

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -85,29 +86,6 @@ func TestRunTaskContextCancellationBeforeTask(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error from canceled context")
-	}
-}
-
-func TestRunTaskErrorTakesPriorityOverStopError(t *testing.T) {
-	cfg := newTestConfig("test", "1.0")
-	app, _ := NewApp(cfg)
-
-	taskErr := fmt.Errorf("task failed")
-
-	app.OnBeforeStop(func(ctx context.Context) error {
-		return fmt.Errorf("stop also failed")
-	})
-
-	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return taskErr
-	})
-
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	// When both task and stop fail, task error wins
-	if err.Error() != "task failed" {
-		t.Errorf("expected task error to take priority, got %q", err.Error())
 	}
 }
 
@@ -262,13 +240,11 @@ func TestDoubleRunTaskSequential(t *testing.T) {
 		t.Fatalf("first RunTask failed: %v", err1)
 	}
 
-	// Second run — container is already closed, but should still attempt
-	err2 := app.RunTask(context.Background(), task)
-	// We don't require error-free second run, just no panic
-	_ = err2
-
-	if count < 1 {
-		t.Error("task should have run at least once")
+	if err := app.RunTask(context.Background(), task); !errors.Is(err, ErrLifecycleUsed) {
+		t.Fatalf("second RunTask error = %v, want ErrLifecycleUsed", err)
+	}
+	if count != 1 {
+		t.Errorf("task ran %d times, want 1", count)
 	}
 }
 

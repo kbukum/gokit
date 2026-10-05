@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -380,14 +381,13 @@ func TestRunTaskSuccess(t *testing.T) {
 func TestRunTaskError(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
+	cause := fmt.Errorf("task error")
 	err := app.RunTask(context.Background(), func(ctx context.Context) error {
-		return fmt.Errorf("task error")
+		return cause
 	})
-	if err == nil {
-		t.Error("expected error from failing task")
-	}
-	if err.Error() != "task error" {
-		t.Errorf("expected 'task error', got %q", err.Error())
+	var taskErr *TaskError
+	if !errors.As(err, &taskErr) || !errors.Is(err, cause) || taskErr.Shutdown != nil {
+		t.Fatalf("RunTask error = %v, want *TaskError with cause and no shutdown failure", err)
 	}
 }
 

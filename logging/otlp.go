@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -23,8 +24,9 @@ const otlpLoggerName = "github.com/kbukum/gokit/logging"
 // OTLPProvider owns the OpenTelemetry LoggerProvider used by the OTLP sink and
 // exposes its lifecycle so the facade can flush and shut it down.
 type OTLPProvider struct {
-	provider *sdklog.LoggerProvider
-	logger   otellog.Logger
+	provider  *sdklog.LoggerProvider
+	processor sdklog.Processor
+	logger    otellog.Logger
 }
 
 // OTLPProviderConfig configures an OTLP log provider and its resource attributes.
@@ -48,22 +50,31 @@ func NewOTLPProvider(cfg OTLPProviderConfig) (*OTLPProvider, error) {
 		return nil, fmt.Errorf("creating OTLP log resource: %w", err)
 	}
 
-	provider := sdklog.NewLoggerProvider(
-		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
-		sdklog.WithResource(res),
-	)
-	return &OTLPProvider{
-		provider: provider,
-		logger:   provider.Logger(otlpLoggerName),
-	}, nil
+	return newOTLPProvider(exporter, res), nil
 }
 
-// Shutdown flushes and stops the provider.
+func newOTLPProvider(exporter sdklog.Exporter, res *resource.Resource) *OTLPProvider {
+	processor := sdklog.NewBatchProcessor(exporter)
+	opts := []sdklog.LoggerProviderOption{sdklog.WithProcessor(processor)}
+	if res != nil {
+		opts = append(opts, sdklog.WithResource(res))
+	}
+	provider := sdklog.NewLoggerProvider(opts...)
+	return &OTLPProvider{provider: provider, processor: processor, logger: provider.Logger(otlpLoggerName)}
+}
+
+// Shutdown flushes and stops the provider within ctx. The SDK provider skips its processors
+// when ctx has already ended, so the owned processor is then shut down directly: it stops its
+// worker and exporter in the background even with an ended ctx, and a repeated shutdown is a no-op.
 func (p *OTLPProvider) Shutdown(ctx context.Context) error {
 	if p == nil || p.provider == nil {
 		return nil
 	}
-	return p.provider.Shutdown(ctx)
+	err := p.provider.Shutdown(ctx)
+	if p.processor != nil {
+		err = errors.Join(err, p.processor.Shutdown(ctx))
+	}
+	return err
 }
 
 // otlpHandler is an [slog.Handler] that emits records to the OTLP collector. It
