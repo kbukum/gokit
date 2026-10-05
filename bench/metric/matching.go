@@ -22,7 +22,7 @@ func (m *exactMatch[L]) Compute(scored []bench.ScoredSample[L]) Result {
 
 	correct := 0
 	for _, s := range scored {
-		if s.Prediction.Label == s.Sample.Label {
+		if s.Error == "" && s.Prediction.Label == s.Sample.Label {
 			correct++
 		}
 	}
@@ -70,7 +70,7 @@ func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 		// The empty path still carries the threshold-bearing name and threshold
 		// provenance, so an empty run stays distinct by cutoff and never drops the
 		// configuration input the comparator relies on to keep runs comparable.
-		return Result{Name: m.name, Value: 0, Detail: map[string]any{"threshold": m.threshold}}
+		return Result{Name: m.name, Value: 0}
 	}
 
 	matches := 0
@@ -92,7 +92,6 @@ func (m *fuzzyMatch) Compute(scored []bench.ScoredSample[string]) Result {
 		// The threshold is a configuration input, not a quality signal, so it lives
 		// in provenance detail rather than Values, where RunComparator would score a
 		// threshold change as an improvement or regression.
-		Detail: map[string]any{"threshold": m.threshold},
 	}
 }
 

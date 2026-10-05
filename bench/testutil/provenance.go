@@ -5,11 +5,18 @@ package testutil
 // environment or process access. The zero value reports empty strings and no git
 // commit; configure it with the functional options below.
 type FixedProvenanceProbe struct {
-	gitCommit string
-	host      string
-	os        string
-	arch      string
+	gitCommit    string
+	gitTreeState string
+	host         string
+	os           string
+	arch         string
 }
+
+func WithGitTreeState(state string) ProbeOption {
+	return func(p *FixedProvenanceProbe) { p.gitTreeState = state }
+}
+
+func (p FixedProvenanceProbe) GitTreeState() string { return p.gitTreeState }
 
 // ProbeOption configures a FixedProvenanceProbe.
 type ProbeOption func(*FixedProvenanceProbe)

@@ -439,7 +439,13 @@ jobs:
         with:
           version: ${{ env.TOVEN_VERSION }}
 
+      # The auth host process proof launches the built binary; it fails closed without it.
+      - name: Build the auth test host
+        run: make auth-host-build
+
       - name: Run integration tests in every module
+        env:
+          GOKIT_AUTH_HOST_BINARY: ${{ github.workspace }}/auth/testhost/target/auth-host
         run: '"${{ steps.toven.outputs.toven }}" run test -- -race -count=1 -timeout=20m -tags=integration'
 
   # ── Gate: Aggregate status for branch protection ──────────────────────────

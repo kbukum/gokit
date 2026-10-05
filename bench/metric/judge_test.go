@@ -86,7 +86,7 @@ func TestLLMJudgeNameEmbedsModelAndPrompt(t *testing.T) {
 	// than a brittle exact hash.
 	const prefix = "llm_judge[fake/judge-model@gokit.builtin.judge@1.0.0#"
 	const suffix = ":t0.5]"
-	got := m.Name()
+	got := m.Identity().Name
 	if !strings.HasPrefix(got, prefix) || !strings.HasSuffix(got, suffix) {
 		t.Errorf("Name() = %q, want prefix %q and suffix %q", got, prefix, suffix)
 	}
@@ -96,8 +96,8 @@ func TestLLMJudgeThresholdInNameChangesIdentity(t *testing.T) {
 	t.Parallel()
 
 	m := newJudge(t, verdictProvider(1, ""), metric.WithJudgeThreshold[string](0.8))
-	if !strings.Contains(m.Name(), ":t0.8]") {
-		t.Errorf("Name() = %q, want threshold t0.8 in identity", m.Name())
+	if !strings.Contains(m.Identity().Name, ":t0.8]") {
+		t.Errorf("Name() = %q, want threshold t0.8 in identity", m.Identity().Name)
 	}
 }
 
@@ -355,18 +355,18 @@ func TestLLMJudgeDetailRecordsIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	detail, ok := res.Detail.(map[string]any)
+	detail, ok := res.Judge, res.Judge != nil
 	if !ok {
-		t.Fatalf("Detail = %T, want map[string]any", res.Detail)
+		t.Fatalf("Detail = %T, want map[string]any", res.Judge)
 	}
-	if detail[bench.DetailJudgeModel] != judgeModel {
-		t.Errorf("detail[%s] = %v, want %q", bench.DetailJudgeModel, detail[bench.DetailJudgeModel], judgeModel)
+	if detail.Model != judgeModel {
+		t.Errorf("judge.Model = %v, want %q", detail.Model, judgeModel)
 	}
-	if detail[bench.DetailJudgePromptID] != "gokit.builtin.judge" {
-		t.Errorf("detail[%s] = %v, want gokit.builtin.judge", bench.DetailJudgePromptID, detail[bench.DetailJudgePromptID])
+	if detail.PromptID != "gokit.builtin.judge" {
+		t.Errorf("judge.PromptID = %v, want gokit.builtin.judge", detail.PromptID)
 	}
-	if detail[bench.DetailJudgePromptVersion] != "1.0.0" {
-		t.Errorf("detail[%s] = %v, want 1.0.0", bench.DetailJudgePromptVersion, detail[bench.DetailJudgePromptVersion])
+	if detail.PromptVersion != "1.0.0" {
+		t.Errorf("judge.PromptVersion = %v, want 1.0.0", detail.PromptVersion)
 	}
 }
 
@@ -623,8 +623,8 @@ func TestParseJudgePromptAcceptsCustomTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LLMJudge: %v", err)
 	}
-	if !strings.Contains(m.Name(), "@custom@2.1.0#") {
-		t.Errorf("Name() = %q, want custom prompt identity", m.Name())
+	if !strings.Contains(m.Identity().Name, "@custom@2.1.0#") {
+		t.Errorf("Name() = %q, want custom prompt identity", m.Identity().Name)
 	}
 }
 
@@ -645,8 +645,8 @@ func TestLLMJudgeRubricFingerprintChangesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LLMJudge(mutated): %v", err)
 	}
-	if mBase.Name() == mMut.Name() {
-		t.Errorf("rubric change must change identity, both = %q", mBase.Name())
+	if mBase.Identity().Name == mMut.Identity().Name {
+		t.Errorf("rubric change must change identity, both = %q", mBase.Identity().Name)
 	}
 }
 
@@ -790,12 +790,12 @@ func TestLLMJudgeRecordsResolvedModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	detail, ok := res.Detail.(map[string]any)
+	detail, ok := res.Judge, res.Judge != nil
 	if !ok {
-		t.Fatalf("Detail type = %T, want map[string]any", res.Detail)
+		t.Fatalf("Detail type = %T, want map[string]any", res.Judge)
 	}
-	if detail[bench.DetailJudgeResolvedModel] != "backend-2024-05" {
-		t.Errorf("detail[%s] = %v, want backend-2024-05", bench.DetailJudgeResolvedModel, detail[bench.DetailJudgeResolvedModel])
+	if detail.ResolvedModel != "backend-2024-05" {
+		t.Errorf("judge.ResolvedModel = %v, want backend-2024-05", detail.ResolvedModel)
 	}
 }
 

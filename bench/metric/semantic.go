@@ -167,7 +167,6 @@ func (m *semanticSimilarity[L]) Compute(ctx context.Context, scored []bench.Scor
 			"avg_similarity": avg,
 			"match_rate":     float64(matches) / n,
 		},
-		Detail: map[string]any{"model": modelIdentity(m.model, m.provider), "threshold": m.threshold, "samples": len(scored)},
 	}, nil
 }
 
@@ -265,7 +264,6 @@ func (m *semanticSimilarity[L]) zeroed() Result {
 			"avg_similarity": 0,
 			"match_rate":     0,
 		},
-		Detail: map[string]any{"model": modelIdentity(m.model, m.provider), "threshold": m.threshold, "samples": 0},
 	}
 }
 

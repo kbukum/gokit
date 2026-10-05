@@ -5,347 +5,152 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
+	"reflect"
 	"testing"
-	"time"
 
 	"github.com/kbukum/gokit/bench"
 	gostorage "github.com/kbukum/gokit/storage"
+	"github.com/kbukum/gokit/storage/local"
 )
 
-// fakeStorage is an in-memory storage.Storage with fault injection for tests.
-type fakeStorage struct {
-	objects   map[string][]byte
-	uploadErr error
-	failList  bool
-	// downloadErr maps a path to an error returned by Download.
-	downloadErr map[string]error
+type faultStore struct {
+	gostorage.Storage
+	uploadErr, downloadErr, listErr error
+	reader                          io.ReadCloser
+	files                           []gostorage.FileInfo
 }
 
-var _ gostorage.Storage = (*fakeStorage)(nil)
+func (s *faultStore) Upload(ctx context.Context, key string, r io.Reader) error {
+	if s.uploadErr != nil {
+		return s.uploadErr
+	}
+	return s.Storage.Upload(ctx, key, r)
+}
 
-func newFakeStorage() *fakeStorage {
-	return &fakeStorage{
-		objects:     make(map[string][]byte),
-		downloadErr: make(map[string]error),
+func (s *faultStore) Download(ctx context.Context, key string) (io.ReadCloser, error) {
+	if s.downloadErr != nil {
+		return nil, s.downloadErr
+	}
+	if s.reader != nil {
+		return s.reader, nil
+	}
+	return s.Storage.Download(ctx, key)
+}
+
+func (s *faultStore) List(ctx context.Context, prefix string) ([]gostorage.FileInfo, error) {
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	if s.files != nil {
+		return s.files, nil
+	}
+	return s.Storage.List(ctx, prefix)
+}
+
+type failingReader struct{ err error }
+
+func (r failingReader) Read([]byte) (int, error) { return 0, r.err }
+func (r failingReader) Close() error             { return r.err }
+
+func TestProviderObjectPort(t *testing.T) {
+	t.Parallel()
+	for _, prefix := range []string{"bench/", "custom/"} {
+		t.Run(prefix, func(t *testing.T) {
+			t.Parallel()
+			backend, err := local.NewStorage(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			adapter := NewProviderStorage(backend, WithPrefix(prefix))
+			if err := adapter.Put(t.Context(), "records/run/0/00000000.jsonl", []byte("data")); err != nil {
+				t.Fatal(err)
+			}
+			data, err := adapter.Get(t.Context(), "records/run/0/00000000.jsonl", 4)
+			if err != nil || string(data) != "data" {
+				t.Fatalf("get=%q %v", data, err)
+			}
+			keys, err := adapter.List(t.Context(), "records/")
+			if err != nil || !reflect.DeepEqual(keys, []string{"records/run/0/00000000.jsonl"}) {
+				t.Fatalf("list=%v %v", keys, err)
+			}
+			if err := adapter.Delete(t.Context(), keys[0]); err != nil {
+				t.Fatal(err)
+			}
+			keys, err = adapter.List(t.Context(), "")
+			if err != nil || len(keys) != 0 {
+				t.Fatalf("cleanup=%v %v", keys, err)
+			}
+		})
 	}
 }
 
-func (f *fakeStorage) Upload(_ context.Context, path string, reader io.Reader) error {
-	if f.uploadErr != nil {
-		return f.uploadErr
+func TestProviderErrors(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("injected")
+	for _, tc := range []struct {
+		name string
+		run  func(*ProviderStorage) error
+	}{
+		{"upload", func(s *ProviderStorage) error { return s.Put(t.Context(), "key", nil) }},
+		{"download", func(s *ProviderStorage) error { _, err := s.Get(t.Context(), "key", 10); return err }},
+		{"list", func(s *ProviderStorage) error { _, err := s.List(t.Context(), ""); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := NewProviderStorage(&faultStore{uploadErr: cause, downloadErr: cause, listErr: cause})
+			if err := tc.run(s); !errors.Is(err, cause) {
+				t.Fatalf("cause lost: %v", err)
+			}
+		})
 	}
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	f.objects[path] = data
-	return nil
-}
-
-func (f *fakeStorage) Download(_ context.Context, path string) (io.ReadCloser, error) {
-	if err := f.downloadErr[path]; err != nil {
-		return nil, err
-	}
-	data, ok := f.objects[path]
-	if !ok {
-		return nil, errors.New("not found: " + path)
-	}
-	return io.NopCloser(bytes.NewReader(data)), nil
-}
-
-func (f *fakeStorage) Delete(_ context.Context, path string) error {
-	delete(f.objects, path)
-	return nil
-}
-
-func (f *fakeStorage) Exists(_ context.Context, path string) (bool, error) {
-	_, ok := f.objects[path]
-	return ok, nil
-}
-
-func (f *fakeStorage) URL(_ context.Context, path string) (string, error) {
-	return "mem://" + path, nil
-}
-
-func (f *fakeStorage) Head(_ context.Context, path string) (gostorage.FileInfo, error) {
-	data, ok := f.objects[path]
-	if !ok {
-		return gostorage.FileInfo{}, errors.New("not found: " + path)
-	}
-	return gostorage.FileInfo{Path: path, Size: int64(len(data))}, nil
-}
-
-func (f *fakeStorage) Copy(_ context.Context, srcPath, dstPath string) error {
-	data, ok := f.objects[srcPath]
-	if !ok {
-		return errors.New("not found: " + srcPath)
-	}
-	f.objects[dstPath] = bytes.Clone(data)
-	return nil
-}
-
-func (f *fakeStorage) Rename(_ context.Context, srcPath, dstPath string) error {
-	data, ok := f.objects[srcPath]
-	if !ok {
-		return errors.New("not found: " + srcPath)
-	}
-	f.objects[dstPath] = data
-	delete(f.objects, srcPath)
-	return nil
-}
-
-func (f *fakeStorage) List(_ context.Context, prefix string) ([]gostorage.FileInfo, error) {
-	if f.failList {
-		return nil, errors.New("list failed")
-	}
-	var out []gostorage.FileInfo
-	for path := range f.objects {
-		if strings.HasPrefix(path, prefix) {
-			out = append(out, gostorage.FileInfo{Path: path})
+	for _, key := range []string{"../escape", "/absolute", ""} {
+		s := NewProviderStorage(&faultStore{})
+		if err := s.Put(t.Context(), key, nil); err == nil {
+			t.Fatalf("invalid key %q", key)
+		}
+		if _, err := s.Get(t.Context(), key, 1); err == nil {
+			t.Fatalf("invalid get %q", key)
+		}
+		if err := s.Delete(t.Context(), key); err == nil {
+			t.Fatalf("invalid delete %q", key)
 		}
 	}
-	return out, nil
-}
-
-func sampleResult(id, tag, dataset string, ts time.Time, f1 float64) *bench.RunResult {
-	return &bench.RunResult{
-		ID:        id,
-		Timestamp: ts,
-		Tag:       tag,
-		Dataset:   bench.DatasetInfo{Name: dataset},
-		Metrics: []bench.MetricResult{
-			{Name: "classification", Values: map[string]float64{"f1": f1}},
-		},
-	}
-}
-
-func TestNewProviderStorageDefaultPrefix(t *testing.T) {
-	t.Parallel()
-	s := NewProviderStorage(newFakeStorage())
-	if got := s.key("run1"); got != "bench/run1.json" {
-		t.Fatalf("key = %q, want bench/run1.json", got)
-	}
-}
-
-func TestWithPrefix(t *testing.T) {
-	t.Parallel()
-	s := NewProviderStorage(newFakeStorage(), WithPrefix("results/"))
-	if got := s.key("run1"); got != "results/run1.json" {
-		t.Fatalf("key = %q, want results/run1.json", got)
-	}
-}
-
-func TestSaveAndLoadRoundTrip(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	fake := newFakeStorage()
-	s := NewProviderStorage(fake)
-
-	ts := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
-	want := sampleResult("run-a", "nightly", "ds1", ts, 0.9)
-
-	id, err := s.Save(ctx, want)
-	if err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if id != "run-a" {
-		t.Fatalf("Save id = %q, want run-a", id)
-	}
-
-	got, err := s.Load(ctx, "run-a")
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if got.ID != want.ID || got.Tag != want.Tag || got.Dataset.Name != want.Dataset.Name {
-		t.Fatalf("Load = %+v, want %+v", got, want)
-	}
-}
-
-func TestSaveMarshalError(t *testing.T) {
-	t.Parallel()
-	s := NewProviderStorage(newFakeStorage())
-	// Curves holds a channel, which encoding/json cannot marshal.
-	bad := sampleResult("run-x", "", "ds", time.Now(), 0)
-	bad.Curves = map[string]any{"c": make(chan int)}
-
-	if _, err := s.Save(context.Background(), bad); err == nil {
-		t.Fatal("expected marshal error, got nil")
-	}
-}
-
-func TestSaveUploadError(t *testing.T) {
-	t.Parallel()
-	fake := newFakeStorage()
-	fake.uploadErr = errors.New("boom")
-	s := NewProviderStorage(fake)
-
-	if _, err := s.Save(context.Background(), sampleResult("r", "", "d", time.Now(), 0)); err == nil {
-		t.Fatal("expected upload error, got nil")
-	}
-}
-
-func TestLoadDownloadError(t *testing.T) {
-	t.Parallel()
-	s := NewProviderStorage(newFakeStorage())
-	if _, err := s.Load(context.Background(), "missing"); err == nil {
-		t.Fatal("expected download error, got nil")
-	}
-}
-
-func TestLoadDecodeError(t *testing.T) {
-	t.Parallel()
-	fake := newFakeStorage()
-	fake.objects["bench/broken.json"] = []byte("{not json")
-	s := NewProviderStorage(fake)
-
-	if _, err := s.Load(context.Background(), "broken"); err == nil {
-		t.Fatal("expected decode error, got nil")
-	}
-}
-
-func TestLatestEmpty(t *testing.T) {
-	t.Parallel()
-	s := NewProviderStorage(newFakeStorage())
-	if _, err := s.Latest(context.Background()); err == nil {
-		t.Fatal("expected error for empty storage, got nil")
-	}
-}
-
-func TestLatestReturnsMostRecent(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	fake := newFakeStorage()
-	s := NewProviderStorage(fake)
-
-	older := sampleResult("old", "", "ds", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 0.5)
-	newer := sampleResult("new", "", "ds", time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), 0.8)
-	if _, err := s.Save(ctx, older); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Save(ctx, newer); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := s.Latest(ctx)
-	if err != nil {
-		t.Fatalf("Latest: %v", err)
-	}
-	if got.ID != "new" {
-		t.Fatalf("Latest ID = %q, want new", got.ID)
-	}
-}
-
-func TestListError(t *testing.T) {
-	t.Parallel()
-	fake := newFakeStorage()
-	fake.failList = true
-	s := NewProviderStorage(fake)
-
-	if _, err := s.List(context.Background()); err == nil {
-		t.Fatal("expected list error, got nil")
-	}
-}
-
-func TestListSortsFiltersAndLimits(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	fake := newFakeStorage()
-	s := NewProviderStorage(fake)
-
-	mustSave := func(r *bench.RunResult) {
-		if _, err := s.Save(ctx, r); err != nil {
-			t.Fatalf("Save %s: %v", r.ID, err)
+	for _, limit := range []int64{0, 1} {
+		s := NewProviderStorage(&faultStore{reader: io.NopCloser(bytes.NewReader([]byte("too big")))})
+		if _, err := s.Get(t.Context(), "key", limit); err == nil {
+			t.Fatal("invalid read accepted")
 		}
 	}
-	mustSave(sampleResult("a", "nightly", "ds1", time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 0.1))
-	mustSave(sampleResult("b", "nightly", "ds1", time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC), 0.2))
-	mustSave(sampleResult("c", "release", "ds2", time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC), 0.3))
-
-	// Non-JSON and unrelated objects must be ignored.
-	fake.objects["bench/notes.txt"] = []byte("ignore me")
-
-	all, err := s.List(ctx)
-	if err != nil {
-		t.Fatalf("List: %v", err)
+	s := NewProviderStorage(&faultStore{reader: failingReader{err: cause}})
+	if _, err := s.Get(t.Context(), "key", 10); !errors.Is(err, cause) {
+		t.Fatalf("read/close cause lost: %v", err)
 	}
-	if len(all) != 3 {
-		t.Fatalf("List len = %d, want 3", len(all))
-	}
-	if all[0].ID != "b" || all[1].ID != "c" || all[2].ID != "a" {
-		t.Fatalf("List order = %v, want [b c a] (timestamp desc)", []string{all[0].ID, all[1].ID, all[2].ID})
-	}
-
-	tagged, err := s.List(ctx, bench.WithTagFilter("release"))
-	if err != nil {
-		t.Fatalf("List tag: %v", err)
-	}
-	if len(tagged) != 1 || tagged[0].ID != "c" {
-		t.Fatalf("tag filter = %v, want [c]", tagged)
-	}
-
-	byDataset, err := s.List(ctx, bench.WithDatasetFilter("ds1"))
-	if err != nil {
-		t.Fatalf("List dataset: %v", err)
-	}
-	if len(byDataset) != 2 {
-		t.Fatalf("dataset filter len = %d, want 2", len(byDataset))
-	}
-
-	limited, err := s.List(ctx, bench.WithLimit(1))
-	if err != nil {
-		t.Fatalf("List limit: %v", err)
-	}
-	if len(limited) != 1 || limited[0].ID != "b" {
-		t.Fatalf("limit = %v, want [b]", limited)
+	s = NewProviderStorage(&faultStore{files: []gostorage.FileInfo{{Path: "outside/key"}}})
+	if _, err := s.List(t.Context(), ""); err == nil {
+		t.Fatal("out-of-namespace listing accepted")
 	}
 }
 
-func TestListSkipsUndecodableAndDownloadErrors(t *testing.T) {
+func TestProviderResultStoreConsumer(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	fake := newFakeStorage()
-	s := NewProviderStorage(fake)
-
-	if _, err := s.Save(ctx, sampleResult("good", "", "ds", time.Now(), 0.4)); err != nil {
+	backend, err := local.NewStorage(t.TempDir())
+	if err != nil {
 		t.Fatal(err)
 	}
-	fake.objects["bench/corrupt.json"] = []byte("{bad")
-	fake.objects["bench/unreadable.json"] = []byte("{}")
-	fake.downloadErr["bench/unreadable.json"] = errors.New("io error")
-
-	got, err := s.List(ctx)
+	store := bench.NewResultStore(NewProviderStorage(backend))
+	runner := bench.NewBenchRunner(bench.WithStore[string](store))
+	runner.Register("model", bench.EvaluatorFunc("model", func(context.Context, []byte) (bench.Prediction[string], error) {
+		return bench.Prediction[string]{Label: "yes"}, nil
+	}))
+	result, err := runner.Run(t.Context(), bench.NewSliceDataset(bench.DatasetDescriptor{Name: "adapter", Version: "1"}, []bench.Sample[string]{{ID: "one", Label: "yes"}}))
 	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(got) != 1 || got[0].ID != "good" {
-		t.Fatalf("List = %v, want only [good]", got)
-	}
-}
-
-func TestListF1FromMetricValue(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	fake := newFakeStorage()
-	s := NewProviderStorage(fake)
-
-	r := &bench.RunResult{
-		ID:        "mc",
-		Timestamp: time.Now(),
-		Dataset:   bench.DatasetInfo{Name: "ds"},
-		Metrics: []bench.MetricResult{
-			{Name: "multi_class_classification", Value: 0.77},
-		},
-	}
-	if _, err := s.Save(ctx, r); err != nil {
 		t.Fatal(err)
 	}
-
-	got, err := s.List(ctx)
-	if err != nil {
-		t.Fatalf("List: %v", err)
+	loaded, err := store.Load(t.Context(), result.ID)
+	if err != nil || loaded.ID != result.ID {
+		t.Fatalf("load=%v %v", loaded, err)
 	}
-	if len(got) != 1 || got[0].F1 != 0.77 {
-		t.Fatalf("F1 = %v, want 0.77", got)
+	if err := store.Delete(t.Context(), result.ID); err != nil {
+		t.Fatal(err)
 	}
 }

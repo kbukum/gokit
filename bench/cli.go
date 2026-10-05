@@ -118,7 +118,8 @@ func (c *CLIRunner) printResult(r *RunResult) {
 
 	if len(r.Metrics) > 0 {
 		_, _ = fmt.Fprintln(c.out, "Metrics:")
-		for _, m := range r.Metrics {
+		for metricIndex := range r.Metrics {
+			m := &r.Metrics[metricIndex]
 			_, _ = fmt.Fprintf(c.out, "  %s: %.4f\n", m.Name, m.Value)
 			for k, v := range m.Values {
 				_, _ = fmt.Fprintf(c.out, "    %s: %.4f\n", k, v)
@@ -129,19 +130,12 @@ func (c *CLIRunner) printResult(r *RunResult) {
 
 	if len(r.Branches) > 0 {
 		_, _ = fmt.Fprintln(c.out, "Branches:")
-		for name, br := range r.Branches {
+		for name := range r.Branches {
+			br := r.Branches[name]
 			_, _ = fmt.Fprintf(c.out, "  %s (tier %d): %s, errors=%d\n", name, br.Tier, br.Duration, br.Errors)
 		}
 		_, _ = fmt.Fprintln(c.out)
 	}
 
-	// Sample summary.
-	correct := 0
-	for _, s := range r.Samples {
-		if s.Correct {
-			correct++
-		}
-	}
-	_, _ = fmt.Fprintf(c.out, "Samples: %d/%d correct (%.1f%%)\n", correct, len(r.Samples),
-		100*float64(correct)/max(float64(len(r.Samples)), 1))
+	_, _ = fmt.Fprintf(c.out, "Samples: %d\n", r.Dataset.SampleCount)
 }

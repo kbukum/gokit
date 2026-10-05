@@ -65,11 +65,8 @@ func TestJudgeProvenanceSortedByMetric(t *testing.T) {
 
 	judge := func(name string) MetricResult {
 		return MetricResult{
-			Name: name,
-			Detail: map[string]any{
-				DetailJudgeModel:         "gpt-4o-mini",
-				DetailJudgePromptVersion: "1.0.0",
-			},
+			Name:  name,
+			Judge: &JudgeProvenance{Metric: name, Model: "gpt-4o-mini", PromptVersion: "1.0.0"},
 		}
 	}
 	// Supplied out of order: relevance, then coherence.
@@ -200,57 +197,70 @@ func sampleWithInput(id, label, input string) Sample[string] {
 	return Sample[string]{ID: id, Label: label, Input: []byte(input)}
 }
 
-func sampleWithSourceMetadata(id, label, source string, metadata map[string]any) Sample[string] {
+func sampleWithSourceMetadata(id, label, source string, metadata map[string]json.RawMessage) Sample[string] {
 	return Sample[string]{ID: id, Label: label, Source: source, Metadata: metadata}
 }
 
-func TestDatasetHashIsOrderIndependent(t *testing.T) {
+func testDatasetHash(t *testing.T, samples []Sample[string]) string {
+	t.Helper()
+	h := util.NewContentHasher()
+	for _, s := range samples {
+		label, err := roundTripLabel(s.Label)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := hashSample(h, s, label); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return finishDatasetHash(h, len(samples))
+}
+
+func TestDatasetHashIsOrderDependent(t *testing.T) {
 	t.Parallel()
 
 	forward := []Sample[string]{sample("a", "yes"), sample("b", "no")}
 	reversed := []Sample[string]{sample("b", "no"), sample("a", "yes")}
-	if datasetHash(forward) != datasetHash(reversed) {
-		t.Error("dataset hash changed with sample order")
+	if testDatasetHash(t, forward) == testDatasetHash(t, reversed) {
+		t.Error("dataset hash must change with sample order")
 	}
 }
 
 func TestDatasetHashChangesWithContent(t *testing.T) {
 	t.Parallel()
 
-	if datasetHash([]Sample[string]{sample("a", "yes")}) ==
-		datasetHash([]Sample[string]{sample("a", "no")}) {
+	if testDatasetHash(t, []Sample[string]{sample("a", "yes")}) ==
+		testDatasetHash(t, []Sample[string]{sample("a", "no")}) {
 		t.Error("dataset hash did not change when label changed")
 	}
-	if datasetHash([]Sample[string]{sampleWithInput("a", "yes", "first")}) ==
-		datasetHash([]Sample[string]{sampleWithInput("a", "yes", "second")}) {
+	if testDatasetHash(t, []Sample[string]{sampleWithInput("a", "yes", "first")}) ==
+		testDatasetHash(t, []Sample[string]{sampleWithInput("a", "yes", "second")}) {
 		t.Error("dataset hash did not change when input changed")
 	}
-	if datasetHash([]Sample[string]{sampleWithSourceMetadata("a", "yes", "src-A", nil)}) ==
-		datasetHash([]Sample[string]{sampleWithSourceMetadata("a", "yes", "src-B", nil)}) {
+	if testDatasetHash(t, []Sample[string]{sampleWithSourceMetadata("a", "yes", "src-A", nil)}) ==
+		testDatasetHash(t, []Sample[string]{sampleWithSourceMetadata("a", "yes", "src-B", nil)}) {
 		t.Error("dataset hash did not change when source changed")
 	}
-	if datasetHash([]Sample[string]{sampleWithSourceMetadata("a", "yes", "src", map[string]any{"k": "v1"})}) ==
-		datasetHash([]Sample[string]{sampleWithSourceMetadata("a", "yes", "src", map[string]any{"k": "v2"})}) {
+	if testDatasetHash(t, []Sample[string]{sampleWithSourceMetadata("a", "yes", "src", map[string]json.RawMessage{"k": json.RawMessage(`"v1"`)})}) ==
+		testDatasetHash(t, []Sample[string]{sampleWithSourceMetadata("a", "yes", "src", map[string]json.RawMessage{"k": json.RawMessage(`"v2"`)})}) {
 		t.Error("dataset hash did not change when metadata changed")
 	}
 }
 
-func TestDatasetHashPointerLabelUsesValueNotAddress(t *testing.T) {
+func TestDatasetPointerLabelRejected(t *testing.T) {
 	t.Parallel()
 
-	oneA, oneB := 1, 1
-	a := []Sample[*int]{{ID: "x", Label: &oneA}}
-	b := []Sample[*int]{{ID: "x", Label: &oneB}}
-	if datasetHash(a) != datasetHash(b) {
-		t.Error("dataset hash changed for equal pointer labels")
+	one := 1
+	if _, err := roundTripLabel(&one); err == nil {
+		t.Error("pointer identity cannot round-trip through JSON")
 	}
 }
 
 func TestDatasetHashResistsDelimiterCollision(t *testing.T) {
 	t.Parallel()
 
-	if datasetHash([]Sample[string]{sample("a\tb", "c")}) ==
-		datasetHash([]Sample[string]{sample("a", "b\tc")}) {
+	if testDatasetHash(t, []Sample[string]{sample("a\tb", "c")}) ==
+		testDatasetHash(t, []Sample[string]{sample("a", "b\tc")}) {
 		t.Error("dataset hash aliased distinct id/label split")
 	}
 }
@@ -279,7 +289,7 @@ func benchProvenanceRunner(t *testing.T, probe ProvenanceProbe) (first, second *
 	loader := setupTestDataset(t)
 	newRunner := func() *BenchRunner[string] {
 		r := NewBenchRunner(
-			WithClock[string](clock),
+			WithStore[string](NewResultStore(NewDirStore(t.TempDir()))), WithClock[string](clock),
 			WithTag[string]("prov"),
 			WithIDSuffix[string](func() string { return "fixedsfx" }),
 			WithSeed[string](99),
@@ -338,8 +348,8 @@ func TestRunnerAttachesDeterministicProvenance(t *testing.T) {
 	if len(p.Branches) != 1 || p.Branches[0] != "model" {
 		t.Errorf("Branches = %v, want [model]", p.Branches)
 	}
-	if len(p.Metrics) != 1 || p.Metrics[0] != "accuracy" {
-		t.Errorf("Metrics = %v, want [accuracy]", p.Metrics)
+	if len(p.Metrics) != 6 || p.Metrics[0] != "accuracy" {
+		t.Errorf("Metrics = %v, want accuracy followed by performance metrics", p.Metrics)
 	}
 
 	firstJSON, err := json.Marshal(first)
@@ -381,7 +391,7 @@ func TestRunnerProvenanceSurvivesStorageRoundTrip(t *testing.T) {
 	)
 	first, _ := benchProvenanceRunner(t, probe)
 
-	storage := NewFileStorage(t.TempDir())
+	storage := newFixtureStore(t.TempDir())
 	if _, err := storage.Save(context.Background(), first); err != nil {
 		t.Fatalf("Save() error: %v", err)
 	}

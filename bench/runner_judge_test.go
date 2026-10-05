@@ -31,7 +31,7 @@ func TestRunnerRecordsJudgeProvenance(t *testing.T) {
 		}))
 
 	runner := bench.NewBenchRunner(
-		bench.WithContextMetrics(judgeContextMetric(t, provider)),
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithContextMetrics(judgeContextMetric(t, provider)),
 	)
 	runner.Register("model", bench.EvaluatorFunc("m", func(_ context.Context, _ []byte) (bench.Prediction[string], error) {
 		return bench.Prediction[string]{Label: "positive", Score: 0.9}, nil
@@ -77,7 +77,7 @@ func TestRunnerRecordsEveryJudgeProvenance(t *testing.T) {
 		t.Fatalf("LLMJudge second: %v", err)
 	}
 	runner := bench.NewBenchRunner(
-		bench.WithContextMetrics(
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithContextMetrics(
 			metric.AsRunContextMetric[string](first),
 			metric.AsRunContextMetric[string](second),
 		),
@@ -107,7 +107,7 @@ func TestRunnerOmitsJudgeProvenanceWhenAbsent(t *testing.T) {
 
 	loader := writeContextDataset(t)
 	runner := bench.NewBenchRunner(
-		bench.WithMetrics(metric.AsRunMetric[string](mustBinaryClassification[string](t, "positive"))),
+		bench.WithStore[string](bench.NewResultStore(bench.NewDirStore(t.TempDir()))), bench.WithMetrics(metric.AsRunMetric[string](mustBinaryClassification[string](t, "positive"))),
 	)
 	runner.Register("model", bench.EvaluatorFunc("m", func(_ context.Context, _ []byte) (bench.Prediction[string], error) {
 		return bench.Prediction[string]{Label: "positive"}, nil

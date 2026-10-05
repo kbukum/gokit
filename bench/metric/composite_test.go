@@ -87,8 +87,8 @@ func TestWeightedValuesContainIndividual(t *testing.T) {
 		t.Fatal("Values is nil")
 	}
 
-	pName := p.Name()
-	rName := r.Name()
+	pName := p.Identity().Name
+	rName := r.Identity().Name
 
 	if _, ok := result.Values[pName]; !ok {
 		t.Errorf("Values missing key %q", pName)
@@ -113,9 +113,9 @@ func TestWeightedDetail(t *testing.T) {
 
 	result := w.Compute(scored)
 
-	details, ok := result.Detail.([]Result)
+	details, ok := result.Components, result.Components != nil
 	if !ok {
-		t.Fatalf("Detail type = %T, want []Result", result.Detail)
+		t.Fatalf("Detail type = %T, want []Result", result.Components)
 	}
 	if len(details) != 1 {
 		t.Errorf("len(Detail) = %d, want 1", len(details))

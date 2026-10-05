@@ -50,11 +50,6 @@ func sampleRunResult() *bench.RunResult {
 				Errors:           0,
 			},
 		},
-		Samples: []bench.SampleResult{
-			{ID: "s1", Label: "positive", Predicted: "positive", Score: 0.95, Correct: true},
-			{ID: "s2", Label: "positive", Predicted: "positive", Score: 0.80, Correct: true},
-			{ID: "s3", Label: "negative", Predicted: "positive", Score: 0.60, Correct: false},
-		},
 	}
 }
 
@@ -74,7 +69,7 @@ func TestJSONReporterGenerate(t *testing.T) {
 	result := sampleRunResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -105,7 +100,7 @@ func TestJSONReporterRoundTrip(t *testing.T) {
 	result := sampleRunResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -157,12 +152,8 @@ func TestJSONReporterRoundTrip(t *testing.T) {
 	}
 
 	// Verify samples section.
-	samples, ok := parsed["samples"].([]any)
-	if !ok {
-		t.Fatal("missing 'samples' section")
-	}
-	if len(samples) != 3 {
-		t.Errorf("len(samples) = %d, want 3", len(samples))
+	if _, ok := parsed["samples"]; ok {
+		t.Fatal("summary contains sample records")
 	}
 }
 
@@ -173,7 +164,7 @@ func TestJSONReporterSchemaAndVersion(t *testing.T) {
 	result := sampleRunResult()
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -198,11 +189,11 @@ func TestJSONReporterSchemaAndVersion(t *testing.T) {
 func TestJSONReporterSchemaContract(t *testing.T) {
 	t.Parallel()
 
-	if bench.SchemaVersion != "1.0" {
-		t.Errorf("SchemaVersion = %q, want %q (cross-kit contract)", bench.SchemaVersion, "1.0")
+	if bench.SchemaVersion != "2.0" {
+		t.Errorf("SchemaVersion = %q, want %q", bench.SchemaVersion, "2.0")
 	}
-	if bench.SchemaURL != "https://gokit.dev/bench/v1/schema.json" {
-		t.Errorf("SchemaURL = %q, want %q (cross-kit contract)", bench.SchemaURL, "https://gokit.dev/bench/v1/schema.json")
+	if bench.SchemaURL != "https://gokit.dev/bench/v2/schema.json" {
+		t.Errorf("SchemaURL = %q, want %q", bench.SchemaURL, "https://gokit.dev/bench/v2/schema.json")
 	}
 
 	result := &bench.RunResult{
@@ -215,7 +206,7 @@ func TestJSONReporterSchemaContract(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := JSON().Generate(&buf, result); err != nil {
+	if err := JSON().Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -230,11 +221,11 @@ func TestJSONReporterSchemaContract(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &parsed); err != nil {
 		t.Fatalf("JSON parse error: %v", err)
 	}
-	if parsed.Schema != "https://gokit.dev/bench/v1/schema.json" {
+	if parsed.Schema != "https://gokit.dev/bench/v2/schema.json" {
 		t.Errorf("$schema = %q, want the cross-kit URL", parsed.Schema)
 	}
-	if parsed.Version != "1.0" {
-		t.Errorf("version = %q, want %q", parsed.Version, "1.0")
+	if parsed.Version != "2.0" {
+		t.Errorf("version = %q, want %q", parsed.Version, "2.0")
 	}
 	want := map[string]string{"mae": "lower_is_better", "token_stats": "neutral"}
 	for _, m := range parsed.Metrics {
@@ -273,7 +264,7 @@ func TestJSONReporterPerKeyDirections(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := JSON().Generate(&buf, result); err != nil {
+	if err := JSON().Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 
@@ -311,7 +302,7 @@ func TestJSONReporterEmptyResult(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := r.Generate(&buf, result); err != nil {
+	if err := r.Generate(t.Context(), &buf, fixtureInput(t, result)); err != nil {
 		t.Fatalf("Generate() error: %v", err)
 	}
 

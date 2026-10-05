@@ -4,28 +4,14 @@ import "github.com/kbukum/gokit/bench"
 
 // Metric computes evaluation scores from predictions vs ground truth.
 type Metric[L comparable] interface {
-	Name() string
+	Identity() bench.MetricIdentity
 	Compute(scored []bench.ScoredSample[L]) Result
 }
 
 // Result holds a metric computation's output.
-type Result struct {
-	Name   string             `json:"name"`
-	Value  float64            `json:"value"`
-	Values map[string]float64 `json:"values,omitempty"`
-	Detail any                `json:"detail,omitempty"`
-	// Direction is the optimization direction of Value and of every entry in
-	// Values not overridden in Directions: whether higher or lower is better, or
-	// whether the metric is purely descriptive. Run comparison uses it to classify
-	// a change as an improvement or a regression. The zero value is
-	// [bench.HigherIsBetter], so accuracy-style metrics need not set it explicitly.
-	Direction bench.Direction `json:"direction"`
-	// Directions overrides the optimization direction of individual Values entries
-	// whose direction differs from Direction. A key absent from this map inherits
-	// Direction, so a heterogeneous metric — a higher-is-better headline alongside
-	// lower-is-better diagnostics — classifies every subvalue correctly.
-	Directions map[string]bench.Direction `json:"directions,omitempty"`
-}
+type Result = bench.MetricResult
+
+type Streaming[L comparable] = bench.RunStreaming[L]
 
 // Suite groups multiple metrics for batch evaluation.
 type Suite[L comparable] struct {

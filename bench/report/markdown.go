@@ -1,6 +1,7 @@
 package report
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
@@ -18,16 +19,30 @@ type markdownReporter struct{}
 
 func (r *markdownReporter) Name() string { return "markdown" }
 
-func (r *markdownReporter) Generate(w io.Writer, result *bench.RunResult) error {
+func (r *markdownReporter) Generate(ctx context.Context, w io.Writer, input Input) error {
+	if err := validateInput(ctx, input); err != nil {
+		return err
+	}
+	result := input.Result
+	rows, err := preview(ctx, input, maxMarkdownSamples)
+	if err != nil {
+		return err
+	}
 	var b strings.Builder
 
 	r.writeSummary(&b, result)
 	r.writeMetrics(&b, result)
 	r.writeConfusionMatrix(&b, result)
 	r.writeBranches(&b, result)
-	r.writeSamples(&b, result)
+	r.writeSamples(&b, rows)
+	if input.Store != nil && result.Dataset.SampleCount > len(rows) {
+		fmt.Fprintf(&b, "\n> Showing %d of %d samples.\n", len(rows), result.Dataset.SampleCount)
+	}
+	if input.Diff != nil {
+		b.WriteString("\n" + input.Diff.Summary())
+	}
 
-	_, err := io.WriteString(w, b.String())
+	_, err = io.WriteString(w, b.String())
 	return err
 }
 
@@ -53,7 +68,8 @@ func (r *markdownReporter) writeMetrics(b *strings.Builder, result *bench.RunRes
 	b.WriteString("## Metrics\n\n")
 	b.WriteString("| Metric | Value | Detail |\n")
 	b.WriteString("|--------|------:|--------|\n")
-	for _, m := range result.Metrics {
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
 		detail := ""
 		if m.Values != nil {
 			parts := formatValues(m.Values)
@@ -65,15 +81,11 @@ func (r *markdownReporter) writeMetrics(b *strings.Builder, result *bench.RunRes
 }
 
 func (r *markdownReporter) writeConfusionMatrix(b *strings.Builder, result *bench.RunResult) {
-	for _, m := range result.Metrics {
-		cm, ok := m.Detail.(*bench.ConfusionMatrixDetail)
-		if !ok || cm == nil {
-			// Also try non-pointer form.
-			cmv, okv := m.Detail.(bench.ConfusionMatrixDetail)
-			if !okv {
-				continue
-			}
-			cm = &cmv
+	for metricIndex := range result.Metrics {
+		m := &result.Metrics[metricIndex]
+		cm := m.Confusion
+		if cm == nil {
+			continue
 		}
 		b.WriteString("## Confusion Matrix\n\n")
 		b.WriteString("| |")
@@ -121,13 +133,13 @@ func (r *markdownReporter) writeBranches(b *strings.Builder, result *bench.RunRe
 
 const maxMarkdownSamples = 50
 
-func (r *markdownReporter) writeSamples(b *strings.Builder, result *bench.RunResult) {
-	if len(result.Samples) == 0 {
+func (r *markdownReporter) writeSamples(b *strings.Builder, samples []bench.SampleResult) {
+	if len(samples) == 0 {
 		return
 	}
 	b.WriteString("## Samples\n\n")
 
-	count := len(result.Samples)
+	count := len(samples)
 	truncated := false
 	if count > maxMarkdownSamples {
 		truncated = true
@@ -136,7 +148,7 @@ func (r *markdownReporter) writeSamples(b *strings.Builder, result *bench.RunRes
 
 	b.WriteString("| ID | Label | Predicted | Score | Correct | Duration |\n")
 	b.WriteString("|----|-------|-----------|------:|:-------:|---------|\n")
-	for _, s := range result.Samples[:count] {
+	for _, s := range samples[:count] {
 		icon := "✅"
 		if !s.Correct {
 			icon = "❌"
@@ -148,7 +160,7 @@ func (r *markdownReporter) writeSamples(b *strings.Builder, result *bench.RunRes
 			s.ID, s.Label, s.Predicted, s.Score, icon, s.Duration)
 	}
 	if truncated {
-		fmt.Fprintf(b, "\n> Showing %d of %d samples.\n", count, len(result.Samples))
+		fmt.Fprintf(b, "\n> Showing %d of %d samples.\n", count, len(samples))
 	}
 	b.WriteString("\n")
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math/rand/v2"
-	"reflect"
 	"time"
 
 	"github.com/kbukum/gokit/util"
@@ -15,13 +14,13 @@ const RNGAlgorithm = "math/rand/v2:ChaCha8"
 
 // RunMetric computes evaluation scores from predictions vs ground truth. This interface mirrors metric.Metric[L] but lives in bench to avoid an import cycle (bench/metric already imports bench). Use metric.AsRunMetric to adapt metric.Metric[L] values.
 type RunMetric[L comparable] interface {
-	Name() string
+	Identity() MetricIdentity
 	Compute(scored []ScoredSample[L]) MetricResult
 }
 
 // RunContextMetric computes evaluation scores that require I/O — an embedding provider, an LLM judge — so it takes a [context.Context] for cancellation and may fail. It mirrors metric.ContextMetric[L] but lives in bench to avoid an import cycle (bench/metric already imports bench); use metric.AsRunContextMetric to adapt metric.ContextMetric[L] values. Pure, deterministic offline metrics use [RunMetric] instead.
 type RunContextMetric[L comparable] interface {
-	Name() string
+	Identity() MetricIdentity
 	Compute(ctx context.Context, scored []ScoredSample[L]) (MetricResult, error)
 }
 
@@ -29,27 +28,54 @@ type RunContextMetric[L comparable] interface {
 type RunOption[L comparable] func(*runConfig[L])
 
 type runConfig[L comparable] struct {
-	metrics          []RunMetric[L]
-	contextMetrics   []RunContextMetric[L]
-	storage          RunStorage
-	concurrency      int
-	timeout          time.Duration
-	tag              string
-	clock            util.Clock
-	idSuffix         func() string
-	seed             uint64
-	probe            ProvenanceProbe
-	targets          map[string]float64
-	failOnRegression bool
+	metrics             []RunMetric[L]
+	contextMetrics      []RunContextMetric[L]
+	store               *ResultStore
+	limits              Limits
+	repeats             int
+	warmup              int
+	percentileThreshold int
+	concurrency         int
+	timeout             time.Duration
+	tag                 string
+	clock               util.Clock
+	idSuffix            func() string
+	seed                uint64
+	probe               ProvenanceProbe
 }
 
 func defaultConfig[L comparable]() runConfig[L] {
 	return runConfig[L]{
-		concurrency: 1,
-		clock:       util.SystemClock{},
-		idSuffix:    randomIDSuffix,
-		probe:       SystemProvenanceProbe{},
+		concurrency:         1,
+		clock:               util.SystemClock{},
+		idSuffix:            randomIDSuffix,
+		probe:               SystemProvenanceProbe{},
+		limits:              DefaultLimits(),
+		repeats:             1,
+		percentileThreshold: 4096,
 	}
+}
+
+// WithStore supplies the required transactional result store.
+func WithStore[L comparable](store *ResultStore) RunOption[L] {
+	return func(c *runConfig[L]) { c.store = store }
+}
+
+func WithLimits[L comparable](limits Limits) RunOption[L] {
+	return func(c *runConfig[L]) { c.limits = limits }
+}
+
+func WithRepeats[L comparable](n int) RunOption[L] {
+	return func(c *runConfig[L]) { c.repeats = n }
+}
+
+func WithWarmup[L comparable](n int) RunOption[L] {
+	return func(c *runConfig[L]) { c.warmup = n }
+}
+
+// WithPercentileThreshold lowers the in-memory cutoff for deterministic radix tests.
+func WithPercentileThreshold[L comparable](n int) RunOption[L] {
+	return func(c *runConfig[L]) { c.percentileThreshold = n }
 }
 
 // seededRand returns a fresh RNG seeded deterministically from the run seed. The algorithm is fixed (see [RNGAlgorithm]), so the same seed yields an identical sequence across rebuilds and distinct seeds yield distinct sequences.
@@ -70,13 +96,6 @@ func WithMetrics[L comparable](metrics ...RunMetric[L]) RunOption[L] {
 func WithContextMetrics[L comparable](metrics ...RunContextMetric[L]) RunOption[L] {
 	return func(c *runConfig[L]) {
 		c.contextMetrics = append(c.contextMetrics, metrics...)
-	}
-}
-
-// WithStorage configures the storage backend for persisting results.
-func WithStorage[L comparable](s RunStorage) RunOption[L] {
-	return func(c *runConfig[L]) {
-		c.storage = s
 	}
 }
 
@@ -122,20 +141,6 @@ func WithIDSuffix[L comparable](suffix func() string) RunOption[L] {
 	}
 }
 
-// WithTargets sets metric target thresholds (metric name → minimum value).
-func WithTargets[L comparable](targets map[string]float64) RunOption[L] {
-	return func(c *runConfig[L]) {
-		c.targets = targets
-	}
-}
-
-// WithFailOnRegression configures whether the run should fail if a regression is detected compared to the previous run.
-func WithFailOnRegression[L comparable](b bool) RunOption[L] {
-	return func(c *runConfig[L]) {
-		c.failOnRegression = b
-	}
-}
-
 // WithSeed sets the deterministic run seed recorded in provenance and driving [runConfig.seededRand]. The default seed is 0.
 func WithSeed[L comparable](seed uint64) RunOption[L] {
 	return func(c *runConfig[L]) {
@@ -146,22 +151,8 @@ func WithSeed[L comparable](seed uint64) RunOption[L] {
 // WithProvenanceProbe injects the probe used to record host and source-control identity. The default is [SystemProvenanceProbe]; tests inject a fixed probe for deterministic, offline provenance. A nil probe — including a typed-nil interface value (a nil *T boxed in the interface) — is ignored, keeping the default.
 func WithProvenanceProbe[L comparable](probe ProvenanceProbe) RunOption[L] {
 	return func(c *runConfig[L]) {
-		if !isNilProbe(probe) {
+		if !util.IsNil(probe) {
 			c.probe = probe
 		}
-	}
-}
-
-// isNilProbe reports whether probe is nil, including a typed-nil interface value (a nil *T stored in the interface) that a plain probe == nil check misses and that would otherwise panic when [BenchRunner.Run] dispatches a method through it.
-func isNilProbe(probe ProvenanceProbe) bool {
-	if probe == nil {
-		return true
-	}
-	v := reflect.ValueOf(probe)
-	switch v.Kind() {
-	case reflect.Pointer, reflect.Func, reflect.Map, reflect.Slice, reflect.Chan, reflect.Interface:
-		return v.IsNil()
-	default:
-		return false
 	}
 }

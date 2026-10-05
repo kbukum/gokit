@@ -125,7 +125,7 @@ func (m *binaryClassification[L]) Compute(scored []bench.ScoredSample[L]) Result
 		// would score a threshold change as an improvement or regression. It is
 		// copied into the detail (not aliased to the metric's field) so a consumer
 		// cannot mutate the metric through the result.
-		Detail: bench.ConfusionMatrixDetail{
+		Confusion: &bench.ConfusionMatrixDetail{
 			Labels:      labels,
 			Matrix:      matrix,
 			Orientation: "row=actual, col=predicted",
@@ -172,7 +172,7 @@ func (m *confusionMatrix[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	return Result{
 		Name:  "confusion_matrix",
 		Value: 0,
-		Detail: bench.ConfusionMatrixDetail{
+		Confusion: &bench.ConfusionMatrixDetail{
 			Labels:      labelStrings,
 			Matrix:      matrix,
 			Orientation: "row=actual, col=predicted",
@@ -232,9 +232,9 @@ func (m *thresholdSweep[L]) Compute(scored []bench.ScoredSample[L]) Result {
 	}
 
 	return Result{
-		Name:   "threshold_sweep",
-		Value:  bestF1,
-		Detail: points,
+		Name:           "threshold_sweep",
+		Value:          bestF1,
+		ThresholdSweep: points,
 	}
 }
 
