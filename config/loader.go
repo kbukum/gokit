@@ -1,10 +1,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	iofs "io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
@@ -18,7 +21,9 @@ import (
 
 // FileSystem interface for file operations (useful for testing).
 type FileSystem interface {
-	Exists(path string) bool
+	// Exists reports whether path exists. A path that does not exist returns false and a nil error; any other probe
+	// failure, such as permission denied, is returned.
+	Exists(path string) (bool, error)
 	LoadEnv(path string) error
 	Getwd() (string, error)
 }
@@ -26,9 +31,15 @@ type FileSystem interface {
 // RealFileSystem implements FileSystem using actual file operations.
 type RealFileSystem struct{}
 
-func (rfs *RealFileSystem) Exists(path string) bool {
+func (rfs *RealFileSystem) Exists(path string) (bool, error) {
 	_, err := os.Stat(path)
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, iofs.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 func (rfs *RealFileSystem) LoadEnv(path string) error {
@@ -51,35 +62,84 @@ type ResolvedFiles struct {
 	EnvFile        string
 }
 
-// ResolveFiles finds config and env files for a service. Returns explicit paths if provided,
-// otherwise searches for them.
-func (cr *Resolver) ResolveFiles(serviceName string, opts LoaderConfig) ResolvedFiles {
+var (
+	// ErrFileNotFound reports an explicitly requested config, env or profile file that does not exist.
+	ErrFileNotFound = errors.New("config: file not found")
+	// ErrInvalidProfile reports a profile name that is not a lowercase slug, so it cannot escape the profile directory.
+	ErrInvalidProfile = errors.New("config: invalid profile name")
+
+	profileName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
+)
+
+// ResolveFiles finds config and env files for a service. Explicit paths and an explicitly named profile must exist;
+// discovered files and an ENVIRONMENT-derived profile are optional.
+func (cr *Resolver) ResolveFiles(serviceName string, opts LoaderConfig) (ResolvedFiles, error) {
 	resolved := ResolvedFiles{
 		ConfigFile: opts.ConfigFile,
 		EnvFile:    opts.EnvFile,
 	}
-
-	if resolved.ConfigFile == "" {
-		resolved.ConfigFile = cr.findConfigFile(serviceName)
+	for _, path := range []string{opts.ConfigFile, opts.EnvFile} {
+		if path == "" {
+			continue
+		}
+		ok, err := cr.FileSystem.Exists(path)
+		if err != nil {
+			return ResolvedFiles{}, fmt.Errorf("config: check %q: %w", path, err)
+		}
+		if !ok {
+			return ResolvedFiles{}, fmt.Errorf("%w: %q", ErrFileNotFound, path)
+		}
 	}
-	if resolved.EnvFile == "" {
-		resolved.EnvFile = cr.findEnvFile(serviceName)
+
+	if !opts.DisableDiscovery {
+		var err error
+		if resolved.ConfigFile == "" {
+			if resolved.ConfigFile, err = cr.firstExisting(configSearchPaths(serviceName)); err != nil {
+				return ResolvedFiles{}, err
+			}
+		}
+		if resolved.EnvFile == "" {
+			if resolved.EnvFile, err = cr.firstExisting(envSearchPaths(serviceName)); err != nil {
+				return ResolvedFiles{}, err
+			}
+		}
 	}
 
-	// Resolve profile env file if profile loading is enabled.
 	if opts.ProfileEnabled {
-		profile := opts.Profile
-		if profile == "" {
+		profile, required := opts.Profile, opts.Profile != ""
+		if !required {
 			profile = os.Getenv("ENVIRONMENT")
 		}
-		resolved.ProfileEnvFile = cr.findProfileEnvFile(profile)
+		file, err := cr.findProfileEnvFile(profile, opts.ProfileDir, opts.DisableDiscovery)
+		if err != nil {
+			return ResolvedFiles{}, err
+		}
+		if required && file == "" {
+			return ResolvedFiles{}, fmt.Errorf("%w: profile %q", ErrFileNotFound, profile)
+		}
+		resolved.ProfileEnvFile = file
 	}
 
-	return resolved
+	return resolved, nil
 }
 
-// findConfigFile searches for config.yml in standard locations.
-func (cr *Resolver) findConfigFile(serviceName string) string {
+// firstExisting returns the first path that exists, or "" when none do. Probe failures other than "not found" are
+// returned rather than treated as absence.
+func (cr *Resolver) firstExisting(paths []string) (string, error) {
+	for _, path := range paths {
+		ok, err := cr.FileSystem.Exists(path)
+		if err != nil {
+			return "", fmt.Errorf("config: check %q: %w", path, err)
+		}
+		if ok {
+			return path, nil
+		}
+	}
+	return "", nil
+}
+
+// configSearchPaths lists the standard config.yml locations in search order.
+func configSearchPaths(serviceName string) []string {
 	shortName := serviceName
 	if idx := strings.LastIndex(serviceName, "-"); idx != -1 {
 		shortName = serviceName[idx+1:]
@@ -96,17 +156,11 @@ func (cr *Resolver) findConfigFile(serviceName string) string {
 		"../config/config.yml",
 		"./config.yml",
 	}
-
-	for _, path := range searchPaths {
-		if cr.FileSystem.Exists(path) {
-			return path
-		}
-	}
-	return ""
+	return searchPaths
 }
 
-// findEnvFile searches for .env files in standard locations.
-func (cr *Resolver) findEnvFile(serviceName string) string {
+// envSearchPaths lists the standard .env locations in search order.
+func envSearchPaths(serviceName string) []string {
 	shortName := serviceName
 	if idx := strings.LastIndex(serviceName, "-"); idx != -1 {
 		shortName = serviceName[idx+1:]
@@ -122,38 +176,40 @@ func (cr *Resolver) findEnvFile(serviceName string) string {
 		searchPaths = append(searchPaths, buildEnvSearchPaths(shortName, "")...)
 	}
 
+	var paths []string
 	for _, envFile := range envFiles {
 		for _, basePath := range searchPaths {
-			var fullPath string
 			if basePath == "" {
-				fullPath = envFile
+				paths = append(paths, envFile)
 			} else {
-				fullPath = fmt.Sprintf("%s/%s", basePath, envFile)
-			}
-			if cr.FileSystem.Exists(fullPath) {
-				return fullPath
+				paths = append(paths, fmt.Sprintf("%s/%s", basePath, envFile))
 			}
 		}
 	}
-	return ""
+	return paths
 }
 
-// findProfileEnvFile searches for a profile-specific .env file in standard locations.
-func (cr *Resolver) findProfileEnvFile(profile string) string {
+// findProfileEnvFile looks for <profile>.env in dir when set, otherwise in the standard relative locations unless
+// discovery is disabled.
+func (cr *Resolver) findProfileEnvFile(profile, dir string, noDiscovery bool) (string, error) {
 	if profile == "" {
-		return ""
+		return "", nil
 	}
-	searchPaths := []string{
-		fmt.Sprintf("./config/profiles/%s.env", profile),
-		fmt.Sprintf("../config/profiles/%s.env", profile),
-		fmt.Sprintf("../../config/profiles/%s.env", profile),
+	if !profileName.MatchString(profile) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidProfile, profile)
 	}
-	for _, path := range searchPaths {
-		if cr.FileSystem.Exists(path) {
-			return path
+	var searchPaths []string
+	switch {
+	case dir != "":
+		searchPaths = []string{filepath.Join(dir, profile+".env")}
+	case !noDiscovery:
+		searchPaths = []string{
+			fmt.Sprintf("./config/profiles/%s.env", profile),
+			fmt.Sprintf("../config/profiles/%s.env", profile),
+			fmt.Sprintf("../../config/profiles/%s.env", profile),
 		}
 	}
-	return ""
+	return cr.firstExisting(searchPaths)
 }
 
 // LoaderConfig holds dependencies and optional file overrides.
@@ -163,7 +219,10 @@ type LoaderConfig struct {
 	EnvFile        string // Direct env file path (optional)
 	Profile        string // Profile name (e.g., "development", "docker", "staging")
 	ProfileEnabled bool   // Whether profile loading was explicitly enabled
-	WarningLogger  WarningFunc
+	ProfileDir     string // Only directory searched for <profile>.env (optional)
+	// DisableDiscovery skips the relative config.yml, .env and profile search so only explicit inputs load.
+	DisableDiscovery bool
+	WarningLogger    WarningFunc
 }
 
 // LoaderOption is a functional option for LoadConfig.
@@ -196,13 +255,24 @@ func WithEnvFile(path string) LoaderOption {
 }
 
 // WithProfile sets the configuration profile to load.
-// Searches for config/profiles/{profile}.env in standard paths. If profile is empty,
-// reads from the ENVIRONMENT env var.
+// Searches for config/profiles/{profile}.env in standard paths, or only in [WithProfileDir]. A named profile must
+// exist. If profile is empty, the ENVIRONMENT env var names an optional profile. Names must match
+// ^[a-z0-9][a-z0-9_-]*$.
 func WithProfile(profile string) LoaderOption {
 	return func(lc *LoaderConfig) {
 		lc.Profile = profile
 		lc.ProfileEnabled = true
 	}
+}
+
+// WithProfileDir makes dir the only location searched for the profile's .env file.
+func WithProfileDir(dir string) LoaderOption {
+	return func(lc *LoaderConfig) { lc.ProfileDir = dir }
+}
+
+// WithoutDiscovery loads only explicit files and profiles, skipping the working-directory-relative search.
+func WithoutDiscovery() LoaderOption {
+	return func(lc *LoaderConfig) { lc.DisableDiscovery = true }
 }
 
 // WithWarningLogger sets a warning logger callback for non-fatal loader issues.
@@ -223,7 +293,10 @@ func LoadConfig(serviceName string, cfg any, opts ...LoaderOption) error {
 	}
 
 	resolver := &Resolver{FileSystem: lc.FileSystem}
-	files := resolver.ResolveFiles(serviceName, lc)
+	files, err := resolver.ResolveFiles(serviceName, lc)
+	if err != nil {
+		return err
+	}
 
 	return loadFromResolvedFiles(cfg, loadPlan{
 		serviceName: serviceName,
@@ -257,14 +330,14 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 	v := viper.New()
 
 	// 1. Load YAML config first (base configuration)
-	if files.ConfigFile != "" && fs.Exists(files.ConfigFile) {
+	if files.ConfigFile != "" {
 		if err := readConfigFile(v, files.ConfigFile); err != nil {
 			return warnAndWrap(warn, "config: failed to load config file", files.ConfigFile, err)
 		}
 	}
 
 	// 2. Load profile .env file (environment-specific overrides)
-	if files.ProfileEnvFile != "" && fs.Exists(files.ProfileEnvFile) {
+	if files.ProfileEnvFile != "" {
 		if err := fs.LoadEnv(files.ProfileEnvFile); err != nil {
 			return warnAndWrap(warn, "config: failed to load profile env file", files.ProfileEnvFile, err)
 		}
@@ -275,7 +348,7 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 	autoBindEnvVars(v)
 
 	// 4. Load service .env file
-	if files.EnvFile != "" && fs.Exists(files.EnvFile) {
+	if files.EnvFile != "" {
 		if err := fs.LoadEnv(files.EnvFile); err != nil {
 			return warnAndWrap(warn, "config: failed to load .env file", files.EnvFile, err)
 		}
@@ -321,12 +394,12 @@ func loadFromResolvedFiles(cfg any, plan loadPlan) error {
 	return nil
 }
 
-// warnAndWrap logs a resolved-file load failure through warn (when provided)
-// and returns it wrapped, so a file that exists but cannot be read or decoded
-// fails loudly instead of silently falling back to a defaulted config. Files
-// that are simply absent are skipped by the caller's Exists check and never
-// reach here.
+// warnAndWrap reports a failed load of a resolved file. A file that vanished after resolution still fails as
+// ErrFileNotFound rather than being skipped.
 func warnAndWrap(warn WarningFunc, msg, file string, err error) error {
+	if errors.Is(err, iofs.ErrNotExist) {
+		err = fmt.Errorf("%w: %w", ErrFileNotFound, err)
+	}
 	if warn != nil {
 		warn(msg, slog.String("file", file), slog.String("error", err.Error()))
 	}

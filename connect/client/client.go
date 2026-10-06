@@ -73,7 +73,8 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 	}, nil
 }
 
-// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme.
+// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme. Network failures are marked with
+// ErrTransport.
 type schemeTransport struct {
 	*http.Transport
 	scheme string
@@ -86,7 +87,12 @@ func (t *schemeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		return nil, fmt.Errorf("connect client: transport requires %s URLs", t.scheme)
 	}
-	return t.Transport.RoundTrip(req)
+	resp, err := t.Transport.RoundTrip(req)
+	if err != nil {
+		return nil, markTransport(req, err)
+	}
+	resp.Body = &transportBody{ReadCloser: resp.Body, req: req}
+	return resp, nil
 }
 
 // ProtocolOption returns the connect.ClientOption for the configured wire protocol.

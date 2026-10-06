@@ -41,26 +41,55 @@ type Response struct {
 	CSRFToken string         `json:"csrfToken"`
 }
 
+// HandlerConfig configures the browser session endpoints.
+type HandlerConfig struct {
+	// Origin is the exact HTTPS origin accepted for login.
+	Origin string
+	// Errors writes every failure through the outer transport's problem boundary.
+	Errors ErrorWriter
+	// Clock derives cookie Max-Age from each grant's absolute expiry.
+	Clock util.Clock
+}
+
 type handler struct {
-	manager  *Manager
-	verifier LoginVerifier
-	origin   string
-	errors   ErrorWriter
+	backend Backend
+	origin  string
+	errors  ErrorWriter
+	clock   util.Clock
 }
 
 // NewHandler mounts POST /auth/login, GET /auth/session, and POST /auth/logout only.
-// Login requires exact same-origin HTTPS and JSON; status never emits Set-Cookie.
-func NewHandler(manager *Manager, verifier LoginVerifier, origin string, errors ErrorWriter) (http.Handler, error) {
-	u, err := url.Parse(origin)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || manager == nil || util.IsNil(verifier) || errors == nil {
-		return nil, apperrors.InvalidInput("auth", "Manager, verifier, HTTPS origin and error writer are required")
+// Login requires exact same-origin HTTPS and JSON; status never emits Set-Cookie. The handler validates every
+// browser-facing input, including the cookie shape and logout CSRF header, before it calls the backend, so a backend may
+// be the local Manager or a remote session authority.
+func NewHandler(backend Backend, cfg HandlerConfig) (http.Handler, error) {
+	u, err := url.Parse(cfg.Origin)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || util.IsNil(backend) || cfg.Errors == nil || util.IsNil(cfg.Clock) {
+		return nil, apperrors.InvalidInput("auth", "Backend, HTTPS origin, error writer and clock are required")
 	}
-	h := &handler{manager: manager, verifier: verifier, origin: origin, errors: errors}
+	h := &handler{backend: backend, origin: cfg.Origin, errors: cfg.Errors, clock: cfg.Clock}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /auth/login", h.login)
 	mux.HandleFunc("GET /auth/session", h.status)
 	mux.HandleFunc("POST /auth/logout", h.logout)
 	return mux, nil
+}
+
+// RequestCSRF returns the synchronizer token an unsafe request presents in exactly one X-CSRF-Token header.
+// Safe methods return an empty token without error.
+func RequestCSRF(r *http.Request) (string, error) {
+	if !unsafe(r.Method) {
+		return "", nil
+	}
+	values := r.Header.Values("X-CSRF-Token")
+	if len(values) != 1 || values[0] == "" {
+		return "", csrfInvalid()
+	}
+	return values[0], nil
+}
+
+func csrfInvalid() error {
+	return apperrors.New(apperrors.ErrCodeForbidden, "CSRF verification failed").WithReason("CSRF_INVALID")
 }
 
 func (h *handler) login(w http.ResponseWriter, r *http.Request) {
@@ -106,43 +135,50 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, apperrors.InvalidInput("login", "Invalid login input"))
 		return
 	}
-	attempt, err := h.manager.BeginLogin(ctx, credential.Value)
-	if err != nil {
-		h.errors(w, r, err)
-		return
-	}
-	p, err := h.verifier.VerifyLogin(ctx, input)
+	grant, err := h.backend.SignIn(ctx, SignIn{Login: input, Presented: credential.Value})
 	input.Password = ""
 	if err != nil {
-		if app, ok := apperrors.AsAppError(err); ok && app != nil && app.Code == apperrors.ErrCodeUnauthorized {
-			h.errors(w, r, auth.Failure("LOGIN_INVALID"))
-			return
-		}
-		h.errors(w, r, storeFailure(err))
+		h.errors(w, r, err)
 		return
 	}
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		h.errors(w, r, storeFailure(ctxErr))
+	if tokenErr := ValidateToken(grant.Token); tokenErr != nil {
+		h.errors(w, r, apperrors.Internal(tokenErr))
 		return
 	}
-	issued, err := h.manager.CompleteLogin(ctx, attempt, p)
+	seconds, err := h.remaining(grant)
 	if err != nil {
 		h.errors(w, r, err)
 		return
 	}
-	token, err := h.manager.CSRFToken(ctx, issued.Principal.Reference)
+	h.respond(w, r, grant, &http.Cookie{Name: auth.SessionCookie, Value: grant.Token, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/", Expires: grant.Principal.ExpiresAt, MaxAge: seconds})
+}
+
+// remaining rejects grants that are not a valid, unexpired session identity with a CSRF token, whatever the backend
+// returned.
+func (h *handler) remaining(grant Grant) (int, error) {
+	p := grant.Principal
+	if p.Credential != auth.Session || p.Validate() != nil {
+		return 0, auth.Failure("SESSION_INVALID")
+	}
+	remaining := p.ExpiresAt.Sub(h.clock.Now())
+	if remaining <= 0 || grant.CSRFToken == "" {
+		return 0, auth.Failure("SESSION_INVALID")
+	}
+	return max(1, int(remaining/time.Second)), nil
+}
+
+func (h *handler) sessionToken(r *http.Request) (string, error) {
+	credential, err := auth.ParseCredentials(r)
 	if err != nil {
-		h.errors(w, r, err)
-		return
+		return "", err
 	}
-	remaining := issued.Principal.ExpiresAt.Sub(h.manager.clock.Now())
-	if remaining <= 0 {
-		h.errors(w, r, auth.Failure("SESSION_INVALID"))
-		return
+	if credential.Kind != auth.Session {
+		return "", auth.Failure("MISSING_CREDENTIAL")
 	}
-	seconds := max(1, int(remaining/time.Second))
-	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: issued.Token, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/", Expires: issued.Principal.ExpiresAt, MaxAge: seconds})
-	h.respond(w, r, issued.Principal, token)
+	if err := ValidateToken(credential.Value); err != nil {
+		return "", err
+	}
+	return credential.Value, nil
 }
 
 func (h *handler) status(w http.ResponseWriter, r *http.Request) {
@@ -150,24 +186,34 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), LookupBudget)
 	defer cancel()
 	r = r.WithContext(ctx)
-	p, err := h.manager.Authenticate(r)
+	token, err := h.sessionToken(r)
 	if err != nil {
 		h.errors(w, r, err)
 		return
 	}
-	token, err := h.manager.CSRFToken(ctx, p.Reference)
+	grant, err := h.backend.Status(ctx, token)
 	if err != nil {
 		h.errors(w, r, err)
 		return
 	}
-	h.respond(w, r, p, token)
+	if _, err := h.remaining(grant); err != nil {
+		h.errors(w, r, err)
+		return
+	}
+	h.respond(w, r, grant, nil)
 }
 
-func (h *handler) respond(w http.ResponseWriter, r *http.Request, p auth.Principal, token string) {
-	data, err := json.Marshal(Response{Status: "authenticated", Identity: p.Clone(), ExpiresAt: p.ExpiresAt, CSRFToken: token})
+// respond encodes the session response before setting cookie (when non-nil), so a failed encoding never issues a
+// session cookie on an error response.
+func (h *handler) respond(w http.ResponseWriter, r *http.Request, grant Grant, cookie *http.Cookie) {
+	p := grant.Principal
+	data, err := json.Marshal(Response{Status: "authenticated", Identity: p.Clone(), ExpiresAt: p.ExpiresAt, CSRFToken: grant.CSRFToken})
 	if err != nil {
 		h.errors(w, r, apperrors.Internal(err))
 		return
+	}
+	if cookie != nil {
+		http.SetCookie(w, cookie)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if _, err := w.Write(data); err != nil {
@@ -185,21 +231,16 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, auth.Failure("SESSION_INVALID"))
 		return
 	}
-	if err := ValidateToken(credential.Value); err != nil {
+	if tokenErr := ValidateToken(credential.Value); tokenErr != nil {
+		h.errors(w, r, tokenErr)
+		return
+	}
+	csrf, err := RequestCSRF(r)
+	if err != nil {
 		h.errors(w, r, err)
 		return
 	}
-	ref := h.manager.protection.Digest(credential.Value)
-	values := r.Header.Values("X-CSRF-Token")
-	if len(values) != 1 {
-		h.errors(w, r, apperrors.New(apperrors.ErrCodeForbidden, "CSRF verification failed").WithReason("CSRF_INVALID"))
-		return
-	}
-	if err := h.manager.csrf.Verify(ref, values[0]); err != nil {
-		h.errors(w, r, err)
-		return
-	}
-	if err := h.manager.Logout(ctx, ref); err != nil {
+	if err := h.backend.SignOut(ctx, SignOut{Token: credential.Value, CSRFToken: csrf}); err != nil {
 		h.errors(w, r, err)
 		return
 	}

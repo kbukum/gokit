@@ -118,6 +118,7 @@ server.MountDocs(engine, log,
 |---|---|
 | `HTTPAuth[T](authenticator, setClaims, ...HTTPAuthOption)` | Authenticate the original HTTP request and propagate its typed identity before HTTP, Connect, or SSE dispatch |
 | `WithAuthErrorWriter(writer)` | Inject protocol-aware rejection encoding; the default is safe RFC 9457 problem+json |
+| `WriteProblem(w, r, err)` | Write a normalized RFC 9457 problem+json response with `Cache-Control: no-store` and `Retry-After` for retryable failures that carry a positive retry delay; the default `HTTPAuth` writer |
 | `WithMissingPolicy(policy)` | `RejectMissing` (default) or `AcceptMissing`, which dispatches credential-less requests without an identity |
 | `Auth[T](validator, setClaims)` | Require a header-only bearer credential in Gin; validation receives the request context |
 | `OptionalAuth[T](validator, setClaims)` | Accept a missing header, never malformed or invalid presented credentials |

@@ -123,6 +123,7 @@ For an explicitly public operation, omit the required-identity guard and call th
 | **client subpackage** | |
 | `client.Config` | Client config: BaseURL, Timeout, DialTimeout, Protocol, TLS |
 | `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
+| `client.IsTransportFailure(err)` | Report a failure marked `client.ErrTransport`: the peer was unreachable or the connection broke mid-response, under any Connect code. Caller cancellation and a clean end of stream are not marked |
 | `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
 | `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |
 

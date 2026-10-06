@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,10 +109,10 @@ func TestLoadConfigMissingFile(t *testing.T) {
 	}
 
 	var cfg TestConfig
-	// With no config file found, LoadConfig should still succeed (just empty config)
+	// An explicit file is a requirement, never a silent fallback to defaults.
 	err := LoadConfig("nonexistent-service", &cfg, WithConfigFile("/nonexistent/path.yml"))
-	if err != nil {
-		t.Fatalf("expected LoadConfig to succeed with missing file, got %v", err)
+	if !errors.Is(err, ErrFileNotFound) {
+		t.Fatalf("expected ErrFileNotFound for missing explicit file, got %v", err)
 	}
 }
 
@@ -120,19 +121,28 @@ func TestResolverWithMockFS(t *testing.T) {
 		"./cmd/my-svc/config.yml": true,
 	}}
 	resolver := &Resolver{FileSystem: fs}
-	files := resolver.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, resolver, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "./cmd/my-svc/config.yml" {
 		t.Errorf("expected config file at ./cmd/my-svc/config.yml, got %q", files.ConfigFile)
 	}
+}
+
+func mustResolve(t *testing.T, r *Resolver, name string, lc LoaderConfig) ResolvedFiles {
+	t.Helper()
+	files, err := r.ResolveFiles(name, lc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
 }
 
 type mockFS struct {
 	files map[string]bool
 }
 
-func (m *mockFS) Exists(path string) bool   { return m.files[path] }
-func (m *mockFS) LoadEnv(path string) error { return nil }
-func (m *mockFS) Getwd() (string, error)    { return "/mock", nil }
+func (m *mockFS) Exists(path string) (bool, error) { return m.files[path], nil }
+func (m *mockFS) LoadEnv(path string) error        { return nil }
+func (m *mockFS) Getwd() (string, error)           { return "/mock", nil }
 
 func TestWithFileSystemOption(t *testing.T) {
 	var lc LoaderConfig
@@ -367,7 +377,7 @@ type advancedMockFS struct {
 	cwd     string
 }
 
-func (m *advancedMockFS) Exists(path string) bool { return m.files[path] }
+func (m *advancedMockFS) Exists(path string) (bool, error) { return m.files[path], nil }
 func (m *advancedMockFS) LoadEnv(path string) error {
 	if m.loadErr != nil {
 		return m.loadErr
@@ -849,7 +859,7 @@ func TestResolverFindsConfigInCmdServiceDir(t *testing.T) {
 		"./cmd/my-svc/config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "./cmd/my-svc/config.yml" {
 		t.Errorf("ConfigFile = %q, want './cmd/my-svc/config.yml'", files.ConfigFile)
 	}
@@ -860,7 +870,7 @@ func TestResolverFindsConfigInConfigDir(t *testing.T) {
 		"./config/config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "./config/config.yml" {
 		t.Errorf("ConfigFile = %q, want './config/config.yml'", files.ConfigFile)
 	}
@@ -871,7 +881,7 @@ func TestResolverFindsConfigAtRoot(t *testing.T) {
 		"./config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "./config.yml" {
 		t.Errorf("ConfigFile = %q, want './config.yml'", files.ConfigFile)
 	}
@@ -880,7 +890,7 @@ func TestResolverFindsConfigAtRoot(t *testing.T) {
 func TestResolverReturnsEmptyWhenNoFilesFound(t *testing.T) {
 	fs := &mockFS{files: map[string]bool{}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("no-files", LoaderConfig{})
+	files := mustResolve(t, r, "no-files", LoaderConfig{})
 	if files.ConfigFile != "" {
 		t.Errorf("ConfigFile = %q, want empty", files.ConfigFile)
 	}
@@ -896,7 +906,7 @@ func TestResolverPriorityCmdOverConfig(t *testing.T) {
 		"./config.yml":            true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	// cmd/{service}/ should be found first
 	if files.ConfigFile != "./cmd/my-svc/config.yml" {
 		t.Errorf("ConfigFile = %q, want './cmd/my-svc/config.yml' (highest priority)", files.ConfigFile)
@@ -919,7 +929,7 @@ func TestResolverFindConfigFileSearchPrecedence(t *testing.T) {
 		"./config/config.yaml":        true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "./cmd/my-svc/config.yml" {
 		t.Fatalf("ConfigFile = %q, want first YAML search path ./cmd/my-svc/config.yml", files.ConfigFile)
 	}
@@ -931,7 +941,7 @@ func TestResolverShortNameFallback(t *testing.T) {
 		"./cmd/api/config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("platform-api", LoaderConfig{})
+	files := mustResolve(t, r, "platform-api", LoaderConfig{})
 	if files.ConfigFile != "./cmd/api/config.yml" {
 		t.Errorf("ConfigFile = %q, want './cmd/api/config.yml' (short name fallback)", files.ConfigFile)
 	}
@@ -940,9 +950,11 @@ func TestResolverShortNameFallback(t *testing.T) {
 func TestResolverExplicitPathTakesPrecedence(t *testing.T) {
 	fs := &mockFS{files: map[string]bool{
 		"./cmd/my-svc/config.yml": true,
+		"/explicit/config.yml":    true,
+		"/explicit/.env":          true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{
+	files := mustResolve(t, r, "my-svc", LoaderConfig{
 		ConfigFile: "/explicit/config.yml",
 		EnvFile:    "/explicit/.env",
 	})
@@ -959,7 +971,7 @@ func TestResolverFindsEnvFile(t *testing.T) {
 		".env": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.EnvFile == "" {
 		t.Error("expected .env file to be found")
 	}
@@ -972,7 +984,7 @@ func TestResolverFindsServiceSpecificEnvFile(t *testing.T) {
 		"./cmd/my-svc//.env.my-svc": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.EnvFile != "./cmd/my-svc//.env.my-svc" {
 		t.Errorf("EnvFile = %q, want './cmd/my-svc//.env.my-svc'", files.EnvFile)
 	}
@@ -983,7 +995,7 @@ func TestResolverParentDirectorySearch(t *testing.T) {
 		"../cmd/my-svc/config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "../cmd/my-svc/config.yml" {
 		t.Errorf("ConfigFile = %q, want '../cmd/my-svc/config.yml'", files.ConfigFile)
 	}
@@ -994,7 +1006,7 @@ func TestResolverGrandparentDirectorySearch(t *testing.T) {
 		"../../cmd/my-svc/config.yml": true,
 	}}
 	r := &Resolver{FileSystem: fs}
-	files := r.ResolveFiles("my-svc", LoaderConfig{})
+	files := mustResolve(t, r, "my-svc", LoaderConfig{})
 	if files.ConfigFile != "../../cmd/my-svc/config.yml" {
 		t.Errorf("ConfigFile = %q, want '../../cmd/my-svc/config.yml'", files.ConfigFile)
 	}
@@ -1012,7 +1024,7 @@ func TestWithFileSystemOverridesDefault(t *testing.T) {
 		t.Error("WithFileSystem should set the custom filesystem")
 	}
 	// Verify it's the correct instance
-	if !lc.FileSystem.Exists("custom") {
+	if ok, err := lc.FileSystem.Exists("custom"); err != nil || !ok {
 		t.Error("custom filesystem should report 'custom' exists")
 	}
 }
@@ -1168,11 +1180,11 @@ func TestLoadConfigDefaultFileSystemWhenNoneProvided(t *testing.T) {
 func TestRealFileSystemExists(t *testing.T) {
 	rfs := &RealFileSystem{}
 	// The test file itself should exist
-	if !rfs.Exists("config_test.go") {
-		t.Error("expected config_test.go to exist")
+	if ok, err := rfs.Exists("config_test.go"); err != nil || !ok {
+		t.Errorf("Exists(config_test.go) = %v, %v; want true", ok, err)
 	}
-	if rfs.Exists("this-file-does-not-exist-12345.xyz") {
-		t.Error("expected nonexistent file to not exist")
+	if ok, err := rfs.Exists("this-file-does-not-exist-12345.xyz"); err != nil || ok {
+		t.Errorf("Exists(missing) = %v, %v; want false, nil", ok, err)
 	}
 }
 

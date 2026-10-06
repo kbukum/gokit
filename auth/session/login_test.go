@@ -41,7 +41,7 @@ func TestLoginRotatesPresentedSessionAndOldLogoutRevokesReplacement(t *testing.T
 	}
 	defer release()
 	clock.Advance(time.Minute)
-	h, err := NewHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
+	h, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestLoginRejectsAmbiguityBeforePasswordVerification(t *testing.T) {
 			s := &memoryStore{rows: make(map[string]Record)}
 			m, _ := fixture(t, s)
 			calls := 0
-			h, err := NewHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) {
+			h, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) {
 				calls++
 				return caller(), nil
 			}), "https://example.test", errorWriter)
@@ -113,7 +113,7 @@ func TestLoginLogoutDuringVerificationCannotResurrect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h, err := NewHandler(m, LoginVerifierFunc(func(ctx context.Context, _ Login) (auth.Principal, error) {
+	h, err := newLocalHandler(m, LoginVerifierFunc(func(ctx context.Context, _ Login) (auth.Principal, error) {
 		if err := m.Logout(ctx, first.Principal.Reference); err != nil {
 			t.Fatal(err)
 		}
@@ -402,7 +402,7 @@ func (b tlsBrowser) cookies() []*http.Cookie {
 func tlsHost(t *testing.T, hold func() <-chan struct{}) tlsBrowser {
 	t.Helper()
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	h, err := NewHandler(m, LoginVerifierFunc(func(ctx context.Context, _ Login) (auth.Principal, error) {
+	h, err := newLocalHandler(m, LoginVerifierFunc(func(ctx context.Context, _ Login) (auth.Principal, error) {
 		if release := hold(); release != nil {
 			select {
 			case <-release:
