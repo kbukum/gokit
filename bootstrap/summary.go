@@ -63,6 +63,15 @@ type ClientInfo struct {
 	Type   string // "grpc", "http", etc.
 }
 
+// ModuleInfo describes a registered module for the startup summary. Needs entries read "port ← provider".
+type ModuleInfo struct {
+	Name       string
+	Provides   []string
+	Needs      []string
+	Routes     []string
+	Components []string
+}
+
 // Summary tracks and displays the application bootstrap process.
 //
 // Output is written to the configured io.Writer (default: os.Stdout).
@@ -80,6 +89,7 @@ type Summary struct {
 	routes          []RouteInfo
 	consumers       []ConsumerInfo
 	clients         []ClientInfo
+	modules         []ModuleInfo
 	writer          io.Writer
 }
 
@@ -149,6 +159,11 @@ func (s *Summary) TrackInfrastructure(info InfrastructureInfo) {
 	s.infrastructure = append(s.infrastructure, info)
 }
 
+// TrackModule records a registered module. The App tracks each module it registers.
+func (s *Summary) TrackModule(info ModuleInfo) {
+	s.modules = append(s.modules, info)
+}
+
 // TrackBusinessComponent records a business-layer component.
 func (s *Summary) TrackBusinessComponent(name, componentType, status string, dependencies []string) {
 	s.business = append(s.business, BusinessComponentInfo{
@@ -214,6 +229,8 @@ func (s *Summary) DisplaySummary(ctx context.Context, registry *component.Regist
 		}
 		fmt.Fprintf(s.writer, "\n")
 	}
+
+	s.displayModules()
 
 	// Component health summary
 	var healthResults []component.Health
@@ -310,6 +327,38 @@ func (s *Summary) DisplaySummary(ctx context.Context, registry *component.Regist
 		}
 	}
 
+	fmt.Fprintf(s.writer, "\n")
+}
+
+// displayModules lists modules in registration order with their ports, routes and components.
+func (s *Summary) displayModules() {
+	if len(s.modules) == 0 {
+		return
+	}
+	fmt.Fprintf(s.writer, "\033[1m🧩 Modules (%d)\033[0m\n", len(s.modules))
+	for i, m := range s.modules {
+		fmt.Fprintf(s.writer, "   %s %s\n", treePrefix(i, len(s.modules)), m.Name)
+		var lines []string
+		if len(m.Provides) > 0 {
+			lines = append(lines, "provides "+strings.Join(m.Provides, ", "))
+		}
+		if len(m.Needs) > 0 {
+			lines = append(lines, "needs "+strings.Join(m.Needs, ", "))
+		}
+		if len(m.Routes) > 0 {
+			lines = append(lines, "routes "+strings.Join(m.Routes, ", "))
+		}
+		if len(m.Components) > 0 {
+			lines = append(lines, "components "+strings.Join(m.Components, ", "))
+		}
+		indent := "│  "
+		if i == len(s.modules)-1 {
+			indent = "   "
+		}
+		for j, line := range lines {
+			fmt.Fprintf(s.writer, "   %s %s %s\n", indent, treePrefix(j, len(lines)), line)
+		}
+	}
 	fmt.Fprintf(s.writer, "\n")
 }
 

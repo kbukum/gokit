@@ -15,6 +15,7 @@ var ErrShutdownRequested = errors.New("bootstrap: shutdown requested during star
 type Phase string
 
 const (
+	PhaseModules     Phase = "modules"
 	PhaseConfigure   Phase = "configure"
 	PhaseBeforeStart Phase = "before_start"
 	PhaseStart       Phase = "start"

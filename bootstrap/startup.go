@@ -34,10 +34,12 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		"version": a.Version,
 	})
 
-	// Configure runs application setup that may register components before the single-pass
-	// StartAll; after_start hooks run before the ready phase.
+	// Configure registers the command's own components and may add modules and bindings; modules
+	// then register so their components start after those and before listeners; everything starts
+	// in one StartAll pass; after_start hooks run before the ready phase.
 	phases := []startupPhase{
 		{PhaseConfigure, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventConfigure) }},
+		{PhaseModules, a.wireModules},
 		{PhaseBeforeStart, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventBeforeStart) }},
 		{PhaseStart, a.Components.StartAll},
 		{PhaseAfterStart, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventAfterStart) }},
@@ -47,8 +49,10 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		if err := p.run(ctx); err != nil {
 			return nil, a.abortStartup(ctx, p.phase, err)
 		}
-		if err := shutdownRequested(ctx); err != nil {
-			return nil, a.abortStartup(ctx, p.phase, err)
+		// A phase can succeed after its context ends, for example when it does no blocking work;
+		// startup must still stop rather than run later phases or the task on a canceled context.
+		if ctx.Err() != nil {
+			return nil, a.abortStartup(ctx, p.phase, context.Cause(ctx))
 		}
 	}
 
