@@ -52,7 +52,7 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		// A phase can succeed after its context ends, for example when it does no blocking work;
 		// startup must still stop rather than run later phases or the task on a canceled context.
 		if ctx.Err() != nil {
-			return nil, a.abortStartup(ctx, p.phase, context.Cause(ctx))
+			return nil, a.abortStartup(ctx, p.phase, ctx.Err())
 		}
 	}
 
@@ -85,14 +85,15 @@ func shutdownRequested(ctx context.Context) error {
 }
 
 // abortStartup tears down whatever earlier startup phases created after a fatal error and
-// returns a *StartupError holding both the cause and the teardown outcome. A phase that
-// returned its context error after Shutdown keeps ErrShutdownRequested in the cause. Teardown
-// runs through the normal shutdown sequence on a context that keeps values but detaches
+// returns a *StartupError holding both the cause and the teardown outcome. When the startup
+// context has ended, its cause (ErrShutdownRequested, or the caller's cancellation cause) is kept
+// alongside the phase error, so a phase that returned only context.Canceled does not hide why.
+// Teardown runs through the normal shutdown sequence on a context that keeps values but detaches
 // cancellation, because the startup context may already be canceled; shutdown skips components
 // that never started, so this is safe regardless of how far startup reached.
-func (a *App[C]) abortStartup(ctx context.Context, phase Phase, cause error) error {
-	if requested := shutdownRequested(ctx); requested != nil && !errors.Is(cause, requested) {
-		cause = errors.Join(requested, cause)
+func (a *App[C]) abortStartup(ctx context.Context, phase Phase, err error) error {
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(err, cause) {
+		err = errors.Join(cause, err)
 	}
-	return &StartupError{Phase: phase, Cause: cause, Rollback: a.shutdownWith(context.WithoutCancel(ctx))}
+	return &StartupError{Phase: phase, Cause: err, Rollback: a.shutdownWith(context.WithoutCancel(ctx))}
 }

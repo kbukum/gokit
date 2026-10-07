@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/kbukum/gokit/component"
@@ -69,11 +70,11 @@ func (p *planner) refs(list []PortRef, owner, field string) []PortRef {
 	return out
 }
 
-// planModules validates modules and listeners and orders modules so every provider registers before the modules that need it. Ties keep Use order.
-func planModules(set *moduleSet) (*modulePlan, *ModuleError) {
+// planModules validates modules and listeners and orders modules so every provider registers before the modules that need it. Ties keep Use order. registered reports component names the App already holds, which listener components must not reuse.
+func planModules(set *moduleSet, registered func(name string) bool) (*modulePlan, *ModuleError) {
 	p := &planner{}
 	modules := p.checkModules(set.modules)
-	p.checkModuleListeners(modules, p.checkListeners(set.listeners))
+	p.checkModuleListeners(modules, p.checkListeners(set.listeners, registered))
 
 	providers := map[PortRef][]int{}
 	needers := map[PortRef][]int{}
@@ -146,9 +147,11 @@ func (p *planner) checkModules(in []Module) []plannedModule {
 	return out
 }
 
-// checkListeners validates declared listeners and returns their names. The Listener type guarantees a listener quiesces and drains; its drain phase is a value, so it is checked here.
-func (p *planner) checkListeners(in []namedListener) map[string]bool {
+// checkListeners validates declared listeners and returns their names. The Listener type guarantees a listener quiesces and drains; its drain phase is a value, so it is checked here. Listener components register after modules, so their component names are checked here too, against each other and the components the App already holds, rather than failing after every module registered.
+func (p *planner) checkListeners(in []namedListener, registered func(string) bool) map[string]bool {
 	seen := map[string]bool{}
+	components := map[string][]string{}
+	var componentOrder []string
 	for _, nl := range in {
 		problem := ModuleProblem{Kind: ProblemInvalid, Listener: nl.name}
 		switch {
@@ -160,12 +163,27 @@ func (p *planner) checkListeners(in []namedListener) map[string]bool {
 			problem.Detail = "listener is nil"
 		case nl.l.DrainPhase() != component.DrainIngress:
 			problem.Detail = "listener must drain as component.DrainIngress"
+		case nl.l.Name() == "":
+			problem.Detail = "listener component has no name"
+		case registered(nl.l.Name()):
+			problem.Detail = fmt.Sprintf("component name %q already registered", nl.l.Name())
+		default:
+			c := nl.l.Name()
+			if len(components[c]) == 0 {
+				componentOrder = append(componentOrder, c)
+			}
+			components[c] = append(components[c], nl.name)
 		}
 		if nl.name != "" {
 			seen[nl.name] = true
 		}
 		if problem.Detail != "" {
 			p.add(problem)
+		}
+	}
+	for _, c := range componentOrder {
+		if names := components[c]; len(names) > 1 {
+			p.invalid("", fmt.Sprintf("component name %q used by listeners %s", c, strings.Join(names, ", ")))
 		}
 	}
 	return seen
@@ -200,7 +218,7 @@ func (p *planner) checkModuleListeners(modules []plannedModule, declared map[str
 	}
 }
 
-// order sorts modules topologically by provider edges and reports a cycle if one remains.
+// order sorts modules topologically by provider edges. If modules remain, every dependency cycle among them is reported, one representative path per strongly connected group, so a single check shows them all.
 func (p *planner) order(modules []plannedModule, providers map[PortRef][]int) []plannedModule {
 	deps := make([][]int, len(modules))
 	for i, m := range modules {
@@ -224,7 +242,9 @@ func (p *planner) order(modules []plannedModule, providers map[PortRef][]int) []
 			}
 		}
 		if next < 0 {
-			p.add(ModuleProblem{Kind: ProblemCycle, Modules: cyclePath(modules, deps, done)})
+			for _, group := range cyclicGroups(deps, done) {
+				p.add(ModuleProblem{Kind: ProblemCycle, Modules: cyclePath(modules, deps, group)})
+			}
 			return nil
 		}
 		done[next] = true
@@ -233,12 +253,66 @@ func (p *planner) order(modules []plannedModule, providers map[PortRef][]int) []
 	return order
 }
 
-// cyclePath walks from the first unfinished module to an unfinished provider until a module repeats. Every unfinished module has an unfinished provider, so the walk always closes a cycle.
-func cyclePath(modules []plannedModule, deps [][]int, done []bool) []string {
-	start := slices.Index(done, false)
+// cyclicGroups returns the strongly connected groups of unfinished modules that contain a cycle, ordered by their first module. Modules that only depend on a cycle are not in any group.
+func cyclicGroups(deps [][]int, done []bool) [][]int {
+	// Tarjan's algorithm over the unfinished modules.
+	n := len(deps)
+	index, low := make([]int, n), make([]int, n)
+	onStack := make([]bool, n)
+	for i := range index {
+		index[i] = -1
+	}
+	var stack []int
+	var groups [][]int
+	counter := 0
+	var visit func(v int)
+	visit = func(v int) {
+		index[v], low[v] = counter, counter
+		counter++
+		stack = append(stack, v)
+		onStack[v] = true
+		for _, w := range deps[v] {
+			switch {
+			case done[w]:
+			case index[w] < 0:
+				visit(w)
+				low[v] = min(low[v], low[w])
+			case onStack[w]:
+				low[v] = min(low[v], index[w])
+			}
+		}
+		if low[v] != index[v] {
+			return
+		}
+		var group []int
+		for {
+			w := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			onStack[w] = false
+			group = append(group, w)
+			if w == v {
+				break
+			}
+		}
+		if len(group) > 1 || slices.Contains(deps[v], v) {
+			slices.Sort(group)
+			groups = append(groups, group)
+		}
+	}
+	for v := range n {
+		if !done[v] && index[v] < 0 {
+			visit(v)
+		}
+	}
+	slices.SortFunc(groups, func(a, b []int) int { return cmp.Compare(a[0], b[0]) })
+	return groups
+}
+
+// cyclePath walks from the group's first module to a provider in the same group until a module repeats. Every module in a cyclic group has a provider in it, so the walk always closes a cycle.
+func cyclePath(modules []plannedModule, deps [][]int, group []int) []string {
 	visited := map[int]int{}
 	var path []int
-	for at := start; ; {
+	for at := group[0]; ; {
 		if pos, ok := visited[at]; ok {
 			path = append(path[pos:], at)
 			break
@@ -246,7 +320,7 @@ func cyclePath(modules []plannedModule, deps [][]int, done []bool) []string {
 		visited[at] = len(path)
 		path = append(path, at)
 		for _, j := range deps[at] {
-			if !done[j] {
+			if slices.Contains(group, j) {
 				at = j
 				break
 			}

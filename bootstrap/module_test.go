@@ -742,3 +742,83 @@ func TestPortRefString(t *testing.T) {
 		t.Fatal("Name mismatch")
 	}
 }
+
+func TestDisjointCyclesAreAllReported(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	p1, p2 := NewPort[greeter]("p1"), NewPort[greeter]("p2")
+	p3, p4 := NewPort[greeter]("p3"), NewPort[greeter]("p4")
+	mustUse(t, app,
+		module("a", refs(p1.Ref()), refs(p2.Ref()), nil),
+		module("b", refs(p2.Ref()), refs(p1.Ref()), nil),
+		module("downstream", nil, refs(p1.Ref()), nil), // depends on a cycle but is not in one
+		module("c", refs(p3.Ref()), refs(p4.Ref()), nil),
+		module("d", refs(p4.Ref()), refs(p3.Ref()), nil),
+	)
+	var cycles [][]string
+	for _, p := range moduleProblems(t, app) {
+		if p.Kind == ProblemCycle {
+			cycles = append(cycles, p.Modules)
+		}
+	}
+	want := [][]string{{"a", "b", "a"}, {"c", "d", "c"}}
+	if !slices.EqualFunc(cycles, want, slices.Equal[[]string]) {
+		t.Fatalf("cycles = %v, want %v", cycles, want)
+	}
+}
+
+func TestListenerComponentNamesAreChecked(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	mustRegisterComponent(t, app, &mockComponent{name: "taken"})
+	for name, component := range map[string]string{"public": "http", "internal": "http", "admin": "", "debug": "taken"} {
+		if err := app.Listen(name, newListener(component, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := app.CheckModules()
+	var modErr *ModuleError
+	if !errors.As(err, &modErr) || countKind(modErr.Problems, ProblemInvalid) != 3 {
+		t.Fatalf("CheckModules = %v, want duplicate, empty and taken component names", err)
+	}
+	for _, want := range []string{`component name "http" used by listeners`, `"admin"`, `component name "taken" already registered`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+}
+
+func TestStartupKeepsCancelCauseWhenPhaseFails(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	cause := errors.New("deploy aborted")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	mustUse(t, app,
+		module("first", nil, nil, func(context.Context, *ModuleContext) error {
+			cancel(cause)
+			return nil
+		}),
+		module("second", nil, nil, nil),
+	)
+	err := app.Startup(ctx)
+	var startErr *StartupError
+	if !errors.As(err, &startErr) || startErr.Phase != PhaseModules || !errors.Is(err, cause) {
+		t.Fatalf("Startup = %v, want a modules-phase StartupError wrapping the cancel cause", err)
+	}
+}
+
+func TestStartupJoinsCancelCauseWithPhaseError(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	cause, boom := errors.New("deploy aborted"), errors.New("boom")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	mustUse(t, app, module("m", nil, nil, func(context.Context, *ModuleContext) error {
+		cancel(cause)
+		return boom
+	}))
+	if err := app.Startup(ctx); !errors.Is(err, cause) || !errors.Is(err, boom) {
+		t.Fatalf("Startup = %v, want both the phase error and the cancel cause", err)
+	}
+}

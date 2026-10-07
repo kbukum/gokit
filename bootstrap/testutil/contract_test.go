@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/bootstrap"
 )
@@ -109,5 +110,57 @@ func TestCheckContractRejectsInvalidSetup(t *testing.T) {
 	}
 	if err := checkContract(suite, []Impl[counter]{{Name: "a", New: newCounter}}); err != nil {
 		t.Fatalf("valid setup = %v", err)
+	}
+}
+
+type nestedRequest struct {
+	Name     string
+	Callback func() `json:"-"`
+	hidden   chan int
+}
+
+type nestedOK struct {
+	Items  []string
+	ByName map[string]*nestedOK // recursive
+	At     time.Time
+}
+
+// selfEncoded hides a func behind its own encoding, so RemoteSafe treats it as opaque.
+type selfEncoded struct{ Hook func() }
+
+func (selfEncoded) MarshalText() ([]byte, error) { return []byte("x"), nil }
+
+type nestedPort interface {
+	Slice(ctx context.Context, in []chan string) error
+	Map(ctx context.Context, in map[string]func()) error
+	Struct(ctx context.Context, in *nestedRequest) error
+	Any(ctx context.Context, in any) error
+	Wrapped(ctx context.Context, in []any) error
+	Encoded(ctx context.Context, in selfEncoded) error
+	Result(ctx context.Context) ([]nestedRequest, error)
+	Fine(ctx context.Context, in nestedOK) (*nestedOK, error)
+}
+
+func TestRemoteSafeInspectsNestedTypes(t *testing.T) {
+	t.Parallel()
+	err := RemoteSafe(bootstrap.NewPort[nestedPort]("nested"))
+	if !errors.Is(err, ErrNotRemoteSafe) {
+		t.Fatalf("RemoteSafe = %v", err)
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"nested Slice: parameter 1 contains a chan",
+		"nested Map: parameter 1 contains a func",
+		"nested Struct: parameter 1 contains a func",
+		"nested Any: parameter 1 is an interface",
+		"nested Wrapped: parameter 1 contains an interface",
+		"nested Result: result 0 contains a func",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error does not report %q:\n%s", want, msg)
+		}
+	}
+	if strings.Contains(msg, "Fine") || strings.Contains(msg, "Encoded") || strings.Contains(msg, "hidden") {
+		t.Errorf("reported a safe method or an unexported field:\n%s", msg)
 	}
 }

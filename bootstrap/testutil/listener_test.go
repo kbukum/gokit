@@ -125,3 +125,38 @@ func TestListenerStopForceClosesAtDeadline(t *testing.T) {
 		t.Fatalf("Stop = %v, want DeadlineExceeded", err)
 	}
 }
+
+func TestListenerDrainForceClosesAndCancelsRequestsAtDeadline(t *testing.T) {
+	t.Parallel()
+	l := NewListener("public")
+	entered, finished := make(chan struct{}), make(chan struct{})
+	l.Handle("GET /wait", http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-r.Context().Done() // a cooperative handler that only ends on cancellation
+		close(finished)
+	}))
+	if err := l.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, l.URL()+"/wait", http.NoBody)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	<-entered
+	_ = l.Quiesce()
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	if err := l.Drain(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Drain = %v, want the graceful deadline error", err)
+	}
+	select {
+	case <-finished:
+	default:
+		t.Fatal("Drain returned while the handler was still running")
+	}
+	if err := l.Stop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}

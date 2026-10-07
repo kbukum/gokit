@@ -60,7 +60,7 @@ func Listen[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], name string
 	return l
 }
 
-// Capture adds a module named "capture <port name>" to app that needs port p, and returns a function that yields the value provided for p once app has started. Calling the function before startup fails t. Because the capture is an ordinary module, startup reports a missing or duplicate provider as a [bootstrap.ModuleError]. Capture each port once per App.
+// Capture adds a module to app that needs port p, and returns a function that yields the value provided for p once app has started. Calling the function before startup fails t. Because the capture is an ordinary module, startup reports a missing or duplicate provider as a [bootstrap.ModuleError]. Each capture module is named after its port's identity ("capture <port name>@<address>"), so distinct ports with the same name can both be captured; capture each port once per App.
 func Capture[C bootstrap.Config, T any](t testing.TB, app *bootstrap.App[C], p *bootstrap.Port[T]) func() T {
 	t.Helper()
 	c := &capture[T]{port: p}
@@ -87,7 +87,7 @@ type capture[T any] struct {
 }
 
 func (c *capture[T]) Spec() bootstrap.ModuleSpec {
-	return bootstrap.ModuleSpec{Name: "capture " + c.port.Name(), Needs: []bootstrap.PortRef{c.port.Ref()}}
+	return bootstrap.ModuleSpec{Name: fmt.Sprintf("capture %s@%p", c.port.Name(), c.port), Needs: []bootstrap.PortRef{c.port.Ref()}}
 }
 
 func (c *capture[T]) Register(_ context.Context, mc *bootstrap.ModuleContext) error {

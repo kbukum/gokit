@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -17,9 +19,15 @@ var ErrNotRemoteSafe = errors.New("bootstrap/testutil: port is not remote-safe")
 var (
 	contextType = reflect.TypeFor[context.Context]()
 	errorType   = reflect.TypeFor[error]()
+	// Values of these types encode themselves, so their Go shape need not be portable.
+	selfEncoding = []reflect.Type{
+		reflect.TypeFor[json.Marshaler](),
+		reflect.TypeFor[encoding.TextMarshaler](),
+		reflect.TypeFor[encoding.BinaryMarshaler](),
+	}
 )
 
-// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be a channel, function or unsafe.Pointer, which cannot cross a process boundary. Every violation is reported, each wrapping [ErrNotRemoteSafe].
+// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields. The leading context.Context and trailing error are the only interfaces allowed. Types that encode themselves (json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler, or protobuf messages with a ProtoReflect method) are opaque and accepted as is. Every violation is reported, each wrapping [ErrNotRemoteSafe].
 //
 // The check covers shape only. Whether values are safe to copy, calls tolerate latency and errors map to the same kinds remotely is what [Contract] tests.
 func RemoteSafe[T any](p *bootstrap.Port[T]) error {
@@ -41,26 +49,89 @@ func RemoteSafe[T any](p *bootstrap.Port[T]) error {
 			fail(m.Name, "last result must be error")
 		}
 		for j := range ft.NumIn() {
-			if kind, bad := unportable(ft.In(j)); bad {
-				fail(m.Name, "parameter %d is a %s", j, kind)
+			if j == 0 && ft.In(j) == contextType {
+				continue
+			}
+			if problem := unportable(ft.In(j)); problem != "" {
+				fail(m.Name, "parameter %d %s", j, problem)
 			}
 		}
 		for j := range ft.NumOut() {
-			if kind, bad := unportable(ft.Out(j)); bad {
-				fail(m.Name, "result %d is a %s", j, kind)
+			if j == ft.NumOut()-1 && ft.Out(j) == errorType {
+				continue
+			}
+			if problem := unportable(ft.Out(j)); problem != "" {
+				fail(m.Name, "result %d %s", j, problem)
 			}
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func unportable(t reflect.Type) (reflect.Kind, bool) {
-	switch k := t.Kind(); k {
-	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		return k, true
-	default:
-		return k, false
+// unportable describes the first kind in t that cannot cross a process boundary ("is a chan", "contains a func"), or returns "" when t is portable.
+func unportable(t reflect.Type) string {
+	if kind := findUnportable(t, map[reflect.Type]bool{}); kind != reflect.Invalid {
+		verb := "contains"
+		if kind == t.Kind() && !selfEncodes(t) {
+			verb = "is"
+		}
+		article := "a"
+		if kind == reflect.Interface || kind == reflect.UnsafePointer {
+			article = "an"
+		}
+		return fmt.Sprintf("%s %s %s", verb, article, kind)
 	}
+	return ""
+}
+
+func findUnportable(t reflect.Type, seen map[reflect.Type]bool) reflect.Kind {
+	if seen[t] || selfEncodes(t) {
+		return reflect.Invalid
+	}
+	seen[t] = true
+	switch k := t.Kind(); k {
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer, reflect.Interface:
+		return k
+	case reflect.Pointer, reflect.Slice, reflect.Array:
+		return findUnportable(t.Elem(), seen)
+	case reflect.Map:
+		if kind := findUnportable(t.Key(), seen); kind != reflect.Invalid {
+			return kind
+		}
+		return findUnportable(t.Elem(), seen)
+	case reflect.Struct:
+		for i := range t.NumField() {
+			if f := t.Field(i); f.IsExported() {
+				if kind := findUnportable(f.Type, seen); kind != reflect.Invalid {
+					return kind
+				}
+			}
+		}
+	case reflect.Invalid, reflect.Bool, reflect.String,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+	}
+	return reflect.Invalid
+}
+
+func selfEncodes(t reflect.Type) bool {
+	if t.Kind() == reflect.Interface {
+		return false
+	}
+	pt := t
+	if t.Kind() != reflect.Pointer {
+		pt = reflect.PointerTo(t)
+	}
+	if _, ok := pt.MethodByName("ProtoReflect"); ok {
+		return true
+	}
+	for _, enc := range selfEncoding {
+		if t.Implements(enc) || pt.Implements(enc) {
+			return true
+		}
+	}
+	return false
 }
 
 // AssertRemoteSafe fails t when [RemoteSafe] reports a violation.

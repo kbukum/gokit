@@ -182,3 +182,20 @@ func TestNewAppAppliesOptionsAfterDefaults(t *testing.T) {
 		t.Fatalf("app = %q %q", app.Name, app.Cfg.Environment)
 	}
 }
+
+func TestCaptureDistinguishesPortsWithTheSameName(t *testing.T) {
+	t.Parallel()
+	app := NewApp(t)
+	first, second := bootstrap.NewPort[clock]("clock"), bootstrap.NewPort[clock]("clock")
+	a, b := Capture(t, app, first), Capture(t, app, second)
+	if err := app.Use(
+		bootstrap.ValueModule("first", first, clock(fixedClock("1"))),
+		bootstrap.ValueModule("second", second, clock(fixedClock("2"))),
+	); err != nil {
+		t.Fatal(err)
+	}
+	Start(t, app)
+	if a().Now() != "1" || b().Now() != "2" {
+		t.Fatalf("captured %q and %q", a().Now(), b().Now())
+	}
+}

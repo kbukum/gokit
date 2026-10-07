@@ -15,16 +15,18 @@ func (a *App[C]) Listen(name string, l Listener) error {
 	return a.declare(func(s *moduleSet) { s.listeners = append(s.listeners, namedListener{name: name, l: l}) })
 }
 
-// CheckModules validates the modules and listeners declared so far without registering or starting anything, and returns a [*ModuleError] listing every problem, or nil. Startup runs the same check, so use CheckModules to test a service composition without its infrastructure. Declarations a configure hook would add are not included.
+// CheckModules validates the modules and listeners declared so far, including listener component names against components already registered, without registering or starting anything, and returns a [*ModuleError] listing every problem, or nil. Startup runs the same check, so use CheckModules to test a service composition without its infrastructure. Declarations a configure hook would add are not included.
 func (a *App[C]) CheckModules() error {
 	a.lifecycleMu.Lock()
 	set := moduleSet{modules: append([]Module(nil), a.modules.modules...), listeners: append([]namedListener(nil), a.modules.listeners...)}
 	a.lifecycleMu.Unlock()
-	if _, err := planModules(&set); err != nil {
+	if _, err := planModules(&set, a.componentRegistered); err != nil {
 		return err
 	}
 	return nil
 }
+
+func (a *App[C]) componentRegistered(name string) bool { return a.Components.Get(name) != nil }
 
 // declare records a module declaration before the lifecycle starts or while startup runs configure hooks.
 func (a *App[C]) declare(fn func(*moduleSet)) error {
@@ -51,7 +53,7 @@ func (a *App[C]) wireModules(ctx context.Context) error {
 	if set.empty() {
 		return nil
 	}
-	plan, modErr := planModules(set)
+	plan, modErr := planModules(set, a.componentRegistered)
 	if modErr != nil {
 		return modErr
 	}
@@ -66,8 +68,8 @@ func (a *App[C]) wireModules(ctx context.Context) error {
 		w.mounted[nl.name] = map[string]bool{}
 	}
 	for _, pm := range plan.order {
-		if err := ctx.Err(); err != nil {
-			return err
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
 		}
 		if err := a.registerModule(ctx, pm, w, plan.providers); err != nil {
 			return err
