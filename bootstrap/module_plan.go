@@ -141,8 +141,8 @@ func (p *planner) checkModules(in []Module) []plannedModule {
 			p.invalid(spec.Name, "module name used twice")
 		default:
 			seen[spec.Name] = true
-			out = append(out, plannedModule{module: m, spec: spec})
 		}
+		out = append(out, plannedModule{module: m, spec: spec})
 	}
 	return out
 }

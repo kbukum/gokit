@@ -474,27 +474,37 @@ func TestRun_CanceledContextFailsStartup(t *testing.T) {
 	}
 }
 
-// signalWriter closes ready on its first write; the startup summary is written once startup has succeeded.
+// signalWriter signals Run's wait boundary, after startup and its summary probes return.
 type signalWriter struct {
 	once  sync.Once
 	ready chan struct{}
 }
 
 func (w *signalWriter) Write(p []byte) (int, error) {
-	w.once.Do(func() { close(w.ready) })
+	if bytes.Contains(p, []byte("Application ready")) {
+		w.once.Do(func() { close(w.ready) })
+	}
 	return len(p), nil
 }
 
 func TestRun_ExitsCleanlyWhenContextIsCanceledAfterStartup(t *testing.T) {
-	app := newQuietApp(t)
+	started := &signalWriter{ready: make(chan struct{})}
+	logCfg := &logging.Config{Level: "info", Format: "json"}
+	logCfg.ApplyDefaults()
+	log, err := logging.New(logCfg, "test", logging.WithWriter(started))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApp(newTestConfig("test", "1.0"), WithLogger(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Summary.SetWriter(io.Discard)
 	comp := &mockComponent{
 		name:   "db",
 		health: component.Health{Name: "db", Status: component.StatusHealthy},
 	}
 	mustRegisterComponent(t, app, comp)
-	started := &signalWriter{ready: make(chan struct{})}
-	app.Summary.SetWriter(started)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)

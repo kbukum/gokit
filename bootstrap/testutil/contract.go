@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/kbukum/gokit/bootstrap"
 	"github.com/kbukum/gokit/util"
 )
@@ -24,10 +26,11 @@ var (
 		reflect.TypeFor[json.Marshaler](),
 		reflect.TypeFor[encoding.TextMarshaler](),
 		reflect.TypeFor[encoding.BinaryMarshaler](),
+		reflect.TypeFor[proto.Message](),
 	}
 )
 
-// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields. The leading context.Context and trailing error are the only interfaces allowed. Types that encode themselves (json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler, or protobuf messages with a ProtoReflect method) are opaque and accepted as is. Every violation is reported, each wrapping [ErrNotRemoteSafe].
+// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields. The leading context.Context and trailing error are the only interfaces allowed. Concrete types implementing json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler or proto.Message (directly or through their pointer type) are opaque and accepted as is. Every violation is reported, each wrapping [ErrNotRemoteSafe].
 //
 // The check covers shape only. Whether values are safe to copy, calls tolerate latency and errors map to the same kinds remotely is what [Contract] tests.
 func RemoteSafe[T any](p *bootstrap.Port[T]) error {
@@ -122,9 +125,6 @@ func selfEncodes(t reflect.Type) bool {
 	pt := t
 	if t.Kind() != reflect.Pointer {
 		pt = reflect.PointerTo(t)
-	}
-	if _, ok := pt.MethodByName("ProtoReflect"); ok {
-		return true
 	}
 	for _, enc := range selfEncoding {
 		if t.Implements(enc) || pt.Implements(enc) {

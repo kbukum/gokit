@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/types/known/structpb"
+
 	"github.com/kbukum/gokit/bootstrap"
 )
 
@@ -139,6 +141,29 @@ type nestedPort interface {
 	Encoded(ctx context.Context, in selfEncoded) error
 	Result(ctx context.Context) ([]nestedRequest, error)
 	Fine(ctx context.Context, in nestedOK) (*nestedOK, error)
+}
+
+type notProtobuf struct{ Callback func() }
+
+func (*notProtobuf) ProtoReflect() {}
+
+type protobufPort interface {
+	Message(ctx context.Context, in *structpb.Struct) (*structpb.Value, error)
+}
+
+type notProtobufPort interface {
+	Message(ctx context.Context, in *notProtobuf) error
+}
+
+func TestRemoteSafeRequiresTheProtobufMessageContract(t *testing.T) {
+	t.Parallel()
+	if err := RemoteSafe(bootstrap.NewPort[protobufPort]("protobuf")); err != nil {
+		t.Errorf("protobuf message rejected: %v", err)
+	}
+	err := RemoteSafe(bootstrap.NewPort[notProtobufPort]("not-protobuf"))
+	if !errors.Is(err, ErrNotRemoteSafe) || !strings.Contains(err.Error(), "contains a func") {
+		t.Errorf("RemoteSafe = %v, want rejection of a non-protobuf callback field", err)
+	}
 }
 
 func TestRemoteSafeInspectsNestedTypes(t *testing.T) {

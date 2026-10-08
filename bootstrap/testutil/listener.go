@@ -14,20 +14,21 @@ import (
 
 var _ bootstrap.Listener = (*Listener)(nil)
 
-// Listener is a [bootstrap.Listener] that serves on a loopback port chosen at Start. Once quiesced it answers new requests with 503 Service Unavailable. Drain and Stop follow the ingress contract of gokit's server: wait for in-flight requests for most of the deadline, then force-close connections, cancel request contexts and wait for handlers to return. ServeHTTP routes a request in-process without the network.
+// Listener is a [bootstrap.Listener] that serves on a loopback port chosen at Start. Once quiesced it answers new requests with 503 Service Unavailable. Drain and Stop follow the ingress contract of gokit's server: gracefully drain HTTP connections for most of the deadline, force-close any remaining connections, then cancel request contexts and wait for all handlers to return. ServeHTTP routes a request in-process without the network.
 type Listener struct {
 	name string
 	mux  *http.ServeMux
 
-	mu       sync.Mutex
-	srv      *http.Server
-	url      string
-	done     chan error
-	cancel   context.CancelFunc
-	closing  bool
-	stopping bool
-	active   int           // admitted handlers still running
-	drained  chan struct{} // closed once the listener is closing and no handler runs
+	mu         sync.Mutex
+	srv        *http.Server
+	url        string
+	done       chan error
+	cancel     context.CancelFunc
+	onShutdown func(func()) func() bool
+	closing    bool
+	stopping   bool
+	active     int           // admitted handlers still running
+	drained    chan struct{} // closed once the listener is closing and no handler runs
 }
 
 // NewListener returns a stopped listener whose component name is name.
@@ -41,7 +42,7 @@ func (l *Listener) Name() string { return l.name }
 // Handle mounts handler at pattern. Like [http.ServeMux.Handle], it panics on an invalid or conflicting pattern.
 func (l *Listener) Handle(pattern string, handler http.Handler) { l.mux.Handle(pattern, handler) }
 
-// ServeHTTP routes r to the mounted handlers, or answers 503 once the listener is quiesced.
+// ServeHTTP routes r to the mounted handlers, or answers 503 once the listener is quiesced. After Start, each request also receives listener shutdown cancellation while retaining its own context values, deadline and cancellation.
 func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.mu.Lock()
 	if l.closing {
@@ -50,6 +51,7 @@ func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l.active++
+	onShutdown := l.onShutdown
 	l.mu.Unlock()
 	defer func() {
 		l.mu.Lock()
@@ -59,6 +61,15 @@ func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			close(l.drained)
 		}
 	}()
+	if onShutdown != nil {
+		ctx, cancel := context.WithCancel(r.Context())
+		stop := onShutdown(cancel)
+		defer func() {
+			stop()
+			cancel()
+		}()
+		r = r.WithContext(ctx)
+	}
 	l.mux.ServeHTTP(w, r)
 }
 
@@ -82,6 +93,7 @@ func (l *Listener) Start(ctx context.Context) error {
 	}
 	base, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel = cancel
+	l.onShutdown = func(f func()) func() bool { return context.AfterFunc(base, f) }
 	l.srv = &http.Server{Handler: l, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
 	l.url = "http://" + ln.Addr().String()
 	l.done = make(chan error, 1)
@@ -134,7 +146,7 @@ func (l *Listener) Stop(ctx context.Context) error {
 	return err
 }
 
-// shutdown quiesces the listener, stops accepting connections and gives in-flight requests four fifths of ctx's remaining time. If they outlast it, it force-closes connections and cancels request contexts, then waits for handlers to return until ctx ends, so no handler outlives a successful drain. It returns the graceful-shutdown error and any wait failure.
+// shutdown quiesces the listener, stops accepting connections and gives HTTP connections four fifths of ctx's remaining time to drain before force-closing them. It then cancels all request contexts, including direct and hijacked requests not tracked by http.Server, and waits for handlers until ctx ends. No handler outlives a successful drain. It returns the graceful-shutdown error and any wait failure.
 func (l *Listener) shutdown(ctx context.Context, srv *http.Server) error {
 	_ = l.Quiesce() // never fails; admission must be closed for drained to close
 	graceCtx := ctx
@@ -146,8 +158,8 @@ func (l *Listener) shutdown(ctx context.Context, srv *http.Server) error {
 	err := srv.Shutdown(graceCtx)
 	if err != nil {
 		err = errors.Join(err, srv.Close())
-		l.cancel()
 	}
+	l.cancel()
 	select {
 	case <-l.drained:
 	case <-ctx.Done():

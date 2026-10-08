@@ -58,6 +58,9 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 
 	a.Summary.SetStartupDuration(time.Since(start))
 	a.DisplaySummary(ctx)
+	if ctx.Err() != nil {
+		return nil, a.abortStartup(ctx, PhaseReady, ctx.Err())
+	}
 	return ctx, nil
 }
 

@@ -313,6 +313,49 @@ func TestModuleCyclesAreReported(t *testing.T) {
 	}
 }
 
+func TestInvalidModuleNamesDoNotHideWiringProblems(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	missing := NewPort[store]("missing")
+	registered := false
+	register := func(context.Context, *ModuleContext) error {
+		registered = true
+		return nil
+	}
+	mustUse(t, app,
+		module("dup", refs(greeterPort.Ref()), nil, register),
+		module("dup", refs(greeterPort.Ref()), refs(missing.Ref()), register).on("public"),
+		module("", refs(PortRef{}), refs(storePort.Ref()), register).on("internal"),
+	)
+	err := app.CheckModules()
+	var modErr *ModuleError
+	if !errors.As(err, &modErr) {
+		t.Fatalf("CheckModules = %v", err)
+	}
+	for _, want := range []struct {
+		kind ModuleProblemKind
+		port PortRef
+	}{
+		{ProblemDuplicatePort, greeterPort.Ref()},
+		{ProblemMissingPort, missing.Ref()},
+		{ProblemMissingPort, storePort.Ref()},
+	} {
+		if !hasProblem(modErr.Problems, want.kind, want.port) {
+			t.Errorf("missing %s for %s: %v", want.kind, want.port, err)
+		}
+	}
+	if countKind(modErr.Problems, ProblemInvalid) != 3 || countKind(modErr.Problems, ProblemMissingListener) != 2 {
+		t.Errorf("CheckModules = %v, want invalid names/port and both missing listeners", err)
+	}
+	var startupProblems *ModuleError
+	if got := app.Startup(t.Context()); !errors.As(got, &startupProblems) || !reflect.DeepEqual(startupProblems.Problems, modErr.Problems) {
+		t.Errorf("Startup = %v, want the same complete problems as CheckModules", got)
+	}
+	if registered {
+		t.Error("invalid composition registered a module")
+	}
+}
+
 func TestInvalidDeclarationsAreReported(t *testing.T) {
 	t.Parallel()
 	app := newQuietApp(t)
