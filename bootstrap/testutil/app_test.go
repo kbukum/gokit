@@ -231,3 +231,53 @@ func TestStartBudgetDoesNotCancelAStartedApp(t *testing.T) {
 	case <-time.After(5 * budget):
 	}
 }
+
+type startKey struct{}
+
+// withBaseContext replaces t.Context as the parent of Start's lifecycle context.
+func withBaseContext(ctx context.Context) StartOption {
+	return func(c *startConfig) { c.base = ctx }
+}
+
+// withExpiredTimer simulates a budget timer that fired as startup returned but whose callback has not canceled yet.
+func withExpiredTimer() StartOption {
+	return func(c *startConfig) {
+		c.afterFunc = func(time.Duration, func()) func() bool { return func() bool { return false } }
+	}
+}
+
+func TestStartReportsTheBudgetWhenTheTimerFiresAsStartupReturns(t *testing.T) {
+	t.Parallel()
+	rec := &recordingTB{TB: t}
+	app := NewApp(t)
+	var stopValue any
+	app.OnBeforeStop(func(ctx context.Context) error {
+		stopValue = ctx.Value(startKey{})
+		return nil
+	})
+	base := context.WithValue(t.Context(), startKey{}, "fixture")
+	Start(rec, app, withBaseContext(base), withExpiredTimer())
+	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], ErrStartBudget.Error()) {
+		t.Fatalf("failures = %v, want one failure naming the budget", rec.failures)
+	}
+	if stopValue != "fixture" {
+		t.Fatalf("rollback shutdown context value = %v, want the startup context's values", stopValue)
+	}
+}
+
+func TestStartCleanupKeepsContextValues(t *testing.T) {
+	t.Parallel()
+	app := NewApp(t)
+	var stopValue any
+	app.OnBeforeStop(func(ctx context.Context) error {
+		stopValue = ctx.Value(startKey{})
+		return nil
+	})
+	// Registered before Start, so it runs after Start's shutdown cleanup.
+	t.Cleanup(func() {
+		if stopValue != "fixture" {
+			t.Errorf("cleanup shutdown context value = %v, want the startup context's values", stopValue)
+		}
+	})
+	Start(t, app, withBaseContext(context.WithValue(t.Context(), startKey{}, "fixture")))
+}

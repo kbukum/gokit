@@ -20,7 +20,14 @@ const DefaultStartBudget = 30 * time.Second
 // StartOption configures [Start].
 type StartOption func(*startConfig)
 
-type startConfig struct{ budget time.Duration }
+type startConfig struct {
+	budget time.Duration
+	// Test seams: the lifecycle context's parent (nil means t.Context) and the budget timer.
+	base      context.Context
+	afterFunc func(d time.Duration, f func()) (stop func() bool)
+}
+
+func afterFunc(d time.Duration, f func()) func() bool { return time.AfterFunc(d, f).Stop }
 
 // WithStartBudget bounds startup in [Start] by d. A nonpositive d uses [DefaultStartBudget].
 func WithStartBudget(d time.Duration) StartOption {
@@ -54,10 +61,10 @@ func NewApp(t testing.TB, opts ...bootstrap.Option) *bootstrap.App[*Config] {
 	return app
 }
 
-// Start runs app's startup and fails t if it fails. Startup gets [DefaultStartBudget] unless [WithStartBudget] sets another: if configure, start or ready hooks outlast it, the startup context is canceled with [ErrStartBudget] and startup rolls back. The budget covers startup only. Once started, app keeps its context, which carries t.Context's values but not its cancellation, until Start shuts app down when the test and its subtests finish, reporting a shutdown error on t. Shutdown is bounded by the App's graceful timeout.
+// Start runs app's startup and fails t if it fails. Startup gets [DefaultStartBudget] unless [WithStartBudget] sets another: if configure, start or ready hooks outlast it, the startup context is canceled with [ErrStartBudget] and startup rolls back. The budget covers startup only. Once started, app keeps its context, which carries t.Context's values but not its cancellation, until Start shuts app down when the test and its subtests finish, reporting a shutdown error on t. Shutdown keeps the startup context's values and is bounded by the App's graceful timeout.
 func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...StartOption) {
 	t.Helper()
-	cfg := startConfig{}
+	cfg := startConfig{afterFunc: afterFunc}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -65,13 +72,17 @@ func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...Star
 	if budget <= 0 {
 		budget = DefaultStartBudget
 	}
-	ctx, cancel := context.WithCancelCause(context.WithoutCancel(t.Context()))
-	budgetTimer := time.AfterFunc(budget, func() { cancel(fmt.Errorf("%w (%s)", ErrStartBudget, budget)) })
+	base := cfg.base
+	if base == nil {
+		base = t.Context()
+	}
+	ctx, cancel := context.WithCancelCause(context.WithoutCancel(base))
+	budgetErr := fmt.Errorf("%w (%s)", ErrStartBudget, budget)
+	stopTimer := cfg.afterFunc(budget, func() { cancel(budgetErr) })
 	err := app.Startup(ctx)
-	disarmed := budgetTimer.Stop()
-	if err == nil && !disarmed {
-		// The budget fired as startup returned, so the app may hold a canceled context.
-		err = errors.Join(context.Cause(ctx), app.Shutdown(context.Background()))
+	if !stopTimer() && err == nil {
+		// The budget fired as startup returned, so the app may hold a canceled context. The timer callback may not have run yet, so report the budget directly rather than through context.Cause.
+		err = errors.Join(budgetErr, app.Shutdown(context.WithoutCancel(ctx)))
 	}
 	if err != nil {
 		cancel(nil)
@@ -80,7 +91,7 @@ func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...Star
 	}
 	t.Cleanup(func() {
 		defer cancel(nil)
-		if err := app.Shutdown(context.Background()); err != nil {
+		if err := app.Shutdown(context.WithoutCancel(ctx)); err != nil {
 			t.Errorf("testutil: shutdown: %v", err)
 		}
 	})
