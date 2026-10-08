@@ -18,14 +18,14 @@ type AvailabilityState string
 const (
 	// AvailabilityUnknown means no call has finished yet.
 	AvailabilityUnknown AvailabilityState = "unknown"
-	// AvailabilityAvailable means the peer last answered, even with an error.
+	// AvailabilityAvailable means the peer last served a call, even with an error response.
 	AvailabilityAvailable AvailabilityState = "available"
-	// AvailabilityUnavailable means the last call could not reach the peer or the peer was overloaded.
+	// AvailabilityUnavailable means the last call counted as [IsUnavailable].
 	AvailabilityUnavailable AvailabilityState = "unavailable"
 )
 
-// Unreachable reports whether err means the peer did not answer: a transport failure, or the Connect codes Unavailable, DeadlineExceeded or Canceled. A connection lost mid-stream can surface under any Connect code, so the transport mark decides first. An error that is not a Connect error is treated as unreachable; any other Connect code is an answer from the peer.
-func Unreachable(err error) bool {
+// IsUnavailable reports whether err means the peer cannot serve calls right now. That is either a call that never got an answer (a transport failure, or an error that is not a Connect error) or a Connect code saying the peer cannot serve it now: Unavailable, DeadlineExceeded or Canceled, whether the client or the peer produced it. A connection lost mid-stream can surface under any Connect code, so the transport mark decides first. Any other Connect code is a served call: the peer is available and the error is its answer.
+func IsUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -44,7 +44,7 @@ func Unreachable(err error) bool {
 	}
 }
 
-// Availability records whether a peer answered, from real calls only; it never probes. Install it with connect.WithInterceptors on every client for one peer, and report it through the Health of the component that owns those clients. A degraded health means the peer was unreachable on its last call.
+// Availability records whether a peer can serve calls, from real calls only; it never probes. Install it with connect.WithInterceptors on every client for one peer, and report it through the Health of the component that owns those clients. A degraded health means the last call counted as [IsUnavailable].
 type Availability struct {
 	name string
 
@@ -66,13 +66,13 @@ func (a *Availability) State() AvailabilityState {
 	return a.state
 }
 
-// Observe records the outcome of a finished call made with ctx. A nil error or an answer from the peer marks it available; an [Unreachable] error marks it unavailable. A call that failed after ctx ended, by the caller's cancellation or deadline, says nothing about the peer and is ignored, so callers cannot mark a peer unavailable by choosing a short deadline. Adapters call it directly for outcomes the interceptor cannot see, such as a stream that ended before its first message when the protocol requires one.
+// Observe records the outcome of a finished call made with ctx. A nil error or any other error the peer served marks it available; an [IsUnavailable] error marks it unavailable, unless ctx had already ended: a caller's own cancellation or deadline says nothing about the peer, so callers cannot mark a peer unavailable by choosing a short deadline. Adapters call it directly for outcomes the interceptor cannot see, such as a stream that ended before its first message when the protocol requires one.
 func (a *Availability) Observe(ctx context.Context, err error) {
-	if err != nil && ctx.Err() != nil {
-		return
-	}
 	state := AvailabilityAvailable
-	if Unreachable(err) {
+	if IsUnavailable(err) {
+		if ctx.Err() != nil {
+			return
+		}
 		state = AvailabilityUnavailable
 	}
 	a.mu.Lock()

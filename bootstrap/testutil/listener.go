@@ -10,6 +10,7 @@ import (
 
 	"github.com/kbukum/gokit/bootstrap"
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/util"
 )
 
 var _ bootstrap.Listener = (*Listener)(nil)
@@ -39,11 +40,16 @@ func NewListener(name string) *Listener {
 // Name returns the component name.
 func (l *Listener) Name() string { return l.name }
 
-// Handle mounts handler at pattern. Like [http.ServeMux.Handle], it panics on an invalid or conflicting pattern.
-func (l *Listener) Handle(pattern string, handler http.Handler) { l.mux.Handle(pattern, handler) }
+// Handle mounts handler at pattern. Like [http.ServeMux.Handle], it panics on a nil or typed-nil handler and on an invalid or conflicting pattern.
+func (l *Listener) Handle(pattern string, handler http.Handler) {
+	if util.IsNil(handler) {
+		panic("testutil: nil handler for " + pattern)
+	}
+	l.mux.Handle(pattern, handler)
+}
 
-// Fallback serves requests no mounted pattern matches. It panics if a handler is already mounted at "/".
-func (l *Listener) Fallback(handler http.Handler) { l.mux.Handle("/", handler) }
+// Fallback serves requests no mounted pattern matches. It panics on a nil or typed-nil handler, or if a handler is already mounted at "/".
+func (l *Listener) Fallback(handler http.Handler) { l.Handle("/", handler) }
 
 // ServeHTTP routes r to the mounted handlers, or answers 503 once the listener is quiesced. After Start, each request also receives listener shutdown cancellation while retaining its own context values, deadline and cancellation.
 func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {

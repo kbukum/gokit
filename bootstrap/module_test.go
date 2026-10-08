@@ -747,7 +747,7 @@ func TestFallbackServesUnmatchedPathsOutsideModuleRoutes(t *testing.T) {
 		}).on("public"),
 		// Routes mounted after the fallback, by a later module, are still reserved.
 		module("api", nil, nil, func(_ context.Context, mc *ModuleContext) error {
-			for _, pattern := range []string{"POST /auth/login", "/svc.v1.Service/"} {
+			for _, pattern := range []string{"POST /auth/login", "/svc.v1.Service/", "GET /%61dmin/users"} {
 				if err := mc.Handle("public", pattern, write("api")); err != nil {
 					return err
 				}
@@ -765,6 +765,9 @@ func TestFallbackServesUnmatchedPathsOutsideModuleRoutes(t *testing.T) {
 		"/auth/unknown":         "404",
 		"/auth":                 "404",
 		"/svc.v1.Service/Other": "api",
+		"/admin/other":          "404",
+		"/%61dmin/other":        "404",
+		"/admin%2Fx":            "spa",
 	} {
 		rec := httptest.NewRecorder()
 		public.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, http.NoBody))
@@ -785,6 +788,9 @@ func TestRoutePrefix(t *testing.T) {
 	t.Parallel()
 	for pattern, want := range map[string]string{
 		"POST /auth/login":      "/auth",
+		"POST /%61uth/login":    "/auth",
+		"/a%2Fb/c":              "/a/b",
+		"/%zz/c":                "",
 		"/svc.v1.Service/":      "/svc.v1.Service",
 		"example.com/feed/x":    "/feed",
 		"GET /":                 "",

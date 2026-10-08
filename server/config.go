@@ -109,6 +109,10 @@ func (c *Config) Validate() error {
 	if err := c.TLS.Validate(); err != nil {
 		return fmt.Errorf("server.tls: %w", err)
 	}
+	// Any TLS setting turns TLS on, and a TLS server cannot serve without its own certificate.
+	if c.TLS.IsEnabled() && (c.TLS.CertFile == "" || c.TLS.KeyFile == "") {
+		return fmt.Errorf("server.tls: cert_file and key_file are required when TLS is enabled")
+	}
 	if _, err := c.SecurityHeaders.HeaderMap(); err != nil {
 		return err
 	}

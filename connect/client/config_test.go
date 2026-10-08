@@ -97,6 +97,19 @@ func TestNoTimeoutKeepsTheClientUnbounded(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsNegativeTimeouts(t *testing.T) {
+	for name, cfg := range map[string]Config{
+		"timeout":                 {Timeout: -1},
+		"dial timeout":            {DialTimeout: -1},
+		"timeout with no_timeout": {Timeout: -1, NoTimeout: true},
+	} {
+		cfg.ApplyDefaults()
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "negative") {
+			t.Errorf("%s: Validate = %v, want a negative-timeout error", name, err)
+		}
+	}
+}
+
 func TestValidateRejectsTimeoutWithNoTimeout(t *testing.T) {
 	cfg := Config{Protocol: ProtocolConnect, NoTimeout: true, Timeout: time.Second}
 	err := cfg.Validate()

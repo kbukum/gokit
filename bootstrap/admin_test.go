@@ -145,6 +145,34 @@ func hasComponent(hs []component.Health, name string, status component.HealthSta
 	return false
 }
 
+// probingWriter reads /readyz the first time the startup summary is written.
+type probingWriter struct {
+	once  sync.Once
+	probe func()
+}
+
+func (w *probingWriter) Write(p []byte) (int, error) {
+	w.once.Do(w.probe)
+	return len(p), nil
+}
+
+func TestAdminReportsStartingWhileTheSummaryIsWritten(t *testing.T) {
+	t.Parallel()
+	app := newAdminApp(t, AdminConfig{})
+	var during probe
+	app.Summary.SetWriter(&probingWriter{probe: func() { during = get(t.Context(), t, app, "/readyz") }})
+	if err := app.Startup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+	if during.code != http.StatusServiceUnavailable || during.body.Status != ReadinessStarting {
+		t.Errorf("readyz during summary = %d %q, want 503 starting", during.code, during.body.Status)
+	}
+	if after := get(t.Context(), t, app, "/readyz"); after.body.Status != ReadinessReady {
+		t.Errorf("readyz after startup = %q, want ready", after.body.Status)
+	}
+}
+
 func TestAdminServesPprofOnlyWhenEnabled(t *testing.T) {
 	t.Parallel()
 	for _, enabled := range []bool{false, true} {
@@ -186,6 +214,7 @@ func TestAdminConfigIsValidated(t *testing.T) {
 		"negative port":           {Port: -1},
 		"port too large":          {Port: 65536},
 		"negative health timeout": {HealthTimeout: -1},
+		"typed-nil metrics":       {Metrics: http.HandlerFunc(nil)},
 	} {
 		_, err := NewApp(newTestConfig("test", "1.0"), WithLogger(logging.NewDefault("test")), WithAdmin(cfg))
 		if !errors.Is(err, ErrInvalidAdminConfig) {

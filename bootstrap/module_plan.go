@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"strings"
@@ -384,18 +385,18 @@ func installFallback(l Listener, listener string, fb fallback, reserved []string
 		}
 	}()
 	l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		for _, prefix := range reserved {
-			if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
-				http.NotFound(rw, r)
-				return
-			}
+		// http.ServeMux matches unescaped segments of the escaped path, so the guard compares the same way.
+		first, _, _ := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
+		if segment, err := url.PathUnescape(first); err != nil || slices.Contains(reserved, "/"+segment) {
+			http.NotFound(rw, r)
+			return
 		}
 		fb.handler.ServeHTTP(rw, r)
 	}))
 	return nil
 }
 
-// routePrefix returns the first literal path segment of an http.ServeMux pattern ("[METHOD ][HOST]/[PATH]"), such as "/auth" for "POST /auth/login", or "" for the root or a wildcard segment.
+// routePrefix returns the first literal path segment of an http.ServeMux pattern ("[METHOD ][HOST]/[PATH]"), unescaped as the mux matches it, such as "/auth" for "POST /auth/login" or "POST /%61uth/login", or "" for the root, a wildcard segment or an invalid escape.
 func routePrefix(pattern string) string {
 	_, rest, found := strings.Cut(pattern, " ")
 	if !found {
@@ -409,7 +410,11 @@ func routePrefix(pattern string) string {
 	if segment == "" || strings.Contains(segment, "{") {
 		return ""
 	}
-	return "/" + segment
+	unescaped, err := url.PathUnescape(segment)
+	if err != nil {
+		return ""
+	}
+	return "/" + unescaped
 }
 
 func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (err error) {

@@ -64,6 +64,9 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("connect client: unsupported protocol %q (use connect, grpc, or grpcweb)", c.Protocol)
 	}
+	if c.Timeout < 0 || c.DialTimeout < 0 {
+		return fmt.Errorf("connect client: timeout and dial_timeout must not be negative; use no_timeout for an unbounded client")
+	}
 	if c.NoTimeout && c.Timeout != 0 {
 		return fmt.Errorf("connect client: timeout and no_timeout are mutually exclusive")
 	}

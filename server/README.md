@@ -4,7 +4,7 @@ Gin-based HTTP server with h2c support, built-in middleware, health/info endpoin
 
 ## SPA, diagnostics, and shutdown
 
-`MountSPA(files, spa.Config{...})` serves a trusted `fs.FS` behind registered API routes. Use an embedded filesystem in an image or `os.OpenRoot(...).FS()` for confined on-disk assets; keep the root open until the server stops. HTML navigation falls back to `index.html`, but API namespaces, asset namespaces, and missing file paths return 404. Add application-specific API prefixes through `ReservedPrefixes`. `Fallback(handler)` installs any handler for unmatched requests, behind the server's middleware; `*server.Component` exposes it as `bootstrap.Listener.Fallback`, through which a module's fallback also reserves that module's route prefixes.
+`MountSPA(files, spa.Config{...})` serves a trusted `fs.FS` behind registered API routes. Use an embedded filesystem in an image or `os.OpenRoot(...).FS()` for confined on-disk assets; keep the root open until the server stops. HTML navigation falls back to `index.html`, but API namespaces, asset namespaces, and missing file paths return 404. Add application-specific API prefixes through `ReservedPrefixes`. `Fallback(handler)` installs any handler for unmatched requests, behind the server's middleware; like `Handle`, it panics on a nil handler at registration; `*server.Component` exposes it as `bootstrap.Listener.Fallback`, through which a module's fallback also reserves that module's route prefixes.
 
 List fingerprinted files from the build manifest in `ImmutableAssets` to cache them for one year. Other assets revalidate. The index is limited to 1 MiB and uses `no-cache, no-store`. Put `{nonce}` in script/style nonce attributes; each index response gets a fresh cryptographic nonce and a matching strict CSP. `spa.Config.CSP` can replace the policy template, but cannot enable unsafe scripts or weaken its base/object/frame restrictions.
 
@@ -149,6 +149,7 @@ The Gin bearer middleware uses a context-aware `TokenValidator[T]` and accepts e
 - minimum supported floor: TLS 1.2
 - default negotiation outcome: TLS 1.3 whenever peers support it
 - explicit floors below TLS 1.2 are rejected
+- any TLS setting on `server.Config.TLS` turns TLS on and requires both `cert_file` and `key_file`; `Config.Validate` rejects it otherwise
 
 ### `server/endpoint`
 

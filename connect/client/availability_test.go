@@ -13,7 +13,7 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
-func TestUnreachableClassifiesPeerFailures(t *testing.T) {
+func TestIsUnavailableClassifiesPeerFailures(t *testing.T) {
 	cases := []struct {
 		name string
 		err  error
@@ -30,13 +30,13 @@ func TestUnreachableClassifiesPeerFailures(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := Unreachable(tc.err); got != tc.want {
-				t.Fatalf("Unreachable = %v, want %v", got, tc.want)
+			if got := IsUnavailable(tc.err); got != tc.want {
+				t.Fatalf("IsUnavailable = %v, want %v", got, tc.want)
 			}
 		})
 	}
-	if Unreachable(nil) {
-		t.Fatal("Unreachable(nil) = true, want false")
+	if IsUnavailable(nil) {
+		t.Fatal("IsUnavailable(nil) = true, want false")
 	}
 }
 
@@ -71,6 +71,15 @@ func TestAvailabilityIgnoresCallerDeadline(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Unix(0, 0))
 	defer cancel()
 	a.Observe(ctx, connect.NewError(connect.CodeDeadlineExceeded, context.DeadlineExceeded))
+	assertState(t, a, AvailabilityAvailable)
+}
+
+func TestAvailabilityCountsAnAnswerAfterTheCallerEnded(t *testing.T) {
+	a := NewAvailability("access")
+	a.Observe(context.Background(), connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	a.Observe(ctx, connect.NewError(connect.CodePermissionDenied, errors.New("answered")))
 	assertState(t, a, AvailabilityAvailable)
 }
 

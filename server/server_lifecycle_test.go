@@ -147,6 +147,8 @@ func TestConfig_Validate_TLS(t *testing.T) {
 		"cert without key": {CertFile: "server.crt"},
 		"key without cert": {KeyFile: "server.key"},
 		"old minimum":      {CertFile: "server.crt", KeyFile: "server.key", MinVersion: tls.VersionTLS11},
+		"no certificate":   {MinVersion: tls.VersionTLS13},
+		"client CA only":   {CAFile: "ca.crt"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := newTestConfig()

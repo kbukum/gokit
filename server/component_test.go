@@ -34,6 +34,29 @@ func TestComponentDescribeAndRoutes(t *testing.T) {
 	}
 }
 
+func TestNilHandlersAreRejectedAtRegistration(t *testing.T) {
+	s := newTestServer(t)
+	comp := server.NewComponent(s)
+	for name, register := range map[string]func(){
+		"Handle nil":         func() { comp.Handle("/a/", nil) },
+		"Handle typed nil":   func() { comp.Handle("/b/", http.HandlerFunc(nil)) },
+		"Fallback nil":       func() { comp.Fallback(nil) },
+		"Fallback typed nil": func() { comp.Fallback(http.HandlerFunc(nil)) },
+	} {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("%s: registered without panicking", name)
+				}
+			}()
+			register()
+		}()
+	}
+	if mounts := s.Mounts(); len(mounts) != 0 {
+		t.Errorf("mounts = %v, want none", mounts)
+	}
+}
+
 func TestComponentFallbackServesUnmatchedRequests(t *testing.T) {
 	s := newTestServer(t)
 	s.RegisterDefaultEndpoints("svc", healthyCheck)

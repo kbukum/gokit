@@ -35,7 +35,7 @@ type ModuleSpec struct {
 	Listeners []string
 }
 
-// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle may panic on an invalid or conflicting pattern, as *http.ServeMux does; [ModuleContext.Handle] reports that as [ErrRouteConflict]. Fallback installs the handler for requests no route matches, such as a single-page app; the App calls it at most once, after every module has registered.
+// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle and Fallback may panic on a nil handler or an invalid or conflicting pattern, as *http.ServeMux does; the App reports that as [ErrRouteConflict]. Fallback installs the handler for requests no route matches, such as a single-page app; the App calls it at most once, after every module has registered.
 //
 // Listeners are HTTP only; Connect services mount as HTTP handlers. A listener with another mount model, such as a *grpc.Server, is wired by the command outside the module layer.
 type Listener interface {

@@ -16,6 +16,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/endpoint"
 	"github.com/kbukum/gokit/server/middleware"
+	"github.com/kbukum/gokit/util"
 )
 
 // Server is a unified HTTP server backed by Gin with optional support for additional http.Handler mounts (e.g. Connect-Go / gRPC) on the same port.
@@ -152,7 +153,11 @@ func (s *Server) Logger() *logging.Logger {
 // Handle mounts an http.Handler at the given pattern on the root ServeMux.
 // Use this to add Connect-Go or any other handler alongside Gin.
 // The pattern must include a trailing slash for subtree matches (e.g. "/grpc.health.v1.Health/").
+// Like [http.ServeMux.Handle], it panics on a nil or typed-nil handler and on an invalid or conflicting pattern.
 func (s *Server) Handle(pattern string, handler http.Handler) {
+	if util.IsNil(handler) {
+		panic("server: nil handler for " + pattern)
+	}
 	s.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		middleware.SetMetricRoute(r, pattern)
 		handler.ServeHTTP(w, r)

@@ -15,6 +15,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/observability"
+	"github.com/kbukum/gokit/util"
 )
 
 // AdminComponentName is the registry name of the admin listener [WithAdmin] adds.
@@ -36,7 +37,7 @@ type AdminConfig struct {
 	Metrics http.Handler `yaml:"-" mapstructure:"-"`
 }
 
-// Validate reports a host that is not a loopback or private IP address, an out-of-range port or a negative health timeout.
+// Validate reports a host that is not a loopback or private IP address, an out-of-range port, a negative health timeout or a typed-nil metrics handler.
 func (c AdminConfig) Validate() error {
 	var errs []error
 	if c.Host != "" {
@@ -49,6 +50,9 @@ func (c AdminConfig) Validate() error {
 	}
 	if c.HealthTimeout < 0 {
 		errs = append(errs, fmt.Errorf("%w: health_timeout must not be negative", ErrInvalidAdminConfig))
+	}
+	if c.Metrics != nil && util.IsNil(c.Metrics) {
+		errs = append(errs, fmt.Errorf("%w: metrics handler is a typed nil", ErrInvalidAdminConfig))
 	}
 	return errors.Join(errs...)
 }
