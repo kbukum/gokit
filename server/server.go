@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -30,8 +29,6 @@ type Server struct {
 	mounts         []MountedHandler      // tracked for summary display
 	listener       net.Listener          // set by Start(); used by ListenAddr()
 	secHeaders     middleware.Middleware // built once from config; no-op when disabled
-	adminServer    *http.Server
-	adminListener  net.Listener
 	serveWG        sync.WaitGroup
 	cancelRequests context.CancelFunc
 	admissionMu    sync.Mutex
@@ -199,9 +196,6 @@ func (s *Server) Start(ctx context.Context) error {
 		return fmt.Errorf("server failed to bind %s: %w", s.httpServer.Addr, err)
 	}
 	s.listener = listener
-	if err := s.startAdmin(ctx); err != nil {
-		return errors.Join(err, listener.Close())
-	}
 	requestCtx, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
 	s.cancelRequests = cancelRequests
 	s.httpServer.BaseContext = func(net.Listener) context.Context { return requestCtx }
@@ -233,12 +227,9 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) Stop(ctx context.Context) error {
 	ctx, cancel := s.shutdownContext(ctx)
 	defer cancel()
-	publicCtx, publicCancel := context.WithTimeout(ctx, remainingBudget(ctx)/2)
-	publicErr := s.drain(publicCtx)
-	publicCancel()
-	adminErr := s.stopAdmin(ctx)
+	err := s.drain(ctx)
 	s.serveWG.Wait()
-	return errors.Join(publicErr, adminErr)
+	return err
 }
 
 // Addr returns the configured listen address.

@@ -30,7 +30,7 @@ import (
 func TestCoordinatedShutdownDrainsBeforeDependencies(t *testing.T) {
 	const budget = 500 * time.Millisecond
 	const allowance = 250 * time.Millisecond
-	app, err := bootstrap.NewApp(&config.ServiceConfig{Name: "shutdown"}, bootstrap.WithGracefulTimeout(budget))
+	app, err := bootstrap.NewApp(&config.ServiceConfig{Name: "shutdown"}, bootstrap.WithGracefulTimeout(budget), bootstrap.WithAdmin(bootstrap.AdminConfig{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestCoordinatedShutdownDrainsBeforeDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(&server.Config{Host: "127.0.0.1", Admin: &server.AdminConfig{Enabled: true}}, nil)
+	srv := server.New(&server.Config{Host: "127.0.0.1"}, nil)
 	srv.Handle("/events", handler)
 	slowStarted, slowDone := make(chan struct{}), make(chan struct{})
 	srv.Handle("/slow", http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func TestCoordinatedShutdownDrainsBeforeDependencies(t *testing.T) {
 		if !slices.Equal(order, []string{"client"}) {
 			t.Errorf("telemetry closed before clients: %v", order)
 		}
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+srv.AdminAddr().String()+"/metrics", http.NoBody)
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+app.AdminAddr().String()+"/metrics", http.NoBody)
 		if err != nil {
 			return err
 		}
@@ -197,6 +197,7 @@ func TestCoordinatedShutdownDrainsBeforeDependencies(t *testing.T) {
 	}()
 	<-slowStarted
 	assertActive(t.Context(), 2, 1)
+	adminAddr := app.AdminAddr().String()
 	start := time.Now()
 	if err := app.Shutdown(t.Context()); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("slow handler force-close outcome: %v", err)
@@ -209,7 +210,7 @@ func TestCoordinatedShutdownDrainsBeforeDependencies(t *testing.T) {
 	if !slices.Equal(order, []string{"client", "telemetry"}) {
 		t.Fatalf("dependency release order: %v", order)
 	}
-	if response, err := httpClient.Get("http://" + srv.AdminAddr().String() + "/metrics"); err == nil {
+	if response, err := httpClient.Get("http://" + adminAddr + "/metrics"); err == nil {
 		_ = response.Body.Close()
 		t.Fatal("admin listener still accepting after shutdown")
 	}

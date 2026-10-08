@@ -2,12 +2,14 @@ package server_test
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/security"
 	"github.com/kbukum/gokit/server"
 	"github.com/kbukum/gokit/server/endpoint"
 )
@@ -136,6 +139,22 @@ func TestConfig_Validate_Valid(t *testing.T) {
 	cfg := newTestConfig()
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid config: %v", err)
+	}
+}
+
+func TestConfig_Validate_TLS(t *testing.T) {
+	for name, tlsCfg := range map[string]*security.TLSConfig{
+		"cert without key": {CertFile: "server.crt"},
+		"key without cert": {KeyFile: "server.key"},
+		"old minimum":      {CertFile: "server.crt", KeyFile: "server.key", MinVersion: tls.VersionTLS11},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := newTestConfig()
+			cfg.TLS = tlsCfg
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "server.tls") {
+				t.Fatalf("Validate = %v, want a server.tls error", err)
+			}
+		})
 	}
 }
 

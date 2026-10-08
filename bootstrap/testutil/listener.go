@@ -42,6 +42,9 @@ func (l *Listener) Name() string { return l.name }
 // Handle mounts handler at pattern. Like [http.ServeMux.Handle], it panics on an invalid or conflicting pattern.
 func (l *Listener) Handle(pattern string, handler http.Handler) { l.mux.Handle(pattern, handler) }
 
+// Fallback serves requests no mounted pattern matches. It panics if a handler is already mounted at "/".
+func (l *Listener) Fallback(handler http.Handler) { l.mux.Handle("/", handler) }
+
 // ServeHTTP routes r to the mounted handlers, or answers 503 once the listener is quiesced. After Start, each request also receives listener shutdown cancellation while retaining its own context values, deadline and cancellation.
 func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	l.mu.Lock()

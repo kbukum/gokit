@@ -56,6 +56,7 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		}
 	}
 
+	a.state.Store(int32(stateServing))
 	a.Summary.SetStartupDuration(time.Since(start))
 	a.DisplaySummary(ctx)
 	if ctx.Err() != nil {

@@ -102,6 +102,8 @@ func (l *testListener) Drain(context.Context) error {
 
 func (l *testListener) DrainPhase() component.DrainPhase { return l.phase }
 
+func (l *testListener) Fallback(h http.Handler) { l.Handle("/", h) }
+
 func mustListen(t *testing.T, app *App[*testConfig], name string, order *[]string) *testListener {
 	t.Helper()
 	l := newListener(name, order)
@@ -713,6 +715,101 @@ func TestHandleMountsOnNamedListener(t *testing.T) {
 	public.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ping", http.NoBody))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("public /ping = %d, want 404", rec.Code)
+	}
+}
+
+func TestFallbackServesUnmatchedPathsOutsideModuleRoutes(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	var summary bytes.Buffer
+	app.Summary.SetWriter(&summary)
+	public := mustListen(t, app, "public", nil)
+	write := func(body string) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) })
+	}
+	mustUse(t, app,
+		module("spa", nil, nil, func(_ context.Context, mc *ModuleContext) error {
+			if err := mc.Fallback("public", write("spa")); err != nil {
+				return err
+			}
+			for name, err := range map[string]error{
+				"second fallback": mc.Fallback("public", write("again")),
+				"nil handler":     mc.Fallback("public", nil),
+			} {
+				if !errors.Is(err, ErrRouteConflict) {
+					t.Errorf("%s = %v, want ErrRouteConflict", name, err)
+				}
+			}
+			if err := mc.Fallback("internal", write("x")); !errors.Is(err, ErrListenerNotDeclared) {
+				t.Errorf("undeclared listener = %v", err)
+			}
+			return nil
+		}).on("public"),
+		// Routes mounted after the fallback, by a later module, are still reserved.
+		module("api", nil, nil, func(_ context.Context, mc *ModuleContext) error {
+			for _, pattern := range []string{"POST /auth/login", "/svc.v1.Service/"} {
+				if err := mc.Handle("public", pattern, write("api")); err != nil {
+					return err
+				}
+			}
+			return nil
+		}).on("public"))
+	if err := app.Startup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+	for path, want := range map[string]string{
+		"/":                     "spa",
+		"/settings/profile":     "spa",
+		"/authors":              "spa",
+		"/auth/unknown":         "404",
+		"/auth":                 "404",
+		"/svc.v1.Service/Other": "api",
+	} {
+		rec := httptest.NewRecorder()
+		public.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+		got := rec.Body.String()
+		if rec.Code == http.StatusNotFound {
+			got = "404"
+		}
+		if got != want {
+			t.Errorf("GET %s = %d %q, want %s", path, rec.Code, rec.Body, want)
+		}
+	}
+	if !strings.Contains(summary.String(), "public fallback") {
+		t.Errorf("summary does not list the fallback:\n%s", summary.String())
+	}
+}
+
+func TestRoutePrefix(t *testing.T) {
+	t.Parallel()
+	for pattern, want := range map[string]string{
+		"POST /auth/login":      "/auth",
+		"/svc.v1.Service/":      "/svc.v1.Service",
+		"example.com/feed/x":    "/feed",
+		"GET /":                 "",
+		"/{tenant}/feed":        "",
+		"GET example.com/{id}/": "",
+		"no-slash":              "",
+	} {
+		if got := routePrefix(pattern); got != want {
+			t.Errorf("routePrefix(%q) = %q, want %q", pattern, got, want)
+		}
+	}
+}
+
+func TestFallbackConflictsWithRootRoute(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	mustListen(t, app, "public", nil)
+	mustUse(t, app, module("m", nil, nil, func(_ context.Context, mc *ModuleContext) error {
+		if err := mc.Handle("public", "/", http.NotFoundHandler()); err != nil {
+			return err
+		}
+		return mc.Fallback("public", http.NotFoundHandler())
+	}).on("public"))
+	if err := app.Startup(context.Background()); !errors.Is(err, ErrRouteConflict) {
+		t.Fatalf("Startup = %v, want ErrRouteConflict", err)
 	}
 }
 

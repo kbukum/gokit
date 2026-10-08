@@ -405,3 +405,17 @@ func TestListenerDrainLeavesNoWaiterBehindAStuckHandler(t *testing.T) { //nolint
 		t.Fatalf("a drain left a goroutine waiting for the stuck handler:\n%s", dump.String())
 	}
 }
+
+func TestListenerFallbackServesUnmatchedRequests(t *testing.T) {
+	t.Parallel()
+	l := NewListener("public")
+	l.Handle("GET /ok", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) }))
+	l.Fallback(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("spa")) }))
+	for path, want := range map[string]string{"/ok": "ok", "/settings": "spa"} {
+		rec := httptest.NewRecorder()
+		l.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+		if rec.Body.String() != want {
+			t.Errorf("GET %s = %q, want %q", path, rec.Body, want)
+		}
+	}
+}

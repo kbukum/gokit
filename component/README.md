@@ -66,7 +66,7 @@ Start order remains registration order. Shutdown first calls each optional `Quie
 
 Use `RegisterInPhase` for telemetry and admin resources, or let a component declare `ShutdownPhase()`. Most components use the default resource phase. `bootstrap.App` places DI-container cleanup between resource components and telemetry. `Registry.Shutdown` exposes the same boundary to hosts that manage their own container.
 
-Shutdown uses one bounded context and gives each operation a share of the remaining time. Quiescers must be prompt and idempotent; drain/stop methods must honor their context and release owned goroutines. No detached timeout wrapper can safely kill code that ignores cancellation. `StopAllDetailed` reports quiesce, drain, and stop errors for each component.
+Shutdown uses one bounded context. It reserves 1/`StopReserveDivisor` (a quarter) of the deadline for stops and the release; draining uses the rest. Drainers in one phase drain concurrently, ingress before workers, and time ingress leaves unused passes to workers, so adding components never shortens draining. Stops then share the remaining time in order. Quiescers must be prompt and idempotent; drain/stop methods must honor their context and release owned goroutines. No detached timeout wrapper can safely kill code that ignores cancellation. `StopAllDetailed` reports quiesce, drain, and stop errors for each component.
 
 ---
 

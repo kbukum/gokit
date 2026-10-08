@@ -13,10 +13,11 @@ type Config struct {
 	// Optional when using service discovery, which resolves addresses dynamically.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
-	// Timeout is the HTTP request timeout. Zero means no timeout. Note:
-	// for long-running streaming RPCs,
-	// callers should use per-request context deadlines instead of relying on this global timeout.
+	// Timeout bounds each whole request, including reading a streamed response. Zero uses the default; set NoTimeout for long-lived streams.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
+
+	// NoTimeout builds a client without a whole-request timeout, for streams that stay open as long as the caller listens. Bound each call with its context instead. It cannot be combined with Timeout.
+	NoTimeout bool `yaml:"no_timeout" mapstructure:"no_timeout"`
 
 	// DialTimeout is the timeout for establishing the TCP connection.
 	DialTimeout time.Duration `yaml:"dial_timeout" mapstructure:"dial_timeout"`
@@ -44,7 +45,7 @@ const (
 
 // ApplyDefaults fills in zero-value fields with sensible defaults.
 func (c *Config) ApplyDefaults() {
-	if c.Timeout == 0 {
+	if c.Timeout == 0 && !c.NoTimeout {
 		c.Timeout = defaultTimeout
 	}
 	if c.DialTimeout == 0 {
@@ -62,6 +63,9 @@ func (c *Config) Validate() error {
 		// valid
 	default:
 		return fmt.Errorf("connect client: unsupported protocol %q (use connect, grpc, or grpcweb)", c.Protocol)
+	}
+	if c.NoTimeout && c.Timeout != 0 {
+		return fmt.Errorf("connect client: timeout and no_timeout are mutually exclusive")
 	}
 	if c.TLS != nil {
 		if err := c.TLS.Validate(); err != nil {

@@ -339,7 +339,77 @@ type moduleWiring struct {
 	registry  *component.Registry
 	listeners map[string]Listener
 	mounted   map[string]map[string]bool
+	fallbacks map[string]fallback
 	values    map[PortRef]any
+}
+
+type fallback struct {
+	module  string
+	handler http.Handler
+}
+
+func (w *moduleWiring) setFallback(listener, module string, handler http.Handler) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if prev, ok := w.fallbacks[listener]; ok {
+		return fmt.Errorf("%w: %s already has a fallback from module %q", ErrRouteConflict, listener, prev.module)
+	}
+	w.fallbacks[listener] = fallback{module: module, handler: handler}
+	return nil
+}
+
+// installFallbacks gives each listener its fallback, guarded so it never answers under a prefix a module route owns.
+func (w *moduleWiring) installFallbacks() (err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for listener, fb := range w.fallbacks {
+		var reserved []string
+		for pattern := range w.mounted[listener] {
+			if prefix := routePrefix(pattern); prefix != "" && !slices.Contains(reserved, prefix) {
+				reserved = append(reserved, prefix)
+			}
+		}
+		if err := installFallback(w.listeners[listener], listener, fb, reserved); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func installFallback(l Listener, listener string, fb fallback, reserved []string) (err error) {
+	defer func() {
+		// A listener with a route at "/" cannot also take a fallback; http.ServeMux reports that by panicking.
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %s fallback from module %q: %v", ErrRouteConflict, listener, fb.module, r)
+		}
+	}()
+	l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		for _, prefix := range reserved {
+			if r.URL.Path == prefix || strings.HasPrefix(r.URL.Path, prefix+"/") {
+				http.NotFound(rw, r)
+				return
+			}
+		}
+		fb.handler.ServeHTTP(rw, r)
+	}))
+	return nil
+}
+
+// routePrefix returns the first literal path segment of an http.ServeMux pattern ("[METHOD ][HOST]/[PATH]"), such as "/auth" for "POST /auth/login", or "" for the root or a wildcard segment.
+func routePrefix(pattern string) string {
+	_, rest, found := strings.Cut(pattern, " ")
+	if !found {
+		rest = pattern
+	}
+	slash := strings.IndexByte(rest, '/')
+	if slash < 0 {
+		return ""
+	}
+	segment, _, _ := strings.Cut(rest[slash+1:], "/")
+	if segment == "" || strings.Contains(segment, "{") {
+		return ""
+	}
+	return "/" + segment
 }
 
 func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (err error) {

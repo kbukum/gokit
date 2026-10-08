@@ -121,9 +121,11 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
 | `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
-| `client.Config` | Client config: BaseURL, Timeout, DialTimeout, Protocol, TLS |
+| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS |
 | `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
 | `client.IsTransportFailure(err)` | Report a failure marked `client.ErrTransport`: the peer was unreachable or the connection broke mid-response, under any Connect code. Caller cancellation and a clean end of stream are not marked |
+| `client.Unreachable(err)` | Report that the peer did not answer: a transport failure, `Unavailable`, `DeadlineExceeded`, `Canceled`, or a non-Connect error |
+| `client.NewAvailability(name)` | Interceptor that records from real calls whether a peer answered; its `Health()` is degraded while the peer is unreachable. `Observe` lets the caller record outcomes the interceptor cannot see; failures after the caller's own context ended are ignored |
 | `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
 | `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |
 

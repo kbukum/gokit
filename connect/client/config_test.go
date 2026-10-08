@@ -81,3 +81,26 @@ func TestConfigValidatePropagatesTLSError(t *testing.T) {
 		t.Fatalf("error %q does not mention TLS version", err.Error())
 	}
 }
+
+func TestNoTimeoutKeepsTheClientUnbounded(t *testing.T) {
+	cfg := Config{NoTimeout: true}
+	cfg.ApplyDefaults()
+	if cfg.Timeout != 0 {
+		t.Fatalf("Timeout = %s, want 0 with NoTimeout", cfg.Timeout)
+	}
+	hc, err := NewHTTPClient(Config{NoTimeout: true})
+	if err != nil {
+		t.Fatalf("NewHTTPClient: %v", err)
+	}
+	if hc.Timeout != 0 {
+		t.Fatalf("http.Client.Timeout = %s, want 0", hc.Timeout)
+	}
+}
+
+func TestValidateRejectsTimeoutWithNoTimeout(t *testing.T) {
+	cfg := Config{Protocol: ProtocolConnect, NoTimeout: true, Timeout: time.Second}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "no_timeout") {
+		t.Fatalf("Validate = %v, want a no_timeout conflict", err)
+	}
+}

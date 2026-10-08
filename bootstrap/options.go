@@ -16,6 +16,7 @@ type appOptions struct {
 	logger          *logging.Logger
 	container       *di.Container
 	gracefulTimeout *time.Duration
+	admin           *AdminConfig
 }
 
 // resolveOptions applies all options and returns the collected values.

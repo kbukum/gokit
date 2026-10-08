@@ -48,6 +48,9 @@ func NewComponent(s *Server, opts ...ComponentOption) *Component {
 // Handle mounts handler at pattern on the server's root ServeMux, as [Server.Handle] does. With it the component is a bootstrap.Listener that modules mount routes on.
 func (sc *Component) Handle(pattern string, handler http.Handler) { sc.server.Handle(pattern, handler) }
 
+// Fallback serves requests that no Gin route or mounted handler matches, as [Server.Fallback] does.
+func (sc *Component) Fallback(handler http.Handler) { sc.server.Fallback(handler) }
+
 // Name returns the component name used for registration.
 func (sc *Component) Name() string { return sc.name }
 

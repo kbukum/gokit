@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,9 @@ const (
 	PhaseTelemetry
 	PhaseAdmin
 )
+
+// StopReserveDivisor sets the share of the shutdown deadline kept for stopping components and releasing resources: 1/StopReserveDivisor. Draining uses the rest.
+const StopReserveDivisor = 4
 
 // Quiescer stops acceptance immediately without waiting for accepted work.
 type Quiescer interface {
@@ -72,7 +76,9 @@ func quiesceOrder(entries []*componentEntry) []*componentEntry {
 	return ordered
 }
 
-// Shutdown quiesces every component, drains ingress then workers, and closes resources, telemetry, then admin. releaseResources closes container-owned clients after resource components and before telemetry. Each operation receives a share of the remaining total deadline, so draining cannot consume the entire shutdown budget. Calls are cooperative, never detached.
+// Shutdown quiesces every component, drains ingress then workers, and closes resources, telemetry, then admin. releaseResources closes container-owned clients after resource components and before telemetry.
+//
+// The deadline is split so that adding components never shortens draining: 1/[StopReserveDivisor] of it is reserved for stops and the release, and draining uses the rest. Drainers in one phase drain concurrently. Each phase present gets an equal part of the drain window left when it starts, so time ingress does not use passes to workers. Stops share whatever time remains, in order. Calls are cooperative, never detached.
 func (r *Registry) Shutdown(ctx context.Context, releaseResources func(context.Context) error) error {
 	var errs []error
 	for _, result := range r.shutdown(ctx, releaseResources) {
@@ -113,26 +119,21 @@ func (r *Registry) shutdown(ctx context.Context, releaseResources func(context.C
 			results[indices[entry]].Err = quiescer.Quiesce()
 		}
 	}
-	slices.SortStableFunc(drains, func(a, b *componentEntry) int {
-		ad, _ := a.component.(Drainer)
-		bd, _ := b.component.(Drainer)
-		return int(ad.DrainPhase() - bd.DrainPhase())
-	})
-	remaining := len(entries) + len(drains)
+	deadline, _ := ctx.Deadline()
+	drainEnd := deadline.Add(-time.Until(deadline) / StopReserveDivisor)
+	for _, phase := range drainPhases(drains) {
+		phaseEnd := time.Now().Add(max(time.Until(drainEnd), 0) / time.Duration(phase.remaining))
+		drainPhase(ctx, phaseEnd, phase.entries, indices, results)
+	}
+	remaining := len(entries)
 	if releaseResources != nil {
 		remaining++
 	}
 	call := func(fn func(context.Context) error) error {
-		deadline, _ := ctx.Deadline()
 		opCtx, opCancel := context.WithTimeout(ctx, max(time.Until(deadline)/time.Duration(max(remaining, 1)), 0))
 		defer opCancel()
 		remaining--
 		return fn(opCtx)
-	}
-	for _, entry := range drains {
-		drainer, _ := entry.component.(Drainer)
-		i := indices[entry]
-		results[i].Err = errors.Join(results[i].Err, call(drainer.Drain))
 	}
 	slices.SortStableFunc(entries, func(a, b *componentEntry) int { return int(a.phase - b.phase) })
 	release := func() {
@@ -156,4 +157,45 @@ func (r *Registry) shutdown(ctx context.Context, releaseResources func(context.C
 	}
 	release()
 	return results
+}
+
+type drainGroup struct {
+	entries []*componentEntry
+	// remaining counts this phase and the phases after it, which share the drain window left when it starts.
+	remaining int
+}
+
+// drainPhases groups drainers by phase, ingress first.
+func drainPhases(drains []*componentEntry) []drainGroup {
+	byPhase := map[DrainPhase][]*componentEntry{}
+	var phases []DrainPhase
+	for _, entry := range drains {
+		drainer, _ := entry.component.(Drainer)
+		p := drainer.DrainPhase()
+		if _, seen := byPhase[p]; !seen {
+			phases = append(phases, p)
+		}
+		byPhase[p] = append(byPhase[p], entry)
+	}
+	slices.Sort(phases)
+	groups := make([]drainGroup, len(phases))
+	for i, p := range phases {
+		groups[i] = drainGroup{entries: byPhase[p], remaining: len(phases) - i}
+	}
+	return groups
+}
+
+// drainPhase drains every entry concurrently until each returns or phaseEnd passes. Each result slot is written by one goroutine and read after all have joined.
+func drainPhase(ctx context.Context, phaseEnd time.Time, entries []*componentEntry, indices map[*componentEntry]int, results []StopResult) {
+	phaseCtx, cancel := context.WithDeadline(ctx, phaseEnd)
+	defer cancel()
+	var wg sync.WaitGroup
+	for _, entry := range entries {
+		drainer, _ := entry.component.(Drainer)
+		i := indices[entry]
+		wg.Go(func() {
+			results[i].Err = errors.Join(results[i].Err, drainer.Drain(phaseCtx))
+		})
+	}
+	wg.Wait()
 }

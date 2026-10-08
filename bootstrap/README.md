@@ -133,6 +133,7 @@ How it behaves:
 
 - A port is identified by its `*Port` value: two `NewPort` calls are different ports even with the same name. Port types must be interfaces.
 - Listeners are HTTP only. A `Listener` is a component that quiesces and drains, with `Handle(pattern, handler)` for routes, and it must drain as `component.DrainIngress`. A module lists the listeners it mounts on in `ModuleSpec.Listeners` and can only `Handle` routes on those. An invalid or conflicting pattern is returned as `ErrRouteConflict`.
+- `ModuleContext.Fallback(listener, handler)` sets the handler for requests no route matches, such as a single-page app; a listener has one fallback, and a second is `ErrRouteConflict`. The App installs it after every module registers and answers 404 under the first path segment of every module route on that listener (for `POST /auth/login`, everything under `/auth`), so unknown API paths never reach the fallback.
 - Startup checks the whole module set before any module registers. Missing ports, duplicate providers (such as a module and its client module in one App), missing listeners, every dependency cycle, listener component names that are empty, shared or already registered, and invalid declarations come back together as one `*ModuleError` inside a `*StartupError` with phase `modules`. A module whose `Register` returns without providing a declared port is reported after it registers.
 - Modules register in dependency order, keeping `Use` order where they are independent. A module can only `Provide` and `Need` ports in its own spec, and it must provide every port it declares.
 - The modules phase runs after `OnConfigure`. Components start in this order: those registered before `Run` or in `OnConfigure`, then module components in dependency order, then listener components in `Listen` order, then any registered in `OnBeforeStart`.
@@ -188,6 +189,12 @@ If the caller's context ends during startup, startup stops after the running pha
 
 The App owns the logger it creates from config and releases it last, within the shutdown budget. A logger passed with `WithLogger` is borrowed and never closed. The App always closes its DI container, including one passed with `WithContainer`.
 
+## Admin listener
+
+`WithAdmin(AdminConfig{Host, Port, Pprof, HealthTimeout, Metrics})` adds an App-owned diagnostics listener named `admin`. It serves `GET /livez`, `GET /readyz`, `GET /metrics` (`observability.RuntimeMetricsHandler` unless `Metrics` is set) and, with `Pprof`, `/debug/pprof/`. It serves without TLS, so the host must be a loopback or private IP address; the default is loopback, and port zero picks an ephemeral port. `App.AdminAddr()` reports the bound address.
+
+`/readyz` returns a `Readiness` body. It reports `starting` (503) until startup completes and `draining` (503) from the moment shutdown begins. In between it checks component health within `HealthTimeout` (2 seconds by default): any unhealthy component makes it `not_ready` (503), any degraded one `degraded` (200), otherwise `ready` (200). The listener registers before every other component in the admin shutdown phase, so it starts first and stops last, and it does not quiesce: probes and metrics answer throughout the drain.
+
 One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host several modules in one process, add them to one App with `Use` rather than nesting apps. `Startup` and `Shutdown` serve embedding and tests.
 
 ## Key Types & Functions
@@ -205,11 +212,12 @@ One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host
 | `Use()` / `Listen()` / `CheckModules()` | Compose modules and named listeners; check wiring without starting |
 | `Provide()` / `Need()` | Fill or read a declared port inside `Register` |
 | `ValueModule()` | A module that provides one port with a value, such as a test double |
-| `Listener` | HTTP listener component that modules mount routes on |
+| `Listener` | HTTP listener component that modules mount routes and a fallback on |
 | `ModuleError` / `ModuleProblem` | Every wiring problem found at startup |
 | `testutil.NewApp()` / `Start()` / `Listen()` / `Capture()` | Run modules in tests |
 | `testutil.RemoteSafe()` / `testutil.Contract()` | Check a port's remote shape; run one suite against every implementation |
-| `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` | App options |
+| `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` / `WithAdmin()` | App options |
+| `AdminConfig` / `Readiness` / `AdminAddr()` | Admin listener configuration, `/readyz` body and bound address |
 | `Summary` | Tracks and displays startup summary |
 
 ---
