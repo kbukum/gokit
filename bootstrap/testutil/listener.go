@@ -26,12 +26,13 @@ type Listener struct {
 	cancel   context.CancelFunc
 	closing  bool
 	stopping bool
-	handlers sync.WaitGroup
+	active   int           // admitted handlers still running
+	drained  chan struct{} // closed once the listener is closing and no handler runs
 }
 
 // NewListener returns a stopped listener whose component name is name.
 func NewListener(name string) *Listener {
-	return &Listener{name: name, mux: http.NewServeMux()}
+	return &Listener{name: name, mux: http.NewServeMux(), drained: make(chan struct{})}
 }
 
 // Name returns the component name.
@@ -48,9 +49,16 @@ func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "shutting down", http.StatusServiceUnavailable)
 		return
 	}
-	l.handlers.Add(1)
+	l.active++
 	l.mu.Unlock()
-	defer l.handlers.Done()
+	defer func() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		l.active--
+		if l.closing && l.active == 0 {
+			close(l.drained)
+		}
+	}()
 	l.mux.ServeHTTP(w, r)
 }
 
@@ -85,7 +93,12 @@ func (l *Listener) Start(ctx context.Context) error {
 func (l *Listener) Quiesce() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.closing = true
+	if !l.closing {
+		l.closing = true
+		if l.active == 0 {
+			close(l.drained)
+		}
+	}
 	return nil
 }
 
@@ -121,8 +134,9 @@ func (l *Listener) Stop(ctx context.Context) error {
 	return err
 }
 
-// shutdown stops accepting connections and gives in-flight requests four fifths of ctx's remaining time. If they outlast it, it force-closes connections and cancels request contexts, then waits for handlers to return until ctx ends, so no handler outlives a successful drain. It returns the graceful-shutdown error and any wait failure.
+// shutdown quiesces the listener, stops accepting connections and gives in-flight requests four fifths of ctx's remaining time. If they outlast it, it force-closes connections and cancels request contexts, then waits for handlers to return until ctx ends, so no handler outlives a successful drain. It returns the graceful-shutdown error and any wait failure.
 func (l *Listener) shutdown(ctx context.Context, srv *http.Server) error {
+	_ = l.Quiesce() // never fails; admission must be closed for drained to close
 	graceCtx := ctx
 	if deadline, ok := ctx.Deadline(); ok {
 		var cancel context.CancelFunc
@@ -134,13 +148,8 @@ func (l *Listener) shutdown(ctx context.Context, srv *http.Server) error {
 		err = errors.Join(err, srv.Close())
 		l.cancel()
 	}
-	waited := make(chan struct{})
-	go func() {
-		l.handlers.Wait()
-		close(waited)
-	}()
 	select {
-	case <-waited:
+	case <-l.drained:
 	case <-ctx.Done():
 		err = errors.Join(err, ctx.Err())
 	}

@@ -2,7 +2,7 @@
 //
 // # Running modules in a test
 //
-// [NewApp] returns a quiet App for tests, and [Start] starts any App and shuts it down when the test ends. [bootstrap.ValueModule] provides a port with a test double, [Capture] reads a port that the modules under test provide, and [Listen] declares a loopback HTTP [Listener] whose URL the test can call. Capture is itself a module that needs the port, so a missing provider fails startup with the same [bootstrap.ModuleError] a service would see.
+// [NewApp] returns a quiet App for tests, and [Start] starts any App within a bounded setup budget and shuts it down when the test ends. [bootstrap.ValueModule] provides a port with a test double, [Capture] reads a port that the modules under test provide, and [Listen] declares a loopback HTTP [Listener] whose URL the test can call. Capture is itself a module that needs the port, so a missing provider fails startup with the same [bootstrap.ModuleError] a service would see.
 //
 //	app := testutil.NewApp(t)
 //	public := testutil.Listen(t, app, "public")

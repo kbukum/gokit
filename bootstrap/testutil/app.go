@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -11,7 +12,11 @@ import (
 	"github.com/kbukum/gokit/bootstrap"
 	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/logging"
+	kittestutil "github.com/kbukum/gokit/testutil"
 )
+
+// ErrStartBudget is the cancellation cause of a [Start] whose startup outlasts its setup budget.
+var ErrStartBudget = errors.New("bootstrap/testutil: startup exceeded its setup budget")
 
 // Config is the configuration of an App built by [NewApp].
 type Config struct {
@@ -37,13 +42,25 @@ func NewApp(t testing.TB, opts ...bootstrap.Option) *bootstrap.App[*Config] {
 	return app
 }
 
-// Start runs app's startup and fails t if it fails. On success it shuts app down when the test and its subtests finish, reporting a shutdown error on t. Startup uses a background context so components keep running until that shutdown, after t.Context is canceled.
-func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C]) {
+// Start runs app's startup and fails t if it fails. Startup gets the setup budget of opts (30 seconds by default; see [kittestutil.WithBudgets]): if configure, start or ready hooks outlast it, the startup context is canceled with [ErrStartBudget] and startup rolls back. The budget covers startup only. Once started, app keeps its context, which carries t.Context's values but not its cancellation, until Start shuts app down when the test and its subtests finish, reporting a shutdown error on t. Shutdown is bounded by the App's graceful timeout.
+func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...kittestutil.Option) {
 	t.Helper()
-	if err := app.Startup(context.Background()); err != nil {
+	budget := kittestutil.ResolveBudgets(opts...).Setup
+	ctx, cancel := context.WithCancelCause(context.WithoutCancel(t.Context()))
+	budgetTimer := time.AfterFunc(budget, func() { cancel(fmt.Errorf("%w (%s)", ErrStartBudget, budget)) })
+	err := app.Startup(ctx)
+	disarmed := budgetTimer.Stop()
+	if err == nil && !disarmed {
+		// The budget fired as startup returned, so the app may hold a canceled context.
+		err = errors.Join(context.Cause(ctx), app.Shutdown(context.Background()))
+	}
+	if err != nil {
+		cancel(nil)
 		t.Fatalf("testutil: startup: %v", err)
+		return
 	}
 	t.Cleanup(func() {
+		defer cancel(nil)
 		if err := app.Shutdown(context.Background()); err != nil {
 			t.Errorf("testutil: shutdown: %v", err)
 		}

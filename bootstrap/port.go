@@ -3,7 +3,11 @@ package bootstrap
 import "reflect"
 
 // Port is a typed key for a capability one module provides and other modules need. T is the Go interface the capability exposes. A port is identified by its value, not its name: declare each port once with [NewPort] as a package variable next to its interface and reference that variable everywhere. Two NewPort calls are different ports even with the same name.
-type Port[T any] struct{ ref PortRef }
+type Port[T any] struct {
+	ref PortRef
+	// Zero-size and unused; it makes Port types for different T distinct, so a *Port[A] cannot be converted to a *Port[B] and provide a B value under A's key.
+	_ [0]T
+}
 
 // NewPort declares a port with interface type T. The name is for people: it appears in errors and the startup summary. Startup reports an empty name or a non-interface T as an invalid declaration.
 func NewPort[T any](name string) *Port[T] {

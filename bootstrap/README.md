@@ -160,7 +160,7 @@ func TestAPIModule(t *testing.T) {
 }
 ```
 
-`Start` works with any `*bootstrap.App[C]`, so a test can also start a command's real composition. `Capture` is an ordinary module that needs the port, so a missing provider fails startup with the same `*ModuleError` a service reports.
+`Start` works with any `*bootstrap.App[C]`, so a test can also start a command's real composition. Startup is bounded by the shared test setup budget (30 seconds, or `kittestutil.WithBudgets` from `gokit/testutil`); a hook that outlasts it is canceled with `testutil.ErrStartBudget` and startup rolls back. The budget does not cancel an app that started. `Capture` is an ordinary module that needs the port, so a missing provider fails startup with the same `*ModuleError` a service reports.
 
 `testutil.AssertRemoteSafe` checks that a port's methods take a `context.Context` first, return an `error` last, and pass no channels, functions, unsafe pointers or interfaces at any depth (pointers, slices, maps and exported struct fields are inspected; types that encode themselves are accepted as is). `testutil.Contract` runs one behavior suite against the in-process implementation and the client module's client, so a module can move between services without changing behavior:
 

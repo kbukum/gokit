@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -158,5 +160,40 @@ func TestListenerDrainForceClosesAndCancelsRequestsAtDeadline(t *testing.T) {
 	}
 	if err := l.Stop(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Not parallel: it inspects every goroutine, so no other test's listener may be draining.
+func TestListenerDrainLeavesNoWaiterBehindAStuckHandler(t *testing.T) { //nolint:paralleltest // see above
+	l := NewListener("public")
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	l.Handle("GET /stuck", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		close(entered)
+		<-release // ignores cancellation, so it outlives every drain
+	}))
+	if err := l.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, l.URL()+"/stuck", http.NoBody)
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+	<-entered
+	for range 3 {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+		if err := l.Drain(ctx); !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("Drain = %v, want DeadlineExceeded", err)
+		}
+		cancel()
+	}
+	var dump strings.Builder
+	if err := pprof.Lookup("goroutine").WriteTo(&dump, 1); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(dump.String(), "(*Listener).shutdown") {
+		t.Fatalf("a drain left a goroutine waiting for the stuck handler:\n%s", dump.String())
 	}
 }

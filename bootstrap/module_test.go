@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -820,5 +821,18 @@ func TestStartupJoinsCancelCauseWithPhaseError(t *testing.T) {
 	}))
 	if err := app.Startup(ctx); !errors.Is(err, cause) || !errors.Is(err, boom) {
 		t.Fatalf("Startup = %v, want both the phase error and the cancel cause", err)
+	}
+}
+
+func TestPortsOfDifferentInterfacesAreNotConvertible(t *testing.T) {
+	t.Parallel()
+	// A conversion like (*Port[greeter])(storePort) would let Provide store a greeter under the store key.
+	for _, pair := range [][2]reflect.Type{
+		{reflect.TypeFor[Port[greeter]](), reflect.TypeFor[Port[store]]()},
+		{reflect.TypeFor[*Port[greeter]](), reflect.TypeFor[*Port[store]]()},
+	} {
+		if pair[0].ConvertibleTo(pair[1]) || pair[1].ConvertibleTo(pair[0]) {
+			t.Errorf("%s and %s are convertible", pair[0], pair[1])
+		}
 	}
 }

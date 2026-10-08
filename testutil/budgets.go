@@ -19,7 +19,8 @@ func WithBudgets(b Budgets) Option {
 	return func(target *Budgets) { *target = b }
 }
 
-func lifecycleBudgets(opts []Option) Budgets {
+// ResolveBudgets applies opts to the defaults: 30 seconds for setup and reset, 10 seconds for cleanup. Other test harnesses use it so every gokit lifecycle helper shares one budget option.
+func ResolveBudgets(opts ...Option) Budgets {
 	b := Budgets{Setup: 30 * time.Second, Cleanup: 10 * time.Second}
 	for _, opt := range opts {
 		opt(&b)

@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/bootstrap"
+	kittestutil "github.com/kbukum/gokit/testutil"
 )
 
 type clock interface{ Now() string }
@@ -197,5 +199,36 @@ func TestCaptureDistinguishesPortsWithTheSameName(t *testing.T) {
 	Start(t, app)
 	if a().Now() != "1" || b().Now() != "2" {
 		t.Fatalf("captured %q and %q", a().Now(), b().Now())
+	}
+}
+
+func TestStartFailsWhenStartupOutlastsItsBudget(t *testing.T) {
+	t.Parallel()
+	rec := &recordingTB{TB: t}
+	app := NewApp(t)
+	app.OnBeforeStart(func(ctx context.Context) error {
+		<-ctx.Done() // a hook that only returns on cancellation
+		return ctx.Err()
+	})
+	Start(rec, app, kittestutil.WithBudgets(kittestutil.Budgets{Setup: 20 * time.Millisecond}))
+	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "startup") || !strings.Contains(rec.failures[0], ErrStartBudget.Error()) {
+		t.Fatalf("failures = %v, want one startup failure naming the budget", rec.failures)
+	}
+}
+
+func TestStartBudgetDoesNotCancelAStartedApp(t *testing.T) {
+	t.Parallel()
+	app := NewApp(t)
+	var lifecycle context.Context
+	app.OnReady(func(ctx context.Context) error {
+		lifecycle = ctx
+		return nil
+	})
+	const budget = 10 * time.Millisecond
+	Start(t, app, kittestutil.WithBudgets(kittestutil.Budgets{Setup: budget}))
+	select {
+	case <-lifecycle.Done():
+		t.Fatalf("lifecycle context ended after a successful start: %v", context.Cause(lifecycle))
+	case <-time.After(5 * budget):
 	}
 }

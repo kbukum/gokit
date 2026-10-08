@@ -44,7 +44,7 @@ func Teardown(comp kitcomponent.Component) error {
 
 // TeardownWithContext stops a test component with a custom context.
 func TeardownWithContext(ctx context.Context, comp kitcomponent.Component) error {
-	ctx, cancel := cleanupContext(ctx, lifecycleBudgets(nil).Cleanup)
+	ctx, cancel := cleanupContext(ctx, ResolveBudgets().Cleanup)
 	defer cancel()
 	return comp.Stop(ctx)
 }
