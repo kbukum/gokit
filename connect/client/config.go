@@ -1,7 +1,10 @@
 package client
 
 import (
+	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/security"
@@ -9,8 +12,7 @@ import (
 
 // Config holds configuration for a Connect client connection.
 type Config struct {
-	// BaseURL is the root URL for the target service (e.g., "http://localhost:8080").
-	// Optional when using service discovery, which resolves addresses dynamically.
+	// BaseURL is the root URL for the target service (e.g., "http://localhost:8080"), optionally with a path prefix. Its scheme matches the transport: https with TLS, http (h2c) without. It carries no credentials, query or fragment. Optional when using service discovery, which resolves addresses dynamically.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
 	// Timeout bounds each whole request, including reading a streamed response. Zero uses the default; set NoTimeout for long-lived streams.
@@ -77,6 +79,31 @@ func (c *Config) Validate() error {
 		if err := c.TLS.Validate(); err != nil {
 			return err
 		}
+	}
+	return c.validateBaseURL()
+}
+
+// validateBaseURL never echoes the URL, which may carry a credential.
+func (c *Config) validateBaseURL() error {
+	if c.BaseURL == "" {
+		return nil
+	}
+	u, err := url.Parse(c.BaseURL)
+	if err != nil {
+		return errors.New("connect client: base_url does not parse")
+	}
+	switch {
+	case u.User != nil:
+		return errors.New("connect client: base_url must not carry credentials")
+	case u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https"):
+		return errors.New("connect client: base_url must be an absolute http or https URL")
+	// url.Parse drops an empty fragment, so look for the raw delimiter; an escaped %23 stays valid.
+	case u.RawQuery != "" || u.ForceQuery || strings.Contains(c.BaseURL, "#"):
+		return errors.New("connect client: base_url must not have a query or fragment")
+	case u.Scheme == "https" && !c.TLS.IsEnabled():
+		return errors.New("connect client: an https base_url needs tls settings")
+	case u.Scheme == "http" && c.TLS.IsEnabled():
+		return errors.New("connect client: an http base_url is cleartext h2c; use https with tls settings")
 	}
 	return nil
 }

@@ -71,8 +71,8 @@ func main() {
 |-------|------|-------------|
 | `SkipVerify` | `bool` | Disable server certificate verification (not for production) |
 | `CAFile` | `string` | Path to CA certificate PEM file |
-| `CertFile` | `string` | Path to client certificate PEM (for mTLS) |
-| `KeyFile` | `string` | Path to client private key PEM (for mTLS) |
+| `CertFile` | `string` | Path to the certificate PEM this side presents: the server certificate, or the client certificate for mTLS |
+| `KeyFile` | `string` | Path to the private key PEM for `CertFile` |
 | `ServerName` | `string` | Override server name for certificate verification (SNI) |
 | `MinVersion` | `uint16` | Minimum TLS version; defaults to TLS 1.2 |
 

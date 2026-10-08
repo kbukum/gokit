@@ -16,10 +16,10 @@ type TLSConfig struct {
 	// CAFile is the path to the CA certificate file for verifying the server.
 	CAFile string `yaml:"ca_file" mapstructure:"ca_file"`
 
-	// CertFile is the path to the client TLS certificate file (for mTLS).
+	// CertFile is the path to the certificate this side presents: the server certificate when serving, or the client certificate for mTLS.
 	CertFile string `yaml:"cert_file" mapstructure:"cert_file"`
 
-	// KeyFile is the path to the client TLS key file (for mTLS).
+	// KeyFile is the path to the private key for CertFile.
 	KeyFile string `yaml:"key_file" mapstructure:"key_file"`
 
 	// ServerName overrides the server name used for certificate verification.
@@ -67,7 +67,7 @@ func (c *TLSConfig) Build() (*tls.Config, error) {
 		return nil, err
 	}
 
-	if err := c.loadClientCert(cfg); err != nil {
+	if err := c.loadCertificate(cfg); err != nil {
 		return nil, err
 	}
 
@@ -119,14 +119,14 @@ func (c *TLSConfig) loadCA(cfg *tls.Config) error {
 	return nil
 }
 
-// loadClientCert loads the client certificate and key into the TLS config.
-func (c *TLSConfig) loadClientCert(cfg *tls.Config) error {
+// loadCertificate loads the certificate and key this side presents into the TLS config.
+func (c *TLSConfig) loadCertificate(cfg *tls.Config) error {
 	if c.CertFile == "" || c.KeyFile == "" {
 		return nil
 	}
 	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
 	if err != nil {
-		return fmt.Errorf("security/tls: failed to load client certificate: %w", err)
+		return fmt.Errorf("security/tls: failed to load certificate and key: %w", err)
 	}
 	cfg.Certificates = []tls.Certificate{cert}
 	return nil

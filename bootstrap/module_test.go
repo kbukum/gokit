@@ -779,7 +779,9 @@ func TestFallbackServesUnmatchedPathsOutsideModuleRoutes(t *testing.T) {
 		"/svc.v1.Service/Other": "api",
 		"/admin/other":          "404",
 		"/%61dmin/other":        "404",
-		"/admin%2Fx":            "spa",
+		"/admin%2Fx":            "404",
+		"/auth%2Funknown":       "404",
+		"/authors%2Fx":          "spa",
 	} {
 		rec := httptest.NewRecorder()
 		public.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, http.NoBody))
@@ -991,6 +993,29 @@ func TestPortsOfDifferentInterfacesAreNotConvertible(t *testing.T) {
 	} {
 		if pair[0].ConvertibleTo(pair[1]) || pair[1].ConvertibleTo(pair[0]) {
 			t.Errorf("%s and %s are convertible", pair[0], pair[1])
+		}
+	}
+}
+
+func TestIsReserved(t *testing.T) {
+	t.Parallel()
+	reserved := []string{"/auth", "/a/b"}
+	for path, want := range map[string]bool{
+		"/auth":         true,
+		"/auth/x":       true,
+		"/auth%2Fx":     true,
+		"/%61uth":       true,
+		"/a%2Fb":        true,
+		"/a%2Fb%2Fc/d":  true,
+		"/a%2Fbc":       false,
+		"/a/b":          false,
+		"/authors%2Fx":  false,
+		"/%zz":          true,
+		"/":             false,
+		"/settings/x/y": false,
+	} {
+		if got := isReserved(path, reserved); got != want {
+			t.Errorf("isReserved(%q) = %v, want %v", path, got, want)
 		}
 	}
 }

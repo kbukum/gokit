@@ -26,9 +26,11 @@ var ErrInvalidAdminConfig = errors.New("bootstrap: invalid admin config")
 
 // AdminConfig configures the diagnostics listener [WithAdmin] adds. It serves without TLS, so it binds only a trusted address: the default host is loopback, and port zero asks the OS for an ephemeral port.
 type AdminConfig struct {
-	// Host is a loopback or private IP address; empty means 127.0.0.1.
+	// Host is a loopback or private IP address; empty means 127.0.0.1. With AllInterfaces it is empty or an unspecified address (0.0.0.0 or ::).
 	Host string `yaml:"host" mapstructure:"host"`
-	Port int    `yaml:"port" mapstructure:"port"`
+	// AllInterfaces binds every interface, for platforms such as Kubernetes that probe the pod address and isolate the network namespace. The listener has no TLS or authentication, so it refuses Pprof.
+	AllInterfaces bool `yaml:"all_interfaces" mapstructure:"all_interfaces"`
+	Port          int  `yaml:"port" mapstructure:"port"`
 	// Pprof serves net/http/pprof under /debug/pprof/.
 	Pprof bool `yaml:"pprof" mapstructure:"pprof"`
 	// HealthTimeout bounds the component health checks behind /readyz; zero means 2s.
@@ -37,14 +39,10 @@ type AdminConfig struct {
 	Metrics http.Handler `yaml:"-" mapstructure:"-"`
 }
 
-// Validate reports a host that is not a loopback or private IP address, an out-of-range port, a negative health timeout or a typed-nil metrics handler.
+// Validate reports a host that is not a loopback or private IP address (or, with AllInterfaces, not empty or unspecified), Pprof on every interface, an out-of-range port, a negative health timeout or a typed-nil metrics handler.
 func (c AdminConfig) Validate() error {
 	var errs []error
-	if c.Host != "" {
-		if ip, err := netip.ParseAddr(c.Host); err != nil || (!ip.IsLoopback() && !ip.IsPrivate()) {
-			errs = append(errs, fmt.Errorf("%w: host %q must be a loopback or private IP address", ErrInvalidAdminConfig, c.Host))
-		}
-	}
+	errs = append(errs, c.validateHost())
 	if c.Port < 0 || c.Port > 65535 {
 		errs = append(errs, fmt.Errorf("%w: port %d must be between 0 and 65535", ErrInvalidAdminConfig, c.Port))
 	}
@@ -55,6 +53,29 @@ func (c AdminConfig) Validate() error {
 		errs = append(errs, fmt.Errorf("%w: metrics handler is a typed nil", ErrInvalidAdminConfig))
 	}
 	return errors.Join(errs...)
+}
+
+func (c AdminConfig) validateHost() error {
+	if c.AllInterfaces {
+		if c.Pprof {
+			return fmt.Errorf("%w: pprof is not served on every interface", ErrInvalidAdminConfig)
+		}
+		if ip, err := netip.ParseAddr(c.Host); c.Host != "" && (err != nil || !ip.IsUnspecified()) {
+			return fmt.Errorf("%w: host %q must be empty or an unspecified address with all_interfaces", ErrInvalidAdminConfig, c.Host)
+		}
+		return nil
+	}
+	if c.Host == "" {
+		return nil
+	}
+	ip, err := netip.ParseAddr(c.Host)
+	switch {
+	case err == nil && ip.IsUnspecified():
+		return fmt.Errorf("%w: host %q binds every interface; set all_interfaces to allow it", ErrInvalidAdminConfig, c.Host)
+	case err != nil || (!ip.IsLoopback() && !ip.IsPrivate()):
+		return fmt.Errorf("%w: host %q must be a loopback or private IP address", ErrInvalidAdminConfig, c.Host)
+	}
+	return nil
 }
 
 // WithAdmin adds a diagnostics listener the App owns. It serves:
@@ -140,7 +161,7 @@ func newAdmin(cfg AdminConfig, readiness func(context.Context) Readiness) (*admi
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if cfg.Host == "" {
+	if cfg.Host == "" && !cfg.AllInterfaces {
 		cfg.Host = "127.0.0.1"
 	}
 	if cfg.HealthTimeout == 0 {

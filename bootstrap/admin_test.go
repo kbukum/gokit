@@ -210,7 +210,10 @@ func TestAdminUsesTheGivenMetricsHandler(t *testing.T) {
 func TestAdminConfigIsValidated(t *testing.T) {
 	t.Parallel()
 	for name, cfg := range map[string]AdminConfig{
-		"public host":             {Host: "0.0.0.0"},
+		"wildcard without opt-in": {Host: "0.0.0.0"},
+		"ipv6 wildcard":           {Host: "::"},
+		"all interfaces and host": {AllInterfaces: true, Host: "10.0.0.1"},
+		"all interfaces pprof":    {AllInterfaces: true, Pprof: true},
 		"public address":          {Host: "203.0.113.7"},
 		"hostname":                {Host: "localhost"},
 		"negative port":           {Port: -1},
@@ -247,5 +250,26 @@ func TestAdminPortInUseFailsStartup(t *testing.T) {
 	var startupErr *StartupError
 	if err := second.Startup(t.Context()); !errors.As(err, &startupErr) || startupErr.Phase != PhaseStart {
 		t.Fatalf("Startup on a taken port = %v, want a start-phase StartupError", err)
+	}
+}
+
+func TestAdminBindsAllInterfacesOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
+	for _, cfg := range []AdminConfig{{AllInterfaces: true}, {AllInterfaces: true, Host: "0.0.0.0"}, {AllInterfaces: true, Host: "::"}} {
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("%+v: %v", cfg, err)
+		}
+	}
+	app := newAdminApp(t, AdminConfig{AllInterfaces: true})
+	if err := app.Startup(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+	addr, ok := app.AdminAddr().(*net.TCPAddr)
+	if !ok || !addr.IP.IsUnspecified() {
+		t.Fatalf("AdminAddr = %v, want an unspecified address", app.AdminAddr())
+	}
+	if got := get(t.Context(), t, app, "/livez"); got.code != http.StatusOK {
+		t.Fatalf("livez = %d", got.code)
 	}
 }

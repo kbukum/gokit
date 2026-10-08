@@ -491,7 +491,7 @@ func TestTLSConfig_Build_NonexistentCertFileClearError(t *testing.T) {
 	if !strings.Contains(err.Error(), "security/tls:") {
 		t.Errorf("error should have security/tls prefix: %v", err)
 	}
-	if !strings.Contains(err.Error(), "failed to load client certificate") {
+	if !strings.Contains(err.Error(), "failed to load certificate and key") {
 		t.Errorf("error should mention client certificate loading: %v", err)
 	}
 }

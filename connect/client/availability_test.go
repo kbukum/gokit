@@ -203,8 +203,9 @@ type fakeConn struct {
 	send    []error
 }
 
-func (c *fakeConn) Receive(any) error { return pop(&c.receive) }
-func (c *fakeConn) Send(any) error    { return pop(&c.send) }
+func (c *fakeConn) Receive(any) error   { return pop(&c.receive) }
+func (c *fakeConn) Send(any) error      { return pop(&c.send) }
+func (c *fakeConn) CloseRequest() error { return nil }
 func (c *fakeConn) RequestHeader() http.Header {
 	return http.Header{}
 }
