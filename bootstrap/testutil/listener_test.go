@@ -15,6 +15,12 @@ import (
 	"github.com/kbukum/gokit/component"
 )
 
+func TestListenerRouteContract(t *testing.T) {
+	t.Parallel()
+	listener := NewListener("public")
+	AssertListenerRoutes(t, listener, listener)
+}
+
 func TestListenerLifecycle(t *testing.T) {
 	t.Parallel()
 	l := NewListener("public")

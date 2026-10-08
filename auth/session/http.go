@@ -14,19 +14,19 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// Login is the bounded password login input. Credentials must never be logged.
-type Login struct {
+// LoginCredentials is the bounded password login input. Credentials must never be logged.
+type LoginCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
 // LoginVerifier supplies application-owned verification without embedding membership in sessions.
 type LoginVerifier interface {
-	VerifyLogin(context.Context, Login) (auth.Principal, error)
+	VerifyLogin(context.Context, LoginCredentials) (auth.Principal, error)
 }
-type LoginVerifierFunc func(context.Context, Login) (auth.Principal, error)
+type LoginVerifierFunc func(context.Context, LoginCredentials) (auth.Principal, error)
 
-func (f LoginVerifierFunc) VerifyLogin(ctx context.Context, in Login) (auth.Principal, error) {
+func (f LoginVerifierFunc) VerifyLogin(ctx context.Context, in LoginCredentials) (auth.Principal, error) {
 	return f(ctx, in)
 }
 
@@ -75,9 +75,9 @@ func NewHandler(backend Backend, cfg HandlerConfig) (http.Handler, error) {
 	return mux, nil
 }
 
-// RequestCSRF returns the synchronizer token an unsafe request presents in exactly one X-CSRF-Token header.
+// ParseCSRFToken returns the synchronizer token an unsafe request presents in exactly one X-CSRF-Token header.
 // Safe methods return an empty token without error.
-func RequestCSRF(r *http.Request) (string, error) {
+func ParseCSRFToken(r *http.Request) (string, error) {
 	if !unsafe(r.Method) {
 		return "", nil
 	}
@@ -125,7 +125,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 	reader := http.MaxBytesReader(w, r.Body, 4096)
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
-	var input Login
+	var input LoginCredentials
 	if decodeErr := decoder.Decode(&input); decodeErr != nil {
 		h.errors(w, r, apperrors.InvalidInput("login", "Invalid login input"))
 		return
@@ -135,7 +135,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, apperrors.InvalidInput("login", "Invalid login input"))
 		return
 	}
-	grant, err := h.backend.SignIn(ctx, SignIn{Login: input, Presented: credential.Value})
+	grant, err := h.backend.Login(ctx, LoginRequest{Credentials: input, Presented: credential.Value})
 	input.Password = ""
 	if err != nil {
 		h.errors(w, r, err)
@@ -235,12 +235,12 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, tokenErr)
 		return
 	}
-	csrf, err := RequestCSRF(r)
+	csrf, err := ParseCSRFToken(r)
 	if err != nil {
 		h.errors(w, r, err)
 		return
 	}
-	if err := h.backend.SignOut(ctx, SignOut{Token: credential.Value, CSRFToken: csrf}); err != nil {
+	if err := h.backend.Logout(ctx, LogoutRequest{Token: credential.Value, CSRFToken: csrf}); err != nil {
 		h.errors(w, r, err)
 		return
 	}

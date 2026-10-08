@@ -41,14 +41,14 @@
 //
 // # Long-lived streams
 //
-// A stream client sets NoTimeout and bounds the wait for the first message instead. FirstMessageTimeout goes after Availability, so a peer that never answers is recorded as unavailable, and Unanswered maps the failure for the caller:
+// A stream client sets NoTimeout and bounds the wait for the first message instead. FirstMessageTimeoutInterceptor goes after Availability, so a peer that never answers is recorded as unavailable, and MapCallFailure maps the failure for the caller:
 //
 //	cfg := client.Config{BaseURL: "http://localhost:8080", NoTimeout: true}
 //	availability := client.NewAvailability("feed")
-//	first, err := client.FirstMessageTimeout(time.Second, util.SystemClock{})
+//	first, err := client.FirstMessageTimeoutInterceptor(time.Second, util.SystemClock{})
 //	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(availability, first))
 //	...
-//	if appErr, ok := client.Unanswered(ctx, "feed", stream.Err()); ok {
+//	if appErr, ok := client.MapCallFailure(ctx, "feed", stream.Err()); ok {
 //	    return appErr
 //	}
 //

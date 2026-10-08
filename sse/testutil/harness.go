@@ -20,7 +20,7 @@ type Harness struct {
 }
 
 // New serves a real endpoint with the supplied limits and authorization.
-func New(t *testing.T, limits sse.Limits, cfg sse.HandlerConfig) *Harness {
+func New(t testing.TB, limits sse.Limits, cfg sse.HandlerConfig) *Harness {
 	t.Helper()
 	bus, err := sse.NewBus(limits)
 	if err != nil {
@@ -69,7 +69,7 @@ func (h *Harness) Resume(ctx context.Context, token, cursor string) (*StreamClie
 
 // MustConnect opens a connection and fails the test on a transport error. It does
 // not assert on status; use [RequireStatus] for that.
-func (h *Harness) MustConnect(t *testing.T, ctx context.Context, token string) *StreamClient {
+func (h *Harness) MustConnect(t testing.TB, ctx context.Context, token string) *StreamClient {
 	t.Helper()
 	stream, err := h.Connect(ctx, token)
 	if err != nil {
@@ -80,7 +80,7 @@ func (h *Harness) MustConnect(t *testing.T, ctx context.Context, token string) *
 
 // RequireStatus asserts the stream's response status, and drains and closes
 // rejected bodies so no test goroutine leaks a held connection.
-func RequireStatus(t *testing.T, stream *StreamClient, want int) {
+func RequireStatus(t testing.TB, stream *StreamClient, want int) {
 	t.Helper()
 	resp := stream.Response() //nolint:bodyclose // stream owns the body; the caller closes accepted streams, and rejected ones are drained/closed below.
 	if resp.StatusCode != want {

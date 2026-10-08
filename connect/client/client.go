@@ -1,12 +1,16 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 
 	"connectrpc.com/connect"
 )
+
+// ErrRedirect reports a redirect refused to keep RPC credentials and request bodies at the configured peer.
+var ErrRedirect = errors.New("connect client: redirects are not allowed")
 
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
@@ -15,6 +19,7 @@ import (
 // and gRPC communication without TLS.
 //
 // The returned client can be passed directly to any generated Connect client constructor.
+// Redirects fail with [ErrRedirect], including redirects within the same origin.
 func NewHTTPClient(cfg Config) (*http.Client, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -29,6 +34,9 @@ func NewHTTPClient(cfg Config) (*http.Client, error) {
 	return &http.Client{
 		Transport: transport,
 		Timeout:   cfg.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return ErrRedirect
+		},
 	}, nil
 }
 

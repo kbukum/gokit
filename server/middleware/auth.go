@@ -76,14 +76,14 @@ func newAuthHandler[T any](validator TokenValidator[T], setClaims ClaimsSetter[T
 		if err != nil || !present {
 			c.Abort()
 			c.Header("WWW-Authenticate", security.BearerAuthScheme)
-			WriteProblem(c.Writer, c.Request, apperrors.Unauthorized(""))
+			WriteProblemDetails(c.Writer, c.Request, apperrors.Unauthorized(""))
 			return
 		}
 		claims, err := validator.ValidateToken(c.Request.Context(), token)
 		if err != nil || util.IsNil(claims) {
 			c.Abort()
 			c.Header("WWW-Authenticate", security.BearerAuthScheme)
-			WriteProblem(c.Writer, c.Request, apperrors.Unauthorized("").WithCause(err))
+			WriteProblemDetails(c.Writer, c.Request, apperrors.Unauthorized("").WithCause(err))
 			return
 		}
 		c.Request = c.Request.WithContext(setClaims(c.Request.Context(), claims))

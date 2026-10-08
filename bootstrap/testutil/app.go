@@ -97,11 +97,11 @@ func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...Star
 	})
 }
 
-// Listen declares a loopback HTTP [Listener] named name on app and returns it, failing t if app no longer accepts declarations.
-func Listen[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], name string) *Listener {
+// RegisterListener declares a loopback HTTP [Listener] named name on app and returns it, failing t if app no longer accepts declarations.
+func RegisterListener[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], name string) *Listener {
 	t.Helper()
 	l := NewListener(name)
-	if err := app.Listen(name, l); err != nil {
+	if err := app.RegisterListener(name, l); err != nil {
 		t.Fatalf("testutil: listen %q: %v", name, err)
 	}
 	return l

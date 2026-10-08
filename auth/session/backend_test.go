@@ -21,13 +21,13 @@ func (c fixedClock) Now() time.Time { return c.now }
 
 // remoteBackend models a gateway that delegates session ownership to another service.
 type remoteBackend struct {
-	signIn  func(context.Context, SignIn) (Grant, error)
+	signIn  func(context.Context, LoginRequest) (Grant, error)
 	status  func(context.Context, string) (Grant, error)
-	signOut func(context.Context, SignOut) error
+	signOut func(context.Context, LogoutRequest) error
 	calls   []string
 }
 
-func (b *remoteBackend) SignIn(ctx context.Context, in SignIn) (Grant, error) {
+func (b *remoteBackend) Login(ctx context.Context, in LoginRequest) (Grant, error) {
 	b.calls = append(b.calls, "signIn")
 	return b.signIn(ctx, in)
 }
@@ -37,7 +37,7 @@ func (b *remoteBackend) Status(ctx context.Context, token string) (Grant, error)
 	return b.status(ctx, token)
 }
 
-func (b *remoteBackend) SignOut(ctx context.Context, in SignOut) error {
+func (b *remoteBackend) Logout(ctx context.Context, in LogoutRequest) error {
 	b.calls = append(b.calls, "signOut")
 	return b.signOut(ctx, in)
 }
@@ -68,10 +68,10 @@ func remoteHandler(t *testing.T, backend Backend, clock util.Clock) http.Handler
 func TestRemoteBackendServesBrowserContract(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	var signedIn SignIn
-	var signedOut SignOut
+	var signedIn LoginRequest
+	var signedOut LogoutRequest
 	backend := &remoteBackend{
-		signIn: func(_ context.Context, in SignIn) (Grant, error) {
+		signIn: func(_ context.Context, in LoginRequest) (Grant, error) {
 			signedIn = in
 			return remoteGrant(now), nil
 		},
@@ -83,7 +83,7 @@ func TestRemoteBackendServesBrowserContract(t *testing.T) {
 			grant.Token = ""
 			return grant, nil
 		},
-		signOut: func(_ context.Context, in SignOut) error {
+		signOut: func(_ context.Context, in LogoutRequest) error {
 			signedOut = in
 			return nil
 		},
@@ -92,8 +92,8 @@ func TestRemoteBackendServesBrowserContract(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, loginRequest(remoteToken))
-	if w.Code != http.StatusOK || signedIn.Presented != remoteToken || signedIn.Login.Username != "u" || signedIn.Login.Password != "p" {
-		t.Fatalf("login = %d %+v", w.Code, signedIn.Login.Username)
+	if w.Code != http.StatusOK || signedIn.Presented != remoteToken || signedIn.Credentials.Username != "u" || signedIn.Credentials.Password != "p" {
+		t.Fatalf("login = %d %+v", w.Code, signedIn.Credentials.Username)
 	}
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Value != remoteToken || cookies[0].MaxAge != 1800 || !cookies[0].Secure || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteStrictMode {
@@ -115,7 +115,7 @@ func TestRemoteBackendServesBrowserContract(t *testing.T) {
 	logout.Header.Set("X-CSRF-Token", "csrf-remote")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, logout)
-	if w.Code != http.StatusNoContent || signedOut != (SignOut{Token: remoteToken, CSRFToken: "csrf-remote"}) {
+	if w.Code != http.StatusNoContent || signedOut != (LogoutRequest{Token: remoteToken, CSRFToken: "csrf-remote"}) {
 		t.Fatalf("logout = %d %+v", w.Code, signedOut)
 	}
 	if cleared := w.Result().Cookies(); len(cleared) != 1 || cleared[0].MaxAge != -1 {
@@ -128,9 +128,9 @@ func TestRemoteBackendRejectsBeforeDelegation(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	fail := errors.New("backend must not be called")
 	backend := &remoteBackend{
-		signIn:  func(context.Context, SignIn) (Grant, error) { return Grant{}, fail },
+		signIn:  func(context.Context, LoginRequest) (Grant, error) { return Grant{}, fail },
 		status:  func(context.Context, string) (Grant, error) { return Grant{}, fail },
-		signOut: func(context.Context, SignOut) error { return fail },
+		signOut: func(context.Context, LogoutRequest) error { return fail },
 	}
 	h := remoteHandler(t, backend, fixedClock{now})
 	for name, r := range map[string]*http.Request{
@@ -166,11 +166,11 @@ func TestRemoteBackendFailuresAndExpiredGrants(t *testing.T) {
 	expired := remoteGrant(now)
 	expired.Principal.ExpiresAt = now
 	backend := &remoteBackend{
-		signIn: func(context.Context, SignIn) (Grant, error) { return expired, nil },
+		signIn: func(context.Context, LoginRequest) (Grant, error) { return expired, nil },
 		status: func(context.Context, string) (Grant, error) {
 			return Grant{}, apperrors.ServiceUnavailable("access")
 		},
-		signOut: func(context.Context, SignOut) error { return auth.Failure("SESSION_INVALID") },
+		signOut: func(context.Context, LogoutRequest) error { return auth.Failure("SESSION_INVALID") },
 	}
 	h := remoteHandler(t, backend, fixedClock{now})
 	w := httptest.NewRecorder()
@@ -211,7 +211,7 @@ func TestNewHandlerRequiresBackendConfig(t *testing.T) {
 	}
 }
 
-func TestRequestCSRF(t *testing.T) {
+func TestParseCSRFToken(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
 		method  string
@@ -230,7 +230,7 @@ func TestRequestCSRF(t *testing.T) {
 		for _, value := range tt.values {
 			r.Header.Add("X-CSRF-Token", value)
 		}
-		token, err := RequestCSRF(r)
+		token, err := ParseCSRFToken(r)
 		if (err != nil) != tt.wantErr || token != tt.token {
 			t.Fatalf("%s %v = %q, %v", tt.method, tt.values, token, err)
 		}
@@ -261,7 +261,7 @@ func TestRemoteBackendRejectsInvalidPrincipals(t *testing.T) {
 		grant := remoteGrant(now)
 		mutate(&grant.Principal)
 		backend := &remoteBackend{
-			signIn: func(context.Context, SignIn) (Grant, error) { return grant, nil },
+			signIn: func(context.Context, LoginRequest) (Grant, error) { return grant, nil },
 			status: func(context.Context, string) (Grant, error) { return grant, nil },
 		}
 		h := remoteHandler(t, backend, fixedClock{now})
@@ -283,7 +283,7 @@ func TestRemoteBackendUnencodableGrantSetsNoCookie(t *testing.T) {
 	now := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	grant := remoteGrant(now)
 	grant.Principal.ExpiresAt = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
-	backend := &remoteBackend{signIn: func(context.Context, SignIn) (Grant, error) { return grant, nil }}
+	backend := &remoteBackend{signIn: func(context.Context, LoginRequest) (Grant, error) { return grant, nil }}
 	w := httptest.NewRecorder()
 	remoteHandler(t, backend, fixedClock{now}).ServeHTTP(w, loginRequest(""))
 	if w.Code < 400 || w.Header().Get("Set-Cookie") != "" {

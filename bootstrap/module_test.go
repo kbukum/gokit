@@ -72,19 +72,24 @@ func mustUse(t *testing.T, app *App[*testConfig], modules ...Module) {
 type testListener struct {
 	orderTrackingComponent
 	*http.ServeMux
-	phase    component.DrainPhase
-	quiesced bool
+	phase       component.DrainPhase
+	quiesced    bool
+	fallback    http.Handler
+	fallbackErr error
 }
 
 func newListener(name string, order *[]string) *testListener {
 	if order == nil {
 		order = &[]string{}
 	}
-	return &testListener{
+	l := &testListener{
 		orderTrackingComponent: orderTrackingComponent{name: name, order: order, health: component.Health{Name: name, Status: component.StatusHealthy}},
 		ServeMux:               http.NewServeMux(),
 		phase:                  component.DrainIngress,
+		fallback:               http.NotFoundHandler(),
 	}
+	l.ServeMux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { l.fallback.ServeHTTP(w, r) }))
+	return l
 }
 
 // Quiesce is idempotent, as component.Quiescer requires; it records only the first call.
@@ -114,12 +119,18 @@ func (l *testListener) Handle(pattern string, h http.Handler) (err error) {
 	return nil
 }
 
-func (l *testListener) Fallback(h http.Handler) error { return l.Handle("/", h) }
+func (l *testListener) Fallback(h http.Handler) error {
+	if l.fallbackErr != nil {
+		return l.fallbackErr
+	}
+	l.fallback = h
+	return nil
+}
 
 func mustListen(t *testing.T, app *App[*testConfig], name string, order *[]string) *testListener {
 	t.Helper()
 	l := newListener(name, order)
-	if err := app.Listen(name, l); err != nil {
+	if err := app.RegisterListener(name, l); err != nil {
 		t.Fatal(err)
 	}
 	return l
@@ -392,7 +403,7 @@ func TestInvalidDeclarationsAreReported(t *testing.T) {
 		name string
 		l    Listener
 	}{{"", newListener("x", nil)}, {"public", newListener("public", nil)}, {"public", newListener("public", nil)}, {"nil", nilListener}, {"worker", worker}} {
-		if err := app.Listen(l.name, l.l); err != nil {
+		if err := app.RegisterListener(l.name, l.l); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -425,8 +436,8 @@ func TestModuleContextRejectsUndeclaredAndNilPorts(t *testing.T) {
 		if mc.Name() != "m" || mc.Logger() == nil {
 			t.Errorf("Name = %q, Logger = %v", mc.Name(), mc.Logger())
 		}
-		if err := mc.AddComponent(nil); err == nil {
-			t.Error("AddComponent(nil) succeeded")
+		if err := mc.RegisterComponent(nil); err == nil {
+			t.Error("RegisterComponent(nil) succeeded")
 		}
 		if _, err := Need(mc, storePort); !errors.Is(err, ErrPortNotDeclared) {
 			t.Errorf("Need undeclared = %v", err)
@@ -488,9 +499,9 @@ func TestModuleContextClosesAfterRegister(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
 	for name, err := range map[string]error{
-		"AddComponent": saved.AddComponent(&mockComponent{name: "late"}),
-		"Handle":       saved.Handle("public", "/late", http.NotFoundHandler()),
-		"Provide":      Provide(saved, greeterPort, aGreeter()),
+		"RegisterComponent": saved.RegisterComponent(&mockComponent{name: "late"}),
+		"Handle":            saved.Handle("public", "/late", http.NotFoundHandler()),
+		"Provide":           Provide(saved, greeterPort, aGreeter()),
 	} {
 		if !errors.Is(err, ErrModuleContextClosed) {
 			t.Errorf("late %s = %v, want ErrModuleContextClosed", name, err)
@@ -516,13 +527,13 @@ func TestRegisterFailureRollsBackAndNamesModule(t *testing.T) {
 	laterRegistered := false
 	mustUse(t, app,
 		module("first", refs(greeterPort.Ref()), nil, func(_ context.Context, mc *ModuleContext) error {
-			if err := mc.AddComponent(&orderTrackingComponent{name: "first-res", order: &order}); err != nil {
+			if err := mc.RegisterComponent(&orderTrackingComponent{name: "first-res", order: &order}); err != nil {
 				return err
 			}
 			return Provide(mc, greeterPort, aGreeter())
 		}),
 		module("broken", refs(storePort.Ref()), refs(greeterPort.Ref()), func(_ context.Context, mc *ModuleContext) error {
-			if err := mc.AddComponent(&orderTrackingComponent{name: "broken-res", order: &order}); err != nil {
+			if err := mc.RegisterComponent(&orderTrackingComponent{name: "broken-res", order: &order}); err != nil {
 				return err
 			}
 			return boom
@@ -566,7 +577,7 @@ func TestListenerStartFailureStopsModuleComponents(t *testing.T) {
 	l := mustListen(t, app, "public", &order)
 	l.startErr = boom
 	mustUse(t, app, module("m", nil, nil, func(_ context.Context, mc *ModuleContext) error {
-		return mc.AddComponent(&orderTrackingComponent{name: "module", order: &order})
+		return mc.RegisterComponent(&orderTrackingComponent{name: "module", order: &order})
 	}))
 	err := app.Startup(context.Background())
 	var startErr *StartupError
@@ -587,7 +598,7 @@ func TestConfigureComponentsStartBeforeModulesAndListenersLast(t *testing.T) {
 	})
 	mustListen(t, app, "public", &order)
 	mustUse(t, app, module("m", nil, nil, func(_ context.Context, mc *ModuleContext) error {
-		return mc.AddComponentInPhase(&workerComponent{orderTrackingComponent{name: "module", order: &order}}, component.PhaseResources)
+		return mc.RegisterComponentInPhase(&workerComponent{orderTrackingComponent{name: "module", order: &order}}, component.PhaseResources)
 	}))
 	if err := app.Startup(context.Background()); err != nil {
 		t.Fatal(err)
@@ -622,13 +633,13 @@ func TestConfigureHookCanUseModulesAndListeners(t *testing.T) {
 				}).on("public"),
 				ValueModule("store-double", storePort, aStore()),
 			),
-			a.Listen("public", newListener("public", nil)),
+			a.RegisterListener("public", newListener("public", nil)),
 		)
 	})
 	var lateUse, lateListen error
 	app.OnBeforeStart(func(context.Context) error {
 		lateUse = app.Use(module("late", nil, nil, nil))
-		lateListen = app.Listen("late", newListener("late", nil))
+		lateListen = app.RegisterListener("late", newListener("late", nil))
 		return nil
 	})
 	if err := app.Startup(context.Background()); err != nil {
@@ -639,7 +650,7 @@ func TestConfigureHookCanUseModulesAndListeners(t *testing.T) {
 		t.Fatalf("store returned %q", got)
 	}
 	if !errors.Is(lateUse, ErrLifecycleUsed) || !errors.Is(lateListen, ErrLifecycleUsed) {
-		t.Fatalf("after modules phase: Use = %v, Listen = %v, want ErrLifecycleUsed", lateUse, lateListen)
+		t.Fatalf("after modules phase: Use = %v, RegisterListener = %v, want ErrLifecycleUsed", lateUse, lateListen)
 	}
 }
 
@@ -818,18 +829,29 @@ func TestRoutePrefix(t *testing.T) {
 	}
 }
 
-func TestFallbackConflictsWithRootRoute(t *testing.T) {
+func TestRootRouteIsReservedForListenerDispatch(t *testing.T) {
 	t.Parallel()
 	app := newQuietApp(t)
 	mustListen(t, app, "public", nil)
 	mustUse(t, app, module("m", nil, nil, func(_ context.Context, mc *ModuleContext) error {
-		if err := mc.Handle("public", "/", http.NotFoundHandler()); err != nil {
-			return err
-		}
-		return mc.Fallback("public", http.NotFoundHandler())
+		return mc.Handle("public", "/", http.NotFoundHandler())
 	}).on("public"))
 	if err := app.Startup(context.Background()); !errors.Is(err, ErrRouteConflict) {
 		t.Fatalf("Startup = %v, want ErrRouteConflict", err)
+	}
+}
+
+func TestFallbackInstallationPreservesListenerFailure(t *testing.T) {
+	t.Parallel()
+	app := newQuietApp(t)
+	public := mustListen(t, app, "public", nil)
+	cause := errors.New("listener refused fallback")
+	public.fallbackErr = cause
+	mustUse(t, app, module("m", nil, nil, func(_ context.Context, mc *ModuleContext) error {
+		return mc.Fallback("public", http.NotFoundHandler())
+	}).on("public"))
+	if err := app.Startup(t.Context()); !errors.Is(err, ErrRouteConflict) || !errors.Is(err, cause) {
+		t.Fatalf("Startup = %v, want route conflict preserving the listener failure", err)
 	}
 }
 
@@ -843,8 +865,8 @@ func TestUseAfterLifecycleIsRejected(t *testing.T) {
 	if err := app.Use(module("late", nil, nil, nil)); !errors.Is(err, ErrLifecycleUsed) {
 		t.Fatalf("Use = %v", err)
 	}
-	if err := app.Listen("x", newListener("x", nil)); !errors.Is(err, ErrLifecycleUsed) {
-		t.Fatalf("Listen = %v", err)
+	if err := app.RegisterListener("x", newListener("x", nil)); !errors.Is(err, ErrLifecycleUsed) {
+		t.Fatalf("RegisterListener = %v", err)
 	}
 }
 
@@ -933,7 +955,7 @@ func TestListenerComponentNamesAreChecked(t *testing.T) {
 	app := newQuietApp(t)
 	mustRegisterComponent(t, app, &mockComponent{name: "taken"})
 	for name, component := range map[string]string{"public": "http", "internal": "http", "admin": "", "debug": "taken"} {
-		if err := app.Listen(name, newListener(component, nil)); err != nil {
+		if err := app.RegisterListener(name, newListener(component, nil)); err != nil {
 			t.Fatal(err)
 		}
 	}

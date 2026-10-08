@@ -16,7 +16,29 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
+	"github.com/kbukum/gokit/server/middleware"
 )
+
+func TestProblemWritersRejectUnencodableDetails(t *testing.T) {
+	for name, write := range map[string]func(*gin.Context, error){
+		"gin": server.RespondWithError,
+		"http": func(c *gin.Context, err error) {
+			middleware.WriteProblemDetails(c.Writer, c.Request, err)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, response := newRespCtx()
+			write(c, apperrors.InvalidInput("field", "invalid").WithDetails(map[string]any{"value": func() {}}))
+			var got apperrors.ProblemDetail
+			if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+				t.Fatalf("invalid problem JSON: %v", err)
+			}
+			if response.Code != http.StatusInternalServerError || got.Code != apperrors.ErrCodeInternal {
+				t.Fatalf("response = %d %+v", response.Code, got)
+			}
+		})
+	}
+}
 
 func TestResponseUsesSharedNormalization(t *testing.T) {
 	for _, tc := range []struct {

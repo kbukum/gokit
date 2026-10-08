@@ -20,10 +20,13 @@ func TestIsUnavailableClassifiesPeerFailures(t *testing.T) {
 		want bool
 	}{
 		{"transport failure under any code", connect.NewError(connect.CodeInternal, &transportError{cause: errors.New("reset")}), true},
-		{"unavailable", connect.NewError(connect.CodeUnavailable, errors.New("down")), true},
-		{"deadline exceeded", connect.NewError(connect.CodeDeadlineExceeded, errors.New("slow")), true},
-		{"canceled by the peer", connect.NewError(connect.CodeCanceled, errors.New("gone")), true},
-		{"not a connect error", errors.New("plain"), true},
+		{"unavailable from peer", peerError(t, connect.NewError(connect.CodeUnavailable, errors.New("down"))), true},
+		{"deadline exceeded", peerError(t, connect.NewError(connect.CodeDeadlineExceeded, errors.New("slow"))), true},
+		{"canceled by the peer", peerError(t, connect.NewError(connect.CodeCanceled, errors.New("gone"))), true},
+		{"local error without peer evidence", errors.New("plain"), false},
+		{"clean stream end", io.EOF, false},
+		{"transport failure wrapping EOF", &transportError{cause: io.EOF}, true},
+		{"peer failure wrapping EOF", peerError(t, connect.NewError(connect.CodeUnavailable, io.EOF)), true},
 		{"answer: permission denied", connect.NewError(connect.CodePermissionDenied, errors.New("no")), false},
 		{"answer: resource exhausted", connect.NewError(connect.CodeResourceExhausted, errors.New("slow down")), false},
 		{"answer: internal", connect.NewError(connect.CodeInternal, errors.New("bug")), false},
@@ -45,13 +48,13 @@ func TestAvailabilityStartsUnknownAndFollowsTraffic(t *testing.T) {
 	ctx := context.Background()
 	assertState(t, a, AvailabilityUnknown)
 
-	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")}))
 	assertState(t, a, AvailabilityUnavailable)
 
-	a.Observe(ctx, connect.NewError(connect.CodePermissionDenied, errors.New("answered")))
+	a.Observe(ctx, peerError(t, connect.NewError(connect.CodePermissionDenied, errors.New("answered"))))
 	assertState(t, a, AvailabilityAvailable)
 
-	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")}))
 	a.Observe(ctx, nil)
 	assertState(t, a, AvailabilityAvailable)
 }
@@ -76,16 +79,17 @@ func TestAvailabilityIgnoresCallerDeadline(t *testing.T) {
 
 func TestAvailabilityCountsAnAnswerAfterTheCallerEnded(t *testing.T) {
 	a := NewAvailability("access")
-	a.Observe(context.Background(), connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	a.Observe(context.Background(), connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")}))
+	answered := peerError(t, connect.NewError(connect.CodePermissionDenied, errors.New("answered")))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	a.Observe(ctx, connect.NewError(connect.CodePermissionDenied, errors.New("answered")))
+	a.Observe(ctx, answered)
 	assertState(t, a, AvailabilityAvailable)
 }
 
 func TestAvailabilityCountsPeerDeadlineWhileCallerWaits(t *testing.T) {
 	a := NewAvailability("access")
-	a.Observe(context.Background(), connect.NewError(connect.CodeDeadlineExceeded, errors.New("client timeout")))
+	a.Observe(context.Background(), peerError(t, connect.NewError(connect.CodeDeadlineExceeded, errors.New("client timeout"))))
 	assertState(t, a, AvailabilityUnavailable)
 }
 
@@ -96,7 +100,7 @@ func TestAvailabilityHealthReportsState(t *testing.T) {
 	if h.Name != "events" || h.Status != component.StatusHealthy || h.Message != string(AvailabilityUnknown) {
 		t.Fatalf("unknown health = %+v", h)
 	}
-	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	a.Observe(ctx, connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")}))
 	h = a.Health(ctx)
 	if h.Status != component.StatusDegraded || h.Message != string(AvailabilityUnavailable) {
 		t.Fatalf("unavailable health = %+v", h)
@@ -109,7 +113,7 @@ func TestAvailabilityHealthReportsState(t *testing.T) {
 
 func TestAvailabilityInterceptorObservesUnaryCalls(t *testing.T) {
 	a := NewAvailability("control")
-	fail := connect.NewError(connect.CodeUnavailable, errors.New("down"))
+	fail := connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")})
 	call := a.WrapUnary(func(context.Context, connect.AnyRequest) (connect.AnyResponse, error) { return nil, fail })
 	if _, err := call(context.Background(), nil); !errors.Is(err, fail) {
 		t.Fatalf("err = %v, want the peer error unchanged", err)
@@ -139,7 +143,7 @@ func TestAvailabilityInterceptorObservesStreams(t *testing.T) {
 	})
 	t.Run("clean end is an answer", func(t *testing.T) {
 		a := NewAvailability("events")
-		a.Observe(ctx, connect.NewError(connect.CodeUnavailable, errors.New("down")))
+		a.Observe(ctx, connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")}))
 		conn := a.WrapStreamingClient(func(context.Context, connect.Spec) connect.StreamingClientConn {
 			return &fakeConn{receive: []error{io.EOF}}
 		})(ctx, connect.Spec{})
@@ -160,10 +164,22 @@ func TestAvailabilityInterceptorObservesStreams(t *testing.T) {
 		}
 		assertState(t, a, AvailabilityUnavailable)
 	})
+	t.Run("transport EOF is not a clean end", func(t *testing.T) {
+		a := NewAvailability("events")
+		lost := connect.NewError(connect.CodeInternal, &transportError{cause: io.EOF})
+		conn := a.WrapStreamingClient(func(context.Context, connect.Spec) connect.StreamingClientConn {
+			return &fakeConn{receive: []error{lost}, send: []error{lost}}
+		})(ctx, connect.Spec{})
+		_ = conn.Receive(nil)
+		assertState(t, a, AvailabilityUnavailable)
+		a.Observe(ctx, nil)
+		_ = conn.Send(nil)
+		assertState(t, a, AvailabilityUnavailable)
+	})
 	t.Run("send failure marks unavailable, server close does not", func(t *testing.T) {
 		a := NewAvailability("events")
 		conn := a.WrapStreamingClient(func(context.Context, connect.Spec) connect.StreamingClientConn {
-			return &fakeConn{send: []error{io.EOF, connect.NewError(connect.CodeUnavailable, errors.New("down"))}}
+			return &fakeConn{send: []error{io.EOF, connect.NewError(connect.CodeUnavailable, &transportError{cause: errors.New("down")})}}
 		})(ctx, connect.Spec{})
 		_ = conn.Send(nil)
 		assertState(t, a, AvailabilityUnknown)
@@ -201,11 +217,17 @@ type fakeConn struct {
 	connect.StreamingClientConn
 	receive []error
 	send    []error
+	closed  int
 }
 
 func (c *fakeConn) Receive(any) error   { return pop(&c.receive) }
 func (c *fakeConn) Send(any) error      { return pop(&c.send) }
 func (c *fakeConn) CloseRequest() error { return nil }
+func (c *fakeConn) CloseResponse() error {
+	c.closed++
+	return nil
+}
+
 func (c *fakeConn) RequestHeader() http.Header {
 	return http.Header{}
 }

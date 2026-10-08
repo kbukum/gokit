@@ -23,7 +23,7 @@ func errorWriter(w http.ResponseWriter, r *http.Request, err error) {
 
 func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	h, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
+	h, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, LoginCredentials) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 
 func TestHTTPSessionResponseAndUnsafeCSRF(t *testing.T) {
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	h, _ := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
+	h, _ := newLocalHandler(m, LoginVerifierFunc(func(context.Context, LoginCredentials) (auth.Principal, error) { return caller(), nil }), "https://example.test", errorWriter)
 	r := httptest.NewRequest("POST", "https://example.test/auth/login", strings.NewReader(`{"username":"u","password":"p"}`))
 	r.Header.Set("Origin", "https://example.test")
 	r.Header.Set("Content-Type", "application/json")

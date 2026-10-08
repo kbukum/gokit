@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"connectrpc.com/connect"
@@ -19,7 +20,7 @@ const (
 	firstLimit    = time.Second
 )
 
-// armedClock reports each timer it creates, so a test advances time only after the stream armed its limit.
+// armedClock lets tests advance time only after the stream arms its timeout.
 type armedClock struct {
 	*util.FakeClock
 	armed chan struct{}
@@ -63,7 +64,7 @@ func hung(t *testing.T) string {
 
 func watchClient(t *testing.T, url string, clock util.TimerClock) (*connect.Client[wrapperspb.StringValue, wrapperspb.StringValue], *Availability) {
 	t.Helper()
-	limit, err := FirstMessageTimeout(firstLimit, clock)
+	limit, err := FirstMessageTimeoutInterceptor(firstLimit, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,10 +96,10 @@ func watch(ctx context.Context, c *connect.Client[wrapperspb.StringValue, wrappe
 }
 
 func TestFirstMessageTimeoutRequiresLimitAndClock(t *testing.T) {
-	if _, err := FirstMessageTimeout(0, util.SystemClock{}); err == nil {
+	if _, err := FirstMessageTimeoutInterceptor(0, util.SystemClock{}); err == nil {
 		t.Fatal("zero limit accepted")
 	}
-	if _, err := FirstMessageTimeout(time.Second, nil); err == nil {
+	if _, err := FirstMessageTimeoutInterceptor(time.Second, nil); err == nil {
 		t.Fatal("nil clock accepted")
 	}
 }
@@ -110,8 +111,8 @@ func TestFirstMessageTimeoutEndsAHungStreamAsAnOutage(t *testing.T) {
 	<-clock.armed
 	clock.Advance(firstLimit)
 	err := <-done
-	if !errors.Is(err, ErrNoFirstMessage) || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
-		t.Fatalf("err = %v, want deadline_exceeded with ErrNoFirstMessage", err)
+	if !errors.Is(err, ErrFirstMessageTimeout) || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
+		t.Fatalf("err = %v, want deadline_exceeded with ErrFirstMessageTimeout", err)
 	}
 	assertState(t, availability, AvailabilityUnavailable)
 }
@@ -154,7 +155,7 @@ func TestFirstMessageTimeoutLeavesCallerCancellationAlone(t *testing.T) {
 	done := watch(ctx, c)
 	<-clock.armed
 	cancel()
-	if err := <-done; connect.CodeOf(err) != connect.CodeCanceled || errors.Is(err, ErrNoFirstMessage) {
+	if err := <-done; connect.CodeOf(err) != connect.CodeCanceled || errors.Is(err, ErrFirstMessageTimeout) {
 		t.Fatalf("err = %v, want canceled", err)
 	}
 	clock.Advance(firstLimit)
@@ -162,7 +163,7 @@ func TestFirstMessageTimeoutLeavesCallerCancellationAlone(t *testing.T) {
 }
 
 func TestFirstMessageTimeoutSkipsUnaryAndClientStreams(t *testing.T) {
-	limit, err := FirstMessageTimeout(firstLimit, newArmedClock())
+	limit, err := FirstMessageTimeoutInterceptor(firstLimit, newArmedClock())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,25 +199,64 @@ func TestFirstMessageTimeoutKeepsCancellationThatBeatTheLimit(t *testing.T) {
 		cancel()
 		c, timer := expiredConn(parent, &fakeConn{receive: []error{connect.NewError(connect.CodeCanceled, context.Canceled)}})
 		c.watch(timer)
-		if err := c.Receive(nil); errors.Is(err, ErrNoFirstMessage) || connect.CodeOf(err) != connect.CodeCanceled {
+		if err := c.Receive(nil); errors.Is(err, ErrFirstMessageTimeout) || connect.CodeOf(err) != connect.CodeCanceled {
 			t.Fatalf("receive = %v, want the caller's cancellation", err)
 		}
-		if err := c.Send(nil); errors.Is(err, ErrNoFirstMessage) {
+		if err := c.Send(nil); errors.Is(err, ErrFirstMessageTimeout) {
 			t.Fatalf("send = %v, want the caller's cancellation", err)
 		}
 	}
 }
 
 func TestFirstMessageTimeoutIsStickyAfterTheLimit(t *testing.T) {
-	c, timer := expiredConn(t.Context(), &fakeConn{receive: []error{nil}, send: []error{nil}})
+	underlying := &fakeConn{receive: []error{nil}, send: []error{nil}}
+	c, timer := expiredConn(t.Context(), underlying)
 	c.watch(timer)
 	for name, call := range map[string]func() error{
-		"send":          func() error { return c.Send(nil) },
-		"close request": c.CloseRequest,
-		"receive":       func() error { return c.Receive(nil) },
+		"send":           func() error { return c.Send(nil) },
+		"close request":  c.CloseRequest,
+		"close response": c.CloseResponse,
+		"receive":        func() error { return c.Receive(nil) },
 	} {
-		if err := call(); !errors.Is(err, ErrNoFirstMessage) || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
-			t.Errorf("%s = %v, want deadline_exceeded with ErrNoFirstMessage", name, err)
+		if err := call(); !errors.Is(err, ErrFirstMessageTimeout) || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
+			t.Errorf("%s = %v, want deadline_exceeded with ErrFirstMessageTimeout", name, err)
 		}
 	}
+	if underlying.closed != 1 {
+		t.Fatalf("response cleanup calls = %d, want 1", underlying.closed)
+	}
+}
+
+func TestFirstMessageTimeoutBoundsStreamConstruction(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		clock := util.NewFakeClock(time.Unix(0, 0))
+		limit, err := FirstMessageTimeoutInterceptor(firstLimit, clock)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		done := make(chan connect.StreamingClientConn, 1)
+		next := func(ctx context.Context, _ connect.Spec) connect.StreamingClientConn {
+			<-ctx.Done()
+			return &fakeConn{}
+		}
+		go func() {
+			done <- limit.WrapStreamingClient(next)(ctx, connect.Spec{StreamType: connect.StreamTypeServer})
+		}()
+		synctest.Wait()
+		clock.Advance(firstLimit)
+		synctest.Wait()
+		select {
+		case conn := <-done:
+			if err := conn.CloseResponse(); !errors.Is(err, ErrFirstMessageTimeout) {
+				t.Errorf("constructor timeout = %v", err)
+			}
+		default:
+			t.Error("the first-message limit did not release stream construction")
+			cancel()
+			synctest.Wait()
+			_ = (<-done).CloseResponse()
+		}
+	})
 }

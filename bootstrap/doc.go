@@ -10,7 +10,7 @@
 //
 // # Modules
 //
-// A [Module] declares the typed [Port] values it provides and needs. Commands compose modules with [App.Use] and declare named HTTP listeners with [App.Listen], before Run or in a configure hook. A module that runs in another service is replaced by its client module, which provides the same ports remotely, and [ValueModule] provides a port with a value the command holds, such as a test double. After configure hooks run, startup checks the whole module set and reports every wiring problem in one [*ModuleError], then registers modules in dependency order; [App.CheckModules] runs the same check without starting anything. Package bootstrap/testutil runs modules in tests and checks that a module and its client behave the same.
+// A [Module] declares the typed [Port] values it provides and needs. Commands compose modules with [App.Use] and declare named HTTP listeners with [App.RegisterListener], before Run or in a configure hook. A module that runs in another service is replaced by its client module, which provides the same ports remotely, and [ValueModule] provides a port with a value the command holds, such as a test double. After configure hooks run, startup checks the whole module set and reports every wiring problem in one [*ModuleError], then registers modules in dependency order; [App.CheckModules] runs the same check without starting anything. Package bootstrap/testutil runs modules in tests and checks that a module and its client behave the same.
 //
 // # Server Example
 //

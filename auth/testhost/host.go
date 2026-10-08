@@ -173,7 +173,7 @@ func (h *Host) mount(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	verify := session.LoginVerifierFunc(func(ctx context.Context, input session.Login) (auth.Principal, error) {
+	verify := session.LoginVerifierFunc(func(ctx context.Context, input session.LoginCredentials) (auth.Principal, error) {
 		if contextErr := ctx.Err(); contextErr != nil {
 			return auth.Principal{}, contextErr
 		}

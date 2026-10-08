@@ -100,7 +100,7 @@ func TestHarnessRunsModuleWithDoublesCaptureAndListener(t *testing.T) {
 	t.Run("app", func(t *testing.T) {
 		t.Parallel()
 		app := NewApp(t)
-		public := Listen(t, app, "public")
+		public := RegisterListener(t, app, "public")
 		got := Capture(t, app, greeterPort)
 		if err := app.Use(greeterModule{}, bootstrap.ValueModule("clock", clockPort, clock(fixedClock("noon")))); err != nil {
 			t.Fatal(err)
@@ -138,7 +138,7 @@ func TestCheckModulesReportsCompositionGapsWithoutStarting(t *testing.T) {
 	if !errors.As(err, &modErr) || len(modErr.Problems) != 2 {
 		t.Fatalf("CheckModules = %v, want missing clock and missing listener", err)
 	}
-	Listen(t, app, "public")
+	RegisterListener(t, app, "public")
 	if err := app.Use(bootstrap.ValueModule("clock", clockPort, clock(fixedClock("noon")))); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestHelpersReportFailuresOnT(t *testing.T) {
 	started := NewApp(t)
 	Start(t, started)
 	rec.failures = nil
-	Listen(rec, started, "late")
+	RegisterListener(rec, started, "late")
 	Capture(rec, started, greeterPort)
 	if len(rec.failures) != 2 {
 		t.Fatalf("declarations after start: %v", rec.failures)

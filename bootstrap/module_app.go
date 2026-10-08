@@ -5,13 +5,13 @@ import (
 	"fmt"
 )
 
-// Use adds modules to the App. It can be called before the lifecycle starts or from a configure hook. Startup checks the whole module set before any module registers: every needed port must be provided by exactly one module, every listener a module names must be declared with [App.Listen], and modules must not depend on each other in a cycle. All problems are returned together as a [*ModuleError]. Modules then register in dependency order, keeping Use order where they are independent. Use returns [ErrLifecycleUsed] once the modules phase has begun.
+// Use adds modules to the App. It can be called before the lifecycle starts or from a configure hook. Startup checks the whole module set before any module registers: every needed port must be provided by exactly one module, every listener a module names must be declared with [App.RegisterListener], and modules must not depend on each other in a cycle. All problems are returned together as a [*ModuleError]. Modules then register in dependency order, keeping Use order where they are independent. Use returns [ErrLifecycleUsed] once the modules phase has begun.
 func (a *App[C]) Use(modules ...Module) error {
 	return a.declare(func(s *moduleSet) { s.modules = append(s.modules, modules...) })
 }
 
-// Listen declares a named HTTP listener that modules mount routes on with [ModuleContext.Handle]. The name is what module specs refer to; the listener's component name is what the registry and health checks use. The App registers listener components after every module component, so a listener accepts traffic only after the module resources behind it have started, and on shutdown it stops accepting and drains in-flight requests before module workers drain. Listeners register in Listen order. Listen returns [ErrLifecycleUsed] once the modules phase has begun.
-func (a *App[C]) Listen(name string, l Listener) error {
+// RegisterListener declares a named HTTP listener that modules mount routes on with [ModuleContext.Handle]. The name is what module specs refer to; the listener's component name is what the registry and health checks use. The App registers listener components after every module component, so a listener accepts traffic only after the module resources behind it have started, and on shutdown it stops accepting and drains in-flight requests before module workers drain. Listeners register in RegisterListener order. RegisterListener returns [ErrLifecycleUsed] once the modules phase has begun.
+func (a *App[C]) RegisterListener(name string, l Listener) error {
 	return a.declare(func(s *moduleSet) { s.listeners = append(s.listeners, namedListener{name: name, l: l}) })
 }
 
@@ -46,7 +46,7 @@ func (a *App[C]) sealModules() {
 	a.modulesSealed = true
 }
 
-// wireModules runs the modules phase: close Use and Listen, validate the module set, register modules in dependency order, then register listener components. It runs once per lifecycle.
+// wireModules runs the modules phase: close Use and RegisterListener, validate the module set, register modules in dependency order, then register listener components. It runs once per lifecycle.
 func (a *App[C]) wireModules(ctx context.Context) error {
 	a.sealModules()
 	set := &a.modules

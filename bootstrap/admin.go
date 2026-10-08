@@ -154,6 +154,9 @@ func (a *App[C]) readiness(ctx context.Context) Readiness {
 			r.Status = ReadinessNotReady
 		}
 	}
+	if lifecycleState(a.state.Load()) == stateDraining {
+		return Readiness{Service: a.Name, Status: ReadinessDraining}
+	}
 	return r
 }
 
