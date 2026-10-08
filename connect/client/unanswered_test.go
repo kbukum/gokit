@@ -39,3 +39,25 @@ func TestUnansweredSeparatesCallerFromPeer(t *testing.T) {
 		t.Fatalf("nil = %+v, %v", got, ok)
 	}
 }
+
+// expiringContext reaches its deadline right after the first time its error is read.
+type expiringContext struct {
+	context.Context
+	reads int
+}
+
+func (c *expiringContext) Err() error {
+	c.reads++
+	if c.reads == 1 {
+		return nil
+	}
+	return context.DeadlineExceeded
+}
+
+func TestUnansweredReadsTheContextOnce(t *testing.T) {
+	ctx := &expiringContext{Context: context.Background()}
+	got, ok := Unanswered(ctx, "control", connect.NewError(connect.CodeUnavailable, errors.New("down")))
+	if !ok || got.Code == apperrors.ErrCodeCanceled || ctx.reads != 1 {
+		t.Fatalf("got %+v, %v after %d reads; want one consistent read", got, ok, ctx.reads)
+	}
+}

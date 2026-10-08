@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"connectrpc.com/connect"
@@ -42,7 +41,7 @@ func (f *firstMessage) WrapStreamingClient(next connect.StreamingClientFunc) con
 			return next(ctx, spec)
 		}
 		streamCtx, cancel := context.WithCancelCause(ctx)
-		c := &firstMessageConn{ctx: streamCtx, cancel: cancel, disarmed: make(chan struct{})}
+		c := newFirstMessageConn(streamCtx, cancel)
 		timer := f.clock.NewTimer(f.limit)
 		c.StreamingClientConn = next(streamCtx, spec)
 		go c.watch(timer)
@@ -50,10 +49,10 @@ func (f *firstMessage) WrapStreamingClient(next connect.StreamingClientFunc) con
 	}
 }
 
-// First-message states. Only one transition out of waiting happens, so a message and the limit cannot both win.
+// First-message states. Only one transition out of waiting happens, so the first message, the caller and the limit cannot both win.
 const (
 	waiting int32 = iota
-	answered
+	settled
 	late
 )
 
@@ -61,9 +60,14 @@ type firstMessageConn struct {
 	connect.StreamingClientConn
 	ctx        context.Context //nolint:containedctx // the stream's lifetime is the context it was opened with
 	cancel     context.CancelCauseFunc
-	state      atomic.Int32
+	mu         sync.Mutex
+	state      int32 // guarded by mu
 	disarmed   chan struct{}
 	disarmOnce sync.Once
+}
+
+func newFirstMessageConn(ctx context.Context, cancel context.CancelCauseFunc) *firstMessageConn {
+	return &firstMessageConn{ctx: ctx, cancel: cancel, disarmed: make(chan struct{})}
 }
 
 // watch ends the stream when the limit passes before the first message. It exits when the limit passes, the stream is disarmed or its context ends.
@@ -71,24 +75,58 @@ func (c *firstMessageConn) watch(timer util.Timer) {
 	defer timer.Stop()
 	select {
 	case <-timer.C():
-		if c.state.CompareAndSwap(waiting, late) {
-			c.cancel(ErrNoFirstMessage)
-		}
+		c.expire()
 	case <-c.disarmed:
 	case <-c.ctx.Done():
 	}
+}
+
+// expire ends a stream still waiting for its first message. The limit wins only when its own cancellation ended the stream: a caller's cancellation or deadline that got there first keeps its error even when the timer fired too.
+func (c *firstMessageConn) expire() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state != waiting {
+		return
+	}
+	c.cancel(ErrNoFirstMessage)
+	if errors.Is(context.Cause(c.ctx), ErrNoFirstMessage) {
+		c.state = late
+	} else {
+		c.state = settled
+	}
+}
+
+// settle ends the wait for the first message unless the limit already passed, and reports whether it had.
+func (c *firstMessageConn) settle() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state == waiting {
+		c.state = settled
+		c.disarm()
+	}
+	return c.state == late
+}
+
+func (c *firstMessageConn) expired() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.state == late
 }
 
 func (c *firstMessageConn) disarm() {
 	c.disarmOnce.Do(func() { close(c.disarmed) })
 }
 
-// failure replaces any error after the limit passed, which is the stream's own cancellation, with the outage it stands for.
+// failure replaces the outcome of any call after the limit passed, success included, with the outage it stands for.
 func (c *firstMessageConn) failure(err error) error {
-	if err != nil && c.state.Load() == late {
-		return connect.NewError(connect.CodeDeadlineExceeded, ErrNoFirstMessage)
+	if c.expired() {
+		return errNoFirstMessage()
 	}
 	return err
+}
+
+func errNoFirstMessage() error {
+	return connect.NewError(connect.CodeDeadlineExceeded, ErrNoFirstMessage)
 }
 
 func (c *firstMessageConn) Send(msg any) error {
@@ -99,16 +137,11 @@ func (c *firstMessageConn) CloseRequest() error {
 	return c.failure(c.StreamingClientConn.CloseRequest())
 }
 
+// Receive settles the wait: a first message, a clean end or a peer error all count as an answer.
 func (c *firstMessageConn) Receive(msg any) error {
 	err := c.StreamingClientConn.Receive(msg)
-	if c.state.Load() == waiting {
-		// A first message, a clean end or a peer error all settle the wait.
-		if c.state.CompareAndSwap(waiting, answered) {
-			c.disarm()
-		}
-	}
-	if c.state.Load() == late {
-		return connect.NewError(connect.CodeDeadlineExceeded, ErrNoFirstMessage)
+	if c.settle() {
+		return errNoFirstMessage()
 	}
 	return err
 }

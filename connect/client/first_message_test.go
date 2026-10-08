@@ -182,3 +182,41 @@ func TestFirstMessageTimeoutSkipsUnaryAndClientStreams(t *testing.T) {
 		t.Fatalf("handler = %v", err)
 	}
 }
+
+// expiredConn wraps conn for a stream opened with parent whose limit has already passed.
+func expiredConn(parent context.Context, conn connect.StreamingClientConn) (*firstMessageConn, util.Timer) {
+	ctx, cancel := context.WithCancelCause(parent)
+	c := newFirstMessageConn(ctx, cancel)
+	c.StreamingClientConn = conn
+	return c, util.NewFakeClock(time.Unix(0, 0)).NewTimer(0)
+}
+
+func TestFirstMessageTimeoutKeepsCancellationThatBeatTheLimit(t *testing.T) {
+	// Both the caller's cancellation and the limit are pending when the watchdog runs, so either select branch may fire.
+	for range 64 {
+		parent, cancel := context.WithCancel(t.Context())
+		cancel()
+		c, timer := expiredConn(parent, &fakeConn{receive: []error{connect.NewError(connect.CodeCanceled, context.Canceled)}})
+		c.watch(timer)
+		if err := c.Receive(nil); errors.Is(err, ErrNoFirstMessage) || connect.CodeOf(err) != connect.CodeCanceled {
+			t.Fatalf("receive = %v, want the caller's cancellation", err)
+		}
+		if err := c.Send(nil); errors.Is(err, ErrNoFirstMessage) {
+			t.Fatalf("send = %v, want the caller's cancellation", err)
+		}
+	}
+}
+
+func TestFirstMessageTimeoutIsStickyAfterTheLimit(t *testing.T) {
+	c, timer := expiredConn(t.Context(), &fakeConn{receive: []error{nil}, send: []error{nil}})
+	c.watch(timer)
+	for name, call := range map[string]func() error{
+		"send":          func() error { return c.Send(nil) },
+		"close request": c.CloseRequest,
+		"receive":       func() error { return c.Receive(nil) },
+	} {
+		if err := call(); !errors.Is(err, ErrNoFirstMessage) || connect.CodeOf(err) != connect.CodeDeadlineExceeded {
+			t.Errorf("%s = %v, want deadline_exceeded with ErrNoFirstMessage", name, err)
+		}
+	}
+}

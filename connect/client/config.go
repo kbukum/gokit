@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/kbukum/gokit/security"
@@ -94,9 +95,10 @@ func (c *Config) validateBaseURL() error {
 	switch {
 	case u.User != nil:
 		return errors.New("connect client: base_url must not carry credentials")
-	case u.Host == "" || (u.Scheme != "http" && u.Scheme != "https"):
+	case u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https"):
 		return errors.New("connect client: base_url must be an absolute http or https URL")
-	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "":
+	// url.Parse drops an empty fragment, so look for the raw delimiter; an escaped %23 stays valid.
+	case u.RawQuery != "" || u.ForceQuery || strings.Contains(c.BaseURL, "#"):
 		return errors.New("connect client: base_url must not have a query or fragment")
 	case u.Scheme == "https" && !c.TLS.IsEnabled():
 		return errors.New("connect client: an https base_url needs tls settings")

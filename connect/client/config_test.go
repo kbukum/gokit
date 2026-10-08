@@ -130,6 +130,7 @@ func TestValidateChecksBaseURL(t *testing.T) {
 		{BaseURL: "http://peer.internal:8080"},
 		{BaseURL: "http://peer.internal:8080/prefix/"},
 		{BaseURL: "https://peer.internal", TLS: tlsOn},
+		{BaseURL: "http://peer.internal/a%23b/"},
 	} {
 		cfg.ApplyDefaults()
 		if err := cfg.Validate(); err != nil {
@@ -139,10 +140,12 @@ func TestValidateChecksBaseURL(t *testing.T) {
 	for name, cfg := range map[string]Config{
 		"relative":       {BaseURL: "peer.internal"},
 		"no host":        {BaseURL: "http:///x"},
+		"port only":      {BaseURL: "http://:8080"},
 		"unsupported":    {BaseURL: "ftp://peer.internal"},
 		"credentials":    {BaseURL: "http://user:secret@peer.internal"},
 		"query":          {BaseURL: "http://peer.internal?x=1"},
 		"fragment":       {BaseURL: "http://peer.internal#x"},
+		"empty fragment": {BaseURL: "http://peer.internal#"},
 		"https without":  {BaseURL: "https://peer.internal"},
 		"http with TLS":  {BaseURL: "http://peer.internal", TLS: tlsOn},
 		"does not parse": {BaseURL: "http://[::1"},

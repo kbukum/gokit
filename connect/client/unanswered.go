@@ -15,10 +15,12 @@ func Unanswered(ctx context.Context, peer string, err error) (*apperrors.AppErro
 	if !IsUnavailable(err) {
 		return nil, false
 	}
+	// One read, so a deadline passing mid-check cannot split the classification.
+	ended := ctx.Err()
 	switch {
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+	case errors.Is(ended, context.DeadlineExceeded):
 		return apperrors.Timeout(peer), true
-	case ctx.Err() != nil:
+	case ended != nil:
 		return apperrors.Canceled(peer), true
 	}
 	return apperrors.ServiceUnavailable(peer).WithReason(ReasonUnavailable).WithRetryable(true).WithCause(err), true
