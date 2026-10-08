@@ -114,7 +114,7 @@ func (l *Listener) Quiesce() error {
 	return nil
 }
 
-// Drain closes the port, waits for in-flight requests and, if they outlast the deadline, force-closes them; see [Listener.shutdown].
+// Drain closes the port, waits for in-flight requests and, if they outlast the deadline, force-closes them. A context without a deadline gets a five-second shutdown budget; an explicit deadline is preserved. See [Listener.shutdown].
 func (l *Listener) Drain(ctx context.Context) error {
 	srv, _ := l.server()
 	if srv == nil {
@@ -148,13 +148,15 @@ func (l *Listener) Stop(ctx context.Context) error {
 
 // shutdown quiesces the listener, stops accepting connections and gives HTTP connections four fifths of ctx's remaining time to drain before force-closing them. It then cancels all request contexts, including direct and hijacked requests not tracked by http.Server, and waits for handlers until ctx ends. No handler outlives a successful drain. It returns the graceful-shutdown error and any wait failure.
 func (l *Listener) shutdown(ctx context.Context, srv *http.Server) error {
-	_ = l.Quiesce() // never fails; admission must be closed for drained to close
-	graceCtx := ctx
-	if deadline, ok := ctx.Deadline(); ok {
+	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		graceCtx, cancel = context.WithTimeout(ctx, time.Until(deadline)*4/5)
+		ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 	}
+	_ = l.Quiesce() // never fails; admission must be closed for drained to close
+	deadline, _ := ctx.Deadline()
+	graceCtx, cancel := context.WithTimeout(ctx, time.Until(deadline)*4/5)
+	defer cancel()
 	err := srv.Shutdown(graceCtx)
 	if err != nil {
 		err = errors.Join(err, srv.Close())

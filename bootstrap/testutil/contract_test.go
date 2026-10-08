@@ -127,6 +127,42 @@ type nestedOK struct {
 	At     time.Time
 }
 
+type embeddedValue struct{ nestedRequest }
+
+type embeddedPointer struct{ *nestedRequest }
+
+type embeddedSafe struct{ *nestedOK }
+
+type hiddenCallback func()
+
+type hiddenScalar struct{ hiddenCallback }
+
+type embeddedPort interface {
+	Value(ctx context.Context, in embeddedValue) error
+	Pointer(ctx context.Context) (embeddedPointer, error)
+	Safe(ctx context.Context, in embeddedSafe) error
+	Hidden(ctx context.Context, in hiddenScalar) error
+}
+
+func TestRemoteSafeInspectsUnexportedEmbeddedStructs(t *testing.T) {
+	t.Parallel()
+	err := RemoteSafe(bootstrap.NewPort[embeddedPort]("embedded"))
+	if !errors.Is(err, ErrNotRemoteSafe) {
+		t.Fatalf("RemoteSafe = %v, want ErrNotRemoteSafe", err)
+	}
+	for _, want := range []string{
+		"embedded Value: parameter 1 contains a func",
+		"embedded Pointer: result 0 contains a func",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("RemoteSafe = %v, missing %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "Safe") || strings.Contains(err.Error(), "Hidden") {
+		t.Errorf("RemoteSafe rejected safe or unexported scalar fields: %v", err)
+	}
+}
+
 // selfEncoded hides a func behind its own encoding, so RemoteSafe treats it as opaque.
 type selfEncoded struct{ Hook func() }
 

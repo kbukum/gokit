@@ -30,7 +30,7 @@ var (
 	}
 )
 
-// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields. The leading context.Context and trailing error are the only interfaces allowed. Concrete types implementing json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler or proto.Message (directly or through their pointer type) are opaque and accepted as is. Every violation is reported, each wrapping [ErrNotRemoteSafe].
+// RemoteSafe reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields, including those in unexported embedded structs. The leading context.Context and trailing error are the only interfaces allowed. Concrete types implementing json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler or proto.Message (directly or through their pointer type) are opaque and accepted as is. Every violation is reported, each wrapping [ErrNotRemoteSafe].
 //
 // The check covers shape only. Whether values are safe to copy, calls tolerate latency and errors map to the same kinds remotely is what [Contract] tests.
 func RemoteSafe[T any](p *bootstrap.Port[T]) error {
@@ -104,7 +104,12 @@ func findUnportable(t reflect.Type, seen map[reflect.Type]bool) reflect.Kind {
 		return findUnportable(t.Elem(), seen)
 	case reflect.Struct:
 		for i := range t.NumField() {
-			if f := t.Field(i); f.IsExported() {
+			f := t.Field(i)
+			embedded := f.Type
+			if embedded.Kind() == reflect.Pointer {
+				embedded = embedded.Elem()
+			}
+			if f.IsExported() || (f.Anonymous && embedded.Kind() == reflect.Struct) {
 				if kind := findUnportable(f.Type, seen); kind != reflect.Invalid {
 					return kind
 				}

@@ -165,6 +165,78 @@ func TestListenerDrainForceClosesAndCancelsRequestsAtDeadline(t *testing.T) {
 	}
 }
 
+func TestListenerShutdownWithoutDeadlineIsBounded(t *testing.T) {
+	t.Parallel()
+	for _, operation := range []string{"Drain", "Stop"} {
+		t.Run(operation, func(t *testing.T) {
+			t.Parallel()
+			l := NewListener("public")
+			entered, finished := make(chan struct{}), make(chan struct{})
+			release := make(chan struct{})
+			l.Handle("/wait", http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				defer close(finished)
+				close(entered)
+				select {
+				case <-r.Context().Done():
+				case <-release:
+				}
+			}))
+			if err := l.Start(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			clientDone := make(chan struct{})
+			t.Cleanup(func() {
+				close(release)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				if err := l.Stop(ctx); err != nil {
+					t.Errorf("cleanup: %v", err)
+				}
+				awaitListener(t, clientDone)
+			})
+			go func() {
+				defer close(clientDone)
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, l.URL()+"/wait", http.NoBody)
+				if err != nil {
+					t.Errorf("request: %v", err)
+					return
+				}
+				if resp, err := http.DefaultClient.Do(req); err == nil {
+					_ = resp.Body.Close()
+				}
+			}()
+			awaitListener(t, entered)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				if operation == "Stop" {
+					done <- l.Stop(ctx)
+				} else {
+					done <- l.Drain(ctx)
+				}
+			}()
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Errorf("%s = %v, want default graceful deadline error", operation, err)
+				}
+			case <-time.After(6 * time.Second):
+				t.Errorf("%s did not enforce the five-second default budget", operation)
+				cancel()
+				awaitListener(t, done)
+			}
+			select {
+			case <-finished:
+			default:
+				t.Error("shutdown returned before cooperative handler teardown")
+			}
+		})
+	}
+}
+
 func awaitListener[T any](t *testing.T, result <-chan T) T {
 	t.Helper()
 	select {
