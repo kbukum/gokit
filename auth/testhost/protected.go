@@ -2,6 +2,7 @@ package testhost
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"connectrpc.com/connect"
@@ -51,9 +52,10 @@ func (h *Host) mountProtected(chain auth.Chain) error {
 		}
 		return connect.NewResponse(wrapperspb.String(string(principal.Kind) + ":" + principal.Subject)), nil
 	}, connect.WithInterceptors(kitconnect.NormalizingInterceptor(h.log), require))
-	h.server.Handle(OperationPath, h.track(protect(operation)))
-	h.server.Handle(EventsPath, h.track(protect(http.HandlerFunc(h.stream))))
-	return nil
+	return errors.Join(
+		h.server.Handle(OperationPath, h.track(protect(operation))),
+		h.server.Handle(EventsPath, h.track(protect(http.HandlerFunc(h.stream)))),
+	)
 }
 
 type fixturePolicy struct{}

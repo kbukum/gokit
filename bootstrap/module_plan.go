@@ -377,14 +377,8 @@ func (w *moduleWiring) installFallbacks() (err error) {
 	return nil
 }
 
-func installFallback(l Listener, listener string, fb fallback, reserved []string) (err error) {
-	defer func() {
-		// A listener with a route at "/" cannot also take a fallback; http.ServeMux reports that by panicking.
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%w: %s fallback from module %q: %v", ErrRouteConflict, listener, fb.module, r)
-		}
-	}()
-	l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+func installFallback(l Listener, listener string, fb fallback, reserved []string) error {
+	err := l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		// http.ServeMux matches unescaped segments of the escaped path, so the guard compares the same way.
 		first, _, _ := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
 		if segment, err := url.PathUnescape(first); err != nil || slices.Contains(reserved, "/"+segment) {
@@ -393,6 +387,9 @@ func installFallback(l Listener, listener string, fb fallback, reserved []string
 		}
 		fb.handler.ServeHTTP(rw, r)
 	}))
+	if err != nil {
+		return fmt.Errorf("%w: %s fallback from module %q: %w", ErrRouteConflict, listener, fb.module, err)
+	}
 	return nil
 }
 
@@ -417,7 +414,7 @@ func routePrefix(pattern string) string {
 	return "/" + unescaped
 }
 
-func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (err error) {
+func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	// Planning matched every listener a module declares to one the App has, and Handle accepts only declared listeners.
@@ -425,13 +422,9 @@ func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (er
 	if w.mounted[listener][pattern] {
 		return fmt.Errorf("%w: %s %q already mounted", ErrRouteConflict, listener, pattern)
 	}
-	defer func() {
-		// http.ServeMux reports invalid and conflicting patterns by panicking; startup reports them as errors.
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%w: %s %q: %v", ErrRouteConflict, listener, pattern, r)
-		}
-	}()
-	l.Handle(pattern, handler)
+	if err := l.Handle(pattern, handler); err != nil {
+		return fmt.Errorf("%w: %s %q: %w", ErrRouteConflict, listener, pattern, err)
+	}
 	w.mounted[listener][pattern] = true
 	return nil
 }

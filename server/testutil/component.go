@@ -54,9 +54,9 @@ func (c *Component) GinEngine() *gin.Engine {
 	return c.srv.GinEngine()
 }
 
-// Handle mounts an http.Handler on the server's ServeMux (for ConnectRPC, etc).
-func (c *Component) Handle(pattern string, handler http.Handler) {
-	c.srv.Handle(pattern, handler)
+// Handle mounts an http.Handler on the server's ServeMux (for ConnectRPC, etc), as [server.Server.Handle] does.
+func (c *Component) Handle(pattern string, handler http.Handler) error {
+	return c.srv.Handle(pattern, handler)
 }
 
 // Server returns the underlying *server.Server.

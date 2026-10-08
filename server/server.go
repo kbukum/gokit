@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -75,17 +75,9 @@ func New(cfg *Config, log *logging.Logger) *Server {
 	var protocols http.Protocols
 	protocols.SetHTTP1(true)
 
-	var tlsConfig *tls.Config
 	if cfg.TLS != nil && cfg.TLS.IsEnabled() {
-		// TLS enabled: use encrypted HTTP/2.
+		// TLS enabled: use encrypted HTTP/2. Start loads the certificates.
 		protocols.SetHTTP2(true)
-		var err error
-		tlsConfig, err = cfg.TLS.Build()
-		if err != nil {
-			// Return a server with nil TLS — Start will fail with a clear error.
-			// We don't panic in constructors.
-			tlsConfig = nil
-		}
 	} else if cfg.H2CEnabled() {
 		// No TLS: enable unencrypted HTTP/2 (h2c) for gRPC without TLS.
 		protocols.SetUnencryptedHTTP2(true)
@@ -96,7 +88,6 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		Handler:      mux,
 		Protocols:    &protocols,
 		HTTP2:        &http.HTTP2Config{MaxConcurrentStreams: 250},
-		TLSConfig:    tlsConfig,
 		ReadTimeout:  time.Duration(cfg.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(cfg.WriteTimeout) * time.Second,
 		IdleTimeout:  time.Duration(cfg.IdleTimeout) * time.Second,
@@ -150,22 +141,39 @@ func (s *Server) Logger() *logging.Logger {
 	return s.log
 }
 
+// ErrInvalidRoute reports a nil or typed-nil handler, or an invalid or conflicting pattern, given to [Server.Handle] or [Server.Fallback].
+var ErrInvalidRoute = errors.New("server: invalid route")
+
 // Handle mounts an http.Handler at the given pattern on the root ServeMux.
 // Use this to add Connect-Go or any other handler alongside Gin.
 // The pattern must include a trailing slash for subtree matches (e.g. "/grpc.health.v1.Health/").
-// Like [http.ServeMux.Handle], it panics on a nil or typed-nil handler and on an invalid or conflicting pattern.
-func (s *Server) Handle(pattern string, handler http.Handler) {
+// It returns [ErrInvalidRoute] for a nil or typed-nil handler and for a pattern [http.ServeMux] rejects as invalid or conflicting.
+func (s *Server) Handle(pattern string, handler http.Handler) error {
 	if util.IsNil(handler) {
-		panic("server: nil handler for " + pattern)
+		return fmt.Errorf("%w: nil handler for %q", ErrInvalidRoute, pattern)
 	}
-	s.mux.Handle(pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	if err := muxHandle(s.mux, pattern, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		middleware.SetMetricRoute(r, pattern)
 		handler.ServeHTTP(w, r)
-	}))
+	})); err != nil {
+		return err
+	}
 	s.mounts = append(s.mounts, MountedHandler{Pattern: pattern})
 	s.log.Debug("Handler mounted", map[string]any{
 		"pattern": pattern,
 	})
+	return nil
+}
+
+// muxHandle registers handler on mux, returning the panic [http.ServeMux.Handle] raises for an invalid or conflicting pattern as [ErrInvalidRoute].
+func muxHandle(mux *http.ServeMux, pattern string, handler http.Handler) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%w: %q: %v", ErrInvalidRoute, pattern, r)
+		}
+	}()
+	mux.Handle(pattern, handler)
+	return nil
 }
 
 // Mounts returns all handlers mounted on the ServeMux (excluding Gin root).
@@ -186,10 +194,12 @@ func (s *Server) Start(ctx context.Context) error {
 	if err := s.config.Validate(); err != nil {
 		return err
 	}
-	if s.config.TLS != nil && s.config.TLS.IsEnabled() && s.httpServer.TLSConfig == nil {
-		if _, err := s.config.TLS.Build(); err != nil {
-			return err
+	if s.config.TLS != nil && s.config.TLS.IsEnabled() {
+		tlsConfig, err := s.config.TLS.Build()
+		if err != nil {
+			return fmt.Errorf("server.tls: %w", err)
 		}
+		s.httpServer.TLSConfig = tlsConfig
 	}
 	s.log.DebugCtx(ctx, "Starting HTTP server", map[string]any{
 		"addr": s.httpServer.Addr,

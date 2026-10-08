@@ -8,9 +8,11 @@
 // Services implement the Service interface and are mounted via Mount():
 //
 //	svc := connect.NewService(path, handler)
-//	connect.Mount(srv, svc.Path(), svc.Handler())
+//	if err := connect.Mount(srv, svc.Path(), svc.Handler()); err != nil {
+//		return err
+//	}
 //
-// Mount accepts any HandlerMounter (e.g. gokit/server.Server).
+// Mount accepts any HandlerMounter (e.g. gokit/server.Server) and returns its registration error.
 //
 // # Client-side
 //

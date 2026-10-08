@@ -25,7 +25,9 @@ path, handler := userv1connect.NewUserServiceHandler(svc,
 )
 
 // Mount on any server implementing HandlerMounter (e.g. gokit/server.Server)
-goconnect.Mount(srv, path, handler)
+if err := goconnect.Mount(srv, path, handler); err != nil {
+    return err
+}
 ```
 
 ## Quick Start — Client
@@ -83,7 +85,9 @@ path, handler := userv1connect.NewUserServiceHandler(svc,
         requireIdentity,
     ),
 )
-goconnect.Mount(srv, path, authenticate(handler))
+if err := goconnect.Mount(srv, path, authenticate(handler)); err != nil {
+    return err
+}
 ```
 
 Inside a service handler:
@@ -109,7 +113,7 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `NewService(path, handler)` | Create a Service from path and handler |
 | `HandlerMounter` | Interface for servers that mount HTTP handlers |
 | `Mount(srv, path, handler)` | Mount a single Connect handler on any HandlerMounter |
-| `MountServices(srv, ...Service)` | Mount multiple services at once |
+| `MountServices(srv, ...Service)` | Mount multiple services at once, stopping at the first error |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
 | `NormalizingInterceptor(log)` | Convert any handler error to a coded Connect error (unary + streaming); already-coded errors pass through |
 | `ValidationInterceptor(v)` | Validate requests with an injected `protovalidate.Validator`, emitting shared violations |

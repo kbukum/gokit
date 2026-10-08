@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -34,26 +35,27 @@ func TestComponentDescribeAndRoutes(t *testing.T) {
 	}
 }
 
-func TestNilHandlersAreRejectedAtRegistration(t *testing.T) {
+func TestInvalidRegistrationsReturnErrors(t *testing.T) {
 	s := newTestServer(t)
 	comp := server.NewComponent(s)
-	for name, register := range map[string]func(){
-		"Handle nil":         func() { comp.Handle("/a/", nil) },
-		"Handle typed nil":   func() { comp.Handle("/b/", http.HandlerFunc(nil)) },
-		"Fallback nil":       func() { comp.Fallback(nil) },
-		"Fallback typed nil": func() { comp.Fallback(http.HandlerFunc(nil)) },
-	} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("%s: registered without panicking", name)
-				}
-			}()
-			register()
-		}()
+	ok := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
+	if err := comp.Handle("/taken/", ok); err != nil {
+		t.Fatalf("Handle: %v", err)
 	}
-	if mounts := s.Mounts(); len(mounts) != 0 {
-		t.Errorf("mounts = %v, want none", mounts)
+	for name, register := range map[string]func() error{
+		"Handle nil":         func() error { return comp.Handle("/a/", nil) },
+		"Handle typed nil":   func() error { return comp.Handle("/b/", http.HandlerFunc(nil)) },
+		"Handle bad pattern": func() error { return comp.Handle("GET /{bad", ok) },
+		"Handle conflict":    func() error { return comp.Handle("/taken/", ok) },
+		"Fallback nil":       func() error { return comp.Fallback(nil) },
+		"Fallback typed nil": func() error { return comp.Fallback(http.HandlerFunc(nil)) },
+	} {
+		if err := register(); !errors.Is(err, server.ErrInvalidRoute) {
+			t.Errorf("%s: err = %v, want ErrInvalidRoute", name, err)
+		}
+	}
+	if mounts := s.Mounts(); len(mounts) != 1 {
+		t.Errorf("mounts = %v, want only /taken/", mounts)
 	}
 }
 

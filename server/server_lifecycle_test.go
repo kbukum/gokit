@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -19,6 +21,7 @@ import (
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/security"
+	"github.com/kbukum/gokit/security/tlstest"
 	"github.com/kbukum/gokit/server"
 	"github.com/kbukum/gokit/server/endpoint"
 )
@@ -447,6 +450,42 @@ func TestStart_PortInUse(t *testing.T) {
 		s.Stop(ctx)
 		t.Fatal("expected error when port in use")
 	}
+}
+
+// TestStart_LoadsTLSWhenStarting covers certificates that appear between New and Start: the server must serve TLS, never cleartext.
+func TestStart_LoadsTLSWhenStarting(t *testing.T) {
+	dir := t.TempDir()
+	cfg := newTestConfig()
+	cfg.TLS = &security.TLSConfig{CertFile: filepath.Join(dir, "server.crt"), KeyFile: filepath.Join(dir, "server.key")}
+	s := server.New(cfg, logging.NewDefault("test"))
+
+	ctx := t.Context()
+	if err := s.Start(ctx); err == nil {
+		_ = s.Stop(ctx)
+		t.Fatal("Start succeeded without certificate files")
+	}
+
+	certs := tlstest.GenerateTLSCerts(t)
+	for src, dst := range map[string]string{certs.CertFile: cfg.TLS.CertFile, certs.KeyFile: cfg.TLS.KeyFile} {
+		data, err := os.ReadFile(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Stop(context.Background()) })
+
+	dialer := tls.Dialer{Config: &tls.Config{RootCAs: certs.CertPool, ServerName: "127.0.0.1", MinVersion: tls.VersionTLS12}}
+	conn, err := dialer.DialContext(ctx, "tcp", s.ListenAddr().String())
+	if err != nil {
+		t.Fatalf("TLS handshake: %v", err)
+	}
+	_ = conn.Close()
 }
 
 func TestStart_CancelledContext(t *testing.T) {

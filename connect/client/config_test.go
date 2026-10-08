@@ -98,14 +98,19 @@ func TestNoTimeoutKeepsTheClientUnbounded(t *testing.T) {
 }
 
 func TestValidateRejectsNegativeTimeouts(t *testing.T) {
-	for name, cfg := range map[string]Config{
-		"timeout":                 {Timeout: -1},
-		"dial timeout":            {DialTimeout: -1},
-		"timeout with no_timeout": {Timeout: -1, NoTimeout: true},
+	for name, tc := range map[string]struct {
+		cfg     Config
+		want    string
+		without string
+	}{
+		"timeout":                 {cfg: Config{Timeout: -1}, want: "timeout must not be negative; use no_timeout"},
+		"timeout with no_timeout": {cfg: Config{Timeout: -1, NoTimeout: true}, want: "timeout must not be negative"},
+		"dial timeout":            {cfg: Config{DialTimeout: -1}, want: "dial_timeout must not be negative", without: "no_timeout"},
 	} {
-		cfg.ApplyDefaults()
-		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "negative") {
-			t.Errorf("%s: Validate = %v, want a negative-timeout error", name, err)
+		tc.cfg.ApplyDefaults()
+		err := tc.cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) || (tc.without != "" && strings.Contains(err.Error(), tc.without)) {
+			t.Errorf("%s: Validate = %v, want %q without %q", name, err, tc.want, tc.without)
 		}
 	}
 }

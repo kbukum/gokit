@@ -123,13 +123,14 @@ func (a *App[C]) readiness(ctx context.Context) Readiness {
 	for _, h := range a.Components.HealthAll(ctx) {
 		r.Components = append(r.Components, h)
 		switch h.Status {
-		case component.StatusUnhealthy:
-			r.Status = ReadinessNotReady
+		case component.StatusHealthy:
 		case component.StatusDegraded:
 			if r.Status == ReadinessReady {
 				r.Status = ReadinessDegraded
 			}
-		case component.StatusHealthy:
+		default:
+			// Unhealthy, and any unknown or zero status, fails closed as App.ReadyCheck does.
+			r.Status = ReadinessNotReady
 		}
 	}
 	return r

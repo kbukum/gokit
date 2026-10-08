@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -102,7 +103,18 @@ func (l *testListener) Drain(context.Context) error {
 
 func (l *testListener) DrainPhase() component.DrainPhase { return l.phase }
 
-func (l *testListener) Fallback(h http.Handler) { l.Handle("/", h) }
+// Handle reports the panics http.ServeMux raises for a nil handler or an invalid or conflicting pattern as errors, as a Listener must.
+func (l *testListener) Handle(pattern string, h http.Handler) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("test listener: %v", r)
+		}
+	}()
+	l.ServeMux.Handle(pattern, h)
+	return nil
+}
+
+func (l *testListener) Fallback(h http.Handler) error { return l.Handle("/", h) }
 
 func mustListen(t *testing.T, app *App[*testConfig], name string, order *[]string) *testListener {
 	t.Helper()

@@ -107,6 +107,8 @@ func TestAdminReportsReadinessThroughTheLifecycle(t *testing.T) {
 		{component.StatusHealthy, http.StatusOK, ReadinessReady},
 		{component.StatusDegraded, http.StatusOK, ReadinessDegraded},
 		{component.StatusUnhealthy, http.StatusServiceUnavailable, ReadinessNotReady},
+		{"", http.StatusServiceUnavailable, ReadinessNotReady},
+		{"unknown", http.StatusServiceUnavailable, ReadinessNotReady},
 	} {
 		peer.set(tc.health)
 		got := get(t.Context(), t, app, "/readyz")
