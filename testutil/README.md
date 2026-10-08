@@ -27,7 +27,7 @@ if err := manager.StartAll(); err != nil {
 }
 ```
 
-Setup/reset defaults to 30 seconds (`ResolveBudgets(opts...)` returns the effective values for other harnesses, such as `bootstrap/testutil.Start`). Cleanup preserves context values but gets a **fresh 10-second budget**, independent of test cancellation. Components share the remaining cleanup time. Lifecycle operations are serialized; duplicate names, registration while running, and double startup are errors. Repeated cleanup returns the recorded result without repeating teardown. A stopped manager can be started explicitly again; it never restarts automatically.
+Setup/reset defaults to 30 seconds. Cleanup preserves context values but gets a **fresh 10-second budget**, independent of test cancellation. Components share the remaining cleanup time. Lifecycle operations are serialized; duplicate names, registration while running, and double startup are errors. Repeated cleanup returns the recorded result without repeating teardown. A stopped manager can be started explicitly again; it never restarts automatically.
 
 ```mermaid
 flowchart LR

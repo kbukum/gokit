@@ -28,7 +28,7 @@ type Manager struct {
 func NewManager(ctx context.Context, opts ...Option) *Manager {
 	return &Manager{
 		ctx:        ctx,
-		budgets:    ResolveBudgets(opts...),
+		budgets:    lifecycleBudgets(opts),
 		components: make([]component.Component, 0),
 	}
 }

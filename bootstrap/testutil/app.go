@@ -12,8 +12,20 @@ import (
 	"github.com/kbukum/gokit/bootstrap"
 	"github.com/kbukum/gokit/config"
 	"github.com/kbukum/gokit/logging"
-	kittestutil "github.com/kbukum/gokit/testutil"
 )
+
+// DefaultStartBudget bounds [Start] unless [WithStartBudget] overrides it. It matches the setup budget of gokit's component test harness.
+const DefaultStartBudget = 30 * time.Second
+
+// StartOption configures [Start].
+type StartOption func(*startConfig)
+
+type startConfig struct{ budget time.Duration }
+
+// WithStartBudget bounds startup in [Start] by d. A nonpositive d uses [DefaultStartBudget].
+func WithStartBudget(d time.Duration) StartOption {
+	return func(c *startConfig) { c.budget = d }
+}
 
 // ErrStartBudget is the cancellation cause of a [Start] whose startup outlasts its setup budget.
 var ErrStartBudget = errors.New("bootstrap/testutil: startup exceeded its setup budget")
@@ -42,10 +54,17 @@ func NewApp(t testing.TB, opts ...bootstrap.Option) *bootstrap.App[*Config] {
 	return app
 }
 
-// Start runs app's startup and fails t if it fails. Startup gets the setup budget of opts (30 seconds by default; see [kittestutil.WithBudgets]): if configure, start or ready hooks outlast it, the startup context is canceled with [ErrStartBudget] and startup rolls back. The budget covers startup only. Once started, app keeps its context, which carries t.Context's values but not its cancellation, until Start shuts app down when the test and its subtests finish, reporting a shutdown error on t. Shutdown is bounded by the App's graceful timeout.
-func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...kittestutil.Option) {
+// Start runs app's startup and fails t if it fails. Startup gets [DefaultStartBudget] unless [WithStartBudget] sets another: if configure, start or ready hooks outlast it, the startup context is canceled with [ErrStartBudget] and startup rolls back. The budget covers startup only. Once started, app keeps its context, which carries t.Context's values but not its cancellation, until Start shuts app down when the test and its subtests finish, reporting a shutdown error on t. Shutdown is bounded by the App's graceful timeout.
+func Start[C bootstrap.Config](t testing.TB, app *bootstrap.App[C], opts ...StartOption) {
 	t.Helper()
-	budget := kittestutil.ResolveBudgets(opts...).Setup
+	cfg := startConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	budget := cfg.budget
+	if budget <= 0 {
+		budget = DefaultStartBudget
+	}
 	ctx, cancel := context.WithCancelCause(context.WithoutCancel(t.Context()))
 	budgetTimer := time.AfterFunc(budget, func() { cancel(fmt.Errorf("%w (%s)", ErrStartBudget, budget)) })
 	err := app.Startup(ctx)

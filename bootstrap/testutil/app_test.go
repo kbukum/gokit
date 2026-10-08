@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/bootstrap"
-	kittestutil "github.com/kbukum/gokit/testutil"
 )
 
 type clock interface{ Now() string }
@@ -210,7 +209,7 @@ func TestStartFailsWhenStartupOutlastsItsBudget(t *testing.T) {
 		<-ctx.Done() // a hook that only returns on cancellation
 		return ctx.Err()
 	})
-	Start(rec, app, kittestutil.WithBudgets(kittestutil.Budgets{Setup: 20 * time.Millisecond}))
+	Start(rec, app, WithStartBudget(20*time.Millisecond))
 	if len(rec.failures) != 1 || !strings.Contains(rec.failures[0], "startup") || !strings.Contains(rec.failures[0], ErrStartBudget.Error()) {
 		t.Fatalf("failures = %v, want one startup failure naming the budget", rec.failures)
 	}
@@ -225,7 +224,7 @@ func TestStartBudgetDoesNotCancelAStartedApp(t *testing.T) {
 		return nil
 	})
 	const budget = 10 * time.Millisecond
-	Start(t, app, kittestutil.WithBudgets(kittestutil.Budgets{Setup: budget}))
+	Start(t, app, WithStartBudget(budget))
 	select {
 	case <-lifecycle.Done():
 		t.Fatalf("lifecycle context ended after a successful start: %v", context.Cause(lifecycle))
