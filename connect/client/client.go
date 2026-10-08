@@ -1,12 +1,16 @@
 package client
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 
 	"connectrpc.com/connect"
 )
+
+// ErrRedirect reports a redirect refused to keep RPC credentials and request bodies at the configured peer.
+var ErrRedirect = errors.New("connect client: redirects are not allowed")
 
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
@@ -15,6 +19,7 @@ import (
 // and gRPC communication without TLS.
 //
 // The returned client can be passed directly to any generated Connect client constructor.
+// Redirects fail with [ErrRedirect], including redirects within the same origin.
 func NewHTTPClient(cfg Config) (*http.Client, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
@@ -29,6 +34,9 @@ func NewHTTPClient(cfg Config) (*http.Client, error) {
 	return &http.Client{
 		Transport: transport,
 		Timeout:   cfg.Timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return ErrRedirect
+		},
 	}, nil
 }
 
@@ -73,8 +81,8 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 	}, nil
 }
 
-// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme. Network failures are marked with
-// ErrTransport.
+// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme. Network failures and gateway outage
+// statuses are marked with ErrTransport.
 type schemeTransport struct {
 	*http.Transport
 	scheme string
@@ -90,6 +98,10 @@ func (t *schemeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.Transport.RoundTrip(req)
 	if err != nil {
 		return nil, markTransport(req, err)
+	}
+	if gatewayOutage(req, resp) {
+		_ = resp.Body.Close()
+		return nil, markTransport(req, fmt.Errorf("connect client: gateway responded %s", resp.Status))
 	}
 	resp.Body = &transportBody{ReadCloser: resp.Body, req: req}
 	return resp, nil

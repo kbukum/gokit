@@ -15,7 +15,7 @@ const (
 	ProblemMissingPort ModuleProblemKind = "missing_port"
 	// ProblemDuplicatePort is a port that more than one module provides, such as a module and its client module in the same App.
 	ProblemDuplicatePort ModuleProblemKind = "duplicate_port"
-	// ProblemMissingListener is a listener named in module specs that the command did not declare with Listen.
+	// ProblemMissingListener is a listener named in module specs that the command did not declare with RegisterListener.
 	ProblemMissingListener ModuleProblemKind = "missing_listener"
 	// ProblemCycle is a dependency cycle between modules.
 	ProblemCycle ModuleProblemKind = "dependency_cycle"

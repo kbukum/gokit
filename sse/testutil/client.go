@@ -62,7 +62,7 @@ func (c *StreamClient) Next() (Event, error) {
 // Require reads events until one named want arrives and returns it, failing the
 // test on a read error, EOF, or a mismatched event before want. The connected
 // handshake `connected` event is skipped automatically.
-func (c *StreamClient) Require(t *testing.T, want string) Event {
+func (c *StreamClient) Require(t testing.TB, want string) Event {
 	t.Helper()
 	for {
 		evt, err := c.Next()
@@ -80,7 +80,7 @@ func (c *StreamClient) Require(t *testing.T, want string) Event {
 }
 
 // RequireJSON reads until the want event arrives and decodes its data into v.
-func (c *StreamClient) RequireJSON(t *testing.T, want string, v any) Event {
+func (c *StreamClient) RequireJSON(t testing.TB, want string, v any) Event {
 	t.Helper()
 	evt := c.Require(t, want)
 	if err := json.Unmarshal(evt.Data, v); err != nil {
@@ -90,7 +90,7 @@ func (c *StreamClient) RequireJSON(t *testing.T, want string, v any) Event {
 }
 
 // SkipConnected consumes the initial `connected` handshake event and returns it.
-func (c *StreamClient) SkipConnected(t *testing.T) Event {
+func (c *StreamClient) SkipConnected(t testing.TB) Event {
 	t.Helper()
 	return c.Require(t, "connected")
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -56,7 +57,15 @@ func get(ctx context.Context, t *testing.T, app *App[*testConfig], path string) 
 	if addr == nil {
 		t.Fatal("admin listener is not running")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+addr.String()+path, http.NoBody)
+	target := addr.String()
+	if tcp, ok := addr.(*net.TCPAddr); ok && tcp.IP.IsUnspecified() {
+		host := "127.0.0.1"
+		if tcp.IP.To4() == nil {
+			host = "::1"
+		}
+		target = net.JoinHostPort(host, strconv.Itoa(tcp.Port))
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+target+path, http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}

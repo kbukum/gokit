@@ -114,13 +114,13 @@ public := server.NewComponent(srv, server.WithName("public-http"))
 
 // One process runs both modules.
 err := errors.Join(
-    app.Listen("public", public),
+    app.RegisterListener("public", public),
     app.Use(storeModule{}, apiModule{}),
 )
 
 // Or the API runs alone, and the store's client module stands in for the store.
 err := errors.Join(
-    app.Listen("public", public),
+    app.RegisterListener("public", public),
     app.Use(apiModule{}, store.ClientModule(cfg.StoreURL)),
 )
 ```
@@ -132,14 +132,14 @@ Splitting a module out of a process does not touch the modules that need it. Eac
 How it behaves:
 
 - A port is identified by its `*Port` value: two `NewPort` calls are different ports even with the same name. Port types must be interfaces.
-- Listeners are HTTP only. A `Listener` is a component that quiesces and drains, with `Handle(pattern, handler) error` for routes and `Fallback(handler) error`, and it must drain as `component.DrainIngress`. A module lists the listeners it mounts on in `ModuleSpec.Listeners` and can only `Handle` routes on those. An invalid or conflicting pattern is returned as `ErrRouteConflict`.
+- Listeners are HTTP only. A `Listener` is a component that quiesces and drains, with `Handle(pattern, handler) error` for routes and `Fallback(handler) error`, and it must drain as `component.DrainIngress`. A module lists the listeners it mounts on in `ModuleSpec.Listeners` and can only `Handle` routes on those. Patterns follow `http.ServeMux`; the unqualified `/` is reserved for fallback dispatch. An invalid or conflicting pattern is returned as `ErrRouteConflict`. Direct listener `Fallback` calls replace the previous handler, while the module layer rejects competing fallback owners.
 - `ModuleContext.Fallback(listener, handler)` sets the handler for requests no route matches, such as a single-page app; a listener has one fallback, and a second is `ErrRouteConflict`. The App installs it after every module registers and answers 404 under the first path segment of every module route on that listener (for `POST /auth/login`, everything under `/auth`), so unknown API paths never reach the fallback. It compares the unescaped first segment, so an escaped slash such as `/auth%2Fx` is reserved too, and a segment that fails to decode never reaches the fallback.
 - Startup checks the whole module set before any module registers. Missing ports, duplicate providers (such as a module and its client module in one App), missing listeners, every dependency cycle, listener component names that are empty, shared or already registered, and invalid declarations come back together as one `*ModuleError` inside a `*StartupError` with phase `modules`. A module whose `Register` returns without providing a declared port is reported after it registers.
 - Modules register in dependency order, keeping `Use` order where they are independent. A module can only `Provide` and `Need` ports in its own spec, and it must provide every port it declares.
-- The modules phase runs after `OnConfigure`. Components start in this order: those registered before `Run` or in `OnConfigure`, then module components in dependency order, then listener components in `Listen` order, then any registered in `OnBeforeStart`.
+- The modules phase runs after `OnConfigure`. Components start in this order: those registered before `Run` or in `OnConfigure`, then module components in dependency order, then listener components in `RegisterListener` order, then any registered in `OnBeforeStart`.
 - On shutdown, listeners stop accepting requests and drain in-flight ones before module workers drain, then components stop in reverse within each component phase.
 - `Register` must not block or do network I/O. Components it adds do their I/O in `Start`.
-- `Use` and `Listen` only record declarations. They work before the lifecycle starts and in `OnConfigure`, and return `ErrLifecycleUsed` once the modules phase begins.
+- `Use` and `RegisterListener` only record declarations. They work before the lifecycle starts and in `OnConfigure`, and return `ErrLifecycleUsed` once the modules phase begins.
 - The startup summary lists each module with its ports and their providers, routes and components.
 
 ### Testing modules
@@ -149,7 +149,7 @@ Package `bootstrap/testutil` runs modules in tests the way a service runs them:
 ```go
 func TestAPIModule(t *testing.T) {
     app := testutil.NewApp(t)                         // quiet App; logs and summary discarded
-    public := testutil.Listen(t, app, "public")       // loopback HTTP listener
+    public := testutil.RegisterListener(t, app, "public")       // loopback HTTP listener
     store := testutil.Capture(t, app, StorePort)      // reads a provided port after start
     if err := app.Use(apiModule{}, bootstrap.ValueModule("store", StorePort, fakeStore{})); err != nil {
         t.Fatal(err)
@@ -163,14 +163,16 @@ func TestAPIModule(t *testing.T) {
 
 `Start` works with any `*bootstrap.App[C]`, so a test can also start a command's real composition. Startup is bounded by `testutil.DefaultStartBudget` (30 seconds) or `testutil.WithStartBudget(d)`; a hook that outlasts it is canceled with `testutil.ErrStartBudget` and startup rolls back. The budget does not cancel an app that started. `Capture` is an ordinary module that needs the port, so a missing provider fails startup with the same `*ModuleError` a service reports.
 
-`testutil.AssertRemoteSafe` checks that a port's methods take a `context.Context` first, return an `error` last, and pass no channels, functions, unsafe pointers or interfaces at any depth (pointers, slices, maps and exported struct fields are inspected; types that encode themselves are accepted as is). `testutil.Contract` runs one behavior suite against the in-process implementation and the client module's client, so a module can move between services without changing behavior:
+The loopback listener supports HTTP/1 and h2c, including production Connect unary and streaming clients. `testutil.AssertListenerRoutes(t, listener, handler)` checks a fresh listener against the shared route/fallback contract without starting it.
+
+`testutil.AssertRemoteShape` checks that a port's methods take a `context.Context` first, return an `error` last, and pass no channels, functions, unsafe pointers, interfaces or complex numbers at any depth (pointers, slices, maps and exported struct fields are inspected; types that encode themselves are accepted as is). This validates shape, not serialization or behavioral compatibility. `testutil.Contract` runs one behavior suite against the in-process implementation and the client module's client, so a module can move between services without changing behavior:
 
 ```go
 func TestStorePortContract(t *testing.T) {
-    testutil.AssertRemoteSafe(t, StorePort)
+    testutil.AssertRemoteShape(t, StorePort)
     testutil.Contract(t, StorePort, storeSuite,
-        testutil.Impl[Store]{Name: "local", New: func(t *testing.T) Store { return newStore() }},
-        testutil.Impl[Store]{Name: "http", New: newStoreClientOverTestApp},
+        testutil.Implementation[Store]{Name: "local", New: func(t *testing.T) Store { return newStore() }},
+        testutil.Implementation[Store]{Name: "http", New: newStoreClientOverTestApp},
     )
 }
 ```
@@ -209,13 +211,13 @@ One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host
 | `RegisterComponent()` | Add a managed component |
 | `Module` / `ModuleSpec` / `ModuleContext` | A named capability, its declared ports, and its wiring handle |
 | `Port[T]` / `NewPort()` / `PortRef` | Typed interface ports, identified by value |
-| `Use()` / `Listen()` / `CheckModules()` | Compose modules and named listeners; check wiring without starting |
+| `Use()` / `RegisterListener()` / `CheckModules()` | Compose modules and named listeners; check wiring without starting |
 | `Provide()` / `Need()` | Fill or read a declared port inside `Register` |
 | `ValueModule()` | A module that provides one port with a value, such as a test double |
 | `Listener` | HTTP listener component that modules mount routes and a fallback on |
 | `ModuleError` / `ModuleProblem` | Every wiring problem found at startup |
-| `testutil.NewApp()` / `Start()` / `Listen()` / `Capture()` | Run modules in tests |
-| `testutil.RemoteSafe()` / `testutil.Contract()` | Check a port's remote shape; run one suite against every implementation |
+| `testutil.NewApp()` / `Start()` / `RegisterListener()` / `Capture()` | Run modules in tests |
+| `testutil.ValidateRemoteShape()` / `testutil.Contract()` | Check a port's remote shape; run one suite against every implementation |
 | `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` / `WithAdmin()` | App options |
 | `AdminConfig` / `Readiness` / `AdminAddr()` | Admin listener configuration, `/readyz` body and bound address |
 | `Summary` | Tracks and displays startup summary |

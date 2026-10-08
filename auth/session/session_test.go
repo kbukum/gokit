@@ -273,7 +273,7 @@ func TestExpiryStoreFailureAndCrossInstance(t *testing.T) {
 
 func TestHTTPProtocol(t *testing.T) {
 	m, _ := fixture(t, &memoryStore{rows: make(map[string]Record)})
-	handler, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, Login) (auth.Principal, error) { return caller(), nil }), "https://example.test", func(w http.ResponseWriter, r *http.Request, err error) {
+	handler, err := newLocalHandler(m, LoginVerifierFunc(func(context.Context, LoginCredentials) (auth.Principal, error) { return caller(), nil }), "https://example.test", func(w http.ResponseWriter, r *http.Request, err error) {
 		http.Error(w, "failure", http.StatusUnauthorized)
 	})
 	if err != nil {

@@ -24,23 +24,27 @@ const (
 	AvailabilityUnavailable AvailabilityState = "unavailable"
 )
 
-// IsUnavailable reports whether err means the peer cannot serve calls right now. That is either a call that never got an answer (a transport failure, or an error that is not a Connect error) or a Connect code saying the peer cannot serve it now: Unavailable, DeadlineExceeded or Canceled, whether the client or the peer produced it. A connection lost mid-stream can surface under any Connect code, so the transport mark decides first. Any other Connect code is a served call: the peer is available and the error is its answer.
+// IsUnavailable reports a marked transport failure, a context or first-message timeout, or a received Connect Unavailable, DeadlineExceeded or Canceled. Other locally constructed errors carry no evidence about the peer, regardless of their code. Nil and the clean io.EOF sentinel are successful outcomes; a marked failure wrapping EOF remains an outage.
 func IsUnavailable(err error) bool {
-	if err == nil {
-		return false
+	return callAvailability(err) == AvailabilityUnavailable
+}
+
+func callAvailability(err error) AvailabilityState {
+	if err == nil || err == io.EOF { //nolint:errorlint // only the clean sentinel is completion; wrapped EOF may be a transport failure
+		return AvailabilityAvailable
 	}
-	if IsTransportFailure(err) {
-		return true
+	if IsTransportFailure(err) || errors.Is(err, ErrFirstMessageTimeout) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return AvailabilityUnavailable
 	}
 	var remote *connect.Error
-	if !errors.As(err, &remote) {
-		return true
+	if !errors.As(err, &remote) || !connect.IsWireError(err) {
+		return AvailabilityUnknown
 	}
 	switch remote.Code() {
 	case connect.CodeUnavailable, connect.CodeDeadlineExceeded, connect.CodeCanceled:
-		return true
+		return AvailabilityUnavailable
 	default:
-		return false
+		return AvailabilityAvailable
 	}
 }
 
@@ -66,14 +70,11 @@ func (a *Availability) State() AvailabilityState {
 	return a.state
 }
 
-// Observe records the outcome of a finished call made with ctx. A nil error or any other error the peer served marks it available; an [IsUnavailable] error marks it unavailable, unless ctx had already ended: a caller's own cancellation or deadline says nothing about the peer, so callers cannot mark a peer unavailable by choosing a short deadline. Adapters call it directly for outcomes the interceptor cannot see, such as a stream that ended before its first message when the protocol requires one.
+// Observe records a finished call made with ctx. Success, clean EOF and non-outage wire errors mark the peer available. An [IsUnavailable] failure marks it unavailable unless ctx ended. Other local errors leave the previous state unchanged: a local rejection is not a peer answer. Adapters may record outcomes the interceptor cannot see.
 func (a *Availability) Observe(ctx context.Context, err error) {
-	state := AvailabilityAvailable
-	if IsUnavailable(err) {
-		if ctx.Err() != nil {
-			return
-		}
-		state = AvailabilityUnavailable
+	state := callAvailability(err)
+	if state == AvailabilityUnknown || (state == AvailabilityUnavailable && ctx.Err() != nil) {
+		return
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -121,18 +122,14 @@ type observedConn struct {
 // Receive marks a message or a clean end as an answer and a failure by its kind.
 func (c *observedConn) Receive(msg any) error {
 	err := c.StreamingClientConn.Receive(msg)
-	if errors.Is(err, io.EOF) {
-		c.availability.Observe(c.ctx, nil)
-	} else {
-		c.availability.Observe(c.ctx, err)
-	}
+	c.availability.Observe(c.ctx, err)
 	return err
 }
 
 // Send observes failures only. io.EOF means the peer closed the stream; Receive reports why.
 func (c *observedConn) Send(msg any) error {
 	err := c.StreamingClientConn.Send(msg)
-	if err != nil && !errors.Is(err, io.EOF) {
+	if err != nil && err != io.EOF { //nolint:errorlint // a wrapped EOF can mark a transport failure
 		c.availability.Observe(c.ctx, err)
 	}
 	return err

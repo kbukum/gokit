@@ -8,11 +8,17 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/bootstrap"
+	bootstraptest "github.com/kbukum/gokit/bootstrap/testutil"
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/server"
 )
 
 var _ bootstrap.Listener = (*server.Component)(nil)
+
+func TestComponentListenerRouteContract(t *testing.T) {
+	s := newTestServer(t)
+	bootstraptest.AssertListenerRoutes(t, server.NewComponent(s), s.Handler())
+}
 
 func TestComponentDescribeAndRoutes(t *testing.T) {
 	s := newTestServer(t)

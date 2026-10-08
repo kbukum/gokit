@@ -1,14 +1,12 @@
 package server
 
 import (
-	"math"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	apperrors "github.com/kbukum/gokit/errors"
-	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/server/httpx"
 )
 
 // DataResponse is the standard success envelope.
@@ -27,38 +25,11 @@ type Meta struct {
 
 // RespondWithError inspects err: if it is an *apperrors.AppError the status
 // and structured body are derived automatically; otherwise a generic 500 is sent.
-// The response uses Content-Type: application/problem+json per RFC 9457.
+// The shared [httpx.WriteProblemDetails] writer uses application/problem+json and no-store, validates the error, and falls back to Internal before writing headers if its details cannot be encoded.
 //
 // 5xx responses are logged at Error level (with method, path, status, and the underlying error chain) so operators have a server-side trail even when the client only sees a generic problem detail. The logger is taken from the request context (injected by the server's InjectLogger middleware); when absent — e.g. the helper is used outside a gokit Server — the extra error log is skipped rather than reaching for a package global. 4xx responses are not logged here — that is the caller's call (for noisy validation errors, the caller can choose to log at Debug).
 func RespondWithError(c *gin.Context, err error) {
-	if err == nil {
-		err = apperrors.Internal(nil)
-	}
-	appErr := apperrors.Normalize(err)
-	if validationErr := appErr.Validate(); validationErr != nil {
-		appErr = apperrors.Internal(validationErr)
-		err = appErr
-	}
-	pd := appErr.ToProblemDetail()
-	pd.Instance = c.Request.URL.Path
-
-	if appErr.HTTPStatus() >= http.StatusInternalServerError {
-		if log, ok := logging.LoggerFromContext(c.Request.Context()); ok {
-			log.ErrorCtx(c.Request.Context(), "HTTP error response", map[string]any{
-				"method": c.Request.Method,
-				"path":   c.Request.URL.Path,
-				"status": appErr.HTTPStatus(),
-				"code":   string(appErr.Code),
-				"error":  err.Error(),
-			})
-		}
-	}
-
-	c.Header("Content-Type", "application/problem+json")
-	if appErr.Retryable && appErr.RetryAfter > 0 {
-		c.Header("Retry-After", strconv.Itoa(int(math.Ceil(appErr.RetryAfter.Seconds()))))
-	}
-	c.JSON(appErr.HTTPStatus(), pd)
+	httpx.WriteProblemDetails(c.Writer, c.Request, err)
 }
 
 // RespondOK sends a 200 response wrapping data.

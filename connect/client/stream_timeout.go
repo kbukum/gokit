@@ -11,13 +11,13 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// ErrNoFirstMessage reports a stream whose peer sent no first message within the [FirstMessageTimeout] limit.
-var ErrNoFirstMessage = errors.New("connect client: stream sent no first message in time")
+// ErrFirstMessageTimeout reports a stream whose peer sent no first message within the [FirstMessageTimeoutInterceptor] limit.
+var ErrFirstMessageTimeout = errors.New("connect client: stream sent no first message in time")
 
-// FirstMessageTimeout returns an interceptor that bounds how long a server or bidi stream waits for its first response message. A client built with [Config.NoTimeout] has no other bound, and a peer that accepts the connection but never answers would hold the stream for as long as the caller waits. The clock starts when the stream is created, so it covers opening the stream too: connect-go waits for the response headers before the open returns.
+// FirstMessageTimeoutInterceptor returns an interceptor that bounds how long a server or bidi stream waits for its first response message. A client built with [Config.NoTimeout] has no other bound, and a peer that accepts the connection but never answers would hold the stream for as long as the caller waits. The clock starts when the stream is created, so it covers opening the stream too: connect-go waits for the response headers before the open returns.
 //
-// When the limit passes first, the stream ends and every later call on it returns a Connect deadline_exceeded error wrapping [ErrNoFirstMessage], which [IsUnavailable] counts as an outage; a message that races the limit is dropped. Install it after [Availability] in connect.WithInterceptors, so the availability observes that error against the caller's context. A caller's own cancellation or deadline is left as it is. Unary calls and client streams pass through.
-func FirstMessageTimeout(limit time.Duration, clock util.TimerClock) (connect.Interceptor, error) {
+// When the limit passes first, the stream ends and every later call on it returns a Connect deadline_exceeded error wrapping [ErrFirstMessageTimeout], which [IsUnavailable] counts as an outage; a message that races the limit is dropped. Install it after [Availability] in connect.WithInterceptors, so the availability observes that error against the caller's context. A caller's own cancellation or deadline is left as it is. Unary calls and client streams pass through.
+func FirstMessageTimeoutInterceptor(limit time.Duration, clock util.TimerClock) (connect.Interceptor, error) {
 	if limit <= 0 || util.IsNil(clock) {
 		return nil, errors.New("connect client: first message timeout needs a positive limit and a clock")
 	}
@@ -43,13 +43,13 @@ func (f *firstMessage) WrapStreamingClient(next connect.StreamingClientFunc) con
 		streamCtx, cancel := context.WithCancelCause(ctx)
 		c := newFirstMessageConn(streamCtx, cancel)
 		timer := f.clock.NewTimer(f.limit)
-		c.StreamingClientConn = next(streamCtx, spec)
 		go c.watch(timer)
+		c.StreamingClientConn = next(streamCtx, spec)
 		return c
 	}
 }
 
-// First-message states. Only one transition out of waiting happens, so the first message, the caller and the limit cannot both win.
+// Only one transition out of waiting happens, so the first message, the caller and the limit cannot both win.
 const (
 	waiting int32 = iota
 	settled
@@ -88,8 +88,8 @@ func (c *firstMessageConn) expire() {
 	if c.state != waiting {
 		return
 	}
-	c.cancel(ErrNoFirstMessage)
-	if errors.Is(context.Cause(c.ctx), ErrNoFirstMessage) {
+	c.cancel(ErrFirstMessageTimeout)
+	if errors.Is(context.Cause(c.ctx), ErrFirstMessageTimeout) {
 		c.state = late
 	} else {
 		c.state = settled
@@ -120,13 +120,13 @@ func (c *firstMessageConn) disarm() {
 // failure replaces the outcome of any call after the limit passed, success included, with the outage it stands for.
 func (c *firstMessageConn) failure(err error) error {
 	if c.expired() {
-		return errNoFirstMessage()
+		return errFirstMessageTimeout()
 	}
 	return err
 }
 
-func errNoFirstMessage() error {
-	return connect.NewError(connect.CodeDeadlineExceeded, ErrNoFirstMessage)
+func errFirstMessageTimeout() error {
+	return connect.NewError(connect.CodeDeadlineExceeded, ErrFirstMessageTimeout)
 }
 
 func (c *firstMessageConn) Send(msg any) error {
@@ -141,7 +141,7 @@ func (c *firstMessageConn) CloseRequest() error {
 func (c *firstMessageConn) Receive(msg any) error {
 	err := c.StreamingClientConn.Receive(msg)
 	if c.settle() {
-		return errNoFirstMessage()
+		return errFirstMessageTimeout()
 	}
 	return err
 }
@@ -150,5 +150,5 @@ func (c *firstMessageConn) Receive(msg any) error {
 func (c *firstMessageConn) CloseResponse() error {
 	c.disarm()
 	c.cancel(nil)
-	return c.StreamingClientConn.CloseResponse()
+	return c.failure(c.StreamingClientConn.CloseResponse())
 }

@@ -8,19 +8,19 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// SignIn is a validated login plus the session cookie the browser presented, which is empty for a fresh login.
-type SignIn struct {
-	Login     Login
-	Presented string
+// LoginRequest is a validated login plus the session cookie the browser presented, which is empty for a fresh login.
+type LoginRequest struct {
+	Credentials LoginCredentials
+	Presented   string
 }
 
-// SignOut is a validated session cookie plus the synchronizer CSRF token presented with it.
-type SignOut struct {
+// LogoutRequest is a validated session cookie plus the synchronizer CSRF token presented with it.
+type LogoutRequest struct {
 	Token     string
 	CSRFToken string
 }
 
-// Grant is an authoritative session view. Token is set only by SignIn.
+// Grant is an authoritative session view. Token is set only by Login.
 type Grant struct {
 	Token     string
 	Principal auth.Principal
@@ -30,9 +30,9 @@ type Grant struct {
 // Backend owns session state behind the browser handler. Implementations return typed failures. The handler passes
 // backend errors, causes included, to HandlerConfig.Errors, which must normalize them so causes never reach the browser.
 type Backend interface {
-	SignIn(context.Context, SignIn) (Grant, error)
+	Login(context.Context, LoginRequest) (Grant, error)
 	Status(ctx context.Context, token string) (Grant, error)
-	SignOut(context.Context, SignOut) error
+	Logout(context.Context, LogoutRequest) error
 }
 
 type localBackend struct {
@@ -48,13 +48,13 @@ func NewLocalBackend(manager *Manager, verifier LoginVerifier) (Backend, error) 
 	return &localBackend{manager: manager, verifier: verifier}, nil
 }
 
-// SignIn begins the attempt before verifying, so an invalid presented cookie fails without spending password work.
-func (b *localBackend) SignIn(ctx context.Context, in SignIn) (Grant, error) {
+// Login begins the attempt before verifying, so an invalid presented cookie fails without spending password work.
+func (b *localBackend) Login(ctx context.Context, in LoginRequest) (Grant, error) {
 	attempt, err := b.manager.BeginLogin(ctx, in.Presented)
 	if err != nil {
 		return Grant{}, err
 	}
-	p, err := b.verifier.VerifyLogin(ctx, in.Login)
+	p, err := b.verifier.VerifyLogin(ctx, in.Credentials)
 	if err != nil {
 		if app, ok := apperrors.AsAppError(err); ok && app != nil && app.Code == apperrors.ErrCodeUnauthorized {
 			return Grant{}, auth.Failure("LOGIN_INVALID")
@@ -90,7 +90,7 @@ func (b *localBackend) Status(ctx context.Context, token string) (Grant, error) 
 	return Grant{Principal: row.Principal.Clone(), CSRFToken: csrf}, nil
 }
 
-func (b *localBackend) SignOut(ctx context.Context, in SignOut) error {
+func (b *localBackend) Logout(ctx context.Context, in LogoutRequest) error {
 	if err := ValidateToken(in.Token); err != nil {
 		return err
 	}

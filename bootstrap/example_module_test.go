@@ -172,7 +172,7 @@ func Example_modulesMissingPort() {
 func TestWelcomeModule(t *testing.T) {
 	t.Parallel()
 	app := testutil.NewApp(t)
-	public := testutil.Listen(t, app, "public")
+	public := testutil.RegisterListener(t, app, "public")
 	if err := app.Use(welcomeModule{}, bootstrap.ValueModule("greeter-double", GreeterPort, Greeter(localGreeter{}))); err != nil {
 		t.Fatal(err)
 	}
@@ -186,18 +186,18 @@ func TestWelcomeModule(t *testing.T) {
 // TestGreeterPortContract holds the in-process greeter and its HTTP client to the same behavior, which is what lets the greeter move between services.
 func TestGreeterPortContract(t *testing.T) {
 	t.Parallel()
-	testutil.AssertRemoteSafe(t, GreeterPort)
+	testutil.AssertRemoteShape(t, GreeterPort)
 	testutil.Contract(t, GreeterPort, func(t *testing.T, g Greeter) {
 		got, err := g.Greet(t.Context(), "ada lovelace")
 		if err != nil || got != "hello, ada lovelace" {
 			t.Fatalf("Greet = %q, %v", got, err)
 		}
 	},
-		testutil.Impl[Greeter]{Name: "local", New: func(*testing.T) Greeter { return localGreeter{} }},
-		testutil.Impl[Greeter]{Name: "http", New: func(t *testing.T) Greeter {
+		testutil.Implementation[Greeter]{Name: "local", New: func(*testing.T) Greeter { return localGreeter{} }},
+		testutil.Implementation[Greeter]{Name: "http", New: func(t *testing.T) Greeter {
 			// The client module is tested through the App, as a split service runs it.
 			app := testutil.NewApp(t)
-			internal := testutil.Listen(t, app, "internal")
+			internal := testutil.RegisterListener(t, app, "internal")
 			if err := app.Use(greeterModule{}); err != nil {
 				t.Fatal(err)
 			}
@@ -223,7 +223,7 @@ func (l listeners) listen(app *bootstrap.App[*exampleConfig], names ...string) e
 	errs := make([]error, 0, len(names))
 	for _, name := range names {
 		l[name] = testutil.NewListener(name)
-		errs = append(errs, app.Listen(name, l[name]))
+		errs = append(errs, app.RegisterListener(name, l[name]))
 	}
 	return errors.Join(errs...)
 }

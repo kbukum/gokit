@@ -147,6 +147,7 @@ var ErrInvalidRoute = errors.New("server: invalid route")
 // Handle mounts an http.Handler at the given pattern on the root ServeMux.
 // Use this to add Connect-Go or any other handler alongside Gin.
 // The pattern must include a trailing slash for subtree matches (e.g. "/grpc.health.v1.Health/").
+// The unqualified "/" is reserved for Gin and fallback dispatch.
 // It returns [ErrInvalidRoute] for a nil or typed-nil handler and for a pattern [http.ServeMux] rejects as invalid or conflicting.
 func (s *Server) Handle(pattern string, handler http.Handler) error {
 	if util.IsNil(handler) {

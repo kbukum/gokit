@@ -18,6 +18,31 @@ import (
 	"github.com/kbukum/gokit/security/tlstest"
 )
 
+func TestMainInitializesPrivateFixture(t *testing.T) {
+	original := os.Args
+	t.Cleanup(func() { os.Args = original })
+	path := filepath.Join(t.TempDir(), "fixture.json")
+	os.Args = []string{"auth-host", "-init-fixture", path}
+	main()
+	if _, err := testhost.LoadFixture(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServeRejectsMissingFixture(t *testing.T) {
+	t.Parallel()
+	certs := tlstest.GenerateTLSCerts(t)
+	args := []string{
+		"-fixture", filepath.Join(t.TempDir(), "missing.json"), "-origin", "https://localhost:0",
+		"-cert", certs.CertFile, "-key", certs.KeyFile,
+		"-state", filepath.Join(t.TempDir(), "sessions.db"),
+		"-run-id", "cli-run", "-build-id", "cli-build",
+	}
+	if err := run(t.Context(), args, io.Discard); err == nil {
+		t.Fatal("missing fixture started a host")
+	}
+}
+
 func TestInitFixtureIsPrivateAndNeverOverwrites(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "fixture.json")

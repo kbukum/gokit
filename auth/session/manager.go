@@ -189,7 +189,7 @@ func (m *Manager) Authenticate(r *http.Request) (auth.Principal, error) {
 		return auth.Principal{}, err
 	}
 	if unsafe(r.Method) {
-		token, csrfErr := RequestCSRF(r)
+		token, csrfErr := ParseCSRFToken(r)
 		if csrfErr != nil {
 			return auth.Principal{}, csrfErr
 		}

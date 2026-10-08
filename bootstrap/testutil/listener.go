@@ -22,6 +22,7 @@ type Listener struct {
 	mux  *http.ServeMux
 
 	mu         sync.Mutex
+	fallback   http.Handler
 	srv        *http.Server
 	url        string
 	done       chan error
@@ -35,13 +36,20 @@ type Listener struct {
 
 // NewListener returns a stopped listener whose component name is name.
 func NewListener(name string) *Listener {
-	return &Listener{name: name, mux: http.NewServeMux(), drained: make(chan struct{})}
+	l := &Listener{name: name, mux: http.NewServeMux(), fallback: http.NotFoundHandler(), drained: make(chan struct{})}
+	l.mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		l.mu.Lock()
+		fallback := l.fallback
+		l.mu.Unlock()
+		fallback.ServeHTTP(w, r)
+	}))
+	return l
 }
 
 // Name returns the component name.
 func (l *Listener) Name() string { return l.name }
 
-// Handle mounts handler at pattern. It returns an error for a nil or typed-nil handler and for a pattern [http.ServeMux] rejects as invalid or conflicting.
+// Handle mounts handler at pattern. The unqualified "/" is reserved for fallback dispatch. It returns an error for a nil or typed-nil handler and for a pattern [http.ServeMux] rejects as invalid or conflicting.
 func (l *Listener) Handle(pattern string, handler http.Handler) (err error) {
 	if util.IsNil(handler) {
 		return fmt.Errorf("testutil: nil handler for %q", pattern)
@@ -56,8 +64,16 @@ func (l *Listener) Handle(pattern string, handler http.Handler) (err error) {
 	return nil
 }
 
-// Fallback serves requests no mounted pattern matches. It returns an error for a nil or typed-nil handler, or if a handler is already mounted at "/".
-func (l *Listener) Fallback(handler http.Handler) error { return l.Handle("/", handler) }
+// Fallback replaces the handler for requests no mounted pattern matches. It returns an error for a nil or typed-nil handler.
+func (l *Listener) Fallback(handler http.Handler) error {
+	if util.IsNil(handler) {
+		return errors.New("testutil: nil fallback handler")
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.fallback = handler
+	return nil
+}
 
 // ServeHTTP routes r to the mounted handlers, or answers 503 once the listener is quiesced. After Start, each request also receives listener shutdown cancellation while retaining its own context values, deadline and cancellation.
 func (l *Listener) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -97,7 +113,7 @@ func (l *Listener) URL() string {
 	return l.url
 }
 
-// Start listens on 127.0.0.1 at a free port and serves in the background.
+// Start listens on 127.0.0.1 at a free port and serves HTTP/1 and unencrypted HTTP/2 in the background.
 func (l *Listener) Start(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -111,7 +127,10 @@ func (l *Listener) Start(ctx context.Context) error {
 	base, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	l.cancel = cancel
 	l.onShutdown = func(f func()) func() bool { return context.AfterFunc(base, f) }
-	l.srv = &http.Server{Handler: l, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	protocols.SetUnencryptedHTTP2(true)
+	l.srv = &http.Server{Handler: l, Protocols: protocols, ReadHeaderTimeout: 5 * time.Second, BaseContext: func(net.Listener) context.Context { return base }}
 	l.url = "http://" + ln.Addr().String()
 	l.done = make(chan error, 1)
 	go func(srv *http.Server, done chan<- error) { done <- srv.Serve(ln) }(l.srv, l.done)

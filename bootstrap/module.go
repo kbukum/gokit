@@ -31,11 +31,11 @@ type ModuleSpec struct {
 	Provides []PortRef
 	// Needs lists the ports Register may read with [Need]. Each must be provided by exactly one other module.
 	Needs []PortRef
-	// Listeners names the listeners Register mounts routes on with [ModuleContext.Handle]. Each must be declared with [App.Listen].
+	// Listeners names the listeners Register mounts routes on with [ModuleContext.Handle]. Each must be declared with [App.RegisterListener].
 	Listeners []string
 }
 
-// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle and Fallback return an error for a nil handler or an invalid or conflicting pattern; the App reports it as [ErrRouteConflict]. Fallback installs the handler for requests no route matches, such as a single-page app; the App calls it at most once, after every module has registered.
+// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle uses [http.ServeMux] patterns, with the unqualified "/" reserved for fallback dispatch. Handle and Fallback reject nil and typed-nil handlers; Handle also rejects invalid or conflicting patterns. The App reports these errors as [ErrRouteConflict]. Fallback replaces the handler for requests no route matches, such as a single-page app; the App calls it at most once, after every module has registered. Register routes and fallbacks before starting the listener.
 //
 // Listeners are HTTP only; Connect services mount as HTTP handlers. A listener with another mount model, such as a *grpc.Server, is wired by the command outside the module layer.
 type Listener interface {
@@ -80,13 +80,13 @@ func (mc *ModuleContext) Name() string { return mc.spec.Name }
 // Logger returns the App logger tagged with the module name.
 func (mc *ModuleContext) Logger() *logging.Logger { return mc.logger }
 
-// AddComponent registers a lifecycle component. Module components start after components registered before the modules phase (including in configure hooks), in module dependency order, and before listeners; they stop in reverse within their shutdown phase. A component reports its own phase by implementing ShutdownPhase(); otherwise it is a resource.
-func (mc *ModuleContext) AddComponent(c component.Component) error {
+// RegisterComponent registers a lifecycle component. Module components start after components registered before the modules phase (including in configure hooks), in module dependency order, and before listeners; they stop in reverse within their shutdown phase. A component reports its own phase by implementing ShutdownPhase(); otherwise it is a resource.
+func (mc *ModuleContext) RegisterComponent(c component.Component) error {
 	return mc.addComponent(c, func(r *component.Registry) error { return r.Register(c) })
 }
 
-// AddComponentInPhase registers a lifecycle component in the given shutdown phase.
-func (mc *ModuleContext) AddComponentInPhase(c component.Component, phase component.ShutdownPhase) error {
+// RegisterComponentInPhase registers a lifecycle component in the given shutdown phase.
+func (mc *ModuleContext) RegisterComponentInPhase(c component.Component, phase component.ShutdownPhase) error {
 	return mc.addComponent(c, func(r *component.Registry) error { return r.RegisterInPhase(c, phase) })
 }
 
@@ -103,7 +103,7 @@ func (mc *ModuleContext) addComponent(c component.Component, register func(*comp
 	})
 }
 
-// Handle mounts handler at pattern on the named listener, which must be in the module's Listeners. The command decides which listeners exist with [App.Listen]; a module only names the listeners its routes belong to.
+// Handle mounts handler at pattern on the named listener, which must be in the module's Listeners. The command decides which listeners exist with [App.RegisterListener]; a module only names the listeners its routes belong to.
 func (mc *ModuleContext) Handle(listener, pattern string, handler http.Handler) error {
 	return mc.locked(func() error {
 		if !slices.Contains(mc.spec.Listeners, listener) {
