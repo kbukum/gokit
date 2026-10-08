@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"strings"
@@ -339,10 +340,81 @@ type moduleWiring struct {
 	registry  *component.Registry
 	listeners map[string]Listener
 	mounted   map[string]map[string]bool
+	fallbacks map[string]fallback
 	values    map[PortRef]any
 }
 
-func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (err error) {
+type fallback struct {
+	module  string
+	handler http.Handler
+}
+
+func (w *moduleWiring) setFallback(listener, module string, handler http.Handler) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if prev, ok := w.fallbacks[listener]; ok {
+		return fmt.Errorf("%w: %s already has a fallback from module %q", ErrRouteConflict, listener, prev.module)
+	}
+	w.fallbacks[listener] = fallback{module: module, handler: handler}
+	return nil
+}
+
+// installFallbacks gives each listener its fallback, guarded so it never answers under a prefix a module route owns.
+func (w *moduleWiring) installFallbacks() (err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for listener, fb := range w.fallbacks {
+		var reserved []string
+		for pattern := range w.mounted[listener] {
+			if prefix := routePrefix(pattern); prefix != "" && !slices.Contains(reserved, prefix) {
+				reserved = append(reserved, prefix)
+			}
+		}
+		if err := installFallback(w.listeners[listener], listener, fb, reserved); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func installFallback(l Listener, listener string, fb fallback, reserved []string) error {
+	err := l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		// http.ServeMux matches unescaped segments of the escaped path, so the guard compares the same way.
+		first, _, _ := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
+		if segment, err := url.PathUnescape(first); err != nil || slices.Contains(reserved, "/"+segment) {
+			http.NotFound(rw, r)
+			return
+		}
+		fb.handler.ServeHTTP(rw, r)
+	}))
+	if err != nil {
+		return fmt.Errorf("%w: %s fallback from module %q: %w", ErrRouteConflict, listener, fb.module, err)
+	}
+	return nil
+}
+
+// routePrefix returns the first literal path segment of an http.ServeMux pattern ("[METHOD ][HOST]/[PATH]"), unescaped as the mux matches it, such as "/auth" for "POST /auth/login" or "POST /%61uth/login", or "" for the root, a wildcard segment or an invalid escape.
+func routePrefix(pattern string) string {
+	_, rest, found := strings.Cut(pattern, " ")
+	if !found {
+		rest = pattern
+	}
+	slash := strings.IndexByte(rest, '/')
+	if slash < 0 {
+		return ""
+	}
+	segment, _, _ := strings.Cut(rest[slash+1:], "/")
+	if segment == "" || strings.Contains(segment, "{") {
+		return ""
+	}
+	unescaped, err := url.PathUnescape(segment)
+	if err != nil {
+		return ""
+	}
+	return "/" + unescaped
+}
+
+func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	// Planning matched every listener a module declares to one the App has, and Handle accepts only declared listeners.
@@ -350,13 +422,9 @@ func (w *moduleWiring) mount(listener, pattern string, handler http.Handler) (er
 	if w.mounted[listener][pattern] {
 		return fmt.Errorf("%w: %s %q already mounted", ErrRouteConflict, listener, pattern)
 	}
-	defer func() {
-		// http.ServeMux reports invalid and conflicting patterns by panicking; startup reports them as errors.
-		if r := recover(); r != nil {
-			err = fmt.Errorf("%w: %s %q: %v", ErrRouteConflict, listener, pattern, r)
-		}
-	}()
-	l.Handle(pattern, handler)
+	if err := l.Handle(pattern, handler); err != nil {
+		return fmt.Errorf("%w: %s %q: %w", ErrRouteConflict, listener, pattern, err)
+	}
 	w.mounted[listener][pattern] = true
 	return nil
 }

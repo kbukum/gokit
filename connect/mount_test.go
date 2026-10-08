@@ -1,25 +1,36 @@
 package connect
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 )
 
 type recordingMounter struct {
 	patterns []string
 	handlers []http.Handler
+	failOn   string
 }
 
-func (m *recordingMounter) Handle(pattern string, handler http.Handler) {
+var errMountRejected = errors.New("rejected")
+
+func (m *recordingMounter) Handle(pattern string, handler http.Handler) error {
+	if pattern == m.failOn {
+		return errMountRejected
+	}
 	m.patterns = append(m.patterns, pattern)
 	m.handlers = append(m.handlers, handler)
+	return nil
 }
 
 func TestMountRegistersHandler(t *testing.T) {
 	mounter := &recordingMounter{}
 	handler := &testHandler{}
 
-	Mount(mounter, "/svc.Service/", handler)
+	if err := Mount(mounter, "/svc.Service/", handler); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(mounter.patterns) != 1 || mounter.patterns[0] != "/svc.Service/" {
 		t.Fatalf("patterns = %v, want [/svc.Service/]", mounter.patterns)
@@ -34,11 +45,13 @@ func TestMountServicesRegistersEachService(t *testing.T) {
 	handlerA := &testHandler{id: "a"}
 	handlerB := &testHandler{id: "b"}
 
-	MountServices(
+	if err := MountServices(
 		mounter,
 		NewService("/a.Service/", handlerA),
 		NewService("/b.Service/", handlerB),
-	)
+	); err != nil {
+		t.Fatal(err)
+	}
 
 	wantPatterns := []string{"/a.Service/", "/b.Service/"}
 	if len(mounter.patterns) != len(wantPatterns) {
@@ -57,9 +70,26 @@ func TestMountServicesRegistersEachService(t *testing.T) {
 func TestMountServicesWithNoServicesIsNoop(t *testing.T) {
 	mounter := &recordingMounter{}
 
-	MountServices(mounter)
+	if err := MountServices(mounter); err != nil {
+		t.Fatal(err)
+	}
 
 	if len(mounter.patterns) != 0 || len(mounter.handlers) != 0 {
 		t.Fatalf("registered handlers for no services: patterns=%v handlers=%d", mounter.patterns, len(mounter.handlers))
+	}
+}
+
+func TestMountServicesStopsAtTheFirstFailure(t *testing.T) {
+	mounter := &recordingMounter{failOn: "/b.Service/"}
+	err := MountServices(mounter,
+		NewService("/a.Service/", &testHandler{}),
+		NewService("/b.Service/", &testHandler{}),
+		NewService("/c.Service/", &testHandler{}),
+	)
+	if !errors.Is(err, errMountRejected) || !strings.Contains(err.Error(), "/b.Service/") {
+		t.Fatalf("MountServices = %v, want the /b.Service/ rejection", err)
+	}
+	if len(mounter.patterns) != 1 {
+		t.Fatalf("patterns = %v, want only /a.Service/", mounter.patterns)
 	}
 }

@@ -16,9 +16,8 @@ import (
 
 func TestMain(m *testing.M) { goleak.VerifyTestMain(m) }
 
-func TestAdminIsNeverPublic(t *testing.T) {
-	cfg := &server.Config{Host: "127.0.0.1", Admin: &server.AdminConfig{Enabled: true, Host: "127.0.0.1", Pprof: true}}
-	s := server.New(cfg, nil)
+func TestDiagnosticsAreNeverPublic(t *testing.T) {
+	s := server.New(&server.Config{Host: "127.0.0.1"}, nil)
 	s.ApplyDefaults("test", nil)
 	if err := s.Start(t.Context()); err != nil {
 		t.Fatal(err)
@@ -31,25 +30,16 @@ func TestAdminIsNeverPublic(t *testing.T) {
 	client := &http.Client{Timeout: time.Second}
 	defer client.CloseIdleConnections()
 	for _, endpoint := range []string{"/metrics", "/debug/pprof/"} {
-		for _, target := range []struct {
-			base   string
-			status int
-		}{
-			{"http://" + s.ListenAddr().String(), 404},
-			{"http://" + s.AdminAddr().String(), 200},
-		} {
-			response, err := client.Get(target.base + endpoint)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, readErr := io.Copy(io.Discard, response.Body)
-			closeErr := response.Body.Close()
-			if err := errors.Join(readErr, closeErr); err != nil {
-				t.Fatal(err)
-			}
-			if response.StatusCode != target.status {
-				t.Errorf("%s%s: %d, want %d", target.base, endpoint, response.StatusCode, target.status)
-			}
+		response, err := client.Get("http://" + s.ListenAddr().String() + endpoint)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, readErr := io.Copy(io.Discard, response.Body)
+		if err := errors.Join(readErr, response.Body.Close()); err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusNotFound {
+			t.Errorf("public %s = %d, want 404", endpoint, response.StatusCode)
 		}
 	}
 }

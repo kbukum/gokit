@@ -190,7 +190,9 @@ func (h *Host) mount(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	h.server.Handle("/auth/", h.track(h.fenceStatus(handlers)))
+	if mountErr := h.server.Handle("/auth/", h.track(h.fenceStatus(handlers))); mountErr != nil {
+		return mountErr
+	}
 	keys, err := apikey.NewMemoryStore(8)
 	if err != nil {
 		return err
@@ -217,11 +219,12 @@ func (h *Host) mount(ctx context.Context) error {
 	if err := h.mountProtected(chain); err != nil {
 		return err
 	}
-	h.server.Handle("GET /_test/ready", http.HandlerFunc(h.ready))
-	h.server.Handle("GET /_test/state", http.HandlerFunc(h.state))
-	h.server.Handle("POST /_test/reset", http.HandlerFunc(h.reset))
-	h.server.Handle("POST /_test/scenario", http.HandlerFunc(h.scenario))
-	return nil
+	return errors.Join(
+		h.server.Handle("GET /_test/ready", http.HandlerFunc(h.ready)),
+		h.server.Handle("GET /_test/state", http.HandlerFunc(h.state)),
+		h.server.Handle("POST /_test/reset", http.HandlerFunc(h.reset)),
+		h.server.Handle("POST /_test/scenario", http.HandlerFunc(h.scenario)),
+	)
 }
 
 func (h *Host) track(next http.Handler) http.Handler {

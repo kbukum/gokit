@@ -53,7 +53,6 @@
 //   - /readiness: Kubernetes readiness probe
 //   - /version: Build version information
 //
-// Prometheus metrics are not a public endpoint. Enable the private admin
-// listener (Config.Admin) to expose /metrics and pprof on a separate,
-// trusted-network address.
+// Prometheus metrics are not a public endpoint. bootstrap.WithAdmin serves
+// /metrics and pprof on a separate, trusted-network address.
 package server

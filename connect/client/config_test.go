@@ -81,3 +81,44 @@ func TestConfigValidatePropagatesTLSError(t *testing.T) {
 		t.Fatalf("error %q does not mention TLS version", err.Error())
 	}
 }
+
+func TestNoTimeoutKeepsTheClientUnbounded(t *testing.T) {
+	cfg := Config{NoTimeout: true}
+	cfg.ApplyDefaults()
+	if cfg.Timeout != 0 {
+		t.Fatalf("Timeout = %s, want 0 with NoTimeout", cfg.Timeout)
+	}
+	hc, err := NewHTTPClient(Config{NoTimeout: true})
+	if err != nil {
+		t.Fatalf("NewHTTPClient: %v", err)
+	}
+	if hc.Timeout != 0 {
+		t.Fatalf("http.Client.Timeout = %s, want 0", hc.Timeout)
+	}
+}
+
+func TestValidateRejectsNegativeTimeouts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg     Config
+		want    string
+		without string
+	}{
+		"timeout":                 {cfg: Config{Timeout: -1}, want: "timeout must not be negative; use no_timeout"},
+		"timeout with no_timeout": {cfg: Config{Timeout: -1, NoTimeout: true}, want: "timeout must not be negative"},
+		"dial timeout":            {cfg: Config{DialTimeout: -1}, want: "dial_timeout must not be negative", without: "no_timeout"},
+	} {
+		tc.cfg.ApplyDefaults()
+		err := tc.cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), tc.want) || (tc.without != "" && strings.Contains(err.Error(), tc.without)) {
+			t.Errorf("%s: Validate = %v, want %q without %q", name, err, tc.want, tc.without)
+		}
+	}
+}
+
+func TestValidateRejectsTimeoutWithNoTimeout(t *testing.T) {
+	cfg := Config{Protocol: ProtocolConnect, NoTimeout: true, Timeout: time.Second}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "no_timeout") {
+		t.Fatalf("Validate = %v, want a no_timeout conflict", err)
+	}
+}

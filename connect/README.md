@@ -25,7 +25,9 @@ path, handler := userv1connect.NewUserServiceHandler(svc,
 )
 
 // Mount on any server implementing HandlerMounter (e.g. gokit/server.Server)
-goconnect.Mount(srv, path, handler)
+if err := goconnect.Mount(srv, path, handler); err != nil {
+    return err
+}
 ```
 
 ## Quick Start — Client
@@ -83,7 +85,9 @@ path, handler := userv1connect.NewUserServiceHandler(svc,
         requireIdentity,
     ),
 )
-goconnect.Mount(srv, path, authenticate(handler))
+if err := goconnect.Mount(srv, path, authenticate(handler)); err != nil {
+    return err
+}
 ```
 
 Inside a service handler:
@@ -109,7 +113,7 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `NewService(path, handler)` | Create a Service from path and handler |
 | `HandlerMounter` | Interface for servers that mount HTTP handlers |
 | `Mount(srv, path, handler)` | Mount a single Connect handler on any HandlerMounter |
-| `MountServices(srv, ...Service)` | Mount multiple services at once |
+| `MountServices(srv, ...Service)` | Mount multiple services at once, stopping at the first error |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
 | `NormalizingInterceptor(log)` | Convert any handler error to a coded Connect error (unary + streaming); already-coded errors pass through |
 | `ValidationInterceptor(v)` | Validate requests with an injected `protovalidate.Validator`, emitting shared violations |
@@ -121,9 +125,11 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
 | `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
-| `client.Config` | Client config: BaseURL, Timeout, DialTimeout, Protocol, TLS |
+| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS. Negative timeouts fail validation |
 | `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
 | `client.IsTransportFailure(err)` | Report a failure marked `client.ErrTransport`: the peer was unreachable or the connection broke mid-response, under any Connect code. Caller cancellation and a clean end of stream are not marked |
+| `client.IsUnavailable(err)` | Report that the peer cannot serve calls now: no answer (a transport failure or a non-Connect error) or `Unavailable`, `DeadlineExceeded` or `Canceled` from the client or the peer. Any other Connect code is a served call |
+| `client.NewAvailability(name)` | Interceptor that records from real calls whether a peer can serve; its `Health()` is degraded while the last call was `IsUnavailable`. `Observe` lets the caller record outcomes the interceptor cannot see. An `IsUnavailable` failure after the caller's own context ended is ignored; any other answer still marks the peer available |
 | `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
 | `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |
 

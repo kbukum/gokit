@@ -35,14 +35,15 @@ type ModuleSpec struct {
 	Listeners []string
 }
 
-// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle may panic on an invalid or conflicting pattern, as *http.ServeMux does; [ModuleContext.Handle] reports that as [ErrRouteConflict].
+// Listener is an HTTP listener that modules mount routes on. It is a lifecycle component that stops accepting requests on Quiesce and drains in-flight requests as [component.DrainIngress], so on shutdown it finishes requests before module workers drain. gokit's *server.Component satisfies it. Handle and Fallback return an error for a nil handler or an invalid or conflicting pattern; the App reports it as [ErrRouteConflict]. Fallback installs the handler for requests no route matches, such as a single-page app; the App calls it at most once, after every module has registered.
 //
 // Listeners are HTTP only; Connect services mount as HTTP handlers. A listener with another mount model, such as a *grpc.Server, is wired by the command outside the module layer.
 type Listener interface {
 	component.Component
 	component.Quiescer
 	component.Drainer
-	Handle(pattern string, handler http.Handler)
+	Handle(pattern string, handler http.Handler) error
+	Fallback(handler http.Handler) error
 }
 
 // Errors returned by [ModuleContext] methods, [Provide] and [Need].
@@ -55,7 +56,7 @@ var (
 	ErrNilPortValue = errors.New("bootstrap: nil port value")
 	// ErrListenerNotDeclared reports a route for a listener missing from the module's spec.
 	ErrListenerNotDeclared = errors.New("bootstrap: listener not declared by module")
-	// ErrRouteConflict reports an empty, invalid or already mounted route.
+	// ErrRouteConflict reports an empty, invalid or already mounted route, or a second fallback on a listener.
 	ErrRouteConflict = errors.New("bootstrap: route conflict")
 	// ErrModuleContextClosed reports use of a ModuleContext after its Register returned.
 	ErrModuleContextClosed = errors.New("bootstrap: module context used after Register returned")
@@ -115,6 +116,23 @@ func (mc *ModuleContext) Handle(listener, pattern string, handler http.Handler) 
 			return fmt.Errorf("module %q: %w", mc.spec.Name, err)
 		}
 		mc.info.Routes = append(mc.info.Routes, listener+" "+pattern)
+		return nil
+	})
+}
+
+// Fallback sets the handler for requests on the named listener that no route matches, such as a single-page app. A listener has at most one fallback. The App installs it after every module has registered, and it answers 404 under the first path segment of every route modules mount on that listener (for "POST /auth/login", everything under /auth), so unknown API paths never reach it.
+func (mc *ModuleContext) Fallback(listener string, handler http.Handler) error {
+	return mc.locked(func() error {
+		if !slices.Contains(mc.spec.Listeners, listener) {
+			return fmt.Errorf("%w: module %q sets a fallback on %q", ErrListenerNotDeclared, mc.spec.Name, listener)
+		}
+		if util.IsNil(handler) {
+			return fmt.Errorf("%w: module %q needs a fallback handler", ErrRouteConflict, mc.spec.Name)
+		}
+		if err := mc.wiring.setFallback(listener, mc.spec.Name, handler); err != nil {
+			return fmt.Errorf("module %q: %w", mc.spec.Name, err)
+		}
+		mc.info.Routes = append(mc.info.Routes, listener+" fallback")
 		return nil
 	})
 }

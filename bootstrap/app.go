@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -48,6 +49,8 @@ type App[C Config] struct {
 	hooks           *hook.Registry
 	modules         moduleSet
 	ownsLogger      bool
+	admin           *adminComponent
+	state           atomic.Int32 // lifecycleState reported by the admin listener
 
 	lifecycleMu     sync.Mutex
 	used            bool
@@ -87,6 +90,13 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.gracefulTimeout != nil {
 		app.gracefulTimeout = *o.gracefulTimeout
 	}
+	if o.admin != nil {
+		admin, err := newAdmin(*o.admin, app.readiness)
+		if err != nil {
+			return nil, err
+		}
+		app.admin = admin
+	}
 
 	// Logger: use custom if provided, otherwise create from config (no global state).
 	if o.logger != nil {
@@ -104,6 +114,10 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	regCfg.Logger = app.Logger.WithComponent("component")
 	app.Components = component.NewRegistryWithConfig(regCfg)
 	app.Summary = NewSummary(base.Name, base.Version)
+	if app.admin != nil {
+		// The registry is new, so the first registration cannot collide.
+		_ = app.Components.Register(app.admin)
+	}
 	return app, nil
 }
 

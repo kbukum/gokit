@@ -61,6 +61,7 @@ func (a *App[C]) wireModules(ctx context.Context) error {
 		registry:  a.Components,
 		listeners: map[string]Listener{},
 		mounted:   map[string]map[string]bool{},
+		fallbacks: map[string]fallback{},
 		values:    map[PortRef]any{},
 	}
 	for _, nl := range set.listeners {
@@ -74,6 +75,9 @@ func (a *App[C]) wireModules(ctx context.Context) error {
 		if err := a.registerModule(ctx, pm, w, plan.providers); err != nil {
 			return err
 		}
+	}
+	if err := w.installFallbacks(); err != nil {
+		return fmt.Errorf("bootstrap: %w", err)
 	}
 	for _, nl := range set.listeners {
 		if err := a.Components.Register(nl.l); err != nil {

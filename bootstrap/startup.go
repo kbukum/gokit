@@ -61,6 +61,8 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 	if ctx.Err() != nil {
 		return nil, a.abortStartup(ctx, PhaseReady, ctx.Err())
 	}
+	// Readiness turns ready only once startup can no longer roll back, and never over a drain that already began.
+	a.state.CompareAndSwap(int32(stateStarting), int32(stateServing))
 	return ctx, nil
 }
 

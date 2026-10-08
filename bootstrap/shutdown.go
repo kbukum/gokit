@@ -63,6 +63,7 @@ func (a *App[C]) shutdownWith(parent context.Context) error {
 }
 
 func (a *App[C]) teardown(parent context.Context) error {
+	a.state.Store(int32(stateDraining))
 	a.Logger.InfoCtx(parent, "Shutting down application", map[string]any{
 		"timeout": a.gracefulTimeout.String(),
 	})
