@@ -1,15 +1,19 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/di"
+	"github.com/kbukum/gokit/logging"
 )
 
 // failCloser returns an error from Close(); registering it in a real container
@@ -447,7 +451,7 @@ func TestHookContextAvailability(t *testing.T) {
 	}
 }
 
-func TestRun_ExitsOnContextCancellation(t *testing.T) {
+func TestRun_CanceledContextFailsStartup(t *testing.T) {
 	cfg := newTestConfig("test", "1.0")
 	app, _ := NewApp(cfg)
 
@@ -458,10 +462,61 @@ func TestRun_ExitsOnContextCancellation(t *testing.T) {
 	app.RegisterComponent(comp)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // WaitForSignal returns immediately via ctx.Done
+	cancel()
 
-	if err := app.Run(ctx); err != nil {
-		t.Fatalf("Run should exit cleanly on canceled context: %v", err)
+	err := app.Run(ctx)
+	var startErr *StartupError
+	if !errors.As(err, &startErr) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run on a canceled context = %v, want a *StartupError wrapping context.Canceled", err)
+	}
+	if comp.started {
+		t.Error("component started although the context was canceled before startup")
+	}
+}
+
+// signalWriter signals Run's wait boundary, after startup and its summary probes return.
+type signalWriter struct {
+	once  sync.Once
+	ready chan struct{}
+}
+
+func (w *signalWriter) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("Application ready")) {
+		w.once.Do(func() { close(w.ready) })
+	}
+	return len(p), nil
+}
+
+func TestRun_ExitsCleanlyWhenContextIsCanceledAfterStartup(t *testing.T) {
+	started := &signalWriter{ready: make(chan struct{})}
+	logCfg := &logging.Config{Level: "info", Format: "json"}
+	logCfg.ApplyDefaults()
+	log, err := logging.New(logCfg, "test", logging.WithWriter(started))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApp(newTestConfig("test", "1.0"), WithLogger(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Summary.SetWriter(io.Discard)
+	comp := &mockComponent{
+		name:   "db",
+		health: component.Health{Name: "db", Status: component.StatusHealthy},
+	}
+	mustRegisterComponent(t, app, comp)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- app.Run(ctx) }()
+	select {
+	case <-started.ready:
+	case err := <-done:
+		t.Fatalf("Run returned before startup finished: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("Run should exit cleanly on cancellation after startup: %v", err)
 	}
 	if !comp.stopped {
 		t.Error("component should be stopped after Run returns")
@@ -498,5 +553,31 @@ func TestWaitForSignal_ReturnsNilOnContextCancel(t *testing.T) {
 
 	if sig := app.WaitForSignal(ctx); sig != nil {
 		t.Fatalf("expected nil signal on context cancel, got %v", sig)
+	}
+}
+
+func TestComponentRegistryUsesAppLogger(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	cfg := &logging.Config{Level: "debug", Format: "json"}
+	cfg.ApplyDefaults()
+	logger, err := logging.New(cfg, "test", logging.WithWriter(&buf))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApp(newTestConfig("test", "1.0"), WithLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.Summary.SetWriter(io.Discard)
+	mustRegisterComponent(t, app, &mockComponent{name: "c", health: component.Health{Name: "c", Status: component.StatusHealthy}})
+	if err := app.Startup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "All components started successfully") {
+		t.Fatalf("registry logs did not reach the App logger: %q", buf.String())
 	}
 }

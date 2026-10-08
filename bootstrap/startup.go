@@ -34,10 +34,12 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		"version": a.Version,
 	})
 
-	// Configure runs application setup that may register components before the single-pass
-	// StartAll; after_start hooks run before the ready phase.
+	// Configure registers the command's own components and may add modules and bindings; modules
+	// then register so their components start after those and before listeners; everything starts
+	// in one StartAll pass; after_start hooks run before the ready phase.
 	phases := []startupPhase{
 		{PhaseConfigure, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventConfigure) }},
+		{PhaseModules, a.wireModules},
 		{PhaseBeforeStart, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventBeforeStart) }},
 		{PhaseStart, a.Components.StartAll},
 		{PhaseAfterStart, func(ctx context.Context) error { return a.emitLifecycleHooks(ctx, EventAfterStart) }},
@@ -47,13 +49,18 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 		if err := p.run(ctx); err != nil {
 			return nil, a.abortStartup(ctx, p.phase, err)
 		}
-		if err := shutdownRequested(ctx); err != nil {
-			return nil, a.abortStartup(ctx, p.phase, err)
+		// A phase can succeed after its context ends, for example when it does no blocking work;
+		// startup must still stop rather than run later phases or the task on a canceled context.
+		if ctx.Err() != nil {
+			return nil, a.abortStartup(ctx, p.phase, ctx.Err())
 		}
 	}
 
 	a.Summary.SetStartupDuration(time.Since(start))
 	a.DisplaySummary(ctx)
+	if ctx.Err() != nil {
+		return nil, a.abortStartup(ctx, PhaseReady, ctx.Err())
+	}
 	return ctx, nil
 }
 
@@ -81,14 +88,15 @@ func shutdownRequested(ctx context.Context) error {
 }
 
 // abortStartup tears down whatever earlier startup phases created after a fatal error and
-// returns a *StartupError holding both the cause and the teardown outcome. A phase that
-// returned its context error after Shutdown keeps ErrShutdownRequested in the cause. Teardown
-// runs through the normal shutdown sequence on a context that keeps values but detaches
+// returns a *StartupError holding both the cause and the teardown outcome. When the startup
+// context has ended, its cause (ErrShutdownRequested, or the caller's cancellation cause) is kept
+// alongside the phase error, so a phase that returned only context.Canceled does not hide why.
+// Teardown runs through the normal shutdown sequence on a context that keeps values but detaches
 // cancellation, because the startup context may already be canceled; shutdown skips components
 // that never started, so this is safe regardless of how far startup reached.
-func (a *App[C]) abortStartup(ctx context.Context, phase Phase, cause error) error {
-	if requested := shutdownRequested(ctx); requested != nil && !errors.Is(cause, requested) {
-		cause = errors.Join(requested, cause)
+func (a *App[C]) abortStartup(ctx context.Context, phase Phase, err error) error {
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(err, cause) {
+		err = errors.Join(cause, err)
 	}
-	return &StartupError{Phase: phase, Cause: cause, Rollback: a.shutdownWith(context.WithoutCancel(ctx))}
+	return &StartupError{Phase: phase, Cause: err, Rollback: a.shutdownWith(context.WithoutCancel(ctx))}
 }

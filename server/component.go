@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -43,6 +44,9 @@ func NewComponent(s *Server, opts ...ComponentOption) *Component {
 	}
 	return c
 }
+
+// Handle mounts handler at pattern on the server's root ServeMux, as [Server.Handle] does. With it the component is a bootstrap.Listener that modules mount routes on.
+func (sc *Component) Handle(pattern string, handler http.Handler) { sc.server.Handle(pattern, handler) }
 
 // Name returns the component name used for registration.
 func (sc *Component) Name() string { return sc.name }

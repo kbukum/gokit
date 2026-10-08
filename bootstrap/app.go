@@ -46,10 +46,12 @@ type App[C Config] struct {
 
 	gracefulTimeout time.Duration
 	hooks           *hook.Registry
+	modules         moduleSet
 	ownsLogger      bool
 
 	lifecycleMu     sync.Mutex
 	used            bool
+	modulesSealed   bool
 	starting        bool
 	cancelLifecycle context.CancelCauseFunc
 	active          chan struct{}
@@ -73,7 +75,6 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		Version:         base.Version,
 		Cfg:             cfg,
 		Container:       di.NewContainer(),
-		Components:      component.NewRegistry(),
 		gracefulTimeout: 30 * time.Second,
 		hooks:           hook.NewRegistry(),
 	}
@@ -99,6 +100,9 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		app.ownsLogger = true
 	}
 
+	regCfg := component.DefaultRegistryConfig()
+	regCfg.Logger = app.Logger.WithComponent("component")
+	app.Components = component.NewRegistryWithConfig(regCfg)
 	app.Summary = NewSummary(base.Name, base.Version)
 	return app, nil
 }
@@ -143,7 +147,7 @@ func (a *App[C]) ReadyCheck(ctx context.Context) error {
 }
 
 // Run executes the full application lifecycle for long-running services:
-// Configure → OnBeforeStart hooks → StartAll → OnAfterStart hooks → ReadyCheck → OnReady hooks → Block on signal → Quiesce → OnBeforeStop hooks → Drain and release dependencies → OnAfterStop hooks → Release the owned logger.
+// Configure → Modules → OnBeforeStart hooks → StartAll → OnAfterStart hooks → ReadyCheck → OnReady hooks → Block on signal → Quiesce → OnBeforeStop hooks → Drain and release dependencies → OnAfterStop hooks → Release the owned logger.
 // It returns a *StartupError when startup fails and a *ShutdownError when teardown fails.
 func (a *App[C]) Run(ctx context.Context) error {
 	lifeCtx, err := a.startup(ctx, false)

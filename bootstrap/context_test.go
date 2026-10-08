@@ -42,6 +42,56 @@ func TestStartupSummaryPreservesContext(t *testing.T) {
 	}
 }
 
+func TestStartupCancellationDuringSummaryRollsBack(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"Startup", "Run", "RunTask"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			app := newQuietApp(t)
+			cause := errors.New("canceled during summary")
+			ctx, cancel := context.WithCancelCause(t.Context())
+			defer cancel(nil)
+			summary := false
+			app.OnReady(func(context.Context) error {
+				summary = true
+				return nil
+			})
+			comp := &mockComponent{name: "health", healthFn: func(context.Context) component.Health {
+				if summary {
+					cancel(cause)
+				}
+				return component.Health{Name: "health", Status: component.StatusHealthy}
+			}}
+			mustRegisterComponent(t, app, comp)
+			taskRan := false
+			var err error
+			switch mode {
+			case "Startup":
+				err = app.Startup(ctx)
+			case "Run":
+				err = app.Run(ctx)
+			case "RunTask":
+				err = app.RunTask(ctx, func(context.Context) error {
+					taskRan = true
+					return nil
+				})
+			}
+			t.Cleanup(func() {
+				if err := app.Shutdown(context.Background()); err != nil {
+					t.Errorf("Shutdown = %v", err)
+				}
+			})
+			var failure *StartupError
+			if !errors.As(err, &failure) || failure.Phase != PhaseReady || !errors.Is(err, cause) {
+				t.Errorf("%s = %v, want a ready-phase StartupError preserving cancellation", mode, err)
+			}
+			if !comp.stopped || taskRan {
+				t.Errorf("stopped = %v, task ran = %v", comp.stopped, taskRan)
+			}
+		})
+	}
+}
+
 func TestStartupRollbackPreservesValuesWithoutCancellation(t *testing.T) {
 	t.Parallel()
 	app, err := NewApp(newTestConfig("rollback-test", "1.0"))
