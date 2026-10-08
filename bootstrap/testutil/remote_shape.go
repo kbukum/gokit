@@ -29,7 +29,7 @@ var (
 	}
 )
 
-// ValidateRemoteShape reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer or interface, which cannot cross a process boundary; the check descends into pointers, slices, arrays, map keys and values and exported struct fields, including those in unexported embedded structs. The leading context.Context and trailing error are the only interfaces allowed. Concrete types implementing json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler or proto.Message (directly or through their pointer type) are opaque and accepted as is. Every violation is reported, each wrapping [ErrInvalidRemoteShape].
+// ValidateRemoteShape reports whether port p can be implemented by a remote client. Every method must take a context.Context first, so calls carry deadlines and cancellation, and return an error last, so transport failures surface. No parameter or result may be or contain a channel, function, unsafe.Pointer, interface or complex number, which cannot cross a process boundary or has no JSON or protobuf encoding; the check descends into pointers, slices, arrays, map keys and values and exported struct fields, including those in unexported embedded structs. The leading context.Context and trailing error are the only interfaces allowed. Concrete types implementing json.Marshaler, encoding.TextMarshaler, encoding.BinaryMarshaler or proto.Message (directly or through their pointer type) are opaque and accepted as is. Every violation is reported, each wrapping [ErrInvalidRemoteShape].
 //
 // The check covers shape only. Whether values are safe to copy, calls tolerate latency and errors map to the same kinds remotely is what [Contract] tests.
 func ValidateRemoteShape[T any](p *bootstrap.Port[T]) error {
@@ -70,7 +70,7 @@ func ValidateRemoteShape[T any](p *bootstrap.Port[T]) error {
 	return errors.Join(errs...)
 }
 
-// unportable describes the first kind in t that cannot cross a process boundary ("is a chan", "contains a func"), or returns "" when t is portable.
+// unportable describes the first kind in t that cannot be sent remotely ("is a chan", "contains a func"), or returns "" when t is portable.
 func unportable(t reflect.Type) string {
 	if kind := findUnportable(t, map[reflect.Type]bool{}); kind != reflect.Invalid {
 		verb := "contains"
@@ -92,7 +92,7 @@ func findUnportable(t reflect.Type, seen map[reflect.Type]bool) reflect.Kind {
 	}
 	seen[t] = true
 	switch k := t.Kind(); k {
-	case reflect.Chan, reflect.Func, reflect.UnsafePointer, reflect.Interface:
+	case reflect.Chan, reflect.Func, reflect.UnsafePointer, reflect.Interface, reflect.Complex64, reflect.Complex128:
 		return k
 	case reflect.Pointer, reflect.Slice, reflect.Array:
 		return findUnportable(t.Elem(), seen)
@@ -117,7 +117,7 @@ func findUnportable(t reflect.Type, seen map[reflect.Type]bool) reflect.Kind {
 	case reflect.Invalid, reflect.Bool, reflect.String,
 		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
-		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
+		reflect.Float32, reflect.Float64:
 	}
 	return reflect.Invalid
 }

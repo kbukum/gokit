@@ -81,8 +81,8 @@ func buildTLSTransport(cfg Config) (http.RoundTripper, error) {
 	}, nil
 }
 
-// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme. Network failures are marked with
-// ErrTransport.
+// Native protocol selection can fall back to HTTP/1 for a mismatched URL scheme. Network failures and gateway outage
+// statuses are marked with ErrTransport.
 type schemeTransport struct {
 	*http.Transport
 	scheme string
@@ -98,6 +98,10 @@ func (t *schemeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.Transport.RoundTrip(req)
 	if err != nil {
 		return nil, markTransport(req, err)
+	}
+	if gatewayOutage(req, resp) {
+		_ = resp.Body.Close()
+		return nil, markTransport(req, fmt.Errorf("connect client: gateway responded %s", resp.Status))
 	}
 	resp.Body = &transportBody{ReadCloser: resp.Body, req: req}
 	return resp, nil

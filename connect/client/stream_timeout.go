@@ -120,12 +120,12 @@ func (c *firstMessageConn) disarm() {
 // failure replaces the outcome of any call after the limit passed, success included, with the outage it stands for.
 func (c *firstMessageConn) failure(err error) error {
 	if c.expired() {
-		return errNoFirstMessage()
+		return errFirstMessageTimeout()
 	}
 	return err
 }
 
-func errNoFirstMessage() error {
+func errFirstMessageTimeout() error {
 	return connect.NewError(connect.CodeDeadlineExceeded, ErrFirstMessageTimeout)
 }
 
@@ -141,7 +141,7 @@ func (c *firstMessageConn) CloseRequest() error {
 func (c *firstMessageConn) Receive(msg any) error {
 	err := c.StreamingClientConn.Receive(msg)
 	if c.settle() {
-		return errNoFirstMessage()
+		return errFirstMessageTimeout()
 	}
 	return err
 }

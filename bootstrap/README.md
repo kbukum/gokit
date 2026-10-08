@@ -165,7 +165,7 @@ func TestAPIModule(t *testing.T) {
 
 The loopback listener supports HTTP/1 and h2c, including production Connect unary and streaming clients. `testutil.AssertListenerRoutes(t, listener, handler)` checks a fresh listener against the shared route/fallback contract without starting it.
 
-`testutil.AssertRemoteShape` checks that a port's methods take a `context.Context` first, return an `error` last, and pass no channels, functions, unsafe pointers or interfaces at any depth (pointers, slices, maps and exported struct fields are inspected; types that encode themselves are accepted as is). This validates shape, not serialization or behavioral compatibility. `testutil.Contract` runs one behavior suite against the in-process implementation and the client module's client, so a module can move between services without changing behavior:
+`testutil.AssertRemoteShape` checks that a port's methods take a `context.Context` first, return an `error` last, and pass no channels, functions, unsafe pointers, interfaces or complex numbers at any depth (pointers, slices, maps and exported struct fields are inspected; types that encode themselves are accepted as is). This validates shape, not serialization or behavioral compatibility. `testutil.Contract` runs one behavior suite against the in-process implementation and the client module's client, so a module can move between services without changing behavior:
 
 ```go
 func TestStorePortContract(t *testing.T) {

@@ -176,6 +176,8 @@ type nestedPort interface {
 	Wrapped(ctx context.Context, in []any) error
 	Encoded(ctx context.Context, in selfEncoded) error
 	Result(ctx context.Context) ([]nestedRequest, error)
+	Complex(ctx context.Context, in complex128) error
+	ComplexField(ctx context.Context, in []struct{ Value complex64 }) error
 	Fine(ctx context.Context, in nestedOK) (*nestedOK, error)
 }
 
@@ -216,6 +218,8 @@ func TestValidateRemoteShapeInspectsNestedTypes(t *testing.T) {
 		"nested Any: parameter 1 is an interface",
 		"nested Wrapped: parameter 1 contains an interface",
 		"nested Result: result 0 contains a func",
+		"nested Complex: parameter 1 is a complex128",
+		"nested ComplexField: parameter 1 contains a complex64",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error does not report %q:\n%s", want, msg)
