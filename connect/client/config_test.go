@@ -122,3 +122,39 @@ func TestValidateRejectsTimeoutWithNoTimeout(t *testing.T) {
 		t.Fatalf("Validate = %v, want a no_timeout conflict", err)
 	}
 }
+
+func TestValidateChecksBaseURL(t *testing.T) {
+	tlsOn := &security.TLSConfig{MinVersion: tls.VersionTLS13}
+	for _, cfg := range []Config{
+		{},
+		{BaseURL: "http://peer.internal:8080"},
+		{BaseURL: "http://peer.internal:8080/prefix/"},
+		{BaseURL: "https://peer.internal", TLS: tlsOn},
+	} {
+		cfg.ApplyDefaults()
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%q: %v", cfg.BaseURL, err)
+		}
+	}
+	for name, cfg := range map[string]Config{
+		"relative":       {BaseURL: "peer.internal"},
+		"no host":        {BaseURL: "http:///x"},
+		"unsupported":    {BaseURL: "ftp://peer.internal"},
+		"credentials":    {BaseURL: "http://user:secret@peer.internal"},
+		"query":          {BaseURL: "http://peer.internal?x=1"},
+		"fragment":       {BaseURL: "http://peer.internal#x"},
+		"https without":  {BaseURL: "https://peer.internal"},
+		"http with TLS":  {BaseURL: "http://peer.internal", TLS: tlsOn},
+		"does not parse": {BaseURL: "http://[::1"},
+	} {
+		cfg.ApplyDefaults()
+		err := cfg.Validate()
+		if err == nil {
+			t.Errorf("%s: accepted %q", name, cfg.BaseURL)
+			continue
+		}
+		if strings.Contains(err.Error(), "secret") {
+			t.Errorf("%s: error leaks the URL credential: %v", name, err)
+		}
+	}
+}

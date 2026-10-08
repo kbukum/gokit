@@ -125,10 +125,12 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
 | `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
-| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS. Negative timeouts fail validation |
+| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS. Negative timeouts fail validation. A set BaseURL must be an absolute `http` or `https` URL without credentials, query or fragment, and its scheme must match the transport: `https` with TLS settings, `http` (h2c) without |
 | `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
 | `client.IsTransportFailure(err)` | Report a failure marked `client.ErrTransport`: the peer was unreachable or the connection broke mid-response, under any Connect code. Caller cancellation and a clean end of stream are not marked |
 | `client.IsUnavailable(err)` | Report that the peer cannot serve calls now: no answer (a transport failure or a non-Connect error) or `Unavailable`, `DeadlineExceeded` or `Canceled` from the client or the peer. Any other Connect code is a served call |
+| `client.FirstMessageTimeout(limit, clock)` | Interceptor that ends a server or bidi stream whose peer sends no first message within `limit`, counted from opening the stream, with a `deadline_exceeded` error wrapping `ErrNoFirstMessage`. Bounds `NoTimeout` streams against a peer that accepts but never answers. Install it after `NewAvailability` so the outage is recorded against the caller's context |
+| `client.Unanswered(ctx, peer, err)` | Map a failed call to a local error when the peer did not answer: `Timeout` or `Canceled` without a cause when the caller's context ended, otherwise a retryable `ServiceUnavailable` with reason `ReasonUnavailable` (`PEER_UNAVAILABLE`). Returns `false` for an error the peer served |
 | `client.NewAvailability(name)` | Interceptor that records from real calls whether a peer can serve; its `Health()` is degraded while the last call was `IsUnavailable`. `Observe` lets the caller record outcomes the interceptor cannot see. An `IsUnavailable` failure after the caller's own context ended is ignored; any other answer still marks the peer available |
 | `client.ClientOptions(cfg)` | Build connect.ClientOption slice from config |
 | `client.ProtocolOption(cfg)` | Get wire protocol option (gRPC, gRPC-Web, or nil) |

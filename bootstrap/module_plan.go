@@ -379,9 +379,7 @@ func (w *moduleWiring) installFallbacks() (err error) {
 
 func installFallback(l Listener, listener string, fb fallback, reserved []string) error {
 	err := l.Fallback(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		// http.ServeMux matches unescaped segments of the escaped path, so the guard compares the same way.
-		first, _, _ := strings.Cut(strings.TrimPrefix(r.URL.EscapedPath(), "/"), "/")
-		if segment, err := url.PathUnescape(first); err != nil || slices.Contains(reserved, "/"+segment) {
+		if isReserved(r.URL.EscapedPath(), reserved) {
 			http.NotFound(rw, r)
 			return
 		}
@@ -391,6 +389,19 @@ func installFallback(l Listener, listener string, fb fallback, reserved []string
 		return fmt.Errorf("%w: %s fallback from module %q: %w", ErrRouteConflict, listener, fb.module, err)
 	}
 	return nil
+}
+
+// isReserved reports whether a path the mux left unmatched still belongs to a module prefix. http.ServeMux matches unescaped segments of the escaped path, so "/auth%2Fx" is one segment that no "/auth/" route matches; it is still under "/auth" once decoded and must not reach the fallback. A segment that does not decode is reserved too.
+func isReserved(escaped string, reserved []string) bool {
+	first, _, _ := strings.Cut(strings.TrimPrefix(escaped, "/"), "/")
+	segment, err := url.PathUnescape(first)
+	if err != nil {
+		return true
+	}
+	segment = "/" + segment
+	return slices.ContainsFunc(reserved, func(prefix string) bool {
+		return segment == prefix || strings.HasPrefix(segment, prefix+"/")
+	})
 }
 
 // routePrefix returns the first literal path segment of an http.ServeMux pattern ("[METHOD ][HOST]/[PATH]"), unescaped as the mux matches it, such as "/auth" for "POST /auth/login" or "POST /%61uth/login", or "" for the root, a wildcard segment or an invalid escape.
