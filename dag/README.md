@@ -54,7 +54,10 @@ All existing provider middleware applies per-node:
 
 ```go
 // Wrap a provider as a DAG node
-svc := provider.WithResilience(rawSvc, resilience.Config{...})
+svc, err := provider.WithResilience(rawSvc, provider.ResilienceConfig{...})
+if err != nil {
+    return err
+}
 node := dag.FromProvider(dag.NodeConfig[MyInput, *MyOutput]{
     Name:    "my-service",
     Service: svc,

@@ -2,23 +2,24 @@ package apikey
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"time"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// DefaultGracePeriod is the duration old keys remain valid after rotation.
-const DefaultGracePeriod = 7 * 24 * time.Hour
+// MaxGrace bounds how long a rotated key keeps validating.
+const MaxGrace = 30 * 24 * time.Hour
 
-// RotationConfig configures API key rotation.
-type RotationConfig struct {
-	GracePeriod time.Duration
-	NewKeyID    string
-	OwnerID     string
-	Name        string
-	Prefix      string
-	Scopes      []string
-	ExpiresAt   *time.Time
+// RotateRequest describes the replacement for a rotated key. The replacement keeps the old key's owner, name, prefix,
+// kind and restrictions; issue a new key to change them.
+type RotateRequest struct {
+	NewKeyID string
+	// Grace is how long the old key keeps validating; zero ends it at once. It is capped at the old key's expiry and
+	// must not exceed MaxGrace.
+	Grace time.Duration
+	// ExpiresAt is the replacement's expiry; nil means none.
+	ExpiresAt *time.Time
 }
 
 // RotationResult contains the newly issued key and the persisted replacement record.
@@ -28,65 +29,38 @@ type RotationResult struct {
 	GraceEndsAt time.Time
 }
 
-// RotateKey generates a replacement key and moves the old one into a grace window.
-func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, cfg RotationConfig) (*RotationResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	if cfg.NewKeyID == "" {
-		return nil, fmt.Errorf("apikey: NewKeyID is required for rotation")
+// RotateKey replaces a valid, unrotated key in one atomic store operation, so it cannot race revocation or another
+// rotation. A key that is revoked, expired or already rotated returns CONFLICT.
+func (m *Manager) RotateKey(ctx context.Context, oldKeyID string, req RotateRequest) (*RotationResult, error) {
+	if req.NewKeyID == "" {
+		return nil, apperrors.InvalidInput("new_key_id", "Replacement key id is required")
 	}
-
-	oldKey, err := m.store.GetByID(ctx, oldKeyID)
+	if req.Grace < 0 || req.Grace > MaxGrace {
+		return nil, apperrors.InvalidInput("grace", "Grace must be from zero to 30 days")
+	}
+	ctx, cancel := context.WithTimeout(ctx, mutationBudget)
+	defer cancel()
+	old, err := m.store.GetByID(ctx, oldKeyID)
 	if err != nil {
 		return nil, err
 	}
-	if oldKey == nil || !oldKey.IsActive || oldKey.expired(m.clock.Now()) {
-		return nil, fmt.Errorf("apikey: invalid key")
+	now := m.clock.Now()
+	if !old.rotatable(now) {
+		return nil, apperrors.Conflict("API key is revoked, expired or already rotated").WithReason("API_KEY_NOT_ROTATABLE")
 	}
-
-	grace := cfg.GracePeriod
-	if grace <= 0 {
-		grace = DefaultGracePeriod
-	}
-
-	scopes := cfg.Scopes
-	if len(scopes) == 0 {
-		scopes = slices.Clone(oldKey.Scopes)
-	}
-	ownerID := cfg.OwnerID
-	if ownerID == "" {
-		ownerID = oldKey.OwnerID
-	}
-	name := cfg.Name
-	if name == "" {
-		name = oldKey.Name
-	}
-	prefix := cfg.Prefix
-	if prefix == "" {
-		prefix = oldKey.KeyPrefix
-	}
-
-	issued, record, err := m.IssueKey(ctx, IssueRequest{
-		KeyID:   cfg.NewKeyID,
-		OwnerID: ownerID,
-		Name:    name,
-		Prefix:  prefix,
-		Scopes:  scopes,
-		Kind:    oldKey.Kind, RestrictionMode: oldKey.RestrictionMode, Resources: slices.Clone(oldKey.Resources),
-		ExpiresAt: cfg.ExpiresAt,
+	issued, record, err := m.build(IssueRequest{
+		KeyID: req.NewKeyID, OwnerID: old.OwnerID, Name: old.Name, Prefix: old.KeyPrefix, Scopes: slices.Clone(old.Scopes),
+		Kind: old.Kind, RestrictionMode: old.RestrictionMode, Resources: slices.Clone(old.Resources), ExpiresAt: req.ExpiresAt,
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	graceEndsAt := m.clock.Now().Add(grace)
-	if err := m.store.SetRotation(ctx, oldKeyID, graceEndsAt, record.ID); err != nil {
+	graceEndsAt := now.Add(req.Grace)
+	if old.ExpiresAt != nil && old.ExpiresAt.Before(graceEndsAt) {
+		graceEndsAt = *old.ExpiresAt
+	}
+	if err := m.store.Rotate(ctx, Rotation{OldID: oldKeyID, Replacement: record.Clone(), GraceEndsAt: graceEndsAt, At: now}); err != nil {
 		return nil, err
 	}
-
-	return &RotationResult{
-		Issued:      *issued,
-		Record:      record,
-		GraceEndsAt: graceEndsAt,
-	}, nil
+	return &RotationResult{Issued: *issued, Record: record, GraceEndsAt: graceEndsAt}, nil
 }

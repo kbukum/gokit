@@ -13,7 +13,6 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/kbukum/gokit/database/migration"
-	"github.com/kbukum/gokit/database/sqlite"
 	dbtestutil "github.com/kbukum/gokit/database/testutil"
 )
 
@@ -22,7 +21,7 @@ var migrationsFS embed.FS
 
 func newMigrationDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Discard})
+	db, err := gorm.Open(preparedDialector(t, ":memory:"), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
@@ -125,7 +124,7 @@ func TestMigrationResetReapplyFailureIsSurfaced(t *testing.T) {
 
 func TestMigrationWrapsMigratorCreationErrors(t *testing.T) {
 	db := newMigrationDB(t)
-	cfg := migration.Config{DB: db, FS: migrationsFS, Path: "testdata/migrations", Driver: func(context.Context, *sql.DB, string) (migratedb.Driver, error) {
+	cfg := migration.Config{DB: db, FS: migrationsFS, Path: "testdata/migrations", Driver: func(context.Context, *sql.DB, migration.Table) (migratedb.Driver, error) {
 		return nil, errors.New("driver failed")
 	}}
 	if err := cfg.Up(context.Background()); err == nil || !strings.Contains(err.Error(), "create database driver") {

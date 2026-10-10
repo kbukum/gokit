@@ -1,0 +1,1 @@
+DROP INDEX auth_session_families_subject;

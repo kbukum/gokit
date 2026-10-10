@@ -1,270 +1,204 @@
-// Package jwt provides a generic JWT token service using Go generics.
-//
-// The service is parameterized by a custom claims type T,
-// which must implement jwt.Claims (typically by embedding jwt.RegisteredClaims).
-// This allows each project to define its own claims structure without gokit knowing about it.
-//
-// Usage:
-//
-//	type MyClaims struct {
-//	    jwt.RegisteredClaims
-//	    UserID   string `json:"user_id"`
-//	    TenantID string `json:"tenant_id"`
-//	}
-//
-//	svc, err := jwt.NewService(cfg, func() *MyClaims { return &MyClaims{} })
-//	token, err := svc.Generate(&MyClaims{
-//	    RegisteredClaims: jwt.RegisteredClaims{Subject: "user-123"},
-//	    UserID: "user-123",
-//	})
-//	claims, err := svc.Parse(tokenString)
 package jwt
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+	"slices"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
+
+	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
-// Service provides JWT token generation
-// and parsing for custom claims type T. T must implement jwt.Claims (e.g., by embedding jwt.RegisteredClaims).
-type Service[T gojwt.Claims] struct {
-	cfg      Config
-	newEmpty func() T
+const maxTokenBytes = 8 << 10
+
+// Service issues and verifies tokens of one profile. It is safe for concurrent use.
+type Service[T Claims] struct {
+	cfg       Config
+	keys      keyRing
+	clock     util.Clock
+	newClaims func() T
+	method    gojwt.SigningMethod
+	parser    *gojwt.Parser
+	wantType  string
 }
 
-// NewService creates a new JWT service.
-// The newEmpty function returns a zero-value instance of T for parsing.
-//
-// Example:
-//
-//	svc, err := jwt.NewService(cfg, func() *MyClaims { return &MyClaims{} })
-func NewService[T gojwt.Claims](cfg *Config, newEmpty func() T) (*Service[T], error) {
+// NewService validates the profile and key set. The clock drives issuance times, claim checks and key retirement;
+// newClaims returns an empty claims value for each validation.
+func NewService[T Claims](cfg Config, keys KeySet, clock util.Clock, newClaims func() T) (*Service[T], error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("jwt: %w", err)
+		return nil, apperrors.InvalidInput("jwt", err.Error()).WithCause(err)
 	}
-	return &Service[T]{cfg: *cfg, newEmpty: newEmpty}, nil
-}
-
-// Generate creates a signed JWT token from the given claims. If RegisteredClaims.ExpiresAt is zero,
-// it is set to now + AccessTokenTTL. If RegisteredClaims.IssuedAt is zero, it is set to now.
-func (s *Service[T]) Generate(claims T) (string, error) {
-	token := gojwt.NewWithClaims(s.cfg.signingMethod(), claims)
-	signed, err := token.SignedString(s.cfg.signKey())
+	if util.IsNil(clock) {
+		return nil, apperrors.InvalidInput("jwt.clock", "clock is required")
+	}
+	if newClaims == nil {
+		return nil, apperrors.InvalidInput("jwt.claims", "claims constructor is required")
+	}
+	ring, err := newKeyRing(cfg.Method, keys)
 	if err != nil {
-		return "", fmt.Errorf("jwt: sign token: %w", err)
+		return nil, apperrors.InvalidInput("jwt.keys", err.Error()).WithCause(err)
 	}
-	return signed, nil
+	cfg.Audience = slices.Clone(cfg.Audience)
+	method := cfg.signingMethod()
+	return &Service[T]{
+		cfg:       cfg,
+		keys:      ring,
+		clock:     clock,
+		newClaims: newClaims,
+		method:    method,
+		wantType:  normalizeType(cfg.Type),
+		parser:    gojwt.NewParser(append(claimRules(cfg), gojwt.WithValidMethods([]string{method.Alg()}), gojwt.WithTimeFunc(clock.Now), gojwt.WithStrictDecoding())...),
+	}, nil
 }
 
-// GenerateAccess creates a signed access token with standard time claims.
-// It calls prepareClaims with AccessTokenTTL before signing.
-func (s *Service[T]) GenerateAccess(claims T) (string, error) {
-	s.prepareClaims(claims, s.cfg.AccessTokenTTL)
-	return s.Generate(claims)
-}
-
-// GenerateRefresh creates a signed refresh token with standard time claims.
-// It calls prepareClaims with RefreshTokenTTL before signing.
-func (s *Service[T]) GenerateRefresh(claims T) (string, error) {
-	s.prepareClaims(claims, s.cfg.RefreshTokenTTL)
-	return s.generateWithKey(claims, s.cfg.refreshSignKey())
-}
-
-// Parse validates and parses a JWT token string into claims of type T. It verifies the signature,
-// expiry, issuer, and audience. The service configuration must include Issuer and Audience,
-// and the token must contain matching iss and aud claims.
-func (s *Service[T]) Parse(tokenString string) (T, error) {
-	return s.parseWithKey(tokenString, s.cfg.verifyKey())
-}
-
-// ParseRefresh validates
-// and parses a refresh token string into claims of type T using the configured signature, expiry,
-// issuer, and audience checks.
-func (s *Service[T]) ParseRefresh(tokenString string) (T, error) {
-	return s.parseWithKey(tokenString, s.cfg.refreshVerifyKey())
-}
-
-func (s *Service[T]) generateWithKey(claims T, signKey any) (string, error) {
-	token := gojwt.NewWithClaims(s.cfg.signingMethod(), claims)
-	signed, err := token.SignedString(signKey)
-	if err != nil {
-		return "", fmt.Errorf("jwt: sign token: %w", err)
-	}
-	return signed, nil
-}
-
-func (s *Service[T]) parseWithKey(tokenString string, verifyKey any) (T, error) {
-	claims := s.newEmpty()
-	token, err := gojwt.ParseWithClaims(
-		tokenString,
-		claims,
-		s.keyFunc(verifyKey),
-		s.parserOptions()...,
-	)
-	if err != nil {
-		var zero T
-		return zero, fmt.Errorf("jwt: parse token: %w", err)
-	}
-	if !token.Valid {
-		var zero T
-		return zero, errors.New("jwt: invalid token")
-	}
-	parsed, ok := token.Claims.(T)
-	if !ok {
-		var zero T
-		return zero, errors.New("jwt: unexpected claims type")
-	}
-	if err := s.validateRequiredClaims(parsed); err != nil {
-		var zero T
-		return zero, fmt.Errorf("jwt: %w", err)
-	}
-	return parsed, nil
-}
-
-// ValidatorFunc preserves the claims type and caller cancellation.
-func (s *Service[T]) ValidatorFunc() func(context.Context, string) (T, error) {
-	return s.ValidateToken
-}
-
-// ValidateToken implements the structural typed token validator contract.
-func (s *Service[T]) ValidateToken(ctx context.Context, token string) (T, error) {
-	var zero T
-	if err := ctx.Err(); err != nil {
-		return zero, err
-	}
-	claims, err := s.Parse(token)
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return zero, ctxErr
-	}
-	return claims, err
-}
-
-// GenerateToken implements the structural typed token generator contract.
-func (s *Service[T]) GenerateToken(ctx context.Context, claims T) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	return s.Generate(claims)
-}
-
-// keyFunc is the jwt.Keyfunc used during token parsing.
-func (s *Service[T]) keyFunc(verifyKey any) gojwt.Keyfunc {
-	return func(token *gojwt.Token) (any, error) {
-		// Verify signing method matches expected
-		expected := s.cfg.signingMethod()
-		if token.Method.Alg() != expected.Alg() {
-			return nil, fmt.Errorf("jwt: unexpected signing method: %s", token.Method.Alg())
-		}
-		return verifyKey, nil
-	}
-}
-
-// parserOptions returns jwt.ParserOption based on config.
-func (s *Service[T]) parserOptions() []gojwt.ParserOption {
-	opts := []gojwt.ParserOption{
-		gojwt.WithValidMethods([]string{s.cfg.signingMethod().Alg()}),
-		gojwt.WithLeeway(s.cfg.ClockSkew),
+// claimRules are the profile's claim checks, shared by the parser and the expiry re-check.
+func claimRules(cfg Config) []gojwt.ParserOption {
+	return []gojwt.ParserOption{
+		gojwt.WithLeeway(cfg.Leeway),
 		gojwt.WithExpirationRequired(),
+		gojwt.WithNotBeforeRequired(),
 		gojwt.WithIssuedAt(),
+		gojwt.WithIssuer(cfg.Issuer),
+		gojwt.WithAudience(cfg.Audience...),
 	}
-	if s.cfg.Issuer != "" {
-		opts = append(opts, gojwt.WithIssuer(s.cfg.Issuer))
-	}
-	if len(s.cfg.Audience) > 0 {
-		for _, aud := range s.cfg.Audience {
-			opts = append(opts, gojwt.WithAudience(aud))
-		}
-	}
-	return opts
 }
 
-func (s *Service[T]) validateRequiredClaims(claims T) error {
-	exp, err := claims.GetExpirationTime()
-	if err != nil || exp == nil {
-		return errors.New("missing required exp claim")
+// GenerateToken fills unset registered claims in place and signs the token. Issued-at defaults to now (whole seconds),
+// not-before to issued-at, expiry to issued-at plus MaxLifetime, issuer to the profile issuer, and audience to the
+// profile audience when exactly one is configured. Claims outside the profile are rejected.
+func (s *Service[T]) GenerateToken(ctx context.Context, claims T) (string, error) {
+	if failure := apperrors.FromContext(ctx, "jwt.generate"); failure != nil {
+		return "", failure
 	}
-	iat, err := claims.GetIssuedAt()
-	if err != nil || iat == nil {
-		return errors.New("missing required iat claim")
+	if s.keys.signing == nil {
+		return "", apperrors.InvalidInput("jwt.keys", "service is verify-only")
 	}
-	nbf, err := claims.GetNotBefore()
-	if err != nil || nbf == nil {
-		return errors.New("missing required nbf claim")
+	var zero T
+	if claims == zero {
+		return "", apperrors.InvalidInput("jwt.claims", "claims are required")
 	}
-	iss, err := claims.GetIssuer()
-	if err != nil || iss == "" {
-		return errors.New("missing required iss claim")
+	reg := claims.registered()
+	if reg.IssuedAt == nil {
+		reg.IssuedAt = gojwt.NewNumericDate(s.clock.Now().Truncate(time.Second))
 	}
-	aud, err := claims.GetAudience()
-	if err != nil || len(aud) == 0 {
-		return errors.New("missing required aud claim")
+	if reg.NotBefore == nil {
+		reg.NotBefore = reg.IssuedAt
+	}
+	if reg.ExpiresAt == nil {
+		reg.ExpiresAt = gojwt.NewNumericDate(reg.IssuedAt.Add(s.cfg.MaxLifetime))
+	}
+	if reg.Issuer == "" {
+		reg.Issuer = s.cfg.Issuer
+	}
+	if len(reg.Audience) == 0 && len(s.cfg.Audience) == 1 {
+		reg.Audience = gojwt.ClaimStrings{s.cfg.Audience[0]}
+	}
+	if err := s.checkIssued(reg); err != nil {
+		return "", apperrors.InvalidInput("jwt.claims", err.Error())
+	}
+	token := gojwt.NewWithClaims(s.method, claims)
+	token.Header["kid"] = s.keys.signingID
+	token.Header["typ"] = s.cfg.Type
+	signed, err := token.SignedString(s.keys.signing)
+	if err != nil {
+		return "", apperrors.Internal(fmt.Errorf("sign token: %w", err))
+	}
+	if len(signed) > maxTokenBytes {
+		return "", apperrors.InvalidInput("jwt.claims", fmt.Sprintf("token exceeds %d bytes", maxTokenBytes))
+	}
+	return signed, nil
+}
+
+func (s *Service[T]) checkIssued(reg *gojwt.RegisteredClaims) error {
+	if reg.Issuer != s.cfg.Issuer {
+		return errors.New("issuer does not match the profile")
+	}
+	if len(reg.Audience) == 0 {
+		return errors.New("audience is required")
+	}
+	for _, aud := range reg.Audience {
+		if !slices.Contains(s.cfg.Audience, aud) {
+			return fmt.Errorf("audience %q is not in the profile", aud)
+		}
+	}
+	return s.checkShape(reg)
+}
+
+// checkShape enforces the profile rules golang-jwt does not: time ordering, bounded lifetime and audience cardinality.
+func (s *Service[T]) checkShape(reg *gojwt.RegisteredClaims) error {
+	if reg.IssuedAt == nil || reg.NotBefore == nil || reg.ExpiresAt == nil {
+		return errors.New("iat, nbf and exp are required")
+	}
+	if reg.NotBefore.Before(reg.IssuedAt.Time) || !reg.NotBefore.Before(reg.ExpiresAt.Time) {
+		return errors.New("claims must satisfy iat <= nbf < exp")
+	}
+	if reg.ExpiresAt.Sub(reg.IssuedAt.Time) > s.cfg.MaxLifetime {
+		return fmt.Errorf("lifetime exceeds %s", s.cfg.MaxLifetime)
+	}
+	if s.cfg.SingleAudience && len(reg.Audience) != 1 {
+		return errors.New("exactly one audience is required")
 	}
 	return nil
 }
 
-// prepareClaims sets standard RegisteredClaims fields if they're accessible.
-// It supports three approaches (tried in order):
-//  1. SetDefaults interface — cleanest, gives full control to the claims type
-//  2. Reflection — finds embedded RegisteredClaims in any custom struct
-//  3. Direct cast — only works if T is literally *jwt.RegisteredClaims
-func (s *Service[T]) prepareClaims(claims T, ttl time.Duration) {
-	now := time.Now()
-
-	// Path 1: ClaimsWithDefaults interface (preferred)
-	if setter, ok := any(claims).(interface {
-		SetDefaults(time.Time, time.Duration, string, []string)
-	}); ok {
-		setter.SetDefaults(now, ttl, s.cfg.Issuer, s.cfg.Audience)
-		return
+// ValidateToken verifies the signature with the key named by "kid", the "typ" header, and every profile rule. An expired
+// but otherwise authentic token returns ErrCodeTokenExpired; every other failure returns ErrCodeInvalidToken.
+func (s *Service[T]) ValidateToken(ctx context.Context, tokenString string) (T, error) {
+	var zero T
+	if failure := apperrors.FromContext(ctx, "jwt.validate"); failure != nil {
+		return zero, failure
 	}
-
-	// Path 2: Use reflection to find embedded RegisteredClaims field
-	if rc := findRegisteredClaims(any(claims)); rc != nil {
-		if rc.ExpiresAt == nil || rc.ExpiresAt.IsZero() {
-			rc.ExpiresAt = gojwt.NewNumericDate(now.Add(ttl))
-		}
-		if rc.IssuedAt == nil {
-			rc.IssuedAt = gojwt.NewNumericDate(now)
-		}
-		if rc.NotBefore == nil {
-			rc.NotBefore = gojwt.NewNumericDate(now)
-		}
-		if rc.Issuer == "" && s.cfg.Issuer != "" {
-			rc.Issuer = s.cfg.Issuer
-		}
-		if len(rc.Audience) == 0 && len(s.cfg.Audience) > 0 {
-			rc.Audience = gojwt.ClaimStrings(s.cfg.Audience)
-		}
+	if len(tokenString) > maxTokenBytes {
+		return zero, apperrors.InvalidToken().WithCause(fmt.Errorf("token exceeds %d bytes", maxTokenBytes))
 	}
+	claims := s.newClaims()
+	if claims == zero {
+		return zero, apperrors.Internal(errors.New("claims constructor returned nil"))
+	}
+	if _, err := s.parser.ParseWithClaims(tokenString, claims, s.verificationKey); err != nil {
+		if errors.Is(err, gojwt.ErrTokenExpired) && s.onlyExpired(claims) {
+			return zero, apperrors.TokenExpired().WithCause(err)
+		}
+		return zero, apperrors.InvalidToken().WithCause(err)
+	}
+	if err := s.checkShape(claims.registered()); err != nil {
+		return zero, apperrors.InvalidToken().WithCause(err)
+	}
+	return claims, nil
 }
 
-// findRegisteredClaims uses reflection to find an embedded jwt.RegisteredClaims field in a struct (possibly behind a pointer).
-// Returns a pointer to the embedded field, or nil if not found.
-func findRegisteredClaims(v any) *gojwt.RegisteredClaims {
-	rv := reflect.ValueOf(v)
-	if rv.Kind() == reflect.Pointer {
-		if rv.IsNil() {
-			return nil
-		}
-		rv = rv.Elem()
+// onlyExpired reports whether an authentic, expired token would pass every other rule at the last instant it was
+// valid, so expiry is its sole defect. The parser verified the signature before checking claims.
+func (s *Service[T]) onlyExpired(claims T) bool {
+	reg := claims.registered()
+	if reg.ExpiresAt == nil || s.checkShape(reg) != nil {
+		return false
 	}
-	if rv.Kind() != reflect.Struct {
-		return nil
-	}
+	lastValid := reg.ExpiresAt.Add(s.cfg.Leeway - time.Nanosecond)
+	validator := gojwt.NewValidator(append(claimRules(s.cfg), gojwt.WithTimeFunc(func() time.Time { return lastValid }))...)
+	return validator.Validate(claims) == nil
+}
 
-	// Look for a field of type jwt.RegisteredClaims
-	rcType := reflect.TypeOf(gojwt.RegisteredClaims{})
-	for i := 0; i < rv.NumField(); i++ {
-		field := rv.Field(i)
-		if field.Type() == rcType && field.CanAddr() {
-			return field.Addr().Interface().(*gojwt.RegisteredClaims)
-		}
+func (s *Service[T]) verificationKey(token *gojwt.Token) (any, error) {
+	typ, ok := token.Header["typ"].(string)
+	if !ok || normalizeType(typ) != s.wantType {
+		return nil, errors.New("unexpected token type")
 	}
-	return nil
+	kid, ok := token.Header["kid"].(string)
+	if !ok {
+		return nil, errors.New("key id is required")
+	}
+	key, ok := s.keys.verify[kid]
+	if !ok {
+		return nil, errors.New("unknown key id")
+	}
+	if !key.retireAt.IsZero() && !s.clock.Now().Before(key.retireAt) {
+		return nil, errors.New("key is retired")
+	}
+	return key.key, nil
 }

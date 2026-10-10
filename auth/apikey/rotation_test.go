@@ -3,105 +3,101 @@ package apikey
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
+
+	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
-func TestRotateKeyRequiresNewKeyID(t *testing.T) {
+func TestRotateKeyGraceBoundaries(t *testing.T) {
 	t.Parallel()
-	manager := NewManager(newMemStore(), testHasher(t))
-	if _, err := manager.RotateKey(context.Background(), "old", RotationConfig{}); err == nil {
-		t.Fatal("expected NewKeyID required error")
+	cases := map[string]struct {
+		grace     time.Duration
+		expires   *time.Time
+		wantGrace time.Time
+	}{
+		"zero grace ends the old key now": {0, nil, epoch},
+		"positive grace":                  {time.Minute, nil, epoch.Add(time.Minute)},
+		"grace never outlives expiry":     {time.Hour, at(epoch.Add(time.Minute)), epoch.Add(time.Minute)},
+		"maximum grace":                   {MaxGrace, nil, epoch.Add(MaxGrace)},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			clock := util.NewFakeClock(epoch)
+			m := newTestManager(t, nil, clock)
+			old := issue(t, m, "old", tc.expires)
+			result, err := m.RotateKey(context.Background(), "old", RotateRequest{NewKeyID: "new", Grace: tc.grace})
+			if err != nil {
+				t.Fatalf("RotateKey: %v", err)
+			}
+			if !result.GraceEndsAt.Equal(tc.wantGrace) || result.Record.ID != "new" || result.Record.OwnerID != "owner" || result.Record.Scopes[0] != "read" {
+				t.Fatalf("result = %+v", result)
+			}
+			if _, err := m.ValidateKey(context.Background(), result.Issued.PlainKey, "read"); err != nil {
+				t.Fatalf("replacement: %v", err)
+			}
+			if tc.wantGrace.After(epoch) {
+				clock.Set(tc.wantGrace.Add(-time.Nanosecond))
+				if _, err := m.ValidateKey(context.Background(), old.PlainKey); err != nil {
+					t.Fatalf("old key inside grace: %v", err)
+				}
+			}
+			clock.Set(tc.wantGrace)
+			if _, err := m.ValidateKey(context.Background(), old.PlainKey); reason(err) != "INVALID_CREDENTIAL" {
+				t.Fatalf("old key at grace end: %v", err)
+			}
+			if _, err := m.ValidateKeyID(context.Background(), "old"); reason(err) != "INVALID_CREDENTIAL" {
+				t.Fatalf("old key id at grace end: %v", err)
+			}
+		})
 	}
 }
 
-func TestRotateKeyFailsWhenOldKeyMissing(t *testing.T) {
+func TestRotateKeyRejectsInvalidRequests(t *testing.T) {
 	t.Parallel()
-	manager := NewManager(newMemStore(), testHasher(t))
-	_, err := manager.RotateKey(context.Background(), "missing", RotationConfig{NewKeyID: "new"})
-	if err == nil {
-		t.Fatal("expected error when old key is missing")
+	m := newTestManager(t, nil, nil)
+	issue(t, m, "old", nil)
+	for name, req := range map[string]RotateRequest{
+		"missing new id":  {},
+		"negative grace":  {NewKeyID: "new", Grace: -time.Nanosecond},
+		"excessive grace": {NewKeyID: "new", Grace: MaxGrace + time.Nanosecond},
+		"past expiry":     {NewKeyID: "new", ExpiresAt: at(epoch)},
+	} {
+		if _, err := m.RotateKey(context.Background(), "old", req); apperrors.Normalize(err).Code != apperrors.ErrCodeInvalidInput {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if _, err := m.RotateKey(context.Background(), "absent", RotateRequest{NewKeyID: "new"}); apperrors.Normalize(err).Code != apperrors.ErrCodeNotFound {
+		t.Fatalf("missing old key: %v", err)
 	}
 }
 
-func TestRotateKeyRejectsRevokedOldKey(t *testing.T) {
+func TestRotateKeyIsSingleWinnerAndPropagatesStoreErrors(t *testing.T) {
 	t.Parallel()
-	store := newMemStore()
-	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
+	store := &faultStore{Store: newMemory(t)}
+	m := newTestManager(t, store, nil)
+	issue(t, m, "old", nil)
+	var wg sync.WaitGroup
+	errs := make([]error, 2)
+	for i, id := range []string{"a", "b"} {
+		wg.Go(func() {
+			_, errs[i] = m.RotateKey(context.Background(), "old", RotateRequest{NewKeyID: id, Grace: time.Minute})
+		})
 	}
-	if setErr := store.SetActive(context.Background(), record.ID, false); setErr != nil {
-		t.Fatalf("SetActive: %v", setErr)
+	wg.Wait()
+	if (errs[0] == nil) == (errs[1] == nil) {
+		t.Fatalf("want exactly one winner: %v", errs)
 	}
-	if _, rotErr := manager.RotateKey(context.Background(), record.ID, RotationConfig{NewKeyID: "new"}); rotErr == nil {
-		t.Fatal("expected revoked old key rejection")
+	issue(t, m, "other", nil)
+	store.rotateErr = errors.New("rotate failed")
+	if _, err := m.RotateKey(context.Background(), "other", RotateRequest{NewKeyID: "c"}); !errors.Is(err, store.rotateErr) {
+		t.Fatalf("store failure: %v", err)
 	}
-}
-
-func TestRotateKeyInheritsOldMetadata(t *testing.T) {
-	t.Parallel()
-	store := newMemStore()
-	manager := NewManager(store, testHasher(t))
-	expires := time.Now().Add(time.Hour)
-	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "primary", Prefix: "pkg", Scopes: []string{"read", "write"}, ExpiresAt: &expires})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
+	store.getErr = errors.New("read failed")
+	if _, err := m.RotateKey(context.Background(), "other", RotateRequest{NewKeyID: "c"}); !errors.Is(err, store.getErr) {
+		t.Fatalf("read failure: %v", err)
 	}
-
-	result, err := manager.RotateKey(context.Background(), record.ID, RotationConfig{NewKeyID: "new"})
-	if err != nil {
-		t.Fatalf("RotateKey: %v", err)
-	}
-	if result.Record.OwnerID != "owner" || result.Record.Name != "primary" || result.Record.KeyPrefix != "pkg" {
-		t.Fatalf("rotated record did not inherit metadata: %+v", result.Record)
-	}
-	if len(result.Record.Scopes) != 2 {
-		t.Fatalf("scopes = %v, want inherited 2", result.Record.Scopes)
-	}
-	if !result.GraceEndsAt.After(time.Now()) {
-		t.Fatal("grace window should be in the future")
-	}
-}
-
-func TestRotateKeyPropagatesIssueError(t *testing.T) {
-	t.Parallel()
-	store := newMemStore()
-	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
-	}
-	// A prefix shorter than 3 chars forces GenerateKey (via IssueKey) to fail.
-	_, rotErr := manager.RotateKey(context.Background(), record.ID, RotationConfig{NewKeyID: "new", Prefix: "ab"})
-	if rotErr == nil {
-		t.Fatal("expected issue error from invalid prefix")
-	}
-}
-
-func TestRotateKeyPropagatesSetRotationError(t *testing.T) {
-	t.Parallel()
-	store := &rotationErrStore{memStore: newMemStore()}
-	manager := NewManager(store, testHasher(t))
-	_, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "old", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
-	}
-	store.setRotationErr = errors.New("set rotation failed")
-	if _, rotErr := manager.RotateKey(context.Background(), record.ID, RotationConfig{NewKeyID: "new"}); rotErr == nil {
-		t.Fatal("expected SetRotation error to propagate")
-	}
-}
-
-type rotationErrStore struct {
-	*memStore
-	setRotationErr error
-}
-
-func (s *rotationErrStore) SetRotation(ctx context.Context, id string, graceEndsAt time.Time, rotatedByID string) error {
-	if s.setRotationErr != nil {
-		return s.setRotationErr
-	}
-	return s.memStore.SetRotation(ctx, id, graceEndsAt, rotatedByID)
 }

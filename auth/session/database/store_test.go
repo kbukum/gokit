@@ -30,7 +30,7 @@ func fixture(t *testing.T) (*store, *dbkit.DB, *util.FakeClock) {
 			t.Error(err)
 		}
 	})
-	db, err := dbkit.NewWithContext(ctx, sqlite.Open(path), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+	db, err := dbkit.NewWithContext(ctx, sqlite.Dialect(), dbkit.Config{DSN: path, LogLevel: "silent"}, logging.NewDefault("session-test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func fixture(t *testing.T) (*store, *dbkit.DB, *util.FakeClock) {
 	if err := cfg.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.Ready(ctx, 1); err != nil {
+	if err := cfg.Ready(ctx, SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	clock := util.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -55,7 +55,7 @@ func fixture(t *testing.T) (*store, *dbkit.DB, *util.FakeClock) {
 }
 
 func row(ref, family string, clock util.Clock) session.Record {
-	return session.Record{Reference: ref, Family: family, Generation: 1, Principal: auth.Principal{Subject: "u", Kind: auth.User, Credential: auth.Session, Reference: ref, Restrictions: auth.Restrictions{Mode: auth.Unrestricted}}, ExpiresAt: clock.Now().Add(time.Hour), RetainUntil: clock.Now().Add(time.Hour + 10*time.Minute), Active: true}
+	return session.Record{Reference: ref, Family: family, Generation: 1, Principal: auth.Principal{Subject: "u", Kind: auth.User, Credential: auth.Session, Reference: ref, Restrictions: auth.Restrictions{Mode: auth.Unrestricted}}, ExpiresAt: clock.Now().Add(time.Hour), RetainUntil: clock.Now().Add(time.Hour + 10*time.Minute), AuthenticatedAt: clock.Now(), Active: true}
 }
 
 func TestProductionMigrationRotationRevocation(t *testing.T) {
@@ -110,7 +110,7 @@ func TestProductionMigrationRotationRevocation(t *testing.T) {
 	if _, err := s.Lookup(ctx, "old"); err == nil {
 		t.Fatal("tombstone remained")
 	}
-	if err := cfg.Ready(ctx, 1); err != nil {
+	if err := cfg.Ready(ctx, SchemaVersion); err != nil {
 		t.Fatal("cleanup altered schema", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestCanceledTransactionAndSchemaReadiness(t *testing.T) {
 		t.Fatal("canceled write committed")
 	}
 	cfg := Migrations(db, sqlite.MigrateDriver())
-	if err := cfg.Ready(context.Background(), 2); err == nil {
+	if err := cfg.Ready(context.Background(), SchemaVersion+1); err == nil {
 		t.Fatal("wrong schema accepted")
 	}
 	if err := cfg.Down(context.Background()); err != nil {
@@ -177,6 +177,10 @@ func TestStoreRejectsInvalidTransitionsAndRollsBack(t *testing.T) {
 	}
 	if _, err := NewStore(db, nil); err == nil {
 		t.Fatal("missing clock")
+	}
+	var typedNil *util.FakeClock
+	if _, err := NewStore(db, typedNil); err == nil {
+		t.Fatal("typed-nil clock")
 	}
 	if _, err := NewStore(db, clock, clock); err == nil {
 		t.Fatal("ambiguous clock")
@@ -226,5 +230,99 @@ func TestStoreRejectsInvalidTransitionsAndRollsBack(t *testing.T) {
 	}
 	if _, err := s.Revoke(ctx, "missing"); err == nil {
 		t.Fatal("unknown revocation")
+	}
+}
+
+func TestRevokeSubjectRevokesOnlyThatSubjectsActiveFamilies(t *testing.T) {
+	s, _, clock := fixture(t)
+	ctx := context.Background()
+	alice := func(ref, family string) session.Record {
+		r := row(ref, family, clock)
+		r.Principal.Subject = "alice"
+		return r
+	}
+	for _, r := range []session.Record{alice("a1", "fa1"), alice("a2", "fa2"), row("u1", "fu1", clock)} {
+		if err := s.Create(ctx, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	service := alice("s1", "fs1")
+	service.Principal.Kind = auth.Service
+	if err := s.Create(ctx, service); err != nil {
+		t.Fatal(err)
+	}
+	rotated := alice("a3", "fa1")
+	rotated.Generation = 2
+	if err := s.Rotate(ctx, "a1", rotated); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Revoke(ctx, "a2"); err != nil {
+		t.Fatal(err)
+	}
+
+	families, err := s.RevokeSubject(ctx, auth.User, "alice")
+	if err != nil || families != 1 {
+		t.Fatalf("families = %v, %v", families, err)
+	}
+	for ref, revoked := range map[string]bool{"a1": true, "a3": true, "a2": true, "u1": false, "s1": false} {
+		got, err := s.Lookup(ctx, ref)
+		if err != nil || got.Revoked != revoked {
+			t.Fatalf("%s: revoked=%v err=%v", ref, got.Revoked, err)
+		}
+	}
+	again, err := s.RevokeSubject(ctx, auth.User, "alice")
+	if err != nil || again != 0 {
+		t.Fatalf("again = %v, %v", again, err)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.RevokeSubject(canceled, auth.User, "bob"); err == nil {
+		t.Fatal("canceled revocation succeeded")
+	}
+}
+
+func TestStoreKeepsAuthenticationTime(t *testing.T) {
+	s, db, clock := fixture(t)
+	ctx := context.Background()
+	first := row("first", "family", clock)
+	signedIn := first.AuthenticatedAt
+	if err := s.Create(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Lookup(ctx, "first")
+	if err != nil || !got.AuthenticatedAt.Equal(signedIn) {
+		t.Fatalf("created: %+v %v", got, err)
+	}
+
+	clock.Advance(time.Minute)
+	rotated := row("rotated", "family", clock)
+	rotated.Generation, rotated.ExpiresAt, rotated.RetainUntil = 2, first.ExpiresAt, first.RetainUntil
+	if err := s.Rotate(ctx, "first", rotated); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.Lookup(ctx, "rotated"); err != nil || !got.AuthenticatedAt.Equal(signedIn) {
+		t.Fatalf("rotation must keep the authentication time: %+v %v", got, err)
+	}
+
+	clock.Advance(time.Minute)
+	relogged := row("relogged", "family", clock)
+	relogged.Generation, relogged.ExpiresAt, relogged.RetainUntil = 3, first.ExpiresAt, first.RetainUntil
+	if err := s.Relogin(ctx, "rotated", relogged); err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.Lookup(ctx, "relogged"); err != nil || !got.AuthenticatedAt.Equal(clock.Now()) {
+		t.Fatalf("relogin must record the new authentication time: %+v %v", got, err)
+	}
+
+	unknown := row("unknown", "unknown-family", clock)
+	unknown.AuthenticatedAt = time.Time{}
+	if err := s.Create(ctx, unknown); err == nil {
+		t.Fatal("a session without an authentication time was created")
+	}
+	if err := db.GormDB.WithContext(ctx).Exec("UPDATE auth_session_families SET authenticated_at = NULL WHERE id = ?", "family").Error; err != nil {
+		t.Fatal(err)
+	}
+	if got, err = s.Lookup(ctx, "relogged"); err != nil || !got.AuthenticatedAt.IsZero() {
+		t.Fatalf("a missing authentication time must read as zero: %+v %v", got, err)
 	}
 }

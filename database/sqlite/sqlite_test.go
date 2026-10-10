@@ -3,6 +3,8 @@ package sqlite_test
 import (
 	"testing"
 
+	"gorm.io/gorm"
+
 	"github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
 )
@@ -17,9 +19,23 @@ func TestRegisterAddsDialectToRegistry(t *testing.T) {
 	if !ok {
 		t.Fatalf("dialect %q not found after Register", sqlite.Name)
 	}
-	if d.Open(":memory:") == nil {
-		t.Fatal("registered dialect returned nil dialector")
+	opener, err := d.Prepare(t.Context(), database.ConnectionInput{DSN: ":memory:"})
+	if err != nil || opener == nil {
+		t.Fatal("registered dialect did not prepare a connection")
 	}
+}
+
+func preparedDialector(t *testing.T, dsn string) gorm.Dialector {
+	t.Helper()
+	opener, err := sqlite.Prepare(t.Context(), database.ConnectionInput{DSN: dsn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dialector, err := opener.Open(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dialector
 }
 
 func TestRegisterRejectsDuplicate(t *testing.T) {

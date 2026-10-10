@@ -22,7 +22,7 @@ func newTestDB(t *testing.T) *DB {
 	cfg := Config{Enabled: true, DSN: ":memory:"}
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
-	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
+	db, err := NewWithContext(context.Background(), sqlite.Dialect(), cfg, log)
 	if err != nil {
 		t.Fatalf("newTestDB: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestConcurrentQueries(t *testing.T) {
 	cfg := Config{Enabled: true, DSN: "file::memory:?cache=shared"}
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
-	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
+	db, err := NewWithContext(context.Background(), sqlite.Dialect(), cfg, log)
 	if err != nil {
 		t.Fatalf("newTestDB: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestNewWithContext_ExhaustsRetries(t *testing.T) {
 	cfg := Config{Enabled: true, DSN: "/nonexistent-dir-xyz/db.sqlite", MaxRetries: 1}
 	cfg.ApplyDefaults()
 	cfg.MaxRetries = 1
-	db, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	db, err := NewWithContext(context.Background(), sqlite.Dialect(), cfg, logging.NewDefault("test"))
 	if err == nil || db != nil {
 		t.Fatalf("NewWithContext = db:%v err:%v, want failure", db, err)
 	}
@@ -362,7 +362,7 @@ func TestNewWithContext_CancelsDuringBackoff(t *testing.T) {
 			cancel()
 		},
 	})
-	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
+	db, err := NewWithContext(ctx, sqlite.Dialect(), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
 	if err == nil || db != nil {
 		t.Fatalf("NewWithContext = db:%v err:%v, want cancellation", db, err)
 	}
@@ -381,7 +381,7 @@ func TestNewWithContext_StopsBeforeBackoffExceedsDeadline(t *testing.T) {
 		InitialBackoff: 2 * time.Hour,
 		MaxBackoff:     2 * time.Hour,
 	})
-	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
+	db, err := NewWithContext(ctx, sqlite.Dialect(), cfg, logging.NewDefault("test"), WithConnectPolicy(policy))
 	if db != nil || !errors.Is(err, resilience.ErrMaxRetriesExceeded) {
 		t.Fatalf("NewWithContext = db:%v err:%v, want retry budget failure", db, err)
 	}
@@ -398,7 +398,7 @@ func TestNewWithContext_CanceledBeforeFirstAttempt(t *testing.T) {
 	cfg.ApplyDefaults()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	db, err := NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, logging.NewDefault("test"))
+	db, err := NewWithContext(ctx, sqlite.Dialect(), cfg, logging.NewDefault("test"))
 	if err == nil || db != nil || !strings.Contains(err.Error(), "canceled") {
 		t.Fatalf("NewWithContext canceled = db:%v err:%v", db, err)
 	}
@@ -461,7 +461,7 @@ func TestWithTransaction_RepanicsAfterRollback(t *testing.T) {
 func TestNewAndProviderContract(t *testing.T) {
 	cfg := Config{Enabled: true, Name: "primary", DSN: ":memory:"}
 	cfg.ApplyDefaults()
-	db, err := New(cfg, logging.NewDefault("test"), sqlite.Open(cfg.DSN))
+	db, err := New(cfg, logging.NewDefault("test"), sqlite.Dialect())
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

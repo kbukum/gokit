@@ -81,7 +81,7 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return c.ResiliencePolicy.Validate()
 }
 
 // DefaultRetryConfig returns a default retry config suitable for HTTP clients.

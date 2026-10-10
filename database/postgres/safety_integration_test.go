@@ -10,6 +10,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+
 	"github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/migration"
 	"github.com/kbukum/gokit/database/postgres"
@@ -17,10 +19,10 @@ import (
 )
 
 func TestPostgresSafeDefaultsAndMigrations(t *testing.T) {
-	dsn := newDSN(t)
+	params := newParams(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	db, err := database.NewWithContext(ctx, postgres.Open(dsn), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +61,8 @@ func TestPostgresSafeDefaultsAndMigrations(t *testing.T) {
 	if err := conn.Close(); err != nil {
 		t.Fatal(err)
 	}
-	cfg := migration.Config{DB: db.GormDB, FS: migrationsFS, Path: "testdata/migrations", Driver: postgres.MigrateDriver()}
-	second, err := database.NewWithContext(ctx, postgres.Open(dsn), database.Config{}, logging.NewDefault("test"))
+	cfg := migration.Config{DB: db.GormDB, FS: migrationsFS, Path: "testdata/migrations", Driver: postgres.MigrateDriver(), Table: migration.Table{Schema: "fixture"}}
+	second, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +137,7 @@ func TestPostgresSafeDefaultsAndMigrations(t *testing.T) {
 func TestPostgresResetWithForeignKeys(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	db, err := database.NewWithContext(ctx, postgres.Open(newDSN(t)), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: newParams(t)}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +146,7 @@ func TestPostgresResetWithForeignKeys(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	cfg := migration.Config{DB: db.GormDB, Path: ".", Driver: postgres.MigrateDriver(), FS: fstest.MapFS{
+	cfg := migration.Config{DB: db.GormDB, Path: ".", Driver: postgres.MigrateDriver(), Table: migration.Table{Schema: "fixture"}, FS: fstest.MapFS{
 		"1_tables.up.sql": {Data: []byte(`
 			CREATE TABLE a_parent(id INTEGER PRIMARY KEY);
 			CREATE TABLE z_child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES a_parent(id));
@@ -163,5 +165,80 @@ func TestPostgresResetWithForeignKeys(t *testing.T) {
 	var count int64
 	if err := db.WithContext(ctx).Table("z_child").Count(&count).Error; err != nil || count != 1 {
 		t.Fatalf("reset did not reapply schema: %d, %v", count, err)
+	}
+}
+
+// TestPostgresVersionNeedsOnlyRead proves readiness works for a least-privilege runtime role and never waits for a running migration.
+func TestPostgresVersionNeedsOnlyRead(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	params := newParams(t)
+	owner, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := owner.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	cfg := migration.Config{DB: owner.GormDB, FS: migrationsFS, Path: "testdata/migrations", Driver: postgres.MigrateDriver(), Table: migration.Table{Schema: "fixture"}}
+	if err := cfg.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, statement := range []string{
+		"CREATE ROLE reader LOGIN PASSWORD 'reader-password'",
+		"REVOKE CREATE ON SCHEMA fixture FROM PUBLIC",
+		"GRANT USAGE ON SCHEMA fixture TO reader",
+		"GRANT SELECT ON fixture.schema_migrations TO reader",
+	} {
+		if err := owner.WithContext(ctx).Exec(statement).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	params.User, params.Password = "reader", "reader-password"
+	reader, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := reader.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	readOnly := cfg
+	readOnly.DB = reader.GormDB
+	pool, err := owner.GormDB.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	locker, err := pool.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := locker.ExecContext(ctx, "SELECT pg_advisory_lock(718049637891)"); err != nil {
+		t.Fatal(err)
+	}
+	readyCtx, readyCancel := context.WithTimeout(ctx, 2*time.Second)
+	err = readOnly.Ready(readyCtx, 2)
+	readyCancel()
+	if err != nil {
+		t.Fatalf("least-privilege readiness while a migration holds the lock: %v", err)
+	}
+	if _, err := locker.ExecContext(ctx, "SELECT pg_advisory_unlock(718049637891)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := locker.Close(); err != nil {
+		t.Fatal(err)
+	}
+	readOnly.FS = fstest.MapFS{"3_pending.up.sql": {Data: []byte("CREATE TABLE forbidden(id INTEGER)")}}
+	readOnly.Path = "."
+	if err := readOnly.Up(ctx); err == nil {
+		t.Fatal("a role without CREATE ran migrations")
+	}
+	missing := readOnly
+	missing.Table.Name = "other_schema_migrations"
+	if _, _, err := missing.Version(ctx); !errors.Is(err, migrate.ErrNilVersion) {
+		t.Fatalf("missing version table: %v", err)
 	}
 }

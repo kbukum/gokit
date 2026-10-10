@@ -1,10 +1,10 @@
 # database
 
-GORM-backed database contracts, component lifecycle, transaction helpers, repository helpers, migrations, query builder, and tenant utilities.
+GORM-backed database contracts, component lifecycle, transaction helpers, repository helpers, scoped repositories, migrations and query builder.
 
 Core does not select a backend by default. Applications register or inject the dialect they need as a `Dialect`; adapter packages must not use import-time registration.
 
-A backend is a `Dialect` — it names itself and opens a GORM connection for a DSN. `Config.DSN` is an opaque connection string whose format is defined by that dialect. Core is driver-agnostic and never assembles a DSN itself: when you supply structured `Config.Params` instead of a DSN, the selected dialect builds the DSN (it must implement `StructuredDialect`, as `database/postgres` does). SQLite has no structured form, so callers set `DSN` (a path or `:memory:`) directly.
+A backend is a `Dialect`: it names itself and validates configuration through `Prepare(ctx, ConnectionInput) (Opener, error)`. The prepared `Opener.Open(ctx)` creates a fresh owned GORM dialector/pool for each retry. `Config.DSN` and structured `Config.Params` are mutually exclusive; core stays driver-agnostic. SQLite accepts a filename or memory URI. PostgreSQL uses structured credentials rather than password-bearing URLs.
 
 ## Explicit dialect
 
@@ -13,7 +13,11 @@ import "github.com/kbukum/gokit/database/postgres"
 
 cfg := database.Config{
     Enabled:     true,
-    DSN:         "host=localhost user=app dbname=mydb sslmode=disable",
+    Params: database.ConnParams{
+        Host: "db.example", User: "app", Database: "mydb",
+        PasswordFile: "/run/secrets/database-password",
+        Options: map[string]string{"search_path": "app"},
+    },
     AutoMigrate: true,
 }
 
@@ -22,9 +26,23 @@ comp := database.NewComponent(cfg, log).
     WithAutoMigrate(&User{})
 ```
 
+## Component lifecycle
+
+`Start` validates a copy of the configuration, opens the pool, then runs auto-migration, `WithInitialize` and `WithReadiness` checks in order. The database is published only after every step succeeds; a failure closes the new pool and a later `Start` may retry. Concurrent `Start` calls wait for the attempt in flight, bounded by their context. `DB()` returns `ErrNotStarted` before publication and `ErrStopped` afterwards, never a nil handle. Both are `SERVICE_UNAVAILABLE` application errors; only `ErrNotStarted` is retryable.
+
+`Stop` is terminal. It prevents publication, waits for an in-flight start to clean up within its context, closes the pool once, and returns the recorded result to repeated calls. `Health` runs a ping and the readiness checks within 500 ms and reports only the error code and safe message, never the cause. With PostgreSQL, pass `postgres.Readiness(plan)` so health also requires the expected migration versions and runtime privileges.
+
+```go
+comp := database.NewComponent(cfg, log).
+    WithName("database.app").
+    WithDialect(postgres.Dialect()).
+    WithReadiness(postgres.Readiness(plan))
+db, err := comp.DB()
+```
+
 ## Structured params
 
-Let the dialect build the DSN from typed fields instead of a hand-written string. Backend-specific knobs (`sslmode`, `tls`, …) go in `Options`, so the common shape stays shared across drivers:
+Prepare connections from typed fields. Backend-specific options are validated by the adapter; passwords are assigned separately to driver configuration:
 
 ```go
 cfg := database.Config{
@@ -33,12 +51,19 @@ cfg := database.Config{
         Host:     "localhost",
         User:     "app",
         Database: "mydb",
-        Options:  map[string]string{"sslmode": "disable"},
+        PasswordFile: "/run/secrets/database-password",
+        Options:  map[string]string{"search_path": "app"},
     },
 }
 
 comp := database.NewComponent(cfg, log).WithDialect(postgres.Dialect())
 ```
+
+`Password` and `PasswordFile` are mutually exclusive. `FileSecrets` reads a regular file with a 4 KiB bound, follows mounted-secret symlinks, rejects empty/NUL values and removes one terminal LF/CRLF. Unix opens are nonblocking before descriptor validation; arbitrary filesystems are not universally cancelable. Inject `SecretSource.ReadSecret(ctx, path)` through `WithSecretSource` on the component or connection options for another bounded source. Resolution occurs only during explicit preparation/startup and uses the configured connection timeout; external sources must honor that context and own their resource bounds.
+
+PostgreSQL requires one non-public, non-system `search_path` schema and derives `<application>, pg_temp`; `pg_catalog` retains its implicit precedence. This is namespace selection, not tenant isolation. Supported SSL modes are default `verify-full` and explicit `disable`; verified connections require TLS 1.3 and have no cleartext fallback. `sslrootcert`, `application_name`, bounded millisecond session timeouts and `timezone` are supported; other options and nonempty ambient `PG*` settings fail before driver access. Opaque PostgreSQL input is a credential-free URL, not a password-bearing URL or keyword credential string. Only direct/session-pool connections are supported; transaction-mode poolers have no isolation certification.
+
+`Failure` keeps causes classifiable with `errors.Is/As` while formatting only a safe database classification. Descriptions and connection retries never display DSNs or raw driver causes.
 
 ## Registry-driven selection
 
@@ -94,7 +119,11 @@ if err := postgres.Register(dialects); err != nil {
 
 comp := database.NewComponent(database.Config{
     Enabled: true,
-    DSN:     "host=localhost user=app dbname=app sslmode=disable",
+    Params: database.ConnParams{
+        Host: "db.example", User: "app", Database: "app",
+        PasswordFile: "/run/secrets/database-password",
+        Options: map[string]string{"search_path": "app"},
+    },
 }, log).WithDialectFromRegistry(dialects, postgres.Name)
 ```
 
@@ -125,6 +154,14 @@ page, err := query.ApplyCursorToGorm[Run](ctx, db.ReadOnly(ctx).Model(&Run{}),
 
 A cursor is an untrusted position, not an authorization credential. Apply access restrictions on every query; a cursor never grants access. Shared response fixtures live in `query/testdata/lists.json`.
 
+## Scoped repositories
+
+`repository.NewScopedSpec[T, ID, S]` validates a model once: struct rows without relationships, a single primary key of type `ID`, existing and distinct scope and mutable columns, and query fields that name model columns. Facets and includes are rejected. `spec.Bind(db)` works with a pool or an open transaction and discards any clauses already on the handle.
+
+Scope columns must be creatable and mutable columns updatable under their GORM tags, so a read-only partition field cannot let a database default choose the scope. Every operation takes a scope value converted by `BindScope`; empty or invalid scopes fail before SQL. `Create` stamps the scope on a copy and rejects a conflicting scope. `Get`, `List`, `Update` and `Delete` filter by every scope column, and a missing row and a row in another scope both return the same NotFound. `Update` writes all configured mutable columns, including zero values, rejects identity or scope changes and never upserts. Lists stay bounded and free-text search is parenthesized within the scope.
+
+Scoping is application-level. Pair it with composite foreign keys that include the partition columns; their violations keep their constraint error. PostgreSQL row-level security is optional: `postgres.SetLocal(ctx, tx, "app.partition", value)` sets a transaction-local custom setting for policies, but it isolates nothing without `USING` and `WITH CHECK` policies and a non-owner runtime role.
+
 ## Connections and transactions
 
 `WithContext(ctx)` selects the primary pool; `ReadOnly(ctx)` selects the reader when the adapter provides one. SQLite writes and transactions use the single writer. In-memory SQLite uses a single shared connection, so its schema survives between operations. `Close` closes both owned pools.
@@ -141,7 +178,7 @@ Both adapters provide `MigrateDriver()`. `migration.Config` keeps the golang-mig
 
 Query logs contain duration, row counts, and error types, never interpolated SQL or raw driver error messages. Detailed errors remain available to the caller through their preserved cause.
 
-Call `Up(ctx)` during startup, then `Ready(ctx, expectedVersion)` from the application's readiness check as well as checking database connectivity. A successful ping alone says nothing about schema readiness. Migration sessions borrow a connection and release it without closing the application pool. PostgreSQL serializes concurrent migrators with an advisory lock; SQLite requires one process and one managed writer pool per file.
+Call `Up(ctx)` during startup, then `Ready(ctx, expectedVersion)` from the application's readiness check as well as checking database connectivity. A successful ping alone says nothing about schema readiness. `Version` and `Ready` are read-only: they take no lock, create nothing and need only `SELECT` on the version table, so the runtime role can check readiness while a separate migration role owns the schema. Migration sessions borrow a connection and release it without closing the application pool. PostgreSQL serializes concurrent migrators with an advisory lock; SQLite requires one process and one managed writer pool per file.
 
 ## Expiry cleanup and metrics
 

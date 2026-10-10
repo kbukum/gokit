@@ -92,6 +92,9 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("grpc: %w", err)
 		}
 	}
+	if err := c.ResiliencePolicy.Validate(); err != nil {
+		return fmt.Errorf("grpc: %w", err)
+	}
 	return nil
 }
 

@@ -70,7 +70,7 @@ func TestRateLimitedSentinelMatchesUnderIs(t *testing.T) {
 func TestBulkheadFullSentinelMatchesUnderIs(t *testing.T) {
 	t.Parallel()
 
-	bh := NewBulkhead(BulkheadConfig{Name: "b", MaxConcurrent: 1})
+	bh := newBulkhead(t, BulkheadConfig{Name: "b", MaxConcurrent: 1})
 	release := make(chan struct{})
 	done := make(chan struct{})
 	go func() {

@@ -48,13 +48,13 @@ func (m *Manager) BeginLogin(ctx context.Context, token string) (LoginAttempt, e
 	defer cancel()
 	row, err := m.store.Lookup(ctx, ref)
 	if ctx.Err() != nil {
-		return LoginAttempt{}, storeFailure(ctx.Err())
+		return LoginAttempt{}, storeFailure(ctx, ctx.Err())
 	}
 	if err != nil {
 		if app, ok := apperrors.AsAppError(err); ok && app != nil && app.Code == apperrors.ErrCodeNotFound {
 			return LoginAttempt{manager: m, token: token, state: attemptFresh}, nil
 		}
-		return LoginAttempt{}, storeFailure(err)
+		return LoginAttempt{}, storeFailure(ctx, err)
 	}
 	if corrupt(row, ref) {
 		return LoginAttempt{}, auth.Failure("SESSION_INVALID")
@@ -97,10 +97,10 @@ func (m *Manager) relogin(ctx context.Context, ref string, p auth.Principal) (Is
 	defer readCancel()
 	row, err := m.store.Lookup(readCtx, ref)
 	if readCtx.Err() != nil {
-		return Issued{}, storeFailure(readCtx.Err())
+		return Issued{}, storeFailure(readCtx, readCtx.Err())
 	}
 	if err != nil {
-		return Issued{}, storeFailure(err)
+		return Issued{}, storeFailure(readCtx, err)
 	}
 	if corrupt(row, ref) || !row.Active || row.Revoked {
 		return Issued{}, auth.Failure("SESSION_INVALID")
@@ -113,17 +113,21 @@ func (m *Manager) relogin(ctx context.Context, ref string, p auth.Principal) (Is
 	p.Reference = m.protection.Digest(token)
 	p.Credential = auth.Session
 	p.ExpiresAt = row.ExpiresAt
-	if now := m.clock.Now(); !now.Before(p.ExpiresAt) {
+	now := m.clock.Now()
+	if !now.Before(p.ExpiresAt) {
 		p.ExpiresAt = now.Add(Lifetime)
 	}
 	if err := p.Validate(); err != nil {
 		return Issued{}, err
 	}
-	next := Record{Reference: p.Reference, Family: row.Family, Generation: row.Generation + 1, Principal: p, ExpiresAt: p.ExpiresAt, RetainUntil: p.ExpiresAt.Add(Retention), Active: true}
-	if err := m.store.Relogin(ctx, ref, next); err != nil {
-		return Issued{}, storeFailure(err)
+	next := Record{
+		Reference: p.Reference, Family: row.Family, Generation: row.Generation + 1, Principal: p, ExpiresAt: p.ExpiresAt,
+		RetainUntil: p.ExpiresAt.Add(Retention), AuthenticatedAt: now, Active: true,
 	}
-	m.cancelFamily(row.Family)
+	if err := m.store.Relogin(ctx, ref, next); err != nil {
+		return Issued{}, storeFailure(ctx, err)
+	}
+	m.endFamily(row.Family)
 	return Issued{Token: token, Principal: p.Clone()}, nil
 }
 
@@ -131,8 +135,8 @@ func (m *Manager) relogin(ctx context.Context, ref string, p auth.Principal) (Is
 func (m *Manager) replaceTerminal(ctx context.Context, ref string, p auth.Principal) (Issued, error) {
 	family, err := m.store.Revoke(ctx, ref)
 	if err != nil {
-		return Issued{}, storeFailure(err)
+		return Issued{}, storeFailure(ctx, err)
 	}
-	m.cancelFamily(family)
+	m.endFamily(family)
 	return m.create(ctx, p)
 }

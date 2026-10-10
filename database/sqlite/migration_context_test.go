@@ -8,6 +8,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/mattn/go-sqlite3"
 
 	"github.com/kbukum/gokit/database"
@@ -72,7 +73,7 @@ func TestSQLiteMigrationCancellationAndCleanup(t *testing.T) {
 	t.Parallel()
 	ctx, stop := context.WithTimeout(t.Context(), 10*time.Second)
 	defer stop()
-	db, err := database.NewWithContext(ctx, sqlite.Open(filepath.Join(t.TempDir(), "migration.db")), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, sqlite.Dialect(), database.Config{DSN: filepath.Join(t.TempDir(), "migration.db")}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +148,7 @@ func TestSQLiteMigrationResetAndDriverLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver, err := sqlite.MigrateDriver()(ctx, pool, migration.DefaultVersionTable)
+	driver, err := sqlite.MigrateDriver()(ctx, pool, migration.Table{Name: migration.DefaultVersionTable})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,5 +200,22 @@ func TestSQLiteResetWithForeignKeys(t *testing.T) {
 	}
 	if err := db.Exec("INSERT INTO z_child VALUES (2, 99)").Error; err == nil {
 		t.Fatal("reset disabled foreign key enforcement")
+	}
+}
+
+func TestSQLiteVersionIsReadOnly(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := newMigrationDB(t)
+	cfg := migration.Config{DB: db, FS: migrationsFS, Path: "testdata/migrations", Driver: sqlite.MigrateDriver(), Table: migration.Table{Name: "app_schema_migrations"}}
+	if _, _, err := cfg.Version(ctx); !errors.Is(err, migrate.ErrNilVersion) {
+		t.Fatalf("version before migrating: %v", err)
+	}
+	if err := cfg.Ready(ctx, 2); err == nil {
+		t.Fatal("unmigrated schema reported ready")
+	}
+	var tables int64
+	if err := db.WithContext(ctx).Raw("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?", cfg.Table.Name).Scan(&tables).Error; err != nil || tables != 0 {
+		t.Fatalf("version inspection created the version table: %d, %v", tables, err)
 	}
 }

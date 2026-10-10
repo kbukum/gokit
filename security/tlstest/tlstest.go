@@ -1,17 +1,3 @@
-// Package tlstest provides TLS certificate generation for testing.
-// All certificates are created using Go's crypto stdlib — no external tools needed.
-// Generated files auto-clean via t.TempDir().
-//
-// This package lives in the root gokit module
-// so it can be imported by both root module tests (e.g. security/tls_test.go)
-// and sub-module tests (e.g. httpclient, grpc) without circular dependencies.
-//
-// Usage:
-//
-//	func TestWithTLS(t *testing.T) {
-//	    certs := tlstest.GenerateTLSCerts(t)
-//	    // certs.CAFile, certs.CertFile, certs.KeyFile are valid PEM files
-//	}
 package tlstest
 
 import (
@@ -26,9 +12,21 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
+
+type certificateOptions struct{ hosts []string }
+
+// Option configures throwaway test certificate generation.
+type Option func(*certificateOptions)
+
+// WithHosts replaces the certificate's DNS/IP names, allowing hostname-rejection proofs against a reachable server.
+func WithHosts(hosts ...string) Option {
+	owned := slices.Clone(hosts)
+	return func(cfg *certificateOptions) { cfg.hosts = owned }
+}
 
 // TLSCerts holds paths to generated TLS certificate files and parsed objects.
 type TLSCerts struct {
@@ -52,8 +50,15 @@ type TLSCerts struct {
 // GenerateTLSCerts creates a self-signed CA and a server certificate for testing.
 // The server cert is valid for localhost, 127.0.0.1, and [::1]. Files are written to t.TempDir()
 // and auto-cleaned on test completion.
-func GenerateTLSCerts(t testing.TB) *TLSCerts {
+func GenerateTLSCerts(t testing.TB, opts ...Option) *TLSCerts {
 	t.Helper()
+	cfg := certificateOptions{hosts: []string{"localhost", "127.0.0.1", "::1"}}
+	for _, opt := range opts {
+		if opt == nil {
+			t.Fatal("tlstest: certificate option is required")
+		}
+		opt(&cfg)
+	}
 	dir := t.TempDir()
 
 	// --- Generate CA ---
@@ -99,12 +104,17 @@ func GenerateTLSCerts(t testing.TB) *TLSCerts {
 			Organization: []string{"GoKit Test"},
 			CommonName:   "localhost",
 		},
-		DNSNames:    []string{"localhost"},
-		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:   time.Now().Add(-time.Hour),
 		NotAfter:    time.Now().Add(24 * time.Hour),
 		KeyUsage:    x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+	for _, host := range cfg.hosts {
+		if ip := net.ParseIP(host); ip != nil {
+			serverTemplate.IPAddresses = append(serverTemplate.IPAddresses, ip)
+		} else {
+			serverTemplate.DNSNames = append(serverTemplate.DNSNames, host)
+		}
 	}
 
 	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)

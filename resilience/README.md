@@ -70,6 +70,7 @@ func main() {
 | `Retry[T]()` / `RetryFunc()` / `RetryWithBackoff[T]()` | Generic retry with exponential backoff |
 | `CircuitBreaker` | Circuit breaker with closed/open/half-open states |
 | `RateLimiter` | Token bucket rate limiter |
+| `KeyedRateLimiter` | Per-key token buckets with an injected `Clock` and a `MaxKeys` bound (default 100 000); when full it drops expired buckets and otherwise denies new keys with `Saturated` set |
 | `Bulkhead` | Concurrency limiter with semaphore pattern |
 | `Policy.Acquire()` | Whole-operation admission with a call context and one terminal completion |
 | `CalculateBackoff()` / `CalculateJitteredBackoff()` / `BackoffCalculator` | Standalone exponential backoff with optional jitter |

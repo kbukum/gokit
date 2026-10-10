@@ -44,7 +44,7 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if comp.DB() == nil || !comp.DB().GormDB.Migrator().HasTable(&registryModel{}) {
+	if db, err := comp.DB(); err != nil || !db.GormDB.Migrator().HasTable(&registryModel{}) {
 		t.Fatal("component did not start and migrate model")
 	}
 	if health := comp.Health(ctx); health.Status != component.StatusHealthy {

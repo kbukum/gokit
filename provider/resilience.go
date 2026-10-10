@@ -31,13 +31,18 @@ type ResilienceState struct {
 	retryCfg *resilience.RetryConfig
 }
 
-// BuildResilience creates initialized resilience primitives from config.
-func BuildResilience(cfg ResilienceConfig) *ResilienceState {
-	if cfg.IsEmpty() {
-		return nil
-	}
+// BuildResilience creates initialized resilience primitives from config. Empty config yields a pass-through state;
+// invalid config returns the constructor error so no wrapper is published.
+func BuildResilience(cfg ResilienceConfig) (*ResilienceState, error) {
 	s := &ResilienceState{
 		retryCfg: cfg.Retry,
+	}
+	if cfg.Bulkhead != nil {
+		bh, err := resilience.NewBulkhead(*cfg.Bulkhead)
+		if err != nil {
+			return nil, err
+		}
+		s.bh = bh
 	}
 	if cfg.CircuitBreaker != nil {
 		s.cb = resilience.NewCircuitBreaker(*cfg.CircuitBreaker)
@@ -45,8 +50,5 @@ func BuildResilience(cfg ResilienceConfig) *ResilienceState {
 	if cfg.RateLimiter != nil {
 		s.rl = resilience.NewRateLimiter(*cfg.RateLimiter)
 	}
-	if cfg.Bulkhead != nil {
-		s.bh = resilience.NewBulkhead(*cfg.Bulkhead)
-	}
-	return s
+	return s, nil
 }

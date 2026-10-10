@@ -2,9 +2,11 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	goerrors "github.com/kbukum/gokit/errors"
 )
@@ -62,10 +64,12 @@ func (m *Manager[T]) Initialize(name string, cfg map[string]any) error {
 // wraps it with the given middleware function, calls Init(), and stores it for use.
 // The wrap function applies resilience (or any other middleware) to the provider. Example:
 //
-//	mgr.InitializeWithResilience(ctx, "http", nil, func(p MyProvider) MyProvider {
-//	    return provider.WithResilience(p, resilienceCfg).(MyProvider)
+//	mgr.InitializeWithResilience(ctx, "http", nil, func(p MyProvider) (MyProvider, error) {
+//	    return provider.WithResilience(p, resilienceCfg)
 //	})
-func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, cfg map[string]any, wrap func(T) T) error {
+//
+// A wrap error leaves the provider unpublished and closes it when it is Closeable.
+func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, cfg map[string]any, wrap func(T) (T, error)) error {
 	instance, err := m.registry.Create(name, cfg)
 	if err != nil {
 		return fmt.Errorf("initialize provider %q: %w", name, err)
@@ -73,14 +77,19 @@ func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, 
 
 	// Call Init() if the provider supports it (before wrapping)
 	if init, ok := any(instance).(Initializable); ok {
-		if err := init.Init(ctx); err != nil {
+		if err = init.Init(ctx); err != nil {
 			return fmt.Errorf("init provider %q: %w", name, err)
 		}
 	}
 
 	// Apply middleware wrapper
 	if wrap != nil {
-		instance = wrap(instance)
+		wrapped, wrapErr := wrap(instance)
+		if wrapErr != nil {
+			wrapErr = fmt.Errorf("wrap provider %q: %w", name, wrapErr)
+			return errors.Join(wrapErr, closeUnpublished(ctx, name, instance))
+		}
+		instance = wrapped
 	}
 
 	m.mu.Lock()
@@ -88,6 +97,24 @@ func (m *Manager[T]) InitializeWithResilience(ctx context.Context, name string, 
 	m.mu.Unlock()
 	m.registry.Set(name, instance)
 	m.log.InfoContext(ctx, "provider initialized with resilience", "provider", name)
+	return nil
+}
+
+// unpublishedCloseTimeout bounds cleanup of a provider that never reached the manager.
+const unpublishedCloseTimeout = 5 * time.Second
+
+// closeUnpublished releases an initialized provider whose publication failed;
+// nothing else owns it, so CloseAll could never reach it.
+func closeUnpublished[T any](ctx context.Context, name string, instance T) error {
+	c, ok := any(instance).(Closeable)
+	if !ok {
+		return nil
+	}
+	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), unpublishedCloseTimeout)
+	defer cancel()
+	if err := c.Close(closeCtx); err != nil {
+		return fmt.Errorf("close unpublished provider %q: %w", name, err)
+	}
 	return nil
 }
 
@@ -101,7 +128,7 @@ func (m *Manager[T]) InitializeWithContext(ctx context.Context, name string, cfg
 
 	// Call Init() if the provider supports it
 	if init, ok := any(instance).(Initializable); ok {
-		if err := init.Init(ctx); err != nil {
+		if err = init.Init(ctx); err != nil {
 			return fmt.Errorf("init provider %q: %w", name, err)
 		}
 	}

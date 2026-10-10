@@ -47,9 +47,9 @@ func TestManager_InitializeWithResilience_FactoryError(t *testing.T) {
 		return nil, errors.New("factory error")
 	})
 
-	err := mgr.InitializeWithResilience(context.Background(), "fail-factory", nil, func(p provider.RequestResponse[string, string]) provider.RequestResponse[string, string] {
+	err := mgr.InitializeWithResilience(context.Background(), "fail-factory", nil, func(p provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
 		t.Fatal("wrapper should not be called when factory fails")
-		return p
+		return p, nil
 	})
 	if err == nil {
 		t.Fatal("expected factory error")
@@ -167,15 +167,56 @@ func TestManager_InitializeWithResilience_InitError(t *testing.T) {
 		return &initErrProvider{name: "init-err"}, nil
 	})
 
-	err := mgr.InitializeWithResilience(context.Background(), "init-err", nil, func(p provider.RequestResponse[string, string]) provider.RequestResponse[string, string] {
+	err := mgr.InitializeWithResilience(context.Background(), "init-err", nil, func(p provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
 		t.Fatal("wrapper should not be called when init fails")
-		return p
+		return p, nil
 	})
 	if err == nil {
 		t.Fatal("expected init error")
 	}
 	if !strings.Contains(err.Error(), "init failed") {
 		t.Fatalf("expected 'init failed' error, got %q", err.Error())
+	}
+}
+
+func TestManager_InitializeWithResilience_WrapErrorClosesInitializedProvider(t *testing.T) {
+	t.Parallel()
+	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
+	mgr := provider.NewManager(registry, &provider.HealthCheckSelector[provider.RequestResponse[string, string]]{})
+	created := &initCloseProvider{name: "wrapped"}
+	registry.RegisterFactory("wrapped", func(_ map[string]any) (provider.RequestResponse[string, string], error) {
+		return created, nil
+	})
+
+	wrapErr := errors.New("invalid resilience")
+	err := mgr.InitializeWithResilience(context.Background(), "wrapped", nil, func(p provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
+		return nil, wrapErr
+	})
+	if !errors.Is(err, wrapErr) {
+		t.Fatalf("expected wrap error, got %v", err)
+	}
+	if !created.initialized || !created.closed {
+		t.Fatalf("initialized provider was not closed after wrap failure: %+v", created)
+	}
+	if _, getErr := mgr.GetByName("wrapped"); getErr == nil {
+		t.Fatal("provider published despite wrap failure")
+	}
+}
+
+func TestManager_InitializeWithResilience_WrapErrorJoinsCloseError(t *testing.T) {
+	t.Parallel()
+	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
+	mgr := provider.NewManager(registry, &provider.HealthCheckSelector[provider.RequestResponse[string, string]]{})
+	registry.RegisterFactory("close-err", func(_ map[string]any) (provider.RequestResponse[string, string], error) {
+		return &closeErrProvider{name: "close-err"}, nil
+	})
+
+	wrapErr := errors.New("invalid resilience")
+	err := mgr.InitializeWithResilience(context.Background(), "close-err", nil, func(provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
+		return nil, wrapErr
+	})
+	if !errors.Is(err, wrapErr) || !strings.Contains(err.Error(), "close error") {
+		t.Fatalf("expected joined wrap and close errors, got %v", err)
 	}
 }
 

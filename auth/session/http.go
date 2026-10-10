@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"time"
 
@@ -43,7 +44,7 @@ type Response struct {
 
 // HandlerConfig configures the browser session endpoints.
 type HandlerConfig struct {
-	// Origin is the exact HTTPS origin accepted for login.
+	// Origin is the exact HTTPS origin accepted for login and logout.
 	Origin string
 	// Errors writes every failure through the outer transport's problem boundary.
 	Errors ErrorWriter
@@ -59,7 +60,7 @@ type handler struct {
 }
 
 // NewHandler mounts POST /auth/login, GET /auth/session, and POST /auth/logout only.
-// Login requires exact same-origin HTTPS and JSON; status never emits Set-Cookie. The handler validates every
+// Login and logout require exactly one Origin header equal to Origin, and login requires JSON; status never emits Set-Cookie. The handler validates every
 // browser-facing input, including the cookie shape and logout CSRF header, before it calls the backend, so a backend may
 // be the local Manager or a remote session authority.
 func NewHandler(backend Backend, cfg HandlerConfig) (http.Handler, error) {
@@ -88,6 +89,15 @@ func ParseCSRFToken(r *http.Request) (string, error) {
 	return values[0], nil
 }
 
+// CheckOrigin requires an unsafe request to carry exactly one Origin header equal to origin, the rule the handler
+// applies to login and logout, so a gateway can apply it to its other unsafe cookie routes. Safe methods pass.
+func CheckOrigin(r *http.Request, origin string) error {
+	if unsafe(r.Method) && !exactOrigin(r, origin) {
+		return csrfInvalid()
+	}
+	return nil
+}
+
 func csrfInvalid() error {
 	return apperrors.New(apperrors.ErrCodeForbidden, "CSRF verification failed").WithReason("CSRF_INVALID")
 }
@@ -109,9 +119,8 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	origins := r.Header.Values("Origin")
 	types := r.Header.Values("Content-Type")
-	if len(origins) != 1 || origins[0] != h.origin || len(types) != 1 {
+	if !h.sameOrigin(r) || len(types) != 1 {
 		h.errors(w, r, auth.Failure("LOGIN_ORIGIN_INVALID"))
 		return
 	}
@@ -120,7 +129,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, apperrors.InvalidInput("login", "JSON is required"))
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), LoginBudget)
 	defer cancel()
 	reader := http.MaxBytesReader(w, r.Body, 4096)
 	decoder := json.NewDecoder(reader)
@@ -135,7 +144,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, apperrors.InvalidInput("login", "Invalid login input"))
 		return
 	}
-	grant, err := h.backend.Login(ctx, LoginRequest{Credentials: input, Presented: credential.Value})
+	grant, err := h.backend.Login(ctx, LoginRequest{Credentials: input, Presented: credential.Value, Source: remoteAddr(r)})
 	input.Password = ""
 	if err != nil {
 		h.errors(w, r, err)
@@ -235,6 +244,10 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 		h.errors(w, r, tokenErr)
 		return
 	}
+	if !h.sameOrigin(r) {
+		h.errors(w, r, csrfInvalid())
+		return
+	}
 	csrf, err := ParseCSRFToken(r)
 	if err != nil {
 		h.errors(w, r, err)
@@ -246,4 +259,23 @@ func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: auth.SessionCookie, Value: "", Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/", Expires: time.Unix(1, 0), MaxAge: -1})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// sameOrigin reports whether the request carries exactly one Origin header equal to the configured origin.
+func (h *handler) sameOrigin(r *http.Request) bool { return exactOrigin(r, h.origin) }
+
+func exactOrigin(r *http.Request, origin string) bool {
+	origins := r.Header.Values("Origin")
+	return len(origins) == 1 && origin != "" && origins[0] == origin
+}
+
+// remoteAddr returns the IP address of the connection, or the zero Addr when it has none.
+func remoteAddr(r *http.Request) netip.Addr {
+	if addrPort, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return addrPort.Addr().Unmap()
+	}
+	if addr, err := netip.ParseAddr(r.RemoteAddr); err == nil {
+		return addr.Unmap()
+	}
+	return netip.Addr{}
 }

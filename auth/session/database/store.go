@@ -25,6 +25,7 @@ type family struct {
 	Restrictions     string
 	ExpiresAt        time.Time
 	RetainUntil      time.Time
+	AuthenticatedAt  *time.Time
 	Revoked          bool
 }
 
@@ -54,7 +55,7 @@ func NewStore(db *dbkit.DB, clocks ...util.Clock) (session.Store, error) {
 		return nil, apperrors.InvalidInput("session", "Only one clock may be injected")
 	}
 	if len(clocks) == 1 {
-		if clocks[0] == nil {
+		if util.IsNil(clocks[0]) {
 			return nil, apperrors.InvalidInput("session", "Clock is required")
 		}
 		clock = clocks[0]
@@ -73,11 +74,17 @@ func validate(row session.Record) error {
 	return row.Principal.Validate()
 }
 
+// authenticated reports whether a record that starts or relogs a family carries a known, past authentication time.
+func authenticated(row session.Record, now time.Time) bool {
+	return !row.AuthenticatedAt.IsZero() && !row.AuthenticatedAt.After(now)
+}
+
 func (s *store) Create(ctx context.Context, row session.Record) error {
 	if err := validate(row); err != nil {
 		return err
 	}
-	if row.Generation != 1 || !s.clock.Now().Before(row.ExpiresAt) {
+	now := s.clock.Now()
+	if row.Generation != 1 || !now.Before(row.ExpiresAt) || !authenticated(row, now) {
 		return invalid()
 	}
 	encoded, err := json.Marshal(row.Principal.Restrictions)
@@ -85,7 +92,7 @@ func (s *store) Create(ctx context.Context, row session.Record) error {
 		return err
 	}
 	return s.db.WithTransaction(ctx, func(tx *gorm.DB) error {
-		f := family{ID: row.Family, CurrentReference: row.Reference, Generation: row.Generation, Subject: row.Principal.Subject, Kind: row.Principal.Kind, Restrictions: string(encoded), ExpiresAt: row.ExpiresAt, RetainUntil: row.RetainUntil}
+		f := family{ID: row.Family, CurrentReference: row.Reference, Generation: row.Generation, Subject: row.Principal.Subject, Kind: row.Principal.Kind, Restrictions: string(encoded), ExpiresAt: row.ExpiresAt, RetainUntil: row.RetainUntil, AuthenticatedAt: &row.AuthenticatedAt}
 		if err := tx.Create(&f).Error; err != nil {
 			return err
 		}
@@ -94,31 +101,58 @@ func (s *store) Create(ctx context.Context, row session.Record) error {
 	})
 }
 
+type lookupResult struct {
+	ID                   string
+	CurrentReference     string
+	Generation           uint64
+	Subject              string
+	Kind                 auth.Kind
+	Restrictions         string
+	ExpiresAt            time.Time
+	RetainUntil          time.Time
+	AuthenticatedAt      *time.Time
+	Revoked              bool
+	Reference            string
+	CredentialGeneration uint64
+}
+
 func (s *store) Lookup(ctx context.Context, ref string) (session.Record, error) {
-	type result struct {
-		ID                   string
-		CurrentReference     string
-		Generation           uint64
-		Subject              string
-		Kind                 auth.Kind
-		Restrictions         string
-		ExpiresAt            time.Time
-		RetainUntil          time.Time
-		Revoked              bool
-		Reference            string
-		CredentialGeneration uint64
+	rows, err := s.LookupBatch(ctx, []string{ref})
+	if err != nil {
+		return session.Record{}, err
 	}
-	var out result
+	if row, ok := rows[ref]; ok {
+		return row, nil
+	}
+	return session.Record{}, apperrors.New(apperrors.ErrCodeNotFound, "Session not found")
+}
+
+func (s *store) LookupBatch(ctx context.Context, refs []string) (map[string]session.Record, error) {
+	if err := session.ValidateReferences(refs); err != nil {
+		return nil, err
+	}
+	var results []lookupResult
 	query := s.db.WithContext(ctx).Table("auth_session_generations AS g").
 		Select("f.*, g.reference, g.generation AS credential_generation").
 		Joins("JOIN auth_session_families AS f ON f.id = g.family").
-		Where("g.reference = ?", ref).Take(&out)
-	if stderrors.Is(query.Error, gorm.ErrRecordNotFound) {
-		return session.Record{}, apperrors.New(apperrors.ErrCodeNotFound, "Session not found")
-	}
+		Where("g.reference IN ?", refs).Find(&results)
 	if query.Error != nil {
-		return session.Record{}, query.Error
+		return nil, query.Error
 	}
+	rows := make(map[string]session.Record, len(results))
+	for i := range results {
+		out := &results[i]
+		row, err := out.record()
+		if err != nil {
+			return nil, err
+		}
+		rows[out.Reference] = row
+	}
+	return rows, nil
+}
+
+func (out *lookupResult) record() (session.Record, error) {
+	ref := out.Reference
 	var restrictions auth.Restrictions
 	if err := json.Unmarshal([]byte(out.Restrictions), &restrictions); err != nil {
 		return session.Record{}, err
@@ -127,7 +161,11 @@ func (s *store) Lookup(ctx context.Context, ref string) (session.Record, error) 
 	if err := p.Validate(); err != nil {
 		return session.Record{}, err
 	}
-	return session.Record{Reference: ref, Family: out.ID, Generation: out.CredentialGeneration, Principal: p, ExpiresAt: out.ExpiresAt, RetainUntil: out.RetainUntil, Active: out.CurrentReference == ref && out.Generation == out.CredentialGeneration, Revoked: out.Revoked}, nil
+	row := session.Record{Reference: ref, Family: out.ID, Generation: out.CredentialGeneration, Principal: p, ExpiresAt: out.ExpiresAt, RetainUntil: out.RetainUntil, Active: out.CurrentReference == ref && out.Generation == out.CredentialGeneration, Revoked: out.Revoked}
+	if out.AuthenticatedAt != nil {
+		row.AuthenticatedAt = *out.AuthenticatedAt
+	}
+	return row, nil
 }
 
 func (s *store) Rotate(ctx context.Context, old string, next session.Record) error {
@@ -161,7 +199,7 @@ func (s *store) replace(ctx context.Context, old string, next session.Record, re
 		updates := map[string]any{"current_reference": next.Reference, "generation": next.Generation, "restrictions": string(encoded)}
 		now := s.clock.Now()
 		if relogin {
-			if !now.Before(next.ExpiresAt) || next.ExpiresAt.After(now.Add(session.Lifetime)) {
+			if !now.Before(next.ExpiresAt) || next.ExpiresAt.After(now.Add(session.Lifetime)) || !authenticated(next, now) {
 				return invalid()
 			}
 			query = query.Where("(expires_at = ? OR expires_at <= ?)", next.ExpiresAt, now)
@@ -169,6 +207,7 @@ func (s *store) replace(ctx context.Context, old string, next session.Record, re
 			updates["kind"] = next.Principal.Kind
 			updates["expires_at"] = next.ExpiresAt
 			updates["retain_until"] = next.RetainUntil
+			updates["authenticated_at"] = next.AuthenticatedAt
 		} else {
 			query = query.Where("expires_at = ? AND expires_at > ? AND retain_until = ? AND subject = ? AND kind = ?", next.ExpiresAt, now, next.RetainUntil, next.Principal.Subject, next.Principal.Kind)
 		}
@@ -210,6 +249,22 @@ func (s *store) Revoke(ctx context.Context, ref string) (string, error) {
 		return nil
 	})
 	return id, err
+}
+
+func (s *store) RevokeSubject(ctx context.Context, kind auth.Kind, subject string) (int64, error) {
+	if subject == "" || kind != auth.User && kind != auth.Service {
+		return 0, apperrors.InvalidInput("subject", "Subject and kind are required")
+	}
+	var count int64
+	err := s.db.WithTransaction(ctx, func(tx *gorm.DB) error {
+		result := tx.Model(&family{}).Where("subject = ? AND kind = ? AND revoked = ?", subject, kind, false).Update("revoked", true)
+		count = result.RowsAffected
+		return result.Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func (s *store) Cleanup(ctx context.Context, before time.Time, limit int) (int64, error) {

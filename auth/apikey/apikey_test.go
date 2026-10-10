@@ -5,14 +5,14 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
-	"sync"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
 func testHasher(t *testing.T) *Hasher {
@@ -85,147 +85,10 @@ func TestSplitKey(t *testing.T) {
 	}
 }
 
-type memStore struct {
-	mu      sync.Mutex
-	byID    map[string]*Key
-	listErr error
-}
-
-func newMemStore() *memStore {
-	return &memStore{byID: map[string]*Key{}}
-}
-
-func (s *memStore) Create(_ context.Context, key *Key) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	copyKey := *key
-	copyKey.Scopes = slices.Clone(key.Scopes)
-	s.byID[key.ID] = &copyKey
-	return nil
-}
-
-func (s *memStore) GetByDigest(_ context.Context, digest string) (*Key, error) {
-	if s.listErr != nil {
-		return nil, s.listErr
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for _, record := range s.byID {
-		if record.KeyDigest == digest {
-			copyKey := *record
-			copyKey.Scopes = slices.Clone(record.Scopes)
-			return &copyKey, nil
-		}
-	}
-	return nil, apperrors.New(apperrors.ErrCodeNotFound, "Key not found")
-}
-
-func (s *memStore) GetByID(_ context.Context, id string) (*Key, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key, ok := s.byID[id]
-	if !ok {
-		return nil, errors.New("not found")
-	}
-	copyKey := *key
-	copyKey.Scopes = slices.Clone(key.Scopes)
-	return &copyKey, nil
-}
-
-func (s *memStore) UpdateLastUsed(_ context.Context, id string, usedAt time.Time) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.byID[id].LastUsedAt = &usedAt
-	return nil
-}
-
-func (s *memStore) SetRotation(_ context.Context, id string, graceEndsAt time.Time, rotatedByID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.byID[id].GraceEndsAt = &graceEndsAt
-	s.byID[id].RotatedByID = rotatedByID
-	return nil
-}
-
-func (s *memStore) SetActive(_ context.Context, id string, active bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.byID[id].IsActive = active
-	return nil
-}
-
-func (s *memStore) Delete(_ context.Context, id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.byID, id)
-	return nil
-}
-
-func TestManagerIssueValidateAndRotate(t *testing.T) {
-	t.Parallel()
-
-	store := newMemStore()
-	manager := NewManager(store, testHasher(t))
-
-	issued, record, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "primary", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
-	}
-	if record.KeyDigest != issued.KeyDigest {
-		t.Fatal("record digest mismatch")
-	}
-
-	validated, err := manager.ValidateKey(context.Background(), issued.PlainKey, "read")
-	if err != nil {
-		t.Fatalf("ValidateKey: %v", err)
-	}
-	if validated.OwnerID != "user-1" || validated.LastUsedAt != nil {
-		t.Fatalf("validated = %+v", validated)
-	}
-	if _, validateErr := manager.ValidateKey(context.Background(), issued.PlainKey, "write"); validateErr == nil {
-		t.Fatal("expected scope escalation to fail")
-	}
-
-	rotation, err := manager.RotateKey(context.Background(), "key-1", RotationConfig{
-		NewKeyID: "key-2",
-		OwnerID:  "user-1",
-		Name:     "secondary",
-		Prefix:   "pkg",
-	})
-	if err != nil {
-		t.Fatalf("RotateKey: %v", err)
-	}
-	if rotation.Record.ID != "key-2" {
-		t.Fatalf("rotated record id = %q", rotation.Record.ID)
-	}
-	original, _ := store.GetByID(context.Background(), "key-1")
-	if original.RotatedByID != "key-2" || original.GraceEndsAt == nil {
-		t.Fatalf("original rotation not persisted: %+v", original)
-	}
-}
-
-func TestManagerValidateRejectsExpiredKey(t *testing.T) {
-	t.Parallel()
-
-	store := newMemStore()
-	manager := NewManager(store, testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "expired", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
-	}
-
-	past := time.Now().Add(-time.Hour)
-	store.byID["key-1"].ExpiresAt = &past
-
-	if _, err := manager.ValidateKey(context.Background(), issued.PlainKey); err == nil {
-		t.Fatal("expected expired key to fail")
-	}
-}
-
 func TestRequestAuthentication(t *testing.T) {
 	t.Parallel()
 
-	manager := NewManager(newMemStore(), testHasher(t))
+	manager := newTestManager(t, nil, nil)
 	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "key-1", OwnerID: "user-1", Name: "primary", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
 	if err != nil {
 		t.Fatalf("IssueKey: %v", err)
@@ -245,7 +108,7 @@ func TestRequestAuthentication(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 		req.Header.Set("X-API-Key", issued.PlainKey)
 		p, present, err := chain.Authenticate(req)
-		if err != nil || !present || p.Subject != "user-1" || p.Credential != auth.APIKey || p.Reference == issued.PlainKey {
+		if err != nil || !present || p.Subject != "user-1" || p.Credential != auth.APIKey || p.Reference != "key-1" {
 			t.Fatalf("valid key: principal=%+v err=%v", p, err)
 		}
 	})
@@ -284,146 +147,9 @@ func TestValidatePrefixRejectsInvalid(t *testing.T) {
 	hasher := testHasher(t)
 	cases := []string{"", "ab", "bad/prefix", "bad prefix"}
 	for _, prefix := range cases {
-		if _, err := hasher.GenerateKey(prefix); err == nil {
-			t.Fatalf("GenerateKey(%q) expected prefix rejection", prefix)
+		if _, err := hasher.GenerateKey(prefix); apperrors.Normalize(err).Code != apperrors.ErrCodeInvalidInput {
+			t.Fatalf("GenerateKey(%q) expected prefix rejection, got %v", prefix, err)
 		}
-	}
-}
-
-func TestIsExpiredPastGrace(t *testing.T) {
-	t.Parallel()
-	past := time.Now().Add(-time.Hour)
-	future := time.Now().Add(time.Hour)
-
-	if !(&Key{ExpiresAt: &past}).IsExpiredPastGrace() {
-		t.Fatal("expired key without grace should be past grace")
-	}
-	if (&Key{ExpiresAt: &past, GraceEndsAt: &future}).IsExpiredPastGrace() {
-		t.Fatal("expired key within grace should not be past grace")
-	}
-	if !(&Key{GraceEndsAt: &past}).IsExpiredPastGrace() {
-		t.Fatal("key past grace end should be past grace")
-	}
-	if (&Key{ExpiresAt: &future}).IsExpiredPastGrace() {
-		t.Fatal("unexpired key should not be past grace")
-	}
-}
-
-func TestValidateKeyErrorPaths(t *testing.T) {
-	t.Parallel()
-
-	t.Run("malformed key", func(t *testing.T) {
-		t.Parallel()
-		manager := NewManager(newMemStore(), testHasher(t))
-		if _, err := manager.ValidateKey(context.Background(), "no-separator"); err == nil {
-			t.Fatal("expected malformed key error")
-		}
-	})
-
-	t.Run("invalid prefix", func(t *testing.T) {
-		t.Parallel()
-		manager := NewManager(newMemStore(), testHasher(t))
-		if _, err := manager.ValidateKey(context.Background(), "ab.secret"); err == nil {
-			t.Fatal("expected invalid prefix error")
-		}
-	})
-
-	t.Run("store list error", func(t *testing.T) {
-		t.Parallel()
-		store := newMemStore()
-		store.listErr = errors.New("list failed")
-		manager := NewManager(store, testHasher(t))
-		if _, err := manager.ValidateKey(context.Background(), "pkg.secret"); err == nil {
-			t.Fatal("expected store list error")
-		}
-	})
-
-	t.Run("unknown key", func(t *testing.T) {
-		t.Parallel()
-		manager := NewManager(newMemStore(), testHasher(t))
-		if _, err := manager.ValidateKey(context.Background(), "pkg.secret"); err == nil {
-			t.Fatal("expected unknown key error")
-		}
-	})
-
-	t.Run("insufficient scope", func(t *testing.T) {
-		t.Parallel()
-		store := newMemStore()
-		manager := NewManager(store, testHasher(t))
-		issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: []string{"read"}, ExpiresAt: nil})
-		if err != nil {
-			t.Fatalf("IssueKey: %v", err)
-		}
-		if _, err := manager.ValidateKey(context.Background(), issued.PlainKey, "write"); err == nil {
-			t.Fatal("expected insufficient scope error")
-		}
-	})
-}
-
-func TestIssueKeyRejectsInvalidPrefix(t *testing.T) {
-	t.Parallel()
-	manager := NewManager(newMemStore(), testHasher(t))
-	if _, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "ab", Scopes: nil, ExpiresAt: nil}); err == nil {
-		t.Fatal("expected invalid prefix error")
-	}
-}
-
-func TestValidateRejectsRevokedAndExpired(t *testing.T) {
-	t.Parallel()
-	if err := Validate(&Key{IsActive: false}); err == nil {
-		t.Fatal("expected revoked key error")
-	}
-	past := time.Now().Add(-time.Hour)
-	if err := Validate(&Key{IsActive: true, ExpiresAt: &past}); err == nil {
-		t.Fatal("expected expired key error")
-	}
-}
-
-type failingStore struct {
-	*memStore
-	createErr     error
-	updateUsedErr error
-}
-
-func (s *failingStore) Create(ctx context.Context, key *Key) error {
-	if s.createErr != nil {
-		return s.createErr
-	}
-	return s.memStore.Create(ctx, key)
-}
-
-func (s *failingStore) UpdateLastUsed(ctx context.Context, id string, usedAt time.Time) error {
-	if s.updateUsedErr != nil {
-		return s.updateUsedErr
-	}
-	return s.memStore.UpdateLastUsed(ctx, id, usedAt)
-}
-
-func TestIssueKeyPropagatesCreateError(t *testing.T) {
-	t.Parallel()
-	store := &failingStore{memStore: newMemStore(), createErr: errors.New("create failed")}
-	manager := NewManager(store, testHasher(t))
-	if _, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil}); err == nil {
-		t.Fatal("expected create error to propagate")
-	}
-}
-
-func TestValidateKeyIndependentOfUsageObservation(t *testing.T) {
-	t.Parallel()
-	store := &failingStore{memStore: newMemStore()}
-	manager := NewManager(store, testHasher(t))
-	issued, _, err := manager.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "owner", Name: "name", Prefix: "pkg", Scopes: nil, ExpiresAt: nil})
-	if err != nil {
-		t.Fatalf("IssueKey: %v", err)
-	}
-	store.updateUsedErr = errors.New("update failed")
-	validated, err := manager.ValidateKey(context.Background(), issued.PlainKey)
-	if err != nil || validated.LastUsedAt != nil {
-		t.Fatal("metadata observation affected validity", err)
-	}
-	stored, err := store.GetByID(context.Background(), "k1")
-	if err != nil || stored.LastUsedAt != nil {
-		t.Fatal("authentication mutated usage metadata", err)
 	}
 }
 
@@ -445,4 +171,49 @@ func FuzzDigestCompare(f *testing.F) {
 		digest := hasher.Digest(plain)
 		_ = hasher.Compare(plain, digest)
 	})
+}
+
+func TestEntropyFailureIsInternalNotInvalidPrefix(t *testing.T) {
+	t.Parallel()
+	hasher, err := NewHasher(HashingConfig{Pepper: strings.Repeat("p", 32), Random: iotest.ErrReader(errors.New("entropy exhausted"))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager(Config{Store: newMemory(t), Hasher: hasher, Clock: util.NewFakeClock(epoch)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = hasher.GenerateKey("sk_live")
+	if got := apperrors.Normalize(err); got.Code != apperrors.ErrCodeInternal {
+		t.Fatalf("hasher entropy failure classified as %v", got.Code)
+	}
+	if _, _, err := m.IssueKey(context.Background(), IssueRequest{KeyID: "k1", OwnerID: "o", Prefix: "sk_live", Kind: auth.User, Scopes: []string{"read"}}); apperrors.Normalize(err).Code != apperrors.ErrCodeInternal {
+		t.Fatalf("manager entropy failure classified as %v", apperrors.Normalize(err).Code)
+	}
+}
+
+func TestKeyValidAt(t *testing.T) {
+	t.Parallel()
+	expires, grace := epoch.Add(time.Hour), epoch.Add(time.Minute)
+	cases := map[string]struct {
+		key  Key
+		now  time.Time
+		want bool
+	}{
+		"no expiry":            {Key{}, epoch, true},
+		"before expiry":        {Key{ExpiresAt: &expires}, expires.Add(-time.Nanosecond), true},
+		"at expiry":            {Key{ExpiresAt: &expires}, expires, false},
+		"within grace":         {Key{ExpiresAt: &expires, GraceEndsAt: &grace}, grace.Add(-time.Nanosecond), true},
+		"at grace end":         {Key{ExpiresAt: &expires, GraceEndsAt: &grace}, grace, false},
+		"revoked":              {Key{RevokedAt: &epoch}, epoch.Add(-time.Hour), false},
+		"revoked within grace": {Key{GraceEndsAt: &grace, RevokedAt: &epoch}, epoch, false},
+	}
+	for name, tc := range cases {
+		if got := tc.key.ValidAt(tc.now); got != tc.want {
+			t.Fatalf("%s: ValidAt = %v, want %v", name, got, tc.want)
+		}
+	}
+	if (*Key)(nil).ValidAt(epoch) {
+		t.Fatal("nil key valid")
+	}
 }

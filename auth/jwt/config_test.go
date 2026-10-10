@@ -1,8 +1,7 @@
-package jwt
+package jwt_test
 
 import (
 	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -10,192 +9,92 @@ import (
 	"testing"
 	"time"
 
-	gojwt "github.com/golang-jwt/jwt/v5"
+	"github.com/kbukum/gokit/auth/jwt"
+	"github.com/kbukum/gokit/util"
 )
 
-func TestParse_UnsupportedAlgorithm(t *testing.T) {
-	cfg := &Config{Method: "INVALID", Issuer: "issuer", Audience: []string{"aud"}}
-	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err == nil {
-		t.Fatal("expected error for unsupported signing method")
+func TestConfigValidate(t *testing.T) {
+	t.Parallel()
+	cases := map[string]func(*jwt.Config){
+		"missing issuer":        func(c *jwt.Config) { c.Issuer = "" },
+		"missing audience":      func(c *jwt.Config) { c.Audience = nil },
+		"empty audience":        func(c *jwt.Config) { c.Audience = []string{""} },
+		"duplicate audience":    func(c *jwt.Config) { c.Audience = []string{"a", "a"} },
+		"missing type":          func(c *jwt.Config) { c.Type = "" },
+		"type with space":       func(c *jwt.Config) { c.Type = "a b" },
+		"missing max lifetime":  func(c *jwt.Config) { c.MaxLifetime = 0 },
+		"negative leeway":       func(c *jwt.Config) { c.Leeway = -time.Second },
+		"leeway over a minute":  func(c *jwt.Config) { c.Leeway = time.Minute + time.Second },
+		"unsupported method":    func(c *jwt.Config) { c.Method = "PS512" },
+		"hmac without opt-in":   func(c *jwt.Config) { c.Method = jwt.HS256 },
+		"single audience empty": func(c *jwt.Config) { c.SingleAudience = true; c.Audience = nil },
+	}
+	for name, mutate := range cases {
+		cfg := baseConfig()
+		mutate(&cfg)
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	cfg := baseConfig()
+	cfg.Leeway = 0
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("zero leeway rejected: %v", err)
 	}
 }
 
-func TestConfig_MissingSecret(t *testing.T) {
-	cfg := &Config{
-		Method:             HS256,
-		Secret:             "",
-		AllowSymmetricHMAC: true,
-		Issuer:             "issuer",
-		Audience:           []string{"aud"},
-	}
-	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err == nil {
-		t.Fatal("expected error for missing HMAC secret")
-	}
-}
-
-func TestConfig_RSARequiresKey(t *testing.T) {
-	cfg := &Config{Method: RS256, Issuer: "issuer", Audience: []string{"aud"}}
-	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err == nil {
-		t.Fatal("expected error for RS256 without key")
-	}
-}
-
-func TestConfig_ESRequiresKey(t *testing.T) {
-	cfg := &Config{Method: ES256, Issuer: "issuer", Audience: []string{"aud"}}
-	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err == nil {
-		t.Fatal("expected error for ES256 without key")
-	}
-}
-
-func TestConfig_ApplyDefaultsTTL(t *testing.T) {
-	cfg := &Config{
-		Secret:             "12345678901234567890123456789012",
-		Method:             HS256,
-		AllowSymmetricHMAC: true,
-		Issuer:             "issuer",
-		Audience:           []string{"aud"},
-	}
+func TestApplyDefaultsKeepsExplicitZeroLeeway(t *testing.T) {
+	t.Parallel()
+	cfg := jwt.Config{}
 	cfg.ApplyDefaults()
-	if cfg.AccessTokenTTL != 15*time.Minute {
-		t.Errorf("default access TTL should be 15m, got %v", cfg.AccessTokenTTL)
-	}
-	if cfg.RefreshTokenTTL != 7*24*time.Hour {
-		t.Errorf("default refresh TTL should be 7d, got %v", cfg.RefreshTokenTTL)
-	}
-	if cfg.ClockSkew != 30*time.Second {
-		t.Errorf("default clock skew should be 30s, got %v", cfg.ClockSkew)
+	if cfg.Method != jwt.RS256 || cfg.Leeway != 0 {
+		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }
 
-func TestConfigValidateRejectsMismatchedKeyTypes(t *testing.T) {
+func TestNewServiceRejectsInvalidInputs(t *testing.T) {
+	t.Parallel()
+	keys := jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}
+	clock := util.NewFakeClock(epoch)
+	if _, err := jwt.NewService(baseConfig(), keys, nil, newClaims); err == nil {
+		t.Fatal("nil clock accepted")
+	}
+	if _, err := jwt.NewService[*testClaims](baseConfig(), keys, clock, nil); err == nil {
+		t.Fatal("nil constructor accepted")
+	}
+	bad := baseConfig()
+	bad.Type = ""
+	if _, err := jwt.NewService(bad, keys, clock, newClaims); err == nil {
+		t.Fatal("invalid config accepted")
+	}
+}
+
+func TestAlgorithmsRoundTrip(t *testing.T) {
 	t.Parallel()
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("rsa keygen: %v", err)
+		t.Fatal(err)
 	}
 	ecKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		t.Fatalf("ecdsa keygen: %v", err)
+		t.Fatal(err)
 	}
-	edPub, edPriv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("ed25519 keygen: %v", err)
+	cases := []struct {
+		method jwt.SigningMethod
+		key    jwt.Key
+	}{
+		{jwt.RS256, jwt.Key{ID: "k1", Signer: rsaKey}},
+		{jwt.ES256, jwt.Key{ID: "k1", Signer: ecKey}},
+		{jwt.EdDSA, edKey(t, "k1")},
+		{jwt.HS256, jwt.Key{ID: "k1", Secret: []byte(strings.Repeat("s", 32))}},
 	}
-
-	cases := map[string]*Config{
-		"rs256-bad-private":   {Method: RS256, Issuer: "i", Audience: []string{"a"}, PrivateKey: ecKey},
-		"rs256-bad-public":    {Method: RS256, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey, PublicKey: &ecKey.PublicKey},
-		"es256-bad-private":   {Method: ES256, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey},
-		"es256-bad-public":    {Method: ES256, Issuer: "i", Audience: []string{"a"}, PrivateKey: ecKey, PublicKey: &rsaKey.PublicKey},
-		"eddsa-missing-key":   {Method: EdDSA, Issuer: "i", Audience: []string{"a"}},
-		"eddsa-bad-private":   {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: rsaKey},
-		"eddsa-short-private": {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: ed25519.PrivateKey("short")},
-		"eddsa-bad-public":    {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: edPriv, PublicKey: &rsaKey.PublicKey},
-		"eddsa-short-public":  {Method: EdDSA, Issuer: "i", Audience: []string{"a"}, PrivateKey: edPriv, PublicKey: ed25519.PublicKey("short")},
-	}
-	_ = edPub
-	for name, cfg := range cases {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			if err := cfg.Validate(); err == nil {
-				t.Fatalf("expected validation error for %s", name)
-			}
-		})
-	}
-}
-
-func TestConfigValidateRejectsShortRefreshSecret(t *testing.T) {
-	t.Parallel()
-	cfg := &Config{
-		Method:             HS256,
-		AllowSymmetricHMAC: true,
-		Secret:             strings.Repeat("s", 32),
-		RefreshSecret:      "short",
-		Issuer:             "i",
-		Audience:           []string{"a"},
-	}
-	if err := cfg.Validate(); err == nil {
-		t.Fatal("expected short refresh_secret rejection")
-	}
-}
-
-func TestConfigValidateRejectsClockSkewBounds(t *testing.T) {
-	t.Parallel()
-	base := func() *Config {
-		return &Config{Method: HS256, AllowSymmetricHMAC: true, Secret: strings.Repeat("s", 32), Issuer: "i", Audience: []string{"a"}}
-	}
-	neg := base()
-	neg.ClockSkew = -1
-	if err := neg.Validate(); err == nil {
-		t.Fatal("expected negative clock_skew rejection")
-	}
-	over := base()
-	over.ClockSkew = 2 * time.Minute
-	if err := over.Validate(); err == nil {
-		t.Fatal("expected over-max clock_skew rejection")
-	}
-}
-
-func TestSigningMethodMapping(t *testing.T) {
-	t.Parallel()
-	cases := map[SigningMethod]string{HS256: "HS256", RS256: "RS256", ES256: "ES256", EdDSA: "EdDSA"}
-	for method, alg := range cases {
-		if got := (&Config{Method: method}).signingMethod().Alg(); got != alg {
-			t.Fatalf("signingMethod(%s).Alg() = %q, want %q", method, got, alg)
+	for _, tc := range cases {
+		cfg := baseConfig()
+		cfg.Method = tc.method
+		cfg.AllowSymmetricHMAC = tc.method == jwt.HS256
+		svc := newService(t, cfg, jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{tc.key}}, util.NewFakeClock(epoch))
+		if _, err := svc.ValidateToken(t.Context(), issue(t, svc, subject("svc-a"))); err != nil {
+			t.Fatalf("%s: %v", tc.method, err)
 		}
-	}
-	if got := (&Config{Method: "unknown"}).signingMethod(); got != gojwt.SigningMethodRS256 {
-		t.Fatalf("unknown method should fall back to RS256, got %v", got)
-	}
-}
-
-func TestSignKeyAndRefreshSignKey(t *testing.T) {
-	t.Parallel()
-	hmac := &Config{Method: HS256, Secret: "access-secret", RefreshSecret: "refresh-secret"}
-	if string(hmac.signKey().([]byte)) != "access-secret" {
-		t.Fatal("HS256 signKey should return access secret")
-	}
-	if string(hmac.refreshSignKey().([]byte)) != "refresh-secret" {
-		t.Fatal("HS256 refreshSignKey should return refresh secret")
-	}
-	hmacNoRefresh := &Config{Method: HS256, Secret: "access-secret"}
-	if string(hmacNoRefresh.refreshSignKey().([]byte)) != "access-secret" {
-		t.Fatal("HS256 refreshSignKey without refresh secret should fall back to access secret")
-	}
-
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("rsa keygen: %v", err)
-	}
-	asym := &Config{Method: RS256, PrivateKey: rsaKey}
-	if asym.signKey() != any(rsaKey) {
-		t.Fatal("RS256 signKey should return private key")
-	}
-	if asym.refreshSignKey() == nil {
-		t.Fatal("RS256 refreshSignKey should reuse sign key")
-	}
-}
-
-func TestVerifyKeyFallbacks(t *testing.T) {
-	t.Parallel()
-	// Unknown method falls back to HMAC secret bytes.
-	if got := (&Config{Method: "unknown", Secret: "s"}).verifyKey().([]byte); string(got) != "s" {
-		t.Fatalf("unknown verifyKey = %q, want s", got)
-	}
-	// Asymmetric methods without a configured key return nil.
-	for _, method := range []SigningMethod{RS256, ES256, EdDSA} {
-		cfg := &Config{Method: method}
-		if got := cfg.verifyKey(); got != nil {
-			t.Fatalf("%s verifyKey fallback = %v, want nil", method, cfg.verifyKey())
-		}
-	}
-	// refreshVerifyKey with HS256 refresh secret returns the refresh secret.
-	hmac := &Config{Method: HS256, Secret: "a", RefreshSecret: "r"}
-	if string(hmac.refreshVerifyKey().([]byte)) != "r" {
-		t.Fatal("HS256 refreshVerifyKey should return refresh secret")
 	}
 }

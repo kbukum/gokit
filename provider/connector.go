@@ -59,18 +59,21 @@ type ConnectorConfig[T any] struct {
 	Resilience *ResilienceConfig
 }
 
-// NewConnector creates a Connector from config.
-func NewConnector[T any](cfg ConnectorConfig[T]) *Connector[T] {
+// NewConnector creates a Connector from config. Invalid resilience configuration returns an error.
+func NewConnector[T any](cfg ConnectorConfig[T]) (*Connector[T], error) {
 	var state *ResilienceState
 	if cfg.Resilience != nil {
-		state = BuildResilience(*cfg.Resilience)
+		var err error
+		if state, err = BuildResilience(*cfg.Resilience); err != nil {
+			return nil, err
+		}
 	}
 	return &Connector[T]{
 		serviceName: cfg.ServiceName,
 		create:      cfg.Create,
 		onClose:     cfg.OnClose,
 		state:       state,
-	}
+	}, nil
 }
 
 // GetClient returns the client, creating it on first call. Thread-safe;

@@ -31,7 +31,7 @@ func TestConfigMethodsFailClosedOnZeroValue(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected error for zero-valued Config, got nil")
 			}
-			if !strings.Contains(err.Error(), "database, source, path and driver are required") {
+			if !strings.Contains(err.Error(), "database and driver are required") {
 				t.Fatalf("expected DB-required error, got %v", err)
 			}
 		})
@@ -45,7 +45,7 @@ func TestConfigRequiresDriver(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when Driver is missing, got nil")
 	}
-	if !strings.Contains(err.Error(), "database, source, path and driver are required") {
+	if !strings.Contains(err.Error(), "database and driver are required") {
 		t.Fatalf("expected Driver-required error, got %v", err)
 	}
 }
@@ -54,13 +54,13 @@ func TestConfigRequiresPath(t *testing.T) {
 	t.Parallel()
 	c := Config{
 		DB:     &gorm.DB{},
-		Driver: func(context.Context, *sql.DB, string) (database.Driver, error) { return nil, errors.New("unused") },
+		Driver: func(context.Context, *sql.DB, Table) (database.Driver, error) { return nil, errors.New("unused") },
 	}
 	err := c.Up(context.Background())
 	if err == nil {
 		t.Fatal("expected error when Path is missing, got nil")
 	}
-	if !strings.Contains(err.Error(), "database, source, path and driver are required") {
+	if !strings.Contains(err.Error(), "source and path are required") {
 		t.Fatalf("expected Path-required error, got %v", err)
 	}
 }
@@ -74,7 +74,7 @@ func TestVersionTable(t *testing.T) {
 			t.Errorf("IsVersionTable(%q) = false", name)
 		}
 	}
-	unused := func(context.Context, *sql.DB, string) (database.Driver, error) { return nil, errors.New("unused") }
+	unused := func(context.Context, *sql.DB, Table) (database.Driver, error) { return nil, errors.New("unused") }
 	for _, name := range invalid {
 		if IsVersionTable(name) && name != "" {
 			t.Errorf("IsVersionTable(%q) = true", name)
@@ -82,18 +82,22 @@ func TestVersionTable(t *testing.T) {
 		if name == "" {
 			continue
 		}
-		c := Config{DB: &gorm.DB{}, FS: fstest.MapFS{}, Path: "m", Driver: unused, VersionTable: name}
+		c := Config{DB: &gorm.DB{}, FS: fstest.MapFS{}, Path: "m", Driver: unused, Table: Table{Name: name}}
 		if err := c.Up(context.Background()); err == nil || !strings.Contains(err.Error(), "version table") {
 			t.Errorf("VersionTable %q accepted: %v", name, err)
 		}
 	}
-	if _, err := NewSQLDriver(context.Background(), &sql.DB{}, nopBackend{}, "bad"); err == nil {
+	if _, err := NewSQLDriver(context.Background(), &sql.DB{}, nopBackend{}, Table{Name: "bad"}); err == nil {
 		t.Error("NewSQLDriver accepted an invalid version table")
 	}
 }
 
 type nopBackend struct{}
 
-func (nopBackend) Lock(context.Context, *sql.Conn) error   { return nil }
-func (nopBackend) Unlock(context.Context, *sql.Conn) error { return nil }
-func (nopBackend) Drop(context.Context, *sql.Tx) error     { return nil }
+func (nopBackend) Lock(context.Context, *sql.Conn) error      { return nil }
+func (nopBackend) Unlock(context.Context, *sql.Conn) error    { return nil }
+func (nopBackend) Drop(context.Context, *sql.Tx, Table) error { return nil }
+func (nopBackend) ValidateTable(Table) error                  { return nil }
+func (nopBackend) TableExists(context.Context, *sql.Conn, Table) (bool, error) {
+	return false, nil
+}

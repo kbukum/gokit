@@ -22,7 +22,7 @@ func TestStreamTotalIncludesAdmissionWait(t *testing.T) {
 		c, err := New(Config{
 			Stream: StreamConfig{TotalTimeout: time.Second},
 			ResiliencePolicy: &resilience.Policy{Bulkhead: &resilience.BulkheadConfig{
-				MaxConcurrent: 1, MaxWait: time.Hour, OnRelease: func(string) { releases.Add(1) },
+				MaxConcurrent: 1, MaxWait: time.Hour, MaxQueue: 1, OnRelease: func(string) { releases.Add(1) },
 			}},
 		}, WithStreamClock(clock))
 		if err != nil {

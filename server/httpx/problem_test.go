@@ -79,3 +79,28 @@ func TestWriteProblemDetailsLogsWriteFailure(t *testing.T) {
 		t.Fatalf("missing write failure log: %s", &logs)
 	}
 }
+
+// safeFirst mirrors a storage boundary: a cause-free classification unwraps before a private cause.
+type safeFirst struct{ private error }
+
+func (safeFirst) Error() string { return "DATABASE_FAILURE: Database operation failed" }
+func (e safeFirst) Unwrap() []error {
+	return []error{apperrors.New(apperrors.ErrCodeInternal, "Database operation failed").WithReason("DATABASE_FAILURE"), e.private}
+}
+
+func TestWriteProblemDetailsHonorsSafeBoundaryClassification(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	log, err := logging.New(&logging.Config{Level: "debug", Format: "json"}, "problem-test", logging.WithWriter(&logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/resource", http.NoBody)
+	req = req.WithContext(logging.ContextWithLogger(req.Context(), log))
+	response := httptest.NewRecorder()
+	private := apperrors.InvalidInput("dsn", "private credential detail").WithCause(errors.New("private driver text"))
+	httpx.WriteProblemDetails(response, req, safeFirst{private})
+	if response.Code != http.StatusInternalServerError || strings.Contains(response.Body.String(), "private") || strings.Contains(logs.String(), "private") {
+		t.Fatalf("private classification crossed the boundary: %d %s; logs %s", response.Code, response.Body, &logs)
+	}
+}

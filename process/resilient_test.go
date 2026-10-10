@@ -30,15 +30,18 @@ func TestRunWithResilience_EmptyConfig(t *testing.T) {
 }
 
 func TestRunWithResilience_RetryOnFailure(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{
+	runner, err := process.NewRunner(provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    2,
 			InitialBackoff: time.Millisecond,
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	// "false" always fails — should fail after 2 attempts
-	_, err := runner.Run(context.Background(), process.Command{
+	_, err = runner.Run(context.Background(), process.Command{
 		Binary: "false",
 	})
 	if err == nil {
@@ -47,7 +50,7 @@ func TestRunWithResilience_RetryOnFailure(t *testing.T) {
 }
 
 func TestRunWithResilience_CircuitBreakerTrips(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{
+	runner, err := process.NewRunner(provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "test-proc-cb",
 			MaxFailures:      2,
@@ -55,6 +58,9 @@ func TestRunWithResilience_CircuitBreakerTrips(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Fail twice to trip CB
 	for i := 0; i < 2; i++ {
@@ -67,7 +73,7 @@ func TestRunWithResilience_CircuitBreakerTrips(t *testing.T) {
 	}
 
 	// Third call should be rejected by CB — wrapped as AppError
-	_, err := runner.Run(context.Background(), process.Command{
+	_, err = runner.Run(context.Background(), process.Command{
 		Binary: "false",
 	})
 	if err == nil {
@@ -86,13 +92,16 @@ func TestRunWithResilience_CircuitBreakerTrips(t *testing.T) {
 }
 
 func TestRunWithResilience_SuccessDoesNotTripCB(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{
+	runner, err := process.NewRunner(provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "test-proc-success",
 			MaxFailures: 3,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i := 0; i < 5; i++ {
 		result, err := runner.Run(context.Background(), process.Command{
@@ -162,13 +171,16 @@ func TestSubprocessProvider_WithResilience(t *testing.T) {
 	)
 
 	// Wrap with resilience
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "echo-cb",
 			MaxFailures: 3,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := wrapped.Execute(context.Background(), "test")
 	if err != nil {
@@ -322,7 +334,10 @@ func TestAdapter_GracePeriodNotOverridden(t *testing.T) {
 }
 
 func TestRunner_NilState(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{})
+	runner, err := process.NewRunner(provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	result, err := runner.Run(context.Background(), process.Command{
 		Binary: "echo",
 		Args:   []string{"nil state"},
@@ -336,16 +351,19 @@ func TestRunner_NilState(t *testing.T) {
 }
 
 func TestRunWithResilience_RetryTransientFailure(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{
+	runner, err := process.NewRunner(provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    3,
 			InitialBackoff: time.Millisecond,
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// "false" always fails — retries should be exhausted
-	_, err := runner.Run(context.Background(), process.Command{
+	_, err = runner.Run(context.Background(), process.Command{
 		Binary: "false",
 	})
 	if err == nil {
@@ -366,7 +384,7 @@ func TestRunWithResilience_RetryTransientFailure(t *testing.T) {
 }
 
 func TestRunWithResilience_CircuitBreakerAfterNFailures(t *testing.T) {
-	runner := process.NewRunner(provider.ResilienceConfig{
+	runner, err := process.NewRunner(provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "test-cb-n-failures",
 			MaxFailures:      3,
@@ -374,6 +392,9 @@ func TestRunWithResilience_CircuitBreakerAfterNFailures(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Fail 3 times to trip the circuit breaker
 	for i := 0; i < 3; i++ {
@@ -387,7 +408,7 @@ func TestRunWithResilience_CircuitBreakerAfterNFailures(t *testing.T) {
 
 	// Next call should be rejected by circuit breaker (fast-fail, no subprocess)
 	start := time.Now()
-	_, err := runner.Run(context.Background(), process.Command{
+	_, err = runner.Run(context.Background(), process.Command{
 		Binary: "echo",
 		Args:   []string{"should not run"},
 	})

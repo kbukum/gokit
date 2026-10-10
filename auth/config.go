@@ -63,14 +63,14 @@ func (c *Config) Validate() error {
 }
 
 // Describe returns a human-readable one-liner for the startup summary. Example:
-// "JWT(EdDSA) TTL=15m0s password=argon2id OIDC(issuer.com)"
+// "JWT(EdDSA) max_lifetime=15m0s password=argon2id OIDC(issuer.com)"
 func (c *Config) Describe() string {
 	if !c.Enabled {
 		return "disabled"
 	}
 	var line string
 	if c.JWT != nil {
-		line += fmt.Sprintf("JWT(%s) TTL=%s", c.JWT.Method, c.JWT.AccessTokenTTL)
+		line += fmt.Sprintf("JWT(%s) max_lifetime=%s", c.JWT.Method, c.JWT.MaxLifetime)
 	}
 	if c.Password != nil {
 		if line != "" {

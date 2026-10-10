@@ -112,7 +112,7 @@ func TestAdmissionBudget(t *testing.T) {
 						t.Fatal(err)
 					}
 				case "bulkhead":
-					p.WithBulkhead(BulkheadConfig{MaxConcurrent: 1, MaxWait: time.Hour})
+					p.WithBulkhead(BulkheadConfig{MaxConcurrent: 1, MaxWait: time.Hour, MaxQueue: 1})
 					_, first, err := p.Acquire(context.Background())
 					if err != nil {
 						t.Fatal(err)

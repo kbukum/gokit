@@ -30,7 +30,7 @@ func instance(t *testing.T, db *dbkit.DB, clock util.Clock) *session.Manager {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := session.NewManager(session.Config{Store: s, Clock: clock, Random: rand.Reader, Pepper: strings.Repeat("p", 32), CSRF: csrf})
+	m, err := session.NewManager(session.Config{Store: s, Clock: clock, Random: rand.Reader, Pepper: strings.Repeat("p", 32), CSRF: csrf, ReportError: func(context.Context, error) {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,10 +75,10 @@ func assertCrossInstanceRevocation(t *testing.T, first, second *dbkit.DB, clock 
 	if _, err := b.Authenticate(cookieRequest(issued.Token)); err == nil {
 		t.Fatal("second instance accepted a request after revocation")
 	}
-	b.Poll(ctx)
+	b.Nudge()
 	select {
 	case <-lifetime.Done():
-	default:
+	case <-ctx.Done():
 		t.Fatal("second instance retained a revoked stream after revalidation")
 	}
 	if _, err := a.Authenticate(cookieRequest(issued.Token)); err == nil {
@@ -94,7 +94,7 @@ func TestSQLiteCrossInstanceRevocation(t *testing.T) {
 	if err := first.WithContext(ctx).Raw("SELECT file FROM pragma_database_list WHERE name = 'main'").Scan(&path).Error; err != nil || path == "" {
 		t.Fatal("resolve database file", err)
 	}
-	second, err := dbkit.NewWithContext(ctx, sqlite.Open(path), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+	second, err := dbkit.NewWithContext(ctx, sqlite.Dialect(), dbkit.Config{DSN: path, LogLevel: "silent"}, logging.NewDefault("session-test"))
 	if err != nil {
 		t.Fatal(err)
 	}

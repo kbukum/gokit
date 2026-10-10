@@ -1,690 +1,388 @@
-package jwt
+package jwt_test
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
+
+	"github.com/kbukum/gokit/auth/jwt"
+	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
-// jwtSeed builds a JWT-like compact serialization (header.payload.signature)
-// from raw header/payload JSON so fuzz seeds actually resemble tokens and hit
-// the intended parse paths. A signature of "" produces a trailing dot (the
-// unsecured/alg=none shape).
-func jwtSeed(header, payload, signature string) string {
-	enc := base64.RawURLEncoding.EncodeToString
-	return enc([]byte(header)) + "." + enc([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString([]byte(signature))
-}
-
-// jwtHeaderOnly builds a truncated token that carries only the header segment.
-func jwtHeaderOnly(header string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(header))
-}
-
-// testClaims is a custom claims type that embeds RegisteredClaims
-// (the common pattern) WITHOUT implementing SetDefaults.
-type testClaims struct {
-	gojwt.RegisteredClaims
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-}
-
-// testClaimsWithDefaults implements the SetDefaults interface.
-type testClaimsWithDefaults struct {
-	gojwt.RegisteredClaims
-	UserID         string `json:"user_id"`
-	defaultsCalled bool
-}
-
-func (c *testClaimsWithDefaults) SetDefaults(now time.Time, ttl time.Duration, issuer string, audience []string) {
-	c.defaultsCalled = true
-	if c.IssuedAt == nil {
-		c.IssuedAt = gojwt.NewNumericDate(now)
-	}
-	if c.ExpiresAt == nil && ttl > 0 {
-		c.ExpiresAt = gojwt.NewNumericDate(now.Add(ttl))
-	}
-	if c.Issuer == "" && issuer != "" {
-		c.Issuer = issuer
-	}
-	if len(c.Audience) == 0 && len(audience) > 0 {
-		c.Audience = gojwt.ClaimStrings(audience)
-	}
-}
-
-func newTestConfig() *Config {
-	return &Config{
-		Secret:             "test-secret-key-that-is-long-enough",
-		Method:             HS256,
-		AllowSymmetricHMAC: true,
-		Issuer:             "test-issuer",
-		Audience:           []string{"test-audience"},
-		AccessTokenTTL:     15 * time.Minute,
-		RefreshTokenTTL:    7 * 24 * time.Hour,
-	}
-}
-
-func TestNewService(t *testing.T) {
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService failed: %v", err)
-	}
-	if svc == nil {
-		t.Fatal("expected non-nil service")
-	}
-}
-
-func TestNewService_MissingSecret(t *testing.T) {
-	cfg := &Config{
-		Method:             HS256,
-		AllowSymmetricHMAC: true,
-		Issuer:             "issuer",
-		Audience:           []string{"aud"},
-	}
-	_, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err == nil {
-		t.Fatal("expected error for missing secret")
-	}
-}
-
-func TestGenerateAccess_SetsClaimsViaReflection(t *testing.T) {
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-
-	claims := &testClaims{UserID: "user-123", Email: "test@example.com"}
-	token, err := svc.GenerateAccess(claims)
-	if err != nil {
-		t.Fatalf("GenerateAccess: %v", err)
-	}
-	if token == "" {
-		t.Fatal("expected non-empty token")
-	}
-
-	// Verify claims were set
-	if claims.Issuer != "test-issuer" {
-		t.Errorf("expected issuer 'test-issuer', got '%s'", claims.Issuer)
-	}
-	if len(claims.Audience) == 0 || claims.Audience[0] != "test-audience" {
-		t.Errorf("expected audience ['test-audience'], got %v", claims.Audience)
-	}
-	if claims.ExpiresAt == nil {
-		t.Fatal("expected ExpiresAt to be set")
-	}
-	if claims.IssuedAt == nil {
-		t.Fatal("expected IssuedAt to be set")
-	}
-}
-
-func TestGenerateAccess_SetsClaimsViaSetDefaults(t *testing.T) {
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaimsWithDefaults { return &testClaimsWithDefaults{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-
-	claims := &testClaimsWithDefaults{UserID: "user-456"}
-	token, err := svc.GenerateAccess(claims)
-	if err != nil {
-		t.Fatalf("GenerateAccess: %v", err)
-	}
-	if token == "" {
-		t.Fatal("expected non-empty token")
-	}
-	if !claims.defaultsCalled {
-		t.Fatal("expected SetDefaults to be called")
-	}
-	if claims.Issuer != "test-issuer" {
-		t.Errorf("expected issuer 'test-issuer', got '%s'", claims.Issuer)
-	}
-}
-
-func TestRoundTrip_GenerateAndParse(t *testing.T) {
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-
-	original := &testClaims{UserID: "user-789", Email: "round@trip.com"}
-	token, err := svc.GenerateAccess(original)
-	if err != nil {
-		t.Fatalf("GenerateAccess: %v", err)
-	}
-
-	parsed, err := svc.Parse(token)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-
-	if parsed.UserID != "user-789" {
-		t.Errorf("expected UserID 'user-789', got '%s'", parsed.UserID)
-	}
-	if parsed.Email != "round@trip.com" {
-		t.Errorf("expected Email 'round@trip.com', got '%s'", parsed.Email)
-	}
-	if parsed.Issuer != "test-issuer" {
-		t.Errorf("expected Issuer 'test-issuer', got '%s'", parsed.Issuer)
-	}
-	if len(parsed.Audience) == 0 || parsed.Audience[0] != "test-audience" {
-		t.Errorf("expected Audience ['test-audience'], got %v", parsed.Audience)
-	}
-}
-
-func TestParse_InvalidToken(t *testing.T) {
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-
-	_, err = svc.Parse("invalid-token-string")
-	if err == nil {
-		t.Fatal("expected error for invalid token")
-	}
-}
-
-func TestParse_WrongSecret(t *testing.T) {
-	cfg1 := newTestConfig()
-	svc1, _ := NewService(cfg1, func() *testClaims { return &testClaims{} })
-
-	cfg2 := newTestConfig()
-	cfg2.Secret = "different-secret-key-that-is-also-long"
-	svc2, _ := NewService(cfg2, func() *testClaims { return &testClaims{} })
-
-	token, _ := svc1.GenerateAccess(&testClaims{UserID: "user-1"})
-	_, err := svc2.Parse(token)
-	if err == nil {
-		t.Fatal("expected error when parsing with wrong secret")
-	}
-}
-
-func TestParse_WrongIssuer(t *testing.T) {
-	cfg1 := newTestConfig()
-	svc1, _ := NewService(cfg1, func() *testClaims { return &testClaims{} })
-
-	cfg2 := newTestConfig()
-	cfg2.Issuer = "wrong-issuer"
-	svc2, _ := NewService(cfg2, func() *testClaims { return &testClaims{} })
-
-	token, _ := svc1.GenerateAccess(&testClaims{UserID: "user-1"})
-	_, err := svc2.Parse(token)
-	if err == nil {
-		t.Fatal("expected error when issuer doesn't match")
-	}
-}
-
-func TestGenerateRefresh_UsesRefreshTTL(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	claims := &testClaims{UserID: "user-1"}
-	before := time.Now()
-	_, err := svc.GenerateRefresh(claims)
-	if err != nil {
-		t.Fatalf("GenerateRefresh: %v", err)
-	}
-
-	expected := before.Add(7 * 24 * time.Hour)
-	if claims.ExpiresAt.Before(expected.Add(-time.Second)) {
-		t.Error("refresh token TTL seems too short")
-	}
-}
-
-func TestGenerateRefresh_UsesRefreshSecret(t *testing.T) {
-	cfg := newTestConfig()
-	cfg.RefreshSecret = "refresh-secret-key-that-is-long-enough"
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-
-	token, err := svc.GenerateRefresh(&testClaims{UserID: "user-1"})
-	if err != nil {
-		t.Fatalf("GenerateRefresh: %v", err)
-	}
-
-	if _, err := svc.Parse(token); err == nil {
-		t.Fatal("expected access-token parser to reject refresh token signed with refresh secret")
-	}
-	if _, err := svc.ParseRefresh(token); err != nil {
-		t.Fatalf("ParseRefresh: %v", err)
-	}
-}
-
-func TestFindRegisteredClaims_EmbeddedStruct(t *testing.T) {
-	claims := &testClaims{UserID: "test"}
-	rc := findRegisteredClaims(claims)
-	if rc == nil {
-		t.Fatal("expected to find RegisteredClaims in embedded struct")
-	}
-	rc.Issuer = "set-via-reflection"
-	if claims.Issuer != "set-via-reflection" {
-		t.Error("setting via reflected pointer should modify original")
-	}
-}
-
-func TestFindRegisteredClaims_Nil(t *testing.T) {
-	rc := findRegisteredClaims(nil)
-	if rc != nil {
-		t.Fatal("expected nil for nil input")
-	}
-}
-
-func TestFindRegisteredClaims_NonStruct(t *testing.T) {
-	s := "not a struct"
-	rc := findRegisteredClaims(&s)
-	if rc != nil {
-		t.Fatal("expected nil for non-struct")
-	}
-}
-
-func TestValidatorFunc(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	token, _ := svc.GenerateAccess(&testClaims{UserID: "user-1"})
-	validator := svc.ValidatorFunc()
-
-	parsed, err := validator(context.Background(), token)
-	if err != nil {
-		t.Fatalf("ValidatorFunc: %v", err)
-	}
-	if parsed.UserID != "user-1" {
-		t.Errorf("expected UserID 'user-1', got '%s'", parsed.UserID)
-	}
-}
-
-func TestParse_DifferentHMACVerifierSecretRejected(t *testing.T) {
-	cfg256 := newTestConfig()
-	svc256, _ := NewService(cfg256, func() *testClaims { return &testClaims{} })
-
-	token, _ := svc256.GenerateAccess(&testClaims{UserID: "user-1"})
-	cfgMismatch := newTestConfig()
-	cfgMismatch.Secret = "different-test-secret-key-that-is-long-enough"
-	svcMismatch, _ := NewService(cfgMismatch, func() *testClaims { return &testClaims{} })
-	_, err := svcMismatch.Parse(token)
-	if err == nil {
-		t.Fatal("expected error when token is parsed with a different verifier secret")
-	}
-}
-
-func TestParse_InvalidTokenFormats(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	tests := []struct {
-		name  string
-		token string
-	}{
-		{"empty string", ""},
-		{"no dots", "nodots"},
-		{"one dot", "header.payload"},
-		{"empty segments", ".."},
-		{"whitespace", "   "},
-		{"just dots", "..."},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.Parse(tt.token)
-			if err == nil {
-				t.Errorf("expected error for token format: %q", tt.token)
-			}
-		})
-	}
-}
-
-func TestParse_ExpiredToken(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	claims := &testClaims{
-		RegisteredClaims: gojwt.RegisteredClaims{
-			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(-1 * time.Minute)),
-			IssuedAt:  gojwt.NewNumericDate(time.Now().Add(-2 * time.Minute)),
-		},
-		UserID: "user-1",
-	}
-	token, err := svc.Generate(claims)
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-	_, err = svc.Parse(token)
-	if err == nil {
-		t.Fatal("expected error for expired token")
-	}
-}
-
-func TestGenerate_EmptyClaims(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	claims := &testClaims{} // no fields set
-	token, err := svc.GenerateAccess(claims)
-	if err != nil {
-		t.Fatalf("GenerateAccess with empty claims: %v", err)
-	}
-	parsed, err := svc.Parse(token)
-	if err != nil {
-		t.Fatalf("Parse empty claims token: %v", err)
-	}
-	if parsed.UserID != "" {
-		t.Errorf("expected empty UserID, got %q", parsed.UserID)
-	}
-}
-
-func TestGenerate_LargeClaims(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	claims := &testClaims{
-		UserID: strings.Repeat("x", 10000),
-		Email:  strings.Repeat("e", 10000),
-	}
-	token, err := svc.GenerateAccess(claims)
-	if err != nil {
-		t.Fatalf("GenerateAccess with large claims: %v", err)
-	}
-	parsed, err := svc.Parse(token)
-	if err != nil {
-		t.Fatalf("Parse large claims: %v", err)
-	}
-	if len(parsed.UserID) != 10000 {
-		t.Errorf("large UserID not preserved, got len=%d", len(parsed.UserID))
-	}
-}
-
-func TestGenerate_SpecialCharactersInClaims(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	claims := &testClaims{
-		UserID: "user/with\"special<chars>&",
-		Email:  "用户@例子.中国",
-	}
-	token, err := svc.GenerateAccess(claims)
-	if err != nil {
-		t.Fatalf("GenerateAccess: %v", err)
-	}
-	parsed, err := svc.Parse(token)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
-	if parsed.Email != claims.Email {
-		t.Errorf("special chars not preserved: got %q", parsed.Email)
-	}
-}
-
-func TestParse_WrongAudience(t *testing.T) {
-	cfgGen := newTestConfig()
-	cfgGen.Audience = []string{"aud-a"}
-	svcGen, _ := NewService(cfgGen, func() *testClaims { return &testClaims{} })
-
-	cfgVal := newTestConfig()
-	cfgVal.Audience = []string{"aud-b"}
-	svcVal, _ := NewService(cfgVal, func() *testClaims { return &testClaims{} })
-
-	token, _ := svcGen.GenerateAccess(&testClaims{UserID: "u"})
-	_, err := svcVal.Parse(token)
-	if err == nil {
-		t.Fatal("expected error when audience mismatches")
-	}
-}
-
-func TestParse_ErrorDoesNotLeakSecret(t *testing.T) {
-	cfg := newTestConfig()
-	svc, _ := NewService(cfg, func() *testClaims { return &testClaims{} })
-
-	_, err := svc.Parse("invalid.token.string")
-	if err != nil && strings.Contains(err.Error(), cfg.Secret) {
-		t.Error("error message should not contain the secret key")
-	}
-}
-
-func asymmetricConfig(t *testing.T, method SigningMethod, withPublic bool) *Config {
+func header(t *testing.T, token string) map[string]any {
 	t.Helper()
-	cfg := &Config{
-		Method:          method,
-		Issuer:          "test-issuer",
-		Audience:        []string{"test-audience"},
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: time.Hour,
-	}
-	switch method {
-	case RS256:
-		key, err := rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			t.Fatalf("rsa keygen: %v", err)
-		}
-		cfg.PrivateKey = key
-		if withPublic {
-			cfg.PublicKey = &key.PublicKey
-		}
-	case ES256:
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			t.Fatalf("ecdsa keygen: %v", err)
-		}
-		cfg.PrivateKey = key
-		if withPublic {
-			cfg.PublicKey = &key.PublicKey
-		}
-	case EdDSA:
-		pub, priv, err := ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			t.Fatalf("ed25519 keygen: %v", err)
-		}
-		cfg.PrivateKey = priv
-		if withPublic {
-			cfg.PublicKey = pub
-		}
-	case HS256:
-	}
-	return cfg
-}
-
-func TestRoundTrip_AsymmetricMethods(t *testing.T) {
-	t.Parallel()
-	for _, method := range []SigningMethod{RS256, ES256, EdDSA} {
-		for _, withPublic := range []bool{false, true} {
-			name := string(method)
-			if withPublic {
-				name += "-explicit-public"
-			} else {
-				name += "-derived-public"
-			}
-			t.Run(name, func(t *testing.T) {
-				t.Parallel()
-				cfg := asymmetricConfig(t, method, withPublic)
-				svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-				if err != nil {
-					t.Fatalf("NewService: %v", err)
-				}
-				access, err := svc.GenerateAccess(&testClaims{UserID: "u1"})
-				if err != nil {
-					t.Fatalf("GenerateAccess: %v", err)
-				}
-				parsed, err := svc.Parse(access)
-				if err != nil {
-					t.Fatalf("Parse: %v", err)
-				}
-				if parsed.UserID != "u1" {
-					t.Fatalf("UserID = %q, want u1", parsed.UserID)
-				}
-				refresh, err := svc.GenerateRefresh(&testClaims{UserID: "u1"})
-				if err != nil {
-					t.Fatalf("GenerateRefresh: %v", err)
-				}
-				if _, err := svc.ParseRefresh(refresh); err != nil {
-					t.Fatalf("ParseRefresh: %v", err)
-				}
-			})
-		}
-	}
-}
-
-func TestParse_RejectsUnexpectedSigningMethod(t *testing.T) {
-	t.Parallel()
-	hmacSvc, err := NewService(newTestConfig(), func() *testClaims { return &testClaims{} })
+	raw, err := base64.RawURLEncoding.DecodeString(strings.Split(token, ".")[0])
 	if err != nil {
-		t.Fatalf("NewService: %v", err)
+		t.Fatalf("decode header: %v", err)
 	}
-	token, err := hmacSvc.GenerateAccess(&testClaims{UserID: "u1"})
+	var h map[string]any
+	if err := json.Unmarshal(raw, &h); err != nil {
+		t.Fatalf("unmarshal header: %v", err)
+	}
+	return h
+}
+
+func TestGenerateTokenSetsProfileAndRoundTrips(t *testing.T) {
+	t.Parallel()
+	clock := util.NewFakeClock(epoch)
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, clock)
+
+	token := issue(t, svc, subject("svc-a"))
+	h := header(t, token)
+	if h["kid"] != "k1" || h["typ"] != "test+jwt" || h["alg"] != "EdDSA" {
+		t.Fatalf("unexpected header: %v", h)
+	}
+
+	got, err := svc.ValidateToken(context.Background(), token)
 	if err != nil {
-		t.Fatalf("GenerateAccess: %v", err)
+		t.Fatalf("ValidateToken: %v", err)
 	}
-	rsSvc, err := NewService(asymmetricConfig(t, RS256, false), func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService RS256: %v", err)
+	if got.UserID != "user-1" || got.Issuer != "issuer" || len(got.Audience) != 1 || got.Audience[0] != "svc-a" {
+		t.Fatalf("unexpected claims: %+v", got)
 	}
-	if _, err := rsSvc.Parse(token); err == nil {
-		t.Fatal("expected rejection of HS256 token by RS256 verifier")
-	}
-}
-
-func TestApplyDefaultsSetsMethod(t *testing.T) {
-	t.Parallel()
-	cfg := &Config{}
-	cfg.ApplyDefaults()
-	if cfg.Method != RS256 {
-		t.Fatalf("default method = %q, want RS256", cfg.Method)
+	if !got.IssuedAt.Equal(epoch) || !got.NotBefore.Equal(epoch) || !got.ExpiresAt.Equal(epoch.Add(30*time.Second)) {
+		t.Fatalf("unexpected times: iat=%v nbf=%v exp=%v", got.IssuedAt, got.NotBefore, got.ExpiresAt)
 	}
 }
 
-func TestFindRegisteredClaims_TypedNilPointer(t *testing.T) {
+func TestGenerateRejectsOversizedToken(t *testing.T) {
 	t.Parallel()
-	var typedNil *testClaims
-	if rc := findRegisteredClaims(typedNil); rc != nil {
-		t.Fatal("expected nil for typed nil pointer")
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, util.NewFakeClock(epoch))
+	claims := subject("svc-a")
+	claims.UserID = strings.Repeat("x", 8<<10)
+	token, err := svc.GenerateToken(context.Background(), claims)
+	if err == nil || token != "" {
+		t.Fatal("issuance returned a token outside its validation limit")
+	}
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+}
+
+func TestValidateTokenAcceptsEveryConfiguredAudience(t *testing.T) {
+	t.Parallel()
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, util.NewFakeClock(epoch))
+	for _, aud := range []string{"svc-a", "svc-b"} {
+		if _, err := svc.ValidateToken(context.Background(), issue(t, svc, subject(aud))); err != nil {
+			t.Fatalf("audience %s rejected: %v", aud, err)
+		}
 	}
 }
 
-func TestGenerateReturnsSignError(t *testing.T) {
+func TestExpiryHonorsExplicitLeeway(t *testing.T) {
 	t.Parallel()
-	// A Service configured for RS256 but given a non-RSA sign key forces
-	// SignedString to fail without going through NewService validation.
-	svc := &Service[*testClaims]{cfg: Config{Method: RS256}, newEmpty: func() *testClaims { return &testClaims{} }}
-	if _, err := svc.Generate(&testClaims{UserID: "u1"}); err == nil {
-		t.Fatal("expected sign error from Generate")
-	}
-	if _, err := svc.generateWithKey(&testClaims{UserID: "u1"}, "not-a-key"); err == nil {
-		t.Fatal("expected sign error from generateWithKey")
+	for _, leeway := range []time.Duration{0, 2 * time.Second} {
+		cfg := baseConfig()
+		cfg.Leeway = leeway
+		clock := util.NewFakeClock(epoch)
+		svc := newService(t, cfg, jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, clock)
+		token := issue(t, svc, subject("svc-a"))
+
+		clock.Set(epoch.Add(30*time.Second + leeway - time.Second))
+		if _, err := svc.ValidateToken(context.Background(), token); err != nil {
+			t.Fatalf("leeway %s: rejected inside window: %v", leeway, err)
+		}
+		clock.Set(epoch.Add(30*time.Second + leeway))
+		_, err := svc.ValidateToken(context.Background(), token)
+		requireCode(t, err, apperrors.ErrCodeTokenExpired)
 	}
 }
 
-func TestValidateRequiredClaims(t *testing.T) {
+func TestNotBeforeHonorsLeeway(t *testing.T) {
 	t.Parallel()
-	svc, err := NewService(newTestConfig(), func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
-	}
-	now := time.Now()
-	full := func() *testClaims {
-		return &testClaims{RegisteredClaims: gojwt.RegisteredClaims{
-			ExpiresAt: gojwt.NewNumericDate(now.Add(time.Hour)),
-			IssuedAt:  gojwt.NewNumericDate(now),
-			NotBefore: gojwt.NewNumericDate(now),
-			Issuer:    "test-issuer",
-			Audience:  gojwt.ClaimStrings{"test-audience"},
-		}}
-	}
-	if err := svc.validateRequiredClaims(full()); err != nil {
-		t.Fatalf("full claims rejected: %v", err)
-	}
+	clock := util.NewFakeClock(epoch)
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, clock)
+	claims := subject("svc-a")
+	claims.NotBefore = at(10 * time.Second)
+	token := issue(t, svc, claims)
 
-	mutators := map[string]func(*testClaims){
-		"exp": func(c *testClaims) { c.ExpiresAt = nil },
-		"iat": func(c *testClaims) { c.IssuedAt = nil },
-		"nbf": func(c *testClaims) { c.NotBefore = nil },
-		"iss": func(c *testClaims) { c.Issuer = "" },
-		"aud": func(c *testClaims) { c.Audience = nil },
+	clock.Set(epoch.Add(7 * time.Second))
+	_, err := svc.ValidateToken(context.Background(), token)
+	requireCode(t, err, apperrors.ErrCodeInvalidToken)
+	clock.Set(epoch.Add(8 * time.Second))
+	if _, err := svc.ValidateToken(context.Background(), token); err != nil {
+		t.Fatalf("rejected at nbf-leeway: %v", err)
 	}
-	for name, mutate := range mutators {
+}
+
+func TestIssuedInFutureRejected(t *testing.T) {
+	t.Parallel()
+	clock := util.NewFakeClock(epoch)
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, clock)
+	claims := subject("svc-a")
+	claims.IssuedAt = at(5 * time.Second)
+	token := issue(t, svc, claims)
+	_, err := svc.ValidateToken(context.Background(), token)
+	requireCode(t, err, apperrors.ErrCodeInvalidToken)
+}
+
+func TestLifetimeAndOrdering(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	keys := jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}
+	clock := util.NewFakeClock(epoch)
+	strict := newService(t, baseConfig(), keys, clock)
+	lenientCfg := baseConfig()
+	lenientCfg.MaxLifetime = time.Hour
+	lenient := newService(t, lenientCfg, keys, clock)
+
+	cases := map[string]func(*testClaims){
+		"exp-iat over maximum": func(c *testClaims) { c.ExpiresAt = at(31 * time.Second) },
+		"nbf before iat":       func(c *testClaims) { c.IssuedAt = at(0); c.NotBefore = at(-time.Second) },
+		"exp at nbf":           func(c *testClaims) { c.NotBefore = at(time.Second); c.ExpiresAt = at(time.Second) },
+	}
+	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			claims := full()
+			claims := subject("svc-a")
 			mutate(claims)
-			if err := svc.validateRequiredClaims(claims); err == nil {
-				t.Fatalf("expected error for missing %s", name)
+			_, err := strict.GenerateToken(context.Background(), claims)
+			requireCode(t, err, apperrors.ErrCodeInvalidInput)
+
+			crafted := subject("svc-a")
+			mutate(crafted)
+			if name == "exp-iat over maximum" {
+				token := issue(t, lenient, crafted)
+				_, verr := strict.ValidateToken(context.Background(), token)
+				requireCode(t, verr, apperrors.ErrCodeInvalidToken)
 			}
 		})
 	}
+	claims := subject("svc-a")
+	claims.ExpiresAt = at(30 * time.Second)
+	if _, err := strict.ValidateToken(context.Background(), issue(t, strict, claims)); err != nil {
+		t.Fatalf("exact maximum lifetime rejected: %v", err)
+	}
 }
 
-func TestParse_RejectsTokenMissingNotBefore(t *testing.T) {
+func TestBadlyOrderedTokenFromAnotherIssuerRejected(t *testing.T) {
 	t.Parallel()
-	cfg := newTestConfig()
-	svc, err := NewService(cfg, func() *testClaims { return &testClaims{} })
-	if err != nil {
-		t.Fatalf("NewService: %v", err)
+	key := edKey(t, "k1")
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, util.NewFakeClock(epoch))
+	for name, claims := range map[string]gojwt.RegisteredClaims{
+		"nbf before iat": {Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(-time.Second), ExpiresAt: at(10 * time.Second)},
+		"missing nbf":    {Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), ExpiresAt: at(10 * time.Second)},
+		"missing iat":    {Issuer: "issuer", Audience: []string{"svc-a"}, NotBefore: at(0), ExpiresAt: at(10 * time.Second)},
+		"missing exp":    {Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0)},
+		"wrong issuer":   {Issuer: "other", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)},
+		"foreign aud":    {Issuer: "issuer", Audience: []string{"svc-z"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)},
+		"missing aud":    {Issuer: "issuer", IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)},
+	} {
+		token := signRaw(t, key, map[string]any{"kid": "k1", "typ": "test+jwt"}, claims)
+		_, err := svc.ValidateToken(context.Background(), token)
+		if err == nil {
+			t.Fatalf("%s: accepted", name)
+		}
 	}
-	now := time.Now()
-	claims := &testClaims{RegisteredClaims: gojwt.RegisteredClaims{
-		ExpiresAt: gojwt.NewNumericDate(now.Add(time.Hour)),
-		IssuedAt:  gojwt.NewNumericDate(now),
-		Issuer:    cfg.Issuer,
-		Audience:  gojwt.ClaimStrings(cfg.Audience),
-	}}
-	token := gojwt.NewWithClaims(gojwt.SigningMethodHS256, claims)
-	signed, err := token.SignedString([]byte(cfg.Secret))
+}
+
+func signRaw(t *testing.T, key jwt.Key, headers map[string]any, claims gojwt.Claims) string {
+	t.Helper()
+	token := gojwt.NewWithClaims(gojwt.SigningMethodEdDSA, claims)
+	for k, v := range headers {
+		token.Header[k] = v
+	}
+	if _, ok := headers["typ"]; !ok {
+		delete(token.Header, "typ")
+	}
+	signed, err := token.SignedString(key.Signer)
 	if err != nil {
 		t.Fatalf("sign: %v", err)
 	}
-	if _, err := svc.Parse(signed); err == nil {
-		t.Fatal("expected rejection of token missing nbf claim")
+	return signed
+}
+
+func validRaw() gojwt.RegisteredClaims {
+	return gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)}
+}
+
+func TestTypeHeaderIsRequired(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, util.NewFakeClock(epoch))
+	for typ, accepted := range map[string]bool{"": false, "JWT": false, "other+jwt": false, "test+jwt": true, "TEST+JWT": true, "application/test+jwt": true} {
+		headers := map[string]any{"kid": "k1"}
+		if typ != "" {
+			headers["typ"] = typ
+		}
+		_, err := svc.ValidateToken(context.Background(), signRaw(t, key, headers, validRaw()))
+		if accepted != (err == nil) {
+			t.Fatalf("typ %q: accepted=%v err=%v", typ, accepted, err)
+		}
 	}
 }
 
-// FuzzParse exercises the JWT Service.Parse path with arbitrary input bytes.
-// The contract is: Parse must not panic on any input. Invalid tokens must
-// surface as errors, not crashes. Algorithm-confusion seeds (alg=none,
-// alg=HS256-against-RSA-key, malformed compact form, oversize segments) are
-// added to ensure the corpus exercises the security-critical paths.
-func FuzzParse(f *testing.F) {
-	seeds := []string{
-		"",
-		".",
-		"..",
-		"a.b.c",
-		jwtSeed(`{"alg":"none","typ":"JWT"}`, `{"sub":"1234567890"}`, ""),        // alg=none
-		jwtHeaderOnly(`{"alg":"HS256","typ":"JWT"}`),                             // truncated (header only)
-		jwtSeed(`{"alg":"HS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // bad signature
-		jwtSeed(`{"alg":"RS256","typ":"JWT"}`, `{"sub":"1234567890"}`, "badsig"), // alg confusion (RS256 header, HMAC key)
-		"\x00\x00\x00",
-		string(make([]byte, 64*1024)),
+func TestKeyIDSelectsVerificationKey(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	other := edKey(t, "k2")
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, util.NewFakeClock(epoch))
+	cases := map[string]string{
+		"missing kid":         signRaw(t, key, map[string]any{"typ": "test+jwt"}, validRaw()),
+		"unknown kid":         signRaw(t, key, map[string]any{"typ": "test+jwt", "kid": "k9"}, validRaw()),
+		"numeric kid":         signRaw(t, key, map[string]any{"typ": "test+jwt", "kid": 1}, validRaw()),
+		"kid of another key":  signRaw(t, other, map[string]any{"typ": "test+jwt", "kid": "k1"}, validRaw()),
+		"non-string typ type": signRaw(t, key, map[string]any{"typ": 7, "kid": "k1"}, validRaw()),
 	}
-	for _, s := range seeds {
-		f.Add(s)
+	for name, token := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			_, err := svc.ValidateToken(context.Background(), token)
+			requireCode(t, err, apperrors.ErrCodeInvalidToken)
+		})
 	}
+}
 
-	type fuzzClaims struct {
-		gojwt.RegisteredClaims
+func TestRotationOverlapEndsAtRetirement(t *testing.T) {
+	t.Parallel()
+	oldKey, newKey := edKey(t, "old"), edKey(t, "new")
+	cfg := baseConfig()
+	cfg.MaxLifetime = 10 * time.Minute
+	clock := util.NewFakeClock(epoch)
+	before := newService(t, cfg, jwt.KeySet{SigningKeyID: "old", Keys: []jwt.Key{oldKey}}, clock)
+	token := issue(t, before, subject("svc-a"))
+
+	after := newService(t, cfg, jwt.KeySet{SigningKeyID: "new", Keys: []jwt.Key{newKey, verifyOnly(oldKey, epoch.Add(time.Minute))}}, clock)
+	if h := header(t, issue(t, after, subject("svc-a"))); h["kid"] != "new" {
+		t.Fatalf("rotated service signs with %v", h["kid"])
 	}
-	cfg := &Config{
-		Method:             HS256,
-		Secret:             "fuzz-secret-32-bytes-or-more-for-test",
-		AllowSymmetricHMAC: true,
-		Issuer:             "fuzz-issuer",
-		Audience:           []string{"fuzz-audience"},
+	clock.Set(epoch.Add(time.Minute - time.Second))
+	if _, err := after.ValidateToken(context.Background(), token); err != nil {
+		t.Fatalf("old key rejected inside overlap: %v", err)
 	}
-	svc, err := NewService(cfg, func() *fuzzClaims { return &fuzzClaims{} })
+	clock.Set(epoch.Add(time.Minute))
+	_, err := after.ValidateToken(context.Background(), token)
+	requireCode(t, err, apperrors.ErrCodeInvalidToken)
+}
+
+func TestSingleAudience(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	keys := jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}
+	clock := util.NewFakeClock(epoch)
+	cfg := baseConfig()
+	cfg.SingleAudience = true
+	single := newService(t, cfg, keys, clock)
+	multi := newService(t, baseConfig(), keys, clock)
+
+	_, err := single.GenerateToken(context.Background(), subject("svc-a", "svc-b"))
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+	_, err = single.ValidateToken(context.Background(), issue(t, multi, subject("svc-a", "svc-b")))
+	requireCode(t, err, apperrors.ErrCodeInvalidToken)
+	if _, err := single.ValidateToken(context.Background(), issue(t, single, subject("svc-b"))); err != nil {
+		t.Fatalf("single audience rejected: %v", err)
+	}
+}
+
+func TestIssuanceDefaultsAndRejectsForeignProfile(t *testing.T) {
+	t.Parallel()
+	keys := jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}
+	clock := util.NewFakeClock(epoch)
+	multi := newService(t, baseConfig(), keys, clock)
+	_, err := multi.GenerateToken(context.Background(), subject())
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+	_, err = multi.GenerateToken(context.Background(), subject("svc-z"))
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+	foreign := subject("svc-a")
+	foreign.Issuer = "other"
+	_, err = multi.GenerateToken(context.Background(), foreign)
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+	_, err = multi.GenerateToken(context.Background(), nil)
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+
+	cfg := baseConfig()
+	cfg.Audience = []string{"only"}
+	one := newService(t, cfg, keys, clock)
+	got, err := one.ValidateToken(context.Background(), issue(t, one, subject()))
+	if err != nil || len(got.Audience) != 1 || got.Audience[0] != "only" {
+		t.Fatalf("default audience: %+v %v", got, err)
+	}
+}
+
+func TestVerifyOnlyServiceCannotSign(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	clock := util.NewFakeClock(epoch)
+	signer := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, clock)
+	verifier := newService(t, baseConfig(), jwt.KeySet{Keys: []jwt.Key{{ID: "k1", Public: key.Signer.Public()}}}, clock)
+	if _, err := verifier.ValidateToken(context.Background(), issue(t, signer, subject("svc-a"))); err != nil {
+		t.Fatalf("verify-only rejected: %v", err)
+	}
+	_, err := verifier.GenerateToken(context.Background(), subject("svc-a"))
+	requireCode(t, err, apperrors.ErrCodeInvalidInput)
+}
+
+func TestCanceledContext(t *testing.T) {
+	t.Parallel()
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, util.NewFakeClock(epoch))
+	token := issue(t, svc, subject("svc-a"))
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	expired, stop := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer stop()
+	for ctx, code := range map[context.Context]apperrors.ErrorCode{canceled: apperrors.ErrCodeCanceled, expired: apperrors.ErrCodeTimeout} {
+		_, err := svc.ValidateToken(ctx, token)
+		requireCode(t, err, code)
+		_, err = svc.GenerateToken(ctx, subject("svc-a"))
+		requireCode(t, err, code)
+	}
+}
+
+func TestServiceSatisfiesTokenContracts(t *testing.T) {
+	t.Parallel()
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, util.NewFakeClock(epoch))
+	var _ interface {
+		ValidateToken(context.Context, string) (*testClaims, error)
+		GenerateToken(context.Context, *testClaims) (string, error)
+	} = svc
+	reg := &jwt.Registered{}
+	reg.Audience = []string{"svc-a"}
+	plain, err := jwt.NewService(baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{edKey(t, "k1")}}, util.NewFakeClock(epoch), func() *jwt.Registered { return &jwt.Registered{} })
 	if err != nil {
-		f.Fatalf("NewService: %v", err)
+		t.Fatal(err)
+	}
+	if _, err := plain.GenerateToken(context.Background(), reg); err != nil {
+		t.Fatalf("bare registered claims: %v", err)
+	}
+}
+
+// vetoClaims fails the application's own claim check.
+type vetoClaims struct{ jwt.Registered }
+
+func (*vetoClaims) Validate() error { return errors.New("application veto") }
+
+func TestExpiredIsReportedOnlyWhenItIsTheSoleDefect(t *testing.T) {
+	t.Parallel()
+	key := edKey(t, "k1")
+	clock := util.NewFakeClock(epoch.Add(time.Hour))
+	svc := newService(t, baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, clock)
+	header := map[string]any{"kid": "k1", "typ": "test+jwt"}
+	for name, tc := range map[string]struct {
+		claims gojwt.RegisteredClaims
+		code   apperrors.ErrorCode
+	}{
+		"only expired":   {gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)}, apperrors.ErrCodeTokenExpired},
+		"wrong issuer":   {gojwt.RegisteredClaims{Issuer: "other", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)}, apperrors.ErrCodeInvalidToken},
+		"foreign aud":    {gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-z"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)}, apperrors.ErrCodeInvalidToken},
+		"nbf before iat": {gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(-time.Second), ExpiresAt: at(10 * time.Second)}, apperrors.ErrCodeInvalidToken},
+		"over lifetime":  {gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(time.Minute)}, apperrors.ErrCodeInvalidToken},
+		"missing nbf":    {gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), ExpiresAt: at(10 * time.Second)}, apperrors.ErrCodeInvalidToken},
+	} {
+		_, err := svc.ValidateToken(context.Background(), signRaw(t, key, header, tc.claims))
+		if got := apperrors.Normalize(err).Code; got != tc.code {
+			t.Errorf("%s: got %v, want %v", name, got, tc.code)
+		}
 	}
 
-	f.Fuzz(func(t *testing.T, token string) {
-		// Contract: never panic. Errors are expected on garbage input.
-		_, _ = svc.Parse(token)
-	})
+	veto, err := jwt.NewService(baseConfig(), jwt.KeySet{SigningKeyID: "k1", Keys: []jwt.Key{key}}, clock, func() *vetoClaims { return &vetoClaims{} })
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = veto.ValidateToken(context.Background(), signRaw(t, key, header, gojwt.RegisteredClaims{Issuer: "issuer", Audience: []string{"svc-a"}, IssuedAt: at(0), NotBefore: at(0), ExpiresAt: at(10 * time.Second)}))
+	requireCode(t, err, apperrors.ErrCodeInvalidToken)
 }

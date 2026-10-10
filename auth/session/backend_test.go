@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestRemoteBackendServesBrowserContract(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, loginRequest(remoteToken))
-	if w.Code != http.StatusOK || signedIn.Presented != remoteToken || signedIn.Credentials.Username != "u" || signedIn.Credentials.Password != "p" {
+	if w.Code != http.StatusOK || signedIn.Presented != remoteToken || signedIn.Credentials.Username != "u" || signedIn.Credentials.Password != "p" || signedIn.Source != netip.MustParseAddr("192.0.2.1") {
 		t.Fatalf("login = %d %+v", w.Code, signedIn.Credentials.Username)
 	}
 	cookies := w.Result().Cookies()
@@ -113,6 +114,7 @@ func TestRemoteBackendServesBrowserContract(t *testing.T) {
 	logout := httptest.NewRequest(http.MethodPost, "https://example.test/auth/logout", http.NoBody)
 	logout.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
 	logout.Header.Set("X-CSRF-Token", "csrf-remote")
+	logout.Header.Set("Origin", "https://example.test")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, logout)
 	if w.Code != http.StatusNoContent || signedOut != (LogoutRequest{Token: remoteToken, CSRFToken: "csrf-remote"}) {
@@ -144,6 +146,27 @@ func TestRemoteBackendRejectsBeforeDelegation(t *testing.T) {
 			r.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
 			r.Header.Add("X-CSRF-Token", "a")
 			r.Header.Add("X-CSRF-Token", "b")
+			return r
+		}(),
+		"logout without origin": func() *http.Request {
+			r := httptest.NewRequest(http.MethodPost, "https://example.test/auth/logout", http.NoBody)
+			r.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
+			r.Header.Set("X-CSRF-Token", "csrf")
+			return r
+		}(),
+		"logout foreign origin": func() *http.Request {
+			r := httptest.NewRequest(http.MethodPost, "https://example.test/auth/logout", http.NoBody)
+			r.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
+			r.Header.Set("X-CSRF-Token", "csrf")
+			r.Header.Set("Origin", "https://evil.test")
+			return r
+		}(),
+		"logout duplicate origin": func() *http.Request {
+			r := httptest.NewRequest(http.MethodPost, "https://example.test/auth/logout", http.NoBody)
+			r.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
+			r.Header.Set("X-CSRF-Token", "csrf")
+			r.Header.Add("Origin", "https://example.test")
+			r.Header.Add("Origin", "https://example.test")
 			return r
 		}(),
 		"login malformed cookie":  loginRequest("short"),
@@ -186,6 +209,7 @@ func TestRemoteBackendFailuresAndExpiredGrants(t *testing.T) {
 	logout := httptest.NewRequest(http.MethodPost, "https://example.test/auth/logout", http.NoBody)
 	logout.AddCookie(&http.Cookie{Name: auth.SessionCookie, Value: remoteToken})
 	logout.Header.Set("X-CSRF-Token", "csrf")
+	logout.Header.Set("Origin", "https://example.test")
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, logout)
 	if w.Code != http.StatusUnauthorized || w.Header().Get("Set-Cookie") != "" {
@@ -236,6 +260,36 @@ func TestParseCSRFToken(t *testing.T) {
 		}
 		if err != nil && apperrors.Normalize(err).Reason != "CSRF_INVALID" {
 			t.Fatalf("csrf reason = %v", err)
+		}
+	}
+}
+
+func TestCheckOrigin(t *testing.T) {
+	t.Parallel()
+	const origin = "https://example.test"
+	for _, tt := range []struct {
+		method  string
+		values  []string
+		wantErr bool
+	}{
+		{http.MethodGet, nil, false},
+		{http.MethodOptions, []string{"https://evil.test"}, false},
+		{http.MethodPost, []string{origin}, false},
+		{http.MethodPost, nil, true},
+		{http.MethodPost, []string{"https://evil.test"}, true},
+		{http.MethodDelete, []string{origin, origin}, true},
+		{http.MethodPut, []string{"null"}, true},
+	} {
+		r := httptest.NewRequest(tt.method, origin+"/", http.NoBody)
+		for _, value := range tt.values {
+			r.Header.Add("Origin", value)
+		}
+		err := CheckOrigin(r, origin)
+		if (err != nil) != tt.wantErr {
+			t.Fatalf("%s %v = %v", tt.method, tt.values, err)
+		}
+		if err != nil && apperrors.Normalize(err).Reason != "CSRF_INVALID" {
+			t.Fatalf("origin reason = %v", err)
 		}
 	}
 }

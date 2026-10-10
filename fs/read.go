@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
 
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -20,24 +19,28 @@ var (
 	ErrNotRegularFile = errors.New("path is not a regular file")
 )
 
-// ReadFileLimit reads at most maxBytes from a regular file,
-// failing closed once the limit is exceeded so a caller never buffers an unbounded file.
+// ReadFileLimit bounds a regular-file read, follows symlinks and reports descriptor/close failures. Unix opens are nonblocking before descriptor validation, so a FIFO cannot block opening. Filesystem operations are synchronous; this is not a universal filesystem cancellation guarantee.
 // A negative maxBytes is rejected with an InvalidInput [apperrors.AppError].
-// It resolves symlinks like [os.Open]; callers that must reject symlinks verify the path first.
+// This operation neither confines paths nor rejects symlinks.
 // A non-regular target yields [ErrNotRegularFile], an oversized file yields [ErrFileTooLarge],
 // and other IO failures return a typed AppError.
-func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
+func ReadFileLimit(path string, maxBytes int64) (data []byte, err error) {
 	if maxBytes < 0 {
 		return nil, apperrors.InvalidInput("maxBytes",
 			fmt.Sprintf("maxBytes must be non-negative, got %d", maxBytes))
 	}
-	f, err := os.Open(path)
+	f, err := openReadFile(path)
 	if err != nil {
 		code := osErrorCode(err)
 		return nil, apperrors.New(code,
 			"failed to open file").WithCause(err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil {
+			err = errors.Join(err, apperrors.Internal(fmt.Errorf("close bounded file reader: %w", closeErr)))
+			data = nil
+		}
+	}()
 	info, err := f.Stat()
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
@@ -56,7 +59,7 @@ func ReadFileLimit(path string, maxBytes int64) ([]byte, error) {
 	if probe < math.MaxInt64 {
 		probe++
 	}
-	data, err := io.ReadAll(io.LimitReader(f, probe))
+	data, err = io.ReadAll(io.LimitReader(f, probe))
 	if err != nil {
 		return nil, apperrors.New(apperrors.ErrCodeInternal,
 			"failed to read file",

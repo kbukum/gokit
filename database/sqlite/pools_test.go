@@ -17,7 +17,7 @@ func TestSQLiteOwnedPools(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	dsn := filepath.Join(t.TempDir(), "pool.db")
-	db, err := database.NewWithContext(ctx, sqlite.Open(dsn), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, sqlite.Dialect(), database.Config{DSN: dsn}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,8 @@ func TestMemoryDatabaseRetainsItsConnection(t *testing.T) {
 	for _, dsn := range []string{":memory:", ":memory:?cache=shared", "file::memory:?cache=shared", "file:retained?mode=memory&cache=shared"} {
 		t.Run(dsn, func(t *testing.T) {
 			t.Parallel()
-			db, err := database.NewWithContext(t.Context(), sqlite.Open(dsn), database.Config{
+			db, err := database.NewWithContext(t.Context(), sqlite.Dialect(), database.Config{
+				DSN:             dsn,
 				ConnMaxLifetime: "1ns", ConnMaxIdleTime: "1ns",
 			}, logging.NewDefault("test"))
 			if err != nil {

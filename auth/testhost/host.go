@@ -107,7 +107,7 @@ func (h *Host) Start(ctx context.Context) (err error) {
 	}()
 	cfg := database.Config{Enabled: true, DSN: h.config.StateFile, MaxRetries: 1, LogLevel: "silent"}
 	cfg.ApplyDefaults()
-	h.db, err = database.NewWithContext(ctx, sqlite.Open(cfg.DSN), cfg, h.log)
+	h.db, err = database.NewWithContext(ctx, sqlite.Dialect(), cfg, h.log)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,9 @@ func (h *Host) Start(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	h.manager, err = session.NewManager(session.Config{Store: h.store, Clock: h.clock, Random: rand.Reader, Pepper: string(h.fixture.DigestKey), CSRF: csrf})
+	h.manager, err = session.NewManager(session.Config{Store: h.store, Clock: h.clock, Random: rand.Reader, Pepper: string(h.fixture.DigestKey), CSRF: csrf, ReportError: func(ctx context.Context, err error) {
+		h.log.WarnCtx(ctx, "Session worker failed", map[string]any{"code": string(apperrors.Normalize(err).Code)})
+	}})
 	if err != nil {
 		return err
 	}
@@ -168,7 +170,10 @@ func (h *Host) Start(ctx context.Context) (err error) {
 }
 
 func (h *Host) mount(ctx context.Context) error {
-	hasher := password.NewArgon2Hasher()
+	hasher, err := password.NewHasher(password.Config{})
+	if err != nil {
+		return err
+	}
 	hash, err := hasher.Hash(h.fixture.Password)
 	if err != nil {
 		return err
@@ -201,7 +206,10 @@ func (h *Host) mount(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	keyManager := apikey.NewManager(keys, protection)
+	keyManager, err := apikey.NewManager(apikey.Config{Store: keys, Hasher: protection, Clock: h.clock})
+	if err != nil {
+		return err
+	}
 	prefix, _, err := apikey.SplitKey(h.fixture.APIKey)
 	if err != nil {
 		return err
@@ -209,7 +217,7 @@ func (h *Host) mount(ctx context.Context) error {
 	err = keys.Create(ctx, &apikey.Key{
 		ID: "fixture-key", OwnerID: "fixture-user", Name: "fixture", Kind: auth.User,
 		RestrictionMode: auth.Restricted, Resources: []string{"resource-a"}, Scopes: []string{"read"},
-		KeyPrefix: prefix, KeyDigest: protection.Digest(h.fixture.APIKey), IsActive: true, CreatedAt: h.clock.Now(),
+		KeyPrefix: prefix, KeyDigest: protection.Digest(h.fixture.APIKey), CreatedAt: h.clock.Now(),
 	})
 	if err != nil {
 		return err

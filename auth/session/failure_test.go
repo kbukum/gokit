@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/security"
+	"github.com/kbukum/gokit/util"
 )
 
 func errorWriter(w http.ResponseWriter, r *http.Request, err error) {
@@ -61,6 +63,7 @@ func TestHTTPLogoutRotatedGenerationAndJSONFailures(t *testing.T) {
 	r.Method = "POST"
 	r.URL.Path = "/auth/logout"
 	r.Header.Set("X-CSRF-Token", csrf)
+	r.Header.Set("Origin", "https://example.test")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 204 || len(w.Result().Cookies()) != 1 || w.Result().Cookies()[0].MaxAge != -1 {
@@ -217,10 +220,10 @@ func TestBoundsAndEntropyFailures(t *testing.T) {
 	}
 
 	csrf, _ := security.NewSignedCSRF(bytes.Repeat([]byte{1}, 32), bytes.NewReader(nil))
-	if _, err := NewManager(Config{Store: s, Clock: clock, Random: bytes.NewReader(nil), Pepper: "short", CSRF: csrf}); err == nil {
+	if _, err := NewManager(Config{Store: s, Clock: clock, Random: bytes.NewReader(nil), Pepper: "short", CSRF: csrf, ReportError: func(context.Context, error) {}}); err == nil {
 		t.Fatal("weak pepper")
 	}
-	empty, err := NewManager(Config{Store: s, Clock: clock, Random: bytes.NewReader(nil), Pepper: strings.Repeat("p", 32), CSRF: csrf})
+	empty, err := NewManager(Config{Store: s, Clock: clock, Random: bytes.NewReader(nil), Pepper: strings.Repeat("p", 32), CSRF: csrf, ReportError: func(context.Context, error) {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +265,7 @@ func TestBoundsAndEntropyFailures(t *testing.T) {
 		release()
 		release()
 	}
-	m.Poll(ctx)
+	m.Nudge()
 	clock.Advance(time.Hour + Retention)
 	if n, err := m.Cleanup(context.Background()); err != nil || n > 1 {
 		t.Fatal(n, err)
@@ -272,5 +275,75 @@ func TestBoundsAndEntropyFailures(t *testing.T) {
 	s.mu.Unlock()
 	if remaining != 0 {
 		t.Fatal("due row retained")
+	}
+}
+
+// writeFailureStore reads normally but fails every write, so failures reach the mutation step itself.
+type writeFailureStore struct {
+	*memoryStore
+	err error
+}
+
+func (s *writeFailureStore) Create(context.Context, Record) error          { return s.err }
+func (s *writeFailureStore) Rotate(context.Context, string, Record) error  { return s.err }
+func (s *writeFailureStore) Relogin(context.Context, string, Record) error { return s.err }
+
+func TestWriteFailuresAreUnavailableNotInvalid(t *testing.T) {
+	shared := &memoryStore{rows: make(map[string]Record)}
+	writer, _ := fixture(t, shared)
+	issued, err := writer.Create(context.Background(), caller())
+	if err != nil {
+		t.Fatal(err)
+	}
+	csrf, err := security.NewSignedCSRF(bytes.Repeat([]byte{3}, 32), bytes.NewReader(bytes.Repeat([]byte{4}, 65536)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager(Config{
+		Store: &writeFailureStore{memoryStore: shared, err: errors.New("secret SQL")}, Clock: util.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+		Random: &counterReader{}, Pepper: strings.Repeat("p", 32), CSRF: csrf, ReportError: func(context.Context, error) {},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := m.Close(context.Background()); err != nil {
+			t.Error(err)
+		}
+	})
+	attempt, err := m.BeginLogin(context.Background(), issued.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, call := range map[string]func() error{
+		"create": func() error { _, err := m.Create(context.Background(), caller()); return err },
+		"rotate": func() error {
+			_, err := m.Rotate(context.Background(), issued.Principal.Reference, caller())
+			return err
+		},
+		"relogin": func() error { _, err := m.CompleteLogin(context.Background(), attempt, caller()); return err },
+	} {
+		err := call()
+		got := apperrors.Normalize(err)
+		if got.Code != apperrors.ErrCodeServiceUnavailable || got.Reason != "AUTH_STORE_UNAVAILABLE" || strings.Contains(got.Message, "secret") {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestRemoteAddrAcceptsBareAddresses(t *testing.T) {
+	t.Parallel()
+	for remote, want := range map[string]netip.Addr{
+		"192.0.2.1:443":          netip.MustParseAddr("192.0.2.1"),
+		"[::ffff:192.0.2.1]:443": netip.MustParseAddr("192.0.2.1"),
+		"192.0.2.2":              netip.MustParseAddr("192.0.2.2"),
+		"::ffff:192.0.2.3":       netip.MustParseAddr("192.0.2.3"),
+		"pipe":                   {},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		r.RemoteAddr = remote
+		if got := remoteAddr(r); got != want {
+			t.Fatalf("remoteAddr(%q) = %v, want %v", remote, got, want)
+		}
 	}
 }

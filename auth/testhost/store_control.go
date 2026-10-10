@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kbukum/gokit/auth"
 	"github.com/kbukum/gokit/auth/session"
 	apperrors "github.com/kbukum/gokit/errors"
 )
@@ -58,6 +59,21 @@ func (s *controlledStore) Revoke(ctx context.Context, reference string) (string,
 		return "", err
 	}
 	return s.Store.Revoke(ctx, reference)
+}
+
+func (s *controlledStore) RevokeSubject(ctx context.Context, kind auth.Kind, subject string) (int64, error) {
+	if err := s.check(ctx); err != nil {
+		return 0, err
+	}
+
+	return s.Store.RevokeSubject(ctx, kind, subject)
+}
+
+func (s *controlledStore) LookupBatch(ctx context.Context, refs []string) (map[string]session.Record, error) {
+	if err := s.check(ctx); err != nil {
+		return nil, err
+	}
+	return s.Store.LookupBatch(ctx, refs)
 }
 
 func (s *controlledStore) Cleanup(ctx context.Context, now time.Time, limit int) (int64, error) {

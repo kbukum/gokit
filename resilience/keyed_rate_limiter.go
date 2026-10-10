@@ -3,12 +3,29 @@ package resilience
 import (
 	"sync"
 	"time"
+
+	"github.com/kbukum/gokit/util"
 )
+
+// DefaultMaxKeys bounds a keyed limiter whose config sets no MaxKeys.
+const DefaultMaxKeys = 100_000
+
+// saturatedScanInterval is how often a full limiter rescans for expired buckets before denying a new key, so a flood
+// of new keys cannot force a full scan per call.
+const saturatedScanInterval = time.Second
 
 // KeyedRateLimiterConfig configures a keyed token-bucket limiter.
 type KeyedRateLimiterConfig struct {
+	// CleanupInterval is how often idle buckets are dropped (default 5m).
 	CleanupInterval time.Duration
-	BucketTTL       time.Duration
+	// BucketTTL is how long an untouched bucket lives (default 10m).
+	BucketTTL time.Duration
+	// MaxKeys bounds how many keys hold a bucket at once (default [DefaultMaxKeys]). When full, the limiter drops
+	// expired buckets and otherwise denies new keys with Saturated set, so callers fail closed instead of growing
+	// without bound; keys that already hold a bucket keep their own limit.
+	MaxKeys int
+	// Clock supplies time (default util.SystemClock).
+	Clock util.Clock
 }
 
 // RateLimitDecision captures the outcome of a rate-limit check.
@@ -18,6 +35,8 @@ type RateLimitDecision struct {
 	Remaining  int
 	RetryAfter time.Duration
 	ResetAt    time.Time
+	// Saturated reports a denial because the limiter holds MaxKeys buckets, not because this key ran out.
+	Saturated bool
 }
 
 type keyedBucket struct {
@@ -36,6 +55,7 @@ type KeyedRateLimiter struct {
 	nowFunc     func() time.Time
 	mu          sync.Mutex
 	lastCleanup time.Time
+	lastScan    time.Time
 	buckets     map[string]*keyedBucket
 	stopCh      chan struct{}
 	stoppedCh   chan struct{}
@@ -50,12 +70,19 @@ func NewKeyedRateLimiter(cfg KeyedRateLimiterConfig) *KeyedRateLimiter {
 	if cfg.BucketTTL <= 0 {
 		cfg.BucketTTL = 10 * time.Minute
 	}
+	if cfg.MaxKeys <= 0 {
+		cfg.MaxKeys = DefaultMaxKeys
+	}
+	if util.IsNil(cfg.Clock) {
+		cfg.Clock = util.SystemClock{}
+	}
 
-	now := time.Now()
+	now := cfg.Clock.Now()
 	rl := &KeyedRateLimiter{
 		cfg:         cfg,
-		nowFunc:     time.Now,
+		nowFunc:     cfg.Clock.Now,
 		lastCleanup: now,
+		lastScan:    now,
 		buckets:     make(map[string]*keyedBucket),
 		stopCh:      make(chan struct{}),
 		stoppedCh:   make(chan struct{}),
@@ -75,6 +102,9 @@ func (rl *KeyedRateLimiter) Allow(key string, limit int, interval time.Duration)
 	rl.cleanupLocked(now)
 
 	bucket, ok := rl.buckets[key]
+	if !ok && !rl.admitKeyLocked(now) {
+		return RateLimitDecision{Limit: normalizedLimit, RetryAfter: saturatedScanInterval, ResetAt: now.Add(saturatedScanInterval), Saturated: true}
+	}
 	if !ok || bucket.limit != normalizedLimit || bucket.interval != normalizedInterval {
 		bucket = newKeyedBucket(normalizedLimit, normalizedInterval, now)
 		rl.buckets[key] = bucket
@@ -127,12 +157,30 @@ func (rl *KeyedRateLimiter) cleanupLocked(now time.Time) {
 	if now.Sub(rl.lastCleanup) < rl.cfg.CleanupInterval {
 		return
 	}
+	rl.dropExpiredLocked(now)
+	rl.lastCleanup = now
+}
+
+// admitKeyLocked reports whether a new key may get a bucket. A full limiter rescans for expired buckets at most once
+// per saturatedScanInterval.
+func (rl *KeyedRateLimiter) admitKeyLocked(now time.Time) bool {
+	if len(rl.buckets) < rl.cfg.MaxKeys {
+		return true
+	}
+	if now.Sub(rl.lastScan) < saturatedScanInterval {
+		return false
+	}
+	rl.lastScan = now
+	rl.dropExpiredLocked(now)
+	return len(rl.buckets) < rl.cfg.MaxKeys
+}
+
+func (rl *KeyedRateLimiter) dropExpiredLocked(now time.Time) {
 	for key, bucket := range rl.buckets {
 		if now.Sub(bucket.lastAccess) > rl.cfg.BucketTTL {
 			delete(rl.buckets, key)
 		}
 	}
-	rl.lastCleanup = now
 }
 
 func newKeyedBucket(limit int, interval time.Duration, now time.Time) *keyedBucket {

@@ -9,12 +9,15 @@ import (
 	componenttest "github.com/kbukum/gokit/component/testutil"
 )
 
-func TestFixtureCleanupUsesFreshBudgetAndPreservesFailure(t *testing.T) {
+func TestFixtureCleanupUsesFreshBudgetAndRetriesFailure(t *testing.T) {
 	t.Parallel()
 	failure := errors.New("termination failed")
 	calls := 0
 	double := &componenttest.Component{StopFunc: func(ctx context.Context) error {
 		calls++
+		if calls > 2 {
+			return nil
+		}
 		if ctx.Err() != nil {
 			t.Errorf("canceled cleanup: %v", ctx.Err())
 		}
@@ -32,8 +35,19 @@ func TestFixtureCleanupUsesFreshBudgetAndPreservesFailure(t *testing.T) {
 			t.Fatalf("termination failure hidden: %v", err)
 		}
 	}
-	if calls != 1 {
-		t.Fatalf("termination calls = %d", calls)
+	if calls != 2 {
+		t.Fatalf("failed termination was not retried: calls = %d", calls)
+	}
+	for range 2 {
+		if err := fixture.Close(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if calls != 3 {
+		t.Fatalf("successful termination repeated: calls = %d", calls)
+	}
+	if _, err := fixture.NewDatabase(t.Context()); err == nil {
+		t.Fatal("closed fixture created a database")
 	}
 }
 

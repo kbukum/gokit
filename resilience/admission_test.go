@@ -28,7 +28,7 @@ func TestPolicyBudgetBoundsRateAdmission(t *testing.T) {
 func TestPolicyBudgetBoundsBulkheadAdmission(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		policy := NewPolicy().WithTimeout(10 * time.Millisecond).
-			WithBulkhead(BulkheadConfig{MaxConcurrent: 1, MaxWait: time.Hour})
+			WithBulkhead(BulkheadConfig{MaxConcurrent: 1, MaxWait: time.Hour, MaxQueue: 1})
 		policy.init()
 		if err := policy.bh.acquire(context.Background()); err != nil {
 			t.Fatal(err)

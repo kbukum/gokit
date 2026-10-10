@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/auth/jwt"
 	"github.com/kbukum/gokit/auth/oidc"
@@ -87,11 +88,11 @@ func TestConfig_ApplyDefaultsValidateDescribe(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
 		JWT: &jwt.Config{
-			Method:             jwt.HS256,
-			AllowSymmetricHMAC: true,
-			Secret:             "12345678901234567890123456789012",
-			Issuer:             "issuer",
-			Audience:           []string{"aud"},
+			Method:      jwt.EdDSA,
+			Issuer:      "issuer",
+			Audience:    []string{"aud"},
+			Type:        "at+jwt",
+			MaxLifetime: 15 * time.Minute,
 		},
 		Password: &password.Config{},
 		OIDC: &oidc.Config{
@@ -116,9 +117,11 @@ func TestConfig_ValidateWrappedError(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
 		JWT: &jwt.Config{
-			Method:   jwt.RS256,
-			Issuer:   "issuer",
-			Audience: []string{"aud"},
+			Method:      jwt.HS256,
+			Issuer:      "issuer",
+			Audience:    []string{"aud"},
+			Type:        "at+jwt",
+			MaxLifetime: time.Minute,
 		},
 	}
 	if err := cfg.Validate(); err == nil {

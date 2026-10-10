@@ -19,6 +19,16 @@ store, err := cache.New(reg, cache.Config{
 }, nil, log)
 ```
 
+A memory store can be bounded and driven by an injected clock. `MaxEntries` caps how many keys it holds; adding a new key to a full store evicts the least recently used entry, and replacing a key never evicts. `NewMemoryStore` validates the configuration and returns an error for a negative TTL or bound.
+
+```go
+store, err := cache.NewMemoryStore(cache.MemoryConfig{
+    DefaultTTL: 5 * time.Second,
+    MaxEntries: 10_000,
+    Clock:      clock, // util.Clock; nil means the system clock
+})
+```
+
 ## Redis adapter
 
 ```go

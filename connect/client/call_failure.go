@@ -16,16 +16,19 @@ func MapCallFailure(ctx context.Context, peer string, err error) (*apperrors.App
 	if !IsUnavailable(err) {
 		return nil, false
 	}
-	// One read, so a deadline passing mid-check cannot split the classification.
+	// One read, so a deadline passing mid-check cannot split the classification. A due deadline whose timer has not
+	// fired is still the caller's: the peer may have enforced its propagated copy first.
 	ended := ctx.Err()
 	switch {
+	case ended == nil && deadlineDue(ctx):
+		return apperrors.Timeout(peer).WithCause(errors.Join(err, context.DeadlineExceeded)), true
 	case errors.Is(ended, context.DeadlineExceeded):
 		return apperrors.Timeout(peer).WithCause(errors.Join(err, context.Cause(ctx))), true
 	case ended != nil:
 		return apperrors.Canceled(peer).WithCause(errors.Join(err, context.Cause(ctx))), true
 	}
 	failure := apperrors.ServiceUnavailable(peer).WithReason(ReasonUnavailable).WithCause(err)
-	if IsTransportFailure(err) || errors.Is(err, ErrFirstMessageTimeout) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if IsTransportFailure(err) || errors.Is(err, ErrFirstMessageTimeout) || errors.Is(err, ErrUnaryTimeout) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return failure, true
 	}
 	remote, decodeErr := kitconnect.DecodeError(err)

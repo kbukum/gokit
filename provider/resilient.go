@@ -10,53 +10,57 @@ import (
 
 // WithResilience wraps a RequestResponse provider with resilience middleware. Execution chain:
 // RateLimiter → Bulkhead → CircuitBreaker → Retry → Execute. Nil config fields are skipped.
-// Empty config returns the provider unchanged.
-func WithResilience[I, O any](p RequestResponse[I, O], cfg ResilienceConfig) RequestResponse[I, O] {
+// Empty config returns the provider unchanged; invalid config returns an error and no wrapper.
+func WithResilience[I, O any](p RequestResponse[I, O], cfg ResilienceConfig) (RequestResponse[I, O], error) {
 	if cfg.IsEmpty() {
-		return p
+		return p, nil
 	}
-	return &resilientRR[I, O]{
-		inner: p,
-		state: BuildResilience(cfg),
+	state, err := BuildResilience(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &resilientRR[I, O]{inner: p, state: state}, nil
 }
 
 // WithStreamResilience wraps a Stream provider with resilience middleware.
 // Resilience is applied to the Execute call that opens the stream.
 // Individual Next() calls on the returned Iterator are NOT wrapped.
-func WithStreamResilience[I, O any](p Stream[I, O], cfg ResilienceConfig) Stream[I, O] {
+func WithStreamResilience[I, O any](p Stream[I, O], cfg ResilienceConfig) (Stream[I, O], error) {
 	if cfg.IsEmpty() {
-		return p
+		return p, nil
 	}
-	return &resilientStream[I, O]{
-		inner: p,
-		state: BuildResilience(cfg),
+	state, err := BuildResilience(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &resilientStream[I, O]{inner: p, state: state}, nil
 }
 
 // WithSinkResilience wraps a Sink provider with resilience middleware. Execution chain:
 // RateLimiter → Bulkhead → CircuitBreaker → Retry → Send.
-func WithSinkResilience[I any](p Sink[I], cfg ResilienceConfig) Sink[I] {
+func WithSinkResilience[I any](p Sink[I], cfg ResilienceConfig) (Sink[I], error) {
 	if cfg.IsEmpty() {
-		return p
+		return p, nil
 	}
-	return &resilientSink[I]{
-		inner: p,
-		state: BuildResilience(cfg),
+	state, err := BuildResilience(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &resilientSink[I]{inner: p, state: state}, nil
 }
 
 // WithDuplexResilience wraps a Duplex provider with resilience middleware. Only CircuitBreaker
 // and RateLimiter are applied to the Open call. Retry is not applied —
 // persistent connections should reconnect at a higher level.
-func WithDuplexResilience[I, O any](p Duplex[I, O], cfg ResilienceConfig) Duplex[I, O] {
+func WithDuplexResilience[I, O any](p Duplex[I, O], cfg ResilienceConfig) (Duplex[I, O], error) {
 	if cfg.IsEmpty() {
-		return p
+		return p, nil
 	}
-	return &resilientDuplex[I, O]{
-		inner: p,
-		state: BuildResilience(cfg),
+	state, err := BuildResilience(cfg)
+	if err != nil {
+		return nil, err
 	}
+	return &resilientDuplex[I, O]{inner: p, state: state}, nil
 }
 
 // --- RequestResponse wrapper ---

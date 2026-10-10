@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
@@ -100,6 +101,15 @@ func TestValidate_AfterApplyDefaults(t *testing.T) {
 	cfg := Config{}
 	cfg.ApplyDefaults()
 	require.NoError(t, cfg.Validate(), "defaults should produce a valid config")
+}
+
+func TestValidate_RejectsUnbuildableResiliencePolicy(t *testing.T) {
+	t.Parallel()
+	cfg := Config{
+		Target: "host:50051", MaxMessageSize: 1024, MaxSendMessageSize: 1024,
+		ResiliencePolicy: resilience.NewPolicy().WithBulkhead(resilience.BulkheadConfig{MaxConcurrent: 1, MaxQueue: 1}),
+	}
+	require.Error(t, cfg.Validate())
 }
 
 func TestValidate_EmptyAddr(t *testing.T) {

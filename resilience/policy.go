@@ -35,6 +35,7 @@ type Policy struct {
 	cb   *CircuitBreaker
 	bh   *Bulkhead
 	rl   *RateLimiter
+	err  error
 }
 
 // NewPolicy creates an empty policy that can be configured fluently.
@@ -112,7 +113,7 @@ func (p *Policy) init() {
 			p.cb = NewCircuitBreaker(*p.CircuitBreaker)
 		}
 		if p.Bulkhead != nil {
-			p.bh = NewBulkhead(*p.Bulkhead)
+			p.bh, p.err = NewBulkhead(*p.Bulkhead)
 		}
 		if p.RateLimiter != nil {
 			p.rl = NewRateLimiter(*p.RateLimiter)
@@ -129,7 +130,7 @@ func (p *Policy) IsAvailable() bool {
 		return true
 	}
 	p.init()
-	return p.cb == nil || p.cb.State() != StateOpen
+	return p.err == nil && (p.cb == nil || p.cb.State() != StateOpen)
 }
 
 // Execute runs fn through the configured resilience stack.

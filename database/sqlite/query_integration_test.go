@@ -33,7 +33,7 @@ func newQueryTestDB(t *testing.T) *gorm.DB {
 	cfg := Config{Enabled: true, DSN: ":memory:"}
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
-	wrapped, err := NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
+	wrapped, err := NewWithContext(context.Background(), sqlite.Dialect(), cfg, log)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

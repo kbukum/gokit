@@ -10,7 +10,10 @@
 //
 //	// Example: HTTP client with all patterns
 //	cb := resilience.NewCircuitBreaker(resilience.DefaultCircuitBreakerConfig("http"))
-//	bh := resilience.NewBulkhead(resilience.BulkheadConfig{MaxConcurrent: 10})
+//	bh, err := resilience.NewBulkhead(resilience.BulkheadConfig{MaxConcurrent: 10})
+//	if err != nil {
+//		return err
+//	}
 //	rl := resilience.NewRateLimiter(resilience.RateLimiterConfig{Rate: 100, Burst: 20})
 //
 //	err := cb.Execute(func() error {

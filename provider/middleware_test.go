@@ -242,7 +242,10 @@ func TestChain_WithResilienceAndLogging(t *testing.T) {
 	)(p)
 
 	// Further wrap with resilience (which is also a RequestResponse)
-	resilient := provider.WithResilience(wrapped, provider.ResilienceConfig{})
+	resilient, err := provider.WithResilience(wrapped, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := resilient.Execute(context.Background(), "hello")
 	if err != nil {
@@ -334,13 +337,16 @@ func TestChain_WithResilienceWrapper(t *testing.T) {
 		provider.WithLogging[string, string](log),
 	)(p)
 
-	resilient := provider.WithResilience(chained, provider.ResilienceConfig{
+	resilient, err := provider.WithResilience(chained, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "mw-res-cb",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := resilient.Execute(context.Background(), "test")
 	if err != nil {

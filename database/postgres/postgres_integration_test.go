@@ -33,7 +33,7 @@ import (
 var migrationsFS embed.FS
 
 // newDSN consumes the adapter-owned fixture; Docker and successful termination are required.
-func newDSN(t *testing.T) string {
+func newParams(t *testing.T) database.ConnParams {
 	t.Helper()
 	fixture, err := pgtest.Start(t.Context())
 	if err != nil {
@@ -46,7 +46,7 @@ func newDSN(t *testing.T) string {
 			t.Errorf("terminate container: %v", err)
 		}
 	})
-	return fixture.DSN
+	return fixture.Params
 }
 
 type widget struct {
@@ -60,7 +60,7 @@ func (widget) TableName() string { return "widgets" }
 // TestComponentStartFromRegistryAndMigrates proves the registry seam works end to end against a
 // real server: register the driver, start the component from the registry, and auto-migrate.
 func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
-	dsn := newDSN(t)
+	params := newParams(t)
 	ctx := context.Background()
 
 	reg := database.NewDialectRegistry()
@@ -68,7 +68,7 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 		t.Fatalf("Register: %v", err)
 	}
 
-	cfg := database.Config{Enabled: true, DSN: dsn, AutoMigrate: true}
+	cfg := database.Config{Enabled: true, Params: params, AutoMigrate: true}
 	cfg.ApplyDefaults()
 	comp := database.NewComponent(cfg, logging.NewDefault("test")).
 		WithDialectFromRegistry(reg, postgres.Name).
@@ -82,7 +82,7 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 		}
 	})
 
-	if comp.DB() == nil || !comp.DB().GormDB.Migrator().HasTable(&widget{}) {
+	if db, err := comp.DB(); err != nil || !db.GormDB.Migrator().HasTable(&widget{}) {
 		t.Fatal("component did not start and migrate model")
 	}
 	if health := comp.Health(ctx); health.Status != component.StatusHealthy {
@@ -93,10 +93,10 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 // TestRepositoryRoundTrip exercises a full CRUD cycle through the generic repository against
 // Postgres, plus a database/testutil fixture load to confirm the shared harness is reusable.
 func TestRepositoryRoundTrip(t *testing.T) {
-	dsn := newDSN(t)
+	params := newParams(t)
 	ctx := context.Background()
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Discard})
+	db, err := gorm.Open(preparedDialector(t, params), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
 	}
@@ -147,9 +147,9 @@ func TestRepositoryRoundTrip(t *testing.T) {
 // TestMigrationsUpAndDown drives golang-migrate through postgres.MigrateDriver against the
 // ephemeral server, proving forward and rollback migrations apply symmetrically.
 func TestMigrationsUpAndDown(t *testing.T) {
-	dsn := newDSN(t)
+	params := newParams(t)
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Discard})
+	db, err := gorm.Open(preparedDialector(t, params), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
 	}
@@ -158,6 +158,7 @@ func TestMigrationsUpAndDown(t *testing.T) {
 		FS:     migrationsFS,
 		Path:   "testdata/migrations",
 		Driver: postgres.MigrateDriver(),
+		Table:  migration.Table{Schema: "fixture"},
 	}
 
 	if err := cfg.Up(context.Background()); err != nil {

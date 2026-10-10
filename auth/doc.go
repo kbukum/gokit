@@ -31,13 +31,14 @@
 //	    method: "EdDSA"
 //	    issuer: "https://auth.example.com"
 //	    audience: ["api"]
-//	    access_token_ttl: "15m"
+//	    type: "at+jwt"
+//	    max_lifetime: "15m"
 //	  password:
 //	    algorithm: "argon2id"
 //
 // Register validators for use with middleware:
 //
 //	reg := auth.NewRegistry[*MyClaims]()
-//	reg.Register("jwt", auth.NewValidator(jwtSvc.ValidatorFunc()))
+//	reg.Register("jwt", jwtSvc)
 //	validator, _ := reg.Default()
 package auth

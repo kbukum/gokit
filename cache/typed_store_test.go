@@ -12,7 +12,7 @@ func TestTypedStoreWithoutPrefixAndErrorPaths(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	typed := NewTypedStore[testState](store, "")
 	state := testState{Count: 3}
 	if err := typed.Save(ctx, "plain", &state, 0); err != nil {
@@ -48,7 +48,7 @@ func TestTypedStoreWithoutPrefixAndErrorPaths(t *testing.T) {
 func TestTypedStoreSaveReportsMarshalError(t *testing.T) {
 	t.Parallel()
 
-	typed := NewTypedStore[unmarshalableState](NewMemoryStore(MemoryConfig{}), "")
+	typed := NewTypedStore[unmarshalableState](mustMemory(t, MemoryConfig{}), "")
 	value := unmarshalableState{Fn: func() {}}
 	if err := typed.Save(context.Background(), "k", &value, 0); err == nil || !strings.Contains(err.Error(), "marshal") {
 		t.Fatalf("Save unmarshalable error = %v", err)
@@ -59,7 +59,7 @@ func FuzzTypedStoreRoundTrip(f *testing.F) {
 	f.Add("prefix", "key", 1)
 	f.Add("", "", -1)
 	f.Fuzz(func(t *testing.T, prefix, key string, count int) {
-		store := NewMemoryStore(MemoryConfig{})
+		store := mustMemory(t, MemoryConfig{})
 		typed := NewTypedStore[testState](store, prefix)
 		want := testState{Count: count}
 		if err := typed.Save(context.Background(), key, &want, 0); err != nil {

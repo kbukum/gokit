@@ -2,18 +2,15 @@ package apikey
 
 import (
 	"context"
-	"encoding/hex"
 	"sync"
 	"time"
 
-	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
 const (
 	defaultMemoryCapacity = 1024
 	maxMemoryCapacity     = 4096
-	maxMetadataBytes      = 16 << 10
 )
 
 type memoryStore struct {
@@ -37,44 +34,13 @@ func NewMemoryStore(capacity int) (Store, error) {
 	return &memoryStore{capacity: capacity, keys: make(map[string]*Key), digests: make(map[string]string)}, nil
 }
 
-func validateMemoryKey(key *Key) error {
-	if key == nil || key.ID == "" || len(key.ID) > 512 || len(key.OwnerID) > 512 || len(key.Name) > 512 ||
-		len(key.RotatedByID) > 512 || len(key.Resources) > 256 || len(key.Scopes) > 256 {
-		return apperrors.InvalidInput("apikey", "Invalid key metadata")
-	}
-	if _, err := validatePrefix(key.KeyPrefix); err != nil {
-		return apperrors.InvalidInput("apikey", "Invalid key prefix")
-	}
-	digest, err := hex.DecodeString(key.KeyDigest)
-	if err != nil || len(digest) != 32 || hex.EncodeToString(digest) != key.KeyDigest {
-		return apperrors.InvalidInput("apikey", "A protected canonical key digest is required")
-	}
-	p := auth.Principal{Subject: key.OwnerID, Kind: key.Kind, Credential: auth.APIKey, Reference: key.KeyDigest, Restrictions: auth.Restrictions{Mode: key.RestrictionMode, Resources: key.Resources, Scopes: key.Scopes}}
-	if err := p.Validate(); err != nil {
-		return apperrors.InvalidInput("apikey", "Invalid identity or restrictions").WithCause(err)
-	}
-	size := len(key.ID) + len(key.OwnerID) + len(key.Name) + len(key.KeyPrefix) + len(key.KeyDigest) + len(key.RotatedByID)
-	for _, values := range [][]string{key.Resources, key.Scopes} {
-		for _, value := range values {
-			if len(value) > 512 {
-				return apperrors.InvalidInput("apikey", "Restriction values must not exceed 512 bytes")
-			}
-			size += len(value)
-		}
-	}
-	if size > maxMetadataBytes {
-		return apperrors.InvalidInput("apikey", "Key metadata must not exceed 16 KiB")
-	}
-	return nil
-}
-
 func missingMemoryKey() error { return apperrors.New(apperrors.ErrCodeNotFound, "Key not found") }
 
 func (s *memoryStore) Create(ctx context.Context, key *Key) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := validateMemoryKey(key); err != nil {
+	if err := key.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -82,6 +48,15 @@ func (s *memoryStore) Create(ctx context.Context, key *Key) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if err := s.admit(key); err != nil {
+		return err
+	}
+	s.insert(key)
+	return nil
+}
+
+// admit checks uniqueness and capacity; the caller holds the write lock.
+func (s *memoryStore) admit(key *Key) error {
 	if _, exists := s.keys[key.ID]; exists {
 		return apperrors.New(apperrors.ErrCodeAlreadyExists, "Key already exists")
 	}
@@ -91,9 +66,12 @@ func (s *memoryStore) Create(ctx context.Context, key *Key) error {
 	if len(s.keys) >= s.capacity {
 		return apperrors.New(apperrors.ErrCodeRateLimited, "API key storage capacity reached").WithReason("API_KEY_CAPACITY")
 	}
+	return nil
+}
+
+func (s *memoryStore) insert(key *Key) {
 	s.keys[key.ID] = key.Clone()
 	s.digests[key.KeyDigest] = key.ID
-	return nil
 }
 
 func (s *memoryStore) GetByDigest(ctx context.Context, digest string) (*Key, error) {
@@ -143,7 +121,7 @@ func (s *memoryStore) update(ctx context.Context, id string, apply func(*Key)) e
 	}
 	next := key.Clone()
 	apply(next)
-	if err := validateMemoryKey(next); err != nil {
+	if err := next.Validate(); err != nil {
 		return err
 	}
 	s.keys[id] = next
@@ -154,15 +132,44 @@ func (s *memoryStore) UpdateLastUsed(ctx context.Context, id string, usedAt time
 	return s.update(ctx, id, func(key *Key) { key.LastUsedAt = &usedAt })
 }
 
-func (s *memoryStore) SetRotation(ctx context.Context, id string, graceEndsAt time.Time, rotatedByID string) error {
-	if len(rotatedByID) > 512 {
-		return apperrors.InvalidInput("apikey", "Replacement key ID must not exceed 512 bytes")
+func (s *memoryStore) Rotate(ctx context.Context, r Rotation) error {
+	if err := ctx.Err(); err != nil {
+		return err
 	}
-	return s.update(ctx, id, func(key *Key) { key.GraceEndsAt = &graceEndsAt; key.RotatedByID = rotatedByID })
+	if err := r.Validate(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	old, found := s.keys[r.OldID]
+	if !found {
+		return missingMemoryKey()
+	}
+	if !old.rotatable(r.At) {
+		return apperrors.Conflict("API key is revoked, expired or already rotated").WithReason("API_KEY_NOT_ROTATABLE")
+	}
+	if old.ExpiresAt != nil && r.GraceEndsAt.After(*old.ExpiresAt) {
+		return apperrors.InvalidInput("apikey.rotation", "Grace must not extend old key expiry")
+	}
+	if err := s.admit(r.Replacement); err != nil {
+		return err
+	}
+	next := old.Clone()
+	next.GraceEndsAt, next.RotatedByID = &r.GraceEndsAt, r.Replacement.ID
+	s.keys[r.OldID] = next
+	s.insert(r.Replacement)
+	return nil
 }
 
-func (s *memoryStore) SetActive(ctx context.Context, id string, active bool) error {
-	return s.update(ctx, id, func(key *Key) { key.IsActive = active })
+func (s *memoryStore) Revoke(ctx context.Context, id string, at time.Time) error {
+	return s.update(ctx, id, func(key *Key) {
+		if key.RevokedAt == nil {
+			key.RevokedAt = &at
+		}
+	})
 }
 
 func (s *memoryStore) Delete(ctx context.Context, id string) error {

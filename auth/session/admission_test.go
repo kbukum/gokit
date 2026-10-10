@@ -6,6 +6,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 func TestAdmissionCancellationAndBudgetsBeforeGate(t *testing.T) {
@@ -54,6 +56,25 @@ func TestAdmissionCancellationAndBudgetsBeforeGate(t *testing.T) {
 			if elapsed := time.Since(start); elapsed > operation.budget {
 				t.Fatal(operation.name, "budget started after gate", elapsed)
 			}
+		}
+	})
+}
+
+func TestAcquireLookupOverBudgetIsTimeoutNotClosed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := &memoryStore{rows: make(map[string]Record)}
+		manager, _ := fixture(t, store)
+		defer manager.Close(context.Background())
+		issued, err := manager.Create(context.Background(), caller())
+		if err != nil {
+			t.Fatal(err)
+		}
+		store.mu.Lock()
+		store.lookupLag = 2 * LookupBudget
+		store.mu.Unlock()
+		_, _, err = manager.Acquire(context.Background(), issued.Principal.Reference)
+		if got := apperrors.Normalize(err); got.Code != apperrors.ErrCodeTimeout {
+			t.Fatalf("over-budget admission classified as %v (%v)", got.Code, err)
 		}
 	})
 }

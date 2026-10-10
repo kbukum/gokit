@@ -1,14 +1,3 @@
-// Package password provides password hashing and verification utilities.
-//
-// It defines a Hasher interface with multiple implementations:
-//   - BcryptHasher: migration fallback for existing hashes
-//   - Argon2Hasher: modern argon2id hashing (secure default)
-//
-// Usage:
-//
-//	hasher := password.NewBcryptHasher()
-//	hash, err := hasher.Hash("my-password")
-//	err = hasher.Verify("my-password", hash)
 package password
 
 import (
@@ -17,166 +6,197 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
+
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// Hasher defines the interface for password hashing and verification.
-// Projects choose which implementation to use based on their requirements.
+// Error reasons. Mismatch is UNAUTHORIZED, a corrupt stored hash is INTERNAL and a length violation is
+// INVALID_INPUT, so callers never confuse bad credentials with bad data.
+const (
+	ReasonMismatch        = "PASSWORD_MISMATCH"
+	ReasonCorruptHash     = "PASSWORD_HASH_INVALID"
+	ReasonTooShort        = "PASSWORD_TOO_SHORT"
+	ReasonTooLong         = "PASSWORD_TOO_LONG"
+	ReasonUnsupportedCost = "PASSWORD_COST_UNSUPPORTED"
+)
+
+const (
+	argon2KeyLen  = 32
+	argon2SaltLen = 16
+	minEncodedLen = 16
+	maxEncodedLen = 64
+)
+
+// Hasher hashes and verifies passwords. Use [NewHasher] to construct one, and [Pool] to bound concurrent work.
 type Hasher interface {
-	// Hash returns a hashed representation of the password.
+	// Hash enforces the configured length policy and returns an encoded, salted hash.
 	Hash(password string) (string, error)
 
-	// Verify checks if a password matches the given hash. Returns nil if they match,
-	// an error otherwise.
+	// Verify returns nil when password matches hash, an UNAUTHORIZED error with ReasonMismatch when it does not,
+	// and an INTERNAL error with ReasonCorruptHash when hash cannot be decoded.
 	Verify(password, hash string) error
 }
 
-// --- Bcrypt Implementation ---
-
-// BcryptHasher implements Hasher using bcrypt.
-type BcryptHasher struct {
-	cost int
+func mismatch() error {
+	return apperrors.New(apperrors.ErrCodeUnauthorized, "Invalid password").WithReason(ReasonMismatch)
 }
 
-// BcryptOption configures the bcrypt hasher.
-type BcryptOption func(*BcryptHasher)
-
-// WithCost sets the bcrypt cost parameter (default: 12, range: 4-31).
-func WithCost(cost int) BcryptOption {
-	return func(h *BcryptHasher) {
-		if cost >= bcrypt.MinCost && cost <= bcrypt.MaxCost {
-			h.cost = cost
-		}
-	}
+func corrupt(cause error) error {
+	return apperrors.Internal(cause).WithReason(ReasonCorruptHash)
 }
 
-// NewBcryptHasher creates a bcrypt-based password hasher.
-func NewBcryptHasher(opts ...BcryptOption) *BcryptHasher {
-	h := &BcryptHasher{cost: 12}
-	for _, opt := range opts {
-		opt(h)
+type lengthPolicy struct{ min, max int }
+
+// admit checks a new password's length in characters.
+func (p lengthPolicy) admit(password string) error {
+	n := utf8.RuneCountInString(password)
+	switch {
+	case n < p.min:
+		return apperrors.InvalidInput("password", fmt.Sprintf("Password must be at least %d characters", p.min)).WithReason(ReasonTooShort)
+	case n > p.max:
+		return apperrors.InvalidInput("password", fmt.Sprintf("Password must be at most %d characters", p.max)).WithReason(ReasonTooLong)
 	}
-	return h
+	return nil
 }
 
-func (h *BcryptHasher) Hash(password string) (string, error) {
-	if len(password) < 8 {
-		return "", errors.New("password: minimum length is 8 characters")
+// oversized reports a presented password that can never match, so it is rejected without hashing.
+func (p lengthPolicy) oversized(password string) bool {
+	return len(password) > utf8.UTFMax*p.max || utf8.RuneCountInString(password) > p.max
+}
+
+type bcryptHasher struct {
+	lengthPolicy
+	cost   int
+	limits VerifyLimits
+}
+
+func (h *bcryptHasher) Hash(password string) (string, error) {
+	if err := h.admit(password); err != nil {
+		return "", err
 	}
-	if len(password) > 72 {
-		return "", errors.New("password: maximum length is 72 characters (bcrypt limit)")
+	if len(password) > bcryptMaxBytes {
+		return "", apperrors.InvalidInput("password", "Password must be at most 72 bytes for bcrypt").WithReason(ReasonTooLong)
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), h.cost)
 	if err != nil {
-		return "", fmt.Errorf("password: hash: %w", err)
+		return "", apperrors.Internal(err)
 	}
 	return string(hash), nil
 }
 
-func (h *BcryptHasher) Verify(password, hash string) error {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+func (h *bcryptHasher) Verify(password, hash string) error {
+	if err := validateBcryptEncoding(hash, h.limits.EncodedBytes); err != nil {
+		return corrupt(err)
+	}
+	cost, err := bcrypt.Cost([]byte(hash))
 	if err != nil {
-		return errors.New("password: invalid password")
+		return corrupt(err)
+	}
+	if cost > h.limits.BcryptCost {
+		return unsupportedCost()
+	}
+	if h.oversized(password) || len(password) > bcryptMaxBytes {
+		return mismatch()
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			return mismatch()
+		}
+		return corrupt(err)
 	}
 	return nil
 }
 
-// --- Argon2id Implementation ---
-
-// Argon2Hasher implements Hasher using argon2id.
-type Argon2Hasher struct {
+type argon2Hasher struct {
+	lengthPolicy
 	time    uint32
 	memory  uint32
 	threads uint8
-	keyLen  uint32
-	saltLen int
+	limits  VerifyLimits
 }
 
-// Argon2Option configures the argon2id hasher.
-type Argon2Option func(*Argon2Hasher)
-
-// WithArgon2Time sets the number of iterations (default: 3).
-func WithArgon2Time(t uint32) Argon2Option {
-	return func(h *Argon2Hasher) { h.time = t }
-}
-
-// WithArgon2Memory sets the memory usage in KiB (default: 64*1024 = 64MB).
-func WithArgon2Memory(m uint32) Argon2Option {
-	return func(h *Argon2Hasher) { h.memory = m }
-}
-
-// WithArgon2Threads sets the parallelism (default: 4).
-func WithArgon2Threads(t uint8) Argon2Option {
-	return func(h *Argon2Hasher) { h.threads = t }
-}
-
-// NewArgon2Hasher creates an argon2id-based password hasher. Defaults follow the Group 05 baseline:
-// time=3, memory=64MB, threads=4.
-func NewArgon2Hasher(opts ...Argon2Option) *Argon2Hasher {
-	h := &Argon2Hasher{
-		time:    3,
-		memory:  64 * 1024,
-		threads: 4,
-		keyLen:  32,
-		saltLen: 16,
+func (h *argon2Hasher) Hash(password string) (string, error) {
+	if err := h.admit(password); err != nil {
+		return "", err
 	}
-	for _, opt := range opts {
-		opt(h)
-	}
-	return h
-}
-
-func (h *Argon2Hasher) Hash(password string) (string, error) {
-	if len(password) < 8 {
-		return "", errors.New("password: minimum length is 8 characters")
-	}
-
-	salt, err := generateRandomBytes(h.saltLen)
+	salt, err := generateRandomBytes(argon2SaltLen)
 	if err != nil {
-		return "", fmt.Errorf("password: generate salt: %w", err)
+		return "", apperrors.Internal(err)
 	}
-
-	hash := argon2.IDKey([]byte(password), salt, h.time, h.memory, h.threads, h.keyLen)
-
-	// Encode as: $argon2id$v=19$m=MEMORY,t=TIME,p=THREADS$SALT$HASH
-	encoded := fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
-		argon2.Version,
-		h.memory, h.time, h.threads,
-		base64.RawStdEncoding.EncodeToString(salt),
-		base64.RawStdEncoding.EncodeToString(hash),
-	)
-	return encoded, nil
+	key := argon2.IDKey([]byte(password), salt, h.time, h.memory, h.threads, argon2KeyLen)
+	return fmt.Sprintf("$argon2id$v=%d$%s$%s$%s", argon2.Version, argon2Params(h.memory, h.time, h.threads),
+		base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(key)), nil
 }
 
-func (h *Argon2Hasher) Verify(password, encodedHash string) error {
-	parts := strings.Split(encodedHash, "$")
-	if len(parts) != 6 || parts[1] != "argon2id" {
-		return errors.New("password: invalid argon2id hash format")
-	}
+func argon2Params(memory, time uint32, threads uint8) string {
+	return fmt.Sprintf("m=%d,t=%d,p=%d", memory, time, threads)
+}
 
-	var memory, time uint32
-	var threads uint8
-	_, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
+func (h *argon2Hasher) Verify(password, encoded string) error {
+	if len(encoded) > h.limits.EncodedBytes {
+		return corrupt(fmt.Errorf("password: encoded hash too long"))
+	}
+	parsed, err := parseArgon2(encoded)
 	if err != nil {
-		return fmt.Errorf("password: parse argon2id params: %w", err)
+		return corrupt(err)
 	}
-
-	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
-		return fmt.Errorf("password: decode salt: %w", err)
+	if parsed.memory > h.limits.Argon2Memory || parsed.time > h.limits.Argon2Time || parsed.threads > h.limits.Argon2Threads {
+		return unsupportedCost()
 	}
-
-	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
-		return fmt.Errorf("password: decode hash: %w", err)
+	if h.oversized(password) {
+		return mismatch()
 	}
-
-	hash := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(expectedHash)))
-
-	if subtle.ConstantTimeCompare(hash, expectedHash) != 1 {
-		return errors.New("password: invalid password")
+	key := argon2.IDKey([]byte(password), parsed.salt, parsed.time, parsed.memory, parsed.threads, uint32(len(parsed.key)))
+	if subtle.ConstantTimeCompare(key, parsed.key) != 1 {
+		return mismatch()
 	}
 	return nil
+}
+
+type argon2Hash struct {
+	memory, time uint32
+	threads      uint8
+	salt, key    []byte
+}
+
+// parseArgon2 decodes a canonical PHC-format hash and bounds its cost, so a corrupt or hostile stored hash cannot
+// demand unbounded memory or time.
+func parseArgon2(encoded string) (argon2Hash, error) {
+	parts := strings.Split(encoded, "$")
+	if len(parts) != 6 || parts[0] != "" || parts[1] != "argon2id" || parts[2] != fmt.Sprintf("v=%d", argon2.Version) {
+		return argon2Hash{}, fmt.Errorf("password: not an argon2id v%d hash", argon2.Version)
+	}
+	var h argon2Hash
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &h.memory, &h.time, &h.threads); err != nil || argon2Params(h.memory, h.time, h.threads) != parts[3] {
+		return argon2Hash{}, fmt.Errorf("password: malformed argon2id parameters")
+	}
+	if h.memory < 1 || h.time < 1 || h.threads < 1 {
+		return argon2Hash{}, fmt.Errorf("password: argon2id parameters out of bounds")
+	}
+	var err error
+	if h.salt, err = decodeField(parts[4]); err != nil {
+		return argon2Hash{}, fmt.Errorf("password: salt: %w", err)
+	}
+	if h.key, err = decodeField(parts[5]); err != nil {
+		return argon2Hash{}, fmt.Errorf("password: key: %w", err)
+	}
+	return h, nil
+}
+
+func decodeField(field string) ([]byte, error) {
+	if len(field) > base64.RawStdEncoding.EncodedLen(maxEncodedLen) {
+		return nil, fmt.Errorf("too long")
+	}
+	value, err := base64.RawStdEncoding.Strict().DecodeString(field)
+	if err != nil {
+		return nil, err
+	}
+	if len(value) < minEncodedLen {
+		return nil, fmt.Errorf("too short")
+	}
+	return value, nil
 }
