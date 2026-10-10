@@ -2,7 +2,7 @@ module github.com/kbukum/gokit/stateful
 
 go 1.27.1
 
-require github.com/kbukum/gokit v0.2.0
+require github.com/kbukum/gokit v0.3.0-alpha.1
 
 require (
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
