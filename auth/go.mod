@@ -12,6 +12,7 @@ require (
 require (
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 )
