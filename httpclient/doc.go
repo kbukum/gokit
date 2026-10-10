@@ -23,7 +23,7 @@
 //
 //	// The adapter IS a provider — no wrapper needed.
 //	var p provider.RequestResponse[httpclient.Request, *httpclient.Response] = adapter
-//	resilient := provider.WithResilience(adapter, resilienceConfig)
+//	resilient, err := provider.WithResilience(adapter, resilienceConfig)
 //
 // # REST Convenience
 //

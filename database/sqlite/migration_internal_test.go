@@ -14,8 +14,8 @@ type failingResetBackend struct {
 	failure error
 }
 
-func (b failingResetBackend) Drop(ctx context.Context, tx *sql.Tx) error {
-	if err := b.migrationBackend.Drop(ctx, tx); err != nil {
+func (b failingResetBackend) Drop(ctx context.Context, tx *sql.Tx, table migration.Table) error {
+	if err := b.migrationBackend.Drop(ctx, tx, table); err != nil {
 		return err
 	}
 	return b.failure
@@ -37,7 +37,7 @@ func TestFailedResetRestoresSchemaAndConstraintTiming(t *testing.T) {
 		t.Fatal(err)
 	}
 	failure := errors.New("reset aborted")
-	driver, err := migration.NewSQLDriver(t.Context(), pool, failingResetBackend{failure: failure}, migration.DefaultVersionTable)
+	driver, err := migration.NewSQLDriver(t.Context(), pool, failingResetBackend{failure: failure}, migration.Table{Name: migration.DefaultVersionTable})
 	if err != nil {
 		t.Fatal(err)
 	}

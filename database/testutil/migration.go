@@ -55,7 +55,7 @@ func (d *MigrationDriver) Runs() int {
 
 // DriverFunc adapts the fake to a migration.DriverFunc, ignoring the *sql.DB and version table it is handed.
 func (d *MigrationDriver) DriverFunc() migration.DriverFunc {
-	return func(ctx context.Context, _ *sql.DB, _ string) (migratedb.Driver, error) {
+	return func(ctx context.Context, _ *sql.DB, _ migration.Table) (migratedb.Driver, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

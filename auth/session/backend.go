@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/kbukum/gokit/auth"
 	apperrors "github.com/kbukum/gokit/errors"
@@ -9,9 +10,12 @@ import (
 )
 
 // LoginRequest is a validated login plus the session cookie the browser presented, which is empty for a fresh login.
+// Source is the address of the connection that sent the login, for per-source admission; it is the zero Addr when the
+// connection has no IP address, such as a Unix socket. Forwarding headers are never trusted for it.
 type LoginRequest struct {
 	Credentials LoginCredentials
 	Presented   string
+	Source      netip.Addr
 }
 
 // LogoutRequest is a validated session cookie plus the synchronizer CSRF token presented with it.
@@ -59,10 +63,10 @@ func (b *localBackend) Login(ctx context.Context, in LoginRequest) (Grant, error
 		if app, ok := apperrors.AsAppError(err); ok && app != nil && app.Code == apperrors.ErrCodeUnauthorized {
 			return Grant{}, auth.Failure("LOGIN_INVALID")
 		}
-		return Grant{}, storeFailure(err)
+		return Grant{}, storeFailure(ctx, err)
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
-		return Grant{}, storeFailure(ctxErr)
+		return Grant{}, storeFailure(ctx, ctxErr)
 	}
 	issued, err := b.manager.CompleteLogin(ctx, attempt, p)
 	if err != nil {

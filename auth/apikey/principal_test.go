@@ -14,7 +14,7 @@ import (
 
 func TestIndexedAuthenticatorClockAndCeiling(t *testing.T) {
 	clock := util.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-	m := NewManager(newMemStore(), testHasher(t), WithClock(clock))
+	m := newTestManager(t, nil, clock)
 	expires := clock.Now().Add(time.Minute)
 	issued, _, err := m.IssueKey(context.Background(), IssueRequest{KeyID: "id", OwnerID: "u", Prefix: "key", Kind: auth.Service, RestrictionMode: auth.Restricted, Resources: []string{"one"}, Scopes: []string{"read"}, ExpiresAt: &expires})
 	if err != nil {
@@ -24,7 +24,7 @@ func TestIndexedAuthenticatorClockAndCeiling(t *testing.T) {
 	r := httptest.NewRequest("POST", "/", http.NoBody)
 	r.Header.Set("X-API-Key", issued.PlainKey)
 	p, err := m.Authenticate(r)
-	if err != nil || p.Kind != auth.Service || p.Reference == issued.PlainKey || !p.Allows("one", "read") || p.Allows("two", "read") {
+	if err != nil || p.Kind != auth.Service || p.Reference != "id" || !p.Allows("one", "read") || p.Allows("two", "read") {
 		t.Fatal(err, p)
 	}
 	clock.Advance(time.Minute)

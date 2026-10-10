@@ -31,7 +31,7 @@ func TestMemoryStoreTTLBoundary(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(100, 0)
-	store := newMemoryStore(MemoryConfig{}, func() time.Time { return now })
+	store := mustMemory(t, MemoryConfig{Clock: clockFunc(func() time.Time { return now })})
 	ctx := context.Background()
 
 	if err := store.Set(ctx, "k", []byte("v"), time.Second); err != nil {
@@ -52,7 +52,7 @@ func TestMemoryStoreTTLBoundary(t *testing.T) {
 func TestMemoryStoreCopiesValues(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	ctx := context.Background()
 	value := []byte("secret")
 	if err := store.Set(ctx, "k", value, 0); err != nil {
@@ -93,7 +93,7 @@ func TestNewUsesRegisteredProvider(t *testing.T) {
 func TestTypedStoreLoadSaveDelete(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	typed := NewTypedStore[testState](store, "prefix")
 	ctx := context.Background()
 
@@ -127,7 +127,7 @@ type testState struct {
 func TestMemoryStoreExistsAndGetMany(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	ctx := context.Background()
 	if exists, err := store.Exists(ctx, "missing"); err != nil || exists {
 		t.Fatalf("Exists missing = %v, %v", exists, err)
@@ -160,7 +160,7 @@ func TestMemoryStoreGetManySkipsExpired(t *testing.T) {
 	t.Parallel()
 
 	now := time.Unix(200, 0)
-	store := newMemoryStore(MemoryConfig{}, func() time.Time { return now })
+	store := mustMemory(t, MemoryConfig{Clock: clockFunc(func() time.Time { return now })})
 	ctx := context.Background()
 	if err := store.Set(ctx, "expired", []byte("old"), time.Second); err != nil {
 		t.Fatalf("Set expired: %v", err)
@@ -184,7 +184,7 @@ func TestMemoryStoreGetManySkipsExpired(t *testing.T) {
 func TestMemoryStoreConcurrentAccess(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	ctx := context.Background()
 	var wg sync.WaitGroup
 	for i := range 16 {

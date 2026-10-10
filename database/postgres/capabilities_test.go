@@ -7,13 +7,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
-
-	"github.com/kbukum/gokit/database/postgres"
 )
 
 func TestPostgresOptionalCapabilities(t *testing.T) {
 	t.Parallel()
-	dialect := postgres.Open("host=localhost dbname=app")
+	dialect := preparedDialector(t, testParams())
 	if _, ok := dialect.(gorm.SavePointerDialectorInterface); !ok {
 		t.Error("savepoint support missing")
 	}

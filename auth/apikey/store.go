@@ -5,14 +5,15 @@ import (
 	"time"
 )
 
-// Store is the persistence contract for API keys.
-// Consumers implement this with their database (Postgres, Redis, etc.).
+// Store is the persistence contract for API keys. Every implementation must pass [apikeytest.Run].
+//
+// Missing keys return an AppError with NOT_FOUND; duplicate ids or digests return ALREADY_EXISTS; infrastructure
+// failures must stay distinct from both. Records are copied across the boundary.
 type Store interface {
 	// Create persists a new API key.
 	Create(ctx context.Context, key *Key) error
 
 	// GetByDigest uses a unique indexed protected digest, never an unbounded prefix scan.
-	// Missing digests return an AppError with NOT_FOUND code; infrastructure failures must remain distinct.
 	GetByDigest(ctx context.Context, digest string) (*Key, error)
 
 	// GetByID retrieves a key by its unique identifier.
@@ -21,12 +22,28 @@ type Store interface {
 	// UpdateLastUsed sets the LastUsedAt timestamp.
 	UpdateLastUsed(ctx context.Context, id string, usedAt time.Time) error
 
-	// SetRotation marks a key as rotated with a grace window.
-	SetRotation(ctx context.Context, id string, graceEndsAt time.Time, rotatedByID string) error
+	// Rotate performs r as one compare-and-swap: when the old key is unrevoked, not yet rotated and valid at r.At,
+	// it creates r.Replacement and records r.GraceEndsAt and the replacement id on the old key. Otherwise it changes
+	// nothing and returns CONFLICT, or the error Create would return for the replacement.
+	Rotate(ctx context.Context, r Rotation) error
 
-	// SetActive enables or disables a key.
-	SetActive(ctx context.Context, id string, active bool) error
+	// Revoke records at as the key's revocation time. Revocation is one-way; revoking a revoked key keeps the first
+	// time and succeeds.
+	Revoke(ctx context.Context, id string, at time.Time) error
 
 	// Delete permanently removes a key.
 	Delete(ctx context.Context, id string) error
 }
+
+// Rotation is one atomic replacement of an API key.
+type Rotation struct {
+	OldID       string
+	Replacement *Key
+	// GraceEndsAt is when the old key stops validating. It is not after the old key's expiry.
+	GraceEndsAt time.Time
+	// At is the manager's current time, against which the old key must still be valid.
+	At time.Time
+}
+
+// rotatable reports whether old may be replaced at the given time.
+func (k *Key) rotatable(now time.Time) bool { return k.ValidAt(now) && k.RotatedByID == "" }

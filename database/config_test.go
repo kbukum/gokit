@@ -305,6 +305,17 @@ func TestConfig_Validate_InvalidConnMaxLifetime(t *testing.T) {
 	}
 }
 
+func TestConfig_Validate_NegativeConnectTimeout(t *testing.T) {
+	cfg := Config{Enabled: true, DSN: ":memory:", MaxOpenConns: 25, MaxIdleConns: 5, ConnMaxLifetime: "1h", MaxRetries: 5, SlowQueryThreshold: "200ms", ConnectTimeout: "-1s"}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("negative connect_timeout disabled the attempt bound")
+	}
+	cfg.ConnectTimeout = "0"
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("explicit zero rejected: %v", err)
+	}
+}
+
 // TestConfig_Validate_InvalidConnMaxIdleTime tests validation fails with invalid ConnMaxIdleTime
 func TestConfig_Validate_InvalidConnMaxIdleTime(t *testing.T) {
 	cfg := Config{

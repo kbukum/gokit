@@ -5,7 +5,6 @@ package postgres_test
 import (
 	"context"
 	"errors"
-	"net/url"
 	"testing"
 	"time"
 
@@ -17,14 +16,11 @@ import (
 )
 
 func TestPostgresTimestampTimezone(t *testing.T) {
-	connection, err := url.Parse(newDSN(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	connection.RawQuery += "&timezone=America/New_York"
+	params := newParams(t)
+	params.Options["timezone"] = "America/New_York"
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	db, err := database.NewWithContext(ctx, postgres.Open(connection.String()), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,10 +40,10 @@ func TestPostgresTimestampTimezone(t *testing.T) {
 }
 
 func TestPostgresNestedTransactionsAndTranslation(t *testing.T) {
-	dsn := newDSN(t)
+	params := newParams(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	db, err := database.NewWithContext(ctx, postgres.Open(dsn), database.Config{}, logging.NewDefault("test"))
+	db, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params}, logging.NewDefault("test"))
 	if err != nil {
 		t.Fatal(err)
 	}

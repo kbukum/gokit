@@ -67,6 +67,8 @@ func run(ctx context.Context) error {
 }
 ```
 
+A one-shot command that needs a module's port, such as an operator command, uses `bootstrap.RunPortTask(ctx, app, port, task)`. It adds a module that needs the port and runs `RunTask` with the provided value, so the command uses the same modules, components and lifecycle as the served process. A missing provider fails startup before the task runs.
+
 Both modes share the same lifecycle:
 Configure → Modules → OnBeforeStart → StartAll → OnAfterStart → ReadyCheck → OnReady → (execute) → Quiesce → OnBeforeStop → Drain and stop components → Close the DI container → OnAfterStop → Release the owned logger.
 
@@ -214,6 +216,7 @@ One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host
 | `Use()` / `RegisterListener()` / `CheckModules()` | Compose modules and named listeners; check wiring without starting |
 | `Provide()` / `Need()` | Fill or read a declared port inside `Register` |
 | `ValueModule()` | A module that provides one port with a value, such as a test double |
+| `RunPortTask()` | Run a finite task against the value a module provides for a port |
 | `Listener` | HTTP listener component that modules mount routes and a fallback on |
 | `ModuleError` / `ModuleProblem` | Every wiring problem found at startup |
 | `testutil.NewApp()` / `Start()` / `RegisterListener()` / `Capture()` | Run modules in tests |

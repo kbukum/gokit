@@ -144,11 +144,14 @@ Env entries are merged onto the base environment selected by `EnvPolicy` (`EnvIn
 Use `Runner` for subprocesses that may fail transiently. Circuit breaker state persists across calls.
 
 ```go
-runner := process.NewRunner(provider.ResilienceConfig{
+runner, err := process.NewRunner(provider.ResilienceConfig{
 	CircuitBreaker: &resilience.CircuitBreakerConfig{
 		MaxFailures: 3, Timeout: 30 * time.Second,
 	},
 })
+if err != nil {
+	return err
+}
 
 result, err := runner.Run(ctx, process.Command{Binary: "flaky-tool"})
 ```

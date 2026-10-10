@@ -1,12 +1,9 @@
 package jwt
 
 import (
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/rsa"
-	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
@@ -19,10 +16,10 @@ const (
 	// HS256 is only permitted for explicitly opted-in internal HMAC deployments.
 	HS256 SigningMethod = "HS256"
 
-	// RS256 is the default asymmetric signing method for service-issued tokens.
+	// RS256 is the default asymmetric signing method.
 	RS256 SigningMethod = "RS256"
 
-	// ES256 is the supported ECDSA signing method.
+	// ES256 uses ECDSA P-256 keys.
 	ES256 SigningMethod = "ES256"
 
 	// EdDSA uses Ed25519 keys.
@@ -30,31 +27,16 @@ const (
 )
 
 const (
-	defaultAccessTokenTTL  = 15 * time.Minute
-	defaultRefreshTokenTTL = 7 * 24 * time.Hour
-	defaultClockSkew       = 30 * time.Second
-	maxClockSkew           = time.Minute
-	minHMACSecretLength    = 32
+	maxLeeway        = time.Minute
+	maxTypeBytes     = 64
+	maxAudienceBytes = 256
 )
 
-// Config configures the JWT token service. Loadable from YAML/env via mapstructure tags.
+// Config is one token profile. Every token a Service issues or accepts carries exactly this signing method, issuer,
+// type and audience set, and never lives longer than MaxLifetime. Use one Service per token profile: access and refresh
+// tokens, for example, are two profiles with two types. Key material is not configuration; it is supplied as a [KeySet].
 type Config struct {
-	// Secret is the HMAC signing key (required for HS256).
-	Secret string `mapstructure:"secret"`
-
-	// RefreshSecret is an optional separate secret for refresh tokens. If empty,
-	// Secret is used for both access and refresh tokens.
-	RefreshSecret string `mapstructure:"refresh_secret"`
-
-	// PrivateKeyPath is the path to an RSA, ECDSA, or Ed25519 private key PEM file.
-	// Used for RS256/ES256/EdDSA methods.
-	PrivateKeyPath string `mapstructure:"private_key_path"`
-
-	// PublicKeyPath is the path to the corresponding public key PEM file. If empty,
-	// the public key is derived from the private key where possible.
-	PublicKeyPath string `mapstructure:"public_key_path"`
-
-	// Method is the signing algorithm (default: "RS256").
+	// Method is the only accepted signing algorithm (default: "RS256").
 	Method SigningMethod `mapstructure:"method"`
 
 	// AllowSymmetricHMAC explicitly opts into HS256 for internal-only deployments.
@@ -63,137 +45,72 @@ type Config struct {
 	// Issuer is the required "iss" claim value.
 	Issuer string `mapstructure:"issuer"`
 
-	// Audience is the required "aud" claim value.
+	// Audience lists the accepted "aud" values. A token must name at least one of them and issued tokens may name
+	// only these.
 	Audience []string `mapstructure:"audience"`
 
-	// AccessTokenTTL is the lifetime of access tokens (default: "15m").
-	AccessTokenTTL time.Duration `mapstructure:"access_token_ttl"`
+	// SingleAudience requires every token to carry exactly one audience.
+	SingleAudience bool `mapstructure:"single_audience"`
 
-	// RefreshTokenTTL is the lifetime of refresh tokens (default: "168h" / 7 days).
-	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
+	// Type is the required "typ" header, for example "at+jwt". It is compared case-insensitively and the
+	// "application/" prefix is optional, as RFC 7515 allows.
+	Type string `mapstructure:"type"`
 
-	// ClockSkew is the accepted validation leeway for time-based claims. Secure default: 30s.
-	// Maximum allowed: 60s.
-	ClockSkew time.Duration `mapstructure:"clock_skew"`
+	// MaxLifetime bounds exp - iat. Issued tokens default to it when they set no expiry.
+	MaxLifetime time.Duration `mapstructure:"max_lifetime"`
 
-	// --- Runtime fields (not from config files) ---
-
-	// PrivateKey is the parsed RSA, ECDSA, or Ed25519 private key (set programmatically).
-	PrivateKey crypto.Signer `mapstructure:"-"`
-
-	// PublicKey is the parsed RSA, ECDSA, or Ed25519 public key (set programmatically).
-	PublicKey VerificationKey `mapstructure:"-"`
+	// Leeway is the accepted clock difference for exp, nbf and iat. Zero means none; at most one minute.
+	Leeway time.Duration `mapstructure:"leeway"`
 }
 
-// VerificationKey is the equality contract implemented by RSA, ECDSA and Ed25519 public keys.
-// crypto.PublicKey in Equal follows the standard-library cryptographic key contract.
-type VerificationKey interface{ Equal(crypto.PublicKey) bool }
-
-// ApplyDefaults sets sensible defaults for zero-valued fields.
+// ApplyDefaults selects RS256 when no method is set. Leeway has no default: zero means none.
 func (c *Config) ApplyDefaults() {
 	if c.Method == "" {
 		c.Method = RS256
 	}
-	if c.AccessTokenTTL == 0 {
-		c.AccessTokenTTL = defaultAccessTokenTTL
-	}
-	if c.RefreshTokenTTL == 0 {
-		c.RefreshTokenTTL = defaultRefreshTokenTTL
-	}
-	if c.ClockSkew == 0 {
-		c.ClockSkew = defaultClockSkew
-	}
 }
 
-// Validate checks required fields based on the signing method.
+// Validate checks the profile without key material.
 func (c *Config) Validate() error {
 	if c.Issuer == "" {
-		return errors.New("issuer is required")
+		return fmt.Errorf("issuer is required")
 	}
 	if len(c.Audience) == 0 {
-		return errors.New("audience is required")
+		return fmt.Errorf("audience is required")
 	}
-	if c.ClockSkew < 0 {
-		return errors.New("clock_skew must be >= 0")
+	for i, aud := range c.Audience {
+		if aud == "" || len(aud) > maxAudienceBytes {
+			return fmt.Errorf("audience values must be 1..%d bytes", maxAudienceBytes)
+		}
+		if slices.Contains(c.Audience[:i], aud) {
+			return fmt.Errorf("audience %q is listed twice", aud)
+		}
 	}
-	if c.ClockSkew > maxClockSkew {
-		return fmt.Errorf("clock_skew must be <= %s", maxClockSkew)
+	if c.Type == "" || len(c.Type) > maxTypeBytes || strings.ContainsFunc(c.Type, func(r rune) bool { return r <= ' ' || r > '~' }) {
+		return fmt.Errorf("type must be 1..%d visible ASCII characters", maxTypeBytes)
 	}
-
+	if c.MaxLifetime <= 0 {
+		return fmt.Errorf("max_lifetime must be positive")
+	}
+	if c.Leeway < 0 || c.Leeway > maxLeeway {
+		return fmt.Errorf("leeway must be between 0 and %s", maxLeeway)
+	}
 	switch c.Method {
+	case RS256, ES256, EdDSA:
 	case HS256:
 		if !c.AllowSymmetricHMAC {
-			return errors.New("HS256 requires allow_symmetric_hmac=true and is intended for internal-only deployments")
-		}
-		if len(c.Secret) < minHMACSecretLength {
-			return fmt.Errorf("secret must be at least %d bytes for HS256", minHMACSecretLength)
-		}
-		if c.RefreshSecret != "" && len(c.RefreshSecret) < minHMACSecretLength {
-			return fmt.Errorf("refresh_secret must be at least %d bytes for HS256", minHMACSecretLength)
-		}
-	case RS256:
-		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
-			return errors.New("private_key or private_key_path is required for RS256 signing")
-		}
-		if c.PrivateKey != nil {
-			if _, ok := c.PrivateKey.(*rsa.PrivateKey); !ok {
-				return errors.New("private_key must be *rsa.PrivateKey for RS256")
-			}
-		}
-		if c.PublicKey != nil {
-			if _, ok := c.PublicKey.(*rsa.PublicKey); !ok {
-				return errors.New("public_key must be *rsa.PublicKey for RS256")
-			}
-		}
-	case ES256:
-		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
-			return errors.New("private_key or private_key_path is required for ES256 signing")
-		}
-		if c.PrivateKey != nil {
-			if _, ok := c.PrivateKey.(*ecdsa.PrivateKey); !ok {
-				return errors.New("private_key must be *ecdsa.PrivateKey for ES256")
-			}
-		}
-		if c.PublicKey != nil {
-			if _, ok := c.PublicKey.(*ecdsa.PublicKey); !ok {
-				return errors.New("public_key must be *ecdsa.PublicKey for ES256")
-			}
-		}
-	case EdDSA:
-		if c.PrivateKey == nil && c.PrivateKeyPath == "" {
-			return errors.New("private_key or private_key_path is required for EdDSA signing")
-		}
-		if c.PrivateKey != nil {
-			pk, ok := c.PrivateKey.(ed25519.PrivateKey)
-			if !ok {
-				return errors.New("private_key must be ed25519.PrivateKey for EdDSA")
-			}
-			if len(pk) != ed25519.PrivateKeySize {
-				return fmt.Errorf("private_key has incorrect length for ed25519: got %d, want %d", len(pk), ed25519.PrivateKeySize)
-			}
-		}
-		if c.PublicKey != nil {
-			pk, ok := c.PublicKey.(ed25519.PublicKey)
-			if !ok {
-				return errors.New("public_key must be ed25519.PublicKey for EdDSA")
-			}
-			if len(pk) != ed25519.PublicKeySize {
-				return fmt.Errorf("public_key has incorrect length for ed25519: got %d, want %d", len(pk), ed25519.PublicKeySize)
-			}
+			return fmt.Errorf("HS256 requires allow_symmetric_hmac=true and is intended for internal-only deployments")
 		}
 	default:
-		return errors.New("unsupported signing method: " + string(c.Method))
+		return fmt.Errorf("unsupported signing method: %q", c.Method)
 	}
 	return nil
 }
 
-// signingMethod returns the golang-jwt SigningMethod instance.
 func (c *Config) signingMethod() gojwt.SigningMethod {
 	switch c.Method {
 	case HS256:
 		return gojwt.SigningMethodHS256
-	case RS256:
-		return gojwt.SigningMethodRS256
 	case ES256:
 		return gojwt.SigningMethodES256
 	case EdDSA:
@@ -203,60 +120,7 @@ func (c *Config) signingMethod() gojwt.SigningMethod {
 	}
 }
 
-// signKey returns the key used for signing tokens.
-func (c *Config) signKey() any {
-	switch c.Method {
-	case HS256:
-		return []byte(c.Secret)
-	default:
-		return c.PrivateKey
-	}
-}
-
-func (c *Config) refreshSignKey() any {
-	if c.Method == HS256 && c.RefreshSecret != "" {
-		return []byte(c.RefreshSecret)
-	}
-	return c.signKey()
-}
-
-// verifyKey returns the key used for verifying tokens.
-func (c *Config) verifyKey() any {
-	switch c.Method {
-	case HS256:
-		return []byte(c.Secret)
-	case RS256:
-		if c.PublicKey != nil {
-			return c.PublicKey
-		}
-		if pk, ok := c.PrivateKey.(*rsa.PrivateKey); ok {
-			return &pk.PublicKey
-		}
-		return c.PrivateKey
-	case ES256:
-		if c.PublicKey != nil {
-			return c.PublicKey
-		}
-		if pk, ok := c.PrivateKey.(*ecdsa.PrivateKey); ok {
-			return &pk.PublicKey
-		}
-		return c.PrivateKey
-	case EdDSA:
-		if c.PublicKey != nil {
-			return c.PublicKey
-		}
-		if pk, ok := c.PrivateKey.(ed25519.PrivateKey); ok {
-			return pk.Public().(ed25519.PublicKey)
-		}
-		return c.PrivateKey
-	default:
-		return []byte(c.Secret)
-	}
-}
-
-func (c *Config) refreshVerifyKey() any {
-	if c.Method == HS256 && c.RefreshSecret != "" {
-		return []byte(c.RefreshSecret)
-	}
-	return c.verifyKey()
+func normalizeType(typ string) string {
+	typ = strings.ToLower(typ)
+	return strings.TrimPrefix(typ, "application/")
 }

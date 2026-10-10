@@ -52,9 +52,8 @@ func TestMonotonicLeaseWithFrozenOrBackwardDomainClock(t *testing.T) {
 				store.mu.Lock()
 				store.stall = true
 				store.mu.Unlock()
-				pollDone := make(chan struct{})
-				go func() { manager.Poll(context.Background()); close(pollDone) }()
-				defer func() { close(store.release); <-pollDone }()
+				manager.Nudge()
+				defer close(store.release)
 				<-store.entered
 				if backward {
 					domain.Advance(-24 * time.Hour)

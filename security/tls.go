@@ -4,7 +4,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"os"
+
+	"github.com/kbukum/gokit/fs"
 )
 
 // TLSConfig holds TLS settings shared across gokit modules. Used by httpclient, grpc, kafka,
@@ -107,7 +108,7 @@ func (c *TLSConfig) loadCA(cfg *tls.Config) error {
 	if c.CAFile == "" {
 		return nil
 	}
-	ca, err := os.ReadFile(c.CAFile)
+	ca, err := fs.ReadFileLimit(c.CAFile, 1024*1024)
 	if err != nil {
 		return fmt.Errorf("security/tls: failed to read CA file: %w", err)
 	}
@@ -124,7 +125,15 @@ func (c *TLSConfig) loadCertificate(cfg *tls.Config) error {
 	if c.CertFile == "" || c.KeyFile == "" {
 		return nil
 	}
-	cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+	certPEM, err := fs.ReadFileLimit(c.CertFile, 1024*1024)
+	if err != nil {
+		return fmt.Errorf("security/tls: failed to load certificate and key: %w", err)
+	}
+	keyPEM, err := fs.ReadFileLimit(c.KeyFile, 1024*1024)
+	if err != nil {
+		return fmt.Errorf("security/tls: failed to load certificate and key: %w", err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return fmt.Errorf("security/tls: failed to load certificate and key: %w", err)
 	}

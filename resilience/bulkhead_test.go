@@ -7,10 +7,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kbukum/gokit/util"
 )
 
 func TestBulkhead_AllowsRequestsWithinLimit(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 3,
 	})
@@ -41,7 +43,7 @@ func TestBulkhead_AllowsRequestsWithinLimit(t *testing.T) {
 }
 
 func TestBulkhead_RejectsWhenFull(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 1,
 		MaxWait:       0, // Fail immediately
@@ -74,9 +76,10 @@ func TestBulkhead_RejectsWhenFull(t *testing.T) {
 }
 
 func TestBulkhead_WaitsForSlot(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 1,
+		MaxQueue:      1,
 		MaxWait:       100 * time.Millisecond,
 	})
 
@@ -111,9 +114,10 @@ func TestBulkhead_WaitsForSlot(t *testing.T) {
 }
 
 func TestBulkhead_TimesOutWaiting(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 1,
+		MaxQueue:      1,
 		MaxWait:       10 * time.Millisecond,
 	})
 
@@ -143,9 +147,10 @@ func TestBulkhead_TimesOutWaiting(t *testing.T) {
 }
 
 func TestBulkhead_RespectsContext(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 1,
+		MaxQueue:      1,
 		MaxWait:       1 * time.Second,
 	})
 
@@ -180,7 +185,7 @@ func TestBulkhead_RespectsContext(t *testing.T) {
 func TestBulkhead_Callbacks(t *testing.T) {
 	var acquired, released, rejected int32
 
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 1,
 		MaxWait:       0,
@@ -229,7 +234,7 @@ func TestBulkhead_Callbacks(t *testing.T) {
 }
 
 func TestBulkhead_AvailableAndInUse(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "test",
 		MaxConcurrent: 3,
 	})
@@ -270,7 +275,7 @@ func TestBulkhead_AvailableAndInUse(t *testing.T) {
 }
 
 func TestExecuteWithResult(t *testing.T) {
-	b := NewBulkhead(DefaultBulkheadConfig("test"))
+	b := newBulkhead(t, DefaultBulkheadConfig("test"))
 
 	result, err := ExecuteWithResult(context.Background(), b, func() (int, error) {
 		return 42, nil
@@ -283,16 +288,48 @@ func TestExecuteWithResult(t *testing.T) {
 	}
 }
 
-func TestNewBulkhead_DefaultsMaxConcurrent(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{Name: "t"})
-	if b.Available() != 10 {
-		t.Fatalf("expected default MaxConcurrent 10, got %d", b.Available())
+func TestNewBulkhead_RejectsWhatValidateRejects(t *testing.T) {
+	var typedNil *util.FakeClock
+	for name, cfg := range map[string]BulkheadConfig{
+		"zero concurrency":     {MaxConcurrent: 0},
+		"negative concurrency": {MaxConcurrent: -1},
+		"negative wait":        {MaxConcurrent: 1, MaxWait: -time.Second},
+		"negative queue":       {MaxConcurrent: 1, MaxQueue: -1, MaxWait: time.Second},
+		"queue without wait":   {MaxConcurrent: 1, MaxQueue: 1},
+		"typed nil clock":      {MaxConcurrent: 1, Clock: typedNil},
+	} {
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("%s: Validate accepted", name)
+		}
+		if b, err := NewBulkhead(cfg); err == nil || b != nil {
+			t.Errorf("%s: NewBulkhead accepted", name)
+		}
+	}
+	for name, cfg := range map[string]BulkheadConfig{
+		"no queue":      {MaxConcurrent: 1, MaxWait: time.Second},
+		"bounded queue": {MaxConcurrent: 1, MaxQueue: 2, MaxWait: time.Second},
+	} {
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
+func TestPolicyValidateRejectsUnbuildableBulkhead(t *testing.T) {
+	if err := NewPolicy().WithBulkhead(BulkheadConfig{MaxConcurrent: 1, MaxQueue: 1}).Validate(); err == nil {
+		t.Fatal("policy with unbounded waiter accepted")
+	}
+	if err := NewPolicy().WithTimeout(-time.Second).Validate(); err == nil {
+		t.Fatal("negative timeout accepted")
+	}
+	if err := (*Policy)(nil).Validate(); err != nil {
+		t.Fatalf("nil policy: %v", err)
 	}
 }
 
 func TestBulkhead_ExactlyMaxConcurrentAllSucceed(t *testing.T) {
 	const maxConcurrent = 5
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "exact",
 		MaxConcurrent: maxConcurrent,
 	})
@@ -331,7 +368,7 @@ func TestBulkhead_ExactlyMaxConcurrentAllSucceed(t *testing.T) {
 
 func TestBulkhead_MaxConcurrentPlusOneRejected(t *testing.T) {
 	const maxConcurrent = 2
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "plus-one",
 		MaxConcurrent: maxConcurrent,
 		MaxWait:       0,
@@ -369,9 +406,10 @@ func TestBulkhead_MaxConcurrentPlusOneRejected(t *testing.T) {
 
 func TestBulkhead_MaxWaitTimeoutPrecision(t *testing.T) {
 	const maxWait = 50 * time.Millisecond
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "precision",
 		MaxConcurrent: 1,
+		MaxQueue:      1,
 		MaxWait:       maxWait,
 	})
 
@@ -406,7 +444,7 @@ func TestBulkhead_CallbackOrdering(t *testing.T) {
 	var events []string
 	var mu sync.Mutex
 
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "order",
 		MaxConcurrent: 1,
 		OnAcquire: func(_ string) {
@@ -446,7 +484,7 @@ func TestBulkhead_OnRejectCalled(t *testing.T) {
 	t.Parallel()
 	var rejectCount int32
 
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "reject-cb",
 		MaxConcurrent: 1,
 		MaxWait:       0,
@@ -478,7 +516,7 @@ func TestBulkhead_OnRejectCalled(t *testing.T) {
 }
 
 func TestBulkhead_PanicReleasesSlot(t *testing.T) {
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "panic-slot",
 		MaxConcurrent: 1,
 		MaxWait:       0,
@@ -508,9 +546,10 @@ func TestBulkhead_PanicReleasesSlot(t *testing.T) {
 func TestBulkhead_ConcurrentReleaseAcquireRace(t *testing.T) {
 	t.Parallel()
 	const maxConcurrent = 3
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "race",
 		MaxConcurrent: maxConcurrent,
+		MaxQueue:      1,
 		MaxWait:       100 * time.Millisecond,
 	})
 
@@ -534,7 +573,7 @@ func TestBulkhead_ConcurrentReleaseAcquireRace(t *testing.T) {
 
 func TestBulkhead_AvailableAccuracyDuringExecution(t *testing.T) {
 	const maxConcurrent = 5
-	b := NewBulkhead(BulkheadConfig{
+	b := newBulkhead(t, BulkheadConfig{
 		Name:          "avail",
 		MaxConcurrent: maxConcurrent,
 	})

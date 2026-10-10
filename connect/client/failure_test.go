@@ -106,3 +106,19 @@ func TestMapCallFailureRejectsMalformedRetryMetadata(t *testing.T) {
 		t.Fatalf("malformed peer failure = %+v, %v", got, ok)
 	}
 }
+
+func TestMapCallFailureTreatsADueDeadlineAsTheCallers(t *testing.T) {
+	t.Parallel()
+	enforced := peerError(t, connect.NewError(connect.CodeDeadlineExceeded, errors.New("propagated deadline")))
+	ctx, cancel := context.WithTimeout(context.Background(), deadlinePrecision/2)
+	defer cancel()
+	mapped, ok := MapCallFailure(ctx, "echo", enforced)
+	if !ok || mapped.Code != apperrors.ErrCodeTimeout || !errors.Is(mapped, context.DeadlineExceeded) {
+		t.Fatalf("mapped = %v, %v; want the caller's timeout", mapped, ok)
+	}
+	distant, cancelDistant := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelDistant()
+	if mapped, ok := MapCallFailure(distant, "echo", enforced); !ok || mapped.Reason != ReasonUnavailable {
+		t.Fatalf("mapped = %v, %v; want a peer outage", mapped, ok)
+	}
+}

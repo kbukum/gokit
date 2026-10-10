@@ -3,6 +3,7 @@ package errors
 import (
 	"context"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -30,5 +31,22 @@ func TestFailureJSONVocabulary(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"retryAfter":1.5`) || !strings.Contains(string(data), `"code":"TIMEOUT"`) || !strings.Contains(string(data), `"message":"safe"`) {
 		t.Fatalf("failure: %s", data)
+	}
+}
+
+func TestFromContextClassifiesDeadlineAndCancellation(t *testing.T) {
+	if FromContext(context.Background(), "op") != nil {
+		t.Fatal("live context classified")
+	}
+	cause := stderrors.New("shutdown")
+	canceled, cancel := context.WithCancelCause(context.Background())
+	cancel(cause)
+	if got := FromContext(canceled, "op"); got.Code != ErrCodeCanceled || !stderrors.Is(got, cause) {
+		t.Fatalf("cancellation: %v", got)
+	}
+	expired, stop := context.WithDeadline(context.Background(), time.Unix(0, 0))
+	defer stop()
+	if got := FromContext(expired, "op"); got.Code != ErrCodeTimeout || !stderrors.Is(got, context.DeadlineExceeded) {
+		t.Fatalf("deadline: %v", got)
 	}
 }

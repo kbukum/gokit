@@ -16,7 +16,7 @@ import (
 // Usage:
 //
 //	reg := auth.NewRegistry[*MyClaims]()
-//	if err := reg.Register("jwt", auth.NewValidator(jwtSvc.ValidatorFunc())); err != nil { ... }
+//	if err := reg.Register("jwt", jwtSvc); err != nil { ... }
 //	if err := reg.Register("custom", auth.TokenValidatorFunc[*MyClaims](myValidator)); err != nil { ... }
 //	if err := reg.SetDefault("jwt"); err != nil { ... }
 //

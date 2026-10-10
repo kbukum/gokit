@@ -26,6 +26,7 @@ type countingConnector struct {
 	connects *atomic.Int64
 	closes   *atomic.Int64
 	block    bool
+	fail     error
 }
 
 func (c countingConnector) Connect(ctx context.Context) (driver.Conn, error) {
@@ -33,6 +34,9 @@ func (c countingConnector) Connect(ctx context.Context) (driver.Conn, error) {
 	if c.block {
 		<-ctx.Done()
 		return nil, ctx.Err()
+	}
+	if c.fail != nil {
+		return nil, c.fail
 	}
 	return nil, errConnectRefused
 }
@@ -56,12 +60,23 @@ type countingDialector struct {
 	connects *atomic.Int64
 	closes   *atomic.Int64
 	block    bool
+	fail     error
 }
 
 func (countingDialector) Name() string { return "counting" }
 
+func (d countingDialector) Prepare(context.Context, ConnectionInput) (Opener, error) {
+	return countingOpener{dialector: d}, nil
+}
+
+type countingOpener struct{ dialector countingDialector }
+
+func (o countingOpener) Open(context.Context) (gorm.Dialector, error) {
+	return o.dialector, nil
+}
+
 func (d countingDialector) Initialize(db *gorm.DB) error {
-	db.ConnPool = sql.OpenDB(countingConnector{connects: d.connects, closes: d.closes, block: d.block})
+	db.ConnPool = sql.OpenDB(countingConnector{connects: d.connects, closes: d.closes, block: d.block, fail: d.fail})
 	return nil
 }
 

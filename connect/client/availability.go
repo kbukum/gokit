@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -24,7 +25,7 @@ const (
 	AvailabilityUnavailable AvailabilityState = "unavailable"
 )
 
-// IsUnavailable reports a marked transport failure, a context or first-message timeout, or a received Connect Unavailable, DeadlineExceeded or Canceled. Other locally constructed errors carry no evidence about the peer, regardless of their code. Nil and the clean io.EOF sentinel are successful outcomes; a marked failure wrapping EOF remains an outage.
+// IsUnavailable reports a marked transport failure, a context, unary or first-message timeout, or a received Connect Unavailable, DeadlineExceeded or Canceled. Other locally constructed errors carry no evidence about the peer, regardless of their code. Nil and the clean io.EOF sentinel are successful outcomes; a marked failure wrapping EOF remains an outage.
 func IsUnavailable(err error) bool {
 	return callAvailability(err) == AvailabilityUnavailable
 }
@@ -33,7 +34,7 @@ func callAvailability(err error) AvailabilityState {
 	if err == nil || err == io.EOF { //nolint:errorlint // only the clean sentinel is completion; wrapped EOF may be a transport failure
 		return AvailabilityAvailable
 	}
-	if IsTransportFailure(err) || errors.Is(err, ErrFirstMessageTimeout) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if IsTransportFailure(err) || errors.Is(err, ErrFirstMessageTimeout) || errors.Is(err, ErrUnaryTimeout) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return AvailabilityUnavailable
 	}
 	var remote *connect.Error
@@ -70,15 +71,32 @@ func (a *Availability) State() AvailabilityState {
 	return a.state
 }
 
-// Observe records a finished call made with ctx. Success, clean EOF and non-outage wire errors mark the peer available. An [IsUnavailable] failure marks it unavailable unless ctx ended. Other local errors leave the previous state unchanged: a local rejection is not a peer answer. Adapters may record outcomes the interceptor cannot see.
+// Observe records a finished call made with ctx. Success, clean EOF and non-outage wire errors mark the peer available. An [IsUnavailable] failure marks it unavailable unless ctx ended or reached its deadline. Other local errors leave the previous state unchanged: a local rejection is not a peer answer. Adapters may record outcomes the interceptor cannot see.
 func (a *Availability) Observe(ctx context.Context, err error) {
 	state := callAvailability(err)
-	if state == AvailabilityUnknown || (state == AvailabilityUnavailable && ctx.Err() != nil) {
+	if state == AvailabilityUnknown || (state == AvailabilityUnavailable && deadlineReached(ctx)) {
 		return
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.state = state
+}
+
+// deadlinePrecision is how much earlier a peer's copy of a propagated deadline can end than the caller's own: Connect
+// sends the remaining time truncated to whole milliseconds.
+const deadlinePrecision = time.Millisecond
+
+// deadlineReached reports whether ctx ended or is within deadlinePrecision of its deadline. A peer enforcing the
+// propagated deadline can answer deadline_exceeded before the caller's timer fires, and a loaded runtime can fire that
+// timer late; either way the failure reflects the caller's budget, not the peer.
+func deadlineReached(ctx context.Context) bool {
+	return ctx.Err() != nil || deadlineDue(ctx)
+}
+
+// deadlineDue reports whether ctx's deadline is within deadlinePrecision, whether or not its timer has fired.
+func deadlineDue(ctx context.Context) bool {
+	deadline, ok := ctx.Deadline()
+	return ok && !time.Now().Add(deadlinePrecision).Before(deadline)
 }
 
 // Health reports the state as component health named after the peer: degraded when unavailable, otherwise healthy. The message is the state.

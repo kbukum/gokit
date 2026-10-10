@@ -2,9 +2,11 @@ package resilience
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	apperr "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
 // Common bulkhead errors. These are typed AppErrors so callers can branch on
@@ -24,6 +26,10 @@ type BulkheadConfig struct {
 	MaxConcurrent int `json:"max_concurrent,omitempty" yaml:"max_concurrent" mapstructure:"max_concurrent"`
 	// MaxWait is how long to wait for a slot. 0 means fail immediately.
 	MaxWait time.Duration `json:"max_wait,omitempty" yaml:"max_wait" mapstructure:"max_wait"`
+	// MaxQueue bounds waiting callers. Zero disables waiting, even when MaxWait is positive.
+	MaxQueue int `json:"max_queue,omitempty" yaml:"max_queue" mapstructure:"max_queue"`
+	// Clock injects elapsed-time scheduling; nil uses the monotonic runtime clock.
+	Clock util.TimerClock `json:"-" yaml:"-" mapstructure:"-"`
 	// OnReject is called when a request is rejected.
 	OnReject func(name string) `json:"-" yaml:"-" mapstructure:"-"`
 	// OnAcquire is called when a slot is acquired.
@@ -44,20 +50,24 @@ func DefaultBulkheadConfig(name string) BulkheadConfig {
 // Bulkhead implements the bulkhead pattern for concurrency limiting.
 // It isolates components to prevent cascading failures.
 type Bulkhead struct {
-	config BulkheadConfig
-	sem    chan struct{}
+	config  BulkheadConfig
+	sem     chan struct{}
+	waiting atomic.Int64
 }
 
 // NewBulkhead creates a new bulkhead.
-func NewBulkhead(config BulkheadConfig) *Bulkhead {
-	if config.MaxConcurrent <= 0 {
-		config.MaxConcurrent = 10
+func NewBulkhead(config BulkheadConfig) (*Bulkhead, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	if config.Clock == nil {
+		config.Clock = util.MonotonicClock{}
 	}
 
 	return &Bulkhead{
 		config: config,
 		sem:    make(chan struct{}, config.MaxConcurrent),
-	}
+	}, nil
 }
 
 // Execute runs the given function within the bulkhead. Returns ErrBulkheadFull
@@ -107,21 +117,40 @@ func (b *Bulkhead) acquireSlot(ctx context.Context) error {
 	}
 
 	// If no wait configured, fail immediately
-	if b.config.MaxWait <= 0 {
+	if b.config.MaxWait == 0 || b.config.MaxQueue == 0 {
 		return ErrBulkheadFull
 	}
 
+	if !b.enqueue() {
+		return ErrBulkheadFull
+	}
+	defer b.waiting.Add(-1)
+
 	// Wait with timeout
-	timer := time.NewTimer(b.config.MaxWait)
+	timer := b.config.Clock.NewTimer(b.config.MaxWait)
 	defer timer.Stop()
 
 	select {
 	case b.sem <- struct{}{}:
 		return nil
-	case <-timer.C:
+	case <-timer.C():
 		return ErrBulkheadTimeout
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// enqueue admits the caller to the wait queue unless it is full.
+func (b *Bulkhead) enqueue() bool {
+	limit := int64(b.config.MaxQueue)
+	for {
+		current := b.waiting.Load()
+		if current >= limit {
+			return false
+		}
+		if b.waiting.CompareAndSwap(current, current+1) {
+			return true
+		}
 	}
 }
 
@@ -141,6 +170,16 @@ func (b *Bulkhead) Available() int {
 // InUse returns the number of slots currently in use.
 func (b *Bulkhead) InUse() int {
 	return len(b.sem)
+}
+
+// Waiting returns the number of callers currently waiting for a slot.
+func (b *Bulkhead) Waiting() int {
+	return int(b.waiting.Load())
+}
+
+// MaxQueue returns the wait-queue bound; zero means no queue.
+func (b *Bulkhead) MaxQueue() int {
+	return b.config.MaxQueue
 }
 
 // MaxConcurrent returns the maximum concurrent calls allowed.

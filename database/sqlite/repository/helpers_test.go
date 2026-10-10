@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/sqlite"
 )
 
@@ -21,7 +22,15 @@ func (testModel) TableName() string { return "test_models" }
 // setupTestDB creates an in-memory SQLite database with the test schema.
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+	opener, err := sqlite.Prepare(t.Context(), database.ConnectionInput{DSN: ":memory:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dialector, err := opener.Open(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Discard,
 	})
 	if err != nil {

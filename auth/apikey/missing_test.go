@@ -8,7 +8,7 @@ import (
 )
 
 func TestUnknownDigestIsTerminalAuthenticationFailure(t *testing.T) {
-	m := NewManager(newMemStore(), testHasher(t))
+	m := newTestManager(t, nil, nil)
 	_, err := m.ValidateKey(context.Background(), "key.unknown")
 	if err == nil || apperrors.Normalize(err).Code != apperrors.ErrCodeUnauthorized {
 		t.Fatal("missing digest was not an authentication failure", err)

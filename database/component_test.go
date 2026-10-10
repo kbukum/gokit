@@ -2,9 +2,9 @@ package database
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
-
-	"gorm.io/gorm"
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/logging"
@@ -12,8 +12,10 @@ import (
 
 type fakeDialect struct{}
 
-func (fakeDialect) Name() string               { return "fake" }
-func (fakeDialect) Open(string) gorm.Dialector { return nil }
+func (fakeDialect) Name() string { return "fake" }
+func (fakeDialect) Prepare(context.Context, ConnectionInput) (Opener, error) {
+	return nil, fmt.Errorf("fake dialect has no connections")
+}
 
 // TestComponent_Name tests that the component returns the correct name.
 func TestComponent_Name(t *testing.T) {
@@ -146,8 +148,8 @@ func TestComponent_Describe(t *testing.T) {
 	if desc.Details == "" {
 		t.Error("Describe Details should not be empty")
 	}
-	if desc.Details != "" && desc.Details[0:3] != "DSN" {
-		t.Error("Describe Details should start with DSN")
+	if desc.Details != "" && desc.Details[0:7] != "Backend" {
+		t.Error("Describe Details should identify the backend without exposing a DSN")
 	}
 }
 
@@ -212,7 +214,7 @@ func TestComponent_ChainedMethods(t *testing.T) {
 	}
 }
 
-// TestComponent_DB_ReturnsNilBeforeStart tests DB() returns nil before Start.
+// TestComponent_DB_ReturnsNilBeforeStart tests DB() reports ErrNotStarted before Start.
 func TestComponent_DB_ReturnsNilBeforeStart(t *testing.T) {
 	cfg := Config{
 		Enabled: true,
@@ -221,8 +223,8 @@ func TestComponent_DB_ReturnsNilBeforeStart(t *testing.T) {
 	log := logging.NewDefault("test")
 	comp := NewComponent(cfg, log)
 
-	if db := comp.DB(); db != nil {
-		t.Error("DB() should return nil before Start")
+	if db, err := comp.DB(); db != nil || !errors.Is(err, ErrNotStarted) {
+		t.Errorf("DB() before Start = %v, %v", db, err)
 	}
 }
 
@@ -241,8 +243,8 @@ func TestComponent_Disabled(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() with Enabled=false should not error: %v", err)
 	}
-	if db := comp.DB(); db != nil {
-		t.Error("DB() should be nil when component is disabled")
+	if db, err := comp.DB(); db != nil || !errors.Is(err, ErrNotStarted) {
+		t.Errorf("DB() when disabled = %v, %v", db, err)
 	}
 
 	health := comp.Health(ctx)
@@ -271,60 +273,45 @@ func TestComponent_EnabledDefaultBehavior(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() should not error with default Enabled=false: %v", err)
 	}
-	if db := comp.DB(); db != nil {
-		t.Error("DB() should be nil when Enabled defaults to false")
+	if db, err := comp.DB(); db != nil || !errors.Is(err, ErrNotStarted) {
+		t.Errorf("DB() when Enabled defaults to false = %v, %v", db, err)
 	}
 }
 
-// structuredDialect is a fake dialect that records the DSN it was asked to open and builds one
-// from ConnParams, exercising the Component's structured-DSN path without a real driver SDK.
-type structuredDialect struct{ gotDSN string }
+type structuredDialect struct{ gotInput ConnectionInput }
 
 func (*structuredDialect) Name() string { return "structured" }
 
-func (d *structuredDialect) Open(dsn string) gorm.Dialector {
-	d.gotDSN = dsn
-	return nil
+func (d *structuredDialect) Prepare(_ context.Context, input ConnectionInput) (Opener, error) {
+	d.gotInput = input
+	return nil, fmt.Errorf("fixture does not allocate connections")
 }
 
-func (*structuredDialect) DSN(p ConnParams) (string, error) {
-	return "built://" + p.Host + "/" + p.Database, nil
-}
-
-// TestComponent_ResolveDSN_ExplicitWins verifies an explicit Config.DSN is used verbatim even when
-// the dialect could build one from Params.
-func TestComponent_ResolveDSN_ExplicitWins(t *testing.T) {
+func TestComponentRejectsAmbiguousConnectionInput(t *testing.T) {
 	cfg := Config{Enabled: true, DSN: "explicit://dsn", Params: ConnParams{Host: "ignored"}}
-	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(&structuredDialect{})
-	got, err := comp.resolveDSN()
-	if err != nil {
-		t.Fatalf("resolveDSN() error: %v", err)
-	}
-	if got != "explicit://dsn" {
-		t.Errorf("resolveDSN() = %q, want explicit DSN", got)
+	dialect := &structuredDialect{}
+	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(dialect)
+	if err := comp.Start(t.Context()); err == nil || dialect.gotInput.DSN != "" {
+		t.Fatal("ambiguous input reached backend preparation")
 	}
 }
 
-// TestComponent_ResolveDSN_FromParams verifies a StructuredDialect builds the DSN from Params when
-// no explicit DSN is set.
-func TestComponent_ResolveDSN_FromParams(t *testing.T) {
+func TestComponentPassesStructuredInputWithoutSerialization(t *testing.T) {
 	cfg := Config{Enabled: true, Params: ConnParams{Host: "db.example", Database: "app"}}
-	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(&structuredDialect{})
-	got, err := comp.resolveDSN()
-	if err != nil {
-		t.Fatalf("resolveDSN() error: %v", err)
+	dialect := &structuredDialect{}
+	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(dialect)
+	if err := comp.Start(t.Context()); err == nil {
+		t.Fatal("fixture falsely opened a connection")
 	}
-	if got != "built://db.example/app" {
-		t.Errorf("resolveDSN() = %q, want built DSN from params", got)
+	if dialect.gotInput.Params.Host != "db.example" || dialect.gotInput.DSN != "" {
+		t.Fatal("structured configuration was not passed directly")
 	}
 }
 
-// TestComponent_ResolveDSN_NonStructuredRequiresDSN verifies that a dialect without structured
-// support fails clearly when only Params (no DSN) are provided.
-func TestComponent_ResolveDSN_NonStructuredRequiresDSN(t *testing.T) {
-	cfg := Config{Enabled: true, Params: ConnParams{Host: "db.example"}}
-	comp := NewComponent(cfg, logging.NewDefault("test")).WithDialect(fakeDialect{})
-	if _, err := comp.resolveDSN(); err == nil {
-		t.Fatal("resolveDSN() should fail for a non-structured dialect without an explicit DSN")
+func TestComponentPassesOpaqueInputWithoutParsing(t *testing.T) {
+	dialect := &structuredDialect{}
+	comp := NewComponent(Config{Enabled: true, DSN: "opaque"}, logging.NewDefault("test")).WithDialect(dialect)
+	if err := comp.Start(t.Context()); err == nil || dialect.gotInput.DSN != "opaque" {
+		t.Fatal("opaque configuration was not passed directly")
 	}
 }

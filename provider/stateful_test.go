@@ -251,7 +251,10 @@ func TestStateful_ComposesWithResilience(t *testing.T) {
 	})
 
 	// Wrap with resilience — Stateful implements RequestResponse
-	resilient := provider.WithResilience[chatRequest, chatResponse](stateful, provider.ResilienceConfig{})
+	resilient, err := provider.WithResilience[chatRequest, chatResponse](stateful, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := resilient.Execute(context.Background(), chatRequest{SessionID: "s1", Message: "hi"})
 	if err != nil {
@@ -395,7 +398,7 @@ func TestStateful_WithResilience_Combination(t *testing.T) {
 		TTL: time.Minute,
 	})
 
-	resilient := provider.WithResilience[chatRequest, chatResponse](stateful, provider.ResilienceConfig{
+	resilient, err := provider.WithResilience[chatRequest, chatResponse](stateful, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "stateful-cb",
 			MaxFailures: 5,
@@ -407,6 +410,9 @@ func TestStateful_WithResilience_Combination(t *testing.T) {
 			Burst: 100,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resp, err := resilient.Execute(context.Background(), chatRequest{SessionID: "s1", Message: "hi"})
 	if err != nil {

@@ -32,6 +32,8 @@ type memoryStore struct {
 	rows       map[string]Record
 	fail       error
 	revokeFail error
+	// lookupLag simulates a store that answers after its context budget without observing cancellation.
+	lookupLag time.Duration
 }
 
 func (s *memoryStore) family(ref string) string {
@@ -59,7 +61,9 @@ func (s *memoryStore) Lookup(ctx context.Context, ref string) (Record, error) {
 	if s.fail != nil {
 		return Record{}, s.fail
 	}
-	if err := ctx.Err(); err != nil {
+	if s.lookupLag > 0 {
+		time.Sleep(s.lookupLag)
+	} else if err := ctx.Err(); err != nil {
 		return Record{}, err
 	}
 	row, ok := s.rows[ref]
@@ -80,7 +84,7 @@ func (s *memoryStore) Rotate(ctx context.Context, old string, next Record) error
 		return err
 	}
 	row, ok := s.rows[old]
-	if !ok || !row.Active || row.Revoked || !next.ExpiresAt.Equal(row.ExpiresAt) {
+	if !ok || !row.Active || row.Revoked || !next.ExpiresAt.Equal(row.ExpiresAt) || !next.AuthenticatedAt.Equal(row.AuthenticatedAt) {
 		return auth.Failure("SESSION_INVALID")
 	}
 	row.Active = false
@@ -142,6 +146,32 @@ func (s *memoryStore) Revoke(ctx context.Context, ref string) (string, error) {
 	return row.Family, nil
 }
 
+func (s *memoryStore) RevokeSubject(ctx context.Context, kind auth.Kind, subject string) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.fail != nil {
+		return 0, s.fail
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	seen := make(map[string]bool)
+	var families []string
+	for key := range s.rows {
+		row := s.rows[key]
+		if row.Principal.Kind != kind || row.Principal.Subject != subject || row.Revoked {
+			continue
+		}
+		row.Revoked = true
+		s.rows[key] = row
+		if !seen[row.Family] {
+			seen[row.Family] = true
+			families = append(families, row.Family)
+		}
+	}
+	return int64(len(families)), nil
+}
+
 func (s *memoryStore) Cleanup(ctx context.Context, before time.Time, limit int) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -169,7 +199,7 @@ func fixture(t *testing.T, store *memoryStore) (*Manager, *util.FakeClock) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := NewManager(Config{Store: store, Clock: clock, Random: &counterReader{}, Pepper: strings.Repeat("p", 32), CSRF: csrf})
+	m, err := NewManager(Config{Store: store, Clock: clock, Random: &counterReader{}, Pepper: strings.Repeat("p", 32), CSRF: csrf, ReportError: func(context.Context, error) {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,10 +278,10 @@ func TestExpiryStoreFailureAndCrossInstance(t *testing.T) {
 	if err := m.Logout(context.Background(), issued.Principal.Reference); err != nil {
 		t.Fatal(err)
 	}
-	other.Poll(context.Background())
+	other.Nudge()
 	select {
 	case <-life.Done():
-	default:
+	case <-time.After(4 * time.Second):
 		t.Fatal("remote revocation retained stream")
 	}
 	issued, err = m.Create(context.Background(), caller())
@@ -300,6 +330,7 @@ func TestHTTPProtocol(t *testing.T) {
 	}
 	r.Method = "POST"
 	r.URL.Path = "/auth/logout"
+	r.Header.Set("Origin", "https://example.test")
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
 	if w.Code != 401 {

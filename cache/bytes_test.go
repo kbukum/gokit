@@ -14,7 +14,7 @@ var nonUTF8Payload = []byte{0x00, 0xff, 0xfe, 0x80, 0x01, 'g', 'o', 0xc0, 0xc1}
 func TestMemoryStoreRoundTripsNonUTF8Bytes(t *testing.T) {
 	t.Parallel()
 
-	store := NewMemoryStore(MemoryConfig{})
+	store := mustMemory(t, MemoryConfig{})
 	ctx := context.Background()
 
 	if err := store.Set(ctx, "raw", nonUTF8Payload, 0); err != nil {

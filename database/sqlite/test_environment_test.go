@@ -24,7 +24,7 @@ func TestOwnedFileDatabaseEnvironment(t *testing.T) {
 	var owned *database.DB
 	var schema migration.Config
 	c := dbtest.NewComponent().WithDatabase(func(ctx context.Context) (*database.DB, error) {
-		db, err := database.NewWithContext(ctx, sqlite.Open(path), database.Config{MaxRetries: 1}, logging.NewDefault("fixture"))
+		db, err := database.NewWithContext(ctx, sqlite.Dialect(), database.Config{DSN: path, MaxRetries: 1}, logging.NewDefault("fixture"))
 		owned = db
 		return db, err
 	}).WithInitializer(func(ctx context.Context, db *gorm.DB) error {

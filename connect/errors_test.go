@@ -75,3 +75,26 @@ func TestNormalizingInterceptorStreamingContracts(t *testing.T) {
 		t.Fatalf("invalid application error = %v", got)
 	}
 }
+
+// safeFirst mirrors a storage boundary: a cause-free classification unwraps before a private cause.
+type safeFirst struct{ private error }
+
+func (safeFirst) Error() string { return "DATABASE_FAILURE: Database operation failed" }
+func (e safeFirst) Unwrap() []error {
+	return []error{apperrors.New(apperrors.ErrCodeInternal, "Database operation failed").WithReason("DATABASE_FAILURE"), e.private}
+}
+
+func TestNormalizingInterceptorHonorsSafeBoundaryClassification(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	log, err := logging.New(&logging.Config{Level: "debug", Format: "json"}, "rpc-test", logging.WithWriter(&logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	private := apperrors.InvalidInput("dsn", "private credential detail").WithCause(errors.New("private driver text"))
+	got := NormalizingInterceptor(log).WrapUnary(unaryHandler(nil, safeFirst{private}))
+	_, err = got(t.Context(), newProtoRequest())
+	if connectrpc.CodeOf(err) != connectrpc.CodeInternal || strings.Contains(err.Error(), "private") || strings.Contains(logs.String(), "private") {
+		t.Fatalf("private classification crossed the boundary: %v; logs %s", err, &logs)
+	}
+}

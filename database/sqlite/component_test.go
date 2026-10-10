@@ -2,6 +2,7 @@ package sqlite_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kbukum/gokit/component"
@@ -25,14 +26,14 @@ func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
 	ctx := context.Background()
 
-	if db := comp.DB(); db != nil {
-		t.Error("DB() should be nil before Start")
+	if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
+		t.Errorf("DB() before Start: %v", err)
 	}
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	if db := comp.DB(); db == nil {
-		t.Error("DB() should not be nil after Start")
+	if _, err := comp.DB(); err != nil {
+		t.Errorf("DB() after Start: %v", err)
 	}
 	if err := comp.Stop(ctx); err != nil {
 		t.Fatalf("Stop() failed: %v", err)
@@ -56,7 +57,7 @@ func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	if !comp.DB().GormDB.Migrator().HasTable(&User{}) {
+	if !mustDB(t, comp).GormDB.Migrator().HasTable(&User{}) {
 		t.Error("User table should have been migrated")
 	}
 	if err := comp.Stop(ctx); err != nil {
@@ -81,7 +82,7 @@ func TestComponentWithAutoMigrateDisabled(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	if comp.DB().GormDB.Migrator().HasTable(&User{}) {
+	if mustDB(t, comp).GormDB.Migrator().HasTable(&User{}) {
 		t.Error("User table should not have been migrated when AutoMigrate is false")
 	}
 	if err := comp.Stop(ctx); err != nil {
@@ -93,7 +94,7 @@ func TestNewWithContextSQLiteAdapter(t *testing.T) {
 	cfg := testConfig()
 	log := logging.NewDefault("test")
 
-	db, err := database.NewWithContext(context.Background(), sqlite.Open(cfg.DSN), cfg, log)
+	db, err := database.NewWithContext(context.Background(), sqlite.Dialect(), cfg, log)
 	if err != nil {
 		t.Fatalf("NewWithContext() failed: %v", err)
 	}
@@ -150,9 +151,8 @@ func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
 	}
-	db := comp.DB()
-	if db == nil {
-		t.Error("DB() should not return nil after Start")
+	if db, err := comp.DB(); db == nil || err != nil {
+		t.Errorf("DB() after Start = %v, %v", db, err)
 	}
 	if err := comp.Stop(ctx); err != nil {
 		t.Fatalf("Stop() failed: %v", err)
@@ -197,7 +197,7 @@ func TestComponentStartClosesPoolWhenAutoMigrateFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected auto-migrate to fail")
 	}
-	if comp.DB() != nil {
+	if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
 		t.Fatal("DB() should be nil after a failed Start so the pool is not leaked")
 	}
 	// Stop must be a no-op (nil DB), not a panic or double-close.
@@ -208,4 +208,13 @@ func TestComponentStartClosesPoolWhenAutoMigrateFails(t *testing.T) {
 	if h := comp.Health(context.Background()); h.Status != component.StatusUnhealthy {
 		t.Fatalf("Health = %+v, want unhealthy", h)
 	}
+}
+
+func mustDB(t *testing.T, comp *database.Component) *database.DB {
+	t.Helper()
+	db, err := comp.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
 }

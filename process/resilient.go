@@ -15,9 +15,16 @@ type Runner struct {
 }
 
 // NewRunner creates a Runner with the given resilience config. Nil config fields are skipped.
-// Empty config means Run() calls process.Run directly.
-func NewRunner(cfg provider.ResilienceConfig) *Runner {
-	return &Runner{state: provider.BuildResilience(cfg)}
+// Empty config means Run() calls process.Run directly. Invalid config returns an error.
+func NewRunner(cfg provider.ResilienceConfig) (*Runner, error) {
+	if cfg.IsEmpty() {
+		return &Runner{}, nil
+	}
+	state, err := provider.BuildResilience(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Runner{state: state}, nil
 }
 
 // Run executes a subprocess through the resilience chain.

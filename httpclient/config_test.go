@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/security"
 )
 
@@ -127,5 +128,12 @@ func TestDefaultRateLimiterConfig_NotNil(t *testing.T) {
 	cfg := DefaultRateLimiterConfig("test-rl")
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
+	}
+}
+
+func TestConfig_Validate_RejectsUnbuildableResiliencePolicy(t *testing.T) {
+	cfg := Config{Timeout: 10 * time.Second, ResiliencePolicy: resilience.NewPolicy().WithBulkhead(resilience.BulkheadConfig{MaxConcurrent: 1, MaxQueue: 1})}
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("policy with an unbounded waiter accepted")
 	}
 }

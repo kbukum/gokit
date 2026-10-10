@@ -19,7 +19,7 @@
 //
 // Use provider.Connector for deferred initialization with resilience:
 //
-//	c := provider.NewConnector(provider.ConnectorConfig[myv1connect.MyServiceClient]{
+//	c, err := provider.NewConnector(provider.ConnectorConfig[myv1connect.MyServiceClient]{
 //	    ServiceName: "my-service",
 //	    Create: func() (myv1connect.MyServiceClient, error) {
 //	        url, err := discovery.Resolve("my-service")
@@ -28,6 +28,7 @@
 //	    },
 //	    Resilience: &provider.ResilienceConfig{...},
 //	})
+//	if err != nil { return err }
 //	resp, err := provider.Call(ctx, c, func(svc myv1connect.MyServiceClient) (*Resp, error) {
 //	    return svc.DoThing(ctx, connect.NewRequest(req))
 //	})
@@ -38,6 +39,14 @@
 //	httpClient, err := client.NewHTTPClient(cfg)
 //	opts := client.ClientOptions(cfg)
 //	svcClient := myv1connect.NewMyServiceClient(httpClient, cfg.BaseURL, opts...)
+//
+// # Bounded unary calls
+//
+// A context.WithTimeout applied before the call looks like the caller's own deadline, so a hung peer would never count as an outage. UnaryTimeoutInterceptor goes after Availability instead:
+//
+//	availability := client.NewAvailability("peer")
+//	limit, err := client.UnaryTimeoutInterceptor(2 * time.Second)
+//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(availability, limit))
 //
 // # Long-lived streams
 //

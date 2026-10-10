@@ -15,13 +15,16 @@ import (
 
 func TestConnector_GetClient_LazyInit(t *testing.T) {
 	createCalls := 0
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "test-svc",
 		Create: func() (string, error) {
 			createCalls++
 			return "client-instance", nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if c.IsConnected() {
 		t.Error("should not be connected before GetClient")
@@ -59,13 +62,16 @@ func TestConnector_GetClient_LazyInit(t *testing.T) {
 
 func TestConnector_GetClient_ConcurrentInit(t *testing.T) {
 	var createCalls atomic.Int32
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "concurrent-svc",
 		Create: func() (string, error) {
 			createCalls.Add(1)
 			return "client", nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 20; i++ {
@@ -86,14 +92,17 @@ func TestConnector_GetClient_ConcurrentInit(t *testing.T) {
 }
 
 func TestConnector_GetClient_CreateError(t *testing.T) {
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "failing-svc",
 		Create: func() (string, error) {
 			return "", errors.New("connection refused")
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := c.GetClient()
+	_, err = c.GetClient()
 	if err == nil {
 		t.Error("expected error from failing Create")
 	}
@@ -104,7 +113,7 @@ func TestConnector_GetClient_CreateError(t *testing.T) {
 
 func TestConnector_Close(t *testing.T) {
 	closeCalled := false
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "closeable-svc",
 		Create: func() (string, error) {
 			return "client", nil
@@ -114,9 +123,12 @@ func TestConnector_Close(t *testing.T) {
 			return nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Initialize first.
-	_, err := c.GetClient()
+	_, err = c.GetClient()
 	if err != nil {
 		t.Fatalf("GetClient: %v", err)
 	}
@@ -137,7 +149,7 @@ func TestConnector_Close(t *testing.T) {
 }
 
 func TestConnector_Close_Error(t *testing.T) {
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "close-fail-svc",
 		Create: func() (string, error) {
 			return "client", nil
@@ -146,9 +158,12 @@ func TestConnector_Close_Error(t *testing.T) {
 			return errors.New("close failed")
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, _ = c.GetClient()
-	err := c.Close()
+	err = c.Close()
 	if err == nil {
 		t.Error("expected error from failing OnClose")
 	}
@@ -156,13 +171,16 @@ func TestConnector_Close_Error(t *testing.T) {
 
 func TestConnector_Reset(t *testing.T) {
 	createCalls := 0
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "reset-svc",
 		Create: func() (string, error) {
 			createCalls++
 			return "client-v" + string(rune('0'+createCalls)), nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, _ = c.GetClient()
 	if createCalls != 1 {
@@ -178,12 +196,15 @@ func TestConnector_Reset(t *testing.T) {
 }
 
 func TestConnector_Call(t *testing.T) {
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "call-svc",
 		Create: func() (string, error) {
 			return "my-client", nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := provider.Call(context.Background(), c, func(client string) (string, error) {
 		return "result-from-" + client, nil
@@ -197,14 +218,17 @@ func TestConnector_Call(t *testing.T) {
 }
 
 func TestConnector_Call_CreateFails(t *testing.T) {
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "call-fail-svc",
 		Create: func() (string, error) {
 			return "", errors.New("no connection")
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := provider.Call(context.Background(), c, func(client string) (string, error) {
+	_, err = provider.Call(context.Background(), c, func(client string) (string, error) {
 		t.Fatal("should not be called when Create fails")
 		return "", nil
 	})
@@ -214,7 +238,7 @@ func TestConnector_Call_CreateFails(t *testing.T) {
 }
 
 func TestConnector_Close_NotConnected(t *testing.T) {
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "not-connected",
 		Create: func() (string, error) {
 			return "client", nil
@@ -224,9 +248,12 @@ func TestConnector_Close_NotConnected(t *testing.T) {
 			return nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Close without ever connecting.
-	err := c.Close()
+	err = c.Close()
 	if err != nil {
 		t.Fatalf("Close on unconnected: %v", err)
 	}
@@ -235,7 +262,7 @@ func TestConnector_Close_NotConnected(t *testing.T) {
 func TestConnector_WithResilienceConfig(t *testing.T) {
 	t.Parallel()
 	callCount := atomic.Int32{}
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "resilient-svc",
 		Create: func() (string, error) {
 			callCount.Add(1)
@@ -249,6 +276,9 @@ func TestConnector_WithResilienceConfig(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := provider.Call(context.Background(), c, func(client string) (string, error) {
 		return "result-from-" + client, nil
@@ -264,13 +294,16 @@ func TestConnector_WithResilienceConfig(t *testing.T) {
 func TestConnector_ResetDuringActiveCall(t *testing.T) {
 	t.Parallel()
 	createCount := atomic.Int32{}
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "reset-active-svc",
 		Create: func() (string, error) {
 			n := createCount.Add(1)
 			return fmt.Sprintf("client-v%d", n), nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// First call
 	result1, err := provider.Call(context.Background(), c, func(client string) (string, error) {
@@ -300,7 +333,7 @@ func TestConnector_ResetDuringActiveCall(t *testing.T) {
 
 func TestConnector_ConcurrentCloseAndCall(t *testing.T) {
 	t.Parallel()
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "concurrent-close-svc",
 		Create: func() (string, error) {
 			return "client", nil
@@ -309,6 +342,9 @@ func TestConnector_ConcurrentCloseAndCall(t *testing.T) {
 			return nil
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Initialize
 	_, _ = c.GetClient()
@@ -341,7 +377,7 @@ func TestConnector_ConcurrentCloseAndCall(t *testing.T) {
 func TestConnector_WithCircuitBreakerResilience(t *testing.T) {
 	t.Parallel()
 	callCount := atomic.Int32{}
-	c := provider.NewConnector(provider.ConnectorConfig[string]{
+	c, err := provider.NewConnector(provider.ConnectorConfig[string]{
 		ServiceName: "cb-conn-svc",
 		Create: func() (string, error) {
 			return "client", nil
@@ -354,6 +390,9 @@ func TestConnector_WithCircuitBreakerResilience(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Make the function fail to trip the CB
 	for i := 0; i < 2; i++ {
@@ -364,7 +403,7 @@ func TestConnector_WithCircuitBreakerResilience(t *testing.T) {
 	}
 
 	// Next call should be rejected by CB
-	_, err := provider.Call(context.Background(), c, func(client string) (string, error) {
+	_, err = provider.Call(context.Background(), c, func(client string) (string, error) {
 		return "ok", nil
 	})
 	if err == nil {

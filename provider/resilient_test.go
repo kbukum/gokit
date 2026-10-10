@@ -87,7 +87,10 @@ func (s *failingStream) Execute(_ context.Context, in string) (provider.Iterator
 
 func TestWithResilience_EmptyConfig(t *testing.T) {
 	p := &echoProvider{name: "passthrough"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{})
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Should return the same instance
 	if wrapped.Name() != "passthrough" {
 		t.Fatalf("expected same provider, got %s", wrapped.Name())
@@ -105,7 +108,7 @@ func TestWithResilience_EmptyConfig(t *testing.T) {
 
 func TestWithResilience_RetryRecoversTransient(t *testing.T) {
 	p := &failingProvider{name: "retry-test", failUntil: 2}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    3,
 			InitialBackoff: time.Millisecond,
@@ -113,6 +116,9 @@ func TestWithResilience_RetryRecoversTransient(t *testing.T) {
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := wrapped.Execute(context.Background(), "hello")
 	if err != nil {
@@ -128,7 +134,7 @@ func TestWithResilience_RetryRecoversTransient(t *testing.T) {
 
 func TestWithResilience_RetryExhausted(t *testing.T) {
 	p := &failingProvider{name: "exhaust-test", failUntil: 10}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    3,
 			InitialBackoff: time.Millisecond,
@@ -136,8 +142,11 @@ func TestWithResilience_RetryExhausted(t *testing.T) {
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	_, err := wrapped.Execute(context.Background(), "hello")
+	_, err = wrapped.Execute(context.Background(), "hello")
 	if err == nil {
 		t.Fatal("expected error after retry exhaustion")
 	}
@@ -150,7 +159,7 @@ func TestWithResilience_RetryExhausted(t *testing.T) {
 
 func TestWithResilience_CircuitBreakerTrips(t *testing.T) {
 	p := &alwaysFailProvider{name: "cb-test"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "test-cb",
 			MaxFailures:      3,
@@ -158,6 +167,9 @@ func TestWithResilience_CircuitBreakerTrips(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Fail 3 times to trip CB
 	for i := 0; i < 3; i++ {
@@ -168,7 +180,7 @@ func TestWithResilience_CircuitBreakerTrips(t *testing.T) {
 	}
 
 	// Next call should be rejected by CB (circuit open) — wrapped as AppError
-	_, err := wrapped.Execute(context.Background(), "x")
+	_, err = wrapped.Execute(context.Background(), "x")
 	if err == nil {
 		t.Fatal("expected error when circuit is open")
 	}
@@ -190,7 +202,7 @@ func TestWithResilience_CircuitBreakerTrips(t *testing.T) {
 
 func TestWithResilience_CBAndRetry(t *testing.T) {
 	p := &failingProvider{name: "cb-retry", failUntil: 1}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "test-cb-retry",
 			MaxFailures: 5,
@@ -202,6 +214,9 @@ func TestWithResilience_CBAndRetry(t *testing.T) {
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Should succeed: first call fails, retry succeeds
 	result, err := wrapped.Execute(context.Background(), "hi")
@@ -217,13 +232,16 @@ func TestWithResilience_CBAndRetry(t *testing.T) {
 
 func TestWithResilience_RateLimiter(t *testing.T) {
 	p := &echoProvider{name: "rl-test"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "test-rl",
 			Rate:  1000, // high rate so test doesn't block
 			Burst: 10,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := wrapped.Execute(context.Background(), "test")
 	if err != nil {
@@ -238,13 +256,16 @@ func TestWithResilience_RateLimiter(t *testing.T) {
 
 func TestWithResilience_Bulkhead(t *testing.T) {
 	p := &echoProvider{name: "bh-test"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		Bulkhead: &resilience.BulkheadConfig{
 			Name:          "test-bh",
 			MaxConcurrent: 2,
 			MaxWait:       0, // fail immediately if full
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := wrapped.Execute(context.Background(), "test")
 	if err != nil {
@@ -259,13 +280,16 @@ func TestWithResilience_Bulkhead(t *testing.T) {
 
 func TestWithResilience_DelegatesNameAndAvailability(t *testing.T) {
 	p := &echoProvider{name: "delegated"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "test",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if wrapped.Name() != "delegated" {
 		t.Fatalf("expected name delegated, got %s", wrapped.Name())
@@ -279,13 +303,16 @@ func TestWithResilience_DelegatesNameAndAvailability(t *testing.T) {
 
 func TestWithStreamResilience_RetryRecovers(t *testing.T) {
 	p := &failingStream{failUntil: 1}
-	wrapped := provider.WithStreamResilience[string, byte](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithStreamResilience[string, byte](p, provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    3,
 			InitialBackoff: time.Millisecond,
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	iter, err := wrapped.Execute(context.Background(), "ab")
 	if err != nil {
@@ -313,15 +340,18 @@ func TestWithStreamResilience_RetryRecovers(t *testing.T) {
 
 func TestWithSinkResilience_RetryRecovers(t *testing.T) {
 	s := &failingSink{failUntil: 1}
-	wrapped := provider.WithSinkResilience[string](s, provider.ResilienceConfig{
+	wrapped, err := provider.WithSinkResilience[string](s, provider.ResilienceConfig{
 		Retry: &resilience.RetryConfig{
 			MaxAttempts:    3,
 			InitialBackoff: time.Millisecond,
 			BackoffFactor:  1.0,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	err := wrapped.Send(context.Background(), "msg")
+	err = wrapped.Send(context.Background(), "msg")
 	if err != nil {
 		t.Fatalf("expected retry to recover, got: %v", err)
 	}
@@ -342,7 +372,7 @@ func TestManagerInitializeWithResilience(t *testing.T) {
 		return &echoProvider{name: "test"}, nil
 	})
 
-	err := mgr.InitializeWithResilience(context.Background(), "test", nil, func(p provider.RequestResponse[string, string]) provider.RequestResponse[string, string] {
+	err := mgr.InitializeWithResilience(context.Background(), "test", nil, func(p provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
 		callCount++
 		return provider.WithResilience(p, provider.ResilienceConfig{
 			CircuitBreaker: &resilience.CircuitBreakerConfig{
@@ -376,7 +406,10 @@ func TestWithStreamResilience_NameAndIsAvailable(t *testing.T) {
 	cfg := provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{Name: "s", Rate: 100, Burst: 10},
 	}
-	wrapped := provider.WithStreamResilience[string, byte](&splitProvider{}, cfg)
+	wrapped, err := provider.WithStreamResilience[string, byte](&splitProvider{}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if wrapped.Name() != "split" {
 		t.Fatalf("expected name split, got %q", wrapped.Name())
 	}
@@ -396,7 +429,7 @@ func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
 		},
 	}
 
-	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+	wrapped, err := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "stream-cb",
 			MaxFailures:      2,
@@ -404,6 +437,9 @@ func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Trip the circuit breaker
 	for i := 0; i < 2; i++ {
@@ -414,7 +450,7 @@ func TestWithStreamResilience_CircuitBreakerTrips(t *testing.T) {
 	}
 
 	// Next call should be rejected by CB
-	_, err := wrapped.Execute(context.Background(), "input")
+	_, err = wrapped.Execute(context.Background(), "input")
 	if err == nil {
 		t.Fatal("expected circuit breaker error")
 	}
@@ -436,13 +472,16 @@ func TestWithStreamResilience_RateLimiterDuringIteration(t *testing.T) {
 		},
 	}
 
-	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+	wrapped, err := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "stream-rl",
 			Rate:  1000,
 			Burst: 10,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	iter, err := wrapped.Execute(context.Background(), "input")
 	if err != nil {
@@ -475,13 +514,16 @@ func TestWithStreamResilience_ErrorPropagation(t *testing.T) {
 		},
 	}
 
-	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
+	wrapped, err := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "err-rl",
 			Rate:  1000,
 			Burst: 10,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	iter, err := wrapped.Execute(context.Background(), "input")
 	if err != nil {
@@ -511,7 +553,10 @@ func TestWithStreamResilience_EmptyConfig(t *testing.T) {
 		},
 	}
 
-	wrapped := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{})
+	wrapped, err := provider.WithStreamResilience[string, int](stream, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if wrapped.Name() != "empty-cfg" {
 		t.Fatalf("expected passthrough, got %s", wrapped.Name())
 	}
@@ -526,7 +571,7 @@ func TestWithDuplexResilience_CircuitBreakerOnOpen(t *testing.T) {
 		openErr:   openErr,
 	}
 
-	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+	wrapped, err := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "duplex-cb",
 			MaxFailures:      2,
@@ -534,6 +579,9 @@ func TestWithDuplexResilience_CircuitBreakerOnOpen(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Trip the circuit breaker
 	for i := 0; i < 2; i++ {
@@ -544,7 +592,7 @@ func TestWithDuplexResilience_CircuitBreakerOnOpen(t *testing.T) {
 	}
 
 	// Next call should be rejected by CB
-	_, err := wrapped.Open(context.Background())
+	_, err = wrapped.Open(context.Background())
 	if err == nil {
 		t.Fatal("expected circuit breaker error")
 	}
@@ -562,13 +610,16 @@ func TestWithDuplexResilience_ConcurrentSendRecv(t *testing.T) {
 		stream:    stream,
 	}
 
-	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+	wrapped, err := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "duplex-rl",
 			Rate:  10000,
 			Burst: 100,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ds, err := wrapped.Open(context.Background())
 	if err != nil {
@@ -628,13 +679,16 @@ func TestWithDuplexResilience_ClosePropagation(t *testing.T) {
 		stream:    stream,
 	}
 
-	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+	wrapped, err := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "duplex-close-rl",
 			Rate:  10000,
 			Burst: 100,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ds, err := wrapped.Open(context.Background())
 	if err != nil {
@@ -660,7 +714,10 @@ func TestWithDuplexResilience_EmptyConfig(t *testing.T) {
 		stream:    stream,
 	}
 
-	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{})
+	wrapped, err := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if wrapped.Name() != "passthrough-duplex" {
 		t.Fatalf("expected passthrough, got %s", wrapped.Name())
 	}
@@ -673,13 +730,16 @@ func TestWithDuplexResilience_NameAndIsAvailable(t *testing.T) {
 		available: true,
 	}
 
-	wrapped := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
+	wrapped, err := provider.WithDuplexResilience[string, string](duplex, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "delegate-cb",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if wrapped.Name() != "delegate-duplex" {
 		t.Fatalf("expected delegate-duplex, got %s", wrapped.Name())
@@ -695,7 +755,7 @@ func TestWithSinkResilience_CircuitBreakerTrips(t *testing.T) {
 		return errors.New("send failed")
 	})
 
-	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+	wrapped, err := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:             "sink-cb",
 			MaxFailures:      2,
@@ -703,6 +763,9 @@ func TestWithSinkResilience_CircuitBreakerTrips(t *testing.T) {
 			HalfOpenMaxCalls: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Trip the circuit breaker
 	for i := 0; i < 2; i++ {
@@ -710,7 +773,7 @@ func TestWithSinkResilience_CircuitBreakerTrips(t *testing.T) {
 	}
 
 	// Next call should be rejected by CB
-	err := wrapped.Send(context.Background(), "msg")
+	err = wrapped.Send(context.Background(), "msg")
 	if err == nil {
 		t.Fatal("expected circuit breaker error")
 	}
@@ -729,7 +792,10 @@ func TestWithSinkResilience_EmptyConfig(t *testing.T) {
 		return nil
 	})
 
-	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{})
+	wrapped, err := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if wrapped.Name() != "passthrough-sink" {
 		t.Fatalf("expected passthrough, got %s", wrapped.Name())
 	}
@@ -741,13 +807,16 @@ func TestWithSinkResilience_NameAndIsAvailable(t *testing.T) {
 		return nil
 	})
 
-	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+	wrapped, err := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "sink-delegate-cb",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if wrapped.Name() != "delegate-sink" {
 		t.Fatalf("expected delegate-sink, got %s", wrapped.Name())
@@ -760,16 +829,19 @@ func TestWithSinkResilience_NameAndIsAvailable(t *testing.T) {
 func TestWithResilience_RateLimiterTimeout(t *testing.T) {
 	t.Parallel()
 	p := &echoProvider{name: "rl-timeout"}
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		RateLimiter: &resilience.RateLimiterConfig{
 			Name:  "tight-rl",
 			Rate:  0.001, // Very low rate
 			Burst: 1,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// First call should succeed (uses initial burst)
-	_, err := wrapped.Execute(context.Background(), "first")
+	_, err = wrapped.Execute(context.Background(), "first")
 	if err != nil {
 		t.Fatalf("first call should succeed: %v", err)
 	}
@@ -797,18 +869,21 @@ func TestContextCancellation_ThroughResilience(t *testing.T) {
 		},
 	}
 
-	wrapped := provider.WithResilience[string, string](p, provider.ResilienceConfig{
+	wrapped, err := provider.WithResilience[string, string](p, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "ctx-cb",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	_, err := wrapped.Execute(ctx, "test")
+	_, err = wrapped.Execute(ctx, "test")
 	if err == nil {
 		t.Fatal("expected context error")
 	}
@@ -823,17 +898,47 @@ func TestWithSinkResilience_Bulkhead(t *testing.T) {
 		return nil
 	})
 
-	wrapped := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
+	wrapped, err := provider.WithSinkResilience[string](sink, provider.ResilienceConfig{
 		Bulkhead: &resilience.BulkheadConfig{
 			Name:          "sink-bh",
 			MaxConcurrent: 1,
 			MaxWait:       0, // fail immediately if full
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// One call should succeed
-	err := wrapped.Send(context.Background(), "msg")
+	err = wrapped.Send(context.Background(), "msg")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestResilienceWrappersRejectInvalidBulkhead(t *testing.T) {
+	cfg := provider.ResilienceConfig{Bulkhead: &resilience.BulkheadConfig{MaxConcurrent: 1, MaxQueue: 4}}
+	if w, err := provider.WithResilience[string, string](&alwaysFailProvider{name: "p"}, cfg); err == nil || w != nil {
+		t.Fatalf("request/response wrapper published: %v %v", w, err)
+	}
+	if _, err := provider.BuildResilience(cfg); err == nil {
+		t.Fatal("BuildResilience accepted unbounded waiter")
+	}
+	if c, err := provider.NewConnector(provider.ConnectorConfig[string]{Resilience: &cfg}); err == nil || c != nil {
+		t.Fatalf("connector published: %v", err)
+	}
+	registry := provider.NewRegistry[provider.RequestResponse[string, string]]()
+	registry.RegisterFactory("bad", func(map[string]any) (provider.RequestResponse[string, string], error) {
+		return &alwaysFailProvider{name: "bad"}, nil
+	})
+	mgr := provider.NewManager(registry, &provider.HealthCheckSelector[provider.RequestResponse[string, string]]{})
+	err := mgr.InitializeWithResilience(context.Background(), "bad", nil, func(p provider.RequestResponse[string, string]) (provider.RequestResponse[string, string], error) {
+		return provider.WithResilience(p, cfg)
+	})
+	if err == nil {
+		t.Fatal("manager published provider with invalid resilience")
+	}
+	if _, getErr := mgr.GetByName("bad"); getErr == nil {
+		t.Fatal("invalid provider is retrievable")
 	}
 }

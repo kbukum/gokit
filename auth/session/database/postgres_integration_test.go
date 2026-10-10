@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kbukum/gokit/auth"
 	dbkit "github.com/kbukum/gokit/database"
 	"github.com/kbukum/gokit/database/postgres"
 	pgtest "github.com/kbukum/gokit/database/postgres/testutil"
@@ -26,7 +27,7 @@ func TestPostgresTransactionalFamily(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	db, err := dbkit.NewWithContext(ctx, postgres.Open(fixture.DSN), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+	db, err := dbkit.NewWithContext(ctx, postgres.Dialect(), dbkit.Config{Params: fixture.Params, LogLevel: "silent"}, logging.NewDefault("session-test"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,10 +37,11 @@ func TestPostgresTransactionalFamily(t *testing.T) {
 		}
 	})
 	cfg := Migrations(db, postgres.MigrateDriver())
+	cfg.Table.Schema = fixture.Params.Options["search_path"]
 	if err := cfg.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.Ready(ctx, 1); err != nil {
+	if err := cfg.Ready(ctx, SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	clock := util.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -77,8 +79,17 @@ func TestPostgresTransactionalFamily(t *testing.T) {
 	if err != nil || !record.Revoked {
 		t.Fatal("family revocation failed", err)
 	}
+	active := row("subject", "subject-family", clock)
+	active.Principal.Subject = "reauthenticated"
+	if err := s.Create(ctx, active); err != nil {
+		t.Fatal(err)
+	}
+	families, err := s.RevokeSubject(ctx, auth.User, "reauthenticated")
+	if err != nil || families != 1 {
+		t.Fatal("subject revocation", families, err)
+	}
 	clock.Advance(time.Hour + 10*time.Minute)
-	if n, err := s.Cleanup(ctx, clock.Now(), 256); err != nil || n != 5 {
+	if n, err := s.Cleanup(ctx, clock.Now(), 256); err != nil || n != 7 {
 		t.Fatal(n, err)
 	}
 }
@@ -96,7 +107,7 @@ func TestPostgresCrossInstanceRevocation(t *testing.T) {
 		}
 	})
 	open := func() *dbkit.DB {
-		db, err := dbkit.NewWithContext(ctx, postgres.Open(fixture.DSN), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+		db, err := dbkit.NewWithContext(ctx, postgres.Dialect(), dbkit.Config{Params: fixture.Params, LogLevel: "silent"}, logging.NewDefault("session-test"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,10 +120,11 @@ func TestPostgresCrossInstanceRevocation(t *testing.T) {
 	}
 	first, second := open(), open()
 	cfg := Migrations(first, postgres.MigrateDriver())
+	cfg.Table.Schema = fixture.Params.Options["search_path"]
 	if err := cfg.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.Ready(ctx, 1); err != nil {
+	if err := cfg.Ready(ctx, SchemaVersion); err != nil {
 		t.Fatal(err)
 	}
 	assertCrossInstanceRevocation(t, first, second, util.NewFakeClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
@@ -132,7 +144,7 @@ func TestPostgresMigrationsComposeWithApplicationSchema(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			db, err := dbkit.NewWithContext(ctx, postgres.Open(fixture.DSN), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+			db, err := dbkit.NewWithContext(ctx, postgres.Dialect(), dbkit.Config{Params: fixture.Params, LogLevel: "silent"}, logging.NewDefault("session-test"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -141,7 +153,7 @@ func TestPostgresMigrationsComposeWithApplicationSchema(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			assertMigrationComposition(t, db, postgres.MigrateDriver(), sessionFirst)
+			assertMigrationComposition(t, db, postgres.MigrateDriver(), fixture.Params.Options["search_path"], sessionFirst)
 		})
 	}
 }

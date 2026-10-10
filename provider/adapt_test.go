@@ -197,7 +197,10 @@ func TestAdapt_ComposesWithResilience(t *testing.T) {
 	}
 
 	// Wrap backend with resilience first, then adapt
-	resilient := provider.WithResilience[backendInput, backendOutput](backend, provider.ResilienceConfig{})
+	resilient, err := provider.WithResilience[backendInput, backendOutput](backend, provider.ResilienceConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	adapted := provider.Adapt[domainInput, domainOutput, backendInput, backendOutput](
 		resilient,
@@ -245,13 +248,16 @@ func TestAdapt_Middleware_Resilience_Pipeline(t *testing.T) {
 	)(adapted)
 
 	// Add resilience
-	resilient := provider.WithResilience(chained, provider.ResilienceConfig{
+	resilient, err := provider.WithResilience(chained, provider.ResilienceConfig{
 		CircuitBreaker: &resilience.CircuitBreakerConfig{
 			Name:        "pipeline-cb",
 			MaxFailures: 5,
 			Timeout:     time.Second,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := resilient.Execute(context.Background(), "input")
 	if err != nil {

@@ -21,7 +21,7 @@ func TestMigrationsComposeWithApplicationSchema(t *testing.T) {
 			t.Parallel()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			db, err := dbkit.NewWithContext(ctx, sqlite.Open("file:"+t.Name()+"?mode=memory&cache=shared"), dbkit.Config{LogLevel: "silent"}, logging.NewDefault("session-test"))
+			db, err := dbkit.NewWithContext(ctx, sqlite.Dialect(), dbkit.Config{DSN: "file:" + t.Name() + "?mode=memory&cache=shared", LogLevel: "silent"}, logging.NewDefault("session-test"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -30,7 +30,7 @@ func TestMigrationsComposeWithApplicationSchema(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			assertMigrationComposition(t, db, sqlite.MigrateDriver(), sessionFirst)
+			assertMigrationComposition(t, db, sqlite.MigrateDriver(), "", sessionFirst)
 		})
 	}
 }
@@ -38,21 +38,22 @@ func TestMigrationsComposeWithApplicationSchema(t *testing.T) {
 func TestMigrationsRejectInvalidVersionTable(t *testing.T) {
 	t.Parallel()
 	cfg := Migrations(nil, sqlite.MigrateDriver())
-	if cfg.VersionTable != VersionTable || !migration.IsVersionTable(cfg.VersionTable) || cfg.VersionTable == migration.DefaultVersionTable {
-		t.Fatalf("session migrations must use their own version table, got %q", cfg.VersionTable)
+	if cfg.Table.Name != VersionTable || !migration.IsVersionTable(cfg.Table.Name) || cfg.Table.Name == migration.DefaultVersionTable {
+		t.Fatalf("session migrations must use their own version table, got %q", cfg.Table.Name)
 	}
 }
 
 // assertMigrationComposition proves the session schema and an application schema, each starting at version 1, both install and report ready on one database in either order.
-func assertMigrationComposition(t *testing.T, db *dbkit.DB, driver migration.DriverFunc, sessionFirst bool) {
+func assertMigrationComposition(t *testing.T, db *dbkit.DB, driver migration.DriverFunc, schema string, sessionFirst bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	app := migration.Config{DB: db.GormDB, Driver: driver, Path: "migrations", FS: fstest.MapFS{
+	app := migration.Config{DB: db.GormDB, Driver: driver, Table: migration.Table{Schema: schema}, Path: "migrations", FS: fstest.MapFS{
 		"migrations/1_items.up.sql":   {Data: []byte("CREATE TABLE app_items (id BIGINT PRIMARY KEY);")},
 		"migrations/1_items.down.sql": {Data: []byte("DROP TABLE app_items;")},
 	}}
 	sessions := Migrations(db, driver)
+	sessions.Table.Schema = schema
 	order := []migration.Config{app, sessions}
 	if sessionFirst {
 		order = []migration.Config{sessions, app}

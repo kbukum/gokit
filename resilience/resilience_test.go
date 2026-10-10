@@ -41,7 +41,7 @@ func TestIntegration_CBPlusRetry(t *testing.T) {
 }
 
 func TestIntegration_BulkheadPlusRateLimiter(t *testing.T) {
-	bh := NewBulkhead(BulkheadConfig{
+	bh := newBulkhead(t, BulkheadConfig{
 		Name:          "bh-rl",
 		MaxConcurrent: 3,
 		MaxWait:       50 * time.Millisecond,
@@ -88,7 +88,7 @@ func TestIntegration_AllFourPatterns(t *testing.T) {
 		MaxFailures: 10,
 		Timeout:     time.Second,
 	})
-	bh := NewBulkhead(BulkheadConfig{
+	bh := newBulkhead(t, BulkheadConfig{
 		Name:          "all4",
 		MaxConcurrent: 5,
 		MaxWait:       100 * time.Millisecond,

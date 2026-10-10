@@ -93,6 +93,21 @@ func TestAvailabilityCountsPeerDeadlineWhileCallerWaits(t *testing.T) {
 	assertState(t, a, AvailabilityUnavailable)
 }
 
+// A peer enforcing the caller's millisecond-truncated deadline can answer before the caller's own timer fires.
+func TestAvailabilityIgnoresPeerEnforcingTheCallersDeadline(t *testing.T) {
+	enforced := peerError(t, connect.NewError(connect.CodeDeadlineExceeded, errors.New("propagated deadline")))
+	a := NewAvailability("access")
+	a.Observe(context.Background(), nil)
+	ctx, cancel := context.WithTimeout(context.Background(), deadlinePrecision/2)
+	defer cancel()
+	a.Observe(ctx, enforced)
+	assertState(t, a, AvailabilityAvailable)
+	distant, cancelDistant := context.WithTimeout(context.Background(), time.Minute)
+	defer cancelDistant()
+	a.Observe(distant, enforced)
+	assertState(t, a, AvailabilityUnavailable)
+}
+
 func TestAvailabilityHealthReportsState(t *testing.T) {
 	a := NewAvailability("events")
 	ctx := context.Background()

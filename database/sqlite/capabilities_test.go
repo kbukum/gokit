@@ -6,8 +6,6 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	"github.com/kbukum/gokit/database/sqlite"
 )
 
 func TestNestedTransactionSavepointRollback(t *testing.T) {
@@ -52,7 +50,7 @@ func TestNestedTransactionSavepointRollback(t *testing.T) {
 
 func TestSQLiteTranslateError(t *testing.T) {
 	t.Parallel()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{TranslateError: true, Logger: logger.Discard})
+	db, err := gorm.Open(preparedDialector(t, ":memory:"), &gorm.Config{TranslateError: true, Logger: logger.Discard})
 	if err != nil {
 		t.Fatal(err)
 	}

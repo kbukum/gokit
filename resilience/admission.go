@@ -52,6 +52,9 @@ func (p *Policy) Acquire(ctx context.Context) (callCtx context.Context, finish f
 		return callCtx, finish, nil
 	}
 	p.init()
+	if p.err != nil {
+		return callCtx, finish, p.err
+	}
 	if p.rl != nil {
 		if err := p.rl.Wait(callCtx); err != nil {
 			return callCtx, finish, err
