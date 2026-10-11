@@ -145,7 +145,7 @@ jobs:
       matrix:
         # Floor pinned to the go.mod directive; `stable` tracks the latest
         # release so a newer toolchain cannot silently break the build.
-        go: ['1.27.1', 'stable']
+        go: ['1.27.2', 'stable']
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       GOTOOLCHAIN: local
@@ -182,7 +182,7 @@ jobs:
           exit $failed
 
       - name: Merge and upload coverage
-        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.1'
+        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.2'
         run: |
           set -euo pipefail
           modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
@@ -198,7 +198,7 @@ jobs:
           echo "files=$covfiles" >> "$GITHUB_ENV"
 
       - name: Upload coverage
-        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.1'
+        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.2'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7.1.1
         with:
           files: ${{ env.files }}
