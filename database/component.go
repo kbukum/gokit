@@ -69,10 +69,13 @@ func NewComponent(cfg Config, log *logging.Logger) *Component {
 }
 
 // WithName sets the unique registry name, so one process can own several database components.
+// The name also scopes the component's logger and its bootstrap display name, so
+// several databases in one process stay distinguishable in logs and the summary.
 func (c *Component) WithName(name string) *Component {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.name = name
+	c.log = c.log.WithComponent(name)
 	return c
 }
 
@@ -384,8 +387,14 @@ func (c *Component) Describe() component.Description {
 	if c.cfg.AutoMigrate {
 		details += ", auto-migrate=on"
 	}
+	// A process with several databases names them distinctly (for example
+	// "tenancy-database"); the unnamed default shows as a friendly "Database".
+	displayName := "Database"
+	if c.name != "" && c.name != "database" {
+		displayName = c.name
+	}
 	return component.Description{
-		Name:    "Database",
+		Name:    displayName,
 		Type:    "database",
 		Details: details,
 	}

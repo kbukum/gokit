@@ -2,12 +2,15 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"gorm.io/gorm"
 
 	"github.com/kbukum/gokit/auth"
 	"github.com/kbukum/gokit/auth/session"
@@ -278,6 +281,45 @@ func TestRevokeSubjectRevokesOnlyThatSubjectsActiveFamilies(t *testing.T) {
 	cancel()
 	if _, err := s.RevokeSubject(canceled, auth.User, "bob"); err == nil {
 		t.Fatal("canceled revocation succeeded")
+	}
+}
+
+func TestRevokeSubjectTxFollowsTheCallersTransaction(t *testing.T) {
+	s, db, clock := fixture(t)
+	ctx := context.Background()
+	if err := s.Create(ctx, row("u1", "fu1", clock)); err != nil {
+		t.Fatal(err)
+	}
+	failed := errors.New("caller's later write failed")
+	err := db.WithTransaction(ctx, func(tx *gorm.DB) error {
+		if n, err := RevokeSubjectTx(tx, auth.User, "u"); err != nil || n != 1 {
+			t.Fatalf("in transaction = %v, %v", n, err)
+		}
+		return failed
+	})
+	if !errors.Is(err, failed) {
+		t.Fatal(err)
+	}
+	if got, err := s.Lookup(ctx, "u1"); err != nil || got.Revoked {
+		t.Fatalf("rolled back revocation kept: %+v, %v", got, err)
+	}
+	if err := db.WithTransaction(ctx, func(tx *gorm.DB) error {
+		_, err := RevokeSubjectTx(tx, auth.User, "u")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Lookup(ctx, "u1"); err != nil || !got.Revoked {
+		t.Fatalf("committed revocation lost: %+v, %v", got, err)
+	}
+	for _, tc := range []struct {
+		tx      *gorm.DB
+		kind    auth.Kind
+		subject string
+	}{{nil, auth.User, "u"}, {db.GormDB, auth.User, ""}, {db.GormDB, "robot", "u"}} {
+		if _, err := RevokeSubjectTx(tc.tx, tc.kind, tc.subject); err == nil {
+			t.Fatalf("RevokeSubjectTx(%v, %q, %q) accepted", tc.tx != nil, tc.kind, tc.subject)
+		}
 	}
 }
 

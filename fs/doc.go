@@ -15,6 +15,8 @@
 //     untrusted absolute or existing paths;
 //   - use [WriteAtomic] for same-filesystem writes without exposing partial
 //     files, and [WriteAtomicReplace] when an existing file should be replaced;
+//   - use [WriteAtomicCreate] to publish a new complete file without overwriting an existing destination;
+//   - use [WithFileLock] to serialize cooperating file updates across processes;
 //   - use [CanRead] / [CanWrite] capability checks before optional operations;
 //   - extract untrusted archives with [ExtractTarGz] / [ExtractZip] under
 //     [ExtractLimits], which bound entry count, per-entry and total size, and

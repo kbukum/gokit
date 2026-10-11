@@ -11,7 +11,11 @@ Use `session.Manager` for same-origin HTTPS browsers and `apikey.Manager` for CL
 5. Call `session.NewManager(config)`, then `session.NewLocalBackend(manager, verifier)` and `session.NewHandler(backend, session.HandlerConfig{Origin: "https://your-host", Errors: errorWriter, Clock: util.SystemClock{}})`. `LoginVerifier.VerifyLogin(ctx, session.LoginCredentials)` returns an application-verified principal with subject, kind and explicit restrictions. It does not encode workspace membership. `ErrorWriter` is the outer transport's normalizer; expose only approved application failure fields, never causes.
 6. Close the manager before the borrowed database. `Close(ctx)` synchronously ends local stream lifetimes and waits for its owned lease and cleanup workers.
 
-**Remote session authority:** a gateway that does not own session state implements `session.Backend` (`Login`, `Status`, `Logout`) over its own client and passes it to `NewHandler`. The handler still enforces the whole browser contract before calling the backend: exact origin on login and logout, JSON limits, cookie shape and exactly one `X-CSRF-Token` on logout. `LoginRequest.Source` carries the connection's IP address (`RemoteAddr`, never forwarding headers; zero for a connection without one) for per-source admission. It also rejects a returned grant whose principal is not a valid session identity (`Credential` must be `auth.Session`), is already expired or has no CSRF token. `HandlerConfig.Errors` receives backend errors with their causes and must normalize them. `session.ParseCSRFToken(r)` and `session.CheckOrigin(r, origin)` expose the same header and exact-origin rules to other unsafe cookie routes, so a gateway can fail `CSRF_INVALID` before it forwards a request.
+### Remote authority
+
+A gateway implements `session.Backend` over its own client and injects it into `NewHandler`. The handler retains origin, JSON, cookie, and logout CSRF checks. Grants must contain a valid `auth.Session` principal, future expiry, and CSRF token; backend errors require normalization through `HandlerConfig.Errors`.
+
+`LoginRequest.Source` uses the connection's `RemoteAddr` IP, never forwarding headers; absent IPs produce zero. Reuse `ParseCSRFToken` and `CheckOrigin` for other unsafe cookie routes before forwarding.
 
 `session.Config.Clock` is the injected `util.Clock` owning absolute session expiry and retention dates. Independent `util.MonotonicClock` runtime timing owns stream leases, polling and cleanup cadence: a frozen domain clock or backward wall-clock adjustment cannot stop them. Tests use `testing/synctest` for deterministic monotonic timing rather than advancing domain time to drive transport timers.
 
@@ -59,13 +63,23 @@ Login has two phases around the application's password check: `BeginLogin(ctx, p
 - **Already revoked or superseded at begin:** the cookie is terminal. Login revokes its whole family, cancels its streams, and only then issues a fresh family. A browser stuck with a stale HttpOnly cookie, for example after a lost rotation or logout response, recovers by logging in, while every generation of the old family stays fenced.
 - **Failures:** failed authoritative lookups or revocations never recover.
 
-An explicitly missing credential may establish a fresh family after password verification. An expired but still active, non-revoked generation may atomically establish a new one-hour lifetime through strong authentication; all family tombstones are retained through that lifetime plus ten minutes. Its CAS still loses to committed logout. Cookie-less initial logins have no existing generation to compare and establish independent families, including overlapping initial requests. Clients must serialize initial login/logout and generation-fence late responses; the server cannot correlate unrelated cookie-less requests without a separate client identity. A lost initial response leaves an inaccessible family until expiry, never a recoverable plaintext credential. Status never sets cookies.
+Missing credentials may establish a fresh family after verification. An expired, non-revoked generation may atomically gain a new one-hour lifetime; tombstones remain through expiry plus ten minutes, and committed logout still wins.
+
+Cookie-less logins establish independent families. Clients must serialize login/logout and generation-fence late responses; the server cannot correlate unrelated requests without client identity. A lost response leaves an inaccessible family until expiry, not a recoverable plaintext credential. Status never sets cookies.
 
 `Logout(ctx, protectedReference)` revokes the family even if the supplied generation is inactive. HTTP logout verifies its generation-bound CSRF token directly before revocation, allowing an old generation's cookie and CSRF token to revoke a replacement. Logout is idempotent while the tombstone exists.
 
-RevokeSubject(ctx, kind, subject) transactionally revokes matching families and returns an int64 count of newly transitioned families, never an unbounded id list. The local admission gate covers commit and one subject/kind stream scan, even when the count is zero. Other instances observe revocation at renewal. The SQL store uses the partial subject/kind index in schema version 2. This does not fence cookie-less logins that verified an old password before recovery: the application identity owner must serialize issuance with its authoritative password revision.
+`RevokeSubject` transactionally revokes matching families and returns an `int64` count, not an unbounded ID list. Its local gate covers commit and a subject/kind stream scan even when the count is zero; other instances observe renewal. SQL uses the schema-version-2 subject/kind index.
 
-Lookup/status calls have a 500 ms budget (`LookupBudget`), mutations 2 seconds (`MutationBudget`), and login 5 seconds (`LoginBudget`). Admission budgets start before waiting for the context-aware local revocation gate: acquisition waits count toward 500 ms, while create/rotate/logout waits count toward 2 seconds. Canceling the caller interrupts a contended gate. Authentication uses the revised application category plus semantic reason, such as `SESSION_INVALID`, `CSRF_INVALID`, `AUTH_STORE_UNAVAILABLE` or `CREDENTIAL_CEILING`. Terminal authentication failures stop protected activity; store errors do not certify authenticated success.
+The identity owner must serialize issuance with password revisions: subject revocation does not fence cookie-less logins verified against an old password. For an application transaction, use `database.RevokeSubjectTx`, then call `Manager.RevokeSubject` or `Manager.Nudge` after commit to end local streams.
+
+| Operation | Total budget, including admission-gate waits |
+|---|---|
+| Lookup/status/stream acquisition | 500 ms (`LookupBudget`) |
+| Create/rotate/logout | 2 s (`MutationBudget`) |
+| Login | 5 s (`LoginBudget`) |
+
+Caller cancellation interrupts gate waits. Failures retain application category and semantic reason, including `SESSION_INVALID`, `CSRF_INVALID`, `AUTH_STORE_UNAVAILABLE`, and `CREDENTIAL_CEILING`. Terminal failures stop protected activity; store errors never certify authenticated success.
 
 ## Authorization is an intersection
 

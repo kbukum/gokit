@@ -102,14 +102,13 @@ func TestOperationContextWithMetadata(t *testing.T) {
 func TestOperationContextAllAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
 
 	oc := NewOperationContext(OperationSpec{ServiceName: "my-service", OperationName: "create-user", RequestID: "req-123", UserID: "user-456", Metrics: metrics})
-	ctx := context.Background()
-	ctx, span := oc.StartSpanForOperation(ctx, "test.all-attrs")
+	ctx, span := oc.StartSpanForOperation(base, "test.all-attrs")
 	oc.EndOperation(ctx, span, "ok", nil)
 
 	spans := exporter.GetSpans()
@@ -146,11 +145,10 @@ func TestOperationContextAllAttributes(t *testing.T) {
 func TestOperationContextWithoutUserID(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
 	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "", Metrics: nil})
-	ctx := context.Background()
-	ctx, span := oc.StartSpanForOperation(ctx, "test.no-user")
+	ctx, span := oc.StartSpanForOperation(base, "test.no-user")
 	oc.EndOperation(ctx, span, "ok", nil)
 
 	spans := exporter.GetSpans()
@@ -168,11 +166,10 @@ func TestOperationContextWithoutUserID(t *testing.T) {
 func TestOperationContextSpanAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
 	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "user-1", Metrics: nil})
-	ctx := context.Background()
-	ctx, span := oc.StartSpanForOperation(ctx, "test.span")
+	ctx, span := oc.StartSpanForOperation(base, "test.span")
 
 	// Set additional attributes on the span via context
 	SetSpanAttributes(ctx,
@@ -201,11 +198,10 @@ func TestOperationContextSpanAttributes(t *testing.T) {
 func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
 	oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: "op", RequestID: "req-1", UserID: "", Metrics: nil})
-	ctx := context.Background()
-	ctx, span := oc.StartSpanForOperation(ctx, "test.error")
+	ctx, span := oc.StartSpanForOperation(base, "test.error")
 	testErr := fmt.Errorf("database connection failed")
 	oc.EndOperation(ctx, span, "error", testErr)
 
@@ -230,7 +226,7 @@ func TestOperationContextEndWithErrorSetsAttributes(t *testing.T) {
 func TestConcurrentOperationContexts(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
 	meter := noop.NewMeterProvider().Meter("test")
 	metrics, _ := NewMetrics(meter)
@@ -243,8 +239,7 @@ func TestConcurrentOperationContexts(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			oc := NewOperationContext(OperationSpec{ServiceName: "svc", OperationName: fmt.Sprintf("op-%d", id), RequestID: fmt.Sprintf("req-%d", id), UserID: "", Metrics: metrics})
-			ctx := context.Background()
-			ctx, span := oc.StartSpanForOperation(ctx, fmt.Sprintf("span-%d", id))
+			ctx, span := oc.StartSpanForOperation(base, fmt.Sprintf("span-%d", id))
 			oc.EndOperation(ctx, span, "ok", nil)
 		}(i)
 	}

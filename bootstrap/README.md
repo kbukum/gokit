@@ -67,14 +67,16 @@ func run(ctx context.Context) error {
 }
 ```
 
-A one-shot command that needs a module's port, such as an operator command, uses `bootstrap.RunPortTask(ctx, app, port, task)`. It adds a module that needs the port and runs `RunTask` with the provided value, so the command uses the same modules, components and lifecycle as the served process. A missing provider fails startup before the task runs.
+A one-shot command can use `RunPortTask` to consume a module port through the normal lifecycle. A missing provider fails startup before the task runs.
+
+Pass `WithoutStartupSummary()` to `NewApp` to suppress a task's startup banner without suppressing lifecycle logs.
 
 Both modes share the same lifecycle:
 Configure → Modules → OnBeforeStart → StartAll → OnAfterStart → ReadyCheck → OnReady → (execute) → Quiesce → OnBeforeStop → Drain and stop components → Close the DI container → OnAfterStop → Release the owned logger.
 
 ## Modules
 
-A module is one named capability. It declares the typed ports it provides and needs, and registers its handlers and components through a `ModuleContext`. The command decides where each module runs: add modules to one App to run them together, or split them across services and let client modules stand in for the modules that run elsewhere. Module code stays the same either way.
+A module declares the typed ports it provides and needs, then registers handlers and components through `ModuleContext`. Commands compose local modules or remote client modules behind the same ports.
 
 ```go
 // A port is identified by this variable, not by its name; declare it once next to its interface.
@@ -127,7 +129,7 @@ err := errors.Join(
 )
 ```
 
-Splitting a module out of a process does not touch the modules that need it. Each module package exports a client module next to the module itself: it has its own name, provides the same ports through a remote client, and registers the client's component if it owns connections, so the client starts before the modules that use it. `bootstrap.ValueModule(name, port, value)` provides a port with a value the command already holds, such as a test double.
+Client modules provide the same ports and register owned connections before their consumers start. `ValueModule(name, port, value)` supplies an existing value, such as a test double.
 
 `app.CheckModules()` runs the startup wiring check without registering or starting anything, so a test can prove a service composition is complete without its infrastructure.
 
@@ -135,14 +137,14 @@ How it behaves:
 
 - A port is identified by its `*Port` value: two `NewPort` calls are different ports even with the same name. Port types must be interfaces.
 - Listeners are HTTP only. A `Listener` is a component that quiesces and drains, with `Handle(pattern, handler) error` for routes and `Fallback(handler) error`, and it must drain as `component.DrainIngress`. A module lists the listeners it mounts on in `ModuleSpec.Listeners` and can only `Handle` routes on those. Patterns follow `http.ServeMux`; the unqualified `/` is reserved for fallback dispatch. An invalid or conflicting pattern is returned as `ErrRouteConflict`. Direct listener `Fallback` calls replace the previous handler, while the module layer rejects competing fallback owners.
-- `ModuleContext.Fallback(listener, handler)` sets the handler for requests no route matches, such as a single-page app; a listener has one fallback, and a second is `ErrRouteConflict`. The App installs it after every module registers and answers 404 under the first path segment of every module route on that listener (for `POST /auth/login`, everything under `/auth`), so unknown API paths never reach the fallback. It compares the unescaped first segment, so an escaped slash such as `/auth%2Fx` is reserved too, and a segment that fails to decode never reaches the fallback.
+- `ModuleContext.Fallback` allows one fallback per listener. Duplicate owners return `ErrRouteConflict`. Dispatch reserves every module route's first path segment, including escaped slashes and malformed escapes, so unknown API paths return 404 instead of reaching an SPA.
 - Startup checks the whole module set before any module registers. Missing ports, duplicate providers (such as a module and its client module in one App), missing listeners, every dependency cycle, listener component names that are empty, shared or already registered, and invalid declarations come back together as one `*ModuleError` inside a `*StartupError` with phase `modules`. A module whose `Register` returns without providing a declared port is reported after it registers.
 - Modules register in dependency order, keeping `Use` order where they are independent. A module can only `Provide` and `Need` ports in its own spec, and it must provide every port it declares.
 - The modules phase runs after `OnConfigure`. Components start in this order: those registered before `Run` or in `OnConfigure`, then module components in dependency order, then listener components in `RegisterListener` order, then any registered in `OnBeforeStart`.
 - On shutdown, listeners stop accepting requests and drain in-flight ones before module workers drain, then components stop in reverse within each component phase.
 - `Register` must not block or do network I/O. Components it adds do their I/O in `Start`.
 - `Use` and `RegisterListener` only record declarations. They work before the lifecycle starts and in `OnConfigure`, and return `ErrLifecycleUsed` once the modules phase begins.
-- The startup summary lists each module with its ports and their providers, routes and components.
+- The startup summary shows service identity and a tree of module ports, routes, and components.
 
 ### Testing modules
 
@@ -189,7 +191,9 @@ Each outcome stays inspectable with `errors.As` and `errors.Is`:
 
 An `App` runs one lifecycle. After `Run`, `RunTask`, `Startup`, or `Shutdown`, a new start returns `ErrLifecycleUsed`. `Shutdown` runs teardown once; later calls return the same result.
 
-If the caller's context ends during startup, startup stops after the running phase and rolls back, returning a `*StartupError` that wraps the context's cause, alongside the phase's own error when it returned one; a later phase or the `RunTask` task never runs on a canceled context. `Shutdown` also stops a running lifecycle. During startup it cancels the startup context with `ErrShutdownRequested`, waits for the running phase to return, and lets startup roll back, so no resource starts after shutdown. A shutdown requested during the ready check skips the ready hooks, and a phase that returns its context error still reports `ErrShutdownRequested`. It wakes `Run`, cancels the `RunTask` task, and waits for the task to return before teardown, so task code never runs against released resources. If startup or the task does not return within the shutdown budget, `Shutdown` returns a `*ShutdownError`; teardown still runs when they return.
+Cancellation stops startup after the active phase and returns `StartupError` with the context and phase causes. Later phases and tasks do not run.
+
+`Shutdown` cancels startup with `ErrShutdownRequested` and waits for rollback, or cancels a running task and waits before releasing dependencies. Shutdown during readiness skips ready hooks. If active work exceeds the shutdown budget, `ShutdownError` reports the timeout; teardown still runs when that work returns.
 
 The App owns the logger it creates from config and releases it last, within the shutdown budget. A logger passed with `WithLogger` is borrowed and never closed. The App always closes its DI container, including one passed with `WithContainer`.
 

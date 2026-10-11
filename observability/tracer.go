@@ -2,17 +2,20 @@ package observability
 
 import (
 	"context"
-	"fmt"
+	"net"
+	"net/http"
+	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
+
+	apperrors "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
 const defaultTracerName = "github.com/kbukum/gokit/observability"
@@ -31,14 +34,14 @@ type TracerConfig struct {
 	Protocol OTLPProtocol
 	// Insecure allows insecure connections (for development).
 	Insecure bool
-	// SampleRate is the sampling rate (0.0 to 1.0).
+	// SampleRate is the sampling rate (0.0 to 1.0) for new root traces; spans with an accepted parent follow the parent's sampling decision.
 	SampleRate float64
-	// SkipGlobalRegistration, when true,
-	// prevents InitTracer from mutating the global otel.SetTracerProvider / otel.SetTextMapPropagator state.
-	// Callers that want to thread the returned *TracerProvider through DI can opt out of process-global state.
-	// Defaults to false to preserve the convenient "init once,
-	// instrument anywhere via observability.Tracer(...)" pattern.
-	SkipGlobalRegistration bool
+	// Zero limits use bounded defaults; negative limits are rejected.
+	ExportTimeout time.Duration
+	FlushTimeout  time.Duration
+	BatchTimeout  time.Duration
+	QueueSize     int
+	BatchSize     int
 }
 
 // DefaultTracerConfig returns sensible defaults for development.
@@ -53,17 +56,29 @@ func DefaultTracerConfig(serviceName string) TracerConfig {
 	}
 }
 
-// InitTracer initializes the OpenTelemetry tracer provider.
-// Returns a TracerProvider that should be shut down on application exit.
+// InitTracer creates an instance-owned OpenTelemetry tracer provider without registering globals.
+// The caller owns shutdown and injects provider.Tracer(...) into instrumentation.
 func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProvider, error) {
-	exporter, err := newTraceExporter(ctx, config)
+	cfg, err := normalizedTracerConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("creating trace exporter: %w", err)
+		return nil, err
 	}
+	tp, err := newTracerProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+	exporter, err := newTraceExporter(ctx, &cfg)
+	if err != nil {
+		return nil, traceError(err)
+	}
+	tp.RegisterSpanProcessor(newTraceProcessor(&safeTraceExporter{SpanExporter: exporter}, cfg))
+	return tp, nil
+}
 
+func newTracerProvider(config TracerConfig) (*sdktrace.TracerProvider, error) {
 	res, err := newResource(config.ServiceName, config.ServiceVersion, config.Environment)
 	if err != nil {
-		return nil, fmt.Errorf("creating resource: %w", err)
+		return nil, traceError(err)
 	}
 
 	var sampler sdktrace.Sampler
@@ -76,21 +91,23 @@ func InitTracer(ctx context.Context, config *TracerConfig) (*sdktrace.TracerProv
 		sampler = sdktrace.TraceIDRatioBased(config.SampleRate)
 	}
 
+	// Transports drop untrusted parents, so an accepted parent's sampling decision is authoritative; the rate applies to new roots.
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sampler),
+		sdktrace.WithSampler(sdktrace.ParentBased(sampler)),
+		sdktrace.WithoutPanicRecording(),
 	)
 
-	if !config.SkipGlobalRegistration {
-		otel.SetTracerProvider(tp)
-		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-			propagation.TraceContext{},
-			propagation.Baggage{},
-		))
-	}
-
 	return tp, nil
+}
+
+func newTraceProcessor(exporter sdktrace.SpanExporter, cfg TracerConfig) sdktrace.SpanProcessor {
+	return sdktrace.NewBatchSpanProcessor(exporter,
+		sdktrace.WithMaxQueueSize(cfg.QueueSize),
+		sdktrace.WithMaxExportBatchSize(cfg.BatchSize),
+		sdktrace.WithBatchTimeout(cfg.BatchTimeout),
+		sdktrace.WithExportTimeout(cfg.ExportTimeout),
+	)
 }
 
 // newTraceExporter builds the OTLP trace exporter for the configured protocol.
@@ -100,16 +117,48 @@ func newTraceExporter(ctx context.Context, config *TracerConfig) (sdktrace.SpanE
 	}
 	if config.Protocol == OTLPGRPC {
 		opts := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(config.Endpoint)}
+		if config.ExportTimeout > 0 {
+			opts = append(opts, otlptracegrpc.WithTimeout(config.ExportTimeout))
+		}
 		if config.Insecure {
 			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
 		return otlptracegrpc.New(ctx, opts...)
 	}
 	opts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(config.Endpoint)}
+	timeout := config.ExportTimeout
+	if timeout == 0 {
+		timeout = 2 * time.Second
+	}
+	// OTLP must not instrument itself; this instance owns the SDK's HTTP pool.
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           (&net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          2,
+		MaxIdleConnsPerHost:   2,
+		MaxConnsPerHost:       2,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	opts = append(opts, otlptracehttp.WithHTTPClient(client))
 	if config.Insecure {
 		opts = append(opts, otlptracehttp.WithInsecure())
 	}
-	return otlptracehttp.New(ctx, opts...)
+	exporter, err := otlptracehttp.New(ctx, opts...)
+	if err != nil {
+		client.CloseIdleConnections()
+		return nil, err
+	}
+	return &httpTraceExporter{SpanExporter: exporter, client: client}, nil
 }
 
 // newResource creates an OpenTelemetry resource with service metadata.
@@ -125,14 +174,32 @@ func newResource(serviceName, serviceVersion, environment string) (*resource.Res
 	)
 }
 
-// Tracer returns a named tracer from the global provider.
-func Tracer(name string) trace.Tracer {
-	return otel.Tracer(name)
+type tracerProviderKey struct{}
+
+// TracerProvider supplies instance-owned named tracers. Both TraceComponent and OpenTelemetry providers implement this contract.
+type TracerProvider interface {
+	Tracer(string, ...trace.TracerOption) trace.Tracer
+}
+
+// WithTracerProvider injects the provider for kit instrumentation, including operations without a local parent span. The provider remains caller-owned; nil providers are rejected.
+func WithTracerProvider(ctx context.Context, provider TracerProvider) (context.Context, error) {
+	if util.IsNil(provider) {
+		return nil, apperrors.Validation("tracing requires a provider")
+	}
+	return context.WithValue(ctx, tracerProviderKey{}, provider), nil
+}
+
+// Tracer returns a named tracer from the context's injected provider, or the active span's provider. Without either, tracing is a no-op; process globals are never consulted.
+func Tracer(ctx context.Context, name string) trace.Tracer {
+	if provider, ok := ctx.Value(tracerProviderKey{}).(TracerProvider); ok {
+		return provider.Tracer(name)
+	}
+	return trace.SpanFromContext(ctx).TracerProvider().Tracer(name)
 }
 
 // StartSpan starts a new span using the default tracer.
 func StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
-	return Tracer(defaultTracerName).Start(ctx, name, opts...)
+	return Tracer(ctx, defaultTracerName).Start(ctx, name, opts...)
 }
 
 // SpanFromContext returns the span from context.

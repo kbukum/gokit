@@ -13,6 +13,7 @@ import (
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/validation"
 )
 
@@ -28,7 +29,7 @@ func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 			start := time.Now()
 			procedure := req.Spec().Procedure
 
-			log.WithContext(ctx).DebugCtx(ctx, "RPC call started", map[string]any{
+			log.DebugCtx(ctx, "RPC call started", map[string]any{
 				"procedure": procedure,
 			})
 
@@ -45,11 +46,10 @@ func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 				if stderrors.As(err, &connectErr) {
 					fields["code"] = connectErr.Code().String()
 				}
-				fields["error"] = err.Error()
-				log.WithContext(ctx).ErrorCtx(ctx, "RPC call failed", fields)
+				log.ErrorCtx(ctx, "RPC call failed", fields)
 			} else {
 				fields["code"] = "ok"
-				log.WithContext(ctx).DebugCtx(ctx, "RPC call completed", fields)
+				log.DebugCtx(ctx, "RPC call completed", fields)
 			}
 
 			return resp, err
@@ -61,13 +61,7 @@ func LoggingInterceptor(log *logging.Logger) connect.UnaryInterceptorFunc {
 // Normalization  (handler error → coded Connect error)
 // ---------------------------------------------------------------------------
 
-// NormalizingInterceptor returns the one interceptor that converts every error a
-// handler returns into a coded Connect error, for both unary and streaming RPCs.
-// A handler that already returns a *connect.Error (for example from the auth or
-// validation interceptor) is left untouched; anything else goes through
-// errors.Normalize so context cancellation, deadlines, AppErrors, and unknown
-// errors all map the same way and an unknown error's text never reaches the wire.
-// The underlying cause is logged with the trace id and never serialized.
+// NormalizingInterceptor maps unary and streaming handler errors through errors.Normalize; directly returned native Connect errors pass through. It adds the active trace ID to normalized application errors and logs safe classifications, never raw causes.
 func NormalizingInterceptor(log *logging.Logger) connect.Interceptor {
 	return &normalizingInterceptor{log: log}
 }
@@ -98,41 +92,37 @@ func (i *normalizingInterceptor) normalize(ctx context.Context, procedure string
 		return nil
 	}
 
-	// An *AppError anywhere in the chain owns its own encoding, even when it
-	// wraps a Connect error as its cause, so it is never mistaken for an
-	// already-coded passthrough. Only a non-AppError Connect error (from an auth
-	// or validation interceptor) is left alone.
-	// Only an explicitly returned native error is already approved for this boundary.
+	// Only a directly returned native error is approved; unwrapping could trust a remote failure.
 	if _, ok := err.(*connect.Error); ok { //nolint:errorlint // Unwrapping here would trust decoded remote failures.
 		return err
 	}
 
 	appErr := apperrors.Normalize(err)
-	i.logCause(ctx, procedure, appErr)
+	if id := observability.TraceID(ctx); id != "" {
+		appErr = appErr.WithTraceID(id)
+	}
+	i.logFailure(ctx, procedure, appErr)
 	encoded, encodeErr := ToConnectError(appErr, serviceDomain(procedure))
 	if encodeErr != nil {
 		safe := apperrors.Internal(encodeErr)
-		i.logCause(ctx, procedure, safe)
+		i.logFailure(ctx, procedure, safe)
 		return connect.NewError(connect.CodeInternal, stderrors.New(safe.Message))
 	}
 	return encoded
 }
 
-// logCause records the underlying cause so an operator can trace an internal
-// failure even though the cause never reaches the client.
-func (i *normalizingInterceptor) logCause(ctx context.Context, procedure string, appErr *apperrors.AppError) {
+func (i *normalizingInterceptor) logFailure(ctx context.Context, procedure string, appErr *apperrors.AppError) {
 	if i.log == nil || appErr == nil || appErr.Cause == nil {
 		return
 	}
 	fields := map[string]any{
 		"procedure": procedure,
 		"code":      string(appErr.Code),
-		"cause":     appErr.Cause.Error(),
 	}
 	if appErr.TraceID != "" {
 		fields["traceId"] = appErr.TraceID
 	}
-	i.log.WithContext(ctx).ErrorCtx(ctx, "RPC handler error normalized", fields)
+	i.log.ErrorCtx(ctx, "RPC handler error normalized", fields)
 }
 
 // ---------------------------------------------------------------------------

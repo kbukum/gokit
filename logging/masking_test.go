@@ -196,6 +196,26 @@ func TestMaskValue_HexSecret(t *testing.T) {
 	}
 }
 
+func TestMaskValue_TraceIDStaysCorrelatable(t *testing.T) {
+	m := newTestMasker()
+	const id = "4bf92f3577b34da6a3ce929d0e0e4736"
+	if got := m.MaskValue(FieldTraceID, id); got != id {
+		t.Errorf("trace_id = %q, want it kept so logs join the trace", got)
+	}
+	for _, tc := range []struct{ key, value string }{
+		{"data", id},
+		{FieldRequestID, id},
+		{FieldTraceID, "4BF92F3577B34DA6A3CE929D0E0E4736"},
+		{FieldTraceID, id + "abcd"},
+		{FieldTraceID, "00000000000000000000000000000000"},
+		{FieldTraceID, "key " + id},
+	} {
+		if got := m.MaskValue(tc.key, tc.value); got == tc.value {
+			t.Errorf("MaskValue(%q, %q) kept a value that is not a trace ID", tc.key, tc.value)
+		}
+	}
+}
+
 func TestMaskValue_NonSensitivePassThrough(t *testing.T) {
 	m := newTestMasker()
 

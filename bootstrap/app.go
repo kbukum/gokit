@@ -50,6 +50,7 @@ type App[C Config] struct {
 	modules         moduleSet
 	ownsLogger      bool
 	admin           *adminComponent
+	quietSummary    bool
 	state           atomic.Int32 // lifecycleState reported by the admin listener
 
 	lifecycleMu     sync.Mutex
@@ -90,6 +91,7 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	if o.gracefulTimeout != nil {
 		app.gracefulTimeout = *o.gracefulTimeout
 	}
+	app.quietSummary = o.quietSummary
 	if o.admin != nil {
 		admin, err := newAdmin(*o.admin, app.readiness)
 		if err != nil {
@@ -111,9 +113,10 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	}
 
 	regCfg := component.DefaultRegistryConfig()
-	regCfg.Logger = app.Logger.WithComponent("component")
+	regCfg.Logger = app.Logger.WithComponent("registry")
 	app.Components = component.NewRegistryWithConfig(regCfg)
 	app.Summary = NewSummary(base.Name, base.Version)
+	app.Summary.SetEnvironment(base.Environment)
 	if app.admin != nil {
 		// The registry is new, so the first registration cannot collide.
 		_ = app.Components.Register(app.admin)

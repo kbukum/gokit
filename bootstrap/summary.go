@@ -82,6 +82,7 @@ type ModuleInfo struct {
 type Summary struct {
 	serviceName     string
 	version         string
+	environment     string
 	startupDuration time.Duration
 	components      []ComponentStatus
 	infrastructure  []InfrastructureInfo
@@ -141,6 +142,12 @@ func (s *Summary) SetWriter(w io.Writer) {
 // SetStartupDuration records the total startup time.
 func (s *Summary) SetStartupDuration(d time.Duration) {
 	s.startupDuration = d
+}
+
+// SetEnvironment records the deployment environment (for example "development"
+// or "production") so the header can show it. An empty value is omitted.
+func (s *Summary) SetEnvironment(env string) {
+	s.environment = env
 }
 
 // TrackComponent adds a component's bootstrap status to the summary.
@@ -212,8 +219,14 @@ func (s *Summary) DisplaySummary(ctx context.Context, registry *component.Regist
 
 	// Header
 	fmt.Fprintf(s.writer, "\n")
-	fmt.Fprintf(s.writer, "🚀 \033[1;32m%s\033[0m \033[1;36mv%s\033[0m started in \033[33m%.2fs\033[0m\n\n",
-		s.serviceName, s.version, s.startupDuration.Seconds())
+	identity := fmt.Sprintf("🚀 \033[1;32m%s\033[0m", s.serviceName)
+	if s.version != "" {
+		identity += fmt.Sprintf(" \033[1;36m%s\033[0m", versionLabel(s.version))
+	}
+	if s.environment != "" {
+		identity += fmt.Sprintf(" \033[2m(%s)\033[0m", s.environment)
+	}
+	fmt.Fprintf(s.writer, "%s started in \033[33m%.2fs\033[0m\n\n", identity, s.startupDuration.Seconds())
 
 	// Infrastructure (auto-discovered from Describable components + manual entries)
 	if len(s.infrastructure) > 0 {
@@ -330,36 +343,76 @@ func (s *Summary) DisplaySummary(ctx context.Context, registry *component.Regist
 	fmt.Fprintf(s.writer, "\n")
 }
 
-// displayModules lists modules in registration order with their ports, routes and components.
+// displayModules lists modules in registration order. Each module's provides,
+// needs, routes and components render as nested tree branches so a long list no
+// longer collapses into one comma-separated line.
 func (s *Summary) displayModules() {
 	if len(s.modules) == 0 {
 		return
 	}
 	fmt.Fprintf(s.writer, "\033[1m🧩 Modules (%d)\033[0m\n", len(s.modules))
-	for i, m := range s.modules {
-		fmt.Fprintf(s.writer, "   %s %s\n", treePrefix(i, len(s.modules)), m.Name)
-		var lines []string
-		if len(m.Provides) > 0 {
-			lines = append(lines, "provides "+strings.Join(m.Provides, ", "))
+	nodes := make([]treeNode, 0, len(s.modules))
+	for _, m := range s.modules {
+		nodes = append(nodes, treeNode{
+			label:    fmt.Sprintf("\033[1m%s\033[0m", m.Name),
+			children: moduleCategoryNodes(m),
+		})
+	}
+	s.renderTree(nodes, "   ")
+	fmt.Fprintf(s.writer, "\n")
+}
+
+// moduleCategoryNodes builds the provides/needs/routes/components branches for a
+// module, each carrying its items as leaf nodes. Empty categories are omitted.
+func moduleCategoryNodes(m ModuleInfo) []treeNode {
+	var cats []treeNode
+	add := func(label string, items []string, style func(string) string) {
+		if len(items) == 0 {
+			return
 		}
-		if len(m.Needs) > 0 {
-			lines = append(lines, "needs "+strings.Join(m.Needs, ", "))
+		cat := treeNode{label: fmt.Sprintf("\033[36m%s\033[0m", label)}
+		for _, it := range items {
+			cat.children = append(cat.children, treeNode{label: style(it)})
 		}
-		if len(m.Routes) > 0 {
-			lines = append(lines, "routes "+strings.Join(m.Routes, ", "))
+		cats = append(cats, cat)
+	}
+	add("provides", m.Provides, plainLeaf)
+	add("needs", m.Needs, dimArrow)
+	add("routes", m.Routes, plainLeaf)
+	add("components", m.Components, plainLeaf)
+	return cats
+}
+
+// plainLeaf renders a leaf label unchanged.
+func plainLeaf(s string) string { return s }
+
+// dimArrow dims the "← provider" suffix of a dependency so the needed port reads first.
+func dimArrow(s string) string {
+	if i := strings.Index(s, "← "); i >= 0 {
+		return s[:i] + "\033[2m" + s[i:] + "\033[0m"
+	}
+	return s
+}
+
+// treeNode is one node in a rendered tree; children render indented beneath it.
+type treeNode struct {
+	label    string
+	children []treeNode
+}
+
+// renderTree writes nodes beneath prefix, drawing ├──/└── connectors and
+// extending a │ guide down through each node's children.
+func (s *Summary) renderTree(nodes []treeNode, prefix string) {
+	for i, n := range nodes {
+		connector, childPrefix := "├── ", prefix+"│   "
+		if i == len(nodes)-1 {
+			connector, childPrefix = "└── ", prefix+"    "
 		}
-		if len(m.Components) > 0 {
-			lines = append(lines, "components "+strings.Join(m.Components, ", "))
-		}
-		indent := "│  "
-		if i == len(s.modules)-1 {
-			indent = "   "
-		}
-		for j, line := range lines {
-			fmt.Fprintf(s.writer, "   %s %s %s\n", indent, treePrefix(j, len(lines)), line)
+		fmt.Fprintf(s.writer, "%s%s%s\n", prefix, connector, n.label)
+		if len(n.children) > 0 {
+			s.renderTree(n.children, childPrefix)
 		}
 	}
-	fmt.Fprintf(s.writer, "\n")
 }
 
 // collectFromRegistry auto-discovers infrastructure, routes, and health from registered components.
@@ -545,6 +598,15 @@ func treePrefix(i, n int) string {
 		return "└──"
 	}
 	return "├──"
+}
+
+// versionLabel prefixes a "v" only for numeric semver-like versions (e.g. "1.2.3"
+// becomes "v1.2.3"), leaving descriptive builds such as "dev-9f3a1c" unprefixed.
+func versionLabel(v string) string {
+	if v != "" && v[0] >= '0' && v[0] <= '9' {
+		return "v" + v
+	}
+	return v
 }
 
 func statusIcon(status string, healthy bool) string {

@@ -28,7 +28,7 @@ Dependency-free modules:
 
 ## Version constraints
 
-Go 1.27.1 is the minimum supported toolchain. Dependency updates are candidates, not automatic approvals: build, test, vulnerability, and license gates must pass before adopting them.
+Go 1.27.2 is the minimum supported toolchain. Dependency updates are candidates, not automatic approvals: build, test, vulnerability, and license gates must pass before adopting them.
 
 `toven vuln` and CI use the same suppression-aware scanner. It scans each selected module independently (`GOWORK=off`) using symbol-level source analysis and fails on unsuppressed imported advisories as well as reachable ones. The wrapper controls the scan level and mode and verifies them in the output, so reduced-detail scans cannot bypass reachable-advisory controls. Malformed or incomplete scanner output fails the gate. Security, licenses, fuzz smoke tests, and integration tests run on pull requests, merge queues, and main; the aggregate gate rejects skipped jobs when Go or CI inputs changed. Temporary Dependabot ignores prevent the known affected versions below from being proposed again; they do not replace the security gate or block future patched releases.
 
@@ -39,7 +39,7 @@ Go 1.27.1 is the minimum supported toolchain. Dependency updates are candidates,
 | `k8s.io/kube-openapi` | `v0.0.0-20260721132016-d427ff9ee9ad` | The revision required by [Kubernetes apimachinery v0.37.1](https://github.com/kubernetes/apimachinery/blob/v0.37.1/go.mod). Newer development snapshots use structured-merge-diff/v7, incompatible with the released libraries' v6 schema types. |
 | `github.com/segmentio/asm` | `v1.1.5` | Latest MIT-licensed patch used by MCP's JSON dependency. [v1.2.1 uses MIT-0](https://github.com/segmentio/asm/blob/v1.2.1/LICENSE), which the current scanner does not classify and the allow-list does not approve. This is a tooling/policy constraint, not a missing upstream license; adoption needs scanner support and maintainer approval. |
 
-Validation tools are pinned in CI: golangci-lint v2.14.0, govulncheck v1.8.0, and go-licenses/v2 v2.0.1. Build local copies with Go 1.27.1 or newer so the tools can analyze the repository's language version.
+Validation tools are pinned in CI: golangci-lint v2.14.0, govulncheck v1.8.0, and go-licenses/v2 v2.0.1. Build local copies with Go 1.27.2 or newer so the tools can analyze the repository's language version.
 
 ## Known suppressions
 

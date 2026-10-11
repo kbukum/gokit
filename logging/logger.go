@@ -27,6 +27,13 @@ type Logger struct {
 	slog    *slog.Logger
 	service string
 	level   *slog.LevelVar
+	// root is the constructor's handler, before any With* attributes are bound.
+	// Derived loggers rebuild from it so a re-scoped attribute (for example
+	// component) replaces the earlier value instead of appearing twice.
+	root slog.Handler
+	// attrs is the deduplicated set of bound attributes, keyed by name with the
+	// most recently set value winning, in first-seen order.
+	attrs []slog.Attr
 	// release is non-nil only on the root logger returned by a constructor, so
 	// owned sinks and the exporter are released exactly once.
 	release *release
@@ -57,6 +64,7 @@ func New(cfg *Config, serviceName string, opts ...Option) (*Logger, error) {
 		slog:    slog.New(p.handler),
 		service: serviceName,
 		level:   p.level,
+		root:    p.handler,
 		release: &release{otlp: p.otlp, closers: p.closers},
 	}, nil
 }
@@ -155,21 +163,36 @@ func (l *Logger) Shutdown(ctx context.Context) error {
 	return r.err
 }
 
-// derive returns a Logger backed by a new *slog.Logger, sharing the level var
-// but not sink or exporter ownership (release stays bound to the constructed root).
-func (l *Logger) derive(s *slog.Logger) *Logger {
-	return &Logger{slog: s, service: l.service, level: l.level}
+// with returns a logger carrying attrs in addition to the receiver's bound
+// attributes, replacing any existing attribute with the same key so a re-scoped
+// field (for example component) appears once with its most specific value. The
+// handler chain is rebuilt from root, which shares the level var but not sink or
+// exporter ownership (release stays bound to the constructed root).
+func (l *Logger) with(attrs ...slog.Attr) *Logger {
+	if len(attrs) == 0 {
+		return l
+	}
+	merged := mergeAttrs(l.attrs, attrs)
+	return &Logger{
+		slog:    slog.New(l.root).With(attrsToArgs(merged)...),
+		service: l.service,
+		level:   l.level,
+		root:    l.root,
+		attrs:   merged,
+	}
 }
 
-// WithComponent returns a logger tagged with a component name. Any per-module
-// level override configured for that component then applies.
+// WithComponent returns a logger tagged with a component name, replacing any
+// component already set. Any per-module level override configured for that
+// component then applies.
 func (l *Logger) WithComponent(name string) *Logger {
-	return l.derive(l.slog.With(slog.String(FieldComponent, name)))
+	return l.with(slog.String(FieldComponent, name))
 }
 
-// WithFields returns a logger carrying the given fields on every record.
+// WithFields returns a logger carrying the given fields on every record. A field
+// replaces any existing attribute with the same key.
 func (l *Logger) WithFields(fields map[string]any) *Logger {
-	return l.derive(l.slog.With(fieldsToArgs(fields)...))
+	return l.with(fieldsToAttrs(fields)...)
 }
 
 // WithError returns a logger carrying an error field.
@@ -177,22 +200,19 @@ func (l *Logger) WithError(err error) *Logger {
 	if err == nil {
 		return l
 	}
-	return l.derive(l.slog.With(slog.String(FieldError, err.Error())))
+	return l.with(slog.String(FieldError, err.Error()))
 }
 
 // WithContext returns a logger enriched with correlation identifiers already
 // present on ctx. Prefer the *Ctx logging methods, which enrich automatically.
 func (l *Logger) WithContext(ctx context.Context) *Logger {
-	var args []any
+	var attrs []slog.Attr
 	for _, key := range contextIDs {
 		if v, ok := ctx.Value(contextKey(key)).(string); ok && v != "" {
-			args = append(args, slog.String(key, v))
+			attrs = append(attrs, slog.String(key, v))
 		}
 	}
-	if len(args) == 0 {
-		return l
-	}
-	return l.derive(l.slog.With(args...))
+	return l.with(attrs...)
 }
 
 // Debug logs at debug level. Prefer DebugCtx when a context is in scope.
@@ -266,6 +286,46 @@ func fieldsToArgs(fields ...map[string]any) []any {
 		for k, v := range fm {
 			args = append(args, slog.Any(k, v))
 		}
+	}
+	return args
+}
+
+// fieldsToAttrs converts a field map to slog.Attr values for attribute binding.
+func fieldsToAttrs(fields map[string]any) []slog.Attr {
+	attrs := make([]slog.Attr, 0, len(fields))
+	for k, v := range fields {
+		attrs = append(attrs, slog.Any(k, v))
+	}
+	return attrs
+}
+
+// mergeAttrs appends extra to base, replacing any attribute whose key already
+// exists so each key appears once, in first-seen order, with the latest value.
+func mergeAttrs(base, extra []slog.Attr) []slog.Attr {
+	merged := make([]slog.Attr, 0, len(base)+len(extra))
+	index := make(map[string]int, len(base)+len(extra))
+	add := func(a slog.Attr) {
+		if i, ok := index[a.Key]; ok {
+			merged[i] = a
+			return
+		}
+		index[a.Key] = len(merged)
+		merged = append(merged, a)
+	}
+	for _, a := range base {
+		add(a)
+	}
+	for _, a := range extra {
+		add(a)
+	}
+	return merged
+}
+
+// attrsToArgs adapts slog.Attr values to the variadic any form slog.With wants.
+func attrsToArgs(attrs []slog.Attr) []any {
+	args := make([]any, len(attrs))
+	for i, a := range attrs {
+		args[i] = a
 	}
 	return args
 }

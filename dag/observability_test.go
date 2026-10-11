@@ -5,6 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/kbukum/gokit/dag/status"
 
 	"github.com/kbukum/gokit/logging"
@@ -40,6 +43,23 @@ func TestWithTracing_PropagatesError(t *testing.T) {
 	_, err := traced.Run(context.Background(), NewState())
 	if !errors.Is(err, nodeErr) {
 		t.Fatalf("expected node error, got %v", err)
+	}
+}
+
+func TestWithTracingRecordsOwnedChild(t *testing.T) {
+	t.Parallel()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer func() { _ = tp.Shutdown(t.Context()) }()
+	ctx, parent := tp.Tracer("dag").Start(t.Context(), "request")
+	inner := newFuncNode("node", func(context.Context, *State) (any, error) { return "result", nil })
+	if _, err := WithTracing(inner, "pipeline").Run(ctx, NewState()); err != nil {
+		t.Fatal(err)
+	}
+	parent.End()
+	spans := exporter.GetSpans()
+	if len(spans) != 2 || spans[0].Name != "pipeline.node" || !spans[0].Parent.Equal(spans[1].SpanContext) {
+		t.Fatalf("DAG did not record an owned child: %+v", spans)
 	}
 }
 

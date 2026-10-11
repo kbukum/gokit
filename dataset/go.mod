@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/dataset
 
-go 1.27.1
+go 1.27.2
 
 require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
@@ -17,8 +17,8 @@ require (
 	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
 
 replace (

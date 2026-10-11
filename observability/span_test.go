@@ -1,7 +1,6 @@
 package observability
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -12,10 +11,10 @@ import (
 func TestStartNamedSpan(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	ctx := tracerContext(t, tp)
 
 	_, span := StartNamedSpan(
-		context.Background(),
+		ctx,
 		"test-tracer",
 		"test-operation",
 		WithSpanKind(SpanKindConsumer),
@@ -40,7 +39,7 @@ func TestStartNamedSpan(t *testing.T) {
 func TestSpanSetAttributesAllKinds(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	ctx := tracerContext(t, tp)
 
 	kinds := []SpanKind{
 		SpanKindInternal,
@@ -51,7 +50,7 @@ func TestSpanSetAttributesAllKinds(t *testing.T) {
 		SpanKind(99),
 	}
 	for _, kind := range kinds {
-		_, span := StartNamedSpan(context.Background(), "test-tracer", "op", WithSpanKind(kind))
+		_, span := StartNamedSpan(ctx, "test-tracer", "op", WithSpanKind(kind))
 		span.SetAttributes(StringAttribute("k", "v"), IntAttribute("n", 1))
 		span.End()
 	}

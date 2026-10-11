@@ -61,7 +61,11 @@ comp := database.NewComponent(cfg, log).WithDialect(postgres.Dialect())
 
 `Password` and `PasswordFile` are mutually exclusive. `FileSecrets` reads a regular file with a 4 KiB bound, follows mounted-secret symlinks, rejects empty/NUL values and removes one terminal LF/CRLF. Unix opens are nonblocking before descriptor validation; arbitrary filesystems are not universally cancelable. Inject `SecretSource.ReadSecret(ctx, path)` through `WithSecretSource` on the component or connection options for another bounded source. Resolution occurs only during explicit preparation/startup and uses the configured connection timeout; external sources must honor that context and own their resource bounds.
 
-PostgreSQL requires one non-public, non-system `search_path` schema and derives `<application>, pg_temp`; `pg_catalog` retains its implicit precedence. This is namespace selection, not tenant isolation. Supported SSL modes are default `verify-full` and explicit `disable`; verified connections require TLS 1.3 and have no cleartext fallback. `sslrootcert`, `application_name`, bounded millisecond session timeouts and `timezone` are supported; other options and nonempty ambient `PG*` settings fail before driver access. Opaque PostgreSQL input is a credential-free URL, not a password-bearing URL or keyword credential string. Only direct/session-pool connections are supported; transaction-mode poolers have no isolation certification.
+PostgreSQL requires one non-public, non-system schema, deriving `<application>, pg_temp` with implicit `pg_catalog` precedence. This selects a namespace, not tenant isolation.
+
+TLS defaults to `verify-full` with TLS 1.3 and no cleartext fallback; `disable` must be explicit. Supported options include `sslrootcert`, `application_name`, bounded millisecond session timeouts, and `timezone`. Unsupported options and nonempty ambient `PG*` settings fail before driver access.
+
+Opaque input must be a credential-free URL; password URLs and keyword credential strings are rejected. Use direct or session-pool connections; transaction-mode poolers are not certified for isolation.
 
 `Failure` keeps causes classifiable with `errors.Is/As` while formatting only a safe database classification. Descriptions and connection retries never display DSNs or raw driver causes.
 
@@ -158,7 +162,14 @@ A cursor is an untrusted position, not an authorization credential. Apply access
 
 `repository.NewScopedSpec[T, ID, S]` validates a model once: struct rows without relationships, a single primary key of type `ID`, existing and distinct scope and mutable columns, and query fields that name model columns. Facets and includes are rejected. `spec.Bind(db)` works with a pool or an open transaction and discards any clauses already on the handle.
 
-Scope columns must be creatable and mutable columns updatable under their GORM tags, so a read-only partition field cannot let a database default choose the scope. Every operation takes a scope value converted by `BindScope`; empty or invalid scopes fail before SQL. `Create` stamps the scope on a copy and rejects a conflicting scope. `Get`, `List`, `Update` and `Delete` filter by every scope column, and a missing row and a row in another scope both return the same NotFound. `Update` writes all configured mutable columns, including zero values, rejects identity or scope changes and never upserts. Lists stay bounded and free-text search is parenthesized within the scope.
+GORM tags must allow scope creation and mutable-field updates. `BindScope` rejects empty or invalid scopes before SQL.
+
+| Operation | Scope behavior |
+|---|---|
+| `Create` | Stamp a copy; reject conflicting scope |
+| `Get`, `List`, `Update`, `Delete` | Filter every scope column; inaccessible and missing rows share NotFound |
+| `Update` | Write configured fields including zero values; reject identity/scope changes; never upsert |
+| `List` | Bound pages and parenthesize free-text search within scope |
 
 Scoping is application-level. Pair it with composite foreign keys that include the partition columns; their violations keep their constraint error. PostgreSQL row-level security is optional: `postgres.SetLocal(ctx, tx, "app.partition", value)` sets a transaction-local custom setting for policies, but it isolates nothing without `USING` and `WITH CHECK` policies and a non-owner runtime role.
 

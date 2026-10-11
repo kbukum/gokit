@@ -22,7 +22,7 @@ func (c kafkaHeaderCarrier) Keys() []string {
 	return keys
 }
 
-// InjectTraceContext writes the current span's trace context into the provided message headers using the globally registered propagator.
+// InjectTraceContext writes W3C trace context into message headers without global state or baggage.
 func InjectTraceContext(ctx context.Context, headers map[string]string) {
 	observability.InjectTraceContext(ctx, kafkaHeaderCarrier(headers))
 }
@@ -80,6 +80,7 @@ func WithMessagingSystem(system string) TracingOption {
 // TracingHandler wraps a MessageHandler with OpenTelemetry distributed tracing.
 // It extracts trace context from incoming message headers, creates a consumer span,
 // and annotates it with messaging-specific attributes.
+// Inject observability.WithTracerProvider into the execution context so remote parents and root operations use the instance-owned provider.
 func TracingHandler(handler messaging.MessageHandler, opts ...TracingOption) messaging.MessageHandler {
 	cfg := defaultTracingConfig()
 	for _, opt := range opts {

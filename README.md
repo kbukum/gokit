@@ -3,7 +3,7 @@
 [![CI](https://github.com/kbukum/gokit/actions/workflows/ci.yml/badge.svg)](https://github.com/kbukum/gokit/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/kbukum/gokit.svg)](https://pkg.go.dev/github.com/kbukum/gokit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Go 1.27.1+](https://img.shields.io/badge/Go-1.27.1+-00ADD8.svg)](go.mod)
+[![Go 1.27.2+](https://img.shields.io/badge/Go-1.27.2+-00ADD8.svg)](go.mod)
 
 **A modular Go toolkit for building production services.** Config, logging, resilience, observability, dependency injection, and infrastructure adapters — so teams can focus on business logic instead of reinventing plumbing.
 
@@ -60,7 +60,7 @@ go get github.com/kbukum/gokit/server@latest
 go get github.com/kbukum/gokit/database@latest
 ```
 
-Requires **Go 1.27.1+** for the current development branch.
+Requires **Go 1.27.2+** for the current development branch.
 
 ## Quickstart
 

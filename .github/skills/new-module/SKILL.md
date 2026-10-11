@@ -4,93 +4,16 @@ description: "gokit: Add a Go package or module with layer, workspace, documenta
 user-invocable: true
 ---
 
-# Adding a package or module to gokit
+# Add a package or module
 
-gokit is a multi-module monorepo. Core packages share the root `go.mod` (`github.com/kbukum/gokit`); packages with heavy external dependencies get their own `go.mod` as sub-modules. Getting placement and wiring right up front avoids layering violations and pseudo-version breakage later.
+Follow the [baseline](../../copilot-instructions.md) and [module structure](../../engineering.md#module-structure).
 
-## Step 1 — Decide: root package or sub-module
+1. Find the [concern owner](../../../docs/concern-owners.md) before creating shared behavior. Prefer a root package for stdlib/existing-kit dependencies; isolate genuinely heavy dependencies in a nested module.
+2. Choose the domain from `domains.toml` and confirm depguard permits every import. Transport does not import auth/authz; inject a lower contract instead.
+3. Create focused files and a documentation-only `doc.go`. Use small typed interfaces, cohesive options, cause-preserving errors, and documented genuinely opaque values; no runtime panics, globals, or import-time I/O.
+4. For a new module, initialize its correct import path, add local replacements, and register it in `core.go.work` or `contrib.go.work` as appropriate. Nested paths need correctly resolved replacement depths.
+5. Add the module to its domain and wire directly dependent callers. Track relevant sibling capabilities through `parity`, without a cross-kit runtime dependency.
+6. Implement test-first with shared helpers, deterministic failures, bounded ownership, and real integration proof where required.
+7. Use `validate` for the discovered selector: formatting, build, lint, vet, race/shuffle tests, structure, and read-only tidiness. Use the existing mutating tidy task only when manifest changes require it.
 
-- **No heavy third-party deps** (stdlib + existing gokit only) → add a package **under the root module**. No new `go.mod`.
-- **Heavy deps** (a cloud SDK, a driver, a broker client, an ML runtime) → create a **sub-module** with its own `go.mod` so consumers who don't need it don't pay for the dependency.
-
-When in doubt, prefer the root module;
-promote to a sub-module only when a real heavy dependency forces it.
-
-## Step 2 — Pick the layer and confirm dependency direction
-
-gokit layers depend **downward only** (enforced by `depguard` in `.golangci.yml`).
-Consult `domains.toml` for the domain→module map and each domain's `depends_on`:
-
-- core → patterns → crosscutting → composition → transport → auth → {data, ai} → media → infra
-
-Your new package may only import lower or same-layer packages. A lower layer importing a higher one is a **blocker**. Transport (server/grpc/connect/sse) specifically must not import auth/authz — inject local interfaces instead.
-
-## Step 3 — Create the package
-
-Every package gets a `doc.go` with a package comment describing what it owns:
-
-```go
-// Package foo provides <one-line responsibility>.
-// <2–3 lines on the model, invariants, and what it deliberately does not do>.
-package foo
-```
-
-Conventions: package names are lowercase, single-word, no plurals.
-Exported interfaces (1–3 methods) + factory functions; concrete implementations unexported.
-Constructors take `...Option` (functional options).
-No `interface{}`/`any` in public APIs except a documented opaque value. Organize by focused, concern-named files (types, options, registry, middleware, adapter) from the start — the `doc.go` aggregator stays docs-only, never a monolithic starter file. Before adding a shared helper, check [`docs/concern-owners.md`](../../../docs/concern-owners.md) so the new module does not re-own an existing concern.
-
-## Step 4 — Sub-module wiring (only if you created a new go.mod)
-
-```bash
-cd <newmodule>
-go mod init github.com/kbukum/gokit/<newmodule>
-```
-
-Then in the new `go.mod` add a `replace` back to the root for local dev (nested sub-modules use `../../`):
-
-```
-replace github.com/kbukum/gokit => ../
-```
-
-Register the module in the correct workspace file:
-
-- Core-ish sub-modules (auth, database, media, …) → add `./<newmodule>` to **`core.go.work`**.
-- Backend/contrib adapters (redis, s3, qdrant, kafka, …) → add to **`contrib.go.work`**.
-- The aggregate `go.work` ties both together.
-
-Then tidy: `toven tidy-fix --module go:<newmodule>` (see the `validate` skill).
-
-## Step 5 — Register in domains.toml
-
-Add the module name (directory name without any kit prefix, sub-modules as `parent/child`) to the correct `[domains.<domain>].modules` list
-so the Makefile/CI `check-<domain>` gates and generated docs pick it up.
-
-## Step 6 — Parity awareness
-
-If this capability exists (or should be tracked) in rskit, note it in an rskit tracking issue
-(https://github.com/kbukum/rskit) — the capability, the mirroring level, and any intentional divergence.
-See the `parity` skill for the capability-not-blind mirroring policy.
-
-## Step 7 — Validate
-
-```bash
-gofumpt -w <newmodule>
-toven build --module go:<newmodule>
-toven lint  --module go:<newmodule>
-toven test  --module go:<newmodule> -- -race -count=1 -shuffle=on
-toven tidy  --module go:<newmodule>
-```
-
-## Checklist
-
-- [ ] Placement decided (root vs sub-module) and justified by real deps
-- [ ] Layer confirmed; imports only go downward (depguard clean)
-- [ ] `doc.go` present (docs-only); files split by concern; `make structure` green
-- [ ] Public API typed/generic, options-based, no `any`
-- [ ] (sub-module) `go.mod` + `replace`, added to the right `*.go.work`
-- [ ] `domains.toml` updated
-- [ ] Sibling parity tracked in an rskit issue if it has a cross-kit counterpart
-- [ ] build/lint/test/tidy green for the module
-
-Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.
+Commit, push, open PRs, or publish only when authorized.

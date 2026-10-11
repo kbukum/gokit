@@ -90,6 +90,8 @@ A protocol consumer sets `Request.RequireStreamCompletion` and must call `Stream
 
 ## Key Types & Functions
 
+For raw HTTP/SSE peers, `NewTracingTransport(next, TracingConfig{Tracer: tracer, Operation: "events.subscribe"})` decorates an owned client's transport with an injected tracer and optional propagator. Handle its configuration error before assigning the transport. `Operation` is a fixed declared route/procedure, not a URL. It clones request headers, replaces stale propagation, strips baggage and keeps the span open through response consumption or close. It adds no retries or deadlines; retain the client's existing budgets and redirect policy. Explicit `http.Client.CloseIdleConnections` still reaches the wrapped transport. Use Connect's RPC interceptor instead for Connect clients.
+
 | Name | Description |
 |------|-------------|
 | `Client` | Base HTTP client with auth, TLS, resilience |

@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"syscall"
 	"testing"
 	"time"
 
@@ -41,6 +43,44 @@ func TestDiagnosticsAreNeverPublic(t *testing.T) {
 		if response.StatusCode != http.StatusNotFound {
 			t.Errorf("public %s = %d, want 404", endpoint, response.StatusCode)
 		}
+	}
+}
+
+func TestStopDoesNotWaitForConnectionsThatSentNothing(t *testing.T) {
+	s := server.New(&server.Config{Host: "127.0.0.1"}, nil)
+	s.ApplyMiddleware()
+	if err := s.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	// A preconnect or probe: accepted, but no request byte yet. net/http counts it active for five seconds.
+	silent, err := net.Dial("tcp", s.ListenAddr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = silent.Close() }()
+	client := &http.Client{Timeout: time.Second}
+	defer client.CloseIdleConnections()
+	response, err := client.Get("http://" + s.ListenAddr().String() + "/missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	start := time.Now()
+	if err := s.Stop(ctx); err != nil {
+		t.Fatalf("a drain that lost no request reported %v", err)
+	}
+	if took := time.Since(start); took > 500*time.Millisecond {
+		t.Fatalf("drain waited %s on a connection that sent nothing", took)
+	}
+	if err := silent.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := silent.Read(make([]byte, 1)); !errors.Is(err, io.EOF) && !errors.Is(err, syscall.ECONNRESET) {
+		t.Fatalf("silent connection read = %v, want closed", err)
 	}
 }
 

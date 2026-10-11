@@ -2,37 +2,34 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/http"
-	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/observability"
 )
 
-// Recovery returns middleware that recovers from panics
-// and returns a 500 Problem Details error response. A nil logger falls back to a
-// per-middleware default so the constructor never reaches for a package global.
+// Recovery returns middleware that writes a canonical, trace-correlated 500 problem response and safe diagnostic metadata on panic. Install inside tracing so the failure is recorded before span completion; an outer recovery can protect pre-tracing middleware. Panic values and stacks are never logged. A nil logger uses a per-middleware default.
 func Recovery(log *logging.Logger) Middleware {
 	if log == nil {
 		log = logging.NewDefault("middleware")
 	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() { //nolint:contextcheck // panic recovery closure passes r.Context() to the panic logger explicitly
-				if err := recover(); err != nil {
-					logRecoveredPanic(r.Context(), log, err, r)
-					pd := apperrors.Internal(fmt.Errorf("%v", err)).ToProblemDetail()
-					pd.Instance = r.URL.Path
-					w.Header().Set("Content-Type", "application/problem+json")
-					w.WriteHeader(http.StatusInternalServerError)
-					body, _ := json.Marshal(pd)
-					_, _ = w.Write(body)
+			r = r.WithContext(logging.ContextWithLogger(r.Context(), log))
+			defer func(ctx context.Context) {
+				if recovered := recover(); recovered != nil {
+					cause, _ := recovered.(error)
+					span := observability.SpanFromContext(ctx)
+					span.SetAttributes(attribute.String("error.type", string(apperrors.ErrCodeInternal)))
+					span.SetStatus(codes.Error, string(apperrors.ErrCodeInternal))
+					WriteProblemDetails(w, r, apperrors.Internal(cause))
 				}
-			}()
+			}(r.Context())
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -43,17 +40,4 @@ func Recovery(log *logging.Logger) Middleware {
 // Use this only when you need recovery on the Gin engine directly.
 func GinRecovery(log *logging.Logger) gin.HandlerFunc {
 	return GinWrap(Recovery(log))
-}
-
-// logRecoveredPanic logs a recovered panic with stack trace. The logger must be
-// non-nil (Recovery defaults it).
-func logRecoveredPanic(ctx context.Context, log *logging.Logger, err any, r *http.Request) {
-	fields := map[string]any{
-		"error":     fmt.Sprintf("%v", err),
-		"stack":     string(debug.Stack()),
-		"path":      r.URL.Path,
-		"method":    r.Method,
-		"remote_ip": r.RemoteAddr,
-	}
-	log.ErrorCtx(ctx, "Panic recovered", fields)
 }

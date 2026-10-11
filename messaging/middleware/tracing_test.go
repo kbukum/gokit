@@ -5,29 +5,33 @@ import (
 	"errors"
 	"sort"
 	"testing"
+	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/kbukum/gokit/messaging"
+	"github.com/kbukum/gokit/observability"
 )
 
-// setupTestTracer installs a test TracerProvider and returns a span recorder.
-func setupTestTracer(t *testing.T) *tracetest.SpanRecorder {
+func setupTestTracer(t *testing.T) (context.Context, *tracetest.SpanRecorder) {
 	t.Helper()
 	sr := tracetest.NewSpanRecorder()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
 	t.Cleanup(func() {
-		otel.SetTracerProvider(noop.NewTracerProvider())
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			t.Error(err)
+		}
 	})
-	return sr
+	ctx, err := observability.WithTracerProvider(t.Context(), tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ctx, sr
 }
 
 func TestKafkaHeaderCarrier_GetSetKeys(t *testing.T) {
@@ -53,10 +57,10 @@ func TestKafkaHeaderCarrier_GetSetKeys(t *testing.T) {
 }
 
 func TestInjectExtractTraceContext(t *testing.T) {
-	sr := setupTestTracer(t)
+	base, sr := setupTestTracer(t)
 
 	// Start a span to get an active trace context.
-	ctx, span := otel.Tracer("test").Start(context.Background(), "producer-span")
+	ctx, span := observability.Tracer(base, "test").Start(base, "producer-span")
 	spanCtx := span.SpanContext()
 
 	// Inject into headers.
@@ -80,7 +84,7 @@ func TestInjectExtractTraceContext(t *testing.T) {
 }
 
 func TestTracingHandler_CreatesSpan(t *testing.T) {
-	sr := setupTestTracer(t)
+	ctx, sr := setupTestTracer(t)
 
 	handler := func(_ context.Context, _ messaging.Message) error { return nil }
 	wrapped := TracingHandler(handler)
@@ -91,7 +95,7 @@ func TestTracingHandler_CreatesSpan(t *testing.T) {
 		Key:       "order-42",
 		Headers:   map[string]string{},
 	}
-	err := wrapped(context.Background(), msg)
+	err := wrapped(ctx, msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,7 +126,7 @@ func TestTracingHandler_CreatesSpan(t *testing.T) {
 }
 
 func TestTracingHandler_KafkaAttributes(t *testing.T) {
-	sr := setupTestTracer(t)
+	ctx, sr := setupTestTracer(t)
 
 	handler := func(_ context.Context, _ messaging.Message) error { return nil }
 	wrapped := TracingHandler(handler, WithMessagingSystem("kafka"), WithTracerName("kafka.consumer"))
@@ -133,7 +137,7 @@ func TestTracingHandler_KafkaAttributes(t *testing.T) {
 		Key:       "order-42",
 		Headers:   map[string]string{},
 	}
-	if err := wrapped(context.Background(), msg); err != nil {
+	if err := wrapped(ctx, msg); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -154,7 +158,7 @@ func TestTracingHandler_KafkaAttributes(t *testing.T) {
 }
 
 func TestTracingHandler_RecordsError(t *testing.T) {
-	sr := setupTestTracer(t)
+	ctx, sr := setupTestTracer(t)
 
 	handler := func(_ context.Context, _ messaging.Message) error {
 		return errors.New("boom")
@@ -162,7 +166,7 @@ func TestTracingHandler_RecordsError(t *testing.T) {
 	wrapped := TracingHandler(handler)
 
 	msg := messaging.Message{Topic: "events", Headers: map[string]string{}}
-	err := wrapped(context.Background(), msg)
+	err := wrapped(ctx, msg)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -182,7 +186,7 @@ func TestTracingHandler_RecordsError(t *testing.T) {
 }
 
 func TestTracingHandler_CustomSpanName(t *testing.T) {
-	sr := setupTestTracer(t)
+	ctx, sr := setupTestTracer(t)
 
 	handler := func(_ context.Context, _ messaging.Message) error { return nil }
 	wrapped := TracingHandler(handler, WithSpanNameFunc(func(msg messaging.Message) string {
@@ -190,7 +194,7 @@ func TestTracingHandler_CustomSpanName(t *testing.T) {
 	}))
 
 	msg := messaging.Message{Topic: "orders", Headers: map[string]string{}}
-	_ = wrapped(context.Background(), msg)
+	_ = wrapped(ctx, msg)
 
 	spans := sr.Ended()
 	if len(spans) != 1 {
@@ -202,7 +206,7 @@ func TestTracingHandler_CustomSpanName(t *testing.T) {
 }
 
 func TestTracingHandler_PropagatesContext(t *testing.T) {
-	_ = setupTestTracer(t)
+	ctx, _ := setupTestTracer(t)
 
 	var receivedCtx context.Context
 	handler := func(ctx context.Context, _ messaging.Message) error {
@@ -212,7 +216,7 @@ func TestTracingHandler_PropagatesContext(t *testing.T) {
 	wrapped := TracingHandler(handler)
 
 	msg := messaging.Message{Topic: "t", Headers: map[string]string{}}
-	_ = wrapped(context.Background(), msg)
+	_ = wrapped(ctx, msg)
 
 	span := trace.SpanFromContext(receivedCtx)
 	if !span.SpanContext().IsValid() {

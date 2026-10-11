@@ -1,6 +1,7 @@
 package connect
 
 import (
+	"context"
 	stderrors "errors"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	apperrors "github.com/kbukum/gokit/errors"
 	errorrpc "github.com/kbukum/gokit/errors/rpc"
+	"github.com/kbukum/gokit/observability"
 )
 
 // ToConnectError encodes an application failure through the shared RPC contract.
@@ -27,6 +29,20 @@ func ToConnectError(appErr *apperrors.AppError, service string) (*connectrpc.Err
 		result.AddDetail(d)
 	}
 	return result, nil
+}
+
+// ToConnectErrorContext normalizes err, attaches the trace ID of ctx's active span and encodes it like
+// [ToConnectError]. Use it for failures written before a handler runs, such as an authentication rejection in HTTP
+// middleware, so they carry the same trace ID as handler errors.
+func ToConnectErrorContext(ctx context.Context, err error, service string) (*connectrpc.Error, error) {
+	appErr := apperrors.Normalize(err)
+	if appErr == nil {
+		appErr = apperrors.Internal(nil)
+	}
+	if id := observability.TraceID(ctx); id != "" {
+		appErr = appErr.WithTraceID(id)
+	}
+	return ToConnectError(appErr, service)
 }
 
 // DecodeError decodes a remote Connect failure without approving its message for onward public serialization.

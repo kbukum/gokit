@@ -153,6 +153,23 @@ func TestWithComponentAndFields(t *testing.T) {
 	}
 }
 
+func TestWithComponentReplacesEarlierComponent(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	l := newBufferedLogger(&buf, "info", "json")
+	l.WithComponent("tenancy").WithComponent("database").Info("hi")
+
+	raw := buf.String()
+	if got := strings.Count(raw, `"component"`); got != 1 {
+		t.Fatalf("component key count = %d, want 1 (line: %s)", got, raw)
+	}
+	m := decodeLine(t, &buf)
+	if m[FieldComponent] != "database" {
+		t.Errorf("component = %v, want database (last value wins)", m[FieldComponent])
+	}
+}
+
 func TestWithError(t *testing.T) {
 	t.Parallel()
 

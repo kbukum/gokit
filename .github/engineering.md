@@ -67,7 +67,7 @@ Cross-module operations use `./gomod.sh`:
 ./gomod.sh cmd "go test" -m messaging      # Run in specific module
 ```
 
-Requires: Go 1.27.1+,
+Requires: Go 1.27.2+,
 golangci-lint (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`).
 
 ## Module Structure
@@ -106,23 +106,7 @@ When adding a new module:
 - Errors: RFC 9457 `AppError` with typed error codes.
 - Error contracts: `errors.New(code, message)` derives REST status; do not add status overrides. `errors/rpc` owns shared protobuf details for Connect and gRPC. Validation exposes semantic violation reasons, not validator IDs. Remote decoded failures are not trusted public AppErrors. Retry hints require operation idempotency and one bounded retry owner; server delays are minimums.
 - Tests: parallel, table-driven, use `testutil` helpers; deterministic under `-race -shuffle`.
-- **Readability & structure (load-bearing, not cosmetic):** organize by focused,
-  well-named files within a package — never pile unrelated concerns into one large file.
-  Split by concern (types, options, registry, middleware, adapter) into separate files
-  so the next reader can navigate by filename.
-  When a single non-test `.go` file grows past roughly **300–400 code lines** (code only —
-  excluding test files, comments, and blank lines; a soft average, not a strict cutoff),
-  check whether distinct concerns are piled together; if so it is a refactor signal, not a
-  normal state. Length alone is never the verdict — a cohesive single-concern file is fine
-  at any size; concern-mixing is the real signal.
-  Reorg is not only about one oversized file: when a single package/folder accumulates
-  **more than ~10 non-test files** (excluding `_test.go`) that fall into **2–3+ separable
-  concern groups**, lift each cohesive group into its own concern-named sub-package (sub-folder with
-  its own declare-only `doc.go`), so a reader lands in the right file *and folder* from the layout alone
-  (as in `agent/{memory}`, `cli/{theme,render,…}`, `dataset/{payload,record,stage,…}`).
-  Keep it criteria-driven — only where the groups are genuinely separable and it improves
-  readability, maintainability, scalability, extendability, and reusability without causing
-  other issues (import cycles, over-fragmentation).
+- **Structure:** use concern-named files. Review mixed-concern files around 300–400 non-test code lines, or packages with more than roughly 10 non-test files spanning 2–3 separable groups. These are advisory signals, not size limits. Split only where clearer ownership justifies it without cycles or over-fragmentation; cohesive files may remain large.
 - **Declare-only aggregator.** `doc.go` holds the package clause and package documentation only —
   no `func`/`method`/`type`/`var`/`const` declarations and no imports;
   split code by concern into named sibling files (as in `cli/{theme,render,…}` and `dataset/{payload,record,stage,…}`).
@@ -155,6 +139,9 @@ make check                           # full canonical gate (build + vet + test) 
 
 ## Documentation
 
+- Lead with the capability or reader's task. Use concise, organized prose; keep technical detail only when needed for correct use, contracts, safety, or verification.
+- Changelogs summarize meaningful outcomes by release and concern. Preserve version history and breaking changes; omit code recipes, implementation narration, and minor process details.
+- Skills state triggers, actions, and acceptance. Link canonical guides rather than repeating their procedures or historical state.
 - Write Markdown paragraphs as natural, continuous source lines. Do not hard-wrap prose to a column limit or insert source newlines for visual presentation; Markdown renderers handle viewport-aware wrapping. Keep intentional structure such as paragraph breaks, headings, lists, blockquotes, tables, and fenced code blocks.
 - Apply the same rule to prose in `doc.go`, godoc, and `//` comments: do not introduce arbitrary column-based breaks. Preserve Go formatting conventions for code examples and directives.
 - Comments and godoc describe the code as it is now — not history, plans, or the process that produced it.

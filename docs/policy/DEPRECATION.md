@@ -59,5 +59,5 @@ Before merging a deprecation PR:
 - [ ] `// Deprecated:` comment on the symbol with version + replacement.
 - [ ] CHANGELOG `### Deprecated` entry under `[Unreleased]`.
 - [ ] Replacement API exists and is documented.
-- [ ] If the replacement requires a non-trivial migration, add a `## Migration` block to the CHANGELOG entry showing before/after.
+- [ ] For a non-trivial migration, link a focused migration guide from the concise changelog entry.
 - [ ] Removal date / version recorded in `docs/policy/DEPRECATIONS.csv` (sortable list — create on first deprecation).

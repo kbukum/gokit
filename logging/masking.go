@@ -142,14 +142,19 @@ func (m *DefaultMasker) MaskValue(key, value string) string {
 		return m.replacement
 	}
 
-	// 2. Value-pattern match.
+	// 2. A trace ID names a trace, not a secret; logs keep it so they join the trace.
+	if key == FieldTraceID && isTraceID(value) {
+		return value
+	}
+
+	// 3. Value-pattern match.
 	for _, vp := range m.valuePatterns {
 		if vp.re.MatchString(value) {
 			return vp.re.ReplaceAllStringFunc(value, vp.replace)
 		}
 	}
 
-	// 3. No match — pass through.
+	// 4. No match — pass through.
 	return value
 }
 
@@ -174,4 +179,20 @@ func (m *DefaultMasker) MaskFields(fields map[string]any) map[string]any {
 		}
 	}
 	return out
+}
+
+// isTraceID reports whether s is a valid W3C trace ID: 32 lowercase hex digits, not all zero.
+func isTraceID(s string) bool {
+	if len(s) != 32 {
+		return false
+	}
+	zero := true
+	for i := range len(s) {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+		zero = zero && c == '0'
+	}
+	return !zero
 }

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/kbukum/gokit/component"
+	"github.com/kbukum/gokit/logging"
 )
 
 type greeter interface{ Greet(name string) string }
@@ -890,8 +891,8 @@ func TestSummaryListsModules(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
-	out := buf.String()
-	for _, want := range []string{"Modules (3)", "provider", "provides greeter", "internal GET /greet", "consumer", "needs greeter ← provider, store ← store-double"} {
+	out := stripANSI(buf.String())
+	for _, want := range []string{"Modules (3)", "provider", "provides", "greeter", "internal GET /greet", "consumer", "needs", "greeter ← provider", "store ← store-double"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("summary missing %q:\n%s", want, out)
 		}
@@ -909,6 +910,23 @@ func TestStartupWithoutModulesIsUnchanged(t *testing.T) {
 	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
 	if strings.Contains(buf.String(), "Modules") {
 		t.Fatalf("summary lists modules for an app without modules:\n%s", buf.String())
+	}
+}
+
+func TestWithoutStartupSummarySuppressesBanner(t *testing.T) {
+	t.Parallel()
+	app, err := NewApp(newTestConfig("test", "1.0"), WithLogger(logging.NewDefault("test")), WithoutStartupSummary())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	app.Summary.SetWriter(&buf)
+	if err := app.Startup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = app.Shutdown(context.Background()) })
+	if buf.Len() != 0 {
+		t.Fatalf("expected no startup summary, got:\n%s", buf.String())
 	}
 }
 

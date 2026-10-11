@@ -11,6 +11,7 @@ Multi-module Go infrastructure kit. Core packages share the root `go.mod`; heavy
 - Validate boundaries; no secrets in source/logs, credential URLs, SQL interpolation, or shell-built subprocesses. Bound calls/retries/buffers; every goroutine owns cancellation and shutdown.
 - Use focused concern-named files and declare-only `doc.go`. Follow gofmt, golangci-lint, and current stdlib idioms. Split mixed concerns, not files merely exceeding a line count.
 - Test-first, deterministic behavior/failures; reuse `testutil`, inject clocks, preserve race/shuffle safety. Coverage: >=80% per package, >=85% overall and for errors/auth/authz/security/resilience/encryption. Never weaken integration gates.
+- Docs and skills are concise, task-first, and organized by reader intent. Explain capabilities at a high level; retain technical detail only for correct use, contracts, safety, or verification. Changelogs summarize outcomes, not implementation steps.
 - Markdown and Go comment prose have no arbitrary column wrapping. Describe current behavior, not implementation history.
 
 ## Work and validation

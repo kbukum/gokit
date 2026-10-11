@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/observability"
 	"github.com/kbukum/gokit/provider"
@@ -153,6 +156,23 @@ func TestWithTracing_Error(t *testing.T) {
 }
 
 // --- WithLogging delegation tests ---
+
+func TestWithTracingRecordsOwnedChild(t *testing.T) {
+	t.Parallel()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer func() { _ = tp.Shutdown(t.Context()) }()
+	ctx, parent := tp.Tracer("provider").Start(t.Context(), "request")
+	wrapped := provider.WithTracing[string, string]("service")(&echoProvider{name: "echo"})
+	if _, err := wrapped.Execute(ctx, "hello"); err != nil {
+		t.Fatal(err)
+	}
+	parent.End()
+	spans := exporter.GetSpans()
+	if len(spans) != 2 || spans[0].Name != "service.echo" || !spans[0].Parent.Equal(spans[1].SpanContext) {
+		t.Fatalf("provider did not record an owned child: %+v", spans)
+	}
+}
 
 func TestWithLogging_DelegatesIsAvailable(t *testing.T) {
 	p := &echoProvider{name: "avail-test"}
