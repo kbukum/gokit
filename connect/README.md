@@ -104,6 +104,12 @@ The guard rejects a missing or typed-nil identity with `CodeUnauthenticated`. It
 
 For an explicitly public operation, omit the required-identity guard and call the injected getter directly. The outer authentication policy must still reject malformed, duplicate, expired, or otherwise invalid presented credentials; only genuinely absent credentials may become anonymous access. Never use a query token or a token-validation fallback inside a unary interceptor.
 
+## Typed forwarding
+
+`connect/forward.NewUnary[Request, Response](method)` validates an injected generated method descriptor and builds an immutable entry for a heterogeneous route catalog. The entry creates a handler from a message callback and a client from an injected HTTP client and `client.Config`. Request/response types must match the descriptor; streaming methods are rejected. JSON/protobuf and generated idempotency metadata are preserved.
+
+Each send accepts an optional synchronous header hook for explicit application policy. The kit knows no product receivers, delegation format or exposure rules and never copies incoming headers automatically. Clients require a base URL and finite timeout, retain shorter caller deadlines, preserve Connect errors and never add retry policy. The injected HTTP client's owner must enforce transport/redirect policy and close its connections; `client.NewHTTPClient` provides that policy. See the executable contracts in [`forward/entry_test.go`](forward/entry_test.go).
+
 ## Key Types & Functions
 
 | Symbol | Description |
@@ -115,6 +121,7 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `Mount(srv, path, handler)` | Mount a single Connect handler on any HandlerMounter |
 | `MountServices(srv, ...Service)` | Mount multiple services at once, stopping at the first error |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
+| `TracingInterceptor(TracingConfig)` | Inject client/server tracing, explicit authenticated-parent policy and propagation; unary and streaming spans use canonical procedures |
 | `NormalizingInterceptor(log)` | Convert any handler error to a coded Connect error (unary + streaming); already-coded errors pass through |
 | `ValidationInterceptor(v)` | Validate requests with an injected `protovalidate.Validator`, emitting shared violations |
 | `DeadlineInterceptor(max)` | Bound unary RPCs to a server maximum deadline |
@@ -122,6 +129,7 @@ For an explicitly public operation, omit the required-identity guard and call th
 | `RequireAuth[T](ctx, getClaims)` | Retrieve the typed verified identity or return an unauthenticated error |
 | `ClaimsGetter[T]` | Injected `func(context.Context) (T, bool)` paired with the outer middleware's setter |
 | `ToConnectError(appErr, service)` | Encode shared google.rpc details; returns `(*connect.Error, error)` |
+| `ToConnectErrorContext(ctx, err, service)` | Normalize `err`, attach the active span's trace ID and encode like `ToConnectError`; for rejections written before a handler runs, such as authentication middleware |
 | `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
 | `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
@@ -138,7 +146,9 @@ For an explicitly public operation, omit the required-identity guard and call th
 
 ---
 
-Authenticate at the outer HTTP boundary, then install the RPC normalizer outside validation: logging → normalization → server deadline → identity guard → validation → handler. Validation returns application errors so the outer boundary can log evaluation causes before serialization. Deadlines only cancel work that honors its context.
+Authenticate at the outer HTTP boundary, then install tracing → logging → normalization → server deadline → identity guard → validation → handler. `TrustParent` may accept incoming parents only from authenticated peers; otherwise headers are ignored and an existing local HTTP span is preserved. Baggage is neither accepted nor forwarded. Client instrumentation replaces stale propagation before sending and never retries requests. Streaming clients must read to completion or close their response.
+
+Normalization correlates application errors with the active span without mutating the original error. Logs and spans record classifications, not raw causes, payloads or credentials. Native Connect errors retain their codes, details and metadata. Deadlines only cancel work that honors its context.
 
 The [shared error contract](../errors/README.md#shared-rpc-contract) defines namespaced identities, explicit retry verdicts, semantic violations, and HTTP-only extensions. Connect's HTTP status is protocol-owned. Client retry execution still requires idempotency and a bounded policy; `IsRetryable` alone does not authorize another attempt.
 

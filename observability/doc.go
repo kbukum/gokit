@@ -1,24 +1,4 @@
-// Package observability provides OpenTelemetry tracing and metrics integration
-// for comprehensive service observability.
+// Package observability provides OpenTelemetry tracing and metrics integration. NewTraceComponent owns a tracer provider and its exporter through the telemetry shutdown phase. Construction performs no exporter I/O; register the component before listeners and inject its Tracer. Tracing never registers a process-global provider or propagator.
 //
-// Tracing:
-//
-//	tp, err := observability.InitTracer(ctx, observability.DefaultTracerConfig("my-service"))
-//	defer tp.Shutdown(ctx)
-//
-//	ctx, span := observability.StartSpan(ctx, "my.operation")
-//	defer span.End()
-//
-// Metrics:
-//
-//	mp, err := observability.InitMeter(ctx, observability.DefaultMeterConfig("my-service"))
-//	defer mp.Shutdown(ctx)
-//
-//	metrics, err := observability.NewMetrics(observability.Meter("my-service"))
-//	metrics.RecordRequestEnd(ctx, observability.RequestMetric{Service: "my-service", Method: "GET /users", Status: "ok", Duration: duration})
-//
-// Health Checks:
-//
-//	health := observability.NewServiceHealth("my-service", "1.0.0")
-//	health.AddComponent(checker.CheckHealth(ctx))
+// WithTracerProvider injects a TraceComponent or SDK provider into root operation contexts. Tracer, StartSpan and StartNamedSpan otherwise use the active span's provider, so nested kit instrumentation shares instance ownership without globals. Correlate derives logging identifiers from an active span. Transports use TraceID for safe error correlation and explicit propagation trust policies. Metrics and health aggregation have independent owners.
 package observability

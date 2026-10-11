@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestTraceContextCarriers(t *testing.T) {
@@ -29,16 +30,15 @@ func TestTraceContextCarriers(t *testing.T) {
 }
 
 func TestInjectExtractTraceContext(t *testing.T) {
-	setTextMapPropagator(t, propagation.TraceContext{})
-
-	ctx, span := StartNamedSpan(context.Background(), "test-tracer", "op")
+	tp := sdktrace.NewTracerProvider()
+	ctx, span := StartNamedSpan(tracerContext(t, tp), "test-tracer", "op")
 	defer span.End()
 
 	carrier := MapCarrier{}
 	InjectTraceContext(ctx, carrier)
 
 	extracted := ExtractTraceContext(context.Background(), carrier)
-	if extracted == nil {
-		t.Fatal("expected non-nil extracted context")
+	if !trace.SpanContextFromContext(extracted).Equal(trace.SpanContextFromContext(ctx).WithRemote(true)) {
+		t.Fatal("trace context was not propagated without globals")
 	}
 }

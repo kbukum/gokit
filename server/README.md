@@ -4,7 +4,9 @@ Gin-based HTTP server with h2c support, built-in middleware, health/info endpoin
 
 ## SPA, diagnostics, and shutdown
 
-`MountSPA(files, spa.Config{...})` serves a trusted `fs.FS` behind registered API routes. Use an embedded filesystem in an image or `os.OpenRoot(...).FS()` for confined on-disk assets; keep the root open until the server stops. HTML navigation falls back to `index.html`, but API namespaces, asset namespaces, and missing file paths return 404. Add application-specific API prefixes through `ReservedPrefixes`. `Fallback(handler)` installs any handler for unmatched requests, behind the server's middleware; like `Handle`, it returns `ErrInvalidRoute` for a nil handler at registration; `*server.Component` exposes it as `bootstrap.Listener.Fallback`, through which a module's fallback also reserves that module's route prefixes.
+`MountSPA` serves a trusted embedded or root-confined `fs.FS`; keep an `os.OpenRoot` handle open until shutdown. HTML navigation falls back to `index.html`, while API namespaces, asset namespaces, and missing files return 404. Use `ReservedPrefixes` for application exclusions.
+
+`Fallback` installs an unmatched-route handler behind middleware and rejects nil handlers with `ErrInvalidRoute`. Module fallbacks also reserve the module's API prefixes.
 
 List fingerprinted files from the build manifest in `ImmutableAssets` to cache them for one year. Other assets revalidate. The index is limited to 1 MiB and uses `no-cache, no-store`. Put `{nonce}` in script/style nonce attributes; each index response gets a fresh cryptographic nonce and a matching strict CSP. `spa.Config.CSP` can replace the policy template, but cannot enable unsafe scripts or weaken its base/object/frame restrictions.
 
@@ -12,7 +14,11 @@ Diagnostics are never registered by `RegisterDefaultEndpoints`. Metrics, pprof a
 
 Call `Instrument(meter)` before `ApplyDefaults` to record HTTP metrics through an injected OpenTelemetry meter. Route labels use registered Gin/RPC patterns; unknown routes and methods use fixed labels. `http_requests_active` tracks in-flight requests. Register `sse/metrics` against the same application meter for active streams and queue gauges, then unregister it during resource cleanup before telemetry stops.
 
-Register `NewComponent(srv)` in the component registry for coordinated shutdown. Its name is `http-server`; when one registry hosts several servers, give each a distinct name with `NewComponent(srv, server.WithName("internal"))`. The kit rejects new requests first, cancels SSE subscriptions, drains HTTP, then drains workers before closing clients and telemetry. Listeners drain concurrently within the registry's drain window (see the `component` README); HTTP reserves one fifth of its drain time for force-close and handler cleanup. A forced close returns the deadline error. Handlers and workers must honor cancellation: Go cannot terminate arbitrary application code.
+Call `Trace(middleware.TracingConfig)` before `ApplyDefaults` to trace every route with an injected tracer. The span wraps request logging, so request log lines and problem responses carry its trace ID, and `X-Request-Id` is replaced by that trace ID. Supply `Route` and, only for authenticated peers, `TrustParent` as described under [Middleware ordering](#middleware-ordering).
+
+Register `NewComponent(srv)` for coordinated shutdown; give multiple servers distinct `WithName` values. Shutdown quiesces requests and SSE, drains listeners concurrently, then drains workers before closing dependencies and telemetry.
+
+HTTP reserves one fifth of its drain time for forced close and handler cleanup. Idle pre-request connections close with the listeners. Forced close reports the deadline error; handlers and workers must honor cancellation.
 
 REST request timeouts buffer at most 10 MiB of response body. Exceeding that limit returns a 503 and cancels the handler; writes after cancellation fail. Actual REST handler cleanup remains tracked after the timeout response, so dependency teardown waits for it. Mount streaming endpoints outside this buffering middleware.
 
@@ -124,21 +130,29 @@ server.MountDocs(engine, log,
 | `OptionalAuth[T](validator, setClaims)` | Accept a missing header, never malformed or invalid presented credentials |
 | `CORS(CORSConfig)` | Cross-origin resource sharing |
 | `Recovery()` | Panic recovery |
+| `Tracing(TracingConfig)` | Inject a tracer and optional propagator, registered-route classifier and authenticated-parent policy; returns middleware and a configuration error |
+| `RequestLogger(log)` | Log registered routes and context-derived identifiers without raw URLs or request-header IDs |
 
 ### Middleware ordering
 
 When composing transport concerns, keep the shared order explicit:
 
 1. tracing
-2. logging
-3. auth
-4. validation
-5. handler
-6. metrics
+2. recovery
+3. logging
+4. auth
+5. validation
+6. handler
 
-Apply recovery outside that chain so panics from any layer are captured consistently.
+Recovery inside tracing handles downstream panics with the active context before the span ends, writes a canonical safe 500 problem response and logs only safe failure metadata. An additional outer recovery boundary protects setup and middleware before tracing. `ApplyMiddleware` installs both boundaries when tracing is enabled. Never log raw panic values or stack dumps.
 
-Use `HTTPAuth` for a cookie/API-key authenticator chain: the injected `Authenticate(*http.Request) (T, bool, error)` implementation sees the original method, repeated headers, and cookies and owns credential ambiguity, CSRF, expiry, and revocation checks. Pair its setter with the same typed context getter in downstream handlers. Apply the middleware to protected handlers only. Authentication errors default to safe RFC 9457 responses; unknown provider/store failures never become anonymous success. The boolean reports whether any credential was presented: missing credentials are rejected unless `WithMissingPolicy(AcceptMissing)` is set, in which case the request continues with no identity in context, so required guards such as Connect `RequireAuth` still reject it. `WithAuthErrorWriter(func(http.ResponseWriter, *http.Request, error))` injects transport-specific encoding for a shared HTTP boundary. The writer receives the original request and error; it must normalize private diagnostics before serialization and preserve the target protocol's status and error envelope. Rejections set `Cache-Control: no-store` before invoking either writer.
+Public tracing starts a fresh root and ignores incoming sampling, baggage and forwarded scheme headers. For internal parent propagation, install tracing inside peer authentication and supply `TrustParent`; never decide trust from trace headers. An authentication rejection needs fresh local tracing at its rejection boundary, not trusted extraction. `Route` returns only a registered template/procedure; absent classification uses `http.request`. Place request logging inside tracing to share its context. Traces omit request bodies, URLs and raw errors; HTTP problem responses include the active trace ID.
+
+Use `HTTPAuth` for cookie/API-key chains. The injected authenticator sees the original request and owns ambiguity, CSRF, expiry, and revocation checks. Pair its setter with the downstream typed getter and wrap protected handlers only.
+
+Missing credentials fail unless `AcceptMissing` is explicit; that policy adds no identity, so required guards still reject the request. Invalid credentials and provider/store failures never become anonymous success.
+
+`WithAuthErrorWriter` supplies protocol-specific rejection encoding. Normalize private diagnostics and preserve the protocol's status and envelope. Every rejection sets `Cache-Control: no-store`; the default uses safe RFC 9457 responses.
 
 The Gin bearer middleware uses a context-aware `TokenValidator[T]` and accepts exactly one bounded `Authorization: Bearer …` credential. Empty, duplicate, oversized, or invalid headers are rejected even by `OptionalAuth`. URL query tokens and custom header/scheme fallbacks are not supported.
 

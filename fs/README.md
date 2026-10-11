@@ -1,6 +1,6 @@
 # fs
 
-Local filesystem primitives for safe paths, temporary files and directories, atomic writes, permissions, metadata, symlinks and hard links, bounded archive create/extract, debounced change watching, and OS-standard application directories. It stays deliberately below storage abstractions — higher-level packages (`storage`, `cache`, `httpclient`) reuse these primitives instead of each re-implementing path safety, temp files, and atomic replacement. Where the standard library already suffices (`os`, `io/fs`, `path/filepath`), this package builds on it.
+Local filesystem primitives for safe paths, atomic writes, secret reads, locks, archives, and change watching. Higher-level storage packages reuse this owner; standard-library filesystem APIs remain the foundation.
 
 Typed failures expose safe operation messages. Local paths and raw OS diagnostics stay in the error cause for logging, not in public messages or validation details. Plain sentinel errors remain available for `errors.Is`; normalize errors at transport boundaries rather than serializing `err.Error()`.
 
@@ -13,25 +13,22 @@ go get github.com/kbukum/gokit
 ## Quick Start
 
 ```go
-package main
+package example
 
 import (
     "github.com/kbukum/gokit/fs"
 )
 
-func main() {
-    // Reject symlink / traversal escapes for user-provided relative paths.
-    full, err := fs.SafeJoin("/srv/data", userPath)
+func writeFile(root, relativePath string, data []byte) error {
+    full, err := fs.SafeJoin(root, relativePath)
     if err != nil {
-        panic(err)
+        return err
     }
-
-    // Write without ever exposing a partial file.
-    if err := fs.WriteAtomicReplace(full, []byte("hello"), "tmp-"); err != nil {
-        panic(err)
-    }
+    return fs.WriteAtomicReplace(full, data, "tmp-")
 }
 ```
+
+Replacement is atomic on Unix. On Windows, `WriteAtomicReplace` removes the destination before renaming. Path checks do not protect against arbitrary concurrent filesystem mutation; use trusted directory ownership or an OS-confined filesystem.
 
 ## Key Types & Functions
 
@@ -42,11 +39,14 @@ func main() {
 | `ConfinePath()` / `ConfineExistingPath()` | Reject symlink escapes for untrusted paths |
 | `Absolute()` / `Canonicalize()` | Resolve absolute / symlink-canonical paths |
 | `WriteAtomic()` / `WriteAtomicReplace()` | Atomic same-filesystem writes |
+| `WriteAtomicCreate()` | Publish an owner-only file without overwriting an existing destination; requires an existing parent and hard-link support |
+| `WithFileLock(ctx, path, operation)` | Coordinate cooperating processes around a caller-owned lock file |
+| `ReadSecret(path, minimum, limit)` | Bounded regular-file secret read, preserving bytes except one trailing LF or CRLF; supports mounted symlinks and never includes contents in errors |
 | `CanRead()` / `CanWrite()` / `IsReadonly()` | Capability checks before optional operations |
 | `Mode()` / `SetMode()` / `IsExecutable()` | Permission inspection and updates |
 | `FindInAncestors()` / `ParentDir()` | Walk ancestor directories |
 | `TarGz()` / `Zip()` / `ExtractTarGz()` / `ExtractZip()` | Create and bounded-extract tar.gz / zip archives |
-| `ExtractLimits` / `DefaultExtractLimits()` | Bound entry count, per-entry and total size; reject traversal / symlink escapes |
+| `ExtractLimits` / `DefaultExtractLimits()` | Bound entry count and total uncompressed bytes; reject non-local paths and link escapes |
 | `HardLink()` / `SymlinkFile()` / `SymlinkDir()` / `ReadLink()` | Hard and symbolic links |
 | `NewFsWatcher()` / `FsWatcher` | Debounced filesystem change watching |
 | `AppCacheDir(app)` | OS-standard per-application cache directory |

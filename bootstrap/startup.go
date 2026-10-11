@@ -29,10 +29,11 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 	defer func() { a.endStartup(holdActive && err == nil) }()
 	start := time.Now()
 
-	a.Logger.InfoCtx(ctx, "Starting application", map[string]any{
-		"name":    a.Name,
-		"version": a.Version,
-	})
+	fields := map[string]any{"name": a.Name}
+	if a.Version != "" {
+		fields["version"] = a.Version
+	}
+	a.Logger.InfoCtx(ctx, "Starting application", fields)
 
 	// Configure registers the command's own components and may add modules and bindings; modules
 	// then register so their components start after those and before listeners; everything starts
@@ -57,7 +58,9 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 	}
 
 	a.Summary.SetStartupDuration(time.Since(start))
-	a.DisplaySummary(ctx)
+	if !a.quietSummary {
+		a.DisplaySummary(ctx)
+	}
 	if ctx.Err() != nil {
 		return nil, a.abortStartup(ctx, PhaseReady, ctx.Err())
 	}

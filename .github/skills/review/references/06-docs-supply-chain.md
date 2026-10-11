@@ -12,6 +12,7 @@ Use the [review skill](../SKILL.md) for scope, execution, and finding format. Th
 - **Docs match behavior.** A behavioral change updates the affected godoc, package overview, and any README/example. Stale docs that now describe removed or changed behavior are a should-fix. (Godoc *accuracy* vs the code is pass `07`; this check is that docs were updated at all.)
 - **Canonical docs regenerated.** A module rename/add/remove updates `domains.toml` and `docs/MODULE-INDEX.md` in the same change. A stale module index is a should-fix.
 - **Examples compile.** Example code / `Example` test functions build and reflect the current API.
+- **Reader-focused explanations.** Guides lead with the task or capability, skills state actions and acceptance, and changelogs summarize outcomes. Remove repeated rationale and implementation narration without losing contracts, safeguards, or verification details.
 - **Prose flows naturally.** Markdown paragraphs stay continuous in source instead of being hard-wrapped to a fixed column; renderers own viewport-aware wrapping. `doc.go` and godoc/`//` prose likewise avoid arbitrary column-based breaks. Intentional paragraph, list, blockquote, table, and code-block structure remains intact. AI-generated hard wraps are a should-fix.
 
 ## Supply chain

@@ -8,7 +8,7 @@ import (
 	"github.com/kbukum/gokit/observability"
 )
 
-// WithTracing wraps a Node with OpenTelemetry span creation.
+// WithTracing wraps a Node with span creation using the execution context's injected provider or active span's provider. Inject observability.WithTracerProvider for root operations; no process-global provider is used.
 // Each execution creates a span named "{prefix}.{nodeName}".
 func WithTracing(node Node, prefix string) Node {
 	return &tracingNode{inner: node, prefix: prefix}

@@ -3,29 +3,23 @@ package observability
 import (
 	"context"
 	"testing"
+	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// setTracerProvider installs tp as the global tracer provider for the duration
-// of the test, restoring the previous provider and shutting tp down on cleanup.
-// Cleanups run LIFO, so the previous provider is restored before tp is shut down,
-// preventing parallel tests in this package from observing a shut-down provider.
-func setTracerProvider(t *testing.T, tp *sdktrace.TracerProvider) {
+func tracerContext(t *testing.T, tp *sdktrace.TracerProvider) context.Context {
 	t.Helper()
-	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
-	prev := otel.GetTracerProvider()
-	otel.SetTracerProvider(tp)
-	t.Cleanup(func() { otel.SetTracerProvider(prev) })
-}
-
-// setTextMapPropagator installs p as the global propagator for the duration of
-// the test and restores the previous one on cleanup.
-func setTextMapPropagator(t *testing.T, p propagation.TextMapPropagator) {
-	t.Helper()
-	prev := otel.GetTextMapPropagator()
-	otel.SetTextMapPropagator(p)
-	t.Cleanup(func() { otel.SetTextMapPropagator(prev) })
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, err := WithTracerProvider(t.Context(), tp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ctx
 }

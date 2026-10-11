@@ -24,7 +24,9 @@ func endpoint(log *logging.Logger, authorize sse.Authorizer) (*sse.Bus, http.Han
 }
 ```
 
-An `Authorizer` authenticates the request and returns a verified `Access{Principal, Route, Lifetime}`. `Principal` is the connection-limit key; `Route` is the authorized request scope. Neither comes directly from unverified request parameters. `Authenticated[T](authenticator, resolver)` composes an `Authenticator[T]` with `func(*http.Request, T) (Access, error)`. The resolver receives the same typed identity both as an argument and through `IdentityFromContext[T]`, without losing upstream context values. Different identity types use distinct context keys. `PublicAccess` explicitly exposes a public scope and shares one admission principal across its visitors. There is no implicit public fallback.
+`Authorizer` returns verified `Access{Principal, Route, Lifetime}`. Principal keys admission limits; route selects authorized events. Neither may come from unverified request parameters.
+
+`Authenticated[T]` composes an authenticator and typed resolver, retaining upstream context and exposing identity through `IdentityFromContext[T]`. Identity types have distinct keys. `PublicAccess` explicitly shares one admission principal for a public scope; there is no implicit public fallback.
 
 Use `Bus.Publish(ctx, pattern, message)` from trusted application adapters. `*` matches any route, including `/`; `?` matches one rune, and brackets are literal. Subscriber routes cannot contain wildcards. The same matching rule applies to replay. Publication errors are returned, including oversized messages and a closed bus. The caller owns error handling.
 
@@ -75,7 +77,9 @@ The [convergence fixtures](testdata/convergence.json) use a two-refetch budget a
 | Per-write deadline | 10 seconds | Positive duration |
 | Heartbeat interval | 30 seconds | Positive duration |
 
-Replay is a ring bounded by both count and bytes. Subscribers read replay directly from that ring, not from replay-sized private queues. Live queues store immutable frame strings. A conservative payload bound is replay bytes plus `connections × queue events × max frame bytes`, plus one control and one in-flight frame per connection. Ring slots and subscription metadata add fixed overhead. Proto encoding is serialized per bus; input wire size is checked before proto-JSON allocation and encoded size before retention. Configure all limits together for the deployment's memory budget.
+Replay shares one count/byte-bounded ring; live queues hold immutable frames. Budget replay bytes plus `connections × queue events × max frame bytes`, one control and in-flight frame per connection, and metadata overhead.
+
+Encoding is serialized per bus, with wire-size checks before proto-JSON allocation and encoded-size checks before retention. Configure limits together for the deployment's memory budget.
 
 Admission is checked before allocating a queue. An overflowed stream stays charged until its owner closes it, so repeated admission cannot bypass the bound while old handlers are unwinding. `Subscribe` callers close subscriptions; context cancellation also releases them. HTTP owns its subscription, heartbeat ticker, write, and cancellation callbacks.
 
@@ -85,7 +89,9 @@ The generic decoder separately bounds normalized event-block bytes with `WithMax
 
 ## Authentication and deployment
 
-Browser credentials belong in secure HttpOnly cookies; automation credentials belong in headers. `BearerAuthenticator[T]` accepts a `TokenValidator[T]` with `ValidateToken(context.Context, string) (T, error)` and forwards the request context. It reads exactly one bounded authorization header, never a URL parameter; duplicate, empty, oversized, malformed, or invalid credentials fail closed. An injected `Authenticator[T]` can instead compose the common HTTP cookie/API-key chain or retrieve the already-verified identity from its paired context getter. Authentication and scope checks finish before streaming begins. Pre-stream failures use the shared RFC 9457 encoding and normalization rules; unknown errors are safe internal failures, not successful anonymous access. `WithChallenge` adds a challenge only to a 401 response.
+Browser credentials use secure HttpOnly cookies; automation uses headers. `BearerAuthenticator[T]` forwards context to `TokenValidator[T]` and accepts exactly one bounded authorization header. Duplicate, empty, oversized, malformed, or invalid credentials fail closed; URL credentials are never accepted.
+
+Inject `Authenticator[T]` for a cookie/API-key chain or an already-verified typed identity. Authenticate and authorize before streaming. Pre-stream errors use safe normalized RFC 9457 failures, never anonymous success; `WithChallenge` affects only 401 responses.
 
 `Access.Lifetime` is an authoritative owner context. Its cancellation or expiry cancels the HTTP stream and interrupts a blocked write. Session implementations must return a lifetime tied atomically to their expiry/revocation state; checking a database row once without binding a lifetime is insufficient. SSE does not parse cookies, sessions, roles, or workspace membership. A closed connection alone is not proof that a browser is authenticated; terminal auth failures settle the session, and unexpected closes need a bounded reconnect/revalidation policy.
 

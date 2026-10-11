@@ -17,21 +17,29 @@ const writeAtomicAttempts = 8
 // so a reader never observes a partial file. Parent directories are created as needed. On Unix,
 // renaming replaces any existing destination atomically.
 func WriteAtomic(dest string, bytes []byte, tempPrefix string) error {
-	return writeAtomic(dest, bytes, tempPrefix, false)
+	return writeAtomic(dest, bytes, tempPrefix, false, false)
 }
 
 // WriteAtomicReplace writes bytes to dest and replaces an existing destination.
 // Replacement is atomic on Unix-like platforms;
 // on Windows the existing file is removed before the rename because the platform rename cannot replace it.
 func WriteAtomicReplace(dest string, bytes []byte, tempPrefix string) error {
-	return writeAtomic(dest, bytes, tempPrefix, true)
+	return writeAtomic(dest, bytes, tempPrefix, true, false)
 }
 
-func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting bool) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
-		return apperrors.New(apperrors.ErrCodeInternal,
-			"failed to create parent directories",
-		).WithCause(err)
+// WriteAtomicCreate publishes a complete owner-only file without replacing an existing destination, including a symlink.
+// Its parent must exist. It uses a sibling temporary file and a hard link; filesystems without hard-link support return an error.
+func WriteAtomicCreate(dest string, bytes []byte, tempPrefix string) error {
+	return writeAtomic(dest, bytes, tempPrefix, false, true)
+}
+
+func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting, createOnly bool) error {
+	if !createOnly {
+		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+			return apperrors.New(apperrors.ErrCodeInternal,
+				"failed to create parent directories",
+			).WithCause(err)
+		}
 	}
 
 	for attempt := 0; attempt < writeAtomicAttempts; attempt++ {
@@ -45,9 +53,13 @@ func writeAtomic(dest string, bytes []byte, tempPrefix string, replaceExisting b
 				"failed to create temp file",
 			).WithCause(err)
 		}
-		if err := writeAndPersist(file, bytes, atomicTarget{tempPath: tempPath, dest: dest, replaceExisting: replaceExisting}); err != nil {
-			_ = os.Remove(tempPath)
-			return err
+		if err := writeAndPersist(file, bytes, atomicTarget{tempPath: tempPath, dest: dest, replaceExisting: replaceExisting, createOnly: createOnly}); err != nil {
+			return errors.Join(err, os.Remove(tempPath))
+		}
+		if createOnly {
+			if err := os.Remove(tempPath); err != nil {
+				return apperrors.Internal(fmt.Errorf("remove published file's temporary link: %w", err))
+			}
 		}
 		return nil
 	}
@@ -62,25 +74,30 @@ type atomicTarget struct {
 	tempPath        string
 	dest            string
 	replaceExisting bool
+	createOnly      bool
 }
 
 func writeAndPersist(file *os.File, bytes []byte, target atomicTarget) error {
 	if _, err := file.Write(bytes); err != nil {
-		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
 			"failed to write temp file",
-		).WithCause(err)
+		).WithCause(errors.Join(err, file.Close()))
 	}
 	if err := file.Sync(); err != nil {
-		_ = file.Close()
 		return apperrors.New(apperrors.ErrCodeInternal,
 			"failed to sync temp file",
-		).WithCause(err)
+		).WithCause(errors.Join(err, file.Close()))
 	}
 	if err := file.Close(); err != nil {
 		return apperrors.New(apperrors.ErrCodeInternal,
 			"failed to close temp file",
 		).WithCause(err)
+	}
+	if target.createOnly {
+		if err := os.Link(target.tempPath, target.dest); err != nil {
+			return apperrors.Internal(fmt.Errorf("publish new file: %w", err))
+		}
+		return nil
 	}
 	if target.replaceExisting && runtime.GOOS == "windows" {
 		if err := os.Remove(target.dest); err != nil && !os.IsNotExist(err) {

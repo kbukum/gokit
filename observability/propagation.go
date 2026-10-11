@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // TextMapCarrier is the transport-neutral carrier used for trace propagation.
@@ -50,12 +50,12 @@ func (c HeaderCarrier) Keys() []string {
 	return keys
 }
 
-// InjectTraceContext writes the current trace context into a transport carrier.
+// InjectTraceContext writes W3C trace context into a transport carrier without global state or baggage.
 func InjectTraceContext(ctx context.Context, carrier TextMapCarrier) {
-	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	propagation.TraceContext{}.Inject(ctx, carrier)
 }
 
-// ExtractTraceContext reads trace context from a transport carrier.
+// ExtractTraceContext reads W3C trace context from a trusted transport carrier without global state or baggage. The caller must authenticate the peer before accepting its parent.
 func ExtractTraceContext(ctx context.Context, carrier TextMapCarrier) context.Context {
-	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+	return propagation.TraceContext{}.Extract(ctx, carrier)
 }

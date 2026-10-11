@@ -37,6 +37,8 @@ type Server struct {
 	active         int
 	drained        chan struct{}
 	metricsMW      middleware.Middleware
+	tracingMW      middleware.Middleware
+	conns          freshConns
 }
 
 // MountedHandler records a handler mounted on the ServeMux.
@@ -127,6 +129,8 @@ func New(cfg *Config, log *logging.Logger) *Server {
 		srv.restHandler.ServeHTTP(w, r)
 	}))
 	srv.httpServer.Handler = srv.admit(mux)
+	srv.httpServer.ConnState = srv.conns.track
+	srv.httpServer.RegisterOnShutdown(srv.conns.close)
 	return srv
 }
 
@@ -292,6 +296,10 @@ func (s *Server) ApplyMiddleware() {
 		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
+	}
+	if s.tracingMW != nil {
+		// Recover downstream failures with the active context before tracing ends its span.
+		stack = append(stack, s.tracingMW, middleware.Recovery(s.log))
 	}
 	if s.metricsMW != nil {
 		stack = append([]middleware.Middleware{s.metricsMW}, stack...)

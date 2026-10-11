@@ -17,6 +17,7 @@ type appOptions struct {
 	container       *di.Container
 	gracefulTimeout *time.Duration
 	admin           *AdminConfig
+	quietSummary    bool
 }
 
 // resolveOptions applies all options and returns the collected values.
@@ -49,5 +50,14 @@ func WithGracefulTimeout(d time.Duration) Option {
 func WithContainer(c *di.Container) Option {
 	return func(o *appOptions) {
 		o.container = c
+	}
+}
+
+// WithoutStartupSummary suppresses the startup summary banner. Use it for one-shot
+// task and operator commands run with [App.RunTask], where a "started … shutting
+// down" banner is misleading noise; long-running served apps keep the summary.
+func WithoutStartupSummary() Option {
+	return func(o *appOptions) {
+		o.quietSummary = true
 	}
 }

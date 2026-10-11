@@ -1,36 +1,14 @@
-# Versioning Quick Fix
+# Resolve a missing module version
 
-Use this procedure when a consumer resolves a gokit module to a zero-date pseudo-version.
+A zero-date pseudo-version usually means the module's path-scoped tag is missing or the consumer did not select a published version.
 
-## Cause
-
-The module's version tag is missing from the remote repository, or the consumer has not requested a published version.
-
-## Fix
-
-From a clean `main` checkout, preview the tags first:
+1. Inspect remote tags and the Go proxy for the affected module.
+2. Request an existing published version, or use a local `replace` for unreleased development.
+3. If publication is needed, follow the complete [release procedure](RELEASING.md). Do not cut ad-hoc tags or reuse a cached version.
 
 ```bash
-toven release plan
-```
-
-Configure signing and cut the complete module tag family:
-
-```bash
-git config tag.gpgsign true
-git config user.signingkey <KEY-ID>
-toven release publish --set-version 0.3.0-alpha.1 --yes
-```
-
-Toven discovers all `go.mod` files automatically. It creates the root tag (`v0.3.0-alpha.1`) and path-scoped tags such as `auth/v0.3.0-alpha.1` and `database/sqlite/v0.3.0-alpha.1`.
-
-Consumers can then request the published version:
-
-```bash
-go get github.com/kbukum/gokit@v0.2.0
 go get github.com/kbukum/gokit/auth@v0.2.0
-go get github.com/kbukum/gokit/database/sqlite@v0.2.0
 go mod tidy
 ```
 
-For local development, use `replace` directives instead of publishing temporary tags. See [`VERSIONING.md`](VERSIONING.md) for the complete policy.
+See [Versioning](VERSIONING.md) for root and nested tag conventions.

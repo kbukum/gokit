@@ -57,7 +57,7 @@ func OperationContextFromContext(ctx context.Context) *OperationContext {
 	return nil
 }
 
-// StartSpanForOperation starts a traced span and records the request start metric.
+// StartSpanForOperation starts a span using the execution context's injected provider or active span's provider and records the request start metric.
 func (oc *OperationContext) StartSpanForOperation(ctx context.Context, spanName string) (context.Context, trace.Span) {
 	ctx, span := StartSpan(ctx, spanName)
 	span.SetAttributes(

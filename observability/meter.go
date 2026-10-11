@@ -39,7 +39,6 @@ type MeterConfig struct {
 	Interval time.Duration
 	// SkipGlobalRegistration, when true,
 	// prevents InitMeter from mutating the global otel.SetMeterProvider state.
-	// See TracerConfig.SkipGlobalRegistration.
 	SkipGlobalRegistration bool
 }
 

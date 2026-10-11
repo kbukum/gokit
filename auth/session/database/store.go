@@ -257,14 +257,28 @@ func (s *store) RevokeSubject(ctx context.Context, kind auth.Kind, subject strin
 	}
 	var count int64
 	err := s.db.WithTransaction(ctx, func(tx *gorm.DB) error {
-		result := tx.Model(&family{}).Where("subject = ? AND kind = ? AND revoked = ?", subject, kind, false).Update("revoked", true)
-		count = result.RowsAffected
-		return result.Error
+		var err error
+		count, err = RevokeSubjectTx(tx, kind, subject)
+		return err
 	})
 	if err != nil {
 		return 0, err
 	}
 	return count, nil
+}
+
+// RevokeSubjectTx revokes every active session family of one subject inside the caller's transaction, so the
+// revocation commits or rolls back with the caller's own writes, such as a password change. It does not end live
+// streams: after the commit the caller calls [session.Manager.RevokeSubject] or [session.Manager.Nudge].
+func RevokeSubjectTx(tx *gorm.DB, kind auth.Kind, subject string) (int64, error) {
+	if tx == nil {
+		return 0, apperrors.InvalidInput("transaction", "Transaction is required")
+	}
+	if subject == "" || kind != auth.User && kind != auth.Service {
+		return 0, apperrors.InvalidInput("subject", "Subject and kind are required")
+	}
+	result := tx.Model(&family{}).Where("subject = ? AND kind = ? AND revoked = ?", subject, kind, false).Update("revoked", true)
+	return result.RowsAffected, result.Error
 }
 
 func (s *store) Cleanup(ctx context.Context, before time.Time, limit int) (int64, error) {

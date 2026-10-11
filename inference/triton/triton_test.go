@@ -7,17 +7,17 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/kbukum/gokit/ai/semconv"
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/inference"
 	"github.com/kbukum/gokit/inference/triton"
+	"github.com/kbukum/gokit/observability"
 )
 
 func TestProviderPredictHappyPath(t *testing.T) {
@@ -170,11 +170,17 @@ func TestProviderLifecycleAvailabilityAndExecute(t *testing.T) {
 func TestProviderPredictSpanAttributes(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
 	t.Cleanup(func() {
-		_ = tp.Shutdown(context.Background())
-		otel.SetTracerProvider(noop.NewTracerProvider())
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			t.Error(err)
+		}
 	})
+	ctx, err := observability.WithTracerProvider(t.Context(), tp)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -187,7 +193,7 @@ func TestProviderPredictSpanAttributes(t *testing.T) {
 		t.Fatalf("NewProvider: %v", err)
 	}
 
-	_, err = provider.Predict(context.Background(), inference.PredictRequest{
+	_, err = provider.Predict(ctx, inference.PredictRequest{
 		ModelName: "demo",
 		Inputs:    map[string]inference.Value{"input": inference.TextValue("x")},
 	})

@@ -4,47 +4,18 @@ description: "gokit: Create a change-named kbukum/ branch from an up-to-date mai
 user-invocable: true
 ---
 
-# Creating a branch for gokit work
+# Create a branch
 
-A branch and its eventual PR must read as a **standalone unit of change** to a reviewer who has no knowledge of how the work was planned or sequenced. Two rules make that true: branch off the right, up-to-date base, and name the branch after the actual change — nothing else.
-
-## Golden rule: branch off an up-to-date main
-
-Unless the request explicitly says to build on another branch, always base new work on the latest `origin/main`. Never branch off a stale local `main` or whatever happens to be checked out.
+1. Inspect Git state and preserve existing edits and staging. Confirm which changes belong on the branch.
+2. Fetch the remote and branch from the latest `origin/main`; use another base only when explicitly requested.
+3. Name the branch `kbukum/<short-change-summary>`, using lowercase kebab-case.
 
 ```bash
-git fetch origin                       # refresh remote refs first — always
-git switch -c <branch-name> origin/main
-```
-
-If (and only if) the request says to stack on top of another branch, base on that branch instead and keep it current:
-
-```bash
+git status --short
 git fetch origin
-git switch -c <branch-name> origin/<base-branch>   # explicit base, per the request
+git switch -c kbukum/<change-name> origin/main
 ```
 
-Before switching, check the working tree with `git status`. Uncommitted changes follow you onto the new branch — that is usually what you want when you have already started editing, but confirm it is intentional rather than dragging along unrelated edits.
+Name the capability or fix, not a plan, batch, step, session, or machine. Keep the branch understandable as a standalone change.
 
-## Naming: describe the change, not the plumbing
-
-The branch name captures **what the change does at a high level** — the capability, fix,
-or refactor a reviewer will see. It must not leak how the work was organized internally.
-
-- **Prefix with your username**, then a short kebab-case summary of the change:
-  `<username>/<short-change-summary>` (e.g. `kbukum/harden-skill-loader-path-safety`).
-- Name by the actual change: the module/capability touched
-  and the outcome (`kbukum/typed-di-cycle-detection`, `kbukum/storage-gcs-backend`).
-- Keep it short, lowercase, hyphen-separated; no spaces, no `wip`, no trailing noise.
-
-**Never** put internal, sequencing, or local-only information in the name — it is meaningless to a reviewer and wrong once the work is split into standalone PRs:
-
-- ❌ plan/batch/group numbers: `batch-5-storage`, `group7-cleanup`, `phase2`
-- ❌ task/ticket scaffolding that isn't the change itself, internal roadmap step numbers
-- ❌ session-, machine-, or tool-local detail
-
-If you catch yourself writing `batch-5-...`, ask "what does this change actually do?" and name it that instead. Each branch stands alone; there is no "batch 5" from a reviewer's perspective.
-
-## After the branch exists
-
-Per repo workflow, this skill **creates the branch and leaves the edits uncommitted** — the maintainer commits and pushes, and opens a PR only when explicitly asked. Do not commit, push, or open a PR as part of creating the branch.
+Uncommitted work may follow the switch; if it conflicts, stop rather than discard it. This skill does not authorize commits, pushes, or PRs.

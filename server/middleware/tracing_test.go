@@ -1,211 +1,195 @@
 package middleware_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
+	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server/middleware"
 )
 
-func setupTestTracer(t *testing.T) *tracetest.InMemoryExporter {
+func setupTestTracer(t *testing.T) (*tracetest.InMemoryExporter, trace.Tracer) {
 	t.Helper()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
 	t.Cleanup(func() {
-		_ = tp.Shutdown(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := tp.Shutdown(ctx); err != nil {
+			t.Errorf("shutting down tracer: %v", err)
+		}
 	})
-	return exporter
+	return exporter, tp.Tracer("test-service")
 }
 
-func TestTracing_CreatesSpan(t *testing.T) {
-	exporter := setupTestTracer(t)
+func tracingMiddleware(t *testing.T, cfg middleware.TracingConfig) middleware.Middleware {
+	t.Helper()
+	mw, err := middleware.Tracing(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mw
+}
 
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestTracingPublicInputDoesNotControlCorrelation(t *testing.T) {
+	t.Parallel()
+	exporter, tracer := setupTestTracer(t)
+	handler := tracingMiddleware(t, middleware.TracingConfig{Tracer: tracer})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if baggage.FromContext(r.Context()).Len() != 0 {
+			t.Error("incoming baggage reached handler")
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/api/test", http.NoBody)
-	handler.ServeHTTP(rr, req)
-
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/private-resource-sentinel?token=private-query-sentinel", http.NoBody)
+	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00")
+	req.Header.Set("X-Forwarded-Proto", "private-scheme-sentinel")
+	req.Header.Set("X-Request-Id", "private-request-sentinel")
+	req.Header.Set("Baggage", "token=private-baggage-sentinel")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
 	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d; public input must not suppress local sampling", len(spans))
 	}
-
-	if spans[0].Name != "GET /api/test" {
-		t.Errorf("expected span name 'GET /api/test', got %q", spans[0].Name)
+	if spans[0].SpanContext.TraceID().String() == "4bf92f3577b34da6a3ce929d0e0e4736" || spans[0].Parent.IsValid() {
+		t.Error("public caller selected the internal trace")
+	}
+	if spans[0].Name != "http.request" || strings.Contains(fmt.Sprint(spans[0]), "private-") {
+		t.Error("untrusted request value leaked into telemetry")
 	}
 }
 
-func TestTracing_SetsHTTPAttributes(t *testing.T) {
-	exporter := setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestTracingTrustedParentAndResponse(t *testing.T) {
+	t.Parallel()
+	exporter, tracer := setupTestTracer(t)
+	handler := tracingMiddleware(t, middleware.TracingConfig{
+		Tracer: tracer,
+		Propagator: propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{}, propagation.Baggage{}),
+		TrustParent: func(*http.Request) bool { return true },
+		Route:       func(*http.Request) string { return "/example.Service/Call" },
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if baggage.FromContext(r.Context()).Len() != 0 {
+			t.Error("incoming baggage reached handler")
+		}
 		w.WriteHeader(http.StatusCreated)
 	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "POST", "/users", http.NoBody)
-	handler.ServeHTTP(rr, req)
-
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
-	}
-
-	attrs := make(map[string]any)
-	for _, a := range spans[0].Attributes {
-		switch a.Value.Type().String() {
-		case "STRING":
-			attrs[string(a.Key)] = a.Value.AsString()
-		case "INT64":
-			attrs[string(a.Key)] = a.Value.AsInt64()
-		}
-	}
-
-	if attrs["http.method"] != "POST" {
-		t.Errorf("expected http.method=POST, got %v", attrs["http.method"])
-	}
-	if attrs["http.target"] != "/users" {
-		t.Errorf("expected http.target=/users, got %v", attrs["http.target"])
-	}
-	if attrs["http.status_code"] != int64(201) {
-		t.Errorf("expected http.status_code=201, got %v", attrs["http.status_code"])
-	}
-	if attrs["http.scheme"] != "http" {
-		t.Errorf("expected http.scheme=http, got %v", attrs["http.scheme"])
-	}
-}
-
-func TestTracing_SetsErrorStatusOn5xx(t *testing.T) {
-	exporter := setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/fail", http.NoBody)
-	handler.ServeHTTP(rr, req)
-
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
-	}
-
-	if spans[0].Status.Code.String() != "Error" {
-		t.Errorf("expected span status Error for 500, got %s", spans[0].Status.Code)
-	}
-}
-
-func TestTracing_NoErrorStatusOnSuccess(t *testing.T) {
-	exporter := setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/ok", http.NoBody)
-	handler.ServeHTTP(rr, req)
-
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
-	}
-
-	if spans[0].Status.Code.String() == "Error" {
-		t.Error("expected no error status for 200")
-	}
-}
-
-func TestTracing_InjectsTraceContextInResponse(t *testing.T) {
-	setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/", http.NoBody)
-	handler.ServeHTTP(rr, req)
-
-	tp := rr.Header().Get("Traceparent")
-	if tp == "" {
-		t.Error("expected Traceparent header in response")
-	}
-}
-
-func TestTracing_ExtractsIncomingTraceContext(t *testing.T) {
-	exporter := setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/", http.NoBody)
-	// Inject a valid W3C traceparent header.
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/example.Service/Call", http.NoBody)
+	req.TLS = &tls.ConnectionState{}
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
-	handler.ServeHTTP(rr, req)
-
-	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
-	}
-
-	traceID := spans[0].SpanContext.TraceID().String()
-	if traceID != "4bf92f3577b34da6a3ce929d0e0e4736" {
-		t.Errorf("expected trace ID from incoming header, got %s", traceID)
-	}
-}
-
-func TestTracing_PreservesResponseStatus(t *testing.T) {
-	setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-
+	req.Header.Set("Baggage", "secret=private-sentinel")
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/missing", http.NoBody)
 	handler.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusNotFound {
-		t.Errorf("expected 404, got %d", rr.Code)
-	}
-}
-
-func TestTracing_XForwardedProtoScheme(t *testing.T) {
-	exporter := setupTestTracer(t)
-
-	handler := middleware.Tracing("test-service")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), "GET", "/", http.NoBody)
-	req.Header.Set("X-Forwarded-Proto", "https")
-	handler.ServeHTTP(rr, req)
-
 	spans := exporter.GetSpans()
-	if len(spans) == 0 {
-		t.Fatal("expected at least one span")
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d", len(spans))
 	}
-
-	for _, a := range spans[0].Attributes {
-		if string(a.Key) == "http.scheme" && a.Value.AsString() != "https" {
-			t.Errorf("expected http.scheme=https, got %s", a.Value.AsString())
+	span := spans[0]
+	if span.Name != "/example.Service/Call" || span.SpanKind != trace.SpanKindServer ||
+		span.SpanContext.TraceID().String() != "4bf92f3577b34da6a3ce929d0e0e4736" ||
+		span.Parent.SpanID().String() != "00f067aa0ba902b7" || !span.Parent.IsRemote() {
+		t.Fatalf("incorrect trusted parent or canonical name: %+v", span)
+	}
+	response := propagation.TraceContext{}.Extract(t.Context(), propagation.HeaderCarrier(rr.Header()))
+	if got := trace.SpanContextFromContext(response); got.TraceID() != span.SpanContext.TraceID() || got.SpanID() != span.SpanContext.SpanID() {
+		t.Error("response trace does not identify server span")
+	}
+	if rr.Header().Get("Baggage") != "" || rr.Header().Get("X-Request-Id") != span.SpanContext.TraceID().String() {
+		t.Error("response correlation or baggage is incorrect")
+	}
+	attrs := make(map[string]string)
+	for _, a := range span.Attributes {
+		attrs[string(a.Key)] = a.Value.String()
+	}
+	for key, want := range map[string]string{
+		"http.request.method": "POST", "http.route": "/example.Service/Call",
+		"http.response.status_code": "201", "url.scheme": "https",
+	} {
+		if attrs[key] != want {
+			t.Errorf("%s = %q, want %q", key, attrs[key], want)
 		}
+	}
+}
+
+func TestTracingStatusAndInstanceIsolation(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusOK, http.StatusNotFound, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			t.Parallel()
+			exporter, tracer := setupTestTracer(t)
+			other, _ := setupTestTracer(t)
+			handler := tracingMiddleware(t, middleware.TracingConfig{Tracer: tracer})(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			req := httptest.NewRequestWithContext(t.Context(), "private-method-sentinel", "/", http.NoBody)
+			req.Header.Set("X-Forwarded-Proto", "https")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			spans := exporter.GetSpans()
+			if rr.Code != status || len(spans) != 1 || len(other.GetSpans()) != 0 {
+				t.Fatal("response changed or providers shared state")
+			}
+			if (spans[0].Status.Code == codes.Error) != (status >= 500) {
+				t.Fatal("wrong span status")
+			}
+			for _, a := range spans[0].Attributes {
+				if a.Key == "url.scheme" && a.Value.AsString() != "http" {
+					t.Error("forwarded header selected scheme")
+				}
+				if a.Key == "http.request.method" && a.Value.AsString() != "_OTHER" {
+					t.Error("unbounded method attribute")
+				}
+			}
+		})
+	}
+}
+
+func TestTracingRequiresTracer(t *testing.T) {
+	t.Parallel()
+	if mw, err := middleware.Tracing(middleware.TracingConfig{}); err == nil || mw != nil {
+		t.Fatal("missing tracer accepted")
+	}
+}
+
+func TestTracingRequestLogCorrelation(t *testing.T) {
+	t.Parallel()
+	exporter, tracer := setupTestTracer(t)
+	var output bytes.Buffer
+	log, err := logging.New(&logging.Config{Level: "debug", Format: "json"}, "test", logging.WithWriter(&output))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := tracingMiddleware(t, middleware.TracingConfig{Tracer: tracer})(
+		middleware.RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+		})),
+	)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/private-path-sentinel?token=private-query-sentinel", http.NoBody)
+	req.Header.Set("X-Request-Id", "private-request-sentinel")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+	spans := exporter.GetSpans()
+	if len(spans) != 1 {
+		t.Fatalf("spans = %d", len(spans))
+	}
+	text := output.String()
+	if strings.Contains(text, "private-") {
+		t.Error("request input entered log fields")
+	}
+	if !strings.Contains(text, spans[0].SpanContext.TraceID().String()) ||
+		!strings.Contains(text, spans[0].SpanContext.SpanID().String()) {
+		t.Error("request logs lack trace/span correlation")
 	}
 }

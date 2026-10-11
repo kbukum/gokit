@@ -9,6 +9,7 @@ import (
 	"time"
 
 	connectrpc "connectrpc.com/connect"
+	"go.opentelemetry.io/otel/trace"
 
 	apperrors "github.com/kbukum/gokit/errors"
 	errorrpc "github.com/kbukum/gokit/errors/rpc"
@@ -57,8 +58,8 @@ func TestNormalizingInterceptorStreamingContracts(t *testing.T) {
 	if connectrpc.CodeOf(got) != connectrpc.CodeInternal || strings.Contains(got.Error(), "private") {
 		t.Fatalf("stream normalization = %v", got)
 	}
-	if !strings.Contains(logs.String(), "private backend failure") || !strings.Contains(logs.String(), "trace-123") || !strings.Contains(logs.String(), "/test.Service/Stream") {
-		t.Fatalf("private diagnostic missing from injected logger: %s", &logs)
+	if strings.Contains(logs.String(), "private backend failure") || !strings.Contains(logs.String(), "trace-123") || !strings.Contains(logs.String(), "/test.Service/Stream") || !strings.Contains(logs.String(), "INTERNAL_ERROR") {
+		t.Fatalf("safe diagnostic or privacy contract failed: %s", &logs)
 	}
 	nextCalled := false
 	client := interceptor.WrapStreamingClient(func(context.Context, connectrpc.Spec) connectrpc.StreamingClientConn {
@@ -96,5 +97,31 @@ func TestNormalizingInterceptorHonorsSafeBoundaryClassification(t *testing.T) {
 	_, err = got(t.Context(), newProtoRequest())
 	if connectrpc.CodeOf(err) != connectrpc.CodeInternal || strings.Contains(err.Error(), "private") || strings.Contains(logs.String(), "private") {
 		t.Fatalf("private classification crossed the boundary: %v; logs %s", err, &logs)
+	}
+}
+
+func TestToConnectErrorContextAttachesTheActiveTraceID(t *testing.T) {
+	t.Parallel()
+	traceID := trace.TraceID{0x4b, 0xf9, 0x2f, 0x35, 0x77, 0xb3, 0x4d, 0xa6, 0xa3, 0xce, 0x92, 0x9d, 0x0e, 0x0e, 0x47, 0x36}
+	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: traceID, SpanID: trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}, TraceFlags: trace.FlagsSampled,
+	}))
+	wire, err := ToConnectErrorContext(ctx, errors.New("private cause"), "test.Service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := DecodeError(wire)
+	if err != nil || decoded.TraceID != traceID.String() || decoded.Code != apperrors.ErrCodeInternal || strings.Contains(wire.Message(), "private cause") {
+		t.Fatalf("decoded = %+v, %v", decoded, err)
+	}
+	untraced, err := ToConnectErrorContext(context.Background(), apperrors.Unauthorized("Missing key"), "test.Service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded, err := DecodeError(untraced); err != nil || decoded.TraceID != "" || decoded.Code != apperrors.ErrCodeUnauthorized {
+		t.Fatalf("untraced = %+v, %v", decoded, err)
+	}
+	if wire, err := ToConnectErrorContext(ctx, nil, "test.Service"); err != nil || wire.Code() != connectrpc.CodeInternal {
+		t.Fatalf("nil error = %v, %v", wire, err)
 	}
 }

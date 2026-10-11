@@ -4,13 +4,13 @@
 
 ## Versioning surface
 
-`gokit` is a Go *workspace* with one root module (`github.com/kbukum/gokit`) and 53 sub-modules (e.g. `github.com/kbukum/gokit/storage`, `…/server`, …). All modules are released in lock-step with path-scoped tags. Consumers should pin only the modules they import.
+`gokit` has one root module and opt-in sub-modules. Releases use path-scoped tags; consumers pin only the modules they import. Discover the current module set with `toven modules`.
 
 ## Pre-1.0 (`0.x.y`)
 
 While the project is in `0.x.y`:
 
-- **MINOR** (`0.X.0`) bumps **may** contain breaking API changes. Every break is documented in `CHANGELOG.md` under `### Changed (Breaking API Changes)` for the affected module.
+- **MINOR** (`0.X.0`) bumps **may** contain breaking API changes. Summarize each affected module's public-contract changes under `### Breaking Changes` in `CHANGELOG.md`.
 - **PATCH** (`0.x.Y`) bumps are bug fixes, performance improvements, internal refactors, and **non-breaking** additions. PATCH releases never break the public API.
 - We will not promote a module to `1.0.0` until its public API is settled and we are willing to commit to the full `1.x` compatibility contract for at least 12 months.
 

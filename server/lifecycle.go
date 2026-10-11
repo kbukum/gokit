@@ -3,9 +3,51 @@ package server
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"sync"
 	"time"
 )
+
+// freshConns tracks connections that have not yet sent a request byte. net/http's Shutdown counts such a
+// connection as active for five seconds, so one preconnect or TCP probe would hold every drain to its deadline
+// although it carries no request to lose. Once Shutdown has closed the listeners, they are closed instead.
+type freshConns struct {
+	mu      sync.Mutex
+	closing bool
+	conns   map[net.Conn]struct{}
+}
+
+// track is the server's ConnState hook.
+func (f *freshConns) track(c net.Conn, state http.ConnState) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if state != http.StateNew {
+		delete(f.conns, c)
+		return
+	}
+	if f.closing {
+		// Accepted as the listeners closed; it never reached a handler.
+		_ = c.Close()
+		return
+	}
+	if f.conns == nil {
+		f.conns = make(map[net.Conn]struct{})
+	}
+	f.conns[c] = struct{}{}
+}
+
+// close runs once Shutdown has closed the listeners; a request still unread on one of these connections would
+// have been refused by admission anyway.
+func (f *freshConns) close() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closing = true
+	for c := range f.conns {
+		_ = c.Close()
+	}
+	clear(f.conns)
+}
 
 // Quiesce marks readiness false and rejects new public requests before waiting for existing work.
 func (s *Server) Quiesce() error {

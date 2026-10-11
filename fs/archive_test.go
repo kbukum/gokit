@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"errors"
@@ -132,6 +133,16 @@ func TestExtractTarGzRejectsSymlink(t *testing.T) {
 	if _, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits()); err == nil {
 		t.Fatal("expected symlink rejection")
 	}
+}
+
+func TestExtractTarGzRejectsHardLink(t *testing.T) {
+	t.Parallel()
+	archivePath := filepath.Join(t.TempDir(), "link.tar.gz")
+	fstestutil.WriteTarGz(t, archivePath, fstestutil.TarGzEntry{
+		Name: "link", Typeflag: tar.TypeLink, Linkname: "../outside",
+	})
+	_, err := ExtractTarGz(archivePath, t.TempDir(), DefaultExtractLimits())
+	assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
 }
 
 func TestExtractTarGzCreatesDirectoryMember(t *testing.T) {
@@ -299,7 +310,8 @@ func TestSanitizeArchivePath(t *testing.T) {
 		{"member equals root", root, ".", false},
 		{"dest with trailing separator", root + sep, "file.txt", false},
 		{"traversal escape", root, filepath.Join("..", "evil"), true},
-		{"absolute escape", root, sep + "etc", false}, // Join cleans a leading sep under root
+		{"absolute escape", root, sep + "etc", true},
+		{"legitimate dots in filename", root, "file..txt", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -325,5 +337,110 @@ func TestSanitizeArchivePathRejectsSiblingPrefix(t *testing.T) {
 	// A member crafted to resolve into a sibling directory sharing the prefix.
 	if _, err := sanitizeArchivePath(root, filepath.Join("..", "output", "x")); err == nil {
 		t.Fatal("expected sibling-prefix escape to be rejected")
+	}
+}
+
+func TestArchiveExtractionPathBoundary(t *testing.T) {
+	t.Parallel()
+	formats := []struct {
+		name    string
+		write   func(*testing.T, string, string)
+		extract func(string, string, ExtractLimits) ([]string, error)
+	}{
+		{"tar", func(t *testing.T, path, member string) {
+			fstestutil.WriteTarGz(t, path, fstestutil.TarFile(member, "replacement"))
+		}, ExtractTarGz},
+		{"zip", func(t *testing.T, path, member string) {
+			fstestutil.WriteZip(t, path, fstestutil.ZipFile(member, "replacement"))
+		}, ExtractZip},
+	}
+	for _, format := range formats {
+		t.Run(format.name, func(t *testing.T) {
+			t.Parallel()
+			for _, scenario := range []string{
+				"traversal", "nested traversal", "sibling prefix", "absolute", "drive prefix",
+				"parent symlink", "leaf symlink", "nested file", "dots in filename",
+			} {
+				t.Run(scenario, func(t *testing.T) {
+					t.Parallel()
+					base := t.TempDir()
+					dest := filepath.Join(base, "out")
+					outside := filepath.Join(base, "output")
+					if err := os.MkdirAll(outside, 0o750); err != nil {
+						t.Fatal(err)
+					}
+					victim := filepath.Join(outside, "victim")
+					if err := os.WriteFile(victim, []byte("original"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					before, err := os.Stat(victim)
+					if err != nil {
+						t.Fatal(err)
+					}
+					member := "nested/file.txt"
+					wantErr := true
+					switch scenario {
+					case "traversal":
+						member = "../output/victim"
+					case "nested traversal":
+						member = "nested/../../output/victim"
+					case "sibling prefix":
+						member = "../output/new/victim"
+					case "absolute":
+						member = filepath.ToSlash(victim)
+					case "drive prefix":
+						member = "C:/output/victim"
+					case "parent symlink", "leaf symlink":
+						if err := os.MkdirAll(dest, 0o750); err != nil {
+							t.Fatal(err)
+						}
+						linkTarget := outside
+						member = "link/victim"
+						if scenario == "leaf symlink" {
+							linkTarget = victim
+							member = "link"
+						}
+						if err := os.Symlink(linkTarget, filepath.Join(dest, "link")); err != nil {
+							t.Fatal(err)
+						}
+					case "nested file":
+						wantErr = false
+					case "dots in filename":
+						member = "nested/file..txt"
+						wantErr = false
+					}
+					archive := filepath.Join(base, "archive")
+					format.write(t, archive, member)
+					paths, err := format.extract(archive, dest+string(filepath.Separator), DefaultExtractLimits())
+					if wantErr {
+						assertAppErrorCode(t, err, goerrors.ErrCodeInvalidInput)
+					} else {
+						if err != nil {
+							t.Fatal(err)
+						}
+						want := filepath.Join(dest, member)
+						if len(paths) != 1 || paths[0] != want {
+							t.Fatalf("extracted paths = %v, want [%s]", paths, want)
+						}
+						got, err := os.ReadFile(want)
+						if err != nil || string(got) != "replacement" {
+							t.Fatalf("extracted content = %q, %v", got, err)
+						}
+					}
+					got, err := os.ReadFile(victim)
+					if err != nil || string(got) != "original" {
+						t.Fatalf("outside content changed: %q, %v", got, err)
+					}
+					after, err := os.Stat(victim)
+					if err != nil || after.Mode() != before.Mode() {
+						t.Fatalf("outside permissions changed: %v", err)
+					}
+					entries, err := os.ReadDir(outside)
+					if err != nil || len(entries) != 1 || entries[0].Name() != "victim" {
+						t.Fatalf("outside directory changed: %v, %v", entries, err)
+					}
+				})
+			}
+		})
 	}
 }

@@ -3,11 +3,44 @@ package observability
 import (
 	"context"
 	"fmt"
+	"io"
+	"reflect"
 	"testing"
+	"time"
 
+	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 )
+
+func TestInitTracerDoesNotRegisterGlobals(t *testing.T) {
+	previousProvider := otel.GetTracerProvider()
+	previousPropagator := otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		if otel.GetTracerProvider() != previousProvider {
+			otel.SetTracerProvider(previousProvider)
+		}
+		if !reflect.DeepEqual(otel.GetTextMapPropagator(), previousPropagator) {
+			otel.SetTextMapPropagator(previousPropagator)
+		}
+	})
+	cfg := DefaultTracerConfig("isolated")
+	provider, err := InitTracer(t.Context(), &cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := provider.Shutdown(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	if otel.GetTracerProvider() != previousProvider || !reflect.DeepEqual(otel.GetTextMapPropagator(), previousPropagator) {
+		t.Error("tracer construction mutated process-wide telemetry")
+	}
+}
 
 func TestDefaultTracerConfig(t *testing.T) {
 	cfg := DefaultTracerConfig("test-service")
@@ -73,7 +106,7 @@ func TestTracerConfigZeroValue(t *testing.T) {
 }
 
 func TestTracer(t *testing.T) {
-	tracer := Tracer("test-tracer")
+	tracer := Tracer(t.Context(), "test-tracer")
 	if tracer == nil {
 		t.Fatal("expected non-nil tracer")
 	}
@@ -87,8 +120,102 @@ func TestStartSpan(t *testing.T) {
 	if span == nil {
 		t.Fatal("expected non-nil span")
 	}
+
 	if ctx == nil {
 		t.Fatal("expected non-nil context")
+	}
+}
+
+func TestHelpersUseInstanceOwnedParent(t *testing.T) {
+	t.Parallel()
+	for _, helper := range []string{"StartSpan", "StartNamedSpan", "OperationContext"} {
+		t.Run(helper, func(t *testing.T) {
+			t.Parallel()
+			exporter := tracetest.NewInMemoryExporter()
+			tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+			defer func() { _ = tp.Shutdown(t.Context()) }()
+			ctx, parent := tp.Tracer("owned").Start(t.Context(), "parent")
+			var child trace.Span
+			switch helper {
+			case "StartSpan":
+				_, child = StartSpan(ctx, "child")
+			case "StartNamedSpan":
+				childCtx, _ := StartNamedSpan(ctx, "named", "child")
+				child = trace.SpanFromContext(childCtx)
+			case "OperationContext":
+				oc := NewOperationContext(OperationSpec{ServiceName: "owned"})
+				_, child = oc.StartSpanForOperation(ctx, "child")
+			}
+			if !child.IsRecording() || child.SpanContext().SpanID() == parent.SpanContext().SpanID() {
+				t.Error("helper did not create a recording child span")
+			}
+			child.End()
+			parent.End()
+			spans := exporter.GetSpans()
+			if len(spans) != 2 || !spans[0].Parent.Equal(spans[1].SpanContext) {
+				t.Fatalf("expected owned parent and child: %+v", spans)
+			}
+		})
+	}
+}
+
+func TestWithTracerProviderIsolatesRootOperations(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"first", "second"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			exporter := tracetest.NewInMemoryExporter()
+			tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+			ctx := tracerContext(t, tp)
+			_, span := StartNamedSpan(ctx, name, "root")
+			span.End()
+			spans := exporter.GetSpans()
+			if len(spans) != 1 || spans[0].Parent.IsValid() || spans[0].InstrumentationScope.Name != name {
+				t.Fatalf("root did not use the injected instance: %+v", spans)
+			}
+		})
+	}
+	var nilProvider *sdktrace.TracerProvider
+	for _, provider := range []trace.TracerProvider{nil, nilProvider} {
+		if ctx, err := WithTracerProvider(t.Context(), provider); ctx != nil || err == nil {
+			t.Fatal("nil tracer provider was accepted")
+		}
+	}
+}
+
+func TestTraceComponentInjectsRootOperations(t *testing.T) {
+	t.Parallel()
+	exporter := tracetest.NewInMemoryExporter()
+	c, err := NewTraceComponent(DefaultTracerConfig("owned"), componentLogger(t, io.Discard),
+		WithTraceExporter(func(context.Context) (sdktrace.SpanExporter, error) { return exporter, nil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		if err := c.Stop(ctx); err != nil {
+			t.Error(err)
+		}
+	})
+	ctx, err := WithTracerProvider(t.Context(), c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	_, span := StartSpan(ctx, "root")
+	if !span.IsRecording() {
+		t.Error("component injection did not create a recording root")
+	}
+	span.End()
+	if err := c.Stop(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var nilComponent *TraceComponent
+	if _, err := WithTracerProvider(t.Context(), nilComponent); err == nil {
+		t.Error("typed-nil component was accepted")
 	}
 }
 
@@ -112,9 +239,9 @@ func TestSetSpanAttributes(t *testing.T) {
 	// Use SDK tracer so span.IsRecording() returns true
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
-	ctx, span := StartSpan(context.Background(), "test-attrs")
+	ctx, span := StartSpan(base, "test-attrs")
 	defer span.End()
 
 	// Test all supported types - should not panic
@@ -137,9 +264,9 @@ func TestSetSpanAttributesNoSpan(t *testing.T) {
 func TestSetSpanError(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
+	base := tracerContext(t, tp)
 
-	ctx, span := StartSpan(context.Background(), "test-error")
+	ctx, span := StartSpan(base, "test-error")
 	defer span.End()
 
 	SetSpanError(ctx, fmt.Errorf("test error"))
@@ -227,6 +354,74 @@ func TestInitTracerSamplingRates(t *testing.T) {
 	}
 }
 
+func TestTracerSamplingFollowsAcceptedParent(t *testing.T) {
+	tests := []struct {
+		name          string
+		sampleRate    float64
+		parentSampled bool
+	}{
+		{"unsampled parent overrides always sample", 1.0, false},
+		{"sampled parent overrides never sample", 0.0, true},
+		{"sampled parent overrides ratio", 0.5, true},
+		{"unsampled parent overrides ratio", 0.5, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			config := DefaultTracerConfig("sampling")
+			config.SampleRate = tc.sampleRate
+			cfg, err := normalizedTracerConfig(&config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tp, err := newTracerProvider(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+			flags := trace.TraceFlags(0)
+			if tc.parentSampled {
+				flags = trace.FlagsSampled
+			}
+			parent := trace.NewSpanContext(trace.SpanContextConfig{
+				TraceID:    trace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},
+				SpanID:     trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8},
+				TraceFlags: flags,
+				Remote:     true,
+			})
+			ctx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
+			_, span := tp.Tracer("sampling").Start(ctx, "child")
+			defer span.End()
+			if got := span.SpanContext().IsSampled(); got != tc.parentSampled {
+				t.Fatalf("sampled = %v, want parent decision %v", got, tc.parentSampled)
+			}
+		})
+	}
+}
+
+func TestTracerSamplingAppliesRateToRoots(t *testing.T) {
+	for _, tc := range []struct {
+		rate float64
+		want bool
+	}{{1.0, true}, {0.0, false}} {
+		config := DefaultTracerConfig("sampling")
+		config.SampleRate = tc.rate
+		cfg, err := normalizedTracerConfig(&config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tp, err := newTracerProvider(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, span := tp.Tracer("sampling").Start(context.Background(), "root")
+		if got := span.SpanContext().IsSampled(); got != tc.want {
+			t.Errorf("rate %v: sampled = %v, want %v", tc.rate, got, tc.want)
+		}
+		span.End()
+		_ = tp.Shutdown(context.Background())
+	}
+}
+
 func TestInitTracerSecure(t *testing.T) {
 	cfg := &TracerConfig{
 		ServiceName:    "test",
@@ -250,9 +445,7 @@ func TestInitTracerSecure(t *testing.T) {
 func TestSpanNestingParentChild(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
-
-	ctx := context.Background()
+	ctx := tracerContext(t, tp)
 	ctx, parentSpan := StartSpan(ctx, "parent-op")
 	_, childSpan := StartSpan(ctx, "child-op")
 	childSpan.End()
@@ -283,9 +476,7 @@ func TestSpanNestingParentChild(t *testing.T) {
 func TestThreeLevelSpanNesting(t *testing.T) {
 	exporter := tracetest.NewInMemoryExporter()
 	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
-	setTracerProvider(t, tp)
-
-	ctx := context.Background()
+	ctx := tracerContext(t, tp)
 	ctx, grandparent := StartSpan(ctx, "grandparent")
 	ctx, parent := StartSpan(ctx, "parent")
 	_, child := StartSpan(ctx, "child")

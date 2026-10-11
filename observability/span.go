@@ -87,7 +87,7 @@ type Span struct {
 	span trace.Span
 }
 
-// StartNamedSpan starts a span from a named tracer.
+// StartNamedSpan starts a span from the context-owned named tracer; inject a provider with WithTracerProvider for operations without an active local span.
 func StartNamedSpan(ctx context.Context, tracerName, spanName string, opts ...SpanOption) (context.Context, *Span) {
 	cfg := spanOptions{kind: SpanKindInternal}
 	for _, opt := range opts {
@@ -99,7 +99,7 @@ func StartNamedSpan(ctx context.Context, tracerName, spanName string, opts ...Sp
 		startOpts = append(startOpts, trace.WithAttributes(toOTelSpanAttributes(cfg.attributes)...))
 	}
 
-	ctx, span := Tracer(tracerName).Start(ctx, spanName, startOpts...)
+	ctx, span := Tracer(ctx, tracerName).Start(ctx, spanName, startOpts...)
 	return ctx, &Span{span: span}
 }
 

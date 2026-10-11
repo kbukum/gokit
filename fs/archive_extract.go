@@ -202,12 +202,6 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 	if components == 0 {
 		return "", false, true, nil
 	}
-	// Defense-in-depth containment barrier: the component loop above already
-	// guarantees containment (it rejects "..", absolute, and drive-prefixed
-	// members, so filepath.Join under dest cannot escape), but the member name is
-	// still tainted input flowing to a filesystem sink. Re-resolving it through
-	// sanitizeArchivePath re-establishes the invariant at the boundary rather than
-	// trusting the loop by proximity.
 	target, err = sanitizeArchivePath(dest, cleaned)
 	if err != nil {
 		return "", false, false, escapeError(archivePath, name)
@@ -215,20 +209,13 @@ func memberTarget(archivePath, dest, name string) (target string, isDir, skip bo
 	return target, trailingSlash, false, nil
 }
 
-// sanitizeArchivePath joins a member name under dest and returns the result only when
-// it stays within dest. It is a defense-in-depth barrier at the filesystem boundary:
-// callers (memberTarget) already reject traversal components, so in normal operation
-// this never rejects. Containment is enforced with a component-aware filepath.Rel
-// guard, which — unlike a string-prefix check against dest+separator — correctly
-// admits the destination root itself and destinations whose cleaned form already ends
-// in a separator, while still rejecting a sibling-prefix escape ("/out" vs "/output").
+// sanitizeArchivePath admits only local member names, then verifies component-aware containment under dest.
 func sanitizeArchivePath(dest, name string) (target string, err error) {
+	if !filepath.IsLocal(name) {
+		return "", fmt.Errorf("archive member %q is not a local path", name)
+	}
 	root := filepath.Clean(dest)
 	target = filepath.Join(root, name)
-	// Explicit containment barrier at the filesystem boundary: the cleaned join must
-	// stay within root's subtree. filepath.Rel compares whole path components, so it
-	// neither admits a sibling-prefix escape nor rejects legitimate destinations that
-	// a naive string-prefix check would.
 	rel, err := filepath.Rel(root, target)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("archive member %q escapes destination %q", name, dest)

@@ -61,6 +61,22 @@ func TestWriteProblemDetails(t *testing.T) {
 	}
 }
 
+func TestWriteProblemDetailsLogsReasonButNeverCause(t *testing.T) {
+	t.Parallel()
+	var logs bytes.Buffer
+	log, err := logging.New(&logging.Config{Level: "debug", Format: "json"}, "problem-test", logging.WithWriter(&logs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/resource", http.NoBody)
+	req = req.WithContext(logging.ContextWithLogger(req.Context(), log))
+	failure := apperrors.ServiceUnavailable("peer").WithReason("PEER_UNAVAILABLE").WithCause(errors.New("peer said secret-sentinel"))
+	httpx.WriteProblemDetails(httptest.NewRecorder(), req, failure)
+	if !strings.Contains(logs.String(), `"reason":"PEER_UNAVAILABLE"`) || strings.Contains(logs.String(), "secret-sentinel") {
+		t.Fatalf("logs = %s", logs.String())
+	}
+}
+
 type failedProblemWriter struct{ *httptest.ResponseRecorder }
 
 func (failedProblemWriter) Write([]byte) (int, error) { return 0, errors.New("connection closed") }
@@ -75,7 +91,7 @@ func TestWriteProblemDetailsLogsWriteFailure(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(logging.ContextWithLogger(req.Context(), log))
 	httpx.WriteProblemDetails(failedProblemWriter{httptest.NewRecorder()}, req, apperrors.Unauthorized(""))
-	if !strings.Contains(logs.String(), "HTTP problem response write failed") || !strings.Contains(logs.String(), "connection closed") {
+	if !strings.Contains(logs.String(), "HTTP_RESPONSE_WRITE_FAILED") || strings.Contains(logs.String(), "connection closed") {
 		t.Fatalf("missing write failure log: %s", &logs)
 	}
 }

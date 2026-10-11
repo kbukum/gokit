@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -10,9 +11,7 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// RequestLogger returns middleware that logs every request with method, path, status code,
-// and duration. Health-check paths are silently skipped. A nil logger falls back to a
-// per-middleware default so the constructor never reaches for a package global.
+// RequestLogger logs the registered route, method, status and duration using context correlation. Install inside Tracing to share its span and route. Raw URLs and header-supplied IDs are not logged. Health checks are skipped; a nil logger uses an instance-local default.
 func RequestLogger(log *logging.Logger) Middleware {
 	if log == nil {
 		log = logging.NewDefault("middleware")
@@ -30,16 +29,12 @@ func RequestLogger(log *logging.Logger) Middleware {
 			duration := time.Since(start)
 
 			fields := map[string]any{
-				"method":      r.Method,
-				"path":        r.URL.Path,
+				"method":      traceMethod(r.Method),
+				"path":        requestLogRoute(r),
 				"status":      sw.status,
 				"duration_ms": duration.Milliseconds(),
 			}
-			if id := r.Header.Get("X-Request-Id"); id != "" {
-				fields["request_id"] = id
-			}
-
-			logByStatus(log, fields, sw.status)
+			logByStatus(r.Context(), log, fields, sw.status)
 		})
 	}
 }
@@ -63,17 +58,16 @@ func GinRequestLogger(log *logging.Logger) gin.HandlerFunc {
 
 		latency := time.Since(start)
 		status := c.Writer.Status()
-		path := c.Request.URL.Path
-		if q := c.Request.URL.RawQuery; q != "" {
-			path = path + "?" + q
+		path := c.FullPath()
+		if path == "" {
+			path = "unmatched"
 		}
 
 		fields := map[string]any{
-			"method":  c.Request.Method,
+			"method":  traceMethod(c.Request.Method),
 			"path":    path,
 			"status":  status,
 			"latency": latency.String(),
-			"client":  c.ClientIP(),
 		}
 
 		if status >= 500 {
@@ -82,7 +76,7 @@ func GinRequestLogger(log *logging.Logger) gin.HandlerFunc {
 		if latency > 500*time.Millisecond {
 			fields["slow"] = true
 		}
-		logByStatus(log, fields, status)
+		logByStatus(c.Request.Context(), log, fields, status)
 	}
 }
 
@@ -109,13 +103,23 @@ func isHealthEndpoint(path string) bool {
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
 // The logger must be non-nil (constructors default it). Shared by both Gin and net/http
 // request logger middleware.
-func logByStatus(log *logging.Logger, fields map[string]any, status int) {
+func logByStatus(ctx context.Context, log *logging.Logger, fields map[string]any, status int) {
 	switch {
 	case status >= 500:
-		log.Error("Request completed", fields)
+		log.ErrorCtx(ctx, "Request completed", fields)
 	case status >= 400:
-		log.Warn("Request completed", fields)
+		log.WarnCtx(ctx, "Request completed", fields)
 	default:
-		log.Debug("Request completed", fields)
+		log.DebugCtx(ctx, "Request completed", fields)
 	}
+}
+
+func requestLogRoute(r *http.Request) string {
+	if route, ok := r.Context().Value(traceRouteKey{}).(string); ok && route != "" {
+		return route
+	}
+	if r.Pattern != "" {
+		return r.Pattern
+	}
+	return "unmatched"
 }
