@@ -23,6 +23,8 @@ type fakeObjectClient struct {
 
 func newFakeClient() *fakeObjectClient { return &fakeObjectClient{objects: map[string]string{}} }
 
+func (f *fakeObjectClient) Close() error { return nil }
+
 func (f *fakeObjectClient) Put(_ context.Context, path string, r io.Reader) error {
 	if f.fail != nil {
 		return f.fail
@@ -251,7 +253,7 @@ func TestRegisteredFactoryConstructsStorage(t *testing.T) {
 	if !ok {
 		t.Fatal("gcs provider missing")
 	}
-	store, err := factory(storage.Config{}, nil)
+	store, err := factory(t.Context(), storage.Config{}, nil)
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}

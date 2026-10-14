@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -115,13 +116,41 @@ func ParseJSONLines(data []byte) ([]Record, error) {
 
 // decodeObject decodes a single JSON object into a Record, rejecting any non-object shape.
 func decodeObject(data []byte) (Record, error) {
-	var fields map[string]Value
 	dec := json.NewDecoder(bytes.NewReader(data))
-	if err := dec.Decode(&fields); err != nil {
+	token, err := dec.Token()
+	if err != nil {
 		return Record{}, err
 	}
-	if fields == nil {
+	if token != json.Delim('{') {
 		return Record{}, apperrors.InvalidInput("json", "expected a JSON object")
+	}
+	fields := make(map[string]Value)
+	for dec.More() {
+		token, err := dec.Token()
+		if err != nil {
+			return Record{}, err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return Record{}, apperrors.InvalidInput("json", "expected an object field")
+		}
+		if _, exists := fields[name]; exists {
+			return Record{}, apperrors.InvalidInput("json", "duplicate object field")
+		}
+		var value Value
+		if err := dec.Decode(&value); err != nil {
+			return Record{}, err
+		}
+		fields[name] = value
+	}
+	if _, err := dec.Token(); err != nil {
+		return Record{}, err
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return Record{}, err
+		}
+		return Record{}, apperrors.InvalidInput("json", "trailing object data")
 	}
 	return Record{fields: fields}, nil
 }

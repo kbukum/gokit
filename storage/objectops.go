@@ -1,10 +1,31 @@
-// Single-object helpers: Head, Copy, and Rename against any Storage.
+// Single-object helpers: Create, Head, Copy, and Rename against any Storage.
 package storage
 
 import (
 	"context"
 	"fmt"
+	"io"
 )
+
+// Create writes an object only if its key is absent, through a backend that
+// implements [CreateProvider]. An occupied key returns an error wrapping
+// [ErrExists]. Backends without an atomic create return [ErrCreateUnsupported]:
+// an existence check followed by an upload would race, so there is no fallback.
+func Create(ctx context.Context, s Storage, path string, reader io.Reader) error {
+	switch {
+	case s == nil:
+		return fmt.Errorf("storage: Create requires a non-nil store")
+	case path == "":
+		return fmt.Errorf("storage: Create requires a non-empty path")
+	case reader == nil:
+		return fmt.Errorf("storage: Create requires a reader")
+	}
+	cp, ok := s.(CreateProvider)
+	if !ok {
+		return ErrCreateUnsupported
+	}
+	return cp.Create(ctx, path, reader)
+}
 
 // Head returns metadata for a single object. Backends that implement
 // [HeadProvider] answer directly; otherwise Head falls back to an exact-path

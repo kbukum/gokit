@@ -468,7 +468,7 @@ func TestRegisterFactoryConstructsStorage(t *testing.T) {
 	if !ok {
 		t.Fatal("provider missing")
 	}
-	got, err := f(storage.Config{}, (*logging.Logger)(nil))
+	got, err := f(t.Context(), storage.Config{}, (*logging.Logger)(nil))
 	if err != nil || got == nil {
 		t.Fatalf("factory = %v, %v", got, err)
 	}

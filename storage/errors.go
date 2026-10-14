@@ -11,6 +11,15 @@ import (
 // errors.Is regardless of the underlying store.
 var ErrNotFound = errors.New("storage: object not found")
 
+// ErrExists reports a [Create] whose key already holds an object. Every backend
+// wraps it (via [ExistsError]) so callers can test for an occupied key with
+// errors.Is regardless of the underlying store.
+var ErrExists = errors.New("storage: object already exists")
+
+// ErrCreateUnsupported reports a [Create] against a backend without an atomic
+// create-if-absent operation. It wraps [errors.ErrUnsupported].
+var ErrCreateUnsupported = fmt.Errorf("storage: backend cannot create objects atomically: %w", errors.ErrUnsupported)
+
 // ErrSameObject reports a Copy or Rename whose source and destination keys are
 // identical. Such a request cannot duplicate or move an object and, for backends
 // that copy in place or copy-then-delete, would destroy it, so the package-level
@@ -20,6 +29,11 @@ var ErrSameObject = errors.New("storage: source and destination path are the sam
 // NotFoundError wraps [ErrNotFound] with the missing object's path.
 func NotFoundError(path string) error {
 	return fmt.Errorf("%w: %s", ErrNotFound, path)
+}
+
+// ExistsError wraps [ErrExists] with the occupied object's path.
+func ExistsError(path string) error {
+	return fmt.Errorf("%w: %s", ErrExists, path)
 }
 
 // CheckDistinctPaths returns an [ErrSameObject] error when srcPath equals

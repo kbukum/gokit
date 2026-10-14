@@ -259,7 +259,7 @@ func TestRegisterFactoryConstructs(t *testing.T) {
 	if !ok {
 		t.Fatal("s3 provider missing")
 	}
-	s, err := f(storage.Config{}, (*logging.Logger)(nil))
+	s, err := f(t.Context(), storage.Config{}, (*logging.Logger)(nil))
 	if err != nil || s == nil {
 		t.Fatalf("factory = %v, %v", s, err)
 	}

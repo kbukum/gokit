@@ -11,9 +11,48 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/kbukum/gokit/security"
 )
+
+func TestWithoutRedirectsPreservesOwnedTransport(t *testing.T) {
+	t.Parallel()
+	var forwarded atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		forwarded.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+	}))
+	defer source.Close()
+	original := source.Client()
+	original.Timeout = time.Second
+	safe, err := WithoutRedirects(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if safe == original || safe.Transport != original.Transport || safe.Timeout != original.Timeout || original.CheckRedirect != nil {
+		t.Fatal("redirect policy changed the injected client's ownership or settings")
+	}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, source.URL, http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("X-API-Key", "redirect-test")
+	response, err := safe.Do(request)
+	if response != nil {
+		response.Body.Close()
+	}
+	if !errors.Is(err, ErrRedirect) || forwarded.Load() != 0 {
+		t.Fatalf("credential-bearing redirect was not refused: %v", err)
+	}
+	if _, err := WithoutRedirects(nil); err == nil {
+		t.Fatal("nil client accepted")
+	}
+}
 
 func TestHTTPClientRejectsRedirects(t *testing.T) {
 	t.Parallel()

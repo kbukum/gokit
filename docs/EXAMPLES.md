@@ -254,11 +254,11 @@ import (
 reg := storage.NewFactoryRegistry()
 _ = local.Register(reg, local.Config{BasePath: "./data"})
 
-store, _ := storage.New(reg, storage.Config{
+store, _ := storage.New(ctx, reg, storage.Config{
     Provider: storage.ProviderLocal,
     Enabled:  true,
 }, log)
-_ = store.Put(ctx, "uploads/report.pdf", reader)
-rc, _ := store.Get(ctx, "uploads/report.pdf")
+_ = store.Upload(ctx, "uploads/report.pdf", reader)
+rc, _ := store.Download(ctx, "uploads/report.pdf")
 defer rc.Close()
 ```

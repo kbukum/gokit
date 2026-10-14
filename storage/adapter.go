@@ -11,5 +11,6 @@ var _ provider.Provider = (*Component)(nil)
 
 // IsAvailable checks if the storage backend is initialized (implements provider.Provider).
 func (c *Component) IsAvailable(_ context.Context) bool {
-	return c.storage != nil
+	_, err := c.Source()
+	return err == nil
 }

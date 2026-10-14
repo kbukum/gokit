@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/component"
+	apperrors "github.com/kbukum/gokit/errors"
 )
 
 // TickerFunc is the callback invoked on every tick.
@@ -46,9 +47,10 @@ type TickerWorker struct {
 	runOnStart bool
 	onError    func(error)
 
-	cancel  context.CancelFunc
-	done    chan struct{}
-	running atomic.Bool
+	cancel    context.CancelFunc
+	done      chan struct{}
+	running   atomic.Bool
+	lifecycle sync.Mutex
 
 	mu        sync.RWMutex
 	lastRun   time.Time
@@ -74,7 +76,15 @@ func NewTickerWorker(name string, interval time.Duration, fn TickerFunc, opts ..
 func (w *TickerWorker) Name() string { return w.name }
 
 // Start launches the ticker loop in a background goroutine.
-func (w *TickerWorker) Start(_ context.Context) error {
+func (w *TickerWorker) Start(start context.Context) error {
+	if err := start.Err(); err != nil {
+		return err
+	}
+	if w.name == "" || w.interval <= 0 || w.fn == nil {
+		return apperrors.InvalidInput("ticker", "Name, positive interval and handler are required")
+	}
+	w.lifecycle.Lock()
+	defer w.lifecycle.Unlock()
 	if w.running.Load() {
 		return nil
 	}
@@ -83,20 +93,30 @@ func (w *TickerWorker) Start(_ context.Context) error {
 	w.done = make(chan struct{})
 	w.running.Store(true)
 
-	go w.loop(ctx) //nolint:contextcheck // ticker loop is long-lived and detached from the lifecycle Start ctx
+	go w.loop(ctx, w.done) //nolint:contextcheck // ticker loop is long-lived and detached from the lifecycle Start ctx
 	return nil
 }
 
 // Stop signals the ticker loop to exit and waits for it to finish.
-func (w *TickerWorker) Stop(_ context.Context) error {
+func (w *TickerWorker) Stop(ctx context.Context) error {
+	w.lifecycle.Lock()
 	if !w.running.Load() {
+		w.lifecycle.Unlock()
 		return nil
 	}
-	w.cancel()
-	<-w.done
-	w.running.Store(false)
-	return nil
+	cancel, done := w.cancel, w.done
+	w.lifecycle.Unlock()
+	cancel()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
+
+func (w *TickerWorker) DrainPhase() component.DrainPhase { return component.DrainWorkers }
+func (w *TickerWorker) Drain(ctx context.Context) error  { return w.Stop(ctx) }
 
 // Health returns the current health status.
 func (w *TickerWorker) Health(_ context.Context) component.Health {
@@ -146,8 +166,13 @@ func (w *TickerWorker) FailCount() uint64 {
 	return w.failCount
 }
 
-func (w *TickerWorker) loop(ctx context.Context) {
-	defer close(w.done)
+func (w *TickerWorker) loop(ctx context.Context, done chan struct{}) {
+	defer func() {
+		w.lifecycle.Lock()
+		w.running.Store(false)
+		close(done)
+		w.lifecycle.Unlock()
+	}()
 
 	if w.runOnStart {
 		w.tick(ctx)

@@ -287,6 +287,11 @@ jobs:
         continue-on-error: true
         run: make TOVEN="${{ steps.toven.outputs.toven }}" structure
 
+      - name: Validation dispatch and actual affected-selection contracts
+        env:
+          TOVEN: ${{ steps.toven.outputs.toven }}
+        run: python3 -m unittest discover -s scripts -p test_validation.py -v
+
   # ── Stage 3s: Security scan ──────────────────────────────────────────────────
   security:
     name: Security

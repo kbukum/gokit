@@ -5,6 +5,15 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **connect/client**: enforced redirect refusal for injected HTTP clients without mutating their settings or transferring transport ownership.
+- **database/postgres/testutil / storage/s3/testutil**: owned container identities support private-network consumers without host-gateway routing.
+- **storage**: atomic create-if-absent through `Create`/`CreateProvider` with a portable `ErrExists` identity; S3 (`If-None-Match`), local and in-memory backends implement it, and the component exposes `Create` and `Head`.
+- **process**: bounded, explicitly race/coverage-instrumented child builds and live output observers; retained-child signals and exit-status observation preserve ownership and capture failures.
+- **observability**: instance-owned Prometheus application/runtime export with bounded collection, private registries and lifecycle-owned reader teardown.
+- **encryption / security / httpclient**: injected mounted-key resolution and immutable outbound endpoint grants enforce redaction, DNS-at-dial checks, hostname-verified TLS and redirect/retry refusal for restricted clients.
+- **storage/s3**: mounted credential files and authenticated bucket-readiness checks; a separate real S3 fixture verifies scoped access, hardening and process-crash persistence.
+- **encryption**: caller-supplied authenticated bindings prevent ciphertext from being moved between tenant, record or version contexts.
+- **dataset/record**: cancellable JSONL parsing with explicit byte/record limits and refusal of ambiguous top-level fields or trailing values.
 - **bootstrap**: typed module composition, dependency validation, named listeners, and module-aware operator tasks.
 - **bootstrap**: application-owned health, metrics, and diagnostics endpoints, including opt-in container probe access.
 - **bootstrap/testutil**: module lifecycle, port capture, remote-contract validation, and shared implementation tests.
@@ -26,6 +35,15 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **util**: shared typed-nil dependency validation.
 
 ### Changed
+- **storage/local**: canceled conditional creates no longer publish files; copy and temporary-file ownership remain synchronous.
+- **encryption**: unavailable or invalid mounted key material reports a cause-preserving dependency failure instead of misleading product not-found.
+- **storage**: nonblocking fail-closed lifecycle injection, canceled initialization cleanup, and serialized owned backend teardown prevent unavailable or closing dependencies from appearing ready.
+- **storage/s3**: instance-owned bounded HTTP connections, TLS 1.3, redirect refusal, and no implicit SDK retries after ambiguous writes.
+- **storage/s3**: existence checks preserve authorization, cancellation and availability failures instead of falsely reporting missing objects.
+- **storage/gcs**: storage closes its owned client through `storage.Closer`; later operations fail instead of panicking.
+- **storage/local**: `Create` stages incomplete data in a reserved `.gokit-staging` directory that is hidden from listings and cannot be used as a key.
+- **process**: live output observers are serialized across stdout and stderr, so one writer can safely serve both and a failure stops both streams.
+- **worker**: scheduled workers reject invalid/canceled startup and honor teardown deadlines while draining before dependencies.
 - **bootstrap / database / logging**: clearer startup summaries, consistent component names, and optional banners for one-shot commands.
 - **component**: phased, concurrent draining with reserved teardown time.
 - **logging**: idempotent close and deadline-bounded exporter shutdown.
@@ -40,6 +58,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **sse/testutil**: reusable test and benchmark helpers with failure-path coverage.
 
 ### Breaking Changes
+- **storage**: factories and `New` receive the caller's context so provider initialization respects startup cancellation and deadlines.
 - **bootstrap / component**: typed lifecycle and rollback errors, single-use application lifecycles, and explicit resource ownership.
 - **bootstrap / server**: listeners return registration errors; diagnostics move from server ownership to the application.
 - **bootstrap / auth/session / connect/client**: consistent registration, authentication, and client-failure API names.

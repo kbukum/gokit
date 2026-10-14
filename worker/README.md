@@ -33,6 +33,8 @@ Overflow does not cancel or fail a task. `TaskHandle.Result()` remains authorita
 
 Pools can be registered directly with `component.Registry`. Construction does not start goroutines; registry `Start` or the first direct `Submit` starts workers. This keeps unstarted pools from leaking on startup failure. `Quiesce` stops admission, `Drain` finishes or cancels accepted tasks, and `Stop` joins workers and supervision. Handlers must return when their context is canceled. Map-reduce consumes only its own task handles, never the shared aggregate stream, so reusable pools do not tie a request's lifetime to pool shutdown.
 
+`NewTickerWorker` runs a bounded callback periodically under component ownership. Startup rejects a missing name, nonpositive interval, missing handler or canceled context. Scheduled workers drain in the worker phase; `Stop(ctx)` cancels the callback and waits only within the caller's deadline. If the callback ignores cancellation, teardown reports the deadline error and a later stop can join its eventual exit. Callbacks must bound their own work and return on cancellation.
+
 ## Quick Start
 
 ```go

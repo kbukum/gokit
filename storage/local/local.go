@@ -19,8 +19,24 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
+// stagingDir holds in-progress Create files on the same filesystem as the objects but outside the key namespace.
+const stagingDir = ".gokit-staging"
+
+var errReservedKey = errors.New("storage: key is reserved for local staging")
+
+func checkKey(key string) error {
+	clean := filepath.ToSlash(filepath.Clean("/" + key))
+	if clean == "/"+stagingDir || strings.HasPrefix(clean, "/"+stagingDir+"/") {
+		return fmt.Errorf("%w: %q", errReservedKey, key)
+	}
+	return nil
+}
+
 // safePath resolves path within basePath and ensures it cannot escape via traversal.
 func safePath(basePath, path string) (string, error) {
+	if err := checkKey(path); err != nil {
+		return "", err
+	}
 	// Prefix with "/" so Clean removes leading "../" sequences
 	fullPath := filepath.Join(basePath, filepath.Clean("/"+path))
 	if !strings.HasPrefix(fullPath, basePath+string(filepath.Separator)) && fullPath != basePath {
@@ -46,7 +62,7 @@ func Register(reg *storage.FactoryRegistry, configs ...Config) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	return reg.Register(storage.ProviderLocal, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+	return reg.Register(storage.ProviderLocal, func(_ context.Context, _ storage.Config, _ *logging.Logger) (storage.Storage, error) {
 		return NewStorage(c.BasePath)
 	})
 }
@@ -92,6 +108,62 @@ func (s *Storage) Upload(_ context.Context, path string, reader io.Reader) error
 	}
 	return f.Close()
 }
+
+// Create writes a complete file in a staging directory outside the key namespace, then hard-links it into place, so
+// the key appears atomically and only if it is absent. An occupied key returns an error wrapping [storage.ErrExists].
+// The base directory tree must be one filesystem that supports hard links.
+// Cancellation is checked before each read and publication. The caller must unblock a reader already inside Read.
+func (s *Storage) Create(ctx context.Context, path string, reader io.Reader) (resultErr error) {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := checkKey(path); err != nil {
+		return err
+	}
+	fullPath, err := fs.ConfinePath(s.basePath, path)
+	if err != nil {
+		return fmt.Errorf("storage: resolve path: %w", err)
+	}
+	if mErr := os.MkdirAll(filepath.Dir(fullPath), 0o750); mErr != nil {
+		return fmt.Errorf("storage: create directory: %w", mErr)
+	}
+	staging := filepath.Join(s.basePath, stagingDir)
+	if mErr := os.MkdirAll(staging, 0o700); mErr != nil {
+		return fmt.Errorf("storage: create staging directory: %w", mErr)
+	}
+	tmp, err := os.CreateTemp(staging, "create-*")
+	if err != nil {
+		return fmt.Errorf("storage: create temporary file: %w", err)
+	}
+	defer func() {
+		if rErr := os.Remove(tmp.Name()); rErr != nil && !os.IsNotExist(rErr) {
+			resultErr = errors.Join(resultErr, fmt.Errorf("storage: remove temporary file: %w", rErr))
+		}
+	}()
+	_, copyErr := io.Copy(tmp, readFunc(func(p []byte) (int, error) {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		return reader.Read(p)
+	}))
+	if err := errors.Join(copyErr, tmp.Sync(), tmp.Close()); err != nil {
+		return fmt.Errorf("storage: write file: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := os.Link(tmp.Name(), fullPath); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return storage.ExistsError(path)
+		}
+		return fmt.Errorf("storage: link file: %w", err)
+	}
+	return nil
+}
+
+type readFunc func([]byte) (int, error)
+
+func (f readFunc) Read(p []byte) (int, error) { return f(p) }
 
 // Download returns a reader for the local file at the given path.
 func (s *Storage) Download(_ context.Context, path string) (io.ReadCloser, error) {
@@ -189,6 +261,9 @@ func (s *Storage) Copy(_ context.Context, srcPath, dstPath string) error {
 // other rename error is returned so a permission or I/O failure never silently
 // downgrades to a non-atomic, potentially destructive operation.
 func (s *Storage) Rename(_ context.Context, srcPath, dstPath string) error {
+	if err := errors.Join(checkKey(srcPath), checkKey(dstPath)); err != nil {
+		return err
+	}
 	if err := storage.CheckDistinctPaths("Rename", srcPath, dstPath); err != nil {
 		return err
 	}
@@ -227,6 +302,9 @@ func (s *Storage) Rename(_ context.Context, srcPath, dstPath string) error {
 // symlinked key cannot read from or overwrite a file outside basePath, and the
 // source permissions and modification time are preserved.
 func (s *Storage) copyFile(srcPath, dstPath string) error {
+	if err := errors.Join(checkKey(srcPath), checkKey(dstPath)); err != nil {
+		return err
+	}
 	srcFull, err := fs.ConfineExistingPath(s.basePath, srcPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -259,6 +337,9 @@ func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, er
 			return err
 		}
 		if info.IsDir() {
+			if path == filepath.Join(s.basePath, stagingDir) {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		relPath, err := filepath.Rel(s.basePath, path)
@@ -294,4 +375,7 @@ func (s *Storage) List(_ context.Context, prefix string) ([]storage.FileInfo, er
 }
 
 // compile-time check
-var _ storage.Storage = (*Storage)(nil)
+var (
+	_ storage.Storage        = (*Storage)(nil)
+	_ storage.CreateProvider = (*Storage)(nil)
+)

@@ -22,12 +22,20 @@ const (
 type Option func(*options)
 
 type options struct {
-	algorithm Algorithm
+	algorithm      Algorithm
+	associatedData []byte
 }
 
 // WithAlgorithm selects the encryption algorithm (default: AES-256-GCM).
 func WithAlgorithm(alg Algorithm) Option {
 	return func(o *options) { o.algorithm = alg }
+}
+
+// WithAssociatedData binds ciphertext to caller-owned context, which must match exactly at decryption.
+// The data is copied, not stored in the ciphertext, and must use an unambiguous canonical encoding.
+func WithAssociatedData(data []byte) Option {
+	copied := append([]byte(nil), data...)
+	return func(o *options) { o.associatedData = append([]byte(nil), copied...) }
 }
 
 // New creates an Encryptor with the given key and options. Default algorithm is AES-256-GCM.
@@ -36,6 +44,7 @@ func WithAlgorithm(alg Algorithm) Option {
 // The passphrase is stretched with PBKDF2-SHA256 and each ciphertext is a
 // base64-encoded versioned envelope: version || algorithm || salt || nonce || ciphertext,
 // with the header authenticated as AEAD associated data (wire-compatible with the shared encryption envelope format).
+// WithAssociatedData additionally authenticates caller-supplied context without including it in the envelope.
 func New(key string, opts ...Option) (Encryptor, error) {
 	o := &options{algorithm: AlgorithmAESGCM}
 	for _, opt := range opts {
@@ -44,8 +53,18 @@ func New(key string, opts ...Option) (Encryptor, error) {
 
 	switch o.algorithm {
 	case AlgorithmChaCha20:
-		return NewChaCha20(key)
+		service, err := NewChaCha20(key)
+		if err != nil {
+			return nil, err
+		}
+		service.associatedData = o.associatedData
+		return service, nil
 	default:
-		return NewService(key)
+		service, err := NewService(key)
+		if err != nil {
+			return nil, err
+		}
+		service.associatedData = o.associatedData
+		return service, nil
 	}
 }

@@ -52,6 +52,7 @@ use (
 	./storage
 	./storage/gcs
 	./storage/s3
+	./storage/s3/testutil
 	./storage/testutil
 	./testutil
 	./tool

@@ -28,10 +28,11 @@ func TestStreamingIntegration(t *testing.T) {
 			upstreamDone := make(chan struct{})
 			stop := make(chan struct{})
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Signal completion only after the active count is released; defers run in reverse order.
+				defer close(upstreamDone)
 				requests.Add(1)
 				active.Add(1)
 				defer active.Add(-1)
-				defer close(upstreamDone)
 				if _, err := io.Copy(io.Discard, r.Body); err != nil {
 					t.Error(err)
 					return

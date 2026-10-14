@@ -30,6 +30,16 @@ type Storage interface {
 	List(ctx context.Context, prefix string) ([]FileInfo, error)
 }
 
+// CreateProvider is optionally implemented by storage backends that can create an object only when its key is absent, atomically on the server. Use [Create] to call it; there is no portable fallback.
+type CreateProvider interface {
+	// Create writes data from reader to path only if no object exists there.
+	// It returns an error wrapping [ErrExists] when the key is occupied and
+	// leaves the existing object unchanged. Implementations dispatch the write
+	// exactly once: a failed or ambiguous call is never resent, so once any
+	// object occupies the key the call can no longer replace it.
+	Create(ctx context.Context, path string, reader io.Reader) error
+}
+
 // HeadProvider is optionally implemented by storage backends that can return metadata for a single object more efficiently than scanning a listing. Use [Head] to call it with a listing-based fallback.
 type HeadProvider interface {
 	// Head returns metadata for the single object at path, including its size,

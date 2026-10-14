@@ -4,6 +4,22 @@ Object storage abstraction for gokit.
 
 Core contains provider-neutral contracts, explicit `FactoryRegistry`, component integration, content-addressable wrappers, and lean local storage. Backend SDK dependencies are isolated in opt-in adapter modules such as `storage/s3`.
 
+## Lifecycle injection
+
+Inject `Component` directly as `Storage`, or use `Component.Source` when a consumer needs the underlying backend. Operations return a typed unavailable error until successful startup and after teardown, without waiting for provider initialization. Factories receive the startup context; canceled or failed startup never publishes a backend. A backend returned alongside an initialization error is closed with an independent two-second cleanup deadline.
+
+Stop acceptance and drain active operations before stopping the component. `Stop` cancels and waits for initialization, unpublishes the backend, and invokes its optional `Closer` under the caller's deadline. Failed startup cleanup or teardown retains an unavailable backend for a later `Stop` retry; restart is refused until cleanup succeeds. Closers must be safe to retry and return nil only after complete release. Overlapping startup is rejected during initialization or teardown; concurrent stops wait for the same teardown result within their own deadlines. A caller constructing a backend with `New` owns any non-nil returned backend, including when initialization also returns an error.
+
+Backends may implement `Checker` for authenticated readiness without mutation. The component checks it before startup publication and on every health probe; failed readiness closes the acquired backend rather than making it available. Backends without this capability retain the URL-based health check.
+
+## Create-if-absent
+
+`storage.Create(ctx, store, path, reader)` writes an object only when its key is empty. An occupied key returns an error matching `storage.ErrExists` and leaves the existing object unchanged. Backends opt in through `CreateProvider`; S3 uses `If-None-Match: *`, local storage hard-links a complete file from its reserved `.gokit-staging` directory (hidden from listings and refused as a key; an interrupted process can leave unreachable files there that operators may remove while no create is running) and the in-memory test component checks under its lock. A backend without an atomic create returns `storage.ErrCreateUnsupported`; there is no check-then-upload fallback.
+
+Each `Create` call dispatches at most one write. Once any object occupies a key, a delayed or ambiguous `Create` for that key can never replace it. This lets an owner with one writer per key fence that key: placing a marker with `Create` either stops a delayed write or shows that the write already landed.
+
+Local `Create` observes cancellation before reading, between reads and before publishing the final key; canceled calls remove their temporary file. The caller must unblock a reader already inside `Read` (for example, by closing its owned pipe). No detached copy goroutine is created.
+
 ## Local default
 
 ```go
@@ -14,7 +30,7 @@ if err := local.Register(reg, local.Config{BasePath: "./data"}); err != nil {
     return err
 }
 
-store, err := storage.New(reg, storage.Config{
+store, err := storage.New(ctx, reg, storage.Config{
     Provider: storage.ProviderLocal,
     Enabled:  true,
 }, log)

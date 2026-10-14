@@ -12,6 +12,17 @@ import (
 // ErrRedirect reports a redirect refused to keep RPC credentials and request bodies at the configured peer.
 var ErrRedirect = errors.New("connect client: redirects are not allowed")
 
+// WithoutRedirects copies a client's settings and refuses all redirects, including within the same origin.
+// The caller retains ownership of the shared transport and cookie jar; the original client is not modified.
+func WithoutRedirects(client *http.Client) (*http.Client, error) {
+	if client == nil {
+		return nil, fmt.Errorf("connect client: HTTP client is required")
+	}
+	safe := *client
+	safe.CheckRedirect = func(*http.Request, []*http.Request) error { return ErrRedirect }
+	return &safe, nil
+}
+
 // NewHTTPClient creates an *http.Client configured for ConnectRPC.
 //
 // When TLS is configured, an HTTPS-only HTTP/2 transport is used. When TLS is nil (the default),
@@ -31,13 +42,10 @@ func NewHTTPClient(cfg Config) (*http.Client, error) {
 		return nil, fmt.Errorf("connect client: %w", err)
 	}
 
-	return &http.Client{
+	return WithoutRedirects(&http.Client{
 		Transport: transport,
 		Timeout:   cfg.Timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return ErrRedirect
-		},
-	}, nil
+	})
 }
 
 // buildTransport creates the appropriate HTTP transport based on TLS config.

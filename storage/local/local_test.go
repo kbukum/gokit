@@ -8,6 +8,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -15,6 +16,44 @@ import (
 
 	"github.com/kbukum/gokit/storage"
 )
+
+type cancelReader struct{ cancel context.CancelFunc }
+
+func (r cancelReader) Read(p []byte) (int, error) {
+	r.cancel()
+	return copy(p, "partial"), io.EOF
+}
+
+func TestCreateCancellationNeverPublishes(t *testing.T) {
+	t.Parallel()
+	for _, duringCopy := range []bool{false, true} {
+		t.Run(strconv.FormatBool(duringCopy), func(t *testing.T) {
+			t.Parallel()
+			s := newTestStorage(t)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var reader io.Reader = strings.NewReader("content")
+			if duringCopy {
+				reader = cancelReader{cancel: cancel}
+			} else {
+				cancel()
+			}
+			if err := s.Create(ctx, "canceled", reader); !errors.Is(err, context.Canceled) {
+				t.Fatalf("canceled create returned %v", err)
+			}
+			if exists, err := s.Exists(t.Context(), "canceled"); err != nil || exists {
+				t.Fatalf("canceled create published: exists=%v err=%v", exists, err)
+			}
+			entries, err := os.ReadDir(filepath.Join(s.basePath, stagingDir))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatal("canceled create retained staged bytes")
+			}
+		})
+	}
+}
 
 func newTestStorage(t *testing.T) *Storage {
 	t.Helper()
@@ -666,7 +705,7 @@ func TestRegister_CapturesConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("local provider missing")
 	}
-	s, err := f(storage.Config{}, nil)
+	s, err := f(t.Context(), storage.Config{}, nil)
 	if err != nil || s == nil {
 		t.Fatalf("factory = %v, %v", s, err)
 	}
@@ -1029,4 +1068,133 @@ func assertContent(t *testing.T, s *Storage, path, want string) {
 	if string(got) != want {
 		t.Fatalf("content of %q = %q, want %q", path, got, want)
 	}
+}
+
+func TestCreate_AdmitsExactlyOneConcurrentWriter(t *testing.T) {
+	t.Parallel()
+	s := newTestStorage(t)
+	const writers = 16
+	var wg sync.WaitGroup
+	errs := make([]error, writers)
+	for i := range writers {
+		wg.Go(func() {
+			errs[i] = s.Create(t.Context(), "fenced/key", strings.NewReader(strings.Repeat("x", i+1)))
+		})
+	}
+	wg.Wait()
+	won := -1
+	for i, err := range errs {
+		switch {
+		case err == nil && won == -1:
+			won = i
+		case err == nil:
+			t.Fatal("two writers created the same key")
+		case !errors.Is(err, storage.ErrExists):
+			t.Fatalf("writer %d failed without the occupied-key identity: %v", i, err)
+		}
+	}
+	if won == -1 {
+		t.Fatal("no writer created the key")
+	}
+	data := readBack(t, s, "fenced/key")
+	if data != strings.Repeat("x", won+1) {
+		t.Fatalf("stored bytes do not belong to the winning writer: %q", data)
+	}
+	entries, err := os.ReadDir(filepath.Join(s.basePath, "fenced"))
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("create left temporary files: %v, %v", entries, err)
+	}
+}
+
+func TestCreate_EmptyObjectFencesTheKey(t *testing.T) {
+	t.Parallel()
+	s := newTestStorage(t)
+	if err := storage.Create(t.Context(), s, "key", strings.NewReader("")); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Create(t.Context(), s, "key", strings.NewReader("late")); !errors.Is(err, storage.ErrExists) {
+		t.Fatalf("empty object did not fence its key: %v", err)
+	}
+	if err := s.Delete(t.Context(), "key"); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Create(t.Context(), s, "key", strings.NewReader("after")); err != nil {
+		t.Fatalf("create after deletion was refused: %v", err)
+	}
+}
+
+func TestCreate_PathTraversal_Confined(t *testing.T) {
+	t.Parallel()
+	s := newTestStorage(t)
+	outside := filepath.Join(filepath.Dir(s.basePath), "escaped")
+	if err := s.Create(t.Context(), "../escaped", strings.NewReader("x")); err == nil {
+		if _, statErr := os.Stat(outside); statErr == nil {
+			t.Fatal("create escaped the base directory")
+		}
+	}
+}
+
+func TestCreate_PendingStagingIsNotAnObject(t *testing.T) {
+	t.Parallel()
+	s := newTestStorage(t)
+	reader, writer := io.Pipe()
+	done := make(chan error, 1)
+	go func() { done <- s.Create(t.Context(), "pending/key", reader) }()
+	if _, err := writer.Write([]byte("partial")); err != nil {
+		t.Fatal(err)
+	}
+	files, err := s.List(t.Context(), "")
+	if err != nil || len(files) != 0 {
+		t.Fatalf("pending create is listed: %+v %v", files, err)
+	}
+	entries, err := os.ReadDir(filepath.Join(s.basePath, "pending"))
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("pending create staged inside the key namespace: %v %v", entries, err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	files, err = s.List(t.Context(), "")
+	if err != nil || len(files) != 1 || files[0].Path != filepath.Join("pending", "key") {
+		t.Fatalf("completed create listing = %+v %v", files, err)
+	}
+	staged, err := os.ReadDir(filepath.Join(s.basePath, stagingDir))
+	if err != nil || len(staged) != 0 {
+		t.Fatalf("create left staging files: %v %v", staged, err)
+	}
+}
+
+func TestStagingDirectoryIsNotAKey(t *testing.T) {
+	t.Parallel()
+	s := newTestStorage(t)
+	ctx := t.Context()
+	key := stagingDir + "/x"
+	_, downloadErr := s.Download(ctx, key)
+	_, existsErr := s.Exists(ctx, key)
+	_, listErr := s.List(ctx, stagingDir)
+	for name, err := range map[string]error{
+		"upload": s.Upload(ctx, key, strings.NewReader("x")), "create": s.Create(ctx, key, strings.NewReader("x")),
+		"download": downloadErr, "exists": existsErr, "delete": s.Delete(ctx, key), "list": listErr,
+		"rename": s.Rename(ctx, "missing", "a/../"+key), "copy": s.Copy(ctx, key, "dst"),
+	} {
+		if !errors.Is(err, errReservedKey) {
+			t.Errorf("%s accepted the reserved staging key: %v", name, err)
+		}
+	}
+}
+
+func readBack(t *testing.T, s *Storage, path string) string {
+	t.Helper()
+	rc, err := s.Download(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, readErr := io.ReadAll(rc)
+	if err := errors.Join(readErr, rc.Close()); err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

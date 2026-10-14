@@ -2,15 +2,19 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
+	"github.com/kbukum/gokit/fs"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/storage"
 )
@@ -32,8 +36,8 @@ func Register(reg *storage.FactoryRegistry, configs ...Config) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	return reg.Register(storage.ProviderS3, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
-		return NewStorage(context.Background(), &c)
+	return reg.Register(storage.ProviderS3, func(ctx context.Context, _ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+		return NewStorage(ctx, &c)
 	})
 }
 
@@ -41,12 +45,39 @@ func Register(reg *storage.FactoryRegistry, configs ...Config) error {
 type Storage struct {
 	client *awss3.Client
 	bucket string
+	http   *http.Client
 }
 
 // NewStorage creates a new S3 storage client from the given config.
 func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("storage: S3 configuration is required")
+	}
+	c := *cfg
+	c.ApplyDefaults()
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	cfg = &c
+	if cfg.AccessKeyFile != "" {
+		access, err := fs.ReadSecret(cfg.AccessKeyFile, 1, 1024)
+		if err != nil {
+			return nil, err
+		}
+		secret, err := fs.ReadSecret(cfg.SecretKeyFile, 1, 1024)
+		if err != nil {
+			return nil, err
+		}
+		cfg.AccessKeyID, cfg.SecretAccessKey = string(access), string(secret)
+	}
+	httpClient := newHTTPClient()
 	opts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(cfg.Region),
+		awsconfig.WithHTTPClient(httpClient),
+		awsconfig.WithRetryMaxAttempts(1),
 	}
 
 	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
@@ -57,6 +88,7 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
+		httpClient.CloseIdleConnections()
 		return nil, fmt.Errorf("storage: load aws config: %w", err)
 	}
 
@@ -73,7 +105,7 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 	}
 
 	client := awss3.NewFromConfig(awsCfg, s3Opts...)
-	return &Storage{client: client, bucket: cfg.Bucket}, nil
+	return &Storage{client: client, bucket: cfg.Bucket, http: httpClient}, nil
 }
 
 // Upload writes data from reader to S3.
@@ -85,6 +117,26 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 	})
 	if err != nil {
 		return fmt.Errorf("storage: s3 upload: %w", err)
+	}
+	return nil
+}
+
+// Create writes data to S3 with If-None-Match: * so the server refuses an
+// occupied key. A 412 response returns an error wrapping [storage.ErrExists].
+// The client never retries, so one call dispatches at most one request.
+func (s *Storage) Create(ctx context.Context, path string, reader io.Reader) error {
+	_, err := s.client.PutObject(ctx, &awss3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(path),
+		Body:        reader,
+		IfNoneMatch: aws.String("*"),
+	})
+	if err != nil {
+		var re *awshttp.ResponseError
+		if errors.As(err, &re) && re.HTTPStatusCode() == http.StatusPreconditionFailed {
+			return fmt.Errorf("storage: s3 create: %w", storage.ExistsError(path))
+		}
+		return fmt.Errorf("storage: s3 create: %w", err)
 	}
 	return nil
 }
@@ -116,19 +168,17 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
-// Exists checks whether an S3 object exists.
-//
-// Any non-nil error from HeadObject is treated as "object does not exist" —
-// the AWS SDK surfaces NotFound, NoSuchBucket, AccessDenied, etc. as distinct error types
-// and Exists callers only care about the boolean.
-// Real I/O failures surface on the next operation (Upload/Download/Delete).
+// Exists reports absence only for a not-found response; other failures preserve their cause.
 func (s *Storage) Exists(ctx context.Context, path string) (bool, error) {
 	_, err := s.client.HeadObject(ctx, &awss3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(path),
 	})
 	if err != nil {
-		return false, nil //nolint:nilerr // see godoc: not-found semantics
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("storage: s3 exists: %w", err)
 	}
 	return true, nil
 }
@@ -195,4 +245,5 @@ func (s *Storage) resolveEndpoint() string {
 var (
 	_ storage.Storage           = (*Storage)(nil)
 	_ storage.SignedURLProvider = (*Storage)(nil)
+	_ storage.CreateProvider    = (*Storage)(nil)
 )

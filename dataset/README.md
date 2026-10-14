@@ -20,6 +20,7 @@ It is split into focused sub-packages by concern:
 
 - Every read and payload is bounded by `payload.Limits` (8 MiB in-memory cap, 64-record stream buffer by default); oversized payloads spill to a file rather than being held in memory.
 - Untrusted CSV/JSON records and schema validation **fail closed**; `record`'s readers and `Schema.Validate` have `Fuzz` targets.
+- `record.ParseJSONLinesBounded(ctx, data, record.ParseLimits{MaxBytes: 1 << 20, MaxRecords: 20})` rejects oversized input before decoding, stops before retaining excess records and honors cancellation. Object readers reject duplicate top-level fields and trailing values; nested values still require the caller's schema validation.
 - The collector streams sources through a bounded worker pool: the work and event channels are sized by `Limits.StreamBuffer` for backpressure, each source is bounded by `Config.SourceTimeout` and `context.Context` cancellation, and a resumable source that made partial progress is recorded as `partial` so a later run continues it from its offset.
 
 ## Quick start

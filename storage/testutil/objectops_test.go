@@ -147,3 +147,24 @@ func assertContent(t *testing.T, comp *Component, ctx context.Context, path, wan
 		t.Fatalf("content of %q = %q, want %q", path, got, want)
 	}
 }
+
+func TestComponent_CreateRefusesAnOccupiedKey(t *testing.T) {
+	comp, ctx := startComponent(t)
+	if err := storage.Create(ctx, comp, "key", strings.NewReader("first")); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Create(ctx, comp, "key", strings.NewReader("second")); !errors.Is(err, storage.ErrExists) {
+		t.Fatalf("occupied key was replaced: %v", err)
+	}
+	rc, err := comp.Download(ctx, "key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, readErr := io.ReadAll(rc)
+	if err := errors.Join(readErr, rc.Close()); err != nil || string(data) != "first" {
+		t.Fatalf("refused create changed the object: %q, %v", data, err)
+	}
+	if err := NewComponent().Create(ctx, "key", strings.NewReader("x")); err == nil {
+		t.Fatal("unstarted component accepted a create")
+	}
+}
