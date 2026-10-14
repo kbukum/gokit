@@ -39,6 +39,7 @@ type PersistentConfig struct {
 	// MaxCaptureBytes bounds retained lifetime output per stream. Nonpositive values use Command.MaxOutputBytes, or 64 KiB if neither limit is positive.
 	MaxCaptureBytes int
 	// Stdout and Stderr optionally observe live output in addition to bounded capture.
+	// Observer calls from both streams are serialized, so one writer may serve both.
 	// Writers must return promptly and bound their own retention. A failed writer is
 	// not called again; pipes still drain, and Wait/Shutdown preserve its error.
 	Stdout io.Writer
@@ -211,8 +212,9 @@ func startPersistent(ctx context.Context, cmd Command, cfg PersistentConfig, acq
 
 	var readersWG sync.WaitGroup
 	readersWG.Add(2)
-	go p.readInto(stdoutPipe, p.stdout, cfg.Stdout, marker, signalReady, &readersWG)
-	go p.readInto(stderrPipe, p.stderr, cfg.Stderr, marker, signalReady, &readersWG)
+	stdoutObserver, stderrObserver := newLiveObservers(cfg.Stdout, cfg.Stderr)
+	go p.readInto(stdoutPipe, p.stdout, stdoutObserver, marker, signalReady, &readersWG)
+	go p.readInto(stderrPipe, p.stderr, stderrObserver, marker, signalReady, &readersWG)
 
 	readersDone := make(chan struct{})
 	go func() {

@@ -103,6 +103,72 @@ func TestPersistentObserverFailureRetainsCauseAndDrains(t *testing.T) {
 	}
 }
 
+// unsyncedWriter is deliberately not concurrency-safe so the race detector proves serialized observer calls.
+type unsyncedWriter struct {
+	data  bytes.Buffer
+	calls int
+	cause error
+}
+
+func (w *unsyncedWriter) Write(data []byte) (int, error) {
+	w.calls++
+	if w.cause != nil {
+		return 0, w.cause
+	}
+	return w.data.Write(data)
+}
+
+func shutdownGracefulChild(t *testing.T, cfg process.PersistentConfig) error {
+	t.Helper()
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Readiness, cfg.OutputMarker = process.ReadyOnOutput, "READY"
+	run, err := process.StartPersistent(t.Context(), process.Command{
+		Binary: binary, Args: []string{"-test.run=^TestOwnedProcessChild$"},
+		EnvPolicy: process.EnvEmpty,
+		Env:       map[string]string{"GOKIT_OWNED_CHILD": "graceful", "GORACE": "atexit_sleep_ms=0"},
+	}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 2*time.Second)
+	defer cancel()
+	outcome, err := run.Process.Shutdown(ctx)
+	if !outcome.Complete {
+		t.Fatalf("shutdown did not complete: %+v %v", outcome, err)
+	}
+	return err
+}
+
+func TestPersistentSharedObserverIsSerialized(t *testing.T) {
+	t.Parallel()
+	shared := &unsyncedWriter{}
+	cfg := process.DefaultPersistentConfig()
+	cfg.Stdout, cfg.Stderr = shared, shared
+	if err := shutdownGracefulChild(t, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(shared.data.Bytes(), []byte("READY")) || !bytes.Contains(shared.data.Bytes(), []byte("b")) {
+		t.Fatal("shared observer missed combined output")
+	}
+}
+
+func TestPersistentSharedObserverFailureStopsBothStreams(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("shared observer failed")
+	shared := &unsyncedWriter{cause: cause}
+	cfg := process.DefaultPersistentConfig()
+	cfg.Stdout, cfg.Stderr = shared, shared
+	if err := shutdownGracefulChild(t, cfg); !errors.Is(err, cause) {
+		t.Fatalf("shared observer failure lost its cause: %v", err)
+	}
+	if shared.calls != 1 {
+		t.Fatalf("failed shared observer was called %d times", shared.calls)
+	}
+}
+
 func TestPersistentWaitExitSeparatesStatusFromCleanup(t *testing.T) {
 	t.Parallel()
 	if runtime.GOOS == "windows" {

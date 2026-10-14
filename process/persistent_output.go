@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -43,7 +44,7 @@ func (g *guardedBuffer) error() error {
 }
 
 // Marker matching uses each new chunk plus its bounded trailing carry, not the entire retained output.
-func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, observer io.Writer, marker []byte, signalReady func(), wg *sync.WaitGroup) {
+func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, observer *liveObserver, marker []byte, signalReady func(), wg *sync.WaitGroup) {
 	defer wg.Done()
 	buf := make([]byte, 32*1024)
 	found := len(marker) == 0
@@ -55,9 +56,8 @@ func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, observer i
 				dst.recordError(writeErr)
 				return
 			}
-			if writeErr := observeOutput(observer, buf[:n]); writeErr != nil {
+			if writeErr := observer.write(buf[:n]); writeErr != nil {
 				dst.recordError(writeErr)
-				observer = nil
 			}
 
 			if !found {
@@ -81,6 +81,48 @@ func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, observer i
 			return
 		}
 	}
+}
+
+// liveObserver serializes observer calls from both stream readers. When both streams use the same pointer writer they
+// share one liveObserver, so a failure stops calls from both streams.
+type liveObserver struct {
+	mu     *sync.Mutex
+	writer io.Writer
+	failed bool
+}
+
+func newLiveObservers(stdout, stderr io.Writer) (out, errOut *liveObserver) {
+	mu := &sync.Mutex{}
+	out = &liveObserver{mu: mu, writer: stdout}
+	if sameWriter(stdout, stderr) {
+		return out, out
+	}
+	return out, &liveObserver{mu: mu, writer: stderr}
+}
+
+// sameWriter compares pointer identity only; interface equality could panic on non-comparable dynamic types.
+func sameWriter(a, b io.Writer) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	va, vb := reflect.ValueOf(a), reflect.ValueOf(b)
+	return va.Kind() == reflect.Pointer && va.Type() == vb.Type() && va.Pointer() == vb.Pointer()
+}
+
+func (o *liveObserver) write(data []byte) error {
+	if o.writer == nil {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.failed {
+		return nil
+	}
+	if err := observeOutput(o.writer, data); err != nil {
+		o.failed = true
+		return err
+	}
+	return nil
 }
 
 func observeOutput(observer io.Writer, data []byte) error {
