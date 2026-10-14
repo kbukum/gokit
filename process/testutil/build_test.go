@@ -81,3 +81,26 @@ func TestBuildGoReportsCompilerDiagnostics(t *testing.T) {
 		t.Fatalf("build failure omitted its compiler cause: %v", err)
 	}
 }
+
+func TestBuildGoCanMatchParentRaceInstrumentation(t *testing.T) {
+	t.Parallel()
+	binary := filepath.Join(t.TempDir(), "program")
+	if err := testutil.BuildGo(t.Context(), testutil.GoBuild{
+		Package: "./testdata/program", Output: binary, Race: testutil.RaceEnabled,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := process.Run(t.Context(), process.Command{Binary: binary, MaxOutputBytes: 4096})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.Check(); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Contains(result.StdoutString(), "-race=true"); got != testutil.RaceEnabled {
+		t.Fatalf("child race=%t, parent race=%t", got, testutil.RaceEnabled)
+	}
+	if strings.Contains(result.StdoutString(), "-cover=true") {
+		t.Fatal("race selection unexpectedly enabled coverage")
+	}
+}

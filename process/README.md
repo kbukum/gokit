@@ -70,6 +70,8 @@ Executes the command, captures output, and returns a `*Result` (always populated
 
 ### Owned test processes
 
+`process/testutil.BuildGo` builds child programs with explicit race and coverage settings; parent test flags do not instrument children automatically. Set `GoBuild.Race` to `testutil.RaceEnabled` to follow the owning executable's build mode, or to `true` for a deliberately instrumented child. Coverage remains independently selected through `GoBuild.Coverage` and `CoverPackages`; the caller owns the binary and counter directory. A plain pass is not race evidence.
+
 `StartPersistent` owns a long-lived child until you call `Shutdown`. Startup readiness uses an output marker or an explicit stabilization delay; immediate readiness certifies only spawn. Configure the child with an isolated working directory, `EnvEmpty`, explicit environment values, and a positive output limit. Lifetime capture defaults to 64 KiB per stream and reports truncation.
 
 Emit the readiness marker only after the child has installed shutdown handling and initialized any required descendants. A shell printing a marker before starting another program does not establish that program's readiness; immediate shutdown can race its creation and require forced cleanup.

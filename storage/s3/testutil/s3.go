@@ -40,6 +40,8 @@ type S3Fixture struct {
 }
 
 const (
+	restartTimeout          = 60 * time.Second
+	gracefulStopTimeout     = 20 * time.Second
 	readinessTimeout        = 20 * time.Second
 	readinessAttemptTimeout = 5 * time.Second
 	readinessRetryDelay     = 250 * time.Millisecond
@@ -120,6 +122,8 @@ func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
 			"server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=0.0.0.0", "-filer", "-s3",
 			"-s3.port.iceberg=0", "-s3.port.lance=0", "-debug=false",
 			"-s3.iam=false", "-s3.autoCreateBucket=false", "-s3.config=/run/s3.json", "-volume.max=4", "-master.volumeSizeLimitMB=64",
+			// A single master needs no 10s election wait, and the volume pre-stop delay would outlast the stop grace.
+			"-master.electionTimeout=1s", "-volume.preStopSeconds=0",
 		},
 		// The default growth of seven volumes per collection exceeds the four bounded volume slots.
 		Env:        map[string]string{"WEED_MASTER_VOLUME_GROWTH_COPY_1": "1"},
@@ -216,7 +220,8 @@ func (f *S3Fixture) Config() storages3.Config {
 	return f.config
 }
 
-// Restart stops and starts the same container and persistent metadata/data, returning once writable, within thirty seconds.
+// Restart stops the same container with SIGTERM, verifies a clean exit, and starts it with its persistent metadata/data,
+// returning once writable, within sixty seconds. The filer's graceful gRPC stop alone may take fifteen seconds.
 func (f *S3Fixture) Restart(ctx context.Context) error {
 	if util.IsNil(ctx) {
 		return errors.New("S3 fixture restart requires a context")
@@ -227,13 +232,21 @@ func (f *S3Fixture) Restart(ctx context.Context) error {
 		return errors.New("S3 fixture is closed")
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, restartTimeout)
 	defer cancel()
-	grace := 5 * time.Second
+	grace := gracefulStopTimeout
 	if err := f.container.Stop(ctx, &grace); err != nil {
 		return err
 	}
-	if err := f.container.Start(ctx); err != nil {
+	state, err := f.container.State(ctx)
+	if err != nil {
+		return err
+	}
+	if state.Running || state.ExitCode != 0 {
+		return fmt.Errorf("S3 fixture did not stop gracefully: exit status %d", state.ExitCode)
+	}
+	err = f.container.Start(ctx)
+	if err != nil {
 		return err
 	}
 	endpoint, err := f.container.PortEndpoint(ctx, "8333/tcp", "http")

@@ -47,7 +47,7 @@ Flags are repeatable.
 ```bash
 toven test --module go:media                       # one module
 toven lint --module go:auth --module go:authz      # several
-toven test --module go:errors --workspace          # + everything that depends on errors
+toven test --module go:errors --dependents         # + everything that depends on errors
 toven build --module go:server --dependencies      # + everything server needs
 ```
 
@@ -84,6 +84,8 @@ toven --output jsonl test --base origin/main --merge-base
 
 toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` to bypass a run,
 `--refresh` to re-run but rewrite the cache.
+
+`make test-affected BASE=main` delegates the committed/staged/unstaged/untracked union and reverse-dependency closure to Toven, with result caching disabled. A missing baseline fails rather than selecting an unrelated commit. `M`/`W` are not accepted on this target because they would bypass or truncate affected selection; use `make test M=<module> T=<pattern>` for explicit feedback. Real adapter/process tests remain separate required proof when their contracts change. Run `python3 -m unittest discover -s scripts -p test_validation.py` after changing this dispatch; it tests real dirty/untracked/deleted selection with owned temporary repositories.
 
 ## Before you hand work off
 

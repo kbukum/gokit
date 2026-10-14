@@ -10,6 +10,7 @@ AUTH_HOST_ARGS ?=
 # `toven` on PATH; point it at a freshly built binary to dogfood a candidate,
 # e.g. `make TOVEN=../toven/target/release/toven toven-canary`.
 TOVEN ?= toven
+BASE ?= main
 
 # Module flag: pass -m $(M) to gomod.sh when M is set
 _M = $(if $(M),-m $(M))
@@ -223,69 +224,10 @@ release-dry:
 ## Fast check: build + vet + lint only (no tests) — for rapid iteration
 check-fast: build vet lint
 
-## Run tests only for modules affected by current changes (vs main branch)
+## Current diff (committed + staged + unstaged + untracked) and reverse dependents.
 test-affected:
-	@echo "==> Detecting affected modules..."
-	@CHANGED=$$(git diff --name-only origin/main...HEAD 2>/dev/null || git diff --name-only HEAD~1); \
-	if [ -z "$$CHANGED" ]; then \
-		echo "No changes detected, running all tests"; \
-		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
-	elif printf '%s\n' "$$CHANGED" | grep -Eq '^(go\.mod|go\.sum|go\.work|.*\.go\.work)$$'; then \
-		echo "go.mod/go.sum or .go.work file changed, running all tests"; \
-		$(GOMOD) cmd "go test -race -shuffle=on -count=1" $(_M) $(_W); \
-	else \
-		CHANGED=$$(printf '%s\n' "$$CHANGED" | grep -E '\.go$$|(^|/)(go\.mod|go\.sum)$$' || true); \
-		if [ -z "$$CHANGED" ]; then \
-			echo "No Go source changes"; \
-			exit 0; \
-		fi; \
-		MODULES=$$(printf '%s\n' "$$CHANGED" | xargs -I{} dirname {} | sort -u | while read dir; do \
-			if [ -f "$$dir/go.mod" ]; then echo "$$dir"; \
-			else \
-				d="$$dir"; \
-				while [ "$$d" != "." ] && [ ! -f "$$d/go.mod" ]; do d=$$(dirname "$$d"); done; \
-				[ -f "$$d/go.mod" ] && echo "$$d"; \
-			fi; \
-		done | sort -u); \
-		if [ -z "$$MODULES" ]; then \
-			echo "No Go module changes detected"; \
-		else \
-			if [ -n "$(W)" ]; then \
-				if [ ! -f "$(W).go.work" ]; then \
-					echo "Error: workspace file not found: $(W).go.work"; \
-					exit 1; \
-				fi; \
-				WS_MODS=$$(awk '/^use[[:space:]]*\(/{u=1;next} u&&/\)/{u=0;next} u{gsub(/^[[:space:]]+|[[:space:]]+$$/,"");if($$0!="")print} /^use[[:space:]]+[^(]/{sub(/^use[[:space:]]+/,"");gsub(/^[[:space:]]+|[[:space:]]+$$/,"");print}' $(W).go.work); \
-				FILTERED=""; \
-				for mod in $$MODULES; do \
-					for wmod in $$WS_MODS; do \
-						wmod=$${wmod#./}; wmod=$${wmod%/}; \
-						if [ "$$mod" = "$$wmod" ] || [ "$$mod" = "." -a "$$wmod" = "" ]; then \
-							FILTERED="$$FILTERED $$mod"; \
-							break; \
-						fi; \
-					done; \
-				done; \
-				MODULES=$$FILTERED; \
-				if [ -z "$$MODULES" ]; then \
-					echo "No affected modules in workspace $(W)"; \
-					exit 0; \
-				fi; \
-			fi; \
-			echo "Affected modules: $$MODULES"; \
-			failed=0; \
-			for mod in $$MODULES; do \
-				echo "==> Testing $$mod..."; \
-				if ! $(GOMOD) cmd "go test -race -shuffle=on -count=1" -m "$$mod" $(_W); then \
-					echo "✗ Tests failed in $$mod"; \
-					failed=1; \
-				fi; \
-			done; \
-			if [ "$$failed" -ne 0 ]; then \
-				exit 1; \
-			fi; \
-		fi; \
-	fi
+	@test -z "$(_FILTERED)" || { echo "test-affected does not accept M/W: use test M= for an explicit subset"; exit 2; }
+	@$(TOVEN) test --base "$(BASE)" --no-cache -- -race -shuffle=on -count=1 $(if $(T),-run $(T))
 
 ## Run all checks (build + vet + test) — supports M=<module>
 check: build vet test
@@ -392,7 +334,7 @@ help:
 	@echo "  make help                     Show this help"
 	@echo "  make build    [M=] [W=]       Build packages"
 	@echo "  make test     [M=] [T=] [W=]  Run tests"
-	@echo "  make test-affected [M=] [W=]  Run tests for changed modules vs main"
+	@echo "  make test-affected [BASE=]    Current changes and reverse dependents (default main)"
 	@echo "  make test-integration [M=] [W=] Run integration suite (//go:build integration)"
 	@echo "  make test-coverage [M=] [T=] [W=] Run tests with coverage"
 	@echo "  make lint     [M=] [W=]       Run golangci-lint"
