@@ -251,7 +251,7 @@ func TestRegisteredFactoryConstructsStorage(t *testing.T) {
 	if !ok {
 		t.Fatal("gcs provider missing")
 	}
-	store, err := factory(storage.Config{}, nil)
+	store, err := factory(t.Context(), storage.Config{}, nil)
 	if err != nil {
 		t.Fatalf("factory: %v", err)
 	}

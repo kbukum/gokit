@@ -403,7 +403,7 @@ func TestEncryptWithAEADPropagatesFactoryError(t *testing.T) {
 	want := errors.New("factory unavailable")
 	_, err := sealEnvelope([]byte("key"), AlgorithmAESGCM, func([]byte) (cipher.AEAD, error) {
 		return nil, want
-	}, "secret")
+	}, "secret", nil)
 	if !errors.Is(err, want) {
 		t.Fatalf("Encrypt error = %v, want %v", err, want)
 	}

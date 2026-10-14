@@ -39,6 +39,8 @@ At public ingress, ignore incoming parent/sampling and baggage. Internal parents
 
 ## Key Types & Functions
 
+`NewPrometheusComponent` owns one private Prometheus registry, OTel pull meter provider, and runtime/process collectors. Inject `Meter` into transports/application instruments and `Handler` into the private administration listener; register the component in the telemetry shutdown phase. It never changes OTel or Prometheus globals. Collection has a 512-datapoint cardinality limit per instrument, at most two concurrent scrapes and a two-second application-callback deadline. Scrapes collect application metrics one at a time; a callback failure, deadline, or stopped component rejects the scrape with HTTP 500 and a fixed message rather than serving partial metrics or callback error text. Observable callbacks must honor cancellation. Use fixed route and outcome labels, never tenant IDs, credentials, bodies or raw paths. Shutdown cancels active application collections and drains them within the caller's deadline before releasing readers. A callback that ignores cancellation keeps teardown incomplete and retryable rather than reporting success; there is no background exporter queue.
+
 | Name | Description |
 |------|-------------|
 | `NewTraceComponent()` / `TracerConfig` | Instance-owned tracing and telemetry-phase shutdown |
@@ -46,6 +48,7 @@ At public ingress, ignore incoming parent/sampling and baggage. Internal parents
 | `WithTracerProvider()` / `Tracer(ctx, name)` | Context-owned provider injection and named tracing |
 | `Correlate()` / `TraceID()` | Span-derived logging and error identifiers |
 | `InitMeter()` / `MeterConfig` | OpenTelemetry metrics setup |
+| `NewPrometheusComponent()` | Isolated application/runtime scrape and lifecycle-owned pull reader |
 | `StartSpan()` / `SpanFromContext()` | Distributed tracing helpers |
 | `SetSpanAttributes()` / `SetSpanError()` | Span enrichment |
 | `Metrics` | Pre-built metric instruments for requests, operations, errors |

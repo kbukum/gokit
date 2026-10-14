@@ -19,6 +19,7 @@ use (
 	./messaging/rabbitmq
 	./storage/gcs
 	./storage/s3
+	./storage/s3/testutil
 	./vectorstore/qdrant
 	./workload/dmr
 )

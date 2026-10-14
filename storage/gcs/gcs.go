@@ -29,8 +29,8 @@ func Register(reg *storage.FactoryRegistry, cfg Config) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	return reg.Register(ProviderName, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
-		return NewStorage(context.Background(), &c)
+	return reg.Register(ProviderName, func(ctx context.Context, _ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+		return NewStorage(ctx, &c)
 	})
 }
 

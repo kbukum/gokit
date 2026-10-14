@@ -10,13 +10,21 @@ import (
 
 // RuntimeMetricsHandler exposes Go runtime and process gauges through an instance-owned registry, without global collector registration.
 func RuntimeMetricsHandler() (http.Handler, error) {
+	registry, err := runtimeRegistry()
+	if err != nil {
+		return nil, err
+	}
+	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), nil
+}
+
+func runtimeRegistry() (*prometheus.Registry, error) {
 	registry := prometheus.NewRegistry()
 	for _, collector := range []prometheus.Collector{collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{})} {
 		if err := registry.Register(collector); err != nil {
 			return nil, err
 		}
 	}
-	return promhttp.HandlerFor(registry, promhttp.HandlerOpts{}), nil
+	return registry, nil
 }
 
 // PrometheusHandler returns the HTTP handler that exposes Prometheus metrics.

@@ -43,7 +43,7 @@ func (g *guardedBuffer) error() error {
 }
 
 // Marker matching uses each new chunk plus its bounded trailing carry, not the entire retained output.
-func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, marker []byte, signalReady func(), wg *sync.WaitGroup) {
+func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, observer io.Writer, marker []byte, signalReady func(), wg *sync.WaitGroup) {
 	defer wg.Done()
 	buf := make([]byte, 32*1024)
 	found := len(marker) == 0
@@ -55,6 +55,11 @@ func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, marker []b
 				dst.recordError(writeErr)
 				return
 			}
+			if writeErr := observeOutput(observer, buf[:n]); writeErr != nil {
+				dst.recordError(writeErr)
+				observer = nil
+			}
+
 			if !found {
 				window := make([]byte, 0, len(carry)+n)
 				window = append(window, carry...)
@@ -76,6 +81,17 @@ func (p *PersistentProcess) readInto(r io.Reader, dst *guardedBuffer, marker []b
 			return
 		}
 	}
+}
+
+func observeOutput(observer io.Writer, data []byte) error {
+	if observer == nil {
+		return nil
+	}
+	written, err := observer.Write(data)
+	if err == nil && written != len(data) {
+		return io.ErrShortWrite
+	}
+	return err
 }
 
 func (p *PersistentProcess) exitCode() *int {

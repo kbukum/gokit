@@ -33,7 +33,7 @@ func (s *stubStorage) Rename(context.Context, string, string) error     { return
 func stubRegistry(t *testing.T, s Storage) *FactoryRegistry {
 	t.Helper()
 	reg := NewFactoryRegistry()
-	if err := reg.Register(ProviderLocal, func(Config, *logging.Logger) (Storage, error) {
+	if err := reg.Register(ProviderLocal, func(context.Context, Config, *logging.Logger) (Storage, error) {
 		return s, nil
 	}); err != nil {
 		t.Fatalf("Register: %v", err)
@@ -44,7 +44,7 @@ func stubRegistry(t *testing.T, s Storage) *FactoryRegistry {
 func TestNewLooksUpRegisteredProvider(t *testing.T) {
 	t.Parallel()
 	reg := stubRegistry(t, &stubStorage{})
-	got, err := New(reg, Config{Provider: ProviderLocal, Enabled: true}, nil)
+	got, err := New(t.Context(), reg, Config{Provider: ProviderLocal, Enabled: true}, nil)
 	if err != nil || got == nil {
 		t.Fatalf("New = %v, %v", got, err)
 	}
@@ -52,7 +52,7 @@ func TestNewLooksUpRegisteredProvider(t *testing.T) {
 
 func TestNewNilRegistry(t *testing.T) {
 	t.Parallel()
-	if _, err := New(nil, Config{Provider: ProviderLocal}, nil); err == nil {
+	if _, err := New(t.Context(), nil, Config{Provider: ProviderLocal}, nil); err == nil {
 		t.Fatal("expected nil-registry error")
 	}
 }
@@ -60,7 +60,7 @@ func TestNewNilRegistry(t *testing.T) {
 func TestNewUnsupportedProvider(t *testing.T) {
 	t.Parallel()
 	reg := NewFactoryRegistry()
-	if _, err := New(reg, Config{Provider: "nope"}, nil); err == nil {
+	if _, err := New(t.Context(), reg, Config{Provider: "nope"}, nil); err == nil {
 		t.Fatal("expected unsupported-provider error")
 	}
 }
@@ -153,7 +153,7 @@ func TestComponentDescribe(t *testing.T) {
 
 func TestNewRejectsInvalidConfig(t *testing.T) {
 	t.Parallel()
-	if _, err := New(NewFactoryRegistry(), Config{Provider: ""}, nil); err == nil {
+	if _, err := New(t.Context(), NewFactoryRegistry(), Config{Provider: ""}, nil); err == nil {
 		t.Fatal("expected validation error for empty provider")
 	}
 }

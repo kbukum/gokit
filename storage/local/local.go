@@ -46,7 +46,7 @@ func Register(reg *storage.FactoryRegistry, configs ...Config) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
-	return reg.Register(storage.ProviderLocal, func(_ storage.Config, _ *logging.Logger) (storage.Storage, error) {
+	return reg.Register(storage.ProviderLocal, func(_ context.Context, _ storage.Config, _ *logging.Logger) (storage.Storage, error) {
 		return NewStorage(c.BasePath)
 	})
 }

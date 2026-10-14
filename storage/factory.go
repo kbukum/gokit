@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kbukum/gokit/logging"
@@ -10,7 +11,8 @@ import (
 // StorageFactory creates a Storage implementation from core configuration.
 // Provider-specific configuration is captured by the typed provider Register function,
 // keeping runtime selection free of untyped config blobs.
-type StorageFactory func(cfg Config, log *logging.Logger) (Storage, error)
+// A non-nil backend transfers ownership to the caller even when an error is also returned.
+type StorageFactory func(ctx context.Context, cfg Config, log *logging.Logger) (Storage, error)
 
 // FactoryRegistry stores storage factories by provider name.
 type FactoryRegistry struct {
@@ -34,7 +36,10 @@ func (r *FactoryRegistry) Get(name string) (StorageFactory, bool) {
 
 // New creates a Storage implementation using the provided registry.
 // Provider-specific settings are supplied by the typed provider Register call.
-func New(reg *FactoryRegistry, cfg Config, log *logging.Logger) (Storage, error) {
+func New(ctx context.Context, reg *FactoryRegistry, cfg Config, log *logging.Logger) (Storage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -55,5 +60,5 @@ func New(reg *FactoryRegistry, cfg Config, log *logging.Logger) (Storage, error)
 	}
 
 	l.Debug("initializing storage", map[string]any{"provider": cfg.Provider})
-	return f(cfg, l)
+	return f(ctx, cfg, l)
 }

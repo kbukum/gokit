@@ -16,7 +16,7 @@ type Config struct {
 	// Region is the AWS region.
 	Region string `mapstructure:"region" json:"region"`
 
-	// Endpoint is a custom S3-compatible endpoint (e.g. MinIO).
+	// Endpoint is a custom S3-compatible endpoint.
 	Endpoint string `mapstructure:"endpoint" json:"endpoint"`
 
 	// Resolve is the discovery service name for the S3 endpoint. Empty = use static Endpoint.
@@ -28,6 +28,10 @@ type Config struct {
 
 	// SecretAccessKey is the AWS secret access key.
 	SecretAccessKey string `mapstructure:"secret_access_key" json:"secret_access_key"`
+
+	// AccessKeyFile and SecretKeyFile select bounded mounted credentials instead of inline values or AWS discovery.
+	AccessKeyFile string `mapstructure:"access_key_file" json:"access_key_file"`
+	SecretKeyFile string `mapstructure:"secret_key_file" json:"secret_key_file"`
 
 	// ForcePathStyle forces path-style URLs instead of virtual-hosted-style.
 	ForcePathStyle bool `mapstructure:"force_path_style" json:"force_path_style"`
@@ -51,6 +55,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Region == "" {
 		errs = append(errs, errors.New("s3: region is required"))
+	}
+	if (c.AccessKeyFile == "") != (c.SecretKeyFile == "") || (c.AccessKeyID == "") != (c.SecretAccessKey == "") {
+		errs = append(errs, errors.New("s3: both access and secret credential sources are required"))
+	}
+	if (c.AccessKeyFile != "" || c.SecretKeyFile != "") && (c.AccessKeyID != "" || c.SecretAccessKey != "") {
+		errs = append(errs, errors.New("s3: mounted and inline credentials cannot be mixed"))
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("s3: invalid config: %w", errors.Join(errs...))

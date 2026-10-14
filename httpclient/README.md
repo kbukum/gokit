@@ -105,6 +105,14 @@ For raw HTTP/SSE peers, `NewTracingTransport(next, TracingConfig{Tracer: tracer,
 | `DefaultRetryConfig()` / `DefaultCircuitBreakerConfig()` | Sensible resilience defaults |
 | `IsTimeout()` / `IsAuth()` / `IsNotFound()` / `IsRetryable()` | Error classification helpers |
 
+## Restricted model endpoints
+
+Inject `Config.EndpointPolicy` from `security.NewEndpointPolicy` for an operator-approved outbound endpoint. Rules grant exact normalized scheme/host/port origins; private, loopback and link-local destinations require explicit private subnet grants, and HTTP requires an explicit grant. URL userinfo, queries, fragments, ambiguous authorities and unchecked request Host overrides are refused.
+
+Each request validates current DNS answers, and each new TCP connection resolves again and dials only a validated numeric address. Every answer must be permitted; mixed public/private answers fail closed. Hostname certificate verification and SNI remain bound to the original endpoint, not the numeric dial address. DNS/TCP share two seconds, TLS/header setup is bounded at two seconds, and connections/idle retention are bounded. Buffered calls apply `Config.Timeout` across validation and dispatch.
+
+The restricted client disables proxy discovery and both inherited TLS dial hooks, requires TLS 1.3 with certificate verification, refuses every redirect including same-host redirects, and rejects configured request retries. Normal client behavior is unchanged without a policy. Drain consumers and call `Close`; supplied policy/resolver/dialer ownership remains with composition. Keep provider credentials in headers, never URL fields or logs.
+
 ## Authentication
 
 ```go

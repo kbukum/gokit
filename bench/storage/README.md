@@ -33,7 +33,7 @@ func main() {
 	if err := local.Register(reg, local.Config{BasePath: "./benchmarks"}); err != nil {
 		panic(err)
 	}
-	store, err := storage.New(reg, storage.Config{Provider: storage.ProviderLocal}, nil)
+	store, err := storage.New(ctx, reg, storage.Config{Provider: storage.ProviderLocal}, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -666,7 +666,7 @@ func TestRegister_CapturesConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("local provider missing")
 	}
-	s, err := f(storage.Config{}, nil)
+	s, err := f(t.Context(), storage.Config{}, nil)
 	if err != nil || s == nil {
 		t.Fatalf("factory = %v, %v", s, err)
 	}

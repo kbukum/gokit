@@ -107,6 +107,8 @@ On startup failure, `StartPersistent` normally releases the acquisition and retu
 
 `Wait(ctx)` returns `(*Result, error)`. It observes exit without stopping a live child; after exit it drains the retained group and reaps before returning the completed result. Canceling a wait does not stop a still-live child. Native inspection failure is an error, not proof of exit. A spontaneous nonzero exit is an error, not an automatic restart.
 
+`WaitExit(ctx)` performs the same owned drain/reap but leaves exit-status assertions to the caller: a deliberate crash or nonzero exit is recorded in `Result`, while observation, capture and unexpected forced cleanup still fail. A result is returned only after complete cleanup. `Signal` targets only the retained unreaped child, refuses exited/released identities and never uses a historical PID. Optional `PersistentConfig.Stdout`/`Stderr` writers observe live output; they must be prompt and retention-bounded. Writer failures are retained, subsequent calls to that writer stop, and pipes continue draining.
+
 `Supervisor.Shutdown(ctx, reason)` returns `(ShutdownReport, error)` with per-child results, completion, and reaping status. Completed children and their errors remain in the report across partial-cleanup retries. `Track` transfers exclusive reaping of an unreaped command; configure its group before Start when using descendant termination. Repeated registration of the same command returns its existing handle. `Release` transfers ownership back only before cleanup starts and returns an error if it would abandon pending cleanup. `TrackPid` is explicitly best-effort and signal-only: it cannot verify process identity or reap a child.
 
 Owned persistent/supervised commands support Linux (with `/proc` available), Darwin, and Windows. Linux stat reads are capped at 4 KiB and group scans use 128-entry batches. Windows uses its managed process handle, reports owned termination as forced, and does not support the Unix group or bare-PID contract. Other platforms fail explicitly for this owned-observation path. Go cannot resolve arbitrary kernel stalls or force arbitrary caller-provided I/O callbacks to return; incomplete cleanup stays owned and observable.
@@ -176,6 +178,8 @@ segments, err := p.Execute(ctx, "audio.wav")
 ```
 
 ## Testing
+
+`process/testutil.BuildGo` builds one child program with explicit race/atomic-coverage instrumentation, independent of the parent test flags. It fixes `GOWORK=off`, bounds the build to five minutes and captures at most 1 MiB per diagnostic stream; failure and overflow preserve their causes. The caller owns the output path, `GOCOVERDIR`, artifact reuse and compatible coverage merging.
 
 ```bash
 cd process

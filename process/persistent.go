@@ -38,6 +38,11 @@ type PersistentConfig struct {
 	ShutdownGracePeriod time.Duration
 	// MaxCaptureBytes bounds retained lifetime output per stream. Nonpositive values use Command.MaxOutputBytes, or 64 KiB if neither limit is positive.
 	MaxCaptureBytes int
+	// Stdout and Stderr optionally observe live output in addition to bounded capture.
+	// Writers must return promptly and bound their own retention. A failed writer is
+	// not called again; pipes still drain, and Wait/Shutdown preserve its error.
+	Stdout io.Writer
+	Stderr io.Writer
 	// Lifecycle configures process-group isolation and shutdown escalation.
 	Lifecycle LifecyclePolicy
 }
@@ -206,8 +211,8 @@ func startPersistent(ctx context.Context, cmd Command, cfg PersistentConfig, acq
 
 	var readersWG sync.WaitGroup
 	readersWG.Add(2)
-	go p.readInto(stdoutPipe, p.stdout, marker, signalReady, &readersWG)
-	go p.readInto(stderrPipe, p.stderr, marker, signalReady, &readersWG)
+	go p.readInto(stdoutPipe, p.stdout, cfg.Stdout, marker, signalReady, &readersWG)
+	go p.readInto(stderrPipe, p.stderr, cfg.Stderr, marker, signalReady, &readersWG)
 
 	readersDone := make(chan struct{})
 	go func() {

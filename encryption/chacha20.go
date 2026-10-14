@@ -10,7 +10,8 @@ import (
 // ChaCha20Service handles encryption/decryption using ChaCha20-Poly1305.
 // This is a modern AEAD cipher that performs well on CPUs without AES hardware acceleration (e.g., ARM devices, older processors).
 type ChaCha20Service struct {
-	passphrase []byte
+	passphrase     []byte
+	associatedData []byte
 }
 
 // NewChaCha20 creates a new ChaCha20-Poly1305 encryption service.
@@ -30,10 +31,10 @@ func newChaCha20Poly1305(key []byte) (cipher.AEAD, error) {
 
 // Encrypt encrypts plaintext and returns a base64-encoded versioned envelope.
 func (s *ChaCha20Service) Encrypt(plaintext string) (string, error) {
-	return sealEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, plaintext)
+	return sealEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, plaintext, s.associatedData)
 }
 
 // Decrypt decrypts a base64-encoded ciphertext envelope.
 func (s *ChaCha20Service) Decrypt(ciphertext string) (string, error) {
-	return openEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, ciphertext)
+	return openEnvelope(s.passphrase, AlgorithmChaCha20, newChaCha20Poly1305, ciphertext, s.associatedData)
 }

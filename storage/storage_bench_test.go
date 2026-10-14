@@ -1,13 +1,14 @@
 package storage
 
 import (
+	"context"
 	"strconv"
 	"testing"
 
 	"github.com/kbukum/gokit/logging"
 )
 
-func benchFactory(_ Config, _ *logging.Logger) (Storage, error) {
+func benchFactory(_ context.Context, _ Config, _ *logging.Logger) (Storage, error) {
 	return nil, nil //nolint:nilnil // benchmark stub: no error path exercised
 }
 

@@ -12,12 +12,27 @@ import (
 
 // shutdownOwned retains ownership until both Wait/output collection and the isolated process group complete.
 func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolicy, grace time.Duration) (result ShutdownOutcome, resultErr error) {
+	outcome, err := settleOwned(ctx, child, policy, grace)
+	return outcome, errors.Join(err, shutdownStatusError(outcome))
+}
+
+func shutdownStatusError(outcome ShutdownOutcome) error {
+	if outcome.Result != nil && (outcome.AlreadyExited || outcome.Result.Forced ||
+		(outcome.Result.ExitCode != nil && *outcome.Result.ExitCode != 0)) {
+		return outcome.Result.Check()
+	}
+	return nil
+}
+
+// settleOwned separates exit status from failures to release ownership, allowing
+// crash assertions to inspect status without discarding cleanup/observation errors.
+func settleOwned(ctx context.Context, child *ownedChild, policy LifecyclePolicy, grace time.Duration) (result ShutdownOutcome, resultErr error) {
 	var probeErr error
 	defer func() { resultErr = errors.Join(resultErr, probeErr, child.observationError()) }()
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	outcome := ShutdownOutcome{Result: &Result{}}
-	finish := func() error {
+	finish := func() {
 		select {
 		case <-child.done:
 			outcome.Result.ExitCode = exitCodeOf(child.cmd.ProcessState)
@@ -27,17 +42,13 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 			outcome.Result.Forced = outcome.Result.Forced || child.exit.forced
 		default:
 		}
-		if outcome.AlreadyExited || outcome.Result.Forced ||
-			(outcome.Result.ExitCode != nil && *outcome.Result.ExitCode != 0) {
-			return outcome.Result.Check()
-		}
-		return nil
 	}
+	defer finish()
 	select {
 	case <-child.done:
 		outcome.AlreadyExited = true
 		outcome.Complete = true
-		return outcome, finish()
+		return outcome, nil
 	default:
 	}
 	select {
@@ -53,7 +64,7 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 	if child.groupReleased {
 		waitErr := waitOwnedReap(ctx, child)
 		outcome.Complete = waitErr == nil
-		return outcome, errors.Join(waitErr, finish())
+		return outcome, waitErr
 	}
 	if outcome.AlreadyExited {
 		reapCtx, reapCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
@@ -70,7 +81,7 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 			child.startWait(reapCtx)
 			waitErr := waitOwnedReap(reapCtx, child)
 			outcome.Complete = waitErr == nil
-			return outcome, errors.Join(waitErr, finish())
+			return outcome, waitErr
 		}
 	}
 
@@ -101,10 +112,10 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 		child.startWait(reapCtx)
 		waitErr = waitOwnedReap(reapCtx, child)
 		outcome.Complete = waitErr == nil
-		return outcome, errors.Join(signalErr, waitErr, finish())
+		return outcome, errors.Join(signalErr, waitErr)
 	}
 	if !errors.Is(waitErr, context.Canceled) && !errors.Is(waitErr, context.DeadlineExceeded) {
-		return outcome, errors.Join(signalErr, waitErr, finish())
+		return outcome, errors.Join(signalErr, waitErr)
 	}
 	reapCtx, reapCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer reapCancel()
@@ -116,7 +127,7 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 			var err error
 			descendants, err = groupHasDescendants(reapCtx, child.pid)
 			if err != nil {
-				return outcome, errors.Join(signalErr, err, finish())
+				return outcome, errors.Join(signalErr, err)
 			}
 		}
 		if !descendants {
@@ -125,7 +136,7 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 			outcome.Complete = waitErr == nil
 			outcome.Result.Canceled = errors.Is(ctx.Err(), context.Canceled)
 			outcome.Result.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)
-			return outcome, errors.Join(waitErr, ctx.Err(), finish())
+			return outcome, errors.Join(waitErr, ctx.Err())
 		}
 	}
 
@@ -162,13 +173,7 @@ func shutdownOwned(ctx context.Context, child *ownedChild, policy LifecyclePolic
 	}
 	outcome.Complete = waitErr == nil
 	outcome.Result.TimedOut = outcome.Result.TimedOut || errors.Is(waitErr, context.DeadlineExceeded)
-	var exitErr error
-	select {
-	case <-child.done:
-		exitErr = finish()
-	default:
-	}
-	return outcome, errors.Join(signalErr, exitErr, waitErr,
+	return outcome, errors.Join(signalErr, waitErr,
 		goerrors.Internal(fmt.Errorf("process required forced termination")).WithDetail("forced", true), ctx.Err())
 }
 

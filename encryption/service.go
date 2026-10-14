@@ -22,7 +22,8 @@ type aeadFactory func([]byte) (cipher.AEAD, error)
 
 // Service handles encryption/decryption of sensitive data using AES-256-GCM.
 type Service struct {
-	passphrase []byte
+	passphrase     []byte
+	associatedData []byte
 }
 
 // NewService creates a new encryption service with the given key.
@@ -51,7 +52,7 @@ func newAESGCM(key []byte) (cipher.AEAD, error) {
 
 // sealEnvelope derives a per-message key, seals the plaintext with the header as
 // AEAD associated data, and returns the base64-encoded versioned envelope.
-func sealEnvelope(passphrase []byte, alg Algorithm, factory aeadFactory, plaintext string) (string, error) {
+func sealEnvelope(passphrase []byte, alg Algorithm, factory aeadFactory, plaintext string, binding []byte) (string, error) {
 	salt := make([]byte, saltSize)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
@@ -80,13 +81,13 @@ func sealEnvelope(passphrase []byte, alg Algorithm, factory aeadFactory, plainte
 		return "", err
 	}
 
-	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), header)
+	ciphertext := aead.Seal(nil, nonce, []byte(plaintext), append(header, binding...))
 	return encodeEnvelope(header, ciphertext), nil
 }
 
 // openEnvelope decodes the versioned envelope, verifies it was sealed by the
 // expected algorithm, and authenticates the header before decrypting.
-func openEnvelope(passphrase []byte, expected Algorithm, factory aeadFactory, ciphertext string) (string, error) {
+func openEnvelope(passphrase []byte, expected Algorithm, factory aeadFactory, ciphertext string, binding []byte) (string, error) {
 	env, err := decodeEnvelope(ciphertext)
 	if err != nil {
 		return "", err
@@ -105,7 +106,8 @@ func openEnvelope(passphrase []byte, expected Algorithm, factory aeadFactory, ci
 		return "", err
 	}
 
-	plaintext, err := aead.Open(nil, env.nonce(), env.ciphertext(), env.associatedData())
+	associated := append([]byte(nil), env.associatedData()...)
+	plaintext, err := aead.Open(nil, env.nonce(), env.ciphertext(), append(associated, binding...))
 	if err != nil {
 		return "", invalidEnvelope("ciphertext authentication failed").WithCause(err)
 	}
@@ -115,10 +117,10 @@ func openEnvelope(passphrase []byte, expected Algorithm, factory aeadFactory, ci
 
 // Encrypt encrypts plaintext and returns a base64-encoded versioned envelope.
 func (s *Service) Encrypt(plaintext string) (string, error) {
-	return sealEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, plaintext)
+	return sealEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, plaintext, s.associatedData)
 }
 
 // Decrypt decrypts a base64-encoded ciphertext envelope.
 func (s *Service) Decrypt(ciphertext string) (string, error) {
-	return openEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, ciphertext)
+	return openEnvelope(s.passphrase, AlgorithmAESGCM, newAESGCM, ciphertext, s.associatedData)
 }

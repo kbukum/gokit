@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"crypto/tls"
 	"fmt"
 	"math"
 	"time"
@@ -41,6 +42,9 @@ type Config struct {
 	// TLS configures TLS settings for the HTTP transport.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 
+	// EndpointPolicy constrains every request, redirect and DNS-at-dial destination. Injected, never loaded from wire config.
+	EndpointPolicy *security.EndpointPolicy `yaml:"-" mapstructure:"-"`
+
 	// DefaultHeaders are default headers applied to all requests.
 	DefaultHeaders map[string]string `yaml:"default_headers" mapstructure:"default_headers"`
 
@@ -79,6 +83,14 @@ func (c *Config) Validate() error {
 	if c.TLS != nil {
 		if err := c.TLS.Validate(); err != nil {
 			return err
+		}
+	}
+	if c.EndpointPolicy != nil {
+		if c.TLS != nil && (c.TLS.SkipVerify || c.TLS.ServerName != "" || (c.TLS.MinVersion != 0 && c.TLS.MinVersion < tls.VersionTLS13)) {
+			return NewValidationError("endpoint policy requires hostname verification and TLS 1.3 without a server-name override")
+		}
+		if c.ResiliencePolicy != nil && c.ResiliencePolicy.Retry != nil {
+			return NewValidationError("endpoint policy refuses implicit request retries")
 		}
 	}
 	return c.ResiliencePolicy.Validate()
