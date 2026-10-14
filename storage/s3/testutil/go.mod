@@ -7,6 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.9
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
 	github.com/kbukum/gokit v0.3.0-alpha.1
+	github.com/kbukum/gokit/storage v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage/s3 v0.3.0-alpha.1
 	github.com/moby/moby/api v1.56.1
 	github.com/moby/moby/client v0.5.0
@@ -53,7 +54,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
-	github.com/kbukum/gokit/storage v0.3.0-alpha.1 // indirect
 	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect

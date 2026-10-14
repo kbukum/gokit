@@ -24,6 +24,9 @@ func TestFixtureEffectiveContainerHardening(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if f.ContainerID() == "" {
+		t.Fatal("running fixture omitted its network attachment identity")
+	}
 	actual, err := f.container.Inspect(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +81,9 @@ func TestFixtureEffectiveContainerHardening(t *testing.T) {
 	}
 	if err := f.Close(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+	if f.ContainerID() != "" {
+		t.Fatal("released fixture retained a network attachment identity")
 	}
 	if err := f.Close(t.Context()); err != nil {
 		t.Fatal(err)

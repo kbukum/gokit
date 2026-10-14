@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/auth"
@@ -46,6 +47,7 @@ type objectClient interface {
 	Head(ctx context.Context, path string) (storage.FileInfo, error)
 	Copy(ctx context.Context, srcPath, dstPath string) error
 	SignedURL(ctx context.Context, path string, expiry time.Duration) (string, error)
+	Close() error
 }
 
 // Storage implements storage.Storage using Google Cloud Storage.
@@ -64,9 +66,14 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 	return NewStorageWithClient(cfg.Bucket, cfg.PublicURL, client), nil
 }
 
-// NewStorageWithClient creates storage with an injected client for tests.
+// NewStorageWithClient creates storage with an injected client for tests. Storage owns the client and releases it on Close.
 func NewStorageWithClient(bucket, publicURL string, client objectClient) *Storage {
 	return &Storage{bucket: bucket, publicURL: strings.TrimRight(publicURL, "/"), client: client}
+}
+
+// Close releases the owned GCS client. Consumers must drain operations first; a failed close may be retried.
+func (s *Storage) Close(context.Context) error {
+	return s.client.Close()
 }
 
 // Upload writes data from reader to GCS.
@@ -132,10 +139,15 @@ func (s *Storage) SignedURL(ctx context.Context, path string, expiry time.Durati
 	return signed, nil
 }
 
+var errClientClosed = errors.New("storage: gcs client is closed")
+
+// googleClient refuses use after Close because the SDK client panics once released.
 type googleClient struct {
 	bucket string
-	client *gcstorage.Client
 	cfg    *Config
+	mu     sync.RWMutex
+	client *gcstorage.Client
+	closed bool
 }
 
 func newGoogleClient(ctx context.Context, cfg *Config) (*googleClient, error) {
@@ -170,12 +182,44 @@ func newGoogleClient(ctx context.Context, cfg *Config) (*googleClient, error) {
 	return &googleClient{bucket: cfg.Bucket, client: client, cfg: cfg}, nil
 }
 
-func (c *googleClient) object(path string) *gcstorage.ObjectHandle {
-	return c.client.Bucket(c.bucket).Object(path)
+func (c *googleClient) bucketHandle() (*gcstorage.BucketHandle, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.closed {
+		return nil, errClientClosed
+	}
+	return c.client.Bucket(c.bucket), nil
+}
+
+func (c *googleClient) object(path string) (*gcstorage.ObjectHandle, error) {
+	bucket, err := c.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+	return bucket.Object(path), nil
+}
+
+// Close releases the SDK client. Later operations fail; a failed release may be retried.
+func (c *googleClient) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.client == nil {
+		return nil
+	}
+	c.closed = true
+	if err := c.client.Close(); err != nil {
+		return fmt.Errorf("storage: gcs close: %w", err)
+	}
+	c.client = nil
+	return nil
 }
 
 func (c *googleClient) Put(ctx context.Context, path string, reader io.Reader) error {
-	w := c.object(path).NewWriter(ctx)
+	obj, err := c.object(path)
+	if err != nil {
+		return err
+	}
+	w := obj.NewWriter(ctx)
 	if _, err := io.Copy(w, reader); err != nil {
 		_ = w.Close()
 		return err
@@ -184,11 +228,19 @@ func (c *googleClient) Put(ctx context.Context, path string, reader io.Reader) e
 }
 
 func (c *googleClient) Get(ctx context.Context, path string) (io.ReadCloser, error) {
-	return c.object(path).NewReader(ctx)
+	obj, err := c.object(path)
+	if err != nil {
+		return nil, err
+	}
+	return obj.NewReader(ctx)
 }
 
 func (c *googleClient) Delete(ctx context.Context, path string) error {
-	err := c.object(path).Delete(ctx)
+	obj, err := c.object(path)
+	if err != nil {
+		return err
+	}
+	err = obj.Delete(ctx)
 	if errors.Is(err, gcstorage.ErrObjectNotExist) {
 		return nil
 	}
@@ -196,7 +248,11 @@ func (c *googleClient) Delete(ctx context.Context, path string) error {
 }
 
 func (c *googleClient) Exists(ctx context.Context, path string) (bool, error) {
-	_, err := c.object(path).Attrs(ctx)
+	obj, err := c.object(path)
+	if err != nil {
+		return false, err
+	}
+	_, err = obj.Attrs(ctx)
 	if err == nil {
 		return true, nil
 	}
@@ -207,7 +263,11 @@ func (c *googleClient) Exists(ctx context.Context, path string) (bool, error) {
 }
 
 func (c *googleClient) List(ctx context.Context, prefix string) ([]storage.FileInfo, error) {
-	it := c.client.Bucket(c.bucket).Objects(ctx, &gcstorage.Query{Prefix: prefix})
+	bucket, err := c.bucketHandle()
+	if err != nil {
+		return nil, err
+	}
+	it := bucket.Objects(ctx, &gcstorage.Query{Prefix: prefix})
 	var files []storage.FileInfo
 	for {
 		attrs, err := it.Next()
@@ -232,4 +292,5 @@ func (c *googleClient) SignedURL(_ context.Context, path string, expiry time.Dur
 var (
 	_ storage.Storage           = (*Storage)(nil)
 	_ storage.SignedURLProvider = (*Storage)(nil)
+	_ storage.Closer            = (*Storage)(nil)
 )

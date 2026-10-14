@@ -33,6 +33,8 @@ Set both `AccessKeyFile` and `SecretKeyFile` to select mounted credentials. Each
 
 `Check(ctx)` verifies authenticated access to the configured bucket with `HeadBucket`, without creating it or writing an object. Components check this capability before publishing the backend and during health probes. Missing buckets, denied access, cancellation and unavailable storage fail explicitly.
 
+`Create(ctx, path, reader)` sends one `PutObject` with `If-None-Match: *`. A `412 Precondition Failed` returns an error matching `storage.ErrExists`; other failures, including `409` conditional-request conflicts, preserve their cause and do not prove that the key is occupied. The server must support conditional writes. Amazon S3 and the pinned SeaweedFS fixture are proved.
+
 `Exists(ctx, path)` returns `false, nil` only for a not-found response. Denied access, cancellation and storage/transport failures return cause-preserving errors, never evidence that an object was deleted.
 
 For real adapter proof, use the separate [`storage/s3/testutil`](testutil/README.md) module; the provider-neutral test utilities do not import backend SDKs.

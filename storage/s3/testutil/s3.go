@@ -36,7 +36,14 @@ type S3Fixture struct {
 	mu        sync.Mutex
 	container testcontainers.Container
 	config    storages3.Config
+	setup     s3Credential
 }
+
+const (
+	readinessTimeout        = 20 * time.Second
+	readinessAttemptTimeout = 5 * time.Second
+	readinessRetryDelay     = 250 * time.Millisecond
+)
 
 type s3Credential struct {
 	AccessKey string `json:"accessKey"`
@@ -49,7 +56,7 @@ type s3Identity struct {
 	Actions     []string       `json:"actions"`
 }
 
-// StartS3 requires Docker and an owned temporary directory. Provisioning is bounded at three minutes.
+// StartS3 requires Docker and an owned temporary directory. Provisioning is bounded at three minutes and returns once the bucket accepts writes.
 // Config exposes mounted credential paths; callers must never retain their contents outside the fixture.
 // A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
 func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
@@ -109,10 +116,13 @@ func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
 	request := testcontainers.ContainerRequest{
 		Image: S3Image, Entrypoint: []string{"/usr/bin/weed"}, ExposedPorts: []string{"8333/tcp"},
 		Cmd: []string{
-			"mini", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=0.0.0.0", "-webdav=false", "-admin.ui=false",
+			// "server" starts only the requested components; "mini" always adds an admin server and maintenance worker.
+			"server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=0.0.0.0", "-filer", "-s3",
 			"-s3.port.iceberg=0", "-s3.port.lance=0", "-debug=false",
 			"-s3.iam=false", "-s3.autoCreateBucket=false", "-s3.config=/run/s3.json", "-volume.max=4", "-master.volumeSizeLimitMB=64",
 		},
+		// The default growth of seven volumes per collection exceeds the four bounded volume slots.
+		Env:        map[string]string{"WEED_MASTER_VOLUME_GROWTH_COPY_1": "1"},
 		WaitingFor: wait.ForListeningPort("8333/tcp").WithStartupTimeout(30 * time.Second),
 		ConfigModifier: func(c *container.Config) {
 			c.User, c.WorkingDir = strconv.Itoa(uid)+":"+strconv.Itoa(uid), "/data"
@@ -137,23 +147,59 @@ func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
 		Bucket: bucket, Region: storages3.DefaultRegion, Endpoint: endpoint,
 		AccessKeyFile: accessFile, SecretKeyFile: secretFile, ForcePathStyle: true,
 	}
-	transport := &http.Transport{MaxConnsPerHost: 2, IdleConnTimeout: 10 * time.Second}
-	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
-		return errors.New("S3 fixture redirects are refused")
-	}}
-	defer httpClient.CloseIdleConnections()
-	client := awss3.NewFromConfig(aws.Config{
-		Region: storages3.DefaultRegion, Credentials: credentials.NewStaticCredentialsProvider(setup.AccessKey, setup.SecretKey, ""),
-		RetryMaxAttempts: 1, HTTPClient: httpClient,
-	}, func(o *awss3.Options) {
-		o.BaseEndpoint, o.UsePathStyle = aws.String(endpoint), true
-	})
+	f.setup = setup
+	client, closeClient := f.setupClient(endpoint)
+	defer closeClient()
 	provision, finish := context.WithTimeout(ctx, 10*time.Second)
 	defer finish()
 	if _, err := client.CreateBucket(provision, &awss3.CreateBucketInput{Bucket: aws.String(bucket)}); err != nil {
 		return f.rollback(ctx, fmt.Errorf("S3 bucket provisioning: %w", err))
 	}
+	if err := f.awaitWritable(ctx); err != nil {
+		return f.rollback(ctx, err)
+	}
 	return f, nil
+}
+
+func (f *S3Fixture) setupClient(endpoint string) (client *awss3.Client, closeIdle func()) {
+	transport := &http.Transport{MaxConnsPerHost: 2, IdleConnTimeout: 10 * time.Second}
+	httpClient := &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return errors.New("S3 fixture redirects are refused")
+	}}
+	client = awss3.NewFromConfig(aws.Config{
+		Region: storages3.DefaultRegion, Credentials: credentials.NewStaticCredentialsProvider(f.setup.AccessKey, f.setup.SecretKey, ""),
+		RetryMaxAttempts: 1, HTTPClient: httpClient,
+	}, func(o *awss3.Options) {
+		o.BaseEndpoint, o.UsePathStyle = aws.String(endpoint), true
+	})
+	return client, httpClient.CloseIdleConnections
+}
+
+// awaitWritable proves the bucket accepts and deletes a sentinel object. The S3 listener opens before the master
+// elects a leader and the volume server registers, so an open port alone does not mean writes can be assigned.
+// Callers must hold f.mu or have exclusive ownership of f.
+func (f *S3Fixture) awaitWritable(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, readinessTimeout)
+	defer cancel()
+	client, closeClient := f.setupClient(f.config.Endpoint)
+	defer closeClient()
+	bucket, key := aws.String(f.config.Bucket), aws.String(".fixture-ready/"+rand.Text())
+	for {
+		attempt, finish := context.WithTimeout(ctx, readinessAttemptTimeout)
+		_, err := client.PutObject(attempt, &awss3.PutObjectInput{Bucket: bucket, Key: key, Body: strings.NewReader("ready")})
+		if err == nil {
+			_, err = client.DeleteObject(attempt, &awss3.DeleteObjectInput{Bucket: bucket, Key: key})
+		}
+		finish()
+		if err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("S3 fixture write readiness: %w", errors.Join(err, context.Cause(ctx)))
+		case <-time.After(readinessRetryDelay):
+		}
+	}
 }
 
 func (f *S3Fixture) rollback(ctx context.Context, cause error) (*S3Fixture, error) {
@@ -170,7 +216,7 @@ func (f *S3Fixture) Config() storages3.Config {
 	return f.config
 }
 
-// Restart stops and starts the same container and persistent metadata/data within thirty seconds.
+// Restart stops and starts the same container and persistent metadata/data, returning once writable, within thirty seconds.
 func (f *S3Fixture) Restart(ctx context.Context) error {
 	if util.IsNil(ctx) {
 		return errors.New("S3 fixture restart requires a context")
@@ -195,10 +241,10 @@ func (f *S3Fixture) Restart(ctx context.Context) error {
 		return err
 	}
 	f.config.Endpoint = endpoint
-	return nil
+	return f.awaitWritable(ctx)
 }
 
-// CrashRestart kills PID 1 with SIGKILL and restarts the same persistent node within thirty seconds.
+// CrashRestart kills PID 1 with SIGKILL and restarts the same persistent node, returning once writable, within thirty seconds.
 // This proves process-crash recovery, not host power-loss or multi-node durability.
 func (f *S3Fixture) CrashRestart(ctx context.Context) (err error) {
 	if util.IsNil(ctx) {
@@ -234,7 +280,18 @@ func (f *S3Fixture) CrashRestart(ctx context.Context) (err error) {
 		return err
 	}
 	f.config.Endpoint = endpoint
-	return nil
+	return f.awaitWritable(ctx)
+}
+
+// ContainerID identifies the owned container for attachment to a caller-owned test network.
+// It is empty after release. The fixture, not the network caller, owns container teardown.
+func (f *S3Fixture) ContainerID() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.container == nil {
+		return ""
+	}
+	return f.container.GetContainerID()
 }
 
 // Close releases the owned container with a fresh thirty-second budget; callers own the temporary directory.

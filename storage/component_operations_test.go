@@ -32,15 +32,20 @@ func TestComponentOperationsFollowLifecycle(t *testing.T) {
 		_, existsErr := c.Exists(t.Context(), "key")
 		_, listErr := c.List(t.Context(), "key")
 		_, urlErr := c.URL(t.Context(), "key")
+		createErr := c.Create(t.Context(), "key", strings.NewReader("value"))
+		_, headErr := c.Head(t.Context(), "key")
 		if state == "started" {
-			if err := errors.Join(uploadErr, downloadErr, deleteErr, existsErr, listErr); err != nil {
+			if err := errors.Join(uploadErr, downloadErr, deleteErr, existsErr, listErr, headErr); err != nil {
 				t.Fatal(err)
+			}
+			if !errors.Is(createErr, ErrCreateUnsupported) {
+				t.Fatal("component create bypassed the backend capability", createErr)
 			}
 			if !errors.Is(urlErr, probeErr) {
 				t.Fatal("backend cause lost")
 			}
 		} else {
-			for _, err := range []error{uploadErr, downloadErr, deleteErr, existsErr, listErr, urlErr} {
+			for _, err := range []error{uploadErr, downloadErr, deleteErr, existsErr, listErr, urlErr, createErr, headErr} {
 				if err == nil {
 					t.Fatalf("%s operation appeared successful", state)
 				}

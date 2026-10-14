@@ -2,12 +2,14 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -119,6 +121,26 @@ func (s *Storage) Upload(ctx context.Context, path string, reader io.Reader) err
 	return nil
 }
 
+// Create writes data to S3 with If-None-Match: * so the server refuses an
+// occupied key. A 412 response returns an error wrapping [storage.ErrExists].
+// The client never retries, so one call dispatches at most one request.
+func (s *Storage) Create(ctx context.Context, path string, reader io.Reader) error {
+	_, err := s.client.PutObject(ctx, &awss3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(path),
+		Body:        reader,
+		IfNoneMatch: aws.String("*"),
+	})
+	if err != nil {
+		var re *awshttp.ResponseError
+		if errors.As(err, &re) && re.HTTPStatusCode() == http.StatusPreconditionFailed {
+			return fmt.Errorf("storage: s3 create: %w", storage.ExistsError(path))
+		}
+		return fmt.Errorf("storage: s3 create: %w", err)
+	}
+	return nil
+}
+
 // Download returns a reader for the S3 object at the given path.
 func (s *Storage) Download(ctx context.Context, path string) (io.ReadCloser, error) {
 	out, err := s.client.GetObject(ctx, &awss3.GetObjectInput{
@@ -223,4 +245,5 @@ func (s *Storage) resolveEndpoint() string {
 var (
 	_ storage.Storage           = (*Storage)(nil)
 	_ storage.SignedURLProvider = (*Storage)(nil)
+	_ storage.CreateProvider    = (*Storage)(nil)
 )

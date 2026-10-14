@@ -5,7 +5,11 @@ import (
 	"io"
 )
 
-var _ Storage = (*Component)(nil)
+var (
+	_ Storage        = (*Component)(nil)
+	_ CreateProvider = (*Component)(nil)
+	_ HeadProvider   = (*Component)(nil)
+)
 
 // Upload delegates to the started backend; lifecycle failures are explicit.
 func (c *Component) Upload(ctx context.Context, path string, reader io.Reader) error {
@@ -54,4 +58,22 @@ func (c *Component) List(ctx context.Context, prefix string) ([]FileInfo, error)
 		return nil, err
 	}
 	return backend.List(ctx, prefix)
+}
+
+// Create delegates to the started backend's atomic create; see [Create].
+func (c *Component) Create(ctx context.Context, path string, reader io.Reader) error {
+	backend, err := c.Source()
+	if err != nil {
+		return err
+	}
+	return Create(ctx, backend, path, reader)
+}
+
+// Head delegates to the started backend; see [Head].
+func (c *Component) Head(ctx context.Context, path string) (FileInfo, error) {
+	backend, err := c.Source()
+	if err != nil {
+		return FileInfo{}, err
+	}
+	return Head(ctx, backend, path)
 }

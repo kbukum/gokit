@@ -23,6 +23,8 @@ type fakeObjectClient struct {
 
 func newFakeClient() *fakeObjectClient { return &fakeObjectClient{objects: map[string]string{}} }
 
+func (f *fakeObjectClient) Close() error { return nil }
+
 func (f *fakeObjectClient) Put(_ context.Context, path string, r io.Reader) error {
 	if f.fail != nil {
 		return f.fail

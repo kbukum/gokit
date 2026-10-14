@@ -47,7 +47,11 @@ func (s *Storage) Rename(ctx context.Context, srcPath, dstPath string) error {
 }
 
 func (c *googleClient) Head(ctx context.Context, path string) (storage.FileInfo, error) {
-	attrs, err := c.object(path).Attrs(ctx)
+	obj, err := c.object(path)
+	if err != nil {
+		return storage.FileInfo{}, err
+	}
+	attrs, err := obj.Attrs(ctx)
 	if err != nil {
 		if errors.Is(err, gcstorage.ErrObjectNotExist) {
 			return storage.FileInfo{}, storage.NotFoundError(path)
@@ -71,8 +75,11 @@ func (c *googleClient) Head(ctx context.Context, path string) (storage.FileInfo,
 }
 
 func (c *googleClient) Copy(ctx context.Context, srcPath, dstPath string) error {
-	src := c.object(srcPath)
-	dst := c.object(dstPath)
+	bucket, err := c.bucketHandle()
+	if err != nil {
+		return err
+	}
+	src, dst := bucket.Object(srcPath), bucket.Object(dstPath)
 	if _, err := dst.CopierFrom(src).Run(ctx); err != nil {
 		if errors.Is(err, gcstorage.ErrObjectNotExist) {
 			return storage.NotFoundError(srcPath)

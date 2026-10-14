@@ -38,6 +38,7 @@ var (
 	_ component.Component    = (*Component)(nil)
 	_ testutil.TestComponent = (*Component)(nil)
 	_ storage.Storage        = (*Component)(nil)
+	_ storage.CreateProvider = (*Component)(nil)
 )
 
 // NewComponent creates a new in-memory storage test component.
@@ -144,6 +145,25 @@ func (c *Component) Upload(_ context.Context, path string, reader io.Reader) err
 		modTime:  time.Now(),
 		checksum: hex.EncodeToString(sum[:]),
 	}
+	return nil
+}
+
+// Create stores the object only if path is absent; an occupied path returns an error wrapping storage.ErrExists.
+func (c *Component) Create(_ context.Context, path string, reader io.Reader) error {
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return fmt.Errorf("read create data: %w", err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.started {
+		return fmt.Errorf("component not started")
+	}
+	if _, ok := c.files[path]; ok {
+		return storage.ExistsError(path)
+	}
+	sum := sha256.Sum256(data)
+	c.files[path] = &memFile{data: data, modTime: time.Now(), checksum: hex.EncodeToString(sum[:])}
 	return nil
 }
 

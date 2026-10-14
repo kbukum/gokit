@@ -12,6 +12,14 @@ Stop acceptance and drain active operations before stopping the component. `Stop
 
 Backends may implement `Checker` for authenticated readiness without mutation. The component checks it before startup publication and on every health probe; failed readiness closes the acquired backend rather than making it available. Backends without this capability retain the URL-based health check.
 
+## Create-if-absent
+
+`storage.Create(ctx, store, path, reader)` writes an object only when its key is empty. An occupied key returns an error matching `storage.ErrExists` and leaves the existing object unchanged. Backends opt in through `CreateProvider`; S3 uses `If-None-Match: *`, local storage hard-links a complete file from its reserved `.gokit-staging` directory (hidden from listings and refused as a key; an interrupted process can leave unreachable files there that operators may remove while no create is running) and the in-memory test component checks under its lock. A backend without an atomic create returns `storage.ErrCreateUnsupported`; there is no check-then-upload fallback.
+
+Each `Create` call dispatches at most one write. Once any object occupies a key, a delayed or ambiguous `Create` for that key can never replace it. This lets an owner with one writer per key fence that key: placing a marker with `Create` either stops a delayed write or shows that the write already landed.
+
+Local `Create` observes cancellation before reading, between reads and before publishing the final key; canceled calls remove their temporary file. The caller must unblock a reader already inside `Read` (for example, by closing its owned pipe). No detached copy goroutine is created.
+
 ## Local default
 
 ```go

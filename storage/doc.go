@@ -6,11 +6,13 @@
 //
 // # Optional capabilities
 //
-// Single-object metadata, copy, move, and signed URLs are opt-in capability
-// interfaces ([HeadProvider], [CopyProvider], [RenameProvider], and
-// [SignedURLProvider]) rather than required methods. Call the package-level
-// [Head], [Copy], and [Rename] helpers to use a backend's native operation when
-// it has one and a portable fallback when it does not.
+// Atomic create-if-absent, single-object metadata, copy, move, and signed URLs
+// are opt-in capability interfaces ([CreateProvider], [HeadProvider],
+// [CopyProvider], [RenameProvider], and [SignedURLProvider]) rather than
+// required methods. Call the package-level [Head], [Copy], and [Rename] helpers
+// to use a backend's native operation when it has one and a portable fallback
+// when it does not. [Create] has no fallback: it refuses backends that cannot
+// create atomically.
 //
 // # Backends
 //
