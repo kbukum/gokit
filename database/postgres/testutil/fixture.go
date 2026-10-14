@@ -27,12 +27,13 @@ const Image = "postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702f
 
 // Fixture owns one isolated PostgreSQL container. Params carry ephemeral credentials and must not be logged or retained as evidence.
 type Fixture struct {
-	Params    database.ConnParams
-	admin     *pgx.ConnConfig
-	terminate func(context.Context) error
-	mu        sync.Mutex
-	closed    bool
-	databases map[*Database]struct{}
+	Params      database.ConnParams
+	admin       *pgx.ConnConfig
+	terminate   func(context.Context) error
+	mu          sync.Mutex
+	closed      bool
+	containerID string
+	databases   map[*Database]struct{}
 }
 
 // Start requires a reachable Docker daemon, bounds provisioning to three minutes, and releases any partial container on failure. Each invocation owns a separate container and database.
@@ -78,6 +79,7 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 	container, err := tcpostgres.Run(ctx, Image, customizers...)
 	fixture := &Fixture{}
 	if container != nil {
+		fixture.containerID = container.GetContainerID()
 		fixture.terminate = func(cleanupCtx context.Context) error { return container.Terminate(cleanupCtx) }
 	}
 	if err != nil {
@@ -155,8 +157,17 @@ func (f *Fixture) Close(ctx context.Context) error {
 		return errors.Join(childErr, fmt.Errorf("terminate PostgreSQL fixture: %w", err))
 	}
 	f.terminate = nil
+	f.containerID = ""
 	clear(f.databases)
 	return childErr
+}
+
+// ContainerID identifies the owned container for attachment to a caller-owned test network.
+// It is empty after release. The fixture, not the network caller, owns container teardown.
+func (f *Fixture) ContainerID() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.containerID
 }
 
 func (f *Fixture) track(db *Database) error {
