@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/distribution/reference"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	dockerclient "github.com/moby/moby/client"
@@ -30,6 +32,35 @@ import (
 
 // S3Image pins the multi-platform SeaweedFS community server used by real storage proofs.
 const S3Image = "docker.io/chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d"
+
+var imageID = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+type options struct {
+	image string
+}
+
+// Option configures StartS3.
+type Option func(*options) error
+
+// WithImage runs an alternate SeaweedFS-compatible image instead of S3Image, such as an artifact built from source.
+// The reference must be immutable: a local image ID (sha256:<hex>) or a name pinned by digest. A missing image fails
+// provisioning; the fixture never falls back to another image. The image must provide /usr/bin/weed.
+func WithImage(ref string) Option {
+	return func(o *options) error {
+		if !imageID.MatchString(ref) {
+			parsed, err := reference.Parse(ref)
+			if err != nil {
+				return fmt.Errorf("S3 fixture image must be an image ID or digest-pinned reference: %w", err)
+			}
+			_, named := parsed.(reference.Named)
+			if _, digested := parsed.(reference.Digested); !named || !digested {
+				return errors.New("S3 fixture image must be an image ID or digest-pinned reference")
+			}
+		}
+		o.image = ref
+		return nil
+	}
+}
 
 // S3Fixture owns a private authenticated single-node S3 server and its persistent test data.
 type S3Fixture struct {
@@ -58,12 +89,21 @@ type s3Identity struct {
 	Actions     []string       `json:"actions"`
 }
 
-// StartS3 requires Docker and an owned temporary directory. Provisioning is bounded at three minutes and returns once the bucket accepts writes.
+// StartS3 requires Docker and an owned temporary directory. It runs S3Image unless WithImage selects another artifact. Provisioning is bounded at three minutes and returns once the bucket accepts writes.
 // Config exposes mounted credential paths; callers must never retain their contents outside the fixture.
 // A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
-func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
+func StartS3(ctx context.Context, dir string, opts ...Option) (*S3Fixture, error) {
 	if util.IsNil(ctx) || dir == "" {
 		return nil, errors.New("S3 fixture: context and an owned temporary directory are required")
+	}
+	o := options{image: S3Image}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("S3 fixture: nil option")
+		}
+		if err := opt(&o); err != nil {
+			return nil, err
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
@@ -116,7 +156,7 @@ func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
 		return nil, err
 	}
 	request := testcontainers.ContainerRequest{
-		Image: S3Image, Entrypoint: []string{"/usr/bin/weed"}, ExposedPorts: []string{"8333/tcp"},
+		Image: o.image, Entrypoint: []string{"/usr/bin/weed"}, ExposedPorts: []string{"8333/tcp"},
 		Cmd: []string{
 			// "server" starts only the requested components; "mini" always adds an admin server and maintenance worker.
 			"server", "-dir=/data", "-ip=127.0.0.1", "-ip.bind=0.0.0.0", "-filer", "-s3",
@@ -126,8 +166,11 @@ func StartS3(ctx context.Context, dir string) (*S3Fixture, error) {
 			"-master.electionTimeout=1s", "-volume.preStopSeconds=0",
 		},
 		// The default growth of seven volumes per collection exceeds the four bounded volume slots.
-		Env:        map[string]string{"WEED_MASTER_VOLUME_GROWTH_COPY_1": "1"},
-		WaitingFor: wait.ForListeningPort("8333/tcp").WithStartupTimeout(30 * time.Second),
+		Env: map[string]string{"WEED_MASTER_VOLUME_GROWTH_COPY_1": "1"},
+		// An HTTP response proves the server itself is serving. A port wait would pass on Docker's proxy alone in
+		// images without a shell, because testcontainers then skips its in-container listener check.
+		WaitingFor: wait.ForHTTP("/").WithPort("8333/tcp").WithStatusCodeMatcher(func(int) bool { return true }).
+			WithStartupTimeout(30 * time.Second),
 		ConfigModifier: func(c *container.Config) {
 			c.User, c.WorkingDir = strconv.Itoa(uid)+":"+strconv.Itoa(uid), "/data"
 		},
