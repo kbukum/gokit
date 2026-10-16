@@ -16,7 +16,7 @@ import (
 
 func TestS3FixturePersistsAcrossRestartAndRefusesUnprivilegedSetup(t *testing.T) {
 	t.Parallel()
-	f, err := testutil.StartS3(t.Context(), t.TempDir())
+	f, err := testutil.StartS3(t.Context(), t.TempDir(), testutil.IntegrationOptions(t)...)
 	if f != nil {
 		t.Cleanup(func() {
 			if err := f.Close(context.WithoutCancel(t.Context())); err != nil {

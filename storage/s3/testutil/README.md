@@ -2,6 +2,8 @@
 
 `StartS3(ctx, t.TempDir())` provisions a pinned SeaweedFS Community Edition node, creates a private random bucket using a separate setup identity, waits until that bucket accepts writes, and returns mounted credential paths for a bucket-scoped runtime identity. Docker is required; missing infrastructure fails rather than skipping.
 
+`StartS3` runs the pinned publisher image `S3Image` by default. `WithImage(ref)` selects another SeaweedFS-compatible artifact, such as one built from source, that provides `/usr/bin/weed`. The reference must be immutable: a local image ID (`sha256:<hex>`) or a digest-pinned name. A missing image fails provisioning; the fixture never falls back to the publisher image. Startup waits for an HTTP response from the S3 server itself, so images without a shell work.
+
 Call `Config()` to construct `s3.NewStorage`, and register `Close` with test cleanup whenever `StartS3` returns a non-nil fixture, before checking its error. Failed provisioning rolls back acquired resources; if rollback fails, the returned fixture retains cleanup ownership for a retry. Provisioning is bounded at three minutes, setup calls at ten seconds, graceful restarts at sixty seconds, crash restarts at thirty seconds and teardown at a fresh thirty seconds. The caller owns the temporary directory and must remove it after the container closes. Never log or retain its authentication files.
 
 `Restart` stops the same persistent node with SIGTERM, verifies a clean exit, and starts it again; SeaweedFS may spend up to fifteen seconds draining internal streams. `CrashRestart` sends SIGKILL, verifies exit status 137, and starts the same node without replacing its data. All three operations return only after a sentinel write and delete succeed, bounded at twenty seconds. Docker may assign a new host port: obtain a fresh configuration and reconstruct clients after either operation. This proves single-process crash recovery, not power-loss durability or a production multi-node topology.
@@ -15,3 +17,5 @@ The real suite checks effective container constraints and optional listeners, bu
 ```sh
 GOWORK=off go test -tags integration -race -shuffle=on -count=1 ./...
 ```
+
+Set `GOKIT_S3_FIXTURE_IMAGE` to an immutable reference to run the same suite against an alternate artifact. The listener check reads socket tables from a pinned BusyBox probe that shares the fixture's network namespace, so it needs no tools inside the fixture image.

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -39,6 +40,32 @@ func TestFixtureRollbackRetainsIncompleteOwnership(t *testing.T) {
 	owned, err = fixture.rollback(t.Context(), provisionErr)
 	if owned != nil || !errors.Is(err, provisionErr) || container.calls != 2 {
 		t.Fatalf("completed rollback retained ownership: %v", err)
+	}
+}
+
+func TestWithImageAcceptsOnlyImmutableReferences(t *testing.T) {
+	t.Parallel()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	for _, ref := range []string{digest, "storage@" + digest, "registry.example/storage@" + digest, "registry.example:5000/team/storage:1.0@" + digest} {
+		var o options
+		if err := WithImage(ref)(&o); err != nil || o.image != ref {
+			t.Fatalf("immutable reference %q refused: %v", ref, err)
+		}
+	}
+	for _, ref := range []string{
+		"", "storage", "storage:latest", "sha256:" + strings.Repeat("a", 63), "sha256:" + strings.Repeat("A", 64),
+		"storage@sha256:" + strings.Repeat("g", 64), " " + digest, "Storage@" + digest, "@" + digest,
+	} {
+		var o options
+		if err := WithImage(ref)(&o); err == nil {
+			t.Fatalf("mutable or malformed reference %q accepted", ref)
+		}
+	}
+	if f, err := StartS3(t.Context(), t.TempDir(), WithImage("storage:latest")); f != nil || err == nil {
+		t.Fatal("startup accepted a mutable image")
+	}
+	if f, err := StartS3(t.Context(), t.TempDir(), nil); f != nil || err == nil {
+		t.Fatal("startup accepted a nil option")
 	}
 }
 

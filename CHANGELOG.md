@@ -6,6 +6,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ### Added
 - **connect/client**: enforced redirect refusal for injected HTTP clients without mutating their settings or transferring transport ownership.
+- **storage/s3/testutil**: `WithImage` runs an immutable alternate artifact, such as a source-built server, without publisher-image fallback; shell-free HTTP readiness and a namespace-sharing listener probe support distroless images.
 - **database/postgres/testutil / storage/s3/testutil**: owned container identities support private-network consumers without host-gateway routing.
 - **storage**: atomic create-if-absent through `Create`/`CreateProvider` with a portable `ErrExists` identity; S3 (`If-None-Match`), local and in-memory backends implement it, and the component exposes `Create` and `Head`.
 - **process**: bounded, explicitly race/coverage-instrumented child builds and live output observers; retained-child signals and exit-status observation preserve ownership and capture failures.
