@@ -22,6 +22,8 @@ HTTP reserves one fifth of its drain time for forced close and handler cleanup. 
 
 REST request timeouts buffer at most 10 MiB of response body. Exceeding that limit returns a 503 and cancels the handler; writes after cancellation fail. Actual REST handler cleanup remains tracked after the timeout response, so dependency teardown waits for it. Mount streaming endpoints outside this buffering middleware.
 
+Under HTTP/2, `Config.WriteTimeout` is an absolute deadline per stream that successful writes do not renew, so it resets a healthy long-lived stream. Wrap streaming routes with `middleware.StreamWriteDeadline`; unary routes keep the server deadline.
+
 ## Install
 
 ```bash
@@ -132,6 +134,7 @@ server.MountDocs(engine, log,
 | `Recovery()` | Panic recovery |
 | `Tracing(TracingConfig)` | Inject a tracer and optional propagator, registered-route classifier and authenticated-parent policy; returns middleware and a configuration error |
 | `RequestLogger(log)` | Log registered routes and context-derived identifiers without raw URLs or request-header IDs |
+| `StreamWriteDeadline(budget, clock)` | For long-lived streaming routes: replace the server's absolute `WriteTimeout` with a deadline per write and flush, disarmed while idle; returns middleware and a configuration error |
 
 ### Middleware ordering
 
