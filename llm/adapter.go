@@ -82,6 +82,7 @@ func newAdapter(dialect Dialect, cfg Config) (*Adapter, error) {
 		TLS:            cfg.TLS,
 		DefaultHeaders: cfg.Headers,
 		Stream:         cfg.Stream,
+		EndpointPolicy: cfg.EndpointPolicy,
 	}
 	if cfg.ResiliencePolicy != nil {
 		restCfg.ResiliencePolicy = cfg.ResiliencePolicy

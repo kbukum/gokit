@@ -44,6 +44,10 @@ type Config struct {
 	// Headers are additional HTTP headers sent with every request.
 	Headers map[string]string `yaml:"headers" json:"headers"`
 
+	// EndpointPolicy, when set, constrains every request, redirect and DNS-at-dial destination to operator grants. It
+	// refuses redirects, proxies, TLS overrides and implicit retries. Injected, never loaded from wire config.
+	EndpointPolicy *security.EndpointPolicy `yaml:"-" json:"-"`
+
 	// ResiliencePolicy configures the retry / circuit-breaker / rate-limiter
 	// stack applied to outbound requests. Nil disables resilience. It uses the
 	// shared resilience.Policy config vocabulary, the same block understood by

@@ -69,6 +69,10 @@ Use `llm` for chat-style completions, tool calling, and canonical streaming. Use
 
 One goroutine owns decoding and assembly. A one-slot event channel applies backpressure; cancel the context when stopping consumption. Failure can replace the last undelivered delta with `StreamError` so a full channel cannot strand cleanup or hide the failure. Body closure, reader exit and timer cleanup precede admission release.
 
+## Endpoint policy
+
+Set `Config.EndpointPolicy` (a `security.EndpointPolicy`) when the endpoint comes from tenant or operator data. Every request, redirect and connection is then checked against the operator's origin grants, DNS answers are checked again at dial, and redirects and proxies are refused. Construction fails if the config also asks for implicit retries or weakens TLS. The policy is injected in code and never read from YAML or JSON.
+
 Run the scripted upstream proof from the gokit root; no credentials, model download or paid endpoint is needed:
 
 ```sh
