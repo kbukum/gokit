@@ -3,7 +3,7 @@ module github.com/kbukum/gokit/auth/testhost
 go 1.27.2
 
 require (
-	connectrpc.com/connect v1.21.0
+	connectrpc.com/connect v1.21.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/auth v0.3.0-alpha.1
