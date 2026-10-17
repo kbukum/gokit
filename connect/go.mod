@@ -5,7 +5,7 @@ go 1.27.2
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
 	buf.build/go/protovalidate v1.4.0
-	connectrpc.com/connect v1.21.0
+	connectrpc.com/connect v1.21.1
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
 	go.opentelemetry.io/otel v1.47.0
