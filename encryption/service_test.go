@@ -401,7 +401,7 @@ func TestEncryptWithAEADPropagatesFactoryError(t *testing.T) {
 	t.Parallel()
 
 	want := errors.New("factory unavailable")
-	_, err := sealEnvelope([]byte("key"), AlgorithmAESGCM, func([]byte) (cipher.AEAD, error) {
+	_, err := sealEnvelope([]byte("key"), derivePassphrase, AlgorithmAESGCM, func([]byte) (cipher.AEAD, error) {
 		return nil, want
 	}, "secret", nil)
 	if !errors.Is(err, want) {

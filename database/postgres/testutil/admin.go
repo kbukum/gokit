@@ -15,7 +15,7 @@ import (
 func (f *Fixture) AdminConfig() (*pgx.ConnConfig, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.closed || f.terminate == nil || f.admin == nil {
+	if f.closed || f.admin == nil {
 		return nil, apperrors.New(apperrors.ErrCodeServiceUnavailable, "PostgreSQL fixture is closed or not initialized")
 	}
 	return f.admin.Copy(), nil

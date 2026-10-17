@@ -10,4 +10,10 @@
 //
 //	// Use store.Storage() to access the storage.Storage interface
 //	store.Storage().Upload(ctx, "path/file.txt", strings.NewReader("hello"))
+//
+// # Adapter conformance
+//
+// Conformance checks the write-once guarantees publication flows rely on. Run it from each adapter's tests:
+//
+//	testutil.Conformance(t, func(*testing.T) storage.Storage { return store })
 package testutil
