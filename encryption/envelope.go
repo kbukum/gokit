@@ -11,14 +11,14 @@ import (
 //
 //	version[1] || algorithm[1] || salt[saltSize] || nonce[nonceSize] || ciphertext
 //
+// The version records the key derivation: 1 is a PBKDF2-SHA256 passphrase, 2 is HKDF-SHA256 key material.
 // The header (version, algorithm id, salt, nonce) is authenticated as AEAD
 // associated data, binding the algorithm and key-derivation inputs to the
 // sealed body. This format is wire-compatible with the shared encryption envelope format.
 const (
-	envelopeVersion    byte = 1
-	nonceSize               = 12
-	aeadTagSize             = 16
-	envelopeHeaderSize      = 1 + 1 + saltSize + nonceSize
+	nonceSize          = 12
+	aeadTagSize        = 16
+	envelopeHeaderSize = 1 + 1 + saltSize + nonceSize
 )
 
 // id returns the stable on-wire algorithm identifier.
@@ -55,13 +55,13 @@ type envelope struct {
 }
 
 // header returns the authenticated header bytes for the given inputs.
-func envelopeHeader(alg Algorithm, salt, nonce []byte) ([]byte, error) {
+func envelopeHeader(derivation keyDerivation, alg Algorithm, salt, nonce []byte) ([]byte, error) {
 	id, ok := alg.id()
 	if !ok {
 		return nil, apperrors.InvalidInput("algorithm", fmt.Sprintf("unsupported algorithm %q", alg))
 	}
 	header := make([]byte, 0, envelopeHeaderSize)
-	header = append(header, envelopeVersion, id)
+	header = append(header, byte(derivation), id)
 	header = append(header, salt...)
 	header = append(header, nonce...)
 	return header, nil
@@ -84,7 +84,7 @@ func decodeEnvelope(ciphertext string) (*envelope, error) {
 	if len(data) < envelopeHeaderSize+aeadTagSize {
 		return nil, invalidEnvelope("ciphertext envelope is too short")
 	}
-	if data[0] != envelopeVersion {
+	if v := keyDerivation(data[0]); v != derivePassphrase && v != deriveKeyMaterial {
 		return nil, invalidEnvelope("unsupported ciphertext envelope version")
 	}
 	if _, ok := algorithmFromID(data[1]); !ok {
@@ -97,6 +97,8 @@ func (e *envelope) algorithm() Algorithm {
 	alg, _ := algorithmFromID(e.data[1])
 	return alg
 }
+
+func (e *envelope) derivation() keyDerivation { return keyDerivation(e.data[0]) }
 
 func (e *envelope) associatedData() []byte { return e.data[:envelopeHeaderSize] }
 

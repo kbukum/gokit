@@ -5,6 +5,10 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **encryption**: `WithKeyMaterial` derives message keys from random key material (32 bytes or more, such as mounted key files) with HKDF-SHA256 instead of PBKDF2, in envelope version 2, so each operation takes microseconds instead of tens of milliseconds. Passphrase and key-material ciphertexts never open each other; shared vectors keep the format identical to rskit.
+- **storage/testutil**: `Conformance` checks write-once create, empty-object fencing, exact reads, not-found identity, delete and single-winner concurrent creates; local, in-memory and real S3 backends pass it.
+- **database/postgres/testutil**: `Connect` and `Open` let many test binaries share one PostgreSQL server; connected fixtures drop only their own databases and roles, and a configured server never falls back to a container.
+- **connect/client**: `Peer` owns one peer's HTTP client and availability as a lifecycle component, reporting health from real calls and releasing idle connections on stop.
 - **connect/client**: enforced redirect refusal for injected HTTP clients without mutating their settings or transferring transport ownership.
 - **storage/s3/testutil**: `WithImage` runs an immutable alternate artifact, such as a source-built server, without publisher-image fallback; shell-free HTTP readiness and a namespace-sharing listener probe support distroless images.
 - **database/postgres/testutil / storage/s3/testutil**: owned container identities support private-network consumers without host-gateway routing.

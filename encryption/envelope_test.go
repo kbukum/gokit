@@ -21,8 +21,8 @@ func TestEnvelopeLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if got := raw[0]; got != envelopeVersion {
-		t.Errorf("version byte = %d, want %d", got, envelopeVersion)
+	if got := raw[0]; got != byte(derivePassphrase) {
+		t.Errorf("version byte = %d, want %d", got, derivePassphrase)
 	}
 	id, _ := AlgorithmAESGCM.id()
 	if got := raw[1]; got != id {

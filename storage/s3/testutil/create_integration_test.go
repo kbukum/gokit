@@ -12,6 +12,7 @@ import (
 	"github.com/kbukum/gokit/storage"
 	"github.com/kbukum/gokit/storage/s3"
 	"github.com/kbukum/gokit/storage/s3/testutil"
+	storagetest "github.com/kbukum/gokit/storage/testutil"
 )
 
 func TestCreateRefusesAnExistingObjectOnTheRealServer(t *testing.T) {
@@ -63,4 +64,30 @@ func TestCreateRefusesAnExistingObjectOnTheRealServer(t *testing.T) {
 	if err := storage.Create(t.Context(), store, "fenced/key", strings.NewReader("third")); err != nil {
 		t.Fatalf("create after deletion was refused: %v", err)
 	}
+}
+
+func TestS3StorageConformance(t *testing.T) {
+	t.Parallel()
+	f, err := testutil.StartS3(t.Context(), t.TempDir(), testutil.IntegrationOptions(t)...)
+	if f != nil {
+		t.Cleanup(func() {
+			if err := f.Close(context.WithoutCancel(t.Context())); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := f.Config()
+	store, err := s3.NewStorage(t.Context(), &cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(context.WithoutCancel(t.Context())); err != nil {
+			t.Error(err)
+		}
+	})
+	storagetest.Conformance(t, func(*testing.T) storage.Storage { return store })
 }

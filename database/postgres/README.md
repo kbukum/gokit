@@ -125,4 +125,10 @@ Importing this package has no side effects. Applications own the registry and ch
 
 Import `postgres/testutil` only from tests. Register cleanup immediately after successful Start, report any Close error with `t.Error`, and close database clients before the container. The fixture DSN contains generated test credentials; do not log or retain it. Runtime `postgres` and core `database` do not import container provisioning.
 
+### Shared server
+
+Many test binaries can share one PostgreSQL server instead of starting a container each. Call `testutil.Open(ctx)` in `TestMain`. It starts an owned container unless `GOKIT_POSTGRES_TEST_ADDR` names a shared server (`host:port`); then it attaches with `testutil.Connect`. Set `GOKIT_POSTGRES_TEST_USER` (default `postgres`) to a superuser, and `GOKIT_POSTGRES_TEST_PASSWORD_FILE` when the server needs a password. A configured server that is unreachable or not a superuser login is a test failure; `Open` never falls back to a container. TLS fixtures always start their own container.
+
+A connected fixture owns no container. Its `Close` drops only the databases and roles created through it and leaves the server running. Its `Params` point at the server's maintenance database, so create work through `NewDatabase`, never directly in `Params`.
+
 Container consumers may attach `fixture.ContainerID()` to an owned test network and connect through a network alias on port 5432. Detach it before removing that network; only the fixture owns container termination. The identity is empty after release.

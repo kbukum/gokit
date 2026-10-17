@@ -48,6 +48,15 @@
 //	limit, err := client.UnaryTimeoutInterceptor(2 * time.Second)
 //	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(availability, limit))
 //
+// # Owning a peer
+//
+// A Peer registers one peer's client and availability as a component, so health follows real calls and idle
+// connections close at shutdown:
+//
+//	peer, err := client.NewPeer("peer-control", httpClient)
+//	app.RegisterComponent(peer)
+//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(peer.Availability()))
+//
 // # Long-lived streams
 //
 // A stream client sets NoTimeout and bounds the wait for the first message instead. FirstMessageTimeoutInterceptor goes after Availability, so a peer that never answers is recorded as unavailable, and MapCallFailure maps the failure for the caller:
