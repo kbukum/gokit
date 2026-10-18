@@ -192,6 +192,20 @@ func TestSchemaPlanLeastPrivilege(t *testing.T) {
 		}
 	})
 
+	t.Run("migrates with its own connection", func(t *testing.T) {
+		env := newSchemaEnv(t, ctx, fixture)
+		plan := schemaPlan(env.pair.Runtime.User)
+		m := postgres.SchemaMigration{Config: database.Config{Params: env.pair.Owner, MaxRetries: 1, LogLevel: "silent"}, Plan: plan, SetBudget: time.Minute}
+		for range 2 {
+			if err := postgres.Migrate(ctx, logging.NewDefault("test"), m); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := postgres.ReadyAccess(ctx, env.runtime.GormDB, plan); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("serializes concurrent appliers", func(t *testing.T) {
 		env := newSchemaEnv(t, ctx, fixture)
 		second := open(t, ctx, env.pair.Owner)
@@ -358,6 +372,7 @@ func TestSchemaPlanLeastPrivilege(t *testing.T) {
 		exec(t, ctx, asOwner(env), "CREATE SCHEMA other", "CREATE TABLE other.keep(id INTEGER)")
 		params := env.pair.Owner
 		params.Options = map[string]string{"sslmode": "disable", "search_path": "other"}
+		params.AllowInsecureDev = true
 		db := open(t, ctx, params)
 		cfg := migration.Config{DB: db.GormDB, Driver: postgres.MigrateDriver(), Path: ".", Table: migration.Table{Schema: "app"}, FS: fstest.MapFS{
 			"1_app.up.sql": {Data: []byte("CREATE TABLE app.items(id INTEGER)")},

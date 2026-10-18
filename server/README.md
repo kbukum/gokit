@@ -4,7 +4,7 @@ Gin-based HTTP server with h2c support, built-in middleware, health/info endpoin
 
 ## SPA, diagnostics, and shutdown
 
-`MountSPA` serves a trusted embedded or root-confined `fs.FS`; keep an `os.OpenRoot` handle open until shutdown. HTML navigation falls back to `index.html`, while API namespaces, asset namespaces, and missing files return 404. Use `ReservedPrefixes` for application exclusions.
+`MountSPA` serves a trusted embedded or root-confined `fs.FS`; keep an `os.OpenRoot` handle open until shutdown. `spa.NewDir` does that for a build directory as a lifecycle component: Start opens the confined directory, Stop closes it, and it answers 503 while closed. HTML navigation falls back to `index.html`, while API namespaces, asset namespaces, and missing files return 404. Use `ReservedPrefixes` for application exclusions.
 
 `Fallback` installs an unmatched-route handler behind middleware and rejects nil handlers with `ErrInvalidRoute`. Module fallbacks also reserve the module's API prefixes.
 

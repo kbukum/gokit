@@ -3,11 +3,13 @@ package nats
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
 
+	"github.com/kbukum/gokit/fs"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/security"
 )
@@ -15,13 +17,20 @@ import (
 const (
 	adapterName = "nats"
 	defaultURL  = "tls://localhost:4222"
+
+	maxPasswordBytes = 1024
 )
 
 // Config contains NATS-specific adapter settings.
 type Config struct {
-	URL              string              `yaml:"url" mapstructure:"url"`
-	SubjectPrefix    string              `yaml:"subject_prefix" mapstructure:"subject_prefix"`
-	QueueGroup       string              `yaml:"queue_group" mapstructure:"queue_group"`
+	URL           string `yaml:"url" mapstructure:"url"`
+	SubjectPrefix string `yaml:"subject_prefix" mapstructure:"subject_prefix"`
+	QueueGroup    string `yaml:"queue_group" mapstructure:"queue_group"`
+	// InboxPrefix replaces "_INBOX" for request replies, so a broker user can be limited to its own replies.
+	InboxPrefix string `yaml:"inbox_prefix" mapstructure:"inbox_prefix"`
+	// UserInbox sets the inbox prefix to "_INBOX.<username>", so each broker user can be given only its own replies.
+	// It requires Username and excludes InboxPrefix.
+	UserInbox        bool                `yaml:"user_inbox" mapstructure:"user_inbox"`
 	Queue            string              `yaml:"queue" mapstructure:"queue"`
 	ConnectTimeout   string              `yaml:"connect_timeout" mapstructure:"connect_timeout"`
 	PublishTimeout   string              `yaml:"publish_timeout" mapstructure:"publish_timeout"`
@@ -31,6 +40,7 @@ type Config struct {
 	Token            string              `yaml:"token" mapstructure:"token"`
 	Username         string              `yaml:"username" mapstructure:"username"`
 	Password         string              `yaml:"password" mapstructure:"password"`
+	PasswordFile     string              `yaml:"password_file" mapstructure:"password_file"`
 	TLS              *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
 	AllowInsecureDev bool                `yaml:"allow_insecure_dev" mapstructure:"allow_insecure_dev"`
 }
@@ -67,11 +77,18 @@ func (c Config) Validate() error {
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 			return fmt.Errorf("nats: invalid url %q", raw)
 		}
+		if (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+			return fmt.Errorf("nats: url %q must name only a server, without a path, query or fragment", c.RedactedURL())
+		}
 		if parsed.User != nil {
 			return fmt.Errorf("nats: credentials must be configured via token or username/password fields, not URL userinfo")
 		}
-		if !c.AllowInsecureDev && parsed.Scheme != "tls" && parsed.Scheme != "wss" {
+		secure := parsed.Scheme == "tls" || parsed.Scheme == "wss"
+		if !c.AllowInsecureDev && !secure {
 			return fmt.Errorf("nats: TLS URL scheme is required unless allow_insecure_dev is true")
+		}
+		if !secure && c.TLS != nil && c.TLS.CAFile != "" {
+			return fmt.Errorf("nats: tls ca_file applies only to tls:// or wss:// urls")
 		}
 	}
 	for _, value := range []struct{ name, val string }{
@@ -87,15 +104,32 @@ func (c Config) Validate() error {
 	if c.MaxReconnects < -1 {
 		return fmt.Errorf("nats: max_reconnects must be >= -1")
 	}
-	if c.Token != "" && (c.Username != "" || c.Password != "") {
+	if c.Token != "" && (c.Username != "" || c.Password != "" || c.PasswordFile != "") {
 		return fmt.Errorf("nats: token auth and username/password auth are mutually exclusive")
 	}
-	if c.Password != "" && c.Username == "" {
+	if c.Password != "" && c.PasswordFile != "" {
+		return fmt.Errorf("nats: password and password_file are mutually exclusive")
+	}
+	if (c.Password != "" || c.PasswordFile != "") && c.Username == "" {
 		return fmt.Errorf("nats: username is required when password is set")
 	}
 	if c.SubjectPrefix != "" {
 		if err := messaging.ValidateTopic(strings.Trim(c.SubjectPrefix, ".")); err != nil {
 			return fmt.Errorf("nats: invalid subject_prefix: %w", err)
+		}
+	}
+	if c.UserInbox && c.InboxPrefix != "" {
+		return fmt.Errorf("nats: user_inbox and inbox_prefix are mutually exclusive")
+	}
+	if c.UserInbox && c.Username == "" {
+		return fmt.Errorf("nats: user_inbox requires username")
+	}
+	if prefix := c.inboxPrefix(); prefix != "" {
+		if err := messaging.ValidateTopic(prefix); err != nil {
+			return fmt.Errorf("nats: invalid inbox prefix: %w", err)
+		}
+		if slices.Contains(strings.Split(prefix, "."), "") {
+			return fmt.Errorf("nats: invalid inbox prefix %q: empty subject token", prefix)
 		}
 	}
 	if c.QueueGroup != "" {
@@ -125,6 +159,13 @@ func (c Config) RedactedURL() string {
 	return strings.Join(parts, ",")
 }
 
+func (c Config) inboxPrefix() string {
+	if c.UserInbox {
+		return "_INBOX." + c.Username
+	}
+	return c.InboxPrefix
+}
+
 func (c Config) connectOptions() ([]natsgo.Option, error) {
 	opts := []natsgo.Option{
 		natsgo.Timeout(mustDuration(c.ConnectTimeout)),
@@ -132,10 +173,28 @@ func (c Config) connectOptions() ([]natsgo.Option, error) {
 		natsgo.ReconnectWait(mustDuration(c.ReconnectWait)),
 		natsgo.MaxReconnects(c.MaxReconnects),
 	}
+	if prefix := c.inboxPrefix(); prefix != "" {
+		opts = append(opts, natsgo.CustomInboxPrefix(prefix))
+	}
 	if c.Token != "" {
 		opts = append(opts, natsgo.Token(c.Token))
 	}
-	if c.Username != "" || c.Password != "" {
+	switch {
+	case c.PasswordFile != "":
+		// The file is read now to fail fast, then again at every connect, so a rotated password is used on reconnect.
+		if _, err := fs.ReadSecret(c.PasswordFile, 1, maxPasswordBytes); err != nil {
+			return nil, fmt.Errorf("nats: read password_file: %w", err)
+		}
+		user, file := c.Username, c.PasswordFile
+		opts = append(opts, natsgo.UserInfoHandler(func() (string, string) {
+			secret, err := fs.ReadSecret(file, 1, maxPasswordBytes)
+			if err != nil {
+				// An unreadable file fails authentication, and the connection retries.
+				return user, ""
+			}
+			return user, string(secret)
+		}))
+	case c.Username != "":
 		opts = append(opts, natsgo.UserInfo(c.Username, c.Password))
 	}
 	if c.TLS != nil && c.TLS.IsEnabled() {

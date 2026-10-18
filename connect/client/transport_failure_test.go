@@ -22,7 +22,7 @@ func h2cServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 
 func h2cClient(t *testing.T) *http.Client {
 	t.Helper()
-	client, err := NewHTTPClient(Config{})
+	client, err := NewHTTPClient(Config{AllowInsecureDev: true})
 	if err != nil {
 		t.Fatal(err)
 	}

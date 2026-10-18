@@ -51,6 +51,7 @@ At public ingress, ignore incoming parent/sampling and baggage. Internal parents
 | `NewPrometheusComponent()` | Isolated application/runtime scrape and lifecycle-owned pull reader |
 | `StartSpan()` / `SpanFromContext()` | Distributed tracing helpers |
 | `SetSpanAttributes()` / `SetSpanError()` | Span enrichment |
+| `ObserveGauges()` / `Int64Gauge()` / `Float64Gauge()` | Observable gauges that read one snapshot per collection |
 | `Metrics` | Pre-built metric instruments for requests, operations, errors |
 | `OperationContext` | Combines tracing + metrics for tracked operations |
 | `ServiceHealth` / `HealthChecker` | Service health aggregation |

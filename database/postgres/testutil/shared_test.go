@@ -51,7 +51,7 @@ func TestEnvParamsReadsUserAndPasswordFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if params.Host != "db.local" || params.Port != 6543 || params.User != "admin" || params.Password != "secret" ||
-		params.Database != "postgres" || params.Options["sslmode"] != "disable" {
+		params.Database != "postgres" || params.Options["sslmode"] != "disable" || !params.AllowInsecureDev {
 		t.Fatalf("unexpected params: host=%s port=%d user=%s db=%s", params.Host, params.Port, params.User, params.Database)
 	}
 	t.Setenv(EnvUser, "")

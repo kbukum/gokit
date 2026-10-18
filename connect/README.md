@@ -37,7 +37,7 @@ import (
     "github.com/kbukum/gokit/connect/client"
 )
 
-cfg := client.Config{BaseURL: "http://localhost:8080"}
+cfg := client.Config{BaseURL: "http://localhost:8080", AllowInsecureDev: true}
 httpClient, err := client.NewHTTPClient(cfg)
 if err != nil {
     return err
@@ -45,13 +45,13 @@ if err != nil {
 svcClient := userv1connect.NewUserServiceClient(httpClient, cfg.BaseURL)
 
 // For bidi streaming, use gRPC protocol:
-cfg := client.Config{BaseURL: "http://localhost:8080", Protocol: client.ProtocolGRPC}
+cfg := client.Config{BaseURL: "http://localhost:8080", Protocol: client.ProtocolGRPC, AllowInsecureDev: true}
 httpClient, err := client.NewHTTPClient(cfg)
 opts := client.ClientOptions(cfg)
 svcClient := userv1connect.NewUserServiceClient(httpClient, cfg.BaseURL, opts...)
 ```
 
-The client uses native HTTP/2 transport controls. Enabled TLS requires `https://`; the default h2c mode requires `http://`. Each request is checked before dialing, so neither mode silently falls back to HTTP/1. Redirects, including same-origin redirects, fail with `client.ErrRedirect`: RPC credentials and bodies never follow a peer's `Location` header. Call `httpClient.CloseIdleConnections()` when its owner shuts down.
+The client uses native HTTP/2 transport controls. Enabled TLS requires `https://`. Cleartext h2c requires `http://` and `AllowInsecureDev`, for local development only; without TLS or that flag, validation fails. Each request is checked before dialing, so neither mode silently falls back to HTTP/1. Redirects, including same-origin redirects, fail with `client.ErrRedirect`: RPC credentials and bodies never follow a peer's `Location` header. Call `httpClient.CloseIdleConnections()` when its owner shuts down.
 
 ## Typed authentication
 
@@ -122,6 +122,7 @@ Each send accepts an optional synchronous header hook for explicit application p
 | `MountServices(srv, ...Service)` | Mount multiple services at once, stopping at the first error |
 | `LoggingInterceptor(log)` | Log RPC calls with duration and status |
 | `TracingInterceptor(TracingConfig)` | Inject client/server tracing, explicit authenticated-parent policy and propagation; unary and streaming spans use canonical procedures |
+| `HeaderInterceptor(name, value)` | Set a fixed header, such as a service key, on every unary and streaming client call |
 | `NormalizingInterceptor(log)` | Convert any handler error to a coded Connect error (unary + streaming); already-coded errors pass through |
 | `ValidationInterceptor(v)` | Validate requests with an injected `protovalidate.Validator`, emitting shared violations |
 | `DeadlineInterceptor(max)` | Bound unary RPCs to a server maximum deadline |
@@ -133,7 +134,7 @@ Each send accepts an optional synchronous header hook for explicit application p
 | `DecodeError(err)` | Return a remote `*rpc.Error` or an explicit decode error; never trust remote text as an AppError |
 | `RetryDelay(err)` | Decode the server's minimum delay for a shared resilience policy |
 | **client subpackage** | |
-| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS. Negative timeouts fail validation. A set BaseURL must be an absolute `http` or `https` URL without credentials, query or fragment, and its scheme must match the transport: `https` with TLS settings, `http` (h2c) without |
+| `client.Config` | Client config: BaseURL, Timeout (or NoTimeout for long-lived streams), DialTimeout, Protocol, TLS, AllowInsecureDev. A client needs TLS unless AllowInsecureDev allows cleartext h2c. Negative timeouts fail validation. A set BaseURL must be an absolute `http` or `https` URL without credentials, query or fragment, and its scheme must match the transport: `https` with TLS settings, `http` (h2c) without |
 | `client.NewHTTPClient(cfg)` | Create a native `net/http.Transport` HTTP/2 client (h2c or TLS) for ConnectRPC |
 | `client.WithoutRedirects(httpClient)` | Copy an injected HTTP client's settings with unconditional redirect refusal; transport and cookie-jar ownership remain with the caller |
 | `client.IsTransportFailure(err)` | Report a failure marked `client.ErrTransport`: the peer was unreachable, a gateway answered 502, 503 or 504 without an RPC error, or the connection broke mid-response, under any Connect code. Caller cancellation and a clean end of stream are not marked |

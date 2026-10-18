@@ -7,6 +7,10 @@
 // error, capabilities, a token counter, and a block-until-cancel mode for
 // exercising context cancellation. It is safe for concurrent use.
 //
+// [OpenAIServer] is an OpenAI-compatible chat-completions HTTP handler for tests that need a real HTTP model. It
+// answers with a deterministic echo and usage, counts calls per model, and fails models named with
+// [FailModelPrefix].
+//
 // Example:
 //
 //	p := testutil.NewFakeProvider(

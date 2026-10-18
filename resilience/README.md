@@ -73,6 +73,7 @@ func main() {
 | `KeyedRateLimiter` | Per-key token buckets with an injected `Clock` and a `MaxKeys` bound (default 100 000); when full it drops expired buckets and otherwise denies new keys with `Saturated` set |
 | `NewKeyedComponent(name, config)` | Lifecycle-owned keyed limiter: starts cleanup on `Start`, joins it on `Stop`, denies admission outside its running lifetime, and starts with fresh buckets after restart |
 | `Bulkhead` | Concurrency limiter with semaphore pattern |
+| `ConcurrencyLimit` | Non-waiting concurrency limit overall and per key; a slot binds to its key once known |
 | `Policy.Acquire()` | Whole-operation admission with a call context and one terminal completion |
 | `CalculateBackoff()` / `CalculateJitteredBackoff()` / `BackoffCalculator` | Standalone exponential backoff with optional jitter |
 | `Default*Config()` | Sensible default configurations for each pattern |

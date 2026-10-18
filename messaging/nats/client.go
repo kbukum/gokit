@@ -2,6 +2,7 @@ package nats
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	natsgo "github.com/nats-io/nats.go"
@@ -43,4 +44,22 @@ func defaultConnectNATS(url string, opts ...natsgo.Option) (natsConn, error) {
 		return nil, err
 	}
 	return natsConnAdapter{conn: conn}, nil
+}
+
+// Connect validates cfg and opens a connection with its authentication, TLS, timeout and reconnect settings, followed
+// by extra options. Adapters built on NATS, such as JetStream, share it so every connection is configured alike.
+func Connect(cfg Config, extra ...natsgo.Option) (*natsgo.Conn, error) {
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	opts, err := cfg.connectOptions()
+	if err != nil {
+		return nil, err
+	}
+	conn, err := natsgo.Connect(cfg.URL, append(opts, extra...)...)
+	if err != nil {
+		return nil, fmt.Errorf("nats connect %s: %w", cfg.RedactedURL(), err)
+	}
+	return conn, nil
 }

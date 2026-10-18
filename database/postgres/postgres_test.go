@@ -48,7 +48,7 @@ func TestOpenReturnsDialector(t *testing.T) {
 }
 
 func testParams() database.ConnParams {
-	return database.ConnParams{Host: "localhost", User: "app", Database: "app", Options: map[string]string{"sslmode": "disable", "search_path": "app"}}
+	return database.ConnParams{Host: "localhost", User: "app", Database: "app", Options: map[string]string{"sslmode": "disable", "search_path": "app"}, AllowInsecureDev: true}
 }
 
 func preparedDialector(t *testing.T, params database.ConnParams) gorm.Dialector {

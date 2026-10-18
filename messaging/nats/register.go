@@ -70,7 +70,7 @@ func validateCommon(cfg messaging.Config) error {
 		return fmt.Errorf("nats: core NATS supports only %s commits", messaging.CommitAuto)
 	}
 	if cfg.MaxInFlight != 1 {
-		return fmt.Errorf("nats: max_in_flight > 1 requires JetStream or application-level concurrency")
+		return fmt.Errorf("nats: max_in_flight > 1 requires application-level concurrency")
 	}
 	if cfg.DLQ.Enabled {
 		return fmt.Errorf("nats: adapter-managed DLQ is not supported; use messaging middleware")

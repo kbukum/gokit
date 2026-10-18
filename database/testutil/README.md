@@ -12,6 +12,7 @@ All fixture operations take a context and apply a 30-second ceiling. Fixture ins
 - **State Management**: Reset, Snapshot, and Restore capabilities for test isolation
 - **Fixture Helpers**: Load test data, truncate tables, assert row counts
 - **Migration Driver**: In-memory `golang-migrate` driver fake for proving migration orchestration
+- **Statement Faults**: Fail each SQL statement of an operation in turn to prove errors are reported and rolled back
 - **Auto-Migration**: Optional model auto-migration on startup
 - **Zero Configuration**: Works out of the box with sensible defaults
 
@@ -262,6 +263,29 @@ func TestMigrations(t *testing.T) {
 ```
 
 `FailRun`, `FailSetVersion`, and `FailDrop` inject failures into the corresponding driver operations; `Runs` reports how many statements have been applied.
+
+## Statement Faults
+
+`InjectFaults` fails a chosen SQL statement on any gorm database, including a real PostgreSQL one. `EveryStatement` runs an operation once per statement it executes, failing that statement each time, then once more with no fault. Use it to prove that a store reports every statement failure and leaves no partial change.
+
+```go
+faults, err := dbtestutil.InjectFaults(db.GormDB)
+if err != nil {
+    t.Fatal(err)
+}
+n, err := faults.EveryStatement(func(statement int) error {
+    err := store.Apply(ctx, fact)
+    if err != nil {
+        assertUnchanged(t) // the failed statement rolled back the transaction
+    }
+    return err
+})
+if err != nil || n == 0 {
+    t.Fatalf("sweep = %d, %v", n, err)
+}
+```
+
+The sweep fails if the operation hides a failed statement, if the clean run fails, or if it runs more than `MaxSweepStatements` statements. Only statements count: transaction begin and commit are never failed. Failed statements return `ErrInjected`. Register faults once per database and use them from one test at a time.
 
 ## Best Practices
 

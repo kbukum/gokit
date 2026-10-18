@@ -9,6 +9,12 @@ type Consumer interface {
 	Close() error
 }
 
+// ConsumerStatus is an optional Consumer capability: while Consume runs, ConsumeStatus returns nil when receiving
+// works and the last receive failure while the consumer retries it.
+type ConsumerStatus interface {
+	ConsumeStatus() error
+}
+
 // ConsumerRunner is used by Component to manage consumer lifecycle.
 type ConsumerRunner interface {
 	Consume(ctx context.Context) error

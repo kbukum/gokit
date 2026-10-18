@@ -29,6 +29,8 @@ Importing this package has no side effects. Applications own the registry and ch
 
 SDK retries are disabled, including after ambiguous upload failures. Applications own any bounded retry policy and must limit it to operations they can prove idempotent; cancellation cannot retract a write already accepted by the server. Drain callers before `Close`, which releases idle connections. `storage.Component` performs that closure during teardown.
 
+A custom `Endpoint` is an origin only: `https://host[:port]` without credentials, path, query or fragment. Plain `http://` needs `AllowInsecureDev` and is meant for local development.
+
 Set both `AccessKeyFile` and `SecretKeyFile` to select mounted credentials. Each file is a bounded regular secret file of 1–1024 bytes; unreadable or invalid files fail initialization. Mounted and inline credentials cannot be mixed. With neither source configured, the AWS credential chain remains available. Do not log credential values.
 
 `Check(ctx)` verifies authenticated access to the configured bucket with `HeadBucket`, without creating it or writing an object. Components check this capability before publishing the backend and during health probes. Missing buckets, denied access, cancellation and unavailable storage fail explicitly.

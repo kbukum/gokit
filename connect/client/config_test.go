@@ -50,7 +50,7 @@ func TestConfigApplyDefaultsPreservesConfiguredValues(t *testing.T) {
 func TestConfigValidateProtocols(t *testing.T) {
 	for _, protocol := range []string{ProtocolConnect, ProtocolGRPC, ProtocolGRPCWeb} {
 		t.Run(protocol, func(t *testing.T) {
-			cfg := Config{Protocol: protocol}
+			cfg := Config{Protocol: protocol, AllowInsecureDev: true}
 			if err := cfg.Validate(); err != nil {
 				t.Fatalf("Validate returned error: %v", err)
 			}
@@ -83,12 +83,12 @@ func TestConfigValidatePropagatesTLSError(t *testing.T) {
 }
 
 func TestNoTimeoutKeepsTheClientUnbounded(t *testing.T) {
-	cfg := Config{NoTimeout: true}
+	cfg := Config{NoTimeout: true, AllowInsecureDev: true}
 	cfg.ApplyDefaults()
 	if cfg.Timeout != 0 {
 		t.Fatalf("Timeout = %s, want 0 with NoTimeout", cfg.Timeout)
 	}
-	hc, err := NewHTTPClient(Config{NoTimeout: true})
+	hc, err := NewHTTPClient(Config{NoTimeout: true, AllowInsecureDev: true})
 	if err != nil {
 		t.Fatalf("NewHTTPClient: %v", err)
 	}
@@ -126,11 +126,12 @@ func TestValidateRejectsTimeoutWithNoTimeout(t *testing.T) {
 func TestValidateChecksBaseURL(t *testing.T) {
 	tlsOn := &security.TLSConfig{MinVersion: tls.VersionTLS13}
 	for _, cfg := range []Config{
-		{},
-		{BaseURL: "http://peer.internal:8080"},
-		{BaseURL: "http://peer.internal:8080/prefix/"},
+		{TLS: tlsOn},
+		{AllowInsecureDev: true},
+		{BaseURL: "http://peer.internal:8080", AllowInsecureDev: true},
+		{BaseURL: "http://peer.internal:8080/prefix/", AllowInsecureDev: true},
 		{BaseURL: "https://peer.internal", TLS: tlsOn},
-		{BaseURL: "http://peer.internal/a%23b/"},
+		{BaseURL: "http://peer.internal/a%23b/", AllowInsecureDev: true},
 	} {
 		cfg.ApplyDefaults()
 		if err := cfg.Validate(); err != nil {
@@ -148,6 +149,8 @@ func TestValidateChecksBaseURL(t *testing.T) {
 		"empty fragment": {BaseURL: "http://peer.internal#"},
 		"https without":  {BaseURL: "https://peer.internal"},
 		"http with TLS":  {BaseURL: "http://peer.internal", TLS: tlsOn},
+		"cleartext":      {BaseURL: "http://peer.internal"},
+		"no tls":         {},
 		"does not parse": {BaseURL: "http://[::1"},
 	} {
 		cfg.ApplyDefaults()

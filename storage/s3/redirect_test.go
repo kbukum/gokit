@@ -24,7 +24,7 @@ func TestStorageNeverFollowsRedirects(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 	backend, err := s3.NewStorage(t.Context(), &s3.Config{
-		Bucket: "objects", Region: "us-east-1", Endpoint: server.URL, ForcePathStyle: true,
+		Bucket: "objects", Region: "us-east-1", Endpoint: server.URL, ForcePathStyle: true, AllowInsecureDev: true,
 		AccessKeyID: "fixture", SecretAccessKey: "fixture",
 	})
 	if err != nil {

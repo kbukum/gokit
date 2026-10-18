@@ -42,6 +42,7 @@ use (
 	./messaging
 	./messaging/kafka
 	./messaging/nats
+	./messaging/nats/testutil
 	./messaging/rabbitmq
 
 	./schema

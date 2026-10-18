@@ -79,7 +79,7 @@ func TestHTTPClientRejectsRedirects(t *testing.T) {
 						}
 						http.Redirect(w, r, destination, status)
 					}))
-					cfg := Config{}
+					cfg := Config{AllowInsecureDev: true}
 					if tls {
 						source.EnableHTTP2 = true
 						source.StartTLS()
