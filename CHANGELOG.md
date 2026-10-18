@@ -5,6 +5,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **database/migration**: `Session.Transaction` runs a transaction on the session's pinned connection; canceling its context stops the statements while the rollback stays on the caller's goroutine.
 - **bench**: `SummarizePerformance` summarizes externally collected measurements into the same `latency_ms`, `ttft_ms`, throughput, `failure_rate` and `usage_tokens` metrics a run reports, through `PerformanceSummary.Metrics`.
 - **llm**: `Config.EndpointPolicy` applies the httpclient endpoint policy to model calls: operator origin grants, DNS-at-dial checks, and refused redirects, proxies and implicit retries.
 - **server/middleware**: `StreamWriteDeadline` bounds each write and flush of a long-lived streaming route and disarms the deadline while idle, so the server's `WriteTimeout`, an absolute deadline per HTTP/2 stream, no longer resets healthy streams.
@@ -91,6 +92,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **database**: untimed `Ping`; use context-aware `PingContext`.
 
 ### Fixed
+- **database/migration**: a canceled migration no longer lets `database/sql` close the pinned connection from its own goroutine while the session still unlocks it, which could panic with a nil connection. PostgreSQL schema grants use `Session.Transaction` for the same reason.
 - **fs**: harden ZIP and tar extraction path validation.
 - **logging**: replace duplicate scoped attributes and preserve valid trace identifiers during masking.
 - **bootstrap**: prevent readiness races during shutdown and preserve cancellation during startup and operator tasks.

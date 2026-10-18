@@ -144,7 +144,9 @@ func ApplySchema(ctx context.Context, migrationDB *gorm.DB, plan SchemaPlan) (er
 	if err := session.Apply(ctx, plan.Sets...); err != nil {
 		return err
 	}
-	return bounded(ctx, func(ctx context.Context) error { return reconcileGrants(ctx, conn, plan) })
+	return bounded(ctx, func(ctx context.Context) error {
+		return session.Transaction(ctx, func(ctx context.Context, tx *sql.Tx) error { return reconcileGrants(ctx, tx, plan) })
+	})
 }
 
 // ReadyAccess verifies, as the runtime role on runtimeDB, that the session user is the plan's runtime role with exactly
@@ -272,18 +274,10 @@ func auditRoles(ctx context.Context, q querier, plan SchemaPlan, migrating bool)
 	return nil
 }
 
-func reconcileGrants(ctx context.Context, conn *sql.Conn, plan SchemaPlan) (err error) {
+// reconcileGrants replaces the schema's grants in the caller's transaction and audits the result before it commits.
+func reconcileGrants(ctx context.Context, tx *sql.Tx, plan SchemaPlan) error {
 	schema := pgx.Identifier{plan.Name}.Sanitize()
 	grantees := "PUBLIC, " + pgx.Identifier{plan.RuntimeAccess.Role}.Sanitize()
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if rbErr := tx.Rollback(); !errors.Is(rbErr, sql.ErrTxDone) {
-			err = errors.Join(err, rbErr)
-		}
-	}()
 	var defaults bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_default_acl d
 		WHERE d.defaclrole = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)
@@ -326,10 +320,7 @@ func reconcileGrants(ctx context.Context, conn *sql.Conn, plan SchemaPlan) (err 
 	if err := auditRoles(ctx, tx, plan, true); err != nil {
 		return err
 	}
-	if err := auditAccess(ctx, tx, plan.RuntimeAccess.Role, plan); err != nil {
-		return err
-	}
-	return tx.Commit()
+	return auditAccess(ctx, tx, plan.RuntimeAccess.Role, plan)
 }
 
 // grant is one object's effective privileges for the audited role.

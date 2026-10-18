@@ -192,8 +192,15 @@ func (d *sqlDriver) Run(reader io.Reader) error {
 	})
 }
 
-func (d *sqlDriver) transaction(fn func(*sql.Tx) error) (err error) {
-	tx, err := d.conn.BeginTx(d.ctx, nil)
+func (d *sqlDriver) transaction(fn func(*sql.Tx) error) error {
+	return transaction(d.ctx, d.conn, func(_ context.Context, tx *sql.Tx) error { return fn(tx) })
+}
+
+// transaction runs fn in a transaction on a pinned connection and commits when fn succeeds. Statements use ctx, so
+// cancellation stops them promptly, but the transaction itself is never canceled: database/sql would then roll it
+// back and close the pinned connection from its own goroutine while its owner still uses it. The rollback runs here.
+func transaction(ctx context.Context, conn *sql.Conn, fn func(context.Context, *sql.Tx) error) (err error) {
+	tx, err := conn.BeginTx(context.WithoutCancel(ctx), nil)
 	if err != nil {
 		return err
 	}
@@ -202,7 +209,7 @@ func (d *sqlDriver) transaction(fn func(*sql.Tx) error) (err error) {
 			err = errors.Join(err, rbErr)
 		}
 	}()
-	if err := fn(tx); err != nil {
+	if err := fn(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit()

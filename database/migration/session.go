@@ -47,8 +47,22 @@ func Begin(ctx context.Context, pool *sql.DB, backend SQLBackend) (*Session, err
 }
 
 // Conn returns the pinned connection for backend work under the lock. It is valid until Close and must not be closed
-// by the caller.
+// by the caller. Begin transactions with Transaction, not Conn().BeginTx.
 func (s *Session) Conn() *sql.Conn { return s.conn }
+
+// Transaction runs fn in one transaction on the pinned connection and commits when fn succeeds. Canceling ctx stops
+// fn's statements; the rollback still runs on the caller's goroutine, so the connection stays owned by the session.
+func (s *Session) Transaction(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	if fn == nil {
+		return apperrors.InvalidInput("transaction", "a transaction function is required")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return apperrors.New(apperrors.ErrCodeServiceUnavailable, "migration session is closed")
+	}
+	return transaction(ctx, s.conn, fn)
+}
 
 // Plan validates every set and inspects its stored state against its source and ExpectedVersion without mutation.
 func (s *Session) Plan(ctx context.Context, sets ...Set) error {
