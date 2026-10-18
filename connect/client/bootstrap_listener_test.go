@@ -36,7 +36,7 @@ func TestBootstrapListenerSupportsProductionClient(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	httpClient, err := NewHTTPClient(Config{})
+	httpClient, err := NewHTTPClient(Config{AllowInsecureDev: true})
 	if err != nil {
 		t.Fatal(err)
 	}

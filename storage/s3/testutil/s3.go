@@ -192,7 +192,7 @@ func StartS3(ctx context.Context, dir string, opts ...Option) (*S3Fixture, error
 	}
 	f.config = storages3.Config{
 		Bucket: bucket, Region: storages3.DefaultRegion, Endpoint: endpoint,
-		AccessKeyFile: accessFile, SecretKeyFile: secretFile, ForcePathStyle: true,
+		AccessKeyFile: accessFile, SecretKeyFile: secretFile, ForcePathStyle: true, AllowInsecureDev: true,
 	}
 	f.setup = setup
 	client, closeClient := f.setupClient(endpoint)

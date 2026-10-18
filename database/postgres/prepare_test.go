@@ -144,6 +144,7 @@ func TestPrepareRejectsInvalidInputAtEachBoundary(t *testing.T) {
 		"overflowing port":  "postgres://user@localhost:99999999999999999999/app?search_path=app",
 		"malformed options": "postgres://user@localhost/app?search_path=%zz",
 		"repeated option":   "postgres://user@localhost/app?search_path=a&search_path=b",
+		"disabled TLS":      "postgres://user@localhost/app?search_path=app&sslmode=disable",
 	} {
 		if value, err := Prepare(t.Context(), database.ConnectionInput{DSN: dsn}); value != nil || err == nil {
 			t.Errorf("%s DSN prepared a connection", name)
@@ -160,7 +161,10 @@ func TestPrepareRejectsInvalidInputAtEachBoundary(t *testing.T) {
 		"oversized option":    func(p *database.ConnParams) { p.Options["application_name"] = strings.Repeat("x", 4097) },
 		"NUL option":          func(p *database.ConnParams) { p.Options["application_name"] = "a\x00b" },
 		"unknown timezone":    func(p *database.ConnParams) { p.Options["timezone"] = "Mars/Phobos" },
-		"root CA without TLS": func(p *database.ConnParams) { p.Options["sslmode"], p.Options["sslrootcert"] = "disable", "ca.pem" },
+		"root CA without TLS": func(p *database.ConnParams) {
+			p.AllowInsecureDev, p.Options["sslmode"], p.Options["sslrootcert"] = true, "disable", "ca.pem"
+		},
+		"disabled TLS without dev": func(p *database.ConnParams) { p.Options["sslmode"] = "disable" },
 		"unreadable root CA": func(p *database.ConnParams) {
 			p.Options["sslrootcert"] = t.TempDir() + "/missing.pem"
 		},
@@ -180,6 +184,7 @@ func TestPrepareAppliesBoundedSessionOptions(t *testing.T) {
 	t.Parallel()
 	params := paramsForPreparation()
 	params.Port = 6543
+	params.AllowInsecureDev = true
 	for key, value := range map[string]string{
 		"sslmode": "disable", "statement_timeout": "1500", "idle_in_transaction_session_timeout": "2500",
 		"application_name": "worker", "timezone": "Europe/Istanbul",

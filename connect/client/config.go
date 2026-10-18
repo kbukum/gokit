@@ -28,9 +28,12 @@ type Config struct {
 	// Use "grpc" when the server only speaks gRPC or when using bidi streaming.
 	Protocol string `yaml:"protocol" mapstructure:"protocol"`
 
-	// TLS configures TLS for the connection. When nil, h2c (cleartext HTTP/2) is used. When set,
-	// standard HTTPS/TLS transport is used instead.
+	// TLS configures TLS for the connection. When set, standard HTTPS/TLS transport is used. When nil, the client
+	// speaks h2c (cleartext HTTP/2), which needs AllowInsecureDev.
 	TLS *security.TLSConfig `yaml:"tls" mapstructure:"tls"`
+
+	// AllowInsecureDev allows a client without TLS, speaking h2c to an http base URL, for local development.
+	AllowInsecureDev bool `yaml:"allow_insecure_dev" mapstructure:"allow_insecure_dev"`
 }
 
 const (
@@ -80,7 +83,13 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
-	return c.validateBaseURL()
+	if err := c.validateBaseURL(); err != nil {
+		return err
+	}
+	if !c.TLS.IsEnabled() && !c.AllowInsecureDev {
+		return errors.New("connect client: use https with tls settings; cleartext h2c needs allow_insecure_dev")
+	}
+	return nil
 }
 
 // validateBaseURL never echoes the URL, which may carry a credential.

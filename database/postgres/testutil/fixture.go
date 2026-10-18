@@ -93,9 +93,9 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 	if err != nil {
 		return nil, errors.Join(database.Failure(err), fixture.Close(ctx))
 	}
-	fixture.Params = database.ConnParams{Host: host, Port: int(port.Num()), User: "fixture", Password: password, Database: "fixture", Options: map[string]string{"sslmode": "disable", "search_path": "fixture"}}
+	fixture.Params = database.ConnParams{Host: host, Port: int(port.Num()), User: "fixture", Password: password, Database: "fixture", Options: map[string]string{"sslmode": "disable", "search_path": "fixture"}, AllowInsecureDev: true}
 	if options.tls != nil {
-		fixture.Params.Options["sslmode"] = "verify-full"
+		fixture.Params.Options["sslmode"], fixture.Params.AllowInsecureDev = "verify-full", false
 		fixture.Params.Options["sslrootcert"] = options.tls.CAFile
 	}
 	setupCtx, setupCancel := context.WithTimeout(ctx, 10*time.Second)

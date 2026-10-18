@@ -66,7 +66,7 @@ func TestH2CTransportRejectsHTTPS(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(server.Close)
-	client, err := NewHTTPClient(Config{})
+	client, err := NewHTTPClient(Config{AllowInsecureDev: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestHTTP2TransportRoundTrip(t *testing.T) {
 				}
 				_, _ = io.WriteString(w, "ok")
 			}))
-			cfg := Config{}
+			cfg := Config{AllowInsecureDev: true}
 			if encrypted {
 				server.EnableHTTP2 = true
 				server.StartTLS()

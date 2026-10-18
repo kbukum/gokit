@@ -1,6 +1,8 @@
 package consumer
 
 import (
+	"errors"
+
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/messaging"
 	"github.com/kbukum/gokit/messaging/kafka"
@@ -20,6 +22,8 @@ type ManagedConsumerConfig struct {
 	Topic   string
 	Handler messaging.MessageHandler
 	Log     *logging.Logger
+	// Observer is told about handled messages and failures; nil logs failures to Log.
+	Observer messaging.ConsumerObserver
 }
 
 // NewManagedConsumer creates a managed consumer with lifecycle support.
@@ -29,11 +33,18 @@ func NewManagedConsumer(cfg ManagedConsumerConfig) (*ManagedConsumer, error) {
 		return nil, err
 	}
 
-	mc := messaging.NewManagedConsumer(messaging.ManagedConsumerConfig{
+	observer := cfg.Observer
+	if observer == nil {
+		observer = messaging.LoggingObserver(cfg.Log)
+	}
+	mc, err := messaging.NewManagedConsumer(messaging.ManagedConsumerConfig{
 		Consumer: consumer,
 		Handler:  cfg.Handler,
-		Log:      cfg.Log,
+		Observer: observer,
 	})
+	if err != nil {
+		return nil, errors.Join(err, consumer.Close())
+	}
 
 	return &ManagedConsumer{
 		ManagedConsumer: mc,

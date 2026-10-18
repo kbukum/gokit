@@ -80,7 +80,7 @@ func main() {
 
 - `NewRouter()` — route messages by topic with exact match, wildcard (`*`), and default fallback
 - `NewBatchProducer(producer, topic, cfg)` — buffer and flush on size, time, or byte thresholds
-- `NewManagedConsumer(cfg)` — background consumer lifecycle with start/stop/status
+- `NewManagedConsumer(cfg)` — runs a consumer in the background until Stop: optional restart with doubling delays, a per-message `HandleTimeout`, a `ConsumerObserver` for handled messages and failures (`LoggingObserver` logs them), `MessageAge` for lag, and health that is degraded while restarting or while a consumer implementing `ConsumerStatus` is not receiving. Stop closes the consumer but waits only as long as its context allows; a slow close finishes after Stop returns
 - `ChainHandlers(base, mw...)` — compose handler middlewares in order
 
 ## Sub-Packages
@@ -142,6 +142,40 @@ producer, _ := reg.NewProducer(ctx,
 	log,
 )
 ```
+
+Credentials come from `Token`, `Username` with `Password`, or `Username` with `PasswordFile` (a bounded mounted secret, read again at every connect so a rotated password applies on reconnect).
+
+#### `nats/jetstream/` — JetStream
+
+The `nats` adapter is core NATS: at most once, no persistence. For durable, at-least-once delivery use the `jetstream` adapter in the same module. It implements `messaging.Producer` and `messaging.Consumer` and registers as `"jetstream"`.
+
+- `Client.EnsureStream` declares a file-backed stream with limits retention, a message size cap and a deduplication window. Like Kafka's `EnsureTopics`, it is outside the shared ports.
+- `Producer` stores each message and waits for the server's acknowledgement, bounded by `PublishTimeout`. The `Nats-Msg-Id` header (`MsgIDHeader`, matched in any letter case) is the deduplication ID: a republished message within the window is stored once. `Publish` sets it from `Event.ID`. Only a message with an ID is retried, since a lost acknowledgement could otherwise store it twice. Failures that cannot pass, such as a refused or oversized message, are not retried.
+- `Consumer` declares a durable pull consumer with explicit acknowledgement, or binds to an existing one with `Bind`. A consumer that owns its stream sets `Declare` to declare the stream again whenever it is missing; otherwise a missing stream is retried until another process declares it. It fetches bounded batches and calls the handler in order, marking each message in progress first. `nil` acknowledges and waits for the server's confirmation. An error naks with a delay that doubles per delivery up to `MaxRetryDelay`, and consumption continues; an error wrapping `ErrTerminal` stops redelivery of that message. Broker failures go to `OnError` (required) and are retried with backoff, binding again after a failed fetch. `Consume` returns when its context ends, the consumer closes, or the broker refuses the consumer for good. `Message.Offset` is the stream sequence.
+- `Client.Replay` reads one page (up to `MaxReplayLimit`) of retained messages for a subject filter from a stream sequence or time, through a short-lived consumer it deletes afterwards. `Next` is the checkpoint for the following page and never skips a message stored during the call.
+
+Every JetStream API request is bounded by `PublishTimeout`. `ErrorClassifier` tells retryable failures from permanent ones. The package documentation lists the broker rights each operation needs.
+
+Handlers must be idempotent, for example by recording the message ID in the same transaction as the effect. Subjects are absolute; `SubjectPrefix` and `QueueGroup` are refused. `New(ctx, cfg)` bounds the first connection attempt by `ctx`, then reconnects in the background, including when the server is not reachable at construction. A zero `MaxReconnects` means unlimited; a positive bound lets the connection close for good, after which every operation fails.
+
+`NewComponent` owns a client in a component registry: `Start` connects, `Stop(ctx)` drains and closes within `ctx`, and `Health` is degraded while the broker is unreachable, so a service keeps serving while it reconnects. It is unhealthy once the connection closed for good. Its `Producer`, `Consumer`, `EnsureStream` and `Replay` refuse calls before `Start`.
+
+Through the registry, the configuration must be at-least-once, commit after handler success, `MaxInFlight` 1, without a dead-letter topic. Each topic gets its own durable consumer, named from the consumer group and the topic. Topics are exact subjects; use `Client.Consumer` for wildcard filters.
+
+```go
+import "github.com/kbukum/gokit/messaging/nats/jetstream"
+
+client, err := jetstream.New(ctx, natsadapter.Config{
+	URL: "tls://nats.internal:4222", Username: "runs", PasswordFile: "/run/secrets/nats_password",
+})
+// handle err; defer client.Close()
+producer, err := client.Producer(jetstream.ProducerConfig{Stream: "FACTS"})
+err = producer.Send(ctx, messaging.Message{
+	Topic: "facts.acme.run", Payload: payload, Headers: map[string]string{jetstream.MsgIDHeader: eventID},
+})
+```
+
+`messaging/nats/testutil` starts an authenticated single-node JetStream server for integration tests, with optional restricted users and a restart on the same address.
 
 ### `rabbitmq/` — RabbitMQ Implementation
 

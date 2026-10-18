@@ -59,7 +59,7 @@ func Connect(ctx context.Context, params database.ConnParams) (*Fixture, error) 
 	}
 	params.Options = cloneOptions(params.Options)
 	if params.Options["sslmode"] == "" {
-		params.Options["sslmode"] = "disable"
+		params.Options["sslmode"], params.AllowInsecureDev = "disable", true
 	}
 	// The pool requires an application search_path; the admin session only reads catalogs.
 	if params.Options["search_path"] == "" {
@@ -100,7 +100,7 @@ func envParams(addr string) (database.ConnParams, error) {
 	if user == "" {
 		user = "postgres"
 	}
-	params := database.ConnParams{Host: host, Port: port, User: user, Database: "postgres", Options: map[string]string{"sslmode": "disable"}}
+	params := database.ConnParams{Host: host, Port: port, User: user, Database: "postgres", Options: map[string]string{"sslmode": "disable"}, AllowInsecureDev: true}
 	if file := strings.TrimSpace(os.Getenv(EnvPasswordFile)); file != "" {
 		data, err := os.ReadFile(file) //nolint:gosec // The test operator names the password file explicitly.
 		if err != nil {

@@ -113,3 +113,14 @@ counter, err := tiktoken.New(tiktoken.Cl100kBase)
 ```
 
 Any `TokenCounter` plugs into bench's `metric.TokenStats` metric for per-prediction token usage.
+
+## Testing
+
+`llm/testutil` holds test doubles. `FakeProvider` is an in-process `llm.Provider` with queued or dynamic responses. `OpenAIServer` is an `http.Handler` that speaks the OpenAI chat-completions wire format, for tests that need a real HTTP model:
+
+- `POST /v1/chat/completions` answers `echo: <last user message>` with word-count usage, streamed as server-sent events when the request asks for a stream.
+- It requires a bearer token but never reads its value.
+- It counts calls per model, through `Calls(model)` or `GET /calls?model=<name>`. A bounded number of model names are counted (`WithMaxModels`).
+- Models named `fail-*` are counted and then answered with 502, to drive provider failures.
+
+Serve it with `httptest.NewServer(testutil.NewOpenAIServer())` and point the `openai` dialect's `BaseURL` at the server.

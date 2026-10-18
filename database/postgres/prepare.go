@@ -169,6 +169,9 @@ func connectionOptions(params database.ConnParams) (map[string]string, *tls.Conf
 	}
 	mode := params.Options["sslmode"]
 	if mode == "disable" {
+		if !params.AllowInsecureDev {
+			return nil, nil, apperrors.InvalidInput("sslmode", "SSL mode disable requires allow_insecure_dev")
+		}
 		if params.Options["sslrootcert"] != "" {
 			return nil, nil, apperrors.InvalidInput("sslrootcert", "A root certificate requires verified TLS")
 		}

@@ -64,3 +64,29 @@ func (c *FakeClock) fireTimers() {
 		}
 	}
 }
+
+// AfterFunc runs fn on its own goroutine once d elapses on clock; a non-positive d is due at once. Unlike
+// [time.AfterFunc], the returned stop joins that goroutine: it prevents fn if fn has not started, otherwise waits for
+// fn to return, and reports whether fn was prevented. fn therefore runs exactly when stop returns false and never
+// after stop returns, so the caller may release what fn uses. Call stop exactly once.
+func AfterFunc(clock TimerClock, d time.Duration, fn func()) (stop func() bool) {
+	timer := clock.NewTimer(d)
+	cancel := make(chan struct{})
+	done := make(chan struct{})
+	fired := false
+	go func() {
+		defer close(done)
+		select {
+		case <-timer.C():
+			fired = true
+			fn()
+		case <-cancel:
+		}
+	}()
+	return func() bool {
+		timer.Stop()
+		close(cancel)
+		<-done
+		return !fired
+	}
+}

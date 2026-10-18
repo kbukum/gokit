@@ -18,7 +18,7 @@
 //
 // The client subpackage provides h2c HTTP clients for ConnectRPC:
 //
-//	httpClient := client.NewHTTPClient(client.Config{BaseURL: "http://localhost:8080"})
+//	httpClient := client.NewHTTPClient(client.Config{BaseURL: "http://localhost:8080", AllowInsecureDev: true})
 //	svcClient := myv1connect.NewMyServiceClient(httpClient, cfg.BaseURL)
 //
 // # Authentication

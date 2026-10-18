@@ -58,6 +58,7 @@ func main() {
 | `FormatBytes()` / `ParseBytes()` | Human-readable byte sizes |
 | `FormatDuration()` / `ParseDuration()` / `TimeIt[T]()` | Duration formatting and timing |
 | `Clock` / `NewFakeClock()` | Injectable clock for deterministic tests |
+| `AfterFunc()` | Run a function after a delay on a `TimerClock`; stop waits for a running call |
 | `GlobMatch()` / `NewGlob()` / `HasWildcard()` | Glob pattern matching |
 | `Nearest()` / `NearestWithin()` / `ResolveUnique[T]()` | Fuzzy suggestion and unique resolution |
 | `ParseTemplate[P]()` / `ParseDynamicTemplate()` | Placeholder template parsing |

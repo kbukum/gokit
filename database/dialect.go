@@ -65,12 +65,15 @@ type ConnParams struct {
 	Database string `yaml:"database" mapstructure:"database"`
 	// Options carries backend-specific parameters keyed by the dialect's own vocabulary.
 	Options map[string]string `yaml:"options" mapstructure:"options"`
+	// AllowInsecureDev lets a dialect connect without transport security, such as PostgreSQL sslmode disable, for
+	// local development.
+	AllowInsecureDev bool `yaml:"allow_insecure_dev" mapstructure:"allow_insecure_dev"`
 }
 
 // IsZero reports whether no connection parameters are set.
 func (p ConnParams) IsZero() bool {
 	return p.Host == "" && p.Port == 0 && p.User == "" &&
-		p.Password == "" && p.PasswordFile == "" && p.Database == "" && len(p.Options) == 0
+		p.Password == "" && p.PasswordFile == "" && p.Database == "" && len(p.Options) == 0 && !p.AllowInsecureDev
 }
 
 func (ConnParams) String() string     { return "Connection parameters (credentials redacted)" }

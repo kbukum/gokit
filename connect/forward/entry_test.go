@@ -134,7 +134,7 @@ func TestUnaryWireAndHooks(t *testing.T) {
 				handler.ServeHTTP(out, req)
 				return out.Result(), nil
 			})
-			send, err := e.Client(httpClient, client.Config{BaseURL: "http://peer.test", Timeout: time.Second}, tc.opts...)
+			send, err := e.Client(httpClient, client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test", Timeout: time.Second}, tc.opts...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -165,13 +165,13 @@ func TestUnaryClientRefusesInvalidConstruction(t *testing.T) {
 		http connectrpc.HTTPClient
 		cfg  client.Config
 	}{
-		{"nil client", nil, client.Config{BaseURL: "http://peer.test"}},
-		{"typed nil client", (*http.Client)(nil), client.Config{BaseURL: "http://peer.test"}},
-		{"missing URL", httpClient, client.Config{}},
-		{"credentials", httpClient, client.Config{BaseURL: "http://private-user:private-password@peer.test"}},
-		{"query", httpClient, client.Config{BaseURL: "http://peer.test?secret=private-password"}},
-		{"negative timeout", httpClient, client.Config{BaseURL: "http://peer.test", Timeout: -time.Second}},
-		{"unbounded unary", httpClient, client.Config{BaseURL: "http://peer.test", NoTimeout: true}},
+		{"nil client", nil, client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test"}},
+		{"typed nil client", (*http.Client)(nil), client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test"}},
+		{"missing URL", httpClient, client.Config{AllowInsecureDev: true}},
+		{"credentials", httpClient, client.Config{AllowInsecureDev: true, BaseURL: "http://private-user:private-password@peer.test"}},
+		{"query", httpClient, client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test?secret=private-password"}},
+		{"negative timeout", httpClient, client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test", Timeout: -time.Second}},
+		{"unbounded unary", httpClient, client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test", NoTimeout: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -207,7 +207,7 @@ func TestUnaryRefusalAndNoRetry(t *testing.T) {
 		out := httptest.NewRecorder()
 		handler.ServeHTTP(out, req)
 		return out.Result(), nil
-	}), client.Config{BaseURL: "http://peer.test"})
+	}), client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestUnaryClientRejectsMessagesAndHookFailure(t *testing.T) {
 	send, err := e.Client(httpCall(func(*http.Request) (*http.Response, error) {
 		calls++
 		return nil, errors.New("unexpected HTTP call")
-	}), client.Config{BaseURL: "http://peer.test"})
+	}), client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +283,7 @@ func TestUnaryHonorsCancellationAndBudget(t *testing.T) {
 					}
 					<-req.Context().Done()
 					return nil, req.Context().Err()
-				}), client.Config{BaseURL: "http://peer.test", Timeout: time.Millisecond})
+				}), client.Config{AllowInsecureDev: true, BaseURL: "http://peer.test", Timeout: time.Millisecond})
 				if err != nil {
 					t.Fatal(err)
 				}

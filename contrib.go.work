@@ -16,6 +16,7 @@ use (
 	./llm/tokenizer/tiktoken
 	./messaging/kafka
 	./messaging/nats
+	./messaging/nats/testutil
 	./messaging/rabbitmq
 	./storage/gcs
 	./storage/s3

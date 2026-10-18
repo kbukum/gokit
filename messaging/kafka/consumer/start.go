@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/kbukum/gokit/logging"
@@ -20,6 +21,7 @@ type StartConsumerConfig struct {
 
 // StartConsumer creates and starts a ManagedConsumer that processes raw message values.
 // This is the most common consumer pattern: read bytes from a topic and hand them to a handler.
+// Consumption outlives ctx; the caller must Stop the returned consumer.
 //
 // Example:
 //
@@ -49,7 +51,7 @@ func StartConsumer(ctx context.Context, cfg StartConsumerConfig) (*ManagedConsum
 		return nil, err
 	}
 	if err := mc.Start(ctx); err != nil {
-		return nil, err
+		return nil, errors.Join(err, mc.Stop(context.WithoutCancel(ctx)))
 	}
 	return mc, nil
 }

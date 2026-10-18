@@ -12,7 +12,7 @@ import (
 )
 
 func TestNewHTTPClientBuildsH2CClientByDefault(t *testing.T) {
-	client, err := NewHTTPClient(Config{})
+	client, err := NewHTTPClient(Config{AllowInsecureDev: true})
 	if err != nil {
 		t.Fatalf("NewHTTPClient returned error: %v", err)
 	}
