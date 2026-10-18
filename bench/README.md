@@ -71,6 +71,8 @@ Metrics expose `Identity() bench.MetricIdentity{Name, Version, Config}`. Names r
 
 Latency runs from immediately before evaluator execution until return. Records store nanoseconds. Percentiles use nearest rank, `ceil(p*n/100)`, over successful observations. Up to 4,096 observations sort in memory; larger sets use eight radix passes over stored records, solving all latency and TTFT ranks together. `WithPercentileThreshold` can lower the cutoff for tests.
 
+`SummarizePerformance` applies the same summary to measurements collected outside a run, such as invocations a separate executor recorded: up to `MaxMeasurements` (4,096) latency, TTFT, usage and failure values. `PerformanceSummary.Metrics()` returns the metrics above, so the results feed `CheckBounds` and comparisons like run metrics. Negative values, unknown usage sources and token overflow are refused.
+
 Exact/fuzzy matching, BLEU, ROUGE, MAE, MSE, and RMSE stream through independent accumulators. Classification, probability/calibration, ranking, R-squared, weighted, semantic, and judge metrics remain available. Whole-set metrics collect only up to `MaxRetainedSamples`; larger runs fail explicitly instead of approximating.
 
 BLEU matches sacreBLEU **2.4.3** corpus BLEU: 13a tokenizer, exponential smoothing, max order four, case-sensitive, no effective order, scaled to 0-1. ROUGE-1/2/L match **rouge-score 0.1.2**, default tokenizer without stemming, averaging per-sample F with mean P/R. Python **3.11.6** generated the pinned reference cases; absolute tolerance is **1e-9**. Empty and one-word BLEU are zero without effective order.

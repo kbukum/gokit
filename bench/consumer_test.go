@@ -105,6 +105,29 @@ func TestConsumerEvaluationPath(t *testing.T) {
 	if !reflect.DeepEqual(p, b.Branches["model"].Performance) {
 		t.Fatal("radix and in-memory percentiles differ")
 	}
+	records, err := store.Records(ctx, a.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var measured []bench.Measurement
+	for {
+		record, ok, err := records.Next(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !ok {
+			break
+		}
+		measured = append(measured, bench.Measurement{Latency: record.Latency, TTFT: record.TTFT, Usage: record.Usage, Failed: record.Error != ""})
+	}
+	if err := records.Close(); err != nil {
+		t.Fatal(err)
+	}
+	summarized, err := bench.SummarizePerformance(measured)
+	summarized.WarmupFailures = p.WarmupFailures
+	if err != nil || !reflect.DeepEqual(summarized, p) {
+		t.Fatalf("external summary differs from the run: %+v %v", summarized, err)
+	}
 	for _, m := range a.Metrics[:5] {
 		if math.Abs(m.Value-1) > 1e-9 {
 			t.Fatalf("%s=%g", m.Name, m.Value)

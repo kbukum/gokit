@@ -5,6 +5,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **bench**: `SummarizePerformance` summarizes externally collected measurements into the same `latency_ms`, `ttft_ms`, throughput, `failure_rate` and `usage_tokens` metrics a run reports, through `PerformanceSummary.Metrics`.
 - **llm**: `Config.EndpointPolicy` applies the httpclient endpoint policy to model calls: operator origin grants, DNS-at-dial checks, and refused redirects, proxies and implicit retries.
 - **server/middleware**: `StreamWriteDeadline` bounds each write and flush of a long-lived streaming route and disarms the deadline while idle, so the server's `WriteTimeout`, an absolute deadline per HTTP/2 stream, no longer resets healthy streams.
 - **encryption**: `WithKeyMaterial` derives message keys from random key material (32 bytes or more, such as mounted key files) with HKDF-SHA256 instead of PBKDF2, in envelope version 2, so each operation takes microseconds instead of tens of milliseconds. Passphrase and key-material ciphertexts never open each other; shared vectors keep the format identical to rskit.
