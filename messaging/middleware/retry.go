@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/kbukum/gokit/messaging"
@@ -18,9 +19,7 @@ type RetryMiddlewareConfig struct {
 	OnExhausted func(ctx context.Context, msg messaging.Message, err error) error
 }
 
-// RetryHandler wraps a MessageHandler with retry logic powered by resilience.RetryFunc.
-// Each retry attempt updates the "x-retry-count" header on the message
-// so downstream consumers (and DLQ producers) can observe how many times processing was attempted.
+// RetryHandler wraps a MessageHandler with retry logic powered by resilience.RetryFunc. Each retry attempt updates the "x-retry-count" header on the message so downstream consumers (and DLQ producers) can observe how many times processing was attempted. An error wrapping [messaging.ErrTerminal] is not retried and goes straight to OnExhausted.
 func RetryHandler(handler messaging.MessageHandler, cfg RetryMiddlewareConfig) messaging.MessageHandler {
 	return func(ctx context.Context, msg messaging.Message) error {
 		// Clone headers so retries don't mutate the caller's map.
@@ -30,8 +29,14 @@ func RetryHandler(handler messaging.MessageHandler, cfg RetryMiddlewareConfig) m
 		}
 		msg.Headers = headers
 
+		retry := cfg.RetryConfig
+		retryIf := retry.RetryIf
+		if retryIf == nil {
+			retryIf = resilience.DefaultRetryIf
+		}
+		retry.RetryIf = func(err error) bool { return !errors.Is(err, messaging.ErrTerminal) && retryIf(err) }
 		var attempt int
-		err := resilience.RetryFunc(ctx, cfg.RetryConfig, func() error {
+		err := resilience.RetryFunc(ctx, retry, func() error {
 			attempt++
 			if attempt > 1 {
 				msg.Headers["x-retry-count"] = strconv.Itoa(attempt - 1)

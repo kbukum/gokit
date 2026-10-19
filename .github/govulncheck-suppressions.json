@@ -20,6 +20,7 @@
         "dag/testutil",
         "database",
         "database/postgres",
+        "database/postgres/testutil",
         "database/sqlite",
         "database/testutil",
         "dataset",

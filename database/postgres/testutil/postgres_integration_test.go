@@ -6,7 +6,7 @@
 // Determinism: each test provisions its own ephemeral PostgreSQL server via testcontainers-go with
 // a digest-pinned image, so runs never depend on a developer's or CI runner's local Postgres or on
 // a mutable tag. Missing Docker, startup failure, and termination failure all fail this required gate.
-package postgres_test
+package testutil_test
 
 import (
 	"context"
@@ -70,9 +70,10 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 
 	cfg := database.Config{Enabled: true, Params: params, AutoMigrate: true}
 	cfg.ApplyDefaults()
-	comp := database.NewComponent(cfg, logging.NewDefault("test")).
-		WithDialectFromRegistry(reg, postgres.Name).
-		WithAutoMigrate(&widget{})
+	comp, err := database.NewComponent(cfg, logging.NewDefault("test"), database.WithDialectFromRegistry(reg, postgres.Name), database.WithAutoMigrate(&widget{}))
+	if err != nil {
+		t.Fatalf("NewComponent: %v", err)
+	}
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}

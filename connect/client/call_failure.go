@@ -16,8 +16,7 @@ func MapCallFailure(ctx context.Context, peer string, err error) (*apperrors.App
 	if !IsUnavailable(err) {
 		return nil, false
 	}
-	// One read, so a deadline passing mid-check cannot split the classification. A due deadline whose timer has not
-	// fired is still the caller's: the peer may have enforced its propagated copy first.
+	// One read, so a deadline passing mid-check cannot split the classification. A due deadline whose timer has not fired is still the caller's: the peer may have enforced its propagated copy first.
 	ended := ctx.Err()
 	switch {
 	case ended == nil && deadlineDue(ctx):

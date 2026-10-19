@@ -17,11 +17,26 @@ var ErrFirstMessageTimeout = errors.New("connect client: stream sent no first me
 // FirstMessageTimeoutInterceptor returns an interceptor that bounds how long a server or bidi stream waits for its first response message. A client built with [Config.NoTimeout] has no other bound, and a peer that accepts the connection but never answers would hold the stream for as long as the caller waits. The clock starts when the stream is created, so it covers opening the stream too: connect-go waits for the response headers before the open returns.
 //
 // When the limit passes first, the stream ends and every later call on it returns a Connect deadline_exceeded error wrapping [ErrFirstMessageTimeout], which [IsUnavailable] counts as an outage; a message that races the limit is dropped. Install it after [Availability] in connect.WithInterceptors, so the availability observes that error against the caller's context. A caller's own cancellation or deadline is left as it is. Unary calls and client streams pass through.
-func FirstMessageTimeoutInterceptor(limit time.Duration, clock util.TimerClock) (connect.Interceptor, error) {
-	if limit <= 0 || util.IsNil(clock) {
+func FirstMessageTimeoutInterceptor(limit time.Duration, opts ...FirstMessageOption) (connect.Interceptor, error) {
+	f := &firstMessage{limit: limit, clock: util.SystemClock{}}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, errors.New("connect client: nil first message option")
+		}
+		opt(f)
+	}
+	if limit <= 0 || util.IsNil(f.clock) {
 		return nil, errors.New("connect client: first message timeout needs a positive limit and a clock")
 	}
-	return &firstMessage{limit: limit, clock: clock}, nil
+	return f, nil
+}
+
+// FirstMessageOption configures [FirstMessageTimeoutInterceptor].
+type FirstMessageOption func(*firstMessage)
+
+// WithFirstMessageClock replaces the system clock, for tests. A nil clock is refused.
+func WithFirstMessageClock(clock util.TimerClock) FirstMessageOption {
+	return func(f *firstMessage) { f.clock = clock }
 }
 
 type firstMessage struct {

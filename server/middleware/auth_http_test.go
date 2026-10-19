@@ -182,3 +182,33 @@ func TestHTTPAuthMissingPolicy(t *testing.T) {
 		t.Fatal("accepted unknown missing-credential policy")
 	}
 }
+
+func TestAuthStagesRecordOnceAndStayIsolated(t *testing.T) {
+	calls := 0
+	auth := requestAuthenticator(func(r *http.Request) (string, error) {
+		calls++
+		return "svc", nil
+	})
+	first, err := NewAuthStages[string](auth, storeClaims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewAuthStages[string](auth, storeClaims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var trustedFirst, trustedSecond bool
+	h := first.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		trustedFirst, trustedSecond = first.Trusted(r), second.Trusted(r)
+		first.Enforce(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(w, r)
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+	if !trustedFirst || trustedSecond || calls != 1 {
+		t.Fatalf("trusted first=%v second=%v calls=%d", trustedFirst, trustedSecond, calls)
+	}
+	// Enforce without a recorded outcome authenticates itself.
+	second.Enforce(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+	if calls != 2 {
+		t.Fatalf("calls = %d", calls)
+	}
+}

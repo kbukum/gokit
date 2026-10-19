@@ -2,7 +2,8 @@
        replace-sync replace-check \
        check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
        check-media check-infra check-devtools clean help release-plan release-status release-readiness release-tag \
-       release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump examples
+       release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump examples \
+       consumer-check fuzz fuzz-plan vuln licenses tidy-check actionlint
 
 GOMOD := ./gomod.sh
 AUTH_HOST_ARGS ?=
@@ -11,6 +12,8 @@ AUTH_HOST_ARGS ?=
 # e.g. `make TOVEN=../toven/target/release/toven toven-canary`.
 TOVEN ?= toven
 BASE ?= main
+FUZZTIME ?= 30s
+AUTH_HOST_BINARY := $(CURDIR)/auth/testhost/target/auth-host
 
 # Module flag: pass -m $(M) to gomod.sh when M is set
 _M = $(if $(M),-m $(M))
@@ -19,11 +22,9 @@ _M = $(if $(M),-m $(M))
 _W = $(if $(W),-w $(W))
 
 # Non-empty when a module (M=) or workspace (W=) subset is requested. The
-# everyday gates (build/test/lint/vet/fmt/tidy/coverage) run the WHOLE workspace
-# through Toven — the argv-first orchestrator that discovers modules, orders by
-# the dependency graph, and fans out across cores. A specific M=/W= subset falls
-# back to the native gomod.sh path: Toven has no first-class selector for
-# gokit's named domains yet (see docs/TOVEN-MIGRATION.md, gap 3).
+# everyday gates run the WHOLE workspace through Toven (locally and in CI); an
+# M=/W= subset falls back to the native gomod.sh path because Toven has no
+# selector for gokit's named domains yet (see docs/TOVEN-MIGRATION.md, gap 2).
 _FILTERED = $(strip $(M)$(W))
 
 ## Default target
@@ -42,7 +43,7 @@ auth-host: auth-host-build
 
 ## Real production-adapter session and process proof. Docker is required for PostgreSQL.
 auth-integration: auth-host-build
-	@GOKIT_AUTH_HOST_BINARY="$(CURDIR)/auth/testhost/target/auth-host" go test ./auth/... ./auth/session/database/... ./auth/testhost/... -tags=integration -race -shuffle=on -count=1 -timeout=10m
+	@GOKIT_AUTH_HOST_BINARY="$(AUTH_HOST_BINARY)" go test ./auth/... ./auth/session/database/... ./auth/testhost/... -tags=integration -race -shuffle=on -count=1 -timeout=10m
 
 ## Build packages. Unfiltered → Toven (whole workspace); M=/W= → native gomod.sh.
 build:
@@ -61,10 +62,35 @@ else
 	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M) $(_W)
 endif
 
-## Run integration suite (gated by `//go:build integration`).
-## Slow / dependency-heavy; not part of `make test` or default CI `check`.
-test-integration:
-	@$(GOMOD) cmd "go test -race -count=1 -tags=integration $(if $(T),-run $(T))" $(_M) $(_W)
+## Run the integration suite (`//go:build integration`). Unfiltered → Toven over the
+## modules that hold integration tests; M=/W= → native. Docker is required.
+test-integration: auth-host-build
+ifeq ($(_FILTERED),)
+	@mods=$$(python3 scripts/integration_modules.py --toven "$(TOVEN)") || exit 1; \
+	if [ -z "$$mods" ]; then echo "test-integration: no module holds integration tests" >&2; exit 1; fi; \
+	GOKIT_AUTH_HOST_BINARY="$(AUTH_HOST_BINARY)" $(TOVEN) test --no-cache \
+	  $$(printf -- '--module %s ' $$mods) \
+	  -- -tags=integration -race -shuffle=on -count=1 -timeout=20m $(if $(T),-run $(T))
+else
+	@GOKIT_AUTH_HOST_BINARY="$(AUTH_HOST_BINARY)" $(GOMOD) cmd "go test -tags=integration -race -shuffle=on -count=1 -timeout=20m $(if $(T),-run $(T))" $(_M) $(_W)
+endif
+
+## Fuzz every target for FUZZTIME (default 30s). GROUP=<n> GROUPS=<total> runs one CI shard;
+## FUZZ_BASE=<ref> fuzzes only modules affected since that ref.
+fuzz:
+	@python3 scripts/fuzz.py --toven "$(TOVEN)" $(if $(FUZZ_BASE),--base "$(FUZZ_BASE)") run --fuzztime "$(FUZZTIME)" $(if $(GROUP),--group $(GROUP) --groups $(GROUPS))
+
+## Print the fuzz shard plan as JSON (target count and group list).
+fuzz-plan:
+	@python3 scripts/fuzz.py --toven "$(TOVEN)" $(if $(FUZZ_BASE),--base "$(FUZZ_BASE)") plan
+
+## Scan every module for known vulnerabilities (govulncheck with reviewed suppressions).
+vuln:
+	@$(TOVEN) vuln
+
+## Fail on dependency licenses outside the permissive allow-list (needs go-licenses).
+licenses:
+	@./scripts/check-licenses.sh
 
 ## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W=/T= → native.
 ## Toven's coverage gate has no `-run` selector, so a T=<pattern> request must take
@@ -109,6 +135,15 @@ ifeq ($(_FILTERED),)
 else
 	@$(GOMOD) tidy $(_M) $(_W)
 endif
+
+## Fail when any go.mod/go.sum is untidy, printing the diff (read-only; used by CI).
+tidy-check:
+	@$(TOVEN) run tidy
+
+## Lint GitHub Actions workflows, including their run: scripts through shellcheck, as CI does.
+actionlint:
+	@command -v shellcheck >/dev/null || { echo "error: shellcheck is required to check run: scripts (install: brew install shellcheck, or apt-get install shellcheck)" >&2; exit 1; }
+	@go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
 ## Update dependencies (M=<module>, W=core|contrib)
 update:
@@ -232,6 +267,12 @@ test-affected:
 ## Run all checks (build + vet + test) — supports M=<module>
 check: build vet test
 
+## Build and vet a consumer module against this checkout; it must replace gokit with this path.
+## (usage: make consumer-check CONSUMER=../app/go-services)
+consumer-check:
+	@test -n "$(CONSUMER)" || { echo "usage: make consumer-check CONSUMER=<module dir>"; exit 2; }
+	@scripts/consumer-check.sh "$(CONSUMER)"
+
 ## Verify declare-only aggregators (doc.go docs-only) + god-file — advisory, not gating.
 ## Driven through Toven's `command` ecosystem (`toven run structure`), which shells out
 ## to scripts/check-structure.sh — one source of truth, invoked by both make and CI.
@@ -318,9 +359,9 @@ ensure-act:
 ci: ensure-act
 	@act --secret GITHUB_TOKEN=$$(gh auth token 2>/dev/null) $(ACT_ARGS)
 
-## Run only the test job from CI
+## Run only the check job from CI
 ci-test: ensure-act
-	@act -j test --secret GITHUB_TOKEN=$$(gh auth token 2>/dev/null) $(ACT_ARGS)
+	@act -j check --secret GITHUB_TOKEN=$$(gh auth token 2>/dev/null) $(ACT_ARGS)
 
 ## Run only the lint job from CI
 ci-lint: ensure-act
@@ -335,12 +376,18 @@ help:
 	@echo "  make build    [M=] [W=]       Build packages"
 	@echo "  make test     [M=] [T=] [W=]  Run tests"
 	@echo "  make test-affected [BASE=]    Current changes and reverse dependents (default main)"
-	@echo "  make test-integration [M=] [W=] Run integration suite (//go:build integration)"
-	@echo "  make test-coverage [M=] [T=] [W=] Run tests with coverage"
+	@echo "  make test-integration [M=] [T=] [W=] Run integration suite (Docker required)"
+	@echo "  make test-coverage [M=] [T=] [W=] Race tests with coverage gate"
+	@echo "  make fuzz [FUZZTIME=] [FUZZ_BASE=] [GROUP= GROUPS=] Fuzz targets"
+	@echo "  make fuzz-plan                Print the fuzz shard plan"
+	@echo "  make vuln                     govulncheck every module"
+	@echo "  make licenses                 Check dependency licenses"
 	@echo "  make lint     [M=] [W=]       Run golangci-lint"
 	@echo "  make vet      [M=] [W=]       Run go vet"
 	@echo "  make fmt      [M=]            Format code"
 	@echo "  make tidy     [M=] [W=]       Run go mod tidy"
+	@echo "  make tidy-check               Fail on untidy go.mod/go.sum"
+	@echo "  make actionlint               Lint GitHub Actions workflows"
 	@echo "  make replace-sync             Sync intra-repo replace directives"
 	@echo "  make replace-check            Verify intra-repo replace graph (read-only)"
 	@echo "  make update   [M=] [W=]       Update dependencies"
@@ -379,7 +426,7 @@ help:
 	@echo ""
 	@echo "Local CI (GitHub Actions via act + Docker):"
 	@echo "  make ci                        Run full CI pipeline"
-	@echo "  make ci-test                   Run only test job"
+	@echo "  make ci-test                   Run only check job"
 	@echo "  make ci-lint                   Run only lint job"
 	@echo ""
 	@echo "Module targeting (M=):"

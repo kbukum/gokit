@@ -21,8 +21,7 @@ type GoBuild struct {
 	CoverPackages []string
 }
 
-// BuildGo compiles a child with an isolated module selection, a five-minute ceiling and
-// at most 1 MiB of diagnostics per stream. The caller owns Output and its cleanup.
+// BuildGo compiles a child with an isolated module selection, a five-minute ceiling and at most 1 MiB of diagnostics per stream. The caller owns Output and its cleanup.
 func BuildGo(ctx context.Context, cfg GoBuild) error {
 	if !buildPackage(cfg.Package) || cfg.Output == "" {
 		return apperrors.InvalidInput("Go build", "One package and an output path are required")

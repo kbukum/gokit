@@ -39,7 +39,7 @@ func Prepare(ctx context.Context, input database.ConnectionInput) (database.Open
 	}
 	_, query, _ := strings.Cut(input.DSN, "?")
 	if _, err := url.ParseQuery(query); err != nil {
-		return nil, apperrors.InvalidInput("dsn", "Invalid SQLite connection options").WithCause(database.Failure(err))
+		return nil, apperrors.InvalidInput("dsn", "Invalid SQLite connection options").WithCause(database.WrapFailure(err))
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

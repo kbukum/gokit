@@ -99,12 +99,18 @@ func invalidSession(err error) bool {
 	return ok && app.Code == apperrors.ErrCodeUnauthorized
 }
 
+// endStreams ends the local streams whose key matches, after the store change that ended their sessions committed.
+// Revoke fails only for a nil match, which these callers never pass, so there is no failure to report.
+func (m *Manager) endStreams(match func(watchKey) bool) {
+	_, _ = m.leases.Revoke(match)
+}
+
 func (m *Manager) endReference(ref string) {
-	m.leases.Revoke(func(key watchKey) bool { return key.reference == ref })
+	m.endStreams(func(key watchKey) bool { return key.reference == ref })
 }
 
 func (m *Manager) endFamily(family string) {
-	m.leases.Revoke(func(key watchKey) bool { return key.family == family })
+	m.endStreams(func(key watchKey) bool { return key.family == family })
 }
 
 // Cleanup performs exactly one indexed batch of at most 256 retained generations.

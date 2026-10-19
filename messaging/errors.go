@@ -8,6 +8,9 @@ import (
 // ErrClosed is returned when a producer or consumer is used after Close.
 var ErrClosed = errors.New("messaging: closed")
 
+// ErrTerminal marks a handler failure that redelivery cannot fix, such as a message the handler can never decode. Wrap it in the handler's error: adapters then stop redelivering the message, and retry middleware stops retrying it.
+var ErrTerminal = errors.New("messaging: terminal handler failure")
+
 // ErrUnsupported is returned when an adapter cannot honor a requested messaging capability.
 var ErrUnsupported = errors.New("messaging: unsupported capability")
 

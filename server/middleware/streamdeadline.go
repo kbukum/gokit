@@ -8,17 +8,32 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// StreamWriteDeadline returns middleware for long-lived streaming routes (Connect or gRPC server streams, chunked
-// responses) served by a server with a WriteTimeout.
+// StreamDeadlineOption configures [StreamWriteDeadline].
+type StreamDeadlineOption func(*streamDeadlineOptions)
+
+type streamDeadlineOptions struct {
+	clock util.Clock
+}
+
+// WithStreamDeadlineClock replaces the system clock, for tests. A nil clock is refused.
+func WithStreamDeadlineClock(clock util.Clock) StreamDeadlineOption {
+	return func(o *streamDeadlineOptions) { o.clock = clock }
+}
+
+// StreamWriteDeadline returns middleware for long-lived streaming routes (Connect or gRPC server streams, chunked responses) served by a server with a WriteTimeout.
 //
-// Under HTTP/2, http.Server.WriteTimeout is an absolute deadline per stream that successful writes do not renew, so a
-// healthy stream is reset once it elapses. The middleware disarms that deadline when the request starts and instead
-// bounds each Write and Flush by budget, disarming it again afterwards so an idle stream is never reset. Stream
-// lifetime then belongs to the handler's context. Mount it only on streaming routes; unary routes keep the server
-// deadline.
+// Under HTTP/2, http.Server.WriteTimeout is an absolute deadline per stream that successful writes do not renew, so a healthy stream is reset once it elapses. The middleware disarms that deadline when the request starts and instead bounds each Write and Flush by budget, disarming it again afterwards so an idle stream is never reset. Stream lifetime then belongs to the handler's context. Mount it only on streaming routes; unary routes keep the server deadline.
 //
 // A writer that cannot set deadlines is refused with 500 before the handler runs.
-func StreamWriteDeadline(budget time.Duration, clock util.Clock) (Middleware, error) {
+func StreamWriteDeadline(budget time.Duration, opts ...StreamDeadlineOption) (Middleware, error) {
+	o := streamDeadlineOptions{clock: util.SystemClock{}}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, apperrors.InvalidInput("stream write deadline", "Options must not be nil")
+		}
+		opt(&o)
+	}
+	clock := o.clock
 	if budget <= 0 || util.IsNil(clock) {
 		return nil, apperrors.InvalidInput("stream write deadline", "A positive write budget and a clock are required")
 	}

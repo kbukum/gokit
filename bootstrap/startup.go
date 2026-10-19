@@ -69,12 +69,13 @@ func (a *App[C]) startup(ctx context.Context, holdActive bool) (_ context.Contex
 	return ctx, nil
 }
 
-// ready runs the advisory health probe, then the ready hooks. A failed probe is logged and
-// startup continues degraded; a shutdown requested during the probe skips the ready hooks.
+// ready runs the advisory health probe, then the ready hooks. A degraded or not-ready probe is logged and startup continues; a shutdown requested during the probe skips the ready hooks.
 func (a *App[C]) ready(ctx context.Context) error {
-	if err := a.ReadyCheck(ctx); err != nil {
+	results := a.Components.HealthAll(ctx)
+	if status := healthReadiness(results); status != ReadinessReady {
 		a.Logger.WarnCtx(ctx, "Ready check reported issues", map[string]any{
-			"error": err.Error(),
+			"status":     string(status),
+			"components": healthProblems(results),
 		})
 	}
 	if err := shutdownRequested(ctx); err != nil {

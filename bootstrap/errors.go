@@ -11,6 +11,9 @@ var ErrLifecycleUsed = errors.New("bootstrap: application lifecycle already used
 // ErrShutdownRequested is the cause of a startup that Shutdown interrupted. Shutdown cancels the startup context with this cause, and startup rolls back after the running phase returns.
 var ErrShutdownRequested = errors.New("bootstrap: shutdown requested during startup")
 
+// ErrNotReady is wrapped by [App.ReadyCheck] when a component is unhealthy.
+var ErrNotReady = errors.New("bootstrap: components not ready")
+
 // Phase names the startup phase that failed.
 type Phase string
 

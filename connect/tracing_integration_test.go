@@ -108,7 +108,7 @@ func TestTracingTLSPropagation(t *testing.T) {
 				if r.TLS == nil || r.TLS.Version != tls.VersionTLS13 {
 					t.Error("expected TLS 1.3")
 				}
-				// The kit accepts an authenticated-context hook; RunLab proves its real authenticator separately.
+				// The kit accepts an authenticated-context hook; consumers prove their real authenticator separately.
 				if outcome != "unauthenticated" {
 					r = r.WithContext(context.WithValue(r.Context(), verifiedTracePeer{}, true))
 				}

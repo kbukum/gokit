@@ -11,8 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// The interceptor presents its value as the one header value on unary and streaming client calls, replacing a value
-// the caller set.
+// The interceptor presents its value as the one header value on unary and streaming client calls, replacing a value the caller set.
 func TestHeaderInterceptorSetsClientHeader(t *testing.T) {
 	t.Parallel()
 	var (

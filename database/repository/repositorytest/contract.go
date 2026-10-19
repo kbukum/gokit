@@ -1,5 +1,4 @@
-// Package repositorytest provides shared contracts for partition-enforced repositories, so every database adapter
-// proves the same scoped behavior.
+// Package repositorytest provides shared contracts for partition-enforced repositories, so every database adapter proves the same scoped behavior.
 package repositorytest
 
 import (
@@ -70,8 +69,7 @@ func Migrate(db *gorm.DB) error {
 	return db.Session(&gorm.Session{SkipHooks: true}).AutoMigrate(&Row{})
 }
 
-// Run proves the scoped repository contract. open returns a fresh database whose contract table exists (see
-// [Migrate]); each subtest uses its own database.
+// Run proves the scoped repository contract. open returns a fresh database whose contract table exists (see [Migrate]); each subtest uses its own database.
 func Run(t *testing.T, open func(t *testing.T) *gorm.DB) {
 	t.Helper()
 	spec := Spec(t)

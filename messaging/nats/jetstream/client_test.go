@@ -3,6 +3,7 @@ package jetstream
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,7 +82,7 @@ func TestDeadConnectionFailsOperationsAndHealth(t *testing.T) {
 	if _, err := c.api(); !errors.Is(err, natsgo.ErrConnectionClosed) || !permanent(err) {
 		t.Fatalf("api on a dead connection = %v", err)
 	}
-	comp := NewComponent("broker", unreachable)
+	comp := mustComponent(t, unreachable)
 	comp.client = c
 	if h := comp.Health(context.Background()); h.Status != component.StatusUnhealthy {
 		t.Fatalf("health = %+v", h)
@@ -124,7 +125,8 @@ func TestConsumerConfigDefaultsAndValidate(t *testing.T) {
 	c := ConsumerConfig{Durable: "usage", FilterSubjects: []string{"facts.*.>"}, OnError: func(error) {}}
 	c.ApplyDefaults()
 	if c.AckWait != DefaultAckWait || c.MaxAckPending != DefaultMaxAckPending || c.Batch != DefaultBatch ||
-		c.FetchWait != DefaultFetchWait || c.RetryDelay != DefaultRetryDelay || c.MaxRetryDelay != DefaultMaxRetryDelay {
+		c.FetchWait != DefaultFetchWait || c.RetryDelay != DefaultRetryDelay || c.MaxRetryDelay != DefaultMaxRetryDelay ||
+		c.Delivery.MaxAttempts != 0 {
 		t.Fatalf("defaults = %+v", c)
 	}
 	if err := c.Validate(); err != nil {
@@ -142,7 +144,7 @@ func TestConsumerConfigDefaultsAndValidate(t *testing.T) {
 		"no target":     func(c *ConsumerConfig) { c.FilterSubjects = nil },
 		"filter":        func(c *ConsumerConfig) { c.FilterSubjects = []string{"a..b"} },
 		"ack wait":      func(c *ConsumerConfig) { c.AckWait = -1 },
-		"max deliver":   func(c *ConsumerConfig) { c.MaxDeliver = -1 },
+		"attempts":      func(c *ConsumerConfig) { c.Delivery.MaxAttempts = -1 },
 		"batch":         func(c *ConsumerConfig) { c.Batch = MaxFetchBatch + 1 },
 		"batch>pending": func(c *ConsumerConfig) { c.Batch = c.MaxAckPending + 1 },
 		"retry":         func(c *ConsumerConfig) { c.MaxRetryDelay = c.RetryDelay - 1 },
@@ -155,6 +157,34 @@ func TestConsumerConfigDefaultsAndValidate(t *testing.T) {
 	}
 	if (ConsumerConfig{Stream: "FACTS"}).topic() != "FACTS" || c.topic() != "facts.*.>" {
 		t.Fatal("topic naming")
+	}
+}
+
+func TestDeliveryPolicyNeedsAnExplicitChoiceToGiveUp(t *testing.T) {
+	t.Parallel()
+	hook := func(context.Context, messaging.Message, error) error { return nil }
+	for name, p := range map[string]DeliveryPolicy{
+		"retry until success": {},
+		"terminal hand-off":   {OnDeadLetter: hook},
+		"bounded hand-off":    {MaxAttempts: 3, OnDeadLetter: hook},
+		"bounded discard":     {MaxAttempts: 3, DiscardExhausted: true},
+	} {
+		if err := p.Validate(); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	for name, p := range map[string]DeliveryPolicy{
+		"negative":        {MaxAttempts: -1},
+		"silent drop":     {MaxAttempts: 3},
+		"both choices":    {MaxAttempts: 3, OnDeadLetter: hook, DiscardExhausted: true},
+		"nothing to drop": {DiscardExhausted: true},
+	} {
+		if err := p.Validate(); err == nil {
+			t.Fatalf("%s: expected error", name)
+		}
+	}
+	if err := (DeliveryPolicy{MaxAttempts: 3}).Validate(); !strings.Contains(err.Error(), "on_dead_letter") || !strings.Contains(err.Error(), "discard_exhausted") {
+		t.Fatalf("error does not explain the options: %v", err)
 	}
 }
 

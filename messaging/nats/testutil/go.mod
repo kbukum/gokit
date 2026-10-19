@@ -86,3 +86,5 @@ replace (
 	github.com/kbukum/gokit/messaging => ../../
 	github.com/kbukum/gokit/messaging/nats => ../
 )
+
+replace github.com/kbukum/gokit/testutil => ../../../testutil

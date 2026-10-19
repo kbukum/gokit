@@ -21,22 +21,24 @@ cfg := database.Config{
     AutoMigrate: true,
 }
 
-comp := database.NewComponent(cfg, log).
-    WithDialect(postgres.Dialect()).
-    WithAutoMigrate(&User{})
+comp, err := database.NewComponent(cfg, log,
+    database.WithDialect(postgres.Dialect()),
+    database.WithAutoMigrate(&User{}),
+)
 ```
 
 ## Component lifecycle
 
-`Start` validates a copy of the configuration, opens the pool, then runs auto-migration, `WithInitialize` and `WithReadiness` checks in order. The database is published only after every step succeeds; a failure closes the new pool and a later `Start` may retry. Concurrent `Start` calls wait for the attempt in flight, bounded by their context. `DB()` returns `ErrNotStarted` before publication and `ErrStopped` afterwards, never a nil handle. Both are `SERVICE_UNAVAILABLE` application errors; only `ErrNotStarted` is retryable.
+`NewComponent` takes construction options and validates them, so a component's setup is fixed once built. `Start` validates a copy of the configuration, opens the pool, then runs auto-migration, the `WithStartupCheck`, `WithInitialize` and `WithReadiness` steps in order. A startup check runs once, before setup; readiness also runs on every `Health`. The database is published only after every step succeeds; a failure closes the new pool and a later `Start` may retry. Concurrent `Start` calls wait for the attempt in flight, bounded by their context. `DB()` returns `ErrNotStarted` before publication and `ErrStopped` afterwards, never a nil handle. Both are `SERVICE_UNAVAILABLE` application errors; only `ErrNotStarted` is retryable.
 
-`Stop` is terminal. It prevents publication, waits for an in-flight start to clean up within its context, closes the pool once, and returns the recorded result to repeated calls. `Health` runs a ping and the readiness checks within 500 ms and reports only the error code and safe message, never the cause. With PostgreSQL, pass `postgres.Readiness(plan)` so health also requires the expected migration versions and runtime privileges.
+`Stop` is terminal. It prevents publication, waits for an in-flight start to clean up within its context, closes the pool once, and returns the recorded result to repeated calls. `Health` runs a ping and the readiness checks within one second (`WithHealthTimeout` changes the budget, up to 30 seconds) and reports only the error code and safe message, never the cause. With PostgreSQL, pass `postgres.Readiness(plan)` so health also requires the expected migration versions and runtime privileges.
 
 ```go
-comp := database.NewComponent(cfg, log).
-    WithName("database.app").
-    WithDialect(postgres.Dialect()).
-    WithReadiness(postgres.Readiness(plan))
+comp, err := database.NewComponent(cfg, log,
+    database.WithComponentName("database.app"),
+    database.WithDialect(postgres.Dialect()),
+    database.WithReadiness(postgres.Readiness(plan)),
+)
 db, err := comp.DB()
 ```
 
@@ -56,10 +58,10 @@ cfg := database.Config{
     },
 }
 
-comp := database.NewComponent(cfg, log).WithDialect(postgres.Dialect())
+comp, err := database.NewComponent(cfg, log, database.WithDialect(postgres.Dialect()))
 ```
 
-`Password` and `PasswordFile` are mutually exclusive. `FileSecrets` reads a regular file with a 4 KiB bound, follows mounted-secret symlinks, rejects empty/NUL values and removes one terminal LF/CRLF. Unix opens are nonblocking before descriptor validation; arbitrary filesystems are not universally cancelable. Inject `SecretSource.ReadSecret(ctx, path)` through `WithSecretSource` on the component or connection options for another bounded source. Resolution occurs only during explicit preparation/startup and uses the configured connection timeout; external sources must honor that context and own their resource bounds.
+`Password` and `PasswordFile` are mutually exclusive. `FileSecrets` reads a regular file with a 4 KiB bound, follows mounted-secret symlinks, rejects empty/NUL values and removes one terminal LF/CRLF. Unix opens are nonblocking before descriptor validation; arbitrary filesystems are not universally cancelable. Inject `SecretSource.ReadSecret(ctx, path)` through the `WithSecretSource` connection option, passed to a component with `WithConnectOptions`, for another bounded source. Resolution occurs only during explicit preparation/startup and uses the configured connection timeout; external sources must honor that context and own their resource bounds.
 
 PostgreSQL requires one non-public, non-system schema, deriving `<application>, pg_temp` with implicit `pg_catalog` precedence. This selects a namespace, not tenant isolation.
 
@@ -67,7 +69,7 @@ TLS defaults to `verify-full` with TLS 1.3 and no cleartext fallback; `disable` 
 
 Opaque input must be a credential-free URL; password URLs and keyword credential strings are rejected. Use direct or session-pool connections; transaction-mode poolers are not certified for isolation.
 
-`Failure` keeps causes classifiable with `errors.Is/As` while formatting only a safe database classification. Descriptions and connection retries never display DSNs or raw driver causes.
+`WrapFailure` keeps causes classifiable with `errors.Is/As` while formatting only a safe database classification. Descriptions and connection retries never display DSNs or raw driver causes.
 
 ## Registry-driven selection
 
@@ -87,8 +89,7 @@ if err := postgres.Register(dialects); err != nil {
     return err
 }
 
-comp := database.NewComponent(cfg, log).
-    WithDialectFromRegistry(dialects, postgres.Name)
+comp, err := database.NewComponent(cfg, log, database.WithDialectFromRegistry(dialects, postgres.Name))
 ```
 
 ## SQLite adapter
@@ -103,10 +104,10 @@ if err := sqlite.Register(dialects); err != nil {
     return err
 }
 
-comp := database.NewComponent(database.Config{
+comp, err := database.NewComponent(database.Config{
     Enabled: true,
     DSN:     ":memory:",
-}, log).WithDialectFromRegistry(dialects, sqlite.Name)
+}, log, database.WithDialectFromRegistry(dialects, sqlite.Name))
 ```
 
 ## PostgreSQL adapter
@@ -128,7 +129,7 @@ comp := database.NewComponent(database.Config{
         PasswordFile: "/run/secrets/database-password",
         Options: map[string]string{"search_path": "app"},
     },
-}, log).WithDialectFromRegistry(dialects, postgres.Name)
+}, log, database.WithDialectFromRegistry(dialects, postgres.Name))
 ```
 
 Register both adapters and let configuration pick the backend name — `sqlite` locally, `postgres` in the cloud — through the same registry.

@@ -1,6 +1,6 @@
 //go:build integration
 
-package postgres_test
+package testutil_test
 
 import (
 	"context"
@@ -398,8 +398,12 @@ func TestSchemaPlanLeastPrivilege(t *testing.T) {
 		plan := schemaPlan(env.pair.Runtime.User)
 		newComponent := func() *database.Component {
 			cfg := database.Config{Enabled: true, Params: env.pair.Runtime, MaxRetries: 1, LogLevel: "silent"}
-			return database.NewComponent(cfg, logging.NewDefault("test")).WithName("app-db").
-				WithDialect(postgres.Dialect()).WithReadiness(postgres.Readiness(plan))
+			comp, err := database.NewComponent(cfg, logging.NewDefault("test"), database.WithComponentName("app-db"),
+				database.WithDialect(postgres.Dialect()), database.WithReadiness(postgres.Readiness(plan)))
+			if err != nil {
+				t.Fatalf("NewComponent: %v", err)
+			}
+			return comp
 		}
 		early := newComponent()
 		if err := early.Start(ctx); err == nil || !strings.Contains(err.Error(), "not ready") {

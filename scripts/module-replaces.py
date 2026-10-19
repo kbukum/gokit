@@ -5,7 +5,8 @@ Why this exists
     gokit is a multi-module monorepo. `go.work` unifies the modules for
     `go build`/`go test`, but `go mod tidy` ignores the workspace and resolves
     each module against its own `require` + `replace` graph. Any intra-repo
-    `require` (a `github.com/kbukum/gokit[/...]` module) therefore needs a local
+    `require` (a `github.com/kbukum/gokit[/...]` module), direct or reached
+    through another intra-repo module, therefore needs a local
     `replace => <relative path>` so tidy resolves it from the working tree
     instead of the module proxy. Without it, tidy succeeds only while the
     required version is already published, and breaks the moment a release bump
@@ -77,15 +78,41 @@ def mod_edit_json(mod_dir: Path) -> dict:
     return json.loads(out)
 
 
+def intra_requires(mod_dir: Path, path_to_dir: dict[str, Path]) -> set[str]:
+    """Intra-repo module paths this module's go.mod requires directly."""
+    return {
+        req["Path"]
+        for req in mod_edit_json(mod_dir).get("Require") or []
+        if req["Path"] in path_to_dir
+    }
+
+
+def reachable(mod_dir: Path, path_to_dir: dict[str, Path]) -> set[str]:
+    """Intra-repo modules reachable through the local go.mod require graph."""
+    seen: set[str] = set()
+    pending = list(intra_requires(mod_dir, path_to_dir))
+    while pending:
+        path = pending.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        pending.extend(intra_requires(path_to_dir[path], path_to_dir) - seen)
+    return seen
+
+
 def find_missing(mod_dir: Path, path_to_dir: dict[str, Path]) -> list[tuple[str, str]]:
-    """Return (require_path, relative_replace_target) for each missing replace."""
+    """Return (module_path, relative_replace_target) for each missing replace.
+
+    `go mod tidy` reads the go.mod of every module in the graph, so a module
+    needs a local replace for each intra-repo module it reaches, directly or
+    through another intra-repo module.
+    """
     data = mod_edit_json(mod_dir)
     self_path = module_path(mod_dir)
     replaced = {r["Old"]["Path"] for r in (data.get("Replace") or [])}
     missing: list[tuple[str, str]] = []
-    for req in data.get("Require") or []:
-        path = req["Path"]
-        if path == self_path or path not in path_to_dir or path in replaced:
+    for path in sorted(reachable(mod_dir, path_to_dir)):
+        if path == self_path or path in replaced:
             continue
         rel = os.path.relpath(path_to_dir[path], mod_dir)
         missing.append((path, rel))
@@ -120,7 +147,7 @@ def main() -> int:
                 )
 
     if total_missing == 0:
-        print("replace graph complete: every intra-repo require has a local replace")
+        print("replace graph complete: every reachable intra-repo module has a local replace")
         return 0
     if args.check:
         print(

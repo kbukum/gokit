@@ -1,7 +1,6 @@
 package jetstream
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -47,8 +46,5 @@ func TestErrorClassifier(t *testing.T) {
 		if got := c.IsConnectionError(tc.err); got != tc.connection {
 			t.Errorf("%s: IsConnectionError = %v", tc.name, got)
 		}
-	}
-	if !errors.Is(fmt.Errorf("x: %w", ErrTerminal), ErrTerminal) {
-		t.Fatal("ErrTerminal does not wrap")
 	}
 }

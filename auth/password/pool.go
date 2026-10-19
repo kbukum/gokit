@@ -24,8 +24,7 @@ const (
 	MaxPoolWait    = 30 * time.Second
 )
 
-// PoolConfig bounds concurrent hashing work. Argon2id holds its configured memory per worker, so Workers sets the
-// memory ceiling.
+// PoolConfig bounds concurrent hashing work. Argon2id holds its configured memory per worker, so Workers sets the memory ceiling.
 type PoolConfig struct {
 	// Workers is how many hashes run at once (1-256).
 	Workers int
@@ -50,9 +49,7 @@ func (c PoolConfig) Validate() error {
 	return nil
 }
 
-// Pool admits hashing work through a bounded worker pool and queue. A caller beyond the queue, or one that waits
-// past MaxWait, gets RATE_LIMITED with ReasonBusy before any hashing starts, so a login flood cannot exhaust memory
-// or CPU.
+// Pool admits hashing work through a bounded worker pool and queue. A caller beyond the queue, or one that waits past MaxWait, gets RATE_LIMITED with ReasonBusy before any hashing starts, so a login flood cannot exhaust memory or CPU.
 type Pool struct {
 	hasher  Hasher
 	gate    *resilience.Bulkhead

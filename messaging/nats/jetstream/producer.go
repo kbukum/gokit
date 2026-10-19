@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"strings"
 	"sync"
@@ -17,24 +18,20 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// Producer stores messages in streams. Every send returns once the server has acknowledged that a stream stores the
-// message, bounded by nats.Config.PublishTimeout. A message whose [MsgIDHeader] the stream already holds within its
-// duplicates window is acknowledged without being stored again, which is success.
+// Producer stores messages in streams. Every send returns once the server has acknowledged that a stream stores the message, bounded by nats.Config.PublishTimeout. A message whose [MsgIDHeader] the stream already holds within its duplicates window is acknowledged without being stored again, which is success.
 //
-// Only a message with a deduplication ID is retried, since a lost acknowledgement could otherwise store it twice; any
-// other message is attempted once. Failures that cannot pass, such as an oversized message or a stream mismatch, are
-// never retried.
+// Only a message with a deduplication ID is retried, since a lost acknowledgement could otherwise store it twice; any other message is attempted once. Failures that cannot pass, such as an oversized message or a stream mismatch, are never retried.
 type Producer struct {
 	source source
 	cfg    ProducerConfig
-	owned  *Client
+	owned  io.Closer
 	mu     sync.Mutex
 	closed bool
 }
 
 var _ messaging.Producer = (*Producer)(nil)
 
-func newProducer(src source, cfg ProducerConfig, owned *Client) (*Producer, error) {
+func newProducer(src source, cfg ProducerConfig, owned io.Closer) (*Producer, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -175,8 +172,7 @@ func (p *Producer) publish(ctx context.Context, subject string, data []byte, hea
 	return nil
 }
 
-// canonicalID finds the deduplication ID header in any letter case, checks it and stores it under [MsgIDHeader],
-// which the server matches exactly. It returns the ID, or "" when there is none.
+// canonicalID finds the deduplication ID header in any letter case, checks it and stores it under [MsgIDHeader], which the server matches exactly. It returns the ID, or "" when there is none.
 func canonicalID(headers map[string]string) (canonical map[string]string, id string, err error) {
 	var key string
 	for k := range headers {

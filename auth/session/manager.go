@@ -329,7 +329,7 @@ func (m *Manager) RevokeSubject(ctx context.Context, kind auth.Kind, subject str
 		if err != nil {
 			return 0, storeFailure(ctx, err)
 		}
-		m.leases.Revoke(func(key watchKey) bool { return key.kind == kind && key.subject == subject })
+		m.endStreams(func(key watchKey) bool { return key.kind == kind && key.subject == subject })
 		return count, nil
 	})
 }

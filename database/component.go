@@ -12,8 +12,13 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-// HealthTimeout bounds one Health call, including the ping and the injected readiness check.
-const HealthTimeout = 500 * time.Millisecond
+// Health budgets.
+const (
+	// DefaultHealthTimeout bounds one Health call, including the ping and the readiness check, unless [WithHealthTimeout] sets another budget.
+	DefaultHealthTimeout = time.Second
+	// MaxHealthTimeout is the largest accepted health budget.
+	MaxHealthTimeout = 30 * time.Second
+)
 
 var (
 	// ErrNotStarted reports access to a component that is disabled, not started or whose Start failed. It is a
@@ -31,119 +36,155 @@ var (
 // Check inspects or prepares an opened database during startup or health. It must honor ctx.
 type Check func(ctx context.Context, db *DB) error
 
-// Component wraps DB and implements component.Component for lifecycle management. Configure it before Start; the
-// lifecycle methods and DB are safe for concurrent use.
+// Component wraps DB and implements component.Component for lifecycle management. Its configuration is fixed by [NewComponent]; the lifecycle methods and DB are safe for concurrent use.
 //
-// Start opens the pool, runs auto-migration, the Initialize check and the Readiness check, then publishes the pool.
-// A failed Start closes its pool and may be retried; a successful Start is idempotent. Stop is terminal, prevents a
-// concurrent Start from publishing and records its close result. Health pings and reruns Readiness within
-// [HealthTimeout], so schema or access drift after startup reports unhealthy.
+// Start opens the pool, runs auto-migration, the StartupCheck, the Initialize check and the Readiness check, then publishes the pool. A failed Start closes its pool and may be retried; a successful Start is idempotent. Stop is terminal, prevents a concurrent Start from publishing and records its close result. Health pings and reruns Readiness within the health budget, so schema or access drift after startup reports unhealthy.
 type Component struct {
-	mu          sync.Mutex
-	db          *DB
-	starting    chan struct{}
-	stopped     bool
-	stopDone    chan struct{}
-	stopErr     error
-	lateErr     error
-	cfg         Config
-	log         *logging.Logger
-	name        string
-	models      []any
-	dialect     Dialect
-	dialectName string
-	secrets     SecretSource
-	initialize  Check
-	readiness   Check
+	mu       sync.Mutex
+	db       *DB
+	starting chan struct{}
+	stopped  bool
+	stopDone chan struct{}
+	stopErr  error
+	lateErr  error
+	cfg      Config
+	log      *logging.Logger
+	options  componentOptions
 }
 
-// NewComponent creates a database component named "database" for use with the component registry.
-// Dialects are opt-in: call WithDialect or WithDialectFromRegistry before Start.
-// The Config.Enabled flag can be used to skip initialization at runtime.
-func NewComponent(cfg Config, log *logging.Logger) *Component {
-	return &Component{
-		cfg:  cfg,
-		log:  log.WithComponent("database"),
-		name: "database",
+type componentOptions struct {
+	name          string
+	models        []any
+	dialect       Dialect
+	dialectName   string
+	connect       []Option
+	startup       Check
+	initialize    Check
+	readiness     Check
+	healthTimeout time.Duration
+}
+
+// ComponentOption configures a [Component] at construction.
+type ComponentOption func(*componentOptions) error
+
+// NewComponent creates a database component for use with the component registry. It is named "database" unless [WithComponentName] names it. Dialects are opt-in through [WithDialect] or [WithDialectFromRegistry]; a disabled config (Config.Enabled false) needs none.
+func NewComponent(cfg Config, log *logging.Logger, opts ...ComponentOption) (*Component, error) {
+	if log == nil {
+		return nil, apperrors.InvalidInput("logger", "A database component requires an injected logger")
 	}
+	options := componentOptions{name: "database", healthTimeout: DefaultHealthTimeout}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, apperrors.InvalidInput("option", "Database component options must not be nil")
+		}
+		if err := opt(&options); err != nil {
+			return nil, err
+		}
+	}
+	return &Component{cfg: cfg, log: log.WithComponent(options.name), options: options}, nil
 }
 
-// WithName sets the unique registry name, so one process can own several database components.
-// The name also scopes the component's logger and its bootstrap display name, so
-// several databases in one process stay distinguishable in logs and the summary.
-func (c *Component) WithName(name string) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.name = name
-	c.log = c.log.WithComponent(name)
-	return c
-}
-
-// WithSecretSource injects explicit credential resolution during Start.
-func (c *Component) WithSecretSource(source SecretSource) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.secrets = source
-	return c
-}
-
-// WithInitialize injects a startup-only check that runs after auto-migration and before Readiness, such as
-// verifying persisted installation state. Its failure fails Start.
-func (c *Component) WithInitialize(check Check) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.initialize = check
-	return c
-}
-
-// WithReadiness injects a read-only check, such as schema version and access readiness, that gates publication and
-// every Health call. It must not take locks, run DDL or migrate.
-func (c *Component) WithReadiness(check Check) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.readiness = check
-	return c
+// WithComponentName sets the unique registry name, so one process can own several database components. The name also scopes the component's logger and its bootstrap display name, so several databases in one process stay distinguishable in logs and the summary.
+func WithComponentName(name string) ComponentOption {
+	return func(o *componentOptions) error {
+		if name == "" {
+			return apperrors.InvalidInput("name", "A database component name must not be empty")
+		}
+		o.name = name
+		return nil
+	}
 }
 
 // WithDialect sets the database backend dialect directly.
 //
-// Example:
-//
-//	import "github.com/kbukum/gokit/database/postgres"
-//
-//	db := database.NewComponent(cfg, log).
-//		WithDialect(postgres.Dialect()).
-//		WithAutoMigrate(&User{}, &Post{})
-func (c *Component) WithDialect(d Dialect) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.dialect = d
-	c.dialectName = ""
-	return c
+//	db, err := database.NewComponent(cfg, log, database.WithDialect(postgres.Dialect()), database.WithAutoMigrate(&User{}, &Post{}))
+func WithDialect(d Dialect) ComponentOption {
+	return func(o *componentOptions) error {
+		if d == nil {
+			return apperrors.InvalidInput("dialect", "A database dialect is required")
+		}
+		o.dialect, o.dialectName = d, ""
+		return nil
+	}
 }
 
-// WithDialectFromRegistry selects a registered dialect by backend name.
-func (c *Component) WithDialectFromRegistry(reg *DialectRegistry, name string) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.dialectName = name
-	c.dialect = nil
-	if reg == nil {
-		return c
+// WithDialectFromRegistry selects a registered dialect by backend name. A name the registry lacks fails Start, not construction, so a disabled component may name an adapter the binary does not register.
+func WithDialectFromRegistry(reg *DialectRegistry, name string) ComponentOption {
+	return func(o *componentOptions) error {
+		if reg == nil || name == "" {
+			return apperrors.InvalidInput("dialect", "A dialect registry and backend name are required")
+		}
+		o.dialect, o.dialectName = nil, name
+		if d, ok := reg.Get(name); ok {
+			o.dialect = d
+		}
+		return nil
 	}
-	if d, ok := reg.Get(name); ok {
-		c.dialect = d
-	}
-	return c
 }
 
-// WithAutoMigrate registers models for auto-migration on Start.
-// Models are only migrated if Config.AutoMigrate is true and the component is enabled.
-func (c *Component) WithAutoMigrate(models ...any) *Component {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.models = append(c.models, models...)
-	return c
+// WithAutoMigrate registers models for auto-migration on Start. Models are only migrated if Config.AutoMigrate is true and the component is enabled.
+func WithAutoMigrate(models ...any) ComponentOption {
+	return func(o *componentOptions) error {
+		o.models = append(o.models, models...)
+		return nil
+	}
+}
+
+// WithConnectOptions passes connection options, such as [WithSecretSource] or [WithConnectPolicy], to the pool Start opens.
+func WithConnectOptions(opts ...Option) ComponentOption {
+	return func(o *componentOptions) error {
+		for _, opt := range opts {
+			if opt == nil {
+				return apperrors.InvalidInput("option", "Connection options must not be nil")
+			}
+		}
+		o.connect = append(o.connect, opts...)
+		return nil
+	}
+}
+
+// WithStartupCheck injects a read-only check that runs once at Start, after auto-migration and before Initialize, such as verifying the schema version and access an initializer relies on. Its failure fails Start and closes the pool. It does not run on Health; use [WithReadiness] for checks that must keep holding.
+func WithStartupCheck(check Check) ComponentOption {
+	return func(o *componentOptions) error {
+		if check == nil {
+			return apperrors.InvalidInput("startup_check", "A startup check is required")
+		}
+		o.startup = check
+		return nil
+	}
+}
+
+// WithInitialize injects a startup-only step that runs after the startup check and before Readiness, such as verifying persisted installation state. Its failure fails Start.
+func WithInitialize(check Check) ComponentOption {
+	return func(o *componentOptions) error {
+		if check == nil {
+			return apperrors.InvalidInput("initialize", "An initialize check is required")
+		}
+		o.initialize = check
+		return nil
+	}
+}
+
+// WithReadiness injects a read-only check, such as schema version and access readiness, that gates publication and every Health call. It must not take locks, run DDL or migrate, and must finish within the health budget.
+func WithReadiness(check Check) ComponentOption {
+	return func(o *componentOptions) error {
+		if check == nil {
+			return apperrors.InvalidInput("readiness", "A readiness check is required")
+		}
+		o.readiness = check
+		return nil
+	}
+}
+
+// WithHealthTimeout bounds one Health call, including the ping and the readiness check. It must be positive and at most [MaxHealthTimeout]; the default is [DefaultHealthTimeout].
+func WithHealthTimeout(budget time.Duration) ComponentOption {
+	return func(o *componentOptions) error {
+		if budget <= 0 || budget > MaxHealthTimeout {
+			return apperrors.InvalidInput("health_timeout", "The health budget must be positive and at most 30s")
+		}
+		o.healthTimeout = budget
+		return nil
+	}
 }
 
 // DB returns the published pool. It returns [ErrNotStarted] before a successful Start or when disabled, and
@@ -165,32 +206,18 @@ func (c *Component) DB() (*DB, error) {
 var _ component.Component = (*Component)(nil)
 
 // Name returns the component name.
-func (c *Component) Name() string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.name
-}
-
-type startPlan struct {
-	cfg        Config
-	dialect    Dialect
-	name       string
-	models     []any
-	secrets    SecretSource
-	initialize Check
-	readiness  Check
-}
+func (c *Component) Name() string { return c.options.name }
 
 // Start connects to the database, runs auto-migration and the injected checks, then publishes the pool. If
 // Config.Enabled is false, this method returns immediately without error. The context bounds connection retries
 // and the checks. A concurrent Start waits for the in-flight attempt.
 func (c *Component) Start(ctx context.Context) error {
-	plan, done, err := c.beginStart(ctx)
-	if err != nil || done == nil {
+	done, claimed, err := c.beginStart(ctx)
+	if err != nil || !claimed {
 		return err
 	}
 	defer c.finishStart(done)
-	db, err := c.open(ctx, plan)
+	db, err := c.open(ctx)
 	if err != nil {
 		return err
 	}
@@ -217,26 +244,23 @@ func (c *Component) finishStart(done chan struct{}) {
 	close(done)
 }
 
-// beginStart claims the start slot. It returns a nil channel when no work is required.
-func (c *Component) beginStart(ctx context.Context) (startPlan, chan struct{}, error) {
+// beginStart claims the start slot. It reports claimed=false when the component is already started or disabled.
+func (c *Component) beginStart(ctx context.Context) (done chan struct{}, claimed bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for {
 		switch {
 		case c.stopped:
-			return startPlan{}, nil, ErrStopped
+			return nil, false, ErrStopped
 		case c.db != nil:
-			return startPlan{}, nil, nil
+			return nil, false, nil
 		case c.starting == nil:
 			if !c.cfg.Enabled {
 				c.log.InfoCtx(ctx, "Database component is disabled")
-				return startPlan{}, nil, nil
+				return nil, false, nil
 			}
 			c.starting = make(chan struct{})
-			return startPlan{
-				cfg: c.cfg, dialect: c.dialect, name: c.dialectName, models: append([]any(nil), c.models...),
-				secrets: c.secrets, initialize: c.initialize, readiness: c.readiness,
-			}, c.starting, nil
+			return c.starting, true, nil
 		}
 		inflight := c.starting
 		c.mu.Unlock()
@@ -244,49 +268,56 @@ func (c *Component) beginStart(ctx context.Context) (startPlan, chan struct{}, e
 		case <-inflight:
 		case <-ctx.Done():
 			c.mu.Lock()
-			return startPlan{}, nil, ctx.Err()
+			return nil, false, ctx.Err()
 		}
 		c.mu.Lock()
 	}
 }
 
 // open performs one start attempt without holding the lifecycle lock and closes the pool on any failure.
-func (c *Component) open(ctx context.Context, plan startPlan) (*DB, error) {
+func (c *Component) open(ctx context.Context) (*DB, error) {
 	// Apply defaults and validate before doing any work so a misconfigured component fails fast instead of
 	// attempting to connect with a zero-value input.
-	plan.cfg.ApplyDefaults()
-	if err := plan.cfg.Validate(); err != nil {
+	cfg := c.cfg
+	cfg.ApplyDefaults()
+	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("database start: %w", err)
 	}
-	if plan.dialect == nil {
-		if plan.name != "" {
-			return nil, fmt.Errorf("database start: dialect %q is not configured; register the adapter and call WithDialectFromRegistry or call WithDialect directly", plan.name)
+	o := c.options
+	if o.dialect == nil {
+		if o.dialectName != "" {
+			return nil, fmt.Errorf("database start: dialect %q is not registered; register the adapter before WithDialectFromRegistry or use WithDialect", o.dialectName)
 		}
-		return nil, errors.New("database start: dialect is not configured; register an adapter and call WithDialectFromRegistry or call WithDialect directly")
+		return nil, errors.New("database start: dialect is not configured; use WithDialectFromRegistry or WithDialect")
 	}
-	db, err := NewWithContext(ctx, plan.dialect, plan.cfg, c.log, WithSecretSource(plan.secrets))
+	db, err := NewWithContext(ctx, o.dialect, cfg, c.log, o.connect...)
 	if err != nil {
 		return nil, fmt.Errorf("database start: %w", err)
 	}
-	if err := prepare(ctx, db, plan); err != nil {
+	if err := prepare(ctx, db, cfg, o); err != nil {
 		return nil, errors.Join(err, db.Close()) //nolint:contextcheck // Close owns a bounded cleanup without a request context
 	}
 	return db, nil
 }
 
-func prepare(ctx context.Context, db *DB, plan startPlan) error {
-	if plan.cfg.AutoMigrate && len(plan.models) > 0 {
-		if err := db.AutoMigrate(ctx, plan.models...); err != nil {
+func prepare(ctx context.Context, db *DB, cfg Config, o componentOptions) error {
+	if cfg.AutoMigrate && len(o.models) > 0 {
+		if err := db.AutoMigrate(ctx, o.models...); err != nil {
 			return fmt.Errorf("database auto-migrate: %w", err)
 		}
 	}
-	if plan.initialize != nil {
-		if err := plan.initialize(ctx, db); err != nil {
+	if o.startup != nil {
+		if err := o.startup(ctx, db); err != nil {
+			return fmt.Errorf("database startup check: %w", err)
+		}
+	}
+	if o.initialize != nil {
+		if err := o.initialize(ctx, db); err != nil {
 			return fmt.Errorf("database initialize: %w", err)
 		}
 	}
-	if plan.readiness != nil {
-		if err := plan.readiness(ctx, db); err != nil {
+	if o.readiness != nil {
+		if err := o.readiness(ctx, db); err != nil {
 			return fmt.Errorf("database readiness: %w", err)
 		}
 	}
@@ -342,11 +373,11 @@ func (c *Component) recordedStop() error {
 	return c.stopErr
 }
 
-// Health pings the published pool and reruns the readiness check within [HealthTimeout]. If Config.Enabled is false,
-// it returns StatusHealthy with a "disabled" message. Messages carry safe classifications, never driver text.
+// Health pings the published pool and reruns the readiness check within the health budget. If Config.Enabled is false, it returns StatusHealthy with a "disabled" message. Messages carry safe classifications, never driver text.
 func (c *Component) Health(ctx context.Context) component.Health {
+	name, enabled, readiness := c.options.name, c.cfg.Enabled, c.options.readiness
 	c.mu.Lock()
-	name, enabled, db, stopped, readiness := c.name, c.cfg.Enabled, c.db, c.stopped, c.readiness
+	db, stopped := c.db, c.stopped
 	c.mu.Unlock()
 	switch {
 	case !enabled:
@@ -356,7 +387,7 @@ func (c *Component) Health(ctx context.Context) component.Health {
 	case db == nil:
 		return component.Health{Name: name, Status: component.StatusUnhealthy, Message: "database not initialized"}
 	}
-	ctx, cancel := context.WithTimeout(ctx, HealthTimeout)
+	ctx, cancel := context.WithTimeout(ctx, c.options.healthTimeout)
 	defer cancel()
 	if err := db.PingContext(ctx); err != nil {
 		return component.Health{Name: name, Status: component.StatusUnhealthy, Message: "ping failed: " + safeMessage(err)}
@@ -377,11 +408,9 @@ func safeMessage(err error) string {
 
 // Describe returns infrastructure summary info for the bootstrap display.
 func (c *Component) Describe() component.Description {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	backend := c.dialectName
-	if c.dialect != nil {
-		backend = c.dialect.Name()
+	backend := c.options.dialectName
+	if c.options.dialect != nil {
+		backend = c.options.dialect.Name()
 	}
 	details := fmt.Sprintf("Backend: %s, MaxConns: %d", backend, c.cfg.MaxOpenConns)
 	if c.cfg.AutoMigrate {
@@ -390,8 +419,8 @@ func (c *Component) Describe() component.Description {
 	// A process with several databases names them distinctly (for example
 	// "tenancy-database"); the unnamed default shows as a friendly "Database".
 	displayName := "Database"
-	if c.name != "" && c.name != "database" {
-		displayName = c.name
+	if c.options.name != "database" {
+		displayName = c.options.name
 	}
 	return component.Description{
 		Name:    displayName,

@@ -6,8 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
-
 	"github.com/kbukum/gokit/logging"
 )
 
@@ -39,47 +37,6 @@ func RequestLogger(log *logging.Logger) Middleware {
 	}
 }
 
-// GinRequestLogger returns a Gin middleware for request logging using the injected logger.
-// A nil logger falls back to a per-middleware default. Prefer using RequestLogger() at the
-// server level via ApplyMiddleware() which covers all routes; use this only when you need
-// logging on the Gin engine directly.
-func GinRequestLogger(log *logging.Logger) gin.HandlerFunc {
-	if log == nil {
-		log = logging.NewDefault("middleware")
-	}
-	return func(c *gin.Context) {
-		if isHealthEndpoint(c.Request.URL.Path) {
-			c.Next()
-			return
-		}
-
-		start := time.Now()
-		c.Next()
-
-		latency := time.Since(start)
-		status := c.Writer.Status()
-		path := c.FullPath()
-		if path == "" {
-			path = "unmatched"
-		}
-
-		fields := map[string]any{
-			"method":  traceMethod(c.Request.Method),
-			"path":    path,
-			"status":  status,
-			"latency": latency.String(),
-		}
-
-		if status >= 500 {
-			fields["size"] = c.Writer.Size()
-		}
-		if latency > 500*time.Millisecond {
-			fields["slow"] = true
-		}
-		logByStatus(c.Request.Context(), log, fields, status)
-	}
-}
-
 func isHealthEndpoint(path string) bool {
 	healthPaths := []string{
 		"/health", "/alive", "/ready", "/metrics",
@@ -101,8 +58,7 @@ func isHealthEndpoint(path string) bool {
 }
 
 // logByStatus logs request fields at the appropriate level based on HTTP status code.
-// The logger must be non-nil (constructors default it). Shared by both Gin and net/http
-// request logger middleware.
+// The logger must be non-nil (the constructor defaults it).
 func logByStatus(ctx context.Context, log *logging.Logger, fields map[string]any, status int) {
 	switch {
 	case status >= 500:

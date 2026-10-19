@@ -21,11 +21,7 @@ const (
 	FailModelPrefix = "fail-"
 )
 
-// OpenAIServer is a deterministic OpenAI-compatible chat model for tests. It answers POST /v1/chat/completions with
-// "echo: " followed by the last user message and reports word-count usage, streamed as server-sent events when the
-// request asks for a stream. It counts calls per model, served over GET /calls?model=<name> and [OpenAIServer.Calls].
-// Models named with [FailModelPrefix] are counted and then fail with 502. It requires a bearer token but never reads
-// or stores its value. It is safe for concurrent use; serve it with httptest or an http.Server.
+// OpenAIServer is a deterministic OpenAI-compatible chat model for tests. It answers POST /v1/chat/completions with "echo: " followed by the last user message and reports word-count usage, streamed as server-sent events when the request asks for a stream. It counts calls per model, served over GET /calls?model=<name> and [OpenAIServer.Calls]. Models named with [FailModelPrefix] are counted and then fail with 502. It requires a bearer token but never reads or stores its value. It is safe for concurrent use; serve it with httptest or an http.Server.
 type OpenAIServer struct {
 	mux       *http.ServeMux
 	maxModels int
@@ -37,8 +33,7 @@ type OpenAIServer struct {
 // OpenAIServerOption configures an [OpenAIServer].
 type OpenAIServerOption func(*OpenAIServer)
 
-// WithMaxModels bounds how many distinct model names are counted. Calls to a new model past the bound answer 503.
-// A non-positive value keeps [DefaultMaxModels].
+// WithMaxModels bounds how many distinct model names are counted. Calls to a new model past the bound answer 503. A non-positive value keeps [DefaultMaxModels].
 func WithMaxModels(n int) OpenAIServerOption {
 	return func(s *OpenAIServer) {
 		if n > 0 {

@@ -15,7 +15,6 @@ import (
 
 	"github.com/kbukum/gokit/component"
 	"github.com/kbukum/gokit/observability"
-	"github.com/kbukum/gokit/util"
 )
 
 // AdminComponentName is the registry name of the admin listener [WithAdmin] adds.
@@ -35,11 +34,9 @@ type AdminConfig struct {
 	Pprof bool `yaml:"pprof" mapstructure:"pprof"`
 	// HealthTimeout bounds the component health checks behind /readyz; zero means 2s.
 	HealthTimeout time.Duration `yaml:"health_timeout" mapstructure:"health_timeout"`
-	// Metrics serves /metrics; nil means [observability.RuntimeMetricsHandler].
-	Metrics http.Handler `yaml:"-" mapstructure:"-"`
 }
 
-// Validate reports a host that is not a loopback or private IP address (or, with AllInterfaces, not empty or unspecified), Pprof on every interface, an out-of-range port, a negative health timeout or a typed-nil metrics handler.
+// Validate reports a host that is not a loopback or private IP address (or, with AllInterfaces, not empty or unspecified), Pprof on every interface, an out-of-range port or a negative health timeout.
 func (c AdminConfig) Validate() error {
 	var errs []error
 	errs = append(errs, c.validateHost())
@@ -48,9 +45,6 @@ func (c AdminConfig) Validate() error {
 	}
 	if c.HealthTimeout < 0 {
 		errs = append(errs, fmt.Errorf("%w: health_timeout must not be negative", ErrInvalidAdminConfig))
-	}
-	if c.Metrics != nil && util.IsNil(c.Metrics) {
-		errs = append(errs, fmt.Errorf("%w: metrics handler is a typed nil", ErrInvalidAdminConfig))
 	}
 	return errors.Join(errs...)
 }
@@ -81,8 +75,8 @@ func (c AdminConfig) validateHost() error {
 // WithAdmin adds a diagnostics listener the App owns. It serves:
 //
 //   - GET /livez: 200 while the process serves.
-//   - GET /readyz: a [Readiness] body; 503 while starting, draining, or when a component is unhealthy, and 200 when every component is healthy ("ready") or some are degraded ("degraded").
-//   - GET /metrics: Prometheus metrics.
+//   - GET /readyz: a [Readiness] body; 503 while starting, draining, or when a component is unhealthy, and 200 when every component is healthy ("ready") or some are degraded ("degraded"). [App.ReadyCheck] applies the same rule.
+//   - GET /metrics: Prometheus metrics from [WithAdminMetrics], or [observability.RuntimeMetricsHandler] by default.
 //   - /debug/pprof/: when Pprof is set.
 //
 // The listener is registered before every other component in the admin shutdown phase, so it starts first and stops last; it does not quiesce, so probes and metrics stay available while the App drains. Its component name is [AdminComponentName].
@@ -140,27 +134,32 @@ func (a *App[C]) readiness(ctx context.Context) Readiness {
 		return r
 	case stateServing:
 	}
-	r.Status = ReadinessReady
-	for _, h := range a.Components.HealthAll(ctx) {
-		r.Components = append(r.Components, h)
-		switch h.Status {
-		case component.StatusHealthy:
-		case component.StatusDegraded:
-			if r.Status == ReadinessReady {
-				r.Status = ReadinessDegraded
-			}
-		default:
-			// Unhealthy, and any unknown or zero status, fails closed as App.ReadyCheck does.
-			r.Status = ReadinessNotReady
-		}
-	}
+	r.Components = a.Components.HealthAll(ctx)
+	r.Status = healthReadiness(r.Components)
 	if lifecycleState(a.state.Load()) == stateDraining {
 		return Readiness{Service: a.Name, Status: ReadinessDraining}
 	}
 	return r
 }
 
-func newAdmin(cfg AdminConfig, readiness func(context.Context) Readiness) (*adminComponent, error) {
+// healthReadiness is the one readiness rule for /readyz and [App.ReadyCheck]: all healthy is ready, any degraded is degraded, and any unhealthy, unknown or zero status is not ready.
+func healthReadiness(healths []component.Health) ReadinessStatus {
+	status := ReadinessReady
+	for _, h := range healths {
+		switch h.Status {
+		case component.StatusHealthy:
+		case component.StatusDegraded:
+			if status == ReadinessReady {
+				status = ReadinessDegraded
+			}
+		default:
+			return ReadinessNotReady
+		}
+	}
+	return status
+}
+
+func newAdmin(cfg AdminConfig, metrics http.Handler, readiness func(context.Context) Readiness) (*adminComponent, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -170,7 +169,6 @@ func newAdmin(cfg AdminConfig, readiness func(context.Context) Readiness) (*admi
 	if cfg.HealthTimeout == 0 {
 		cfg.HealthTimeout = 2 * time.Second
 	}
-	metrics := cfg.Metrics
 	if metrics == nil {
 		var err error
 		if metrics, err = observability.RuntimeMetricsHandler(); err != nil {

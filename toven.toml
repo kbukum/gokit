@@ -2,6 +2,21 @@
 name = "gokit"
 root = "."
 base_ref = "origin/main"
+# Repo-wide inputs: a change here can affect every module, so affected runs
+# check everything. Docs and other root files stay narrow.
+global_inputs = [
+  ".github/workflows/*",
+  ".github/actions/*",
+  "scripts/*",
+  "Makefile",
+  "toven.toml",
+  "*.go.work",
+  "domains.toml",
+  "gomod.sh",
+  ".golangci.yml",
+  "gosec.toml",
+  "sgconfig.yml",
+]
 
 # Bound per-tool CPU parallelism during APPLY fan-out. gokit's `test`/`build`/
 # `lint` tasks fan out one `go` process per module across the
@@ -20,10 +35,36 @@ compute_budget = "auto"
 [ecosystems.go]
 modules = "auto"
 
+# Every module is gated on its line floor. There is no `changed_line` floor for now:
+# Toven measures it over whole changed files, so it would block any edit to a file
+# whose behavior the integration suite proves. Codecov reports patch coverage.
 [ecosystems.go.coverage]
-changed_line = 85.0
-enforcement = "advisory"
+enforcement = "block"
 line = 80.0
+# Test-support modules are measured but not gated, matching codecov.yml: they exist to support other modules' tests.
+exclude = [
+  "connect-testutil",
+  "dag-testutil",
+  "database-postgres-testutil",
+  "database-testutil",
+  "discovery-testutil",
+  "git-testutil",
+  "messaging-nats-testutil",
+  "server-testutil",
+  "storage-s3-testutil",
+  "storage-testutil",
+  "testutil",
+  "workload-testutil",
+]
+
+# For now: ratchets at today's coverage for modules still below the floor, so they cannot slip further.
+# Raise them as tests land and delete them once a module reaches the default floor.
+# database/postgres is mostly proven by the integration suite in database/postgres/testutil.
+[modules."go:database-postgres".coverage]
+line = 49.0
+
+[modules."go:messaging-rabbitmq".coverage]
+line = 76.0
 
 # gokit publishes Go module tags only (no registry): Toven selects the changed
 # modules, cuts Go path-prefixed tags, gates on a clean tree, supports an alpha
@@ -92,23 +133,13 @@ selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
 [ecosystems.go.tasks.coverage]
-# `go test ./...` from the repo root only walks the root module's packages: with
-# a `go.work`, `./...` never crosses into the sub-modules (auth, database, …),
-# which each own a `go.mod`. The workspace-wide import-path pattern
-# `github.com/kbukum/gokit/...` does cross those boundaries (go.work resolves it
-# to every member package), so a single whole-workspace run measures the entire
-# codebase in one invocation. Toven attributes every emitted path to the root
-# `go:gokit` module (its `.` root prefixes them all) and gates the aggregate
-# against `[ecosystems.go.coverage]`. `-covermode=atomic` matches CI's coverage
-# mode; the coverage verb takes no `{args}` passthrough (measurement flags live
-# here, not in the Makefile).
-argv = ["go", "test", "-covermode=atomic", "-coverprofile=target/toven/coverage/go-{module.name}.out", "{args}", "github.com/kbukum/gokit/..."]
+# The full test run: every module in parallel under -race, writing one profile
+# per module. scripts/go-cover.sh owns the flags and honours a module's
+# `.coverpkg`. Toven maps profile import paths back to modules and gates them;
+# CI uploads the same profiles to Codecov.
+argv = ["{workspace.root}/scripts/go-cover.sh", "{module.root}", "{workspace.root}/target/toven/coverage/go-{module.name}.out", "{args}"]
 cacheable = false
-fan_out = "whole-workspace"
-# `go test github.com/kbukum/gokit/...` resolves the whole workspace atomically
-# through go.work, so it carries its own cross-module closure. Matches the Go
-# adapter default for this task.
-workspace_closure = true
+fan_out = "per-module"
 kind = "coverage"
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
@@ -179,13 +210,10 @@ shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 # logic stays script-owned with a single source of truth — the Makefile/CI and
 # `toven run <task>` invoke the very same script.
 #
-# Two guardrails are deliberately NOT wired here and stay native (tracked in
-# docs/TOVEN-MIGRATION.md):
-#   - the change→domain projection (`scripts/affected-domains.sh`) is a stdin-fed
-#     helper used by CI to shard work, not a runnable gate; and
-#   - the dependency license gate (`scripts/check-licenses.sh`) is network-bound
-#     and runs `go-licenses` across every module, exceeding Toven's bounded task
-#     timeout — the same reason rskit keeps its `cargo-deny` gate native.
+# The dependency license gate (`scripts/check-licenses.sh`) deliberately stays
+# native (tracked in docs/TOVEN-MIGRATION.md): it is network-bound and runs
+# `go-licenses` across every module, exceeding Toven's bounded task timeout —
+# the same reason rskit keeps its `cargo-deny` gate native.
 [[ecosystems.command.modules]]
 name = "repo"
 root = "."

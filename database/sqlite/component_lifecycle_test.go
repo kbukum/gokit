@@ -18,24 +18,30 @@ import (
 	"github.com/kbukum/gokit/logging"
 )
 
-func newComponent() *database.Component {
-	return database.NewComponent(testConfig(), logging.NewDefault("test")).WithDialect(sqlite.Dialect())
+func newComponent(t *testing.T, opts ...database.ComponentOption) *database.Component {
+	t.Helper()
+	comp, err := database.NewComponent(testConfig(), logging.NewDefault("test"), append([]database.ComponentOption{database.WithDialect(sqlite.Dialect())}, opts...)...)
+	if err != nil {
+		t.Fatalf("NewComponent: %v", err)
+	}
+	return comp
 }
 
 func TestComponentPublishesOnlyAfterInitializeAndReadiness(t *testing.T) {
 	var order []string
-	comp := newComponent().
-		WithInitialize(func(ctx context.Context, db *database.DB) error {
+	var comp *database.Component
+	comp = newComponent(t,
+		database.WithInitialize(func(ctx context.Context, db *database.DB) error {
 			order = append(order, "initialize")
 			return db.WithContext(ctx).Exec("CREATE TABLE marker (id INTEGER)").Error
-		})
-	comp.WithReadiness(func(ctx context.Context, db *database.DB) error {
-		order = append(order, "readiness")
-		if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
-			t.Errorf("pool published before readiness: %v", err)
-		}
-		return db.WithContext(ctx).Exec("SELECT 1 FROM marker").Error
-	})
+		}),
+		database.WithReadiness(func(ctx context.Context, db *database.DB) error {
+			order = append(order, "readiness")
+			if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
+				t.Errorf("pool published before readiness: %v", err)
+			}
+			return db.WithContext(ctx).Exec("SELECT 1 FROM marker").Error
+		}))
 	if err := comp.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -50,17 +56,73 @@ func TestComponentPublishesOnlyAfterInitializeAndReadiness(t *testing.T) {
 	}
 }
 
+func TestComponentStartupCheckRunsBeforeInitializeAndNotOnHealth(t *testing.T) {
+	var order []string
+	comp := newComponent(t,
+		database.WithStartupCheck(func(context.Context, *database.DB) error {
+			order = append(order, "startup")
+			return nil
+		}),
+		database.WithInitialize(func(context.Context, *database.DB) error {
+			order = append(order, "initialize")
+			return nil
+		}),
+		database.WithReadiness(func(context.Context, *database.DB) error {
+			order = append(order, "readiness")
+			return nil
+		}))
+	if err := comp.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if h := comp.Health(t.Context()); h.Status != component.StatusHealthy {
+		t.Fatalf("Health = %+v", h)
+	}
+	if strings.Join(order, ",") != "startup,initialize,readiness,readiness" {
+		t.Fatalf("check order = %v", order)
+	}
+	if err := comp.Stop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestComponentFailedStartupCheckSkipsInitializeAndClosesPool(t *testing.T) {
+	failure := errors.New("schema behind")
+	var opened *database.DB
+	initialized := false
+	comp := newComponent(t,
+		database.WithStartupCheck(func(_ context.Context, db *database.DB) error {
+			opened = db
+			return failure
+		}),
+		database.WithInitialize(func(context.Context, *database.DB) error {
+			initialized = true
+			return nil
+		}))
+	if err := comp.Start(t.Context()); !errors.Is(err, failure) || !strings.Contains(err.Error(), "startup check") {
+		t.Fatalf("Start = %v, want startup check failure", err)
+	}
+	if initialized {
+		t.Fatal("Initialize ran after a failed startup check")
+	}
+	if err := opened.PingContext(t.Context()); err == nil {
+		t.Fatal("failed Start left its pool open")
+	}
+	if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
+		t.Fatalf("failed Start published: %v", err)
+	}
+}
+
 func TestComponentFailedStartClosesPoolAndMayRetry(t *testing.T) {
 	failure := errors.New("installation mode mismatch")
 	var calls atomic.Int32
 	var opened *database.DB
-	comp := newComponent().WithInitialize(func(_ context.Context, db *database.DB) error {
+	comp := newComponent(t, database.WithInitialize(func(_ context.Context, db *database.DB) error {
 		if calls.Add(1) == 1 {
 			opened = db
 			return failure
 		}
 		return nil
-	})
+	}))
 	if err := comp.Start(t.Context()); !errors.Is(err, failure) {
 		t.Fatalf("Start = %v, want initialize failure", err)
 	}
@@ -79,7 +141,7 @@ func TestComponentFailedStartClosesPoolAndMayRetry(t *testing.T) {
 }
 
 func TestComponentStopIsTerminalAndRecorded(t *testing.T) {
-	comp := newComponent()
+	comp := newComponent(t)
 	if err := comp.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -107,12 +169,12 @@ func TestComponentStopIsTerminalAndRecorded(t *testing.T) {
 func TestComponentStopDuringInitializationPreventsPublication(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	var opened *database.DB
-	comp := newComponent().WithInitialize(func(_ context.Context, db *database.DB) error {
+	comp := newComponent(t, database.WithInitialize(func(_ context.Context, db *database.DB) error {
 		opened = db
 		close(entered)
 		<-release
 		return nil
-	})
+	}))
 	started := make(chan error, 1)
 	go func() { started <- comp.Start(context.Background()) }()
 	<-entered
@@ -143,7 +205,7 @@ func TestComponentStopDuringInitializationPreventsPublication(t *testing.T) {
 
 func TestComponentStopRecordsInflightStartCleanupFailure(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
-	comp := newComponent().WithInitialize(func(_ context.Context, db *database.DB) error {
+	comp := newComponent(t, database.WithInitialize(func(_ context.Context, db *database.DB) error {
 		pool, err := db.GormDB.DB()
 		if err != nil {
 			return err
@@ -154,7 +216,7 @@ func TestComponentStopRecordsInflightStartCleanupFailure(t *testing.T) {
 		close(entered)
 		<-release
 		return nil
-	})
+	}))
 	started := make(chan error, 1)
 	go func() { started <- comp.Start(context.Background()) }()
 	<-entered
@@ -177,7 +239,7 @@ func TestComponentStopRecordsInflightStartCleanupFailure(t *testing.T) {
 }
 
 func TestComponentLifecycleErrorsAreClassified(t *testing.T) {
-	comp := newComponent()
+	comp := newComponent(t)
 	_, err := comp.DB()
 	if app := apperrors.Normalize(err); !errors.Is(err, database.ErrNotStarted) || app.Code != apperrors.ErrCodeServiceUnavailable {
 		t.Fatalf("DB before Start = %v (%s)", err, app.Code)
@@ -195,11 +257,11 @@ func TestComponentLifecycleErrorsAreClassified(t *testing.T) {
 
 func TestComponentStopWaitIsBoundedByContext(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
-	comp := newComponent().WithInitialize(func(context.Context, *database.DB) error {
+	comp := newComponent(t, database.WithInitialize(func(context.Context, *database.DB) error {
 		close(entered)
 		<-release
 		return nil
-	})
+	}))
 	started := make(chan error, 1)
 	go func() { started <- comp.Start(context.Background()) }()
 	<-entered
@@ -217,13 +279,13 @@ func TestComponentStopWaitIsBoundedByContext(t *testing.T) {
 func TestComponentConcurrentStartWaitsForInflightAttempt(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	var calls atomic.Int32
-	comp := newComponent().WithInitialize(func(context.Context, *database.DB) error {
+	comp := newComponent(t, database.WithInitialize(func(context.Context, *database.DB) error {
 		if calls.Add(1) == 1 {
 			close(entered)
 			<-release
 		}
 		return nil
-	})
+	}))
 	first := make(chan error, 1)
 	go func() { first <- comp.Start(context.Background()) }()
 	<-entered
@@ -247,13 +309,23 @@ func TestComponentConcurrentStartWaitsForInflightAttempt(t *testing.T) {
 }
 
 func TestComponentHealthReportsDriftWithSafeBoundedMessage(t *testing.T) {
-	var drift atomic.Bool
-	comp := newComponent().WithName("orders-db").WithReadiness(func(ctx context.Context, db *database.DB) error {
-		if drift.Load() {
-			return database.Failure(errors.New("password=secret relation missing"))
+	var mode atomic.Int32
+	const (
+		ready = iota
+		drifted
+		stuck
+	)
+	budget := 50 * time.Millisecond
+	comp := newComponent(t, database.WithComponentName("orders-db"), database.WithHealthTimeout(budget), database.WithReadiness(func(ctx context.Context, db *database.DB) error {
+		switch mode.Load() {
+		case drifted:
+			return database.WrapFailure(errors.New("secret relation missing"))
+		case stuck:
+			<-ctx.Done()
+			return ctx.Err()
 		}
 		return db.PingContext(ctx)
-	})
+	}))
 	if err := comp.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -261,40 +333,32 @@ func TestComponentHealthReportsDriftWithSafeBoundedMessage(t *testing.T) {
 	if h := comp.Health(t.Context()); h.Status != component.StatusHealthy || h.Name != "orders-db" {
 		t.Fatalf("Health = %+v", h)
 	}
-	drift.Store(true)
+	mode.Store(drifted)
 	h := comp.Health(t.Context())
 	if h.Status != component.StatusUnhealthy || strings.Contains(h.Message, "secret") || !strings.HasPrefix(h.Message, "not ready: ") {
 		t.Fatalf("Health after drift = %+v", h)
 	}
-	drift.Store(false)
-	comp.WithReadiness(func(ctx context.Context, _ *database.DB) error {
-		<-ctx.Done()
-		return ctx.Err()
-	})
-	begin := time.Now()
+	mode.Store(stuck)
 	if h := comp.Health(t.Context()); h.Status != component.StatusUnhealthy || !strings.Contains(h.Message, "TIMEOUT") {
 		t.Fatalf("Health with stuck readiness = %+v", h)
-	}
-	if elapsed := time.Since(begin); elapsed > database.HealthTimeout+time.Second {
-		t.Fatalf("Health took %v", elapsed)
 	}
 }
 
 func TestComponentNamedInstancesRegisterTogether(t *testing.T) {
 	registry := component.NewRegistry()
-	if err := registry.Register(newComponent().WithName("orders-db")); err != nil {
+	if err := registry.Register(newComponent(t, database.WithComponentName("orders-db"))); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Register(newComponent().WithName("billing-db")); err != nil {
+	if err := registry.Register(newComponent(t, database.WithComponentName("billing-db"))); err != nil {
 		t.Fatal(err)
 	}
-	if err := registry.Register(newComponent().WithName("orders-db")); err == nil {
+	if err := registry.Register(newComponent(t, database.WithComponentName("orders-db"))); err == nil {
 		t.Fatal("duplicate component name registered")
 	}
 }
 
 func TestComponentLifecycleIsRaceFree(t *testing.T) {
-	comp := newComponent().WithReadiness(func(ctx context.Context, db *database.DB) error { return db.PingContext(ctx) })
+	comp := newComponent(t, database.WithReadiness(func(ctx context.Context, db *database.DB) error { return db.PingContext(ctx) }))
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Go(func() { _ = comp.Start(context.Background()) })

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -233,5 +234,27 @@ func TestRetryHandler_OnExhaustedFailurePropagates(t *testing.T) {
 	err := RetryHandler(handler, cfg)(context.Background(), messaging.Message{Headers: map[string]string{}})
 	if !errors.Is(err, dlqErr) {
 		t.Fatalf("expected DLQ error propagation, got %v", err)
+	}
+}
+
+func TestRetryHandler_DoesNotRetryTerminalFailures(t *testing.T) {
+	var calls int32
+	var exhausted error
+	cfg := RetryMiddlewareConfig{
+		RetryConfig: resilience.RetryConfig{MaxAttempts: 5, InitialBackoff: time.Millisecond, BackoffFactor: 2.0},
+		OnExhausted: func(_ context.Context, _ messaging.Message, err error) error {
+			exhausted = err
+			return nil
+		},
+	}
+	wrapped := RetryHandler(func(context.Context, messaging.Message) error {
+		atomic.AddInt32(&calls, 1)
+		return fmt.Errorf("decode: %w", messaging.ErrTerminal)
+	}, cfg)
+	if err := wrapped(context.Background(), messaging.Message{Topic: "t"}); err != nil {
+		t.Fatal(err)
+	}
+	if atomic.LoadInt32(&calls) != 1 || !errors.Is(exhausted, messaging.ErrTerminal) {
+		t.Fatalf("calls=%d exhausted=%v", calls, exhausted)
 	}
 }

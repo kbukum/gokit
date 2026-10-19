@@ -6,9 +6,7 @@ import (
 	apperr "github.com/kbukum/gokit/errors"
 )
 
-// ConcurrencyLimit bounds concurrent work overall and per key, without waiting. A caller takes a slot before it knows
-// the key, such as before authentication, then binds the slot to the key once known, so work for one key cannot take
-// every slot. Per-key counts exist only for keys that hold slots, so memory stays bounded by the total.
+// ConcurrencyLimit bounds concurrent work overall and per key, without waiting. A caller takes a slot before it knows the key, such as before authentication, then binds the slot to the key once known, so work for one key cannot take every slot. Per-key counts exist only for keys that hold slots, so memory stays bounded by the total.
 type ConcurrencyLimit struct {
 	total  int
 	perKey int
@@ -62,8 +60,7 @@ type ConcurrencySlot struct {
 	released bool
 }
 
-// Bind counts the slot against key, or reports false when key already holds its share, the slot is bound, or the
-// slot was released. A refused slot stays usable and still needs Release.
+// Bind counts the slot against key, or reports false when key already holds its share, the slot is bound, or the slot was released. A refused slot stays usable and still needs Release.
 func (s *ConcurrencySlot) Bind(key string) bool {
 	l := s.limit
 	l.mu.Lock()

@@ -34,8 +34,7 @@ func configure() (*database.DialectRegistry, error) {
 Then start the component from the registry using the configured backend name:
 
 ```go
-comp := database.NewComponent(cfg, log).
-    WithDialectFromRegistry(registry, postgres.Name)
+comp, err := database.NewComponent(cfg, log, database.WithDialectFromRegistry(registry, postgres.Name))
 ```
 
 ## Connection input
@@ -54,7 +53,7 @@ cfg := database.Config{
     },
 }
 
-comp := database.NewComponent(cfg, log).WithDialect(postgres.Dialect())
+comp, err := database.NewComponent(cfg, log, database.WithDialect(postgres.Dialect()))
 ```
 
 A zero `Port` defaults to `5432` and an absent `Options["sslmode"]` to `verify-full` with TLS 1.3; set `"disable"` explicitly, together with `Params.AllowInsecureDev`, only on a trusted local network. An opaque `DSN` cannot disable TLS. An opaque `DSN` must be a credential-free `postgres://` URL; password-bearing URLs and keyword strings are rejected. The password is passed to the driver configuration directly rather than assembled into a URL.
@@ -96,9 +95,10 @@ plan := postgres.SchemaPlan{
 if err := postgres.ApplySchema(ctx, ownerDB, plan); err != nil { // migration job
     return err
 }
-comp := database.NewComponent(runtimeCfg, log).
-    WithDialect(postgres.Dialect()).
-    WithReadiness(postgres.Readiness(plan)) // service
+comp, err := database.NewComponent(runtimeCfg, log, // service
+    database.WithDialect(postgres.Dialect()),
+    database.WithReadiness(postgres.Readiness(plan)),
+)
 ```
 
 `ApplySchema` holds the advisory lock on one pinned connection: it audits the runtime role, plans every set, creates the schema if absent, applies every set to its expected version, reconciles grants to exactly the manifest and verifies the runtime role's effective privileges before the grant transaction commits. It never creates or edits roles and needs only a one-connection pool. `Migrate` runs it as a job: it opens a connection with the migration login, applies the plan, and closes the connection, bounded by `SetBudget` (default two minutes) per set. There are no default or future-table grants, so a migration that adds a relation must update the manifest. Revoke the default `TEMPORARY` grant from `PUBLIC` on the database; `ApplySchema` rejects a runtime role that can create temporary tables. The runtime role must be a leaf role: membership in any role, whether inherited, `SET`-only or neither, is rejected because it reaches privileges outside the audited matrix. Effective `TRUNCATE`, `REFERENCES`, `TRIGGER`, `MAINTAIN` (PostgreSQL 17+), grant options and callable `SECURITY DEFINER` routines in the schema are also rejected.
@@ -113,10 +113,10 @@ Each new connection receives a 30-second statement timeout and a 10-second idle-
 
 ## Testing
 
-Integration tests live behind the `integration` build tag and consume `database/postgres/testutil.Start(ctx)`. This test-only package provisions a separate database/container with a digest-pinned PostgreSQL 17 image. Startup is capped at three minutes, Docker preflight at five seconds, and `fixture.Close(ctx)` gets a fresh thirty-second termination budget even after cancellation. Missing Docker, failed startup, and failed termination are **test failures**, never implicit skips:
+The adapter's integration tests live in the separate `database/postgres/testutil` module, behind the `integration` build tag, so the adapter module does not depend on container tooling. That test-only module provisions a separate database/container with a digest-pinned PostgreSQL 17 image. Startup is capped at three minutes, Docker preflight at five seconds, and `fixture.Close(ctx)` gets a fresh thirty-second termination budget even after cancellation. Missing Docker, failed startup, and failed termination are **test failures**, never implicit skips:
 
 ```bash
-toven --no-cache test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
+toven --no-cache test --module go:database-postgres-testutil -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
 ```
 
 Importing this package has no side effects. Applications own the registry and choose the driver through configuration.

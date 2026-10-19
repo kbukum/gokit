@@ -74,6 +74,15 @@ Pass `WithoutStartupSummary()` to `NewApp` to suppress a task's startup banner w
 Both modes share the same lifecycle:
 Configure → Modules → OnBeforeStart → StartAll → OnAfterStart → ReadyCheck → OnReady → (execute) → Quiesce → OnBeforeStop → Drain and stop components → Close the DI container → OnAfterStop → Release the owned logger.
 
+## Choosing modules or the DI container
+
+The App offers two ways to wire dependencies. Use one per dependency, not both.
+
+- **Modules and ports** are the default for anything a command composes: a capability with handlers, components or listeners, or one that may run local or remote behind the same interface. Wiring is typed, checked before anything starts, and reported all at once as a `ModuleError`.
+- **`App.Container`** (the `di` container) suits small apps and lazily built values that no module provides, such as a value resolved by name inside `OnConfigure`. It has no startup wiring check, and modules cannot see it.
+
+When a value is needed across modules, give it a port. Keep the container for app-local values that never cross a module boundary.
+
 ## Modules
 
 A module declares the typed ports it provides and needs, then registers handlers and components through `ModuleContext`. Commands compose local modules or remote client modules behind the same ports.
@@ -199,9 +208,9 @@ The App owns the logger it creates from config and releases it last, within the 
 
 ## Admin listener
 
-`WithAdmin(AdminConfig{Host, AllInterfaces, Port, Pprof, HealthTimeout, Metrics})` adds an App-owned diagnostics listener named `admin`. It serves `GET /livez`, `GET /readyz`, `GET /metrics` (`observability.RuntimeMetricsHandler` unless `Metrics` is set) and, with `Pprof`, `/debug/pprof/`. It serves without TLS, so the host must be a loopback or private IP address; the default is loopback, and port zero picks an ephemeral port. `AllInterfaces` binds every interface instead, for platforms such as Kubernetes that probe the pod address inside an isolated network namespace; the host must then be empty or unspecified (`0.0.0.0`, `::`), and `Pprof` is refused. `App.AdminAddr()` reports the bound address.
+`WithAdmin(AdminConfig{Host, AllInterfaces, Port, Pprof, HealthTimeout})` adds an App-owned diagnostics listener named `admin`. It serves `GET /livez`, `GET /readyz`, `GET /metrics` (`observability.RuntimeMetricsHandler` unless `WithAdminMetrics` injects a handler) and, with `Pprof`, `/debug/pprof/`. It serves without TLS, so the host must be a loopback or private IP address; the default is loopback, and port zero picks an ephemeral port. `AllInterfaces` binds every interface instead, for platforms such as Kubernetes that probe the pod address inside an isolated network namespace; the host must then be empty or unspecified (`0.0.0.0`, `::`), and `Pprof` is refused. `App.AdminAddr()` reports the bound address.
 
-`/readyz` returns a `Readiness` body. It reports `starting` (503) until startup completes and `draining` (503) from the moment shutdown begins. In between it checks component health within `HealthTimeout` (2 seconds by default): any unhealthy component makes it `not_ready` (503), any degraded one `degraded` (200), otherwise `ready` (200). The listener registers before every other component in the admin shutdown phase, so it starts first and stops last, and it does not quiesce: probes and metrics answer throughout the drain.
+`/readyz` returns a `Readiness` body. It reports `starting` (503) until startup completes and `draining` (503) from the moment shutdown begins. In between it checks component health within `HealthTimeout` (2 seconds by default): any unhealthy component makes it `not_ready` (503), any degraded one `degraded` (200), otherwise `ready` (200). `App.ReadyCheck` applies the same rule and returns `ErrNotReady` only for `not_ready`; startup logs a warning for degraded or not-ready components and continues. The listener registers before every other component in the admin shutdown phase, so it starts first and stops last, and it does not quiesce: probes and metrics answer throughout the drain.
 
 One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host several modules in one process, add them to one App with `Use` rather than nesting apps. `Startup` and `Shutdown` serve embedding and tests.
 
@@ -225,7 +234,7 @@ One process owns signals: `Run` and `RunTask` handle SIGINT and SIGTERM. To host
 | `ModuleError` / `ModuleProblem` | Every wiring problem found at startup |
 | `testutil.NewApp()` / `Start()` / `RegisterListener()` / `Capture()` | Run modules in tests |
 | `testutil.ValidateRemoteShape()` / `testutil.Contract()` | Check a port's remote shape; run one suite against every implementation |
-| `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` / `WithAdmin()` | App options |
+| `WithLogger()` / `WithGracefulTimeout()` / `WithContainer()` / `WithAdmin()` / `WithAdminMetrics()` | App options |
 | `AdminConfig` / `Readiness` / `AdminAddr()` | Admin listener configuration, `/readyz` body and bound address |
 | `Summary` | Tracks and displays startup summary |
 

@@ -18,8 +18,7 @@ import (
 type Harness struct {
 	// NewStore returns an empty store with room for at least 64 keys. Each call must be independent.
 	NewStore func(t *testing.T) apikey.Store
-	// OwnerID is the owner recorded on every key; it defaults to "owner". Stores that require an existing owner
-	// create it in NewStore.
+	// OwnerID is the owner recorded on every key; it defaults to "owner". Stores that require an existing owner create it in NewStore.
 	OwnerID string
 }
 
@@ -302,8 +301,7 @@ func testConcurrentRotations(t *testing.T, f *fixture) {
 	}
 }
 
-// testRevokeRacingRotation proves the two linearizable outcomes: revocation first makes rotation fail without a
-// replacement; rotation first leaves a replacement and a revoked old key whose grace no longer applies.
+// testRevokeRacingRotation proves the two linearizable outcomes: revocation first makes rotation fail without a replacement; rotation first leaves a replacement and a revoked old key whose grace no longer applies.
 func testRevokeRacingRotation(t *testing.T, f *fixture) {
 	for i := range 16 {
 		old, replacement := fmt.Sprintf("old-%d", i), fmt.Sprintf("new-%d", i)

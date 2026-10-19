@@ -26,9 +26,7 @@ const (
 	EnvPasswordFile = "GOKIT_POSTGRES_TEST_PASSWORD_FILE" //nolint:gosec // Names an environment variable, not a credential.
 )
 
-// Open returns a fixture on the shared server named by [EnvAddr], or starts an owned container with [Start] when it is
-// unset. A configured but unusable shared server is an error; Open never falls back to a container. TLS fixtures always
-// start an owned container because they configure the server.
+// Open returns a fixture on the shared server named by [EnvAddr], or starts an owned container with [Start] when it is unset. A configured but unusable shared server is an error; Open never falls back to a container. TLS fixtures always start an owned container because they configure the server.
 func Open(ctx context.Context, opts ...Option) (*Fixture, error) {
 	addr := strings.TrimSpace(os.Getenv(EnvAddr))
 	options := fixtureOptions{}
@@ -47,9 +45,7 @@ func Open(ctx context.Context, opts ...Option) (*Fixture, error) {
 	return Connect(ctx, params)
 }
 
-// Connect attaches to an existing PostgreSQL server as a superuser within a ten-second budget. The fixture owns no
-// container: Close drops only the databases and roles created through it and leaves the server running, so many test
-// binaries can share one server. Params must name a superuser login and an existing maintenance database.
+// Connect attaches to an existing PostgreSQL server as a superuser within a ten-second budget. The fixture owns no container: Close drops only the databases and roles created through it and leaves the server running, so many test binaries can share one server. Params must name a superuser login and an existing maintenance database.
 func Connect(ctx context.Context, params database.ConnParams) (*Fixture, error) {
 	if util.IsNil(ctx) {
 		return nil, apperrors.InvalidInput("context", "Context is required")
@@ -70,7 +66,7 @@ func Connect(ctx context.Context, params database.ConnParams) (*Fixture, error) 
 	log := logging.NewDefault("postgres-fixture") //nolint:contextcheck // NewDefault disables OTLP and performs no context-bearing exporter initialization.
 	db, err := database.NewWithContext(ctx, postgres.Dialect(), database.Config{Params: params, MaxRetries: 1, LogLevel: "silent"}, log.WithContext(ctx))
 	if err != nil {
-		return nil, database.Failure(err)
+		return nil, database.WrapFailure(err)
 	}
 	var superuser bool
 	checkErr := db.WithContext(ctx).Raw("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").Scan(&superuser).Error
@@ -82,7 +78,7 @@ func Connect(ctx context.Context, params database.ConnParams) (*Fixture, error) 
 		fixture.admin, checkErr = snapshotAdmin(ctx, db)
 	}
 	if err := errors.Join(checkErr, db.Close()); err != nil {
-		return nil, database.Failure(err)
+		return nil, database.WrapFailure(err)
 	}
 	return fixture, nil
 }

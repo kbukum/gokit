@@ -63,11 +63,11 @@ func NewStorage(ctx context.Context, cfg *Config) (*Storage, error) {
 	}
 	cfg = &c
 	if cfg.AccessKeyFile != "" {
-		access, err := fs.ReadSecret(cfg.AccessKeyFile, 1, 1024)
+		access, err := fs.ReadSecret(cfg.AccessKeyFile, fs.SecretBounds{Min: 1, Max: 1024})
 		if err != nil {
 			return nil, err
 		}
-		secret, err := fs.ReadSecret(cfg.SecretKeyFile, 1, 1024)
+		secret, err := fs.ReadSecret(cfg.SecretKeyFile, fs.SecretBounds{Min: 1, Max: 1024})
 		if err != nil {
 			return nil, err
 		}

@@ -188,6 +188,19 @@ auth:
 | `Get[T](ctx)` | Type-safe claims retrieval |
 | `GetOrError[T](ctx)` | Error-based retrieval |
 
+### `auth/lease`
+
+Keeps long-lived work, such as a stream opened with a credential, alive only while an authority keeps confirming it. Use it when a check at admission is not enough because the credential can be revoked mid-stream.
+
+| Symbol | Description |
+|---|---|
+| `New[K](Config[K])` | Start a lease set with a batch `Checker`, lease duration, renewal interval, capacity limit and error reporter; `Clock` is optional |
+| `Set.Acquire(owner, key, grant)` | Start a lease after the admitting check; returns the lease lifetime, a release function and a typed error (capacity, closed or expired) |
+| `Set.Revoke(match)` | End every lease whose key matches and report how many ended; a nil `match` is refused |
+| `Set.Nudge()` | Ask for an early renewal round |
+| `Set.Close(ctx)` | End every lease and wait for the workers within `ctx` |
+| `ErrRevoked`, `ErrExpired`, `ErrEnded`, `ErrReleased`, `ErrClosed` | Reported by `context.Cause` on an ended lifetime |
+
 ### `auth/oidc`
 
 | Symbol | Description |

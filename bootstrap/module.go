@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"sync"
 
@@ -58,6 +59,8 @@ var (
 	ErrListenerNotDeclared = errors.New("bootstrap: listener not declared by module")
 	// ErrRouteConflict reports an empty, invalid or already mounted route, or a second fallback on a listener.
 	ErrRouteConflict = errors.New("bootstrap: route conflict")
+	// ErrPortNotProvided reports a Need whose port holds no value of the port's type, which planning normally rules out.
+	ErrPortNotProvided = errors.New("bootstrap: port not provided")
 	// ErrModuleContextClosed reports use of a ModuleContext after its Register returned.
 	ErrModuleContextClosed = errors.New("bootstrap: module context used after Register returned")
 )
@@ -183,8 +186,11 @@ func Need[T any](mc *ModuleContext, p *Port[T]) (T, error) {
 		if !ref.valid() || !mc.declares(mc.spec.Needs, ref) {
 			return fmt.Errorf("%w: module %q needs %s", ErrPortNotDeclared, mc.spec.Name, ref)
 		}
-		// Planning matched every need to one provider and ordered it first, and that provider's Provide checked the type and nil, so the value is present.
-		v, _ = mc.wiring.value(ref).(T)
+		value, ok := mc.wiring.value(ref).(T)
+		if !ok {
+			return fmt.Errorf("%w: module %q needs %s but it holds no %v value", ErrPortNotProvided, mc.spec.Name, ref, reflect.TypeFor[T]())
+		}
+		v = value
 		return nil
 	})
 	return v, err

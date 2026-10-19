@@ -64,7 +64,7 @@ func hung(t *testing.T) string {
 
 func watchClient(t *testing.T, url string, clock util.TimerClock) (*connect.Client[wrapperspb.StringValue, wrapperspb.StringValue], *Availability) {
 	t.Helper()
-	limit, err := FirstMessageTimeoutInterceptor(firstLimit, clock)
+	limit, err := FirstMessageTimeoutInterceptor(firstLimit, WithFirstMessageClock(clock))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,10 +96,10 @@ func watch(ctx context.Context, c *connect.Client[wrapperspb.StringValue, wrappe
 }
 
 func TestFirstMessageTimeoutRequiresLimitAndClock(t *testing.T) {
-	if _, err := FirstMessageTimeoutInterceptor(0, util.SystemClock{}); err == nil {
+	if _, err := FirstMessageTimeoutInterceptor(0); err == nil {
 		t.Fatal("zero limit accepted")
 	}
-	if _, err := FirstMessageTimeoutInterceptor(time.Second, nil); err == nil {
+	if _, err := FirstMessageTimeoutInterceptor(time.Second, WithFirstMessageClock(nil)); err == nil {
 		t.Fatal("nil clock accepted")
 	}
 }
@@ -163,7 +163,7 @@ func TestFirstMessageTimeoutLeavesCallerCancellationAlone(t *testing.T) {
 }
 
 func TestFirstMessageTimeoutSkipsUnaryAndClientStreams(t *testing.T) {
-	limit, err := FirstMessageTimeoutInterceptor(firstLimit, newArmedClock())
+	limit, err := FirstMessageTimeoutInterceptor(firstLimit, WithFirstMessageClock(newArmedClock()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestFirstMessageTimeoutIsStickyAfterTheLimit(t *testing.T) {
 func TestFirstMessageTimeoutBoundsStreamConstruction(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		clock := util.NewFakeClock(time.Unix(0, 0))
-		limit, err := FirstMessageTimeoutInterceptor(firstLimit, clock)
+		limit, err := FirstMessageTimeoutInterceptor(firstLimit, WithFirstMessageClock(clock))
 		if err != nil {
 			t.Fatal(err)
 		}

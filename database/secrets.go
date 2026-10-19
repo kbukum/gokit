@@ -28,7 +28,7 @@ func (FileSecrets) ReadSecret(ctx context.Context, path string) (util.SecretStri
 	}
 	data, err := fs.ReadFileLimit(path, maxSecretBytes)
 	if err != nil {
-		return util.SecretString{}, Failure(err)
+		return util.SecretString{}, WrapFailure(err)
 	}
 	if err := ctx.Err(); err != nil {
 		return util.SecretString{}, err
@@ -71,7 +71,7 @@ func ResolvePassword(ctx context.Context, params ConnParams, source SecretSource
 	}
 	secret, err := source.ReadSecret(ctx, params.PasswordFile)
 	if err != nil {
-		return util.SecretString{}, Failure(err)
+		return util.SecretString{}, WrapFailure(err)
 	}
 	if err := ctx.Err(); err != nil {
 		return util.SecretString{}, err

@@ -331,13 +331,18 @@ def test_local_and_ci_security_gates_share_policy():
     ]
     assert task["cacheable"] is False
     workflow = yaml.safe_load((root / ".github/workflows/ci.yml").read_text())
-    security = workflow["jobs"]["security"]
-    for job in ["security", "licenses", "fuzz", "integration"]:
-        assert workflow["jobs"][job]["if"] == "needs.changes.outputs.go-code == 'true'"
-    assert any("scripts/govulncheck.py" in step.get("run", "") for step in security["steps"])
+    makefile = (root / "Makefile").read_text()
+    for job in ["security", "licenses", "integration"]:
+        assert workflow["jobs"][job]["if"] == "needs.gate.outputs.code == 'true'"
+    assert workflow["jobs"]["fuzz"]["if"].startswith("needs.gate.outputs.code == 'true'")
+    runs = lambda job: [step.get("run", "") for step in workflow["jobs"][job]["steps"]]
+    assert any(re.search(r"\bmake\b.*\bvuln$", run.strip()) for run in runs("security"))
+    assert re.search(r"^vuln:\n\t@\$\(TOVEN\) vuln$", makefile, re.M)
     assert "security" in workflow["jobs"]["ci-status"]["needs"]
-    integration = workflow["jobs"]["integration"]
-    assert any("run test --" in step.get("run", "") and "-tags=integration" in step["run"] for step in integration["steps"])
+    assert any(run.strip().endswith("test-integration") for run in runs("integration"))
+    target = makefile[makefile.index("\ntest-integration:"):]
+    target = target[:target.index("\n\n")]
+    assert "$(TOVEN) test" in target and "-tags=integration" in target
 
 
 @pytest.mark.parametrize("rc,output", [
@@ -431,13 +436,35 @@ def test_main_rejects_multiple_scanner_configurations(fake_repo, monkeypatch):
     assert gv.main(["--module", "workload"]) == 2
 
 
-@pytest.mark.parametrize("job", ["preflight", "check", "check-cross", "lint", "security", "licenses", "fuzz", "integration"])
-def test_aggregate_rejects_skipped_required_jobs(job):
+CI_JOBS = ["gate", "check", "check-cross", "lint", "security", "fuzz", "licenses", "integration"]
+
+
+def _ci_status(results, code="true", groups='["1"]'):
     workflow = yaml.safe_load((HERE.parent / ".github/workflows/ci.yml").read_text())
-    script = workflow["jobs"]["ci-status"]["steps"][0]["run"]
-    script = script.replace("${{ needs.changes.outputs.go-code }}", "true")
-    script = script.replace("${{ needs." + job + ".result }}", "skipped")
-    script = re.sub(r"\$\{\{ needs\.[\w-]+\.result \}\}", "success", script)
-    result = subprocess.run(["bash", "-c", script], capture_output=True, text=True)
-    assert result.returncode == 1
-    assert "CI failed" in result.stdout
+    status = workflow["jobs"]["ci-status"]
+    assert sorted(status["needs"]) == sorted(CI_JOBS)
+    step = status["steps"][0]
+    assert step["env"]["NEEDS"] == "${{ toJSON(needs) }}"
+    needs = {job: {"result": results.get(job, "success"), "outputs": {}} for job in CI_JOBS}
+    needs["gate"]["outputs"] = {"code": code, "fuzz-groups": groups}
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin", "NEEDS": json.dumps(needs)}
+    return subprocess.run(["bash", "-c", step["run"]], capture_output=True, text=True, env=env)
+
+
+@pytest.mark.parametrize("job", CI_JOBS)
+@pytest.mark.parametrize("result", ["skipped", "failure", "cancelled"])
+def test_aggregate_rejects_required_jobs_that_did_not_succeed(job, result):
+    status = _ci_status({job: result})
+    assert status.returncode == 1
+    assert f"::error::{job} did not succeed ({result})" in status.stdout
+
+
+def test_aggregate_passes_when_every_job_succeeds():
+    assert _ci_status({}).returncode == 0
+
+
+def test_aggregate_allows_skips_only_where_the_gate_decided_them():
+    skipped = {job: "skipped" for job in CI_JOBS if job != "gate"}
+    assert _ci_status(skipped, code="false").returncode == 0
+    assert _ci_status({"fuzz": "skipped"}, groups="[]").returncode == 0
+    assert _ci_status({"gate": "skipped"}, code="false").returncode == 1

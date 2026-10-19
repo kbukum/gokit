@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
+	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/logging"
 	"github.com/kbukum/gokit/server"
 	"github.com/kbukum/gokit/server/middleware"
@@ -161,5 +163,87 @@ func TestServerTraceCorrelatesSafePanicResponse(t *testing.T) {
 	}
 	if !foundLog || strings.Contains(output.String(), "private-") || strings.Contains(fmt.Sprint(spans), "private-") {
 		t.Fatal("panic diagnostics are missing or contain private data")
+	}
+}
+
+type countingAuthenticator struct{ calls int }
+
+func (a *countingAuthenticator) Authenticate(r *http.Request) (identity string, present bool, err error) {
+	a.calls++
+	switch r.Header.Get("X-Key") {
+	case "":
+		return "", false, nil
+	case "good":
+		return "billing", true, nil
+	default:
+		return "", true, apperrors.Unauthorized("")
+	}
+}
+
+type callerKey struct{}
+
+// One authentication per request decides both trace trust and access; a rejected request gets a fresh root trace whose ID its rejection carries.
+func TestServerAuthenticatesOnceForAccessAndTraceTrust(t *testing.T) {
+	exporter := tracetest.NewInMemoryExporter()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exporter))
+	defer func() { _ = provider.Shutdown(t.Context()) }()
+	auth := &countingAuthenticator{}
+	stages, err := middleware.NewAuthStages[string](auth, func(ctx context.Context, caller string) context.Context {
+		return context.WithValue(ctx, callerKey{}, caller)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := server.New(&server.Config{}, nil)
+	if err := s.Authenticate(nil); err == nil {
+		t.Fatal("nil authentication accepted")
+	}
+	if err := s.Authenticate(stages.Authenticate); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Trace(middleware.TracingConfig{Tracer: provider.Tracer("server"), TrustParent: stages.Trusted}); err != nil {
+		t.Fatal(err)
+	}
+	var served []string
+	if err := s.Handle("/svc/", stages.Enforce(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		served = append(served, r.Context().Value(callerKey{}).(string))
+	}))); err != nil {
+		t.Fatal(err)
+	}
+	s.ApplyMiddleware()
+
+	const parentTrace = "4bf92f3577b34da6a3ce929d0e0e4736"
+	call := func(key string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/svc/Call", http.NoBody)
+		req.Header.Set("Traceparent", "00-"+parentTrace+"-00f067aa0ba902b7-01")
+		if key != "" {
+			req.Header.Set("X-Key", key)
+		}
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	for _, tc := range []struct {
+		key     string
+		status  int
+		trusted bool
+	}{{"good", http.StatusOK, true}, {"bad", http.StatusUnauthorized, false}, {"", http.StatusUnauthorized, false}} {
+		exporter.Reset()
+		before := auth.calls
+		rec := call(tc.key)
+		spans := exporter.GetSpans()
+		if rec.Code != tc.status || len(spans) != 1 || auth.calls-before != 1 {
+			t.Fatalf("key %q: status=%d spans=%d authentications=%d", tc.key, rec.Code, len(spans), auth.calls-before)
+		}
+		traceID := spans[0].SpanContext.TraceID().String()
+		if (traceID == parentTrace) != tc.trusted {
+			t.Fatalf("key %q: trace %s, trusted=%v", tc.key, traceID, tc.trusted)
+		}
+		if rec.Header().Get("X-Request-Id") != traceID {
+			t.Fatalf("key %q: response carries %q, not trace %s", tc.key, rec.Header().Get("X-Request-Id"), traceID)
+		}
+	}
+	if len(served) != 1 || served[0] != "billing" {
+		t.Fatalf("served = %v", served)
 	}
 }

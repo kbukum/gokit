@@ -21,7 +21,7 @@ server · server/testutil · httpclient · grpc · sse · connect · connect/tes
 auth · authz
 
 ## 💾 Data  (`make check-data`)
-database · database/postgres · database/sqlite · database/testutil · auth/session/database · cache · cache/redis · storage · storage/s3 · storage/s3/testutil · storage/gcs · storage/testutil · vectorstore · vectorstore/qdrant · messaging · messaging/kafka · messaging/nats · messaging/rabbitmq
+database · database/postgres · database/postgres/testutil · database/sqlite · database/testutil · auth/session/database · cache · cache/redis · storage · storage/s3 · storage/s3/testutil · storage/gcs · storage/testutil · vectorstore · vectorstore/qdrant · messaging · messaging/kafka · messaging/nats · messaging/nats/testutil · messaging/rabbitmq
 
 ## 🧠 AI  (`make check-ai`)
 ai · llm · llm/providers · llm/tokenizer/tiktoken · llm/tokenizer/huggingface · embedding · inference · inference/tgi · inference/triton · inference/vllm · agent · tool · mcp · skill

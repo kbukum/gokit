@@ -409,8 +409,7 @@ func TestInvalidDeclarationsAreReported(t *testing.T) {
 		}
 	}
 	problems := moduleProblems(t, app)
-	// Modules: nil, unnamed, duplicate name, zero port, non-interface port, nil port, provided twice, needed twice,
-	// unnamed listener, repeated listener. Listeners: unnamed, duplicate, nil, not ingress.
+	// Modules: nil, unnamed, duplicate name, zero port, non-interface port, nil port, provided twice, needed twice, unnamed listener, repeated listener. Listeners: unnamed, duplicate, nil, not ingress.
 	if got := countKind(problems, ProblemInvalid); got != 14 {
 		t.Fatalf("got %d invalid problems, want 14: %v", got, problems)
 	}

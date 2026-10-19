@@ -10,8 +10,7 @@ import (
 
 const maxPasswordBytes = 4 << 10
 
-// WithPasswordFile writes params' password to a new mode-0600 file in the caller-owned dir, such as t.TempDir(), and
-// returns params that reference the file instead, for tests of PasswordFile resolution. The caller removes dir.
+// WithPasswordFile writes params' password to a new mode-0600 file in the caller-owned dir, such as t.TempDir(), and returns params that reference the file instead, for tests of PasswordFile resolution. The caller removes dir.
 func WithPasswordFile(dir string, params database.ConnParams) (database.ConnParams, error) {
 	if dir == "" || params.Password == "" || params.PasswordFile != "" || len(params.Password) > maxPasswordBytes {
 		return database.ConnParams{}, apperrors.InvalidInput("password", "A directory and one inline password of at most 4 KiB are required")

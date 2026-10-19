@@ -86,3 +86,28 @@ def test_ignores_external_requires(tmp_path: pathlib.Path) -> None:
 
     # External module is absent from the intra-repo map → never flagged.
     assert mr.find_missing(consumer, {"example.com/kit/consumer": consumer}) == []
+
+
+def test_detects_missing_replace_for_a_transitive_intra_repo_module(tmp_path: pathlib.Path) -> None:
+    # `go mod tidy` reads the go.mod of every module in the graph, so a module
+    # needs local replaces for intra-repo modules it only reaches through others.
+    testutil = tmp_path / "database" / "testutil"
+    store = tmp_path / "session" / "store"
+    host = tmp_path / "host"
+    _init_module(testutil, "example.com/kit/database/testutil")
+    _init_module(store, "example.com/kit/session/store")
+    _init_module(host, "example.com/kit/host")
+    _require(store, "example.com/kit/database/testutil")
+    _replace(store, "example.com/kit/database/testutil", "../../database/testutil")
+    _require(host, "example.com/kit/session/store")
+    _replace(host, "example.com/kit/session/store", "../session/store")
+
+    path_to_dir = {
+        "example.com/kit/database/testutil": testutil,
+        "example.com/kit/session/store": store,
+        "example.com/kit/host": host,
+    }
+    assert mr.find_missing(host, path_to_dir) == [
+        ("example.com/kit/database/testutil", "../database/testutil"),
+    ]
+    assert mr.find_missing(store, path_to_dir) == []

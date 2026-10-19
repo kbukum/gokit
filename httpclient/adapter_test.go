@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1099,5 +1100,34 @@ func TestAdapter_DoStream_ErrorStatus_ReturnsClassifiedError(t *testing.T) {
 	}
 	if !IsServerError(err) {
 		t.Errorf("expected server error, got %T: %v", err, err)
+	}
+}
+
+func TestConnectionCapIsIndependentOfEndpointPolicy(t *testing.T) {
+	transport := func(cfg Config) *http.Transport {
+		t.Helper()
+		a, err := New(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next := a.Unwrap().Transport
+		if e, ok := next.(*endpointTransport); ok {
+			next = e.next
+		}
+		tr, ok := next.(*http.Transport)
+		if !ok {
+			t.Fatalf("transport = %T", next)
+		}
+		return tr
+	}
+	if got := transport(Config{MaxConnsPerHost: 3}); got.MaxConnsPerHost != 3 || got.MaxIdleConnsPerHost != 3 {
+		t.Fatalf("capped = %d/%d", got.MaxConnsPerHost, got.MaxIdleConnsPerHost)
+	}
+	policy, err := security.NewEndpointPolicy([]security.EndpointRule{{Origin: "https://api.example.com"}}, net.DefaultResolver, &net.Dialer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := transport(Config{EndpointPolicy: policy}); got.MaxConnsPerHost != 0 {
+		t.Fatalf("endpoint policy set a cap: %d", got.MaxConnsPerHost)
 	}
 }

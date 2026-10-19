@@ -114,7 +114,7 @@ func NewWithContext(ctx context.Context, dialect Dialect, cfg Config, log *loggi
 		}
 		dialector, openErr := opener.Open(attemptCtx)
 		if openErr != nil {
-			return nil, Failure(openErr)
+			return nil, WrapFailure(openErr)
 		}
 		if util.IsNil(dialector) {
 			return nil, apperrors.InvalidInput("dialector", "Opener returned a nil dialector")
@@ -155,7 +155,7 @@ func prepareConnection(ctx context.Context, dialect Dialect, input ConnectionInp
 	opener, err := dialect.Prepare(ctx, input)
 	err = errors.Join(err, ctx.Err())
 	if err != nil {
-		return nil, Failure(err)
+		return nil, WrapFailure(err)
 	}
 	return opener, nil
 }
@@ -219,7 +219,7 @@ func connectOnce(
 				err = errors.Join(err, poolErr)
 			}
 		}
-		return nil, Failure(err)
+		return nil, WrapFailure(err)
 	}
 
 	sqlDB, err := db.DB()
@@ -227,11 +227,11 @@ func connectOnce(
 		if owner, ok := d.(interface{ Close() error }); ok {
 			err = errors.Join(err, owner.Close())
 		}
-		return nil, Failure(err)
+		return nil, WrapFailure(err)
 	}
 
 	if err := sqlDB.PingContext(ctx); err != nil {
-		return nil, Failure(errors.Join(err, sqlDB.Close()))
+		return nil, WrapFailure(errors.Join(err, sqlDB.Close()))
 	}
 
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
@@ -259,7 +259,7 @@ func (d *DB) Close() error {
 
 	sqlDB, err := d.GormDB.DB()
 	if err != nil {
-		return Failure(err)
+		return WrapFailure(err)
 	}
 	d.log.Debug("Closing database connection") //nolint:contextcheck // Close is invoked from lifecycle Stop without a request context
 	d.closed = true
@@ -267,13 +267,13 @@ func (d *DB) Close() error {
 	if d.reader != nil {
 		readDB, readErr := d.reader.DB()
 		if readErr != nil {
-			d.closeErr = Failure(errors.Join(err, readErr))
+			d.closeErr = WrapFailure(errors.Join(err, readErr))
 			return d.closeErr
 		}
 		err = errors.Join(err, readDB.Close())
 	}
 	if err != nil {
-		d.closeErr = Failure(err)
+		d.closeErr = WrapFailure(err)
 	}
 	return d.closeErr
 }
@@ -285,7 +285,7 @@ func (d *DB) PingContext(ctx context.Context) error {
 		return err
 	}
 	if err := sqlDB.PingContext(ctx); err != nil {
-		return Failure(err)
+		return WrapFailure(err)
 	}
 	return nil
 }

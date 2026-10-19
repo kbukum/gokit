@@ -38,9 +38,7 @@ func TestComponentStartFromRegistryAndMigrates(t *testing.T) {
 
 	cfg := database.Config{Enabled: true, DSN: ":memory:", AutoMigrate: true}
 	cfg.ApplyDefaults()
-	comp := database.NewComponent(cfg, logging.NewDefault("test")).
-		WithDialectFromRegistry(reg, "sqlite").
-		WithAutoMigrate(&registryModel{})
+	comp := mustComponent(t, cfg, database.WithDialectFromRegistry(reg, "sqlite"), database.WithAutoMigrate(&registryModel{}))
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -64,11 +62,10 @@ func TestComponentStartFailsForRegistryDriverErrors(t *testing.T) {
 	cfg.ApplyDefaults()
 	log := logging.NewDefault("test")
 
-	if err := database.NewComponent(cfg, log).WithDialectFromRegistry(nil, "sqlite").Start(ctx); err == nil {
+	if _, err := database.NewComponent(cfg, log, database.WithDialectFromRegistry(nil, "sqlite")); err == nil {
 		t.Fatal("expected error for nil registry")
 	}
-	if err := database.NewComponent(cfg, log).
-		WithDialectFromRegistry(database.NewDialectRegistry(), "sqlite").Start(ctx); err == nil {
+	if err := mustComponent(t, cfg, database.WithDialectFromRegistry(database.NewDialectRegistry(), "sqlite")).Start(ctx); err == nil {
 		t.Fatal("expected error for unregistered driver")
 	}
 }

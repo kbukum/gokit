@@ -10,9 +10,7 @@ import (
 	"testing/synctest"
 )
 
-// A canceled transaction on a pinned connection must end on the caller's goroutine. If database/sql rolled it back
-// from its own cancellation goroutine, that goroutine would also close the connection while its owner, which still
-// has to unlock it, was using it.
+// A canceled transaction on a pinned connection must end on the caller's goroutine. If database/sql rolled it back from its own cancellation goroutine, that goroutine would also close the connection while its owner, which still has to unlock it, was using it.
 func TestCanceledTransactionRollsBackBeforeReturning(t *testing.T) {
 	t.Parallel()
 	exec := func(ctx context.Context, tx *sql.Tx) error {

@@ -9,9 +9,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// BenchmarkPoolEnvelope measures the RunLab admission profile (2 workers, queue 8, 250 ms wait) with a full burst of
-// concurrent verifications: the slowest admitted operation including queue wait, busy rejections, and how long Close
-// takes to drain a full burst. Targets: 2 s per operation, 5 s drain.
+// BenchmarkPoolEnvelope measures a small admission profile (2 workers, queue 8, 250 ms wait) with a full burst of concurrent verifications: the slowest admitted operation including queue wait, busy rejections, and how long Close takes to drain a full burst. Targets: 2 s per operation, 5 s drain.
 func BenchmarkPoolEnvelope(b *testing.B) {
 	const workers, queue, burst = 2, 8, 2 + 8
 	for name, cfg := range map[string]Config{

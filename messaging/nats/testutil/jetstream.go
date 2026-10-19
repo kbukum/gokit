@@ -58,9 +58,7 @@ type user struct {
 	name, permissions string
 }
 
-// WithUser adds a user whose rights are limited by permissions, the body of a NATS server permissions block such as
-// `publish: ["facts.>"], subscribe: ["_INBOX.>"]`. Use it to prove which rights an operation needs. The name is
-// lower case letters, digits and dashes, starting with a letter, and must differ from the default user "app".
+// WithUser adds a user whose rights are limited by permissions, the body of a NATS server permissions block such as `publish: ["facts.>"], subscribe: ["_INBOX.>"]`. Use it to prove which rights an operation needs. The name is lower case letters, digits and dashes, starting with a letter, and must differ from the default user "app".
 func WithUser(name, permissions string) Option {
 	return func(o *options) error {
 		if !userName.MatchString(name) || name == username {
@@ -79,9 +77,7 @@ func WithUser(name, permissions string) Option {
 	}
 }
 
-// StartJetStream requires Docker and an owned temporary directory for the server configuration and the client
-// password files. Provisioning is bounded at two minutes and returns once JetStream answers an authenticated account
-// request. A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
+// StartJetStream requires Docker and an owned temporary directory for the server configuration and the client password files. Provisioning is bounded at two minutes and returns once JetStream answers an authenticated account request. A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
 func StartJetStream(ctx context.Context, dir string, opts ...Option) (*JetStreamFixture, error) {
 	if util.IsNil(ctx) || dir == "" {
 		return nil, errors.New("JetStream fixture: context and an owned temporary directory are required")
@@ -246,8 +242,7 @@ func (f *JetStreamFixture) ConfigFor(name string) (gokitnats.Config, error) {
 	return cfg, nil
 }
 
-// Restart stops the server and starts it again on the same address, to prove clients reconnect. Stream data does not
-// survive, since it lives in memory. It is bounded at two minutes and returns once JetStream answers again.
+// Restart stops the server and starts it again on the same address, to prove clients reconnect. Stream data does not survive, since it lives in memory. It is bounded at two minutes and returns once JetStream answers again.
 func (f *JetStreamFixture) Restart(ctx context.Context) error {
 	if util.IsNil(ctx) {
 		return errors.New("JetStream fixture restart requires a context")

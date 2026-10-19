@@ -3,6 +3,7 @@ package jetstream
 import (
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ var unreachable = nats.Config{URL: "nats://127.0.0.1:1", AllowInsecureDev: true,
 
 func TestComponentLifecycle(t *testing.T) {
 	t.Parallel()
-	c := NewComponent("broker", unreachable)
+	c := mustComponent(t, unreachable)
 	ctx := context.Background()
 	if c.Name() != "broker" || c.Describe().Details != "nats://127.0.0.1:1" {
 		t.Fatalf("name=%q describe=%+v", c.Name(), c.Describe())
@@ -78,14 +79,26 @@ func TestComponentLifecycle(t *testing.T) {
 
 func TestComponentRefusesInvalidConfigAndCanceledStart(t *testing.T) {
 	t.Parallel()
-	if err := NewComponent("broker", nats.Config{URL: "nats://localhost:4222"}).Start(context.Background()); err == nil {
+	if _, err := NewComponent("broker", nats.Config{URL: "nats://localhost:4222"}); err == nil {
 		t.Fatal("cleartext URL accepted without allow_insecure_dev")
+	}
+	if _, err := NewComponent("", unreachable); err == nil {
+		t.Fatal("empty name accepted")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := NewComponent("broker", unreachable).Start(ctx); !errors.Is(err, context.Canceled) {
+	if err := mustComponent(t, unreachable).Start(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled start = %v", err)
 	}
+}
+
+func mustComponent(t *testing.T, cfg nats.Config) *Component {
+	t.Helper()
+	c, err := NewComponent("broker", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
 }
 
 func common(mutate func(*messaging.Config)) messaging.Config {
@@ -99,7 +112,7 @@ func common(mutate func(*messaging.Config)) messaging.Config {
 	return cfg
 }
 
-func TestRegisterBuildsOwningProducerAndConsumer(t *testing.T) {
+func TestRegisterSharesOneClientAcrossTopics(t *testing.T) {
 	t.Parallel()
 	reg := messaging.NewRegistry()
 	if err := Register(reg, unreachable); err != nil {
@@ -114,41 +127,65 @@ func TestRegisterBuildsOwningProducerAndConsumer(t *testing.T) {
 		t.Fatal(err)
 	}
 	jp, ok := p.(*Producer)
-	if !ok || jp.owned == nil || jp.owned.publishTimeout() != time.Second {
+	if !ok || jp.owned == nil {
 		t.Fatalf("producer = %T", p)
 	}
-	if err := p.Close(); err != nil {
-		t.Fatal(err)
+	shared, _ := jp.source()
+	if shared.publishTimeout() != time.Second {
+		t.Fatalf("publish timeout = %v", shared.publishTimeout())
 	}
-	c, err := reg.NewConsumer(ctx, common(nil), nil, "facts.a")
-	if err != nil {
-		t.Fatal(err)
+	consumers := make([]messaging.Consumer, 0, 3)
+	for _, topic := range []string{"facts.a", "facts.a", "facts.b"} {
+		c, err := reg.NewConsumer(ctx, common(nil), nil, topic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		consumers = append(consumers, c)
 	}
-	jc, ok := c.(*Consumer)
-	if !ok || jc.owned == nil || !strings.HasPrefix(jc.cfg.Durable, "usage-") || c.Topic() != "facts.a" {
-		t.Fatalf("consumer = %+v", c)
+	a, same, other := consumers[0].(*Consumer), consumers[1].(*Consumer), consumers[2].(*Consumer)
+	if !strings.HasPrefix(a.cfg.Durable, "usage-") || a.Topic() != "facts.a" {
+		t.Fatalf("consumer = %+v", a)
 	}
 	// Each topic in a group keeps its own durable consumer; the same topic shares one.
-	same, err := reg.NewConsumer(ctx, common(nil), nil, "facts.a")
-	if err != nil {
-		t.Fatal(err)
+	if same.cfg.Durable != a.cfg.Durable || other.cfg.Durable == a.cfg.Durable {
+		t.Fatalf("durables: %s %s %s", a.cfg.Durable, same.cfg.Durable, other.cfg.Durable)
 	}
-	other, err := reg.NewConsumer(ctx, common(nil), nil, "facts.b")
-	if err != nil {
-		t.Fatal(err)
+	for _, c := range consumers {
+		if got, _ := c.(*Consumer).source(); got != shared {
+			t.Fatal("registry consumers do not share the producer's client")
+		}
 	}
-	if same.(*Consumer).cfg.Durable != jc.cfg.Durable || other.(*Consumer).cfg.Durable == jc.cfg.Durable {
-		t.Fatalf("durables: %s %s %s", jc.cfg.Durable, same.(*Consumer).cfg.Durable, other.(*Consumer).cfg.Durable)
-	}
-	for _, x := range []messaging.Consumer{same, other} {
+	a.cfg.OnError(errTransient)
+	for _, x := range []io.Closer{p, consumers[0], consumers[1], p} {
 		if err := x.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	jc.cfg.OnError(errTransient)
-	if err := c.Close(); err != nil {
+	if shared.closedForTest() {
+		t.Fatal("client closed while a consumer still holds it")
+	}
+	if err := consumers[2].Close(); err != nil {
 		t.Fatal(err)
 	}
+	if !shared.closedForTest() {
+		t.Fatal("last holder did not close the shared client")
+	}
+	next, err := reg.NewProducer(ctx, common(nil), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := next.(*Producer).source(); got == shared {
+		t.Fatal("a released client was lent again")
+	}
+	if err := next.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func (c *Client) closedForTest() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.closed
 }
 
 func TestRegisterRefusesUnsupportedSemantics(t *testing.T) {
@@ -185,5 +222,27 @@ func TestRegisterRefusesUnsupportedSemantics(t *testing.T) {
 	}
 	if _, err := reg.NewConsumer(ctx, common(func(c *messaging.Config) { c.ConsumerGroup = strings.Repeat("g", 48) }), nil, "facts.a"); err == nil {
 		t.Fatal("group too long for a durable name accepted")
+	}
+}
+
+func TestRegisterAppliesDeliveryPolicyPerTopic(t *testing.T) {
+	t.Parallel()
+	if err := Register(messaging.NewRegistry(), unreachable, nil); err == nil {
+		t.Fatal("nil option accepted")
+	}
+	if err := Register(messaging.NewRegistry(), unreachable, WithDeliveryPolicy(nil)); err == nil {
+		t.Fatal("nil delivery policy accepted")
+	}
+	var topics []string
+	reg := messaging.NewRegistry()
+	if err := Register(reg, unreachable, WithDeliveryPolicy(func(topic string) DeliveryPolicy {
+		topics = append(topics, topic)
+		return DeliveryPolicy{MaxAttempts: 3}
+	})); err != nil {
+		t.Fatal(err)
+	}
+	_, err := reg.NewConsumer(context.Background(), common(nil), nil, "facts.a")
+	if err == nil || !strings.Contains(err.Error(), "discard_exhausted") || len(topics) != 1 || topics[0] != "facts.a" {
+		t.Fatalf("err=%v topics=%v", err, topics)
 	}
 }

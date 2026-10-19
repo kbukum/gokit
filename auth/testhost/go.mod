@@ -123,3 +123,5 @@ replace github.com/kbukum/gokit/server => ../../server
 replace github.com/kbukum/gokit/testutil => ../../testutil
 
 replace github.com/kbukum/gokit/discovery => ../../discovery
+
+replace github.com/kbukum/gokit/database/postgres/testutil => ../../database/postgres/testutil

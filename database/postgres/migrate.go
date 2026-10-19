@@ -26,8 +26,7 @@ type SchemaMigration struct {
 	Options []database.Option
 }
 
-// Migrate opens a short-lived connection with m.Config, applies m.Plan through [ApplySchema], and closes the
-// connection, all within m.SetBudget for each set in the plan.
+// Migrate opens a short-lived connection with m.Config, applies m.Plan through [ApplySchema], and closes the connection, all within m.SetBudget for each set in the plan.
 func Migrate(ctx context.Context, log *logging.Logger, m SchemaMigration) (err error) {
 	if util.IsNil(ctx) || log == nil {
 		return apperrors.InvalidInput("migration", "Context and logger are required")

@@ -13,12 +13,9 @@ import (
 	"github.com/kbukum/gokit/storage"
 )
 
-// Conformance checks the write-once guarantees a backend must keep for publication flows: Create refuses an occupied
-// key without replacing it, an empty object fences its key, Head and Download report exactly what was written, missing
-// objects return storage.ErrNotFound, Delete removes an object, and concurrent creates have exactly one winner.
+// Conformance checks the write-once guarantees a backend must keep for publication flows: Create refuses an occupied key without replacing it, an empty object fences its key, Head and Download report exactly what was written, missing objects return storage.ErrNotFound, Delete removes an object, and concurrent creates have exactly one winner.
 //
-// open returns the backend under test; it may be shared across subtests because each uses its own key prefix. The
-// backend must implement storage.CreateProvider.
+// open returns the backend under test; it may be shared across subtests because each uses its own key prefix. The backend must implement storage.CreateProvider.
 func Conformance(t *testing.T, open func(t *testing.T) storage.Storage) {
 	t.Helper()
 	prefix := func() string { return "conformance/" + strings.ToLower(rand.Text()) + "/" }
@@ -50,7 +47,7 @@ func Conformance(t *testing.T, open func(t *testing.T) storage.Storage) {
 
 	t.Run("head and download report the written bytes", func(t *testing.T) {
 		s, key := open(t), prefix()+"object"
-		data := bytes.Repeat([]byte("runlab\n"), 1024)
+		data := bytes.Repeat([]byte("payload\n"), 1024)
 		if err := storage.Create(t.Context(), s, key, bytes.NewReader(data)); err != nil {
 			t.Fatal(err)
 		}

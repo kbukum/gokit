@@ -21,8 +21,7 @@ import (
 // Call handles a decoded message and returns the method's concrete response type.
 type Call func(context.Context, proto.Message) (proto.Message, error)
 
-// HeaderHook supplies explicitly selected outbound headers or refuses the call.
-// It performs no blocking I/O and never copies untrusted headers indiscriminately.
+// HeaderHook supplies explicitly selected outbound headers or refuses the call. It performs no blocking I/O and never copies untrusted headers indiscriminately.
 type HeaderHook func(context.Context, http.Header) error
 
 // Send invokes a unary method. A nil hook adds no application-specific headers.

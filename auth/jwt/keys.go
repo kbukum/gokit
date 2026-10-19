@@ -19,9 +19,7 @@ const (
 	minRSABits        = 2048
 )
 
-// Key is one verification key and, optionally, its signing half. Exactly one kind of material is set: Secret for HS256,
-// or Signer and/or Public for asymmetric methods. Signer must be the standard library private key type for the method
-// (*rsa.PrivateKey, *ecdsa.PrivateKey or ed25519.PrivateKey). Public is derived from Signer when omitted.
+// Key is one verification key and, optionally, its signing half. Exactly one kind of material is set: Secret for HS256, or Signer and/or Public for asymmetric methods. Signer must be the standard library private key type for the method (*rsa.PrivateKey, *ecdsa.PrivateKey or ed25519.PrivateKey). Public is derived from Signer when omitted.
 type Key struct {
 	// ID is the "kid" header value: 1..128 bytes of [A-Za-z0-9._:-].
 	ID string
@@ -39,9 +37,7 @@ type Key struct {
 	RetireAt time.Time
 }
 
-// KeySet holds the keys a Service verifies with and selects the key it signs with. Rotation publishes the new key, moves
-// signing to it, and keeps the old key with a RetireAt no earlier than the last token it signed expires. An empty
-// SigningKeyID makes the service verify-only.
+// KeySet holds the keys a Service verifies with and selects the key it signs with. Rotation publishes the new key, moves signing to it, and keeps the old key with a RetireAt no earlier than the last token it signed expires. An empty SigningKeyID makes the service verify-only.
 type KeySet struct {
 	SigningKeyID string
 	Keys         []Key
@@ -152,8 +148,7 @@ func keyMaterial(method SigningMethod, key *Key) (verify, signing any, err error
 	return verify, signing, err
 }
 
-// ParseKey reads one PEM block: a PKCS #8 "PRIVATE KEY" yields a signing key, a PKIX "PUBLIC KEY" a verify-only key.
-// Anything after the block other than whitespace is rejected. Method-specific checks run when the key set is built.
+// ParseKey reads one PEM block: a PKCS #8 "PRIVATE KEY" yields a signing key, a PKIX "PUBLIC KEY" a verify-only key. Anything after the block other than whitespace is rejected. Method-specific checks run when the key set is built.
 func ParseKey(id string, data []byte) (Key, error) {
 	invalid := func(cause error) (Key, error) {
 		return Key{}, apperrors.InvalidInput("jwt.key", "Invalid key material").WithCause(cause)

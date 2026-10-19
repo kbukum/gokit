@@ -66,7 +66,3 @@ func TestGinRecovery(t *testing.T) {
 		t.Errorf("expected problem+json, got %q", w.Header().Get("Content-Type"))
 	}
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// logging.go: GinRequestLogger + RequestLogger covers logByStatus/isHealth
-// ─────────────────────────────────────────────────────────────────────────────

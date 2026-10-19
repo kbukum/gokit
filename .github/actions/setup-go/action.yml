@@ -1,0 +1,64 @@
+name: Set up Go
+description: >
+  Install Go and restore the module and build caches. Callers save the cache with
+  actions/cache/save only from main (pushes and the nightly run), so pull requests
+  never write entries and never fill the cache quota.
+
+inputs:
+  go-version:
+    description: Go version to install. Empty uses the go.mod directive.
+    required: false
+    default: ''
+  cache-name:
+    description: Cache namespace, usually the job name; jobs build different packages.
+    required: true
+
+outputs:
+  cache-key:
+    description: Exact cache key for actions/cache/save.
+    value: ${{ steps.key.outputs.key }}
+  cache-paths:
+    description: Newline-separated cache paths for actions/cache/save.
+    value: ${{ steps.key.outputs.paths }}
+  cache-hit:
+    description: Whether the exact key was restored.
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: ${{ inputs.go-version }}
+        go-version-file: ${{ inputs.go-version == '' && 'go.mod' || '' }}
+        cache: false
+
+    - id: key
+      shell: bash
+      env:
+        CACHE_NAME: ${{ inputs.cache-name }}
+        SUMS: ${{ hashFiles('**/go.sum') }}
+      run: |
+        version=$(go env GOVERSION)
+        prefix="go-${RUNNER_OS}-${RUNNER_ARCH}-${CACHE_NAME}-${version}-"
+        # Each main run saves a fresh build cache; restores take the newest
+        # entry with the same dependencies, then any entry for this toolchain.
+        # The run id and attempt keep reruns and nightly runs of one commit from colliding.
+        {
+          echo "prefix=${prefix}"
+          echo "deps=${prefix}${SUMS}-"
+          echo "key=${prefix}${SUMS}-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "paths<<EOF"
+          go env GOMODCACHE
+          go env GOCACHE
+          echo "EOF"
+        } >> "$GITHUB_OUTPUT"
+
+    - id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.key.outputs.paths }}
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: |
+          ${{ steps.key.outputs.deps }}
+          ${{ steps.key.outputs.prefix }}

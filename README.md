@@ -37,7 +37,7 @@ See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
 | infra | Workload, CLI, dataset, benchmarks, testing | `make check-infra` |
 | devtools | Git repository operations | `make check-devtools` |
 
-CI still runs full-workspace validation; on pull requests the `changes` job also publishes an `affected` domain list from `./scripts/affected-domains.sh` so later workflow steps can consume the same domain mapping developers use locally with `make check-<domain>`.
+CI always validates the whole workspace with the same `make` targets; see [Development](#development) for the local commands.
 
 ## Highlights
 
@@ -130,6 +130,8 @@ make lint     # golangci-lint
 make tidy     # go mod tidy for core + sub-modules
 make examples # build + vet the runnable demos in examples/
 ```
+
+CI runs these same targets; see [`CONTRIBUTING.md`](CONTRIBUTING.md#ci) for the full list, including coverage, integration and fuzz.
 
 ## Contributing
 

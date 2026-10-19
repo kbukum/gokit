@@ -1,14 +1,14 @@
 package bootstrap
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/kbukum/gokit/di"
 	"github.com/kbukum/gokit/logging"
 )
 
-// Option configures the App during creation. Options are non-generic
-// so they can be used with any config type.
+// Option configures the App during creation. Options are non-generic so they can be used with any config type.
 type Option func(*appOptions)
 
 // appOptions collects all option values before applying to App.
@@ -17,6 +17,8 @@ type appOptions struct {
 	container       *di.Container
 	gracefulTimeout *time.Duration
 	admin           *AdminConfig
+	adminMetrics    http.Handler
+	adminMetricsSet bool
 	quietSummary    bool
 }
 
@@ -29,9 +31,7 @@ func resolveOptions(opts []Option) *appOptions {
 	return o
 }
 
-// WithLogger sets a borrowed logger for the application. The App never closes it; the caller
-// closes it after the App shuts down. If not set, the App creates a logger from the config's
-// Logging field, owns it, and releases it as the last step of shutdown.
+// WithLogger sets a borrowed logger for the application. The App never closes it; the caller closes it after the App shuts down. If not set, the App creates a logger from the config's Logging field, owns it, and releases it as the last step of shutdown.
 func WithLogger(l *logging.Logger) Option {
 	return func(o *appOptions) {
 		o.logger = l
@@ -45,19 +45,23 @@ func WithGracefulTimeout(d time.Duration) Option {
 	}
 }
 
-// WithContainer sets a custom DI container for the application. Ownership moves to the App,
-// which closes the container during shutdown like its default container.
+// WithContainer sets a custom DI container for the application. Ownership moves to the App, which closes the container during shutdown like its default container.
 func WithContainer(c *di.Container) Option {
 	return func(o *appOptions) {
 		o.container = c
 	}
 }
 
-// WithoutStartupSummary suppresses the startup summary banner. Use it for one-shot
-// task and operator commands run with [App.RunTask], where a "started … shutting
-// down" banner is misleading noise; long-running served apps keep the summary.
+// WithoutStartupSummary suppresses the startup summary banner. Use it for one-shot task and operator commands run with [App.RunTask], where a "started … shutting down" banner is misleading noise; long-running served apps keep the summary.
 func WithoutStartupSummary() Option {
 	return func(o *appOptions) {
 		o.quietSummary = true
+	}
+}
+
+// WithAdminMetrics serves h at the admin listener's /metrics, such as the handler of an instance-owned Prometheus component. It requires [WithAdmin]; NewApp reports a nil handler, or one given without the admin listener, as [ErrInvalidAdminConfig].
+func WithAdminMetrics(h http.Handler) Option {
+	return func(o *appOptions) {
+		o.adminMetrics, o.adminMetricsSet = h, true
 	}
 }

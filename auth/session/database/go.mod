@@ -7,6 +7,7 @@ require (
 	github.com/kbukum/gokit/auth v0.3.0-alpha.1
 	github.com/kbukum/gokit/database v0.3.0-alpha.1
 	github.com/kbukum/gokit/database/postgres v0.3.0-alpha.1
+	github.com/kbukum/gokit/database/postgres/testutil v0.3.0-alpha.1
 	github.com/kbukum/gokit/database/sqlite v0.3.0-alpha.1
 	gorm.io/gorm v1.31.2
 )
@@ -118,6 +119,8 @@ replace github.com/kbukum/gokit/auth => ../..
 replace github.com/kbukum/gokit/database => ../../../database
 
 replace github.com/kbukum/gokit/database/postgres => ../../../database/postgres
+
+replace github.com/kbukum/gokit/database/postgres/testutil => ../../../database/postgres/testutil
 
 replace github.com/kbukum/gokit/database/sqlite => ../../../database/sqlite
 

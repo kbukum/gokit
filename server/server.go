@@ -38,6 +38,7 @@ type Server struct {
 	drained        chan struct{}
 	metricsMW      middleware.Middleware
 	tracingMW      middleware.Middleware
+	authMW         middleware.Middleware
 	conns          freshConns
 }
 
@@ -296,6 +297,9 @@ func (s *Server) ApplyMiddleware() {
 		middleware.InjectLogger(s.log),
 		middleware.Recovery(s.log),
 		middleware.RequestID(),
+	}
+	if s.authMW != nil {
+		stack = append(stack, s.authMW)
 	}
 	if s.tracingMW != nil {
 		// Recover downstream failures with the active context before tracing ends its span.

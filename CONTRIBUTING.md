@@ -3,11 +3,14 @@
 ## Prerequisites
 
 - **Go 1.27.2+**
+- **[Toven](https://github.com/kbukum/toven)** — runs the workspace `make` gates; CI pins the version in `TOVEN_VERSION` (`.github/workflows/ci.yml`). Install with `brew tap kbukum/tap && brew install toven` or see [installation](https://github.com/kbukum/toven/blob/main/docs/installation.md)
+- **Python 3** — CI helper scripts (`scripts/*.py`)
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`
 - **govulncheck** — `go install golang.org/x/vuln/cmd/govulncheck@v1.8.0`
 - **go-licenses** — `go install github.com/google/go-licenses/v2@v2.0.1`
+- **shellcheck** — `make actionlint` uses it to check workflow `run:` scripts, as CI does; `brew install shellcheck` or `apt-get install shellcheck`
 - **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned Homebrew install last
-- **Docker** — required only for `make ci` (local CI via [act](https://github.com/nektos/act))
+- **Docker** — for `make test-integration` and `make ci` (local CI via [act](https://github.com/nektos/act))
 
 ## Getting Started
 
@@ -70,6 +73,9 @@ make test M=cache T=TestGet  # run specific test in cache
 make lint                    # lint all modules
 make lint M=provider         # lint only provider
 make tidy                    # go mod tidy across all modules
+make test-coverage           # race tests + per-module coverage gate (what CI runs)
+make test-integration        # integration tests (Docker required)
+make fuzz FUZZTIME=10s       # fuzz every target; FUZZ_BASE=main for changed modules only
 make update                  # update dependencies and tidy through Toven
 make fmt                     # format all code
 make ci                      # run full CI pipeline locally (requires Docker)
@@ -91,7 +97,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 2. Make your changes
 3. Run `make check` — builds, vets, and tests everything
 4. Run `make lint` — ensure no linter issues
-5. Run `make tidy` — keep go.mod/go.sum clean
+5. Run `make tidy` — keep go.mod/go.sum clean (CI fails on `make tidy-check`)
 6. Submit a pull request
 
 ## Adding a New Core Package
@@ -166,11 +172,19 @@ Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`)
 
 ## CI
 
-CI runs on GitHub Actions and is fully dynamic — modules are discovered at runtime, not hardcoded. Each module gets its own parallel check and lint job. You can run it locally:
+CI runs on GitHub Actions and calls the same `make` targets you run locally, with a pinned Toven release. Modules and fuzz targets are discovered at runtime, never hardcoded.
+
+- **Gate** — Go version, changelog, CI script tests, workflow lint, replace graph, tidiness, and the fuzz plan. Pull requests that only touch docs skip the Go jobs but still validate the changelog.
+- **Check** — `make build vet test-coverage` on the go.mod floor and the latest Go. A module below its coverage floor in `toven.toml` fails the job; coverage also goes to Codecov.
+- **Lint**, **Security** (`make vuln`), **Licenses**, **Integration** (`make test-integration`), and macOS checks for platform-sensitive modules.
+- **Fuzz** — balanced shards; pull requests fuzz the modules their change affects, `main` fuzzes everything, and a nightly run fuzzes longer. Failing inputs are uploaded as artifacts.
+- **CI Status** — the single required check; it fails unless every job that should run succeeded.
+
+You can run it locally:
 
 ```bash
 make ci        # full pipeline (requires Docker + act)
-make ci-test   # test jobs only
+make ci-test   # check jobs only
 make ci-lint   # lint jobs only
 ```
 

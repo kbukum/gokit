@@ -269,7 +269,10 @@ func TestJetStreamRefusesWrongPassword(t *testing.T) {
 
 func TestJetStreamComponentHealthyWhenConnected(t *testing.T) {
 	_, cfg := startJetStream(t)
-	c := jetstream.NewComponent("broker", cfg)
+	c, err := jetstream.NewComponent("broker", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := c.Start(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -283,8 +286,7 @@ func TestJetStreamComponentHealthyWhenConnected(t *testing.T) {
 	}
 }
 
-// A client and a running consumer survive a broker restart: the client reconnects without a limit by default and the
-// consumer declares its durable consumer again once the stream exists.
+// A client and a running consumer survive a broker restart: the client reconnects without a limit by default and the consumer declares its durable consumer again once the stream exists.
 func TestJetStreamSurvivesBrokerRestart(t *testing.T) {
 	t.Parallel()
 	f := startFixture(t)
@@ -345,9 +347,7 @@ func TestJetStreamSurvivesBrokerRestart(t *testing.T) {
 	}
 }
 
-// Each operation works with exactly the rights the package documentation lists. The server refuses a request without
-// the right by not answering it, so a consumer lacking the create right reports bounded timeouts and handles nothing.
-// Each user may only receive replies under its own inbox prefix, so users cannot read each other's replies.
+// Each operation works with exactly the rights the package documentation lists. The server refuses a request without the right by not answering it, so a consumer lacking the create right reports bounded timeouts and handles nothing. Each user may only receive replies under its own inbox prefix, so users cannot read each other's replies.
 func TestJetStreamDocumentedPermissions(t *testing.T) {
 	t.Parallel()
 	inbox := func(name string) string { return `subscribe: ["_INBOX.` + name + `.>"]` }
@@ -379,8 +379,7 @@ func TestJetStreamDocumentedPermissions(t *testing.T) {
 	send(t, p, "facts.a", "evt-1")
 	send(t, p, "facts.b", "evt-2")
 
-	// Without its prefix the producer's acks go to the shared inbox, which it may not read: the broker stores the
-	// fact but the producer never learns it.
+	// Without its prefix the producer's acks go to the shared inbox, which it may not read: the broker stores the fact but the producer never learns it.
 	shared := config("producer")
 	shared.InboxPrefix = ""
 	unprefixed, err := connect(t, shared).Producer(jetstream.ProducerConfig{Stream: "FACTS"})
@@ -427,8 +426,7 @@ func TestJetStreamDocumentedPermissions(t *testing.T) {
 		t.Fatalf("bind: handled=%d err=%v", handled, err)
 	}
 
-	// Without the pull right the server drops each fetch without a reply: the consumer reports it and stays degraded
-	// rather than looking idle.
+	// Without the pull right the server drops each fetch without a reply: the consumer reports it and stays degraded rather than looking idle.
 	puller, err := as("puller").Consumer(jetstream.ConsumerConfig{
 		Stream: "FACTS", Durable: "usage", FilterSubjects: []string{"facts.>"},
 		FetchWait: time.Second, RetryDelay: 50 * time.Millisecond, MaxRetryDelay: 200 * time.Millisecond,
