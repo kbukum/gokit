@@ -5,6 +5,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **server/spa**: `Config.ImmutableDirs` caches every file beneath a fingerprinted build directory, such as Vite's `assets`, for one year, so a runtime-loaded build needs no manifest list.
 - **database/postgres**: `Migrate` opens a short-lived connection with the migration login, applies a `SchemaPlan` and closes it, bounded per migration set.
 - **server/spa**: `NewDir` serves a build directory as a lifecycle component that opens the confined directory on Start, closes it on Stop, reports health, and answers 503 while closed.
 - **llm/testutil**: `OpenAIServer`, an OpenAI-compatible chat-completions HTTP fake that echoes the last user message with usage, streamed or not, counts calls per model, and fails `fail-*` models with 502.

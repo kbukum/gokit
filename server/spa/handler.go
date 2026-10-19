@@ -17,10 +17,11 @@ import (
 
 const maxIndexBytes = 1024 * 1024
 
-// Config identifies API namespaces and fingerprinted files from the build manifest. File paths are relative to the supplied filesystem.
+// Config identifies API namespaces and fingerprinted build output. Paths are relative to the supplied filesystem. ImmutableAssets lists fingerprinted files from the build manifest; ImmutableDirs lists build directories, such as Vite's assets, whose every file is fingerprinted.
 type Config struct {
 	ReservedPrefixes []string
 	ImmutableAssets  []string
+	ImmutableDirs    []string
 	CSP              string
 }
 
@@ -30,6 +31,7 @@ type handler struct {
 	index     []byte
 	reserved  []string
 	immutable map[string]bool
+	dirs      []string
 	policy    *security.NonceCSP
 }
 
@@ -64,6 +66,17 @@ func New(files fs.FS, cfg Config) (http.Handler, error) {
 		}
 		immutable[name] = true
 	}
+	dirs := make([]string, 0, len(cfg.ImmutableDirs))
+	for _, name := range cfg.ImmutableDirs {
+		if !fs.ValidPath(name) || name == "." {
+			return nil, apperrors.InvalidInput("immutableDirs", "immutable directories must be valid non-root build paths")
+		}
+		info, err := fs.Stat(files, name)
+		if err != nil || !info.IsDir() {
+			return nil, apperrors.InvalidInput("immutableDirs", "immutable directory must exist and be a directory").WithCause(err)
+		}
+		dirs = append(dirs, name+"/")
+	}
 	reserved := []string{"/api", "/rpc", "/assets", "/debug", "/metrics", "/health", "/healthz", "/livez", "/readyz", "/info"}
 	for _, prefix := range cfg.ReservedPrefixes {
 		if !strings.HasPrefix(prefix, "/") || prefix == "/" || path.Clean(prefix) != prefix {
@@ -71,7 +84,7 @@ func New(files fs.FS, cfg Config) (http.Handler, error) {
 		}
 		reserved = append(reserved, prefix)
 	}
-	return &handler{files: files, static: http.FileServerFS(files), index: index, reserved: reserved, immutable: immutable, policy: policy}, nil
+	return &handler{files: files, static: http.FileServerFS(files), index: index, reserved: reserved, immutable: immutable, dirs: dirs, policy: policy}, nil
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +102,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info, err := fs.Stat(h.files, name); err == nil && !info.IsDir() {
-		if h.immutable[name] {
+		if h.isImmutable(name) {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
@@ -111,6 +124,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.serveIndex(w, r)
+}
+
+func (h *handler) isImmutable(name string) bool {
+	if h.immutable[name] {
+		return true
+	}
+	for _, dir := range h.dirs {
+		if strings.HasPrefix(name, dir) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *handler) serveIndex(w http.ResponseWriter, r *http.Request) {

@@ -27,6 +27,10 @@ func TestSPARejectsInvalidBuildAndConfiguration(t *testing.T) {
 		{"invalid asset", files, spa.Config{ImmutableAssets: []string{"../private"}}},
 		{"missing asset", files, spa.Config{ImmutableAssets: []string{"missing.js"}}},
 		{"invalid prefix", files, spa.Config{ReservedPrefixes: []string{"/"}}},
+		{"root immutable directory", files, spa.Config{ImmutableDirs: []string{"."}}},
+		{"invalid immutable directory", files, spa.Config{ImmutableDirs: []string{"../assets"}}},
+		{"missing immutable directory", files, spa.Config{ImmutableDirs: []string{"assets"}}},
+		{"file as immutable directory", files, spa.Config{ImmutableDirs: []string{"index.html"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
