@@ -8,7 +8,7 @@ Gin-based HTTP server with h2c support, built-in middleware, health/info endpoin
 
 `Fallback` installs an unmatched-route handler behind middleware and rejects nil handlers with `ErrInvalidRoute`. Module fallbacks also reserve the module's API prefixes.
 
-List fingerprinted files from the build manifest in `ImmutableAssets` to cache them for one year. Other assets revalidate. The index is limited to 1 MiB and uses `no-cache, no-store`. Put `{nonce}` in script/style nonce attributes; each index response gets a fresh cryptographic nonce and a matching strict CSP. `spa.Config.CSP` can replace the policy template, but cannot enable unsafe scripts or weaken its base/object/frame restrictions.
+List fingerprinted files from the build manifest in `ImmutableAssets`, or fingerprinted build directories such as Vite's `assets` in `ImmutableDirs`, to cache them for one year. Other assets revalidate. The index is limited to 1 MiB and uses `no-cache, no-store`. Put `{nonce}` in script/style nonce attributes; each index response gets a fresh cryptographic nonce and a matching strict CSP. `spa.Config.CSP` can replace the policy template, but cannot enable unsafe scripts or weaken its base/object/frame restrictions.
 
 Diagnostics are never registered by `RegisterDefaultEndpoints`. Metrics, pprof and the lifecycle-aware `/readyz` belong to the App-owned admin listener: see `bootstrap.WithAdmin`.
 

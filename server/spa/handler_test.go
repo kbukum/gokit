@@ -52,3 +52,34 @@ func TestSPARoutingCacheAndNonce(t *testing.T) {
 		})
 	}
 }
+
+func TestSPAImmutableDirsCacheEveryFileBeneathThem(t *testing.T) {
+	t.Parallel()
+	handler, err := spa.New(fstest.MapFS{
+		"index.html":                 {Data: []byte(`<html></html>`)},
+		"assets/app.abcdef12.js":     {Data: []byte(`app`)},
+		"assets/chunks/view.12ab.js": {Data: []byte(`view`)},
+		"assets-other/plain.js":      {Data: []byte(`plain`)},
+		"favicon.svg":                {Data: []byte(`<svg/>`)},
+	}, spa.Config{ImmutableDirs: []string{"assets"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, cache := range map[string]string{
+		"/assets/app.abcdef12.js":     "public, max-age=31536000, immutable",
+		"/assets/chunks/view.12ab.js": "public, max-age=31536000, immutable",
+		"/assets-other/plain.js":      "no-cache",
+		"/favicon.svg":                "no-cache",
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, http.NoBody))
+		if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != cache {
+			t.Errorf("%s: %d, cache %q", path, response.Code, response.Header().Get("Cache-Control"))
+		}
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/assets/missing.js", http.NoBody))
+	if response.Code != http.StatusNotFound || response.Header().Get("Cache-Control") != "" {
+		t.Fatalf("missing immutable file: %d, cache %q", response.Code, response.Header().Get("Cache-Control"))
+	}
+}
