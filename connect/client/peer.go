@@ -5,12 +5,12 @@ import (
 	"errors"
 	"net/http"
 
+	"connectrpc.com/connect"
+
 	"github.com/kbukum/gokit/component"
 )
 
-// Peer owns one peer's HTTP client and the [Availability] its calls report, under a component lifecycle. Health is
-// what real calls last observed, so a peer is never probed; Stop releases idle connections once the callers have
-// drained. Build every Connect client for the peer from HTTPClient with Availability installed.
+// Peer owns one peer's HTTP client and the [Availability] its calls report, under a component lifecycle. Health is what real calls last observed, so a peer is never probed; Stop releases idle connections once the callers have drained. Build every Connect client for the peer from HTTPClient with [Peer.Interceptors] installed.
 type Peer struct {
 	name         string
 	http         *http.Client
@@ -32,6 +32,11 @@ func (p *Peer) HTTPClient() *http.Client { return p.http }
 
 // Availability is the record every client for this peer must report into.
 func (p *Peer) Availability() *Availability { return p.availability }
+
+// Interceptors returns the peer's availability followed by the requested timeouts; see [Interceptors].
+func (p *Peer) Interceptors(opts ...InterceptorOption) ([]connect.Interceptor, error) {
+	return Interceptors(append([]InterceptorOption{WithAvailability(p.availability)}, opts...)...)
+}
 
 func (p *Peer) Name() string                                { return p.name }
 func (*Peer) Start(context.Context) error                   { return nil }

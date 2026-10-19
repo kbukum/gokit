@@ -12,8 +12,7 @@ type Registered struct{ gojwt.RegisteredClaims }
 
 func (r *Registered) registered() *gojwt.RegisteredClaims { return &r.RegisteredClaims }
 
-// Claims is implemented by pointers to structs that embed [Registered]. The service fills and checks the registered
-// claims through it without reflection.
+// Claims is implemented by pointers to structs that embed [Registered]. The service fills and checks the registered claims through it without reflection.
 type Claims interface {
 	comparable
 	gojwt.Claims

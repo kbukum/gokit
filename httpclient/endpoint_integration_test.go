@@ -94,10 +94,10 @@ func TestEndpointPolicyDialsValidatedAddressAndPreservesTLSHostname(t *testing.T
 	if response, err := client.Do(t.Context(), httpclient.Request{Method: http.MethodPost, Path: "/model", Auth: httpclient.BearerAuth("provider-sentinel")}); err != nil || response.StatusCode != http.StatusOK {
 		t.Fatalf("validated provider connection failed: %v", err)
 	}
-	if serverName.Load() != "model.example" || dns.calls.Load() < 2 {
+	if serverName.Load() != "model.example" || dns.calls.Load() != 1 {
 		t.Fatal("numeric dialing bypassed hostname verification/SNI or connection-time DNS checks")
 	}
-	if _, err := client.Do(t.Context(), httpclient.Request{Method: http.MethodGet, Path: "/model", Query: map[string]string{"secret": "must-not-dispatch"}}); err == nil {
-		t.Fatal("query credentials bypassed request policy")
+	if _, err := client.Do(t.Context(), httpclient.Request{Method: http.MethodGet, Path: "/model?secret=must-not-dispatch"}); err == nil {
+		t.Fatal("raw query text bypassed request policy")
 	}
 }

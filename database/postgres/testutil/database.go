@@ -26,8 +26,7 @@ const (
 	scramIterations  = 4096
 )
 
-// Database is one isolated database of a Fixture. PUBLIC holds no CONNECT, TEMPORARY or public-schema CREATE right in
-// it, so only role pairs created here can use it. Close drops it and its role pairs.
+// Database is one isolated database of a Fixture. PUBLIC holds no CONNECT, TEMPORARY or public-schema CREATE right in it, so only role pairs created here can use it. Close drops it and its role pairs.
 type Database struct {
 	fixture *Fixture
 	name    string
@@ -45,15 +44,12 @@ type RolePairConfig struct {
 	Schema string
 }
 
-// RolePair is a fresh least-privilege login pair: Owner may create the schema and migrate it, Runtime may only connect.
-// Neither has role attributes, TEMPORARY or membership in another role. Both carry ephemeral credentials that must
-// not be logged or retained. The pair is dropped with its Database.
+// RolePair is a fresh least-privilege login pair: Owner may create the schema and migrate it, Runtime may only connect. Neither has role attributes, TEMPORARY or membership in another role. Both carry ephemeral credentials that must not be logged or retained. The pair is dropped with its Database.
 type RolePair struct {
 	Owner, Runtime database.ConnParams
 }
 
-// NewDatabase creates an isolated database within the 10-second operation budget. A database created while the fixture
-// closes is rolled back.
+// NewDatabase creates an isolated database within the 10-second operation budget. A database created while the fixture closes is rolled back.
 func (f *Fixture) NewDatabase(ctx context.Context) (*Database, error) {
 	if util.IsNil(ctx) {
 		return nil, apperrors.InvalidInput("context", "Context is required")
@@ -66,7 +62,7 @@ func (f *Fixture) NewDatabase(ctx context.Context) (*Database, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	if err := execute(ctx, admin, "CREATE DATABASE "+quote(name)); err != nil {
-		return nil, database.Failure(err)
+		return nil, database.WrapFailure(err)
 	}
 	db := &Database{fixture: f, name: name, admin: admin.Copy()}
 	db.admin.Database = name
@@ -78,7 +74,7 @@ func (f *Fixture) NewDatabase(ctx context.Context) (*Database, error) {
 		setupErr = f.track(db)
 	}
 	if setupErr != nil {
-		return nil, errors.Join(database.Failure(setupErr), db.Close(context.WithoutCancel(ctx)))
+		return nil, errors.Join(database.WrapFailure(setupErr), db.Close(context.WithoutCancel(ctx)))
 	}
 	return db, nil
 }
@@ -86,12 +82,10 @@ func (f *Fixture) NewDatabase(ctx context.Context) (*Database, error) {
 // Name is the isolated database name.
 func (d *Database) Name() string { return d.name }
 
-// AdminConfig returns an owned superuser connection snapshot for this database, for test-only provisioning and
-// assertions. It must not be logged.
+// AdminConfig returns an owned superuser connection snapshot for this database, for test-only provisioning and assertions. It must not be logged.
 func (d *Database) AdminConfig() *pgx.ConnConfig { return d.admin.Copy() }
 
-// NewRolePair creates a fresh owner and runtime login within the 10-second budget. Passwords are random and stored as
-// client-computed SCRAM-SHA-256 verifiers, so no plaintext password reaches the server.
+// NewRolePair creates a fresh owner and runtime login within the 10-second budget. Passwords are random and stored as client-computed SCRAM-SHA-256 verifiers, so no plaintext password reaches the server.
 func (d *Database) NewRolePair(ctx context.Context, cfg RolePairConfig) (RolePair, error) {
 	if util.IsNil(ctx) {
 		return RolePair{}, apperrors.InvalidInput("context", "Context is required")
@@ -128,7 +122,7 @@ func (d *Database) NewRolePair(ctx context.Context, cfg RolePairConfig) (RolePai
 		"GRANT CONNECT ON DATABASE "+quote(d.name)+" TO "+quote(runtime),
 	)
 	if err != nil {
-		return RolePair{}, database.Failure(err)
+		return RolePair{}, database.WrapFailure(err)
 	}
 	params := func(user, password string) database.ConnParams {
 		p := d.fixture.Params
@@ -140,8 +134,7 @@ func (d *Database) NewRolePair(ctx context.Context, cfg RolePairConfig) (RolePai
 	return RolePair{Owner: params(owner, ownerPassword), Runtime: params(runtime, runtimePassword)}, nil
 }
 
-// Close terminates sessions, drops the database and then its roles with a fresh 10-second budget, even after
-// cancellation. A failed Close may be retried; after success, repeated calls return nil.
+// Close terminates sessions, drops the database and then its roles with a fresh 10-second budget, even after cancellation. A failed Close may be retried; after success, repeated calls return nil.
 func (d *Database) Close(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -158,7 +151,7 @@ func (d *Database) Close(ctx context.Context) error {
 		statements = append(statements, "DROP ROLE IF EXISTS "+quote(role))
 	}
 	if err := execute(ctx, admin, statements...); err != nil {
-		d.result = fmt.Errorf("drop PostgreSQL fixture database: %w", database.Failure(err))
+		d.result = fmt.Errorf("drop PostgreSQL fixture database: %w", database.WrapFailure(err))
 		return d.result
 	}
 	d.done, d.result = true, nil

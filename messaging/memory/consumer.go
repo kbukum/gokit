@@ -25,7 +25,7 @@ type InMemoryConsumer struct {
 
 var _ messaging.Consumer = (*InMemoryConsumer)(nil)
 
-// Consume blocks reading from the broker channel, calling handler for each message.
+// Consume blocks reading from the broker channel, calling handler for each message. With CommitAfterHandlerSuccess, a failed message is kept for the next Consume unless its error wraps [messaging.ErrTerminal].
 func (c *InMemoryConsumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
 	if !c.consuming.CompareAndSwap(false, true) {
 		return apperrors.New(apperrors.ErrCodeConflict, "consumer is already running")
@@ -37,7 +37,7 @@ func (c *InMemoryConsumer) Consume(ctx context.Context, handler messaging.Messag
 			return err
 		}
 		if err := handler(ctx, msg); err != nil {
-			if c.commitStrategy == messaging.CommitAfterHandlerSuccess {
+			if c.commitStrategy == messaging.CommitAfterHandlerSuccess && !errors.Is(err, messaging.ErrTerminal) {
 				return errors.Join(err, c.retain(msg))
 			}
 			return err

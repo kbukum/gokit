@@ -144,9 +144,7 @@ func (m *Manager) ValidateKey(ctx context.Context, plainKey string, requiredScop
 	return m.check(candidate, err, requiredScopes)
 }
 
-// ValidateKeyID applies the same activity, expiry, grace and scope rules as [Manager.ValidateKey] to a key id. The
-// caller proves possession some other way, for example a delegation issued after ValidateKey succeeded, so it is for
-// trusted callers only.
+// ValidateKeyID applies the same activity, expiry, grace and scope rules as [Manager.ValidateKey] to a key id. The caller proves possession some other way, for example a delegation issued after ValidateKey succeeded, so it is for trusted callers only.
 func (m *Manager) ValidateKeyID(ctx context.Context, id string, requiredScopes ...string) (*Key, error) {
 	if id == "" || len(id) > maxKeyIDBytes {
 		return nil, auth.Failure("INVALID_CREDENTIAL")
@@ -193,8 +191,7 @@ func storeUnavailable(err error) error {
 	return apperrors.New(apperrors.ErrCodeServiceUnavailable, "Authentication store unavailable").WithReason("AUTH_STORE_UNAVAILABLE").WithCause(err)
 }
 
-// Authenticate maps persisted metadata to the shared principal, whose Reference is the key id. Header keys need no
-// CSRF.
+// Authenticate maps persisted metadata to the shared principal, whose Reference is the key id. Header keys need no CSRF.
 func (m *Manager) Authenticate(r *http.Request) (auth.Principal, error) {
 	presented, err := auth.ParseCredentials(r)
 	if err != nil {

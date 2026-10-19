@@ -42,7 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TOVEN_VERSION: v0.1.0-alpha.10
+  TOVEN_VERSION: v0.1.0-alpha.14
 
 jobs:
   # Mutation-free rehearsal: the exact plan a real publish would use, preserved
@@ -71,7 +71,7 @@ jobs:
         id: toven
         # Pinned by immutable commit SHA; `version` independently pins the
         # installed binary (dual pin, both required). Same pin as ci.yml.
-        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
         with:
           version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"
@@ -134,7 +134,7 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
         with:
           version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"

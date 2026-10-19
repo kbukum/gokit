@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,7 +58,8 @@ func TestConsumerAcksSuccessAndNaksFailureWithBackoff(t *testing.T) {
 		!m.Timestamp.Equal(time.Unix(1, 0)) || string(m.Payload) != "payload" {
 		t.Fatalf("messages = %+v", seen)
 	}
-	if len(reported) != 3 {
+	// Handler failures stay with the handler; only the bind and metadata failures are adapter failures.
+	if len(reported) != 2 {
 		t.Fatalf("reported = %v", reported)
 	}
 	cc := fake.consumer
@@ -142,10 +144,74 @@ func TestConsumerTerminatesTerminalFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = c.Consume(ctx, func(ctx context.Context, _ messaging.Message) error {
-		return fmt.Errorf("unreadable: %w", ErrTerminal)
+		return fmt.Errorf("unreadable: %w", messaging.ErrTerminal)
 	})
 	if !poison.termed || poison.nakDelay != 0 || poison.acked {
 		t.Fatalf("poison termed=%v nak=%v acked=%v", poison.termed, poison.nakDelay, poison.acked)
+	}
+}
+
+func TestConsumerHandsExhaustedAndTerminalMessagesToDeadLetter(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	exhausted, poison, retried, lost := &fakeMsg{seq: 1, delivered: 3}, &fakeMsg{seq: 2, delivered: 1}, &fakeMsg{seq: 3, delivered: 2}, &fakeMsg{seq: 4, delivered: 1}
+	pull := &fakeConsumer{fetches: []func() (natsjs.MessageBatch, error){
+		func() (natsjs.MessageBatch, error) { return batchOf(nil, exhausted, poison, retried, lost), nil },
+		func() (natsjs.MessageBatch, error) { cancel(); return batchOf(nil), nil },
+	}}
+	var reported []error
+	var dead []int64
+	cfg := consumerConfig(func(err error) { reported = append(reported, err) })
+	cfg.Delivery.MaxAttempts = 3
+	dlqDown := errors.New("dlq down")
+	cfg.Delivery.OnDeadLetter = func(_ context.Context, m messaging.Message, cause error) error {
+		if m.Offset == 4 {
+			return dlqDown
+		}
+		dead = append(dead, m.Offset)
+		return nil
+	}
+	c, err := testClient(&fakeJS{pull: pull}).Consumer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Consume(ctx, func(_ context.Context, m messaging.Message) error {
+		if m.Offset == 2 || m.Offset == 4 {
+			return fmt.Errorf("unreadable: %w", messaging.ErrTerminal)
+		}
+		return errors.New("database down")
+	})
+	if !exhausted.termed || !poison.termed || retried.termed || retried.nakDelay == 0 || lost.termed || lost.nakDelay == 0 {
+		t.Fatalf("termed exhausted=%v poison=%v retried=%v lost=%v", exhausted.termed, poison.termed, retried.termed, lost.termed)
+	}
+	if len(dead) != 2 || dead[0] != 1 || dead[1] != 2 {
+		t.Fatalf("dead-lettered = %v", dead)
+	}
+	if len(reported) != 1 || !errors.Is(reported[0], dlqDown) {
+		t.Fatalf("reported = %v", reported)
+	}
+}
+
+func TestConsumerDiscardsExhaustedMessageOnlyWhenAsked(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	last := &fakeMsg{seq: 1, delivered: 2}
+	pull := &fakeConsumer{fetches: []func() (natsjs.MessageBatch, error){
+		func() (natsjs.MessageBatch, error) { return batchOf(nil, last), nil },
+		func() (natsjs.MessageBatch, error) { cancel(); return batchOf(nil), nil },
+	}}
+	var reported []error
+	cfg := consumerConfig(func(err error) { reported = append(reported, err) })
+	cfg.Delivery = DeliveryPolicy{MaxAttempts: 2, DiscardExhausted: true}
+	c, err := testClient(&fakeJS{pull: pull}).Consumer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Consume(ctx, func(context.Context, messaging.Message) error { return errors.New("database down") })
+	if !last.termed || len(reported) != 1 || !errors.Is(reported[0], ErrDeliveryLimit) {
+		t.Fatalf("termed=%v reported=%v", last.termed, reported)
 	}
 }
 
@@ -188,6 +254,81 @@ func TestConsumerBindsWithoutDeclaring(t *testing.T) {
 	}
 	if fake.looked != "usage" || fake.boundTo != "FACTS" || fake.consumer.Durable != "" {
 		t.Fatalf("looked up %q on %q, declared %+v", fake.looked, fake.boundTo, fake.consumer)
+	}
+}
+
+// A message delivered again after its last attempt failed and its hand-off failed retries only the hand-off.
+func TestConsumerRetriesOnlyTheHandOffAfterTheLastAttempt(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	again := &fakeMsg{seq: 1, delivered: 3}
+	pull := &fakeConsumer{fetches: []func() (natsjs.MessageBatch, error){
+		func() (natsjs.MessageBatch, error) { return batchOf(nil, again), nil },
+		func() (natsjs.MessageBatch, error) { cancel(); return batchOf(nil), nil },
+	}}
+	cfg := consumerConfig(func(error) {})
+	cfg.Delivery.MaxAttempts = 2
+	var causes []error
+	cfg.Delivery.OnDeadLetter = func(_ context.Context, _ messaging.Message, cause error) error {
+		causes = append(causes, cause)
+		return nil
+	}
+	c, err := testClient(&fakeJS{pull: pull}).Consumer(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handled := 0
+	_ = c.Consume(ctx, func(context.Context, messaging.Message) error { handled++; return nil })
+	if handled != 0 || len(causes) != 1 || !errors.Is(causes[0], ErrDeliveryLimit) || !again.termed {
+		t.Fatalf("handled=%d causes=%v termed=%v", handled, causes, again.termed)
+	}
+}
+
+func TestConsumerRetriesUntilSuccessByDefault(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	late := &fakeMsg{seq: 1, delivered: 1000}
+	pull := &fakeConsumer{fetches: []func() (natsjs.MessageBatch, error){
+		func() (natsjs.MessageBatch, error) { return batchOf(nil, late), nil },
+		func() (natsjs.MessageBatch, error) { cancel(); return batchOf(nil), nil },
+	}}
+	var reported []error
+	c, err := testClient(&fakeJS{pull: pull}).Consumer(consumerConfig(func(err error) { reported = append(reported, err) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = c.Consume(ctx, func(context.Context, messaging.Message) error { return errors.New("database down") })
+	if late.termed || late.nakDelay == 0 || len(reported) != 0 {
+		t.Fatalf("termed=%v nak=%v reported=%v", late.termed, late.nakDelay, reported)
+	}
+}
+
+func TestConsumerRefusesUnsafeBoundConsumer(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		server natsjs.ConsumerConfig
+		want   string
+	}{
+		"delivery limit": {server: natsjs.ConsumerConfig{AckPolicy: natsjs.AckExplicitPolicy, MaxDeliver: 20}, want: "max_deliver 20"},
+		"ack all":        {server: natsjs.ConsumerConfig{AckPolicy: natsjs.AckAllPolicy, MaxDeliver: -1}, want: "ack policy"},
+		"ack none":       {server: natsjs.ConsumerConfig{AckPolicy: natsjs.AckNonePolicy, MaxDeliver: -1}, want: "ack policy"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			pull := &fakeConsumer{info: natsjs.ConsumerInfo{Config: tc.server}}
+			cfg := consumerConfig(func(error) {})
+			cfg.Bind = true
+			c, err := testClient(&fakeJS{pull: pull}).Consumer(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = c.Consume(context.Background(), func(context.Context, messaging.Message) error { return nil })
+			if !errors.Is(err, ErrUnsafeBoundConsumer) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Consume = %v", err)
+			}
+		})
 	}
 }
 
@@ -330,8 +471,7 @@ func TestJetStreamRequestsAreBounded(t *testing.T) {
 	}
 }
 
-// A consumer that owns its stream declares it, creating or updating it, each time it binds: first, and again after a
-// failed fetch, since the stream may be gone after a server restart.
+// A consumer that owns its stream declares it, creating or updating it, each time it binds: first, and again after a failed fetch, since the stream may be gone after a server restart.
 func TestConsumerDeclaresItsStreamOnEveryBind(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -406,8 +546,7 @@ func TestConsumerStatusFollowsFetches(t *testing.T) {
 	}
 }
 
-// A fetch the server never completes, such as a pull request a missing permission drops, ends at the fetch deadline
-// rather than with the server's idle reply. It is a failure that keeps the binding, not an empty fetch.
+// A fetch the server never completes, such as a pull request a missing permission drops, ends at the fetch deadline rather than with the server's idle reply. It is a failure that keeps the binding, not an empty fetch.
 func TestConsumerTreatsAnIncompleteFetchAsAFailure(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())

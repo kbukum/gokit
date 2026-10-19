@@ -3,9 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	apperrors "github.com/kbukum/gokit/errors"
 	"github.com/kbukum/gokit/server/httpx"
-	"github.com/kbukum/gokit/util"
 )
 
 // Authenticator verifies the complete HTTP request and returns a typed identity. Implementations own credential precedence, cookie duplication, CSRF, expiry, and revocation checks. present is false only when the request genuinely carries no credential; any presented but malformed, ambiguous, or invalid credential must return an error.
@@ -34,45 +32,13 @@ func WithAuthErrorWriter(writer AuthErrorWriter) HTTPAuthOption {
 	return func(o *httpAuthOptions) { o.writeError = writer }
 }
 
-// HTTPAuth authenticates before dispatch to HTTP, Connect, or SSE handlers. Apply it around the protected handler, not inside a unary interceptor: the original method, headers, cookies, and request context are authoritative.
+// HTTPAuth authenticates before dispatch to HTTP, Connect, or SSE handlers. Apply it around the protected handler, not inside a unary interceptor: the original method, headers, cookies, and request context are authoritative. To let the same authentication decide trace trust, use [NewAuthStages] instead.
 func HTTPAuth[T any](auth Authenticator[T], setClaims ClaimsSetter[T], opts ...HTTPAuthOption) (Middleware, error) {
-	if util.IsNil(auth) {
-		return nil, apperrors.InvalidInput("authenticator", "a non-nil Authenticator is required")
+	stages, err := NewAuthStages(auth, setClaims, opts...)
+	if err != nil {
+		return nil, err
 	}
-	if setClaims == nil {
-		return nil, apperrors.InvalidInput("setClaims", "a non-nil ClaimsSetter is required")
-	}
-	o := &httpAuthOptions{writeError: WriteProblemDetails}
-	for _, option := range opts {
-		if option == nil {
-			return nil, apperrors.InvalidInput("options", "authentication options must not be nil")
-		}
-		option(o)
-	}
-	if o.writeError == nil {
-		return nil, apperrors.InvalidInput("writeError", "a non-nil AuthErrorWriter is required")
-	}
-	if o.missing != RejectMissing && o.missing != AcceptMissing {
-		return nil, apperrors.InvalidInput("missing", "unknown missing-credential policy")
-	}
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			identity, present, err := auth.Authenticate(r)
-			if err == nil && !present && o.missing == AcceptMissing {
-				next.ServeHTTP(w, r)
-				return
-			}
-			if err == nil && (!present || util.IsNil(identity)) {
-				err = apperrors.Unauthorized("")
-			}
-			if err != nil {
-				w.Header().Set("Cache-Control", "no-store")
-				o.writeError(w, r, err)
-				return
-			}
-			next.ServeHTTP(w, r.WithContext(setClaims(r.Context(), identity)))
-		})
-	}, nil
+	return stages.Enforce, nil
 }
 
 // WriteProblemDetails adapts [httpx.WriteProblemDetails] to [AuthErrorWriter]. Causes and unknown errors never reach the client; nil, invalid and unencodable errors become Internal.

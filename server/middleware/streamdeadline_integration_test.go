@@ -14,8 +14,7 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// The server's WriteTimeout is an absolute per-stream deadline under HTTP/2; the middleware lets a stream that keeps
-// writing outlive it.
+// The server's WriteTimeout is an absolute per-stream deadline under HTTP/2; the middleware lets a stream that keeps writing outlive it.
 func TestStreamWriteDeadlineOutlivesServerWriteTimeoutOverHTTP2(t *testing.T) {
 	const writeTimeout = 150 * time.Millisecond
 	stream := func(w http.ResponseWriter, r *http.Request) {

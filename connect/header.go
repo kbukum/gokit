@@ -10,8 +10,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// HeaderInterceptor returns a client interceptor that sets name to value on every unary and streaming call, replacing
-// any value the caller set, such as a service key. It changes nothing on handlers.
+// HeaderInterceptor returns a client interceptor that sets name to value on every unary and streaming call, replacing any value the caller set, such as a service key. It changes nothing on handlers.
 func HeaderInterceptor(name, value string) (connectrpc.Interceptor, error) {
 	if !httpguts.ValidHeaderFieldName(name) {
 		return nil, apperrors.InvalidInput("name", "must be a valid header name")

@@ -8,11 +8,15 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **database/postgres**: `Migrate` opens a short-lived connection with the migration login, applies a `SchemaPlan` and closes it, bounded per migration set.
 - **server/spa**: `NewDir` serves a build directory as a lifecycle component that opens the confined directory on Start, closes it on Stop, reports health, and answers 503 while closed.
 - **llm/testutil**: `OpenAIServer`, an OpenAI-compatible chat-completions HTTP fake that echoes the last user message with usage, streamed or not, counts calls per model, and fails `fail-*` models with 502.
+- **server / server/middleware**: `NewAuthStages` and `Server.Authenticate` authenticate a request once, before tracing, so the same result decides access and whether to continue the caller's trace.
+- **httpclient**: `Config.MaxConnsPerHost` caps connections per host, separate from the endpoint policy. The README lists every call budget.
+- **tooling**: `make consumer-check CONSUMER=<dir>` builds and vets a consumer module against this checkout.
+- **tooling**: `make fuzz`, `make fuzz-plan`, `make vuln`, `make licenses`, `make tidy-check` and `make actionlint` run the same checks as CI.
 - **connect**: `HeaderInterceptor` sets a fixed header, such as a service key, on every unary and streaming client call and replaces a caller's value.
 - **resilience**: `ConcurrencyLimit` bounds concurrent work overall and per key without waiting; a slot is taken first and bound to its key once known, such as after authentication.
 - **observability**: `ObserveGauges` registers observable gauges built with `Int64Gauge` and `Float64Gauge` under one callback, so values that belong together come from one snapshot.
 - **util**: `AfterFunc` runs a function after a delay on a `TimerClock`; its stop prevents the call or waits for it to return, so the function never runs after stop.
-- **messaging/nats/jetstream**: a durable, at-least-once adapter that implements the messaging producer and consumer ports and registers as `jetstream`. It publishes with server acknowledgement and deduplication IDs, consumes through durable pull consumers with explicit acknowledgement and delayed redelivery, declares file-backed streams with explicit limits, and reads bounded replay pages from a sequence or time. It reconnects without a limit by default, bounds every API request, retries only idempotent transient failures, and terminates messages whose handler returns `ErrTerminal`. A consumer that owns its stream can set `Declare` to create or update it each time it binds, so its limits follow the configuration and a stream lost in a restart comes back. `Consumer.ConsumeStatus` reports whether it is receiving; a fetch the server does not complete by its deadline, such as one a missing permission drops, is a retryable `ErrFetchIncomplete`, not an empty fetch. `ErrorClassifier` treats JetStream rejections that depend on server state (limits, placement, a consumer created or deleted concurrently) as retryable. `NewComponent` owns the client in a component registry, reports degraded health while the broker is unreachable and unhealthy once the connection closed for good, and drains within the stop context.
+- **messaging/nats/jetstream**: a durable, at-least-once adapter registered as `jetstream`. Publishes wait for the server's acknowledgement and deduplicate by message ID. Durable pull consumers acknowledge after the handler succeeds, redeliver with backoff, and never drop a message by default: a `DeliveryPolicy` with `MaxAttempts` must say whether to hand off (`OnDeadLetter`) or discard. A failed hand-off is retried without running the handler again, and `Bind` refuses a consumer that could lose a failed message. It also declares streams, replays retained messages in bounded pages, and reports receive status. `NewComponent` owns the client in a component registry; registry producers and consumers share one connection per request timeout, and a slow connect never blocks other timeouts or releases.
 - **messaging/nats**: `Connect` opens a validated connection; `Config.PasswordFile` reads the password from a mounted secret at every connect, so a rotated password applies on reconnect. `Config.InboxPrefix` gives a client its own reply inbox, and `Config.UserInbox` derives it as `_INBOX.<username>`, so a broker user can be limited to its own replies. `Config.Validate` rejects a URL with a path, query or fragment, and a CA file with a cleartext URL.
 - **messaging/nats/testutil**: `StartJetStream` runs a pinned, authenticated, hardened single-node JetStream server for integration tests; `WithUser` adds a user with limited rights and `Restart` restarts it on the same address.
 - **database/testutil**: `InjectFaults` fails a chosen SQL statement on a gorm database, and `Faults.EveryStatement` fails each statement of an operation in turn, to prove that every failure is reported and rolled back.
@@ -24,7 +28,9 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **storage/testutil**: `Conformance` checks write-once create, empty-object fencing, exact reads, not-found identity, delete and single-winner concurrent creates; local, in-memory and real S3 backends pass it.
 - **database/postgres/testutil**: `Connect` and `Open` let many test binaries share one PostgreSQL server; connected fixtures drop only their own databases and roles, and a configured server never falls back to a container.
 - **connect/client**: `Peer` owns one peer's HTTP client and availability as a lifecycle component, reporting health from real calls and releasing idle connections on stop.
-- **connect/client**: enforced redirect refusal for injected HTTP clients without mutating their settings or transferring transport ownership.
+- **connect/client**: `Interceptors` builds availability and timeout interceptors in the right order. Each part is optional, so a client can use timeouts alone. `Peer.Interceptors` adds the peer's availability.
+- **messaging**: `ErrTerminal` marks a handler failure that redelivery cannot fix; adapters stop redelivering it and retry middleware stops retrying it.
+- **security**: `WithEndpointDialBudget` sets how long an endpoint policy may spend dialing; the dial tries every resolved address.
 - **storage/s3/testutil**: `WithImage` runs an immutable alternate artifact, such as a source-built server, without publisher-image fallback; shell-free HTTP readiness and a namespace-sharing listener probe support distroless images.
 - **database/postgres/testutil / storage/s3/testutil**: owned container identities support private-network consumers without host-gateway routing.
 - **storage**: atomic create-if-absent through `Create`/`CreateProvider` with a portable `ErrExists` identity; S3 (`If-None-Match`), local and in-memory backends implement it, and the component exposes `Create` and `Head`.
@@ -34,32 +40,30 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **storage/s3**: mounted credential files and authenticated bucket-readiness checks; a separate real S3 fixture verifies scoped access, hardening and process-crash persistence.
 - **encryption**: caller-supplied authenticated bindings prevent ciphertext from being moved between tenant, record or version contexts.
 - **dataset/record**: cancellable JSONL parsing with explicit byte/record limits and refusal of ambiguous top-level fields or trailing values.
-- **bootstrap**: typed module composition, dependency validation, named listeners, and module-aware operator tasks.
-- **bootstrap**: application-owned health, metrics, and diagnostics endpoints, including opt-in container probe access.
+- **bootstrap**: typed module composition, dependency validation, named listeners, module-aware operator tasks, and application-owned health, metrics and diagnostics endpoints.
 - **bootstrap/testutil**: module lifecycle, port capture, remote-contract validation, and shared implementation tests.
 - **observability**: instance-owned tracing with bounded export, explicit provider injection, and lifecycle-managed shutdown.
 - **connect / httpclient / server**: HTTP and RPC tracing, correlated errors, and typed unary forwarding.
-- **auth/session**: server-side browser sessions with rotation, cross-instance revocation, CSRF protection, and logout-driven stream cancellation.
-- **auth/session**: recent-authentication timestamps, trusted session references, batch lookup, and transactional subject revocation.
+- **auth/session**: server-side browser sessions with rotation, cross-instance revocation, CSRF protection, logout-driven stream cancellation, recent-authentication timestamps and batch lookup.
 - **auth/lease**: bounded, renewable authorization leases for long-lived work.
 - **auth/password**: bounded password workers and verification-cost limits.
 - **auth/testhost / auth/apikey/apikeytest**: HTTPS integration fixtures and shared API-key store contracts.
-- **cache / resilience**: bounded cache eviction, keyed rate limiting, and bulkhead queues with injected clocks.
-- **resilience**: lifecycle ownership for keyed rate limiters.
+- **cache / resilience**: bounded cache eviction, keyed rate limiting with lifecycle ownership, and bulkhead queues with injected clocks.
 - **database/postgres**: PostgreSQL adapter, least-privilege schema provisioning, readiness audits, and isolated database fixtures.
 - **database/migration**: schema-qualified migration sets, exact-version application, and coordinated migration sessions.
 - **database/repository**: partition-scoped repositories with shared SQLite and PostgreSQL contracts.
 - **database**: named components with initialization and readiness hooks.
-- **connect/client**: peer availability tracking, transport-failure classification, and unary and first-message timeouts.
+- **connect/client**: peer availability tracking, transport-failure classification, unary and first-message timeouts, and redirect refusal for injected HTTP clients.
 - **fs**: atomic exclusive file creation, bounded inter-process locks, and bounded secret-file reads.
 - **util**: shared typed-nil dependency validation.
 
 ### Changed
+- **ci**: every job runs the same `make` targets as local development through a pinned Toven. Coverage is measured per module in parallel under `-race` and blocks below each module's floor; test-support modules are measured only, and modules still below the floor are held at today's level. Fuzz targets run as balanced parallel shards, only for affected modules on pull requests, with a nightly longer run; integration runs only the modules that have integration tests; Go caches and each fuzz shard's corpus are saved from `main` only. Every job has a time limit, a fuzz time must be positive and fit a shard's budget, and a failed change-scope check fails the gate instead of skipping the Go jobs.
+- **tooling**: `make test-integration` runs through Toven and builds the auth test host first; it fails when the integration module list cannot be found.
 - **storage/local**: canceled conditional creates no longer publish files; copy and temporary-file ownership remain synchronous.
 - **encryption**: unavailable or invalid mounted key material reports a cause-preserving dependency failure instead of misleading product not-found.
 - **storage**: nonblocking fail-closed lifecycle injection, canceled initialization cleanup, and serialized owned backend teardown prevent unavailable or closing dependencies from appearing ready.
-- **storage/s3**: instance-owned bounded HTTP connections, TLS 1.3, redirect refusal, and no implicit SDK retries after ambiguous writes.
-- **storage/s3**: existence checks preserve authorization, cancellation and availability failures instead of falsely reporting missing objects.
+- **storage/s3**: instance-owned bounded HTTP connections, TLS 1.3, redirect refusal, no implicit SDK retries after ambiguous writes, and existence checks that keep authorization, cancellation and availability failures.
 - **storage/gcs**: storage closes its owned client through `storage.Closer`; later operations fail instead of panicking.
 - **storage/local**: `Create` stages incomplete data in a reserved `.gokit-staging` directory that is hidden from listings and cannot be used as a key.
 - **process**: live output observers are serialized across stdout and stderr, so one writer can safely serve both and a failure stops both streams.
@@ -78,7 +82,16 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **sse/testutil**: reusable test and benchmark helpers with failure-path coverage.
 
 ### Breaking Changes
-- **messaging**: `NewManagedConsumer` validates its config and returns an error. It restarts a failed consumer only when `Restart` says so, with doubling delays, bounds each message with `HandleTimeout`, reports handled messages and failures to a `ConsumerObserver` (`LoggingObserver` logs them), and exposes `MessageAge`. Consumption outlives the Start context until Stop, which always closes the consumer and waits for it only as long as its context allows; a slow close finishes after Stop returns. Health is degraded while restarting or while a consumer that implements the new `ConsumerStatus` is not receiving.
+- **messaging**: `NewManagedConsumer` validates its config and returns an error. It restarts only when `Restart` allows, bounds each message with `HandleTimeout`, reports outcomes to a `ConsumerObserver`, and keeps consuming after the Start context ends until Stop. Health is degraded while restarting or not receiving.
+- **messaging/nats/jetstream**: `ErrTerminal` moved to `messaging.ErrTerminal`. `OnError` receives adapter failures only; handler errors stay with the handler and its observers. `NewComponent` validates and returns an error.
+- **httpclient**: query strings must come from `Request.Query`, and errors redact them.
+- **bootstrap**: `WithAdminMetrics` replaces `AdminConfig.Metrics`. `ReadyCheck` follows the same rule as `/readyz`. `Need` reports a type mismatch as an error, and port tasks report `ErrInvalidPortTask` or `ErrPortNotProvided`.
+- **database**: `NewComponent(cfg, log, opts...)` takes construction-time options (`WithComponentName`, `WithDialect`, `WithConnectOptions`, `WithStartupCheck`, `WithInitialize`, `WithReadiness`, `WithHealthTimeout`, …); `WithStartupCheck` runs before `WithInitialize` and returns an error; the post-construction setters are gone. `Failure` is renamed `WrapFailure`.
+- **database/postgres**: integration tests moved to the `database/postgres/testutil` module, so the adapter no longer depends on testcontainers.
+- **resilience**: `NewKeyedComponent` returns `(*KeyedComponent, error)` and validates its config.
+- **server/middleware / connect/client**: `StreamWriteDeadline` and `FirstMessageTimeoutInterceptor` use the system clock by default; inject a test clock with `WithStreamDeadlineClock` or `WithFirstMessageClock`.
+- **fs**: `ReadSecret(path, SecretBounds{Min, Max})` replaces the positional bounds.
+- **auth/lease**: `Set.Revoke` returns an error and refuses a nil match.
 - **storage/s3**: `Endpoint` must be a credential-free origin without path, query or fragment and must use https unless the new `AllowInsecureDev` allows http. The unused `UseSSL` field is removed.
 - **database/postgres**: `sslmode` `disable` needs the new `ConnParams.AllowInsecureDev`; the test fixtures set it for their local servers.
 - **connect/client**: a client without TLS needs `AllowInsecureDev` for cleartext h2c; otherwise validation fails.
@@ -101,12 +114,29 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **observability**: tracing requires explicit injection rather than global provider registration.
 - **fs**: archive extraction rejects absolute member paths instead of normalizing them beneath the destination.
 
+### Behavior changes
+
+Defaults and rules that change what an existing app sees without a compile error:
+
+- **security**: an endpoint policy's dial budget (DNS plus TCP) is 10s, up from 2s. Set it with `WithEndpointDialBudget`.
+- **security**: shared address space (100.64.0.0/10), benchmarking and IETF protocol ranges need a private grant. NAT64 and 6to4 addresses are judged by the IPv4 address inside them.
+- **httpclient**: endpoint-policy clients no longer cap headers and TLS at 2s or connections at 8 per host. `Timeout` bounds each attempt, and `MaxConnsPerHost` sets the cap for any client.
+- **httpclient**: negative `Timeout` and `MaxResponseBodyBytes` fail at `New` instead of falling back to defaults.
+- **database**: the default health timeout is 1s, up from 500ms.
+- **messaging/nats/jetstream**: a consumer retries a failing message until it succeeds, unless `DeliveryPolicy.MaxAttempts` is set with a hand-off or discard.
+- **connect/client**: `Interceptors` takes options only. A zero timeout is an error; leave the option out for no timeout.
+
 ### Removed
+- **tooling**: `scripts/affected-domains.sh`; Toven selects affected modules.
+- **server/middleware**: `GinRequestLogger`; `RequestLogger` already logs every route at the server level.
 - **auth/apikey**: standalone authentication middleware; API keys use the shared authentication chain.
 - **database**: legacy tenant-scoping and session-setting helpers; use scoped repositories and transaction-local settings.
 - **database**: untimed `Ping`; use context-aware `PingContext`.
 
 ### Fixed
+- **ci**: pull requests that only change docs now report `CI Status` instead of waiting for it forever.
+- **tooling**: `make replace-sync` adds local `replace` lines for intra-repo modules reached through other modules, so `go mod tidy` no longer needs unpublished versions.
+- **ci**: the Dependabot tidy workflow passes the branch name through an environment variable instead of inline script text.
 - **database/migration**: a canceled migration no longer lets `database/sql` close the pinned connection from its own goroutine while the session still unlocks it, which could panic with a nil connection. PostgreSQL schema grants use `Session.Transaction` for the same reason.
 - **fs**: harden ZIP and tar extraction path validation.
 - **logging**: replace duplicate scoped attributes and preserve valid trace identifiers during masking.

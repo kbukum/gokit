@@ -32,20 +32,50 @@ type EndpointDialer interface {
 	DialContext(context.Context, string, string) (net.Conn, error)
 }
 
-// EndpointPolicy owns immutable origin grants and checks DNS again at every connection.
-// Install DialContext on a proxy-free transport that retains hostname certificate verification/SNI and refuses redirects.
+// EndpointPolicy owns immutable origin grants and checks DNS again at every connection. Install DialContext on a proxy-free transport that retains hostname certificate verification/SNI and refuses redirects.
 type EndpointPolicy struct {
 	rules    map[string]EndpointRule
 	resolver EndpointResolver
 	dialer   EndpointDialer
+	budget   time.Duration
+}
+
+// Endpoint connection budgets.
+const (
+	// DefaultEndpointDialBudget bounds DNS resolution plus connection setup when no budget is configured.
+	DefaultEndpointDialBudget = 10 * time.Second
+	// MaxEndpointDialBudget is the largest accepted dial budget.
+	MaxEndpointDialBudget = 2 * time.Minute
+)
+
+// EndpointOption configures an [EndpointPolicy].
+type EndpointOption func(*EndpointPolicy) error
+
+// WithEndpointDialBudget bounds DNS resolution plus connection setup for one dial, across every candidate address. It must be positive and at most [MaxEndpointDialBudget]; the default is [DefaultEndpointDialBudget].
+func WithEndpointDialBudget(budget time.Duration) EndpointOption {
+	return func(p *EndpointPolicy) error {
+		if budget <= 0 || budget > MaxEndpointDialBudget {
+			return apperrors.InvalidInput("endpoint policy", "The dial budget must be positive and at most two minutes")
+		}
+		p.budget = budget
+		return nil
+	}
 }
 
 // NewEndpointPolicy copies at most 128 origin grants, with at most 32 private subnet grants per origin.
-func NewEndpointPolicy(rules []EndpointRule, resolver EndpointResolver, dialer EndpointDialer) (*EndpointPolicy, error) {
+func NewEndpointPolicy(rules []EndpointRule, resolver EndpointResolver, dialer EndpointDialer, opts ...EndpointOption) (*EndpointPolicy, error) {
 	if len(rules) == 0 || len(rules) > 128 || util.IsNil(resolver) || util.IsNil(dialer) {
 		return nil, apperrors.InvalidInput("endpoint policy", "Bounded explicit origins, a resolver and a dialer are required")
 	}
-	p := &EndpointPolicy{rules: make(map[string]EndpointRule, len(rules)), resolver: resolver, dialer: dialer}
+	p := &EndpointPolicy{rules: make(map[string]EndpointRule, len(rules)), resolver: resolver, dialer: dialer, budget: DefaultEndpointDialBudget}
+	for _, opt := range opts {
+		if opt == nil {
+			return nil, apperrors.InvalidInput("endpoint policy", "Options must not be nil")
+		}
+		if err := opt(p); err != nil {
+			return nil, err
+		}
+	}
 	for _, rule := range rules {
 		u, err := endpointURL(rule.Origin)
 		if err != nil {
@@ -71,8 +101,7 @@ func NewEndpointPolicy(rules []EndpointRule, resolver EndpointResolver, dialer E
 	return p, nil
 }
 
-// Validate returns the normalized endpoint after validating all current DNS answers.
-// Connection-time validation remains mandatory; validation here cannot pin a later DNS lookup.
+// Validate returns the normalized endpoint after validating all current DNS answers within the dial budget. Connection-time validation remains mandatory; validation here cannot pin a later DNS lookup.
 func (p *EndpointPolicy) Validate(ctx context.Context, raw string) (string, error) {
 	if util.IsNil(ctx) {
 		return "", apperrors.InvalidInput("endpoint", "A context is required")
@@ -86,14 +115,15 @@ func (p *EndpointPolicy) Validate(ctx context.Context, raw string) (string, erro
 		return "", apperrors.Internal(err)
 	}
 	rule := p.rules[u.Scheme+"://"+u.Host]
+	ctx, cancel := context.WithTimeout(ctx, p.budget)
+	defer cancel()
 	if _, err := p.addresses(ctx, u.Hostname(), rule); err != nil {
 		return "", err
 	}
 	return normalized, nil
 }
 
-// Normalize validates syntax and an explicit origin grant without DNS or I/O.
-// It does not authorize a connection; Validate and DialContext enforce resolved address permissions.
+// Normalize validates syntax and an explicit origin grant without DNS or I/O. It does not authorize a connection; Validate and DialContext enforce resolved address permissions.
 func (p *EndpointPolicy) Normalize(raw string) (string, error) {
 	u, err := endpointURL(raw)
 	if err != nil {
@@ -106,8 +136,7 @@ func (p *EndpointPolicy) Normalize(raw string) (string, error) {
 	return u.String(), nil
 }
 
-// DialContext resolves at most sixteen candidates and validates all of them before dialing one numeric address.
-// DNS and TCP setup share a two-second budget; no implicit retry or unchecked DNS lookup follows validation.
+// DialContext resolves at most sixteen candidates and validates all of them before dialing their numeric addresses in resolver order until one connects. DNS and every connection attempt share the dial budget; no unchecked DNS lookup follows validation.
 func (p *EndpointPolicy) DialContext(ctx context.Context, network, authority string) (net.Conn, error) {
 	if util.IsNil(ctx) {
 		return nil, apperrors.InvalidInput("endpoint", "A context is required")
@@ -132,34 +161,39 @@ func (p *EndpointPolicy) DialContext(ctx context.Context, network, authority str
 	if !permitted {
 		return nil, apperrors.Forbidden("Connection authority is not permitted")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, p.budget)
 	defer cancel()
 	addresses, err := p.addresses(ctx, host, rule)
 	if err != nil {
 		return nil, err
 	}
+	var failures []error
 	for _, address := range addresses {
 		if (network == "tcp4" && !address.Is4()) || (network == "tcp6" && address.Is4()) {
 			continue
 		}
 		conn, dialErr := p.dialer.DialContext(ctx, network, net.JoinHostPort(address.String(), port))
-		if dialErr != nil {
-			if !util.IsNil(conn) {
-				dialErr = errors.Join(dialErr, conn.Close())
-			}
-			return nil, dialErr
+		if dialErr == nil && util.IsNil(conn) {
+			dialErr = apperrors.Internal(errors.New("endpoint dialer returned no connection"))
 		}
-		if util.IsNil(conn) {
-			return nil, apperrors.Internal(errors.New("endpoint dialer returned no connection"))
+		if dialErr == nil {
+			return conn, nil
 		}
-		return conn, nil
+		if !util.IsNil(conn) {
+			dialErr = errors.Join(dialErr, conn.Close())
+		}
+		failures = append(failures, dialErr)
+		if ctx.Err() != nil {
+			break
+		}
 	}
-	return nil, apperrors.Forbidden("No permitted address matches the requested network")
+	if len(failures) == 0 {
+		return nil, apperrors.Forbidden("No permitted address matches the requested network")
+	}
+	return nil, errors.Join(failures...)
 }
 
 func (p *EndpointPolicy) addresses(ctx context.Context, host string, rule EndpointRule) ([]netip.Addr, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -182,11 +216,11 @@ func (p *EndpointPolicy) addresses(ctx context.Context, host string, rule Endpoi
 	addresses = slices.Clone(addresses)
 	for i, candidate := range addresses {
 		address := candidate.Unmap()
-		if !address.IsValid() || address.Zone() != "" || address.IsUnspecified() || address.IsMulticast() ||
-			(!address.IsGlobalUnicast() && !address.IsLoopback() && !address.IsLinkLocalUnicast()) {
+		class := classifyAddress(address)
+		if class == addressRefused {
 			return nil, apperrors.Forbidden("Endpoint resolved an invalid destination")
 		}
-		if address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() {
+		if class == addressNonPublic {
 			allowed := false
 			for _, subnet := range rule.PrivateRanges {
 				allowed = allowed || subnet.Contains(address)
@@ -256,17 +290,7 @@ func privateSubnet(subnet netip.Prefix) bool {
 	if !subnet.IsValid() || subnet != subnet.Masked() {
 		return false
 	}
-	blocks := []netip.Prefix{
-		netip.PrefixFrom(netip.AddrFrom4([4]byte{10}), 8),
-		netip.PrefixFrom(netip.AddrFrom4([4]byte{172, 16}), 12),
-		netip.PrefixFrom(netip.AddrFrom4([4]byte{192, 168}), 16),
-		netip.PrefixFrom(netip.AddrFrom4([4]byte{127}), 8),
-		netip.PrefixFrom(netip.AddrFrom4([4]byte{169, 254}), 16),
-		netip.PrefixFrom(netip.AddrFrom16([16]byte{0xfc}), 7),
-		netip.PrefixFrom(netip.AddrFrom16([16]byte{0xfe, 0x80}), 10),
-		netip.PrefixFrom(netip.IPv6Loopback(), 128),
-	}
-	for _, block := range blocks {
+	for _, block := range nonPublicBlocks {
 		if subnet.Bits() >= block.Bits() && block.Contains(subnet.Addr()) {
 			return true
 		}

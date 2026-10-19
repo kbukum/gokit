@@ -11,11 +11,8 @@ type failure struct {
 	cause error
 }
 
-// Failure preserves typed causes without formatting driver diagnostics, which may contain credentials or SQL. Callers
-// must not log the unwrapped cause. The safe classification unwraps first, so [apperrors.Normalize] and every
-// boundary built on it report DATABASE_FAILURE (or TIMEOUT/CANCELED for a context end) instead of an application error
-// found inside the private cause; errors.Is still reaches the cause.
-func Failure(cause error) error { return failure{cause: cause} }
+// WrapFailure hides a driver error behind a safe classification. Driver diagnostics may contain credentials or SQL, so the message never formats the cause and callers must not log the unwrapped cause. The classification unwraps first, so [apperrors.Normalize] and every boundary built on it report DATABASE_FAILURE (or TIMEOUT/CANCELED for a context end) instead of an application error found inside the private cause; errors.Is still reaches the cause.
+func WrapFailure(cause error) error { return failure{cause: cause} }
 
 func (failure) Error() string      { return "DATABASE_FAILURE: Database operation failed" }
 func (f failure) GoString() string { return f.Error() }

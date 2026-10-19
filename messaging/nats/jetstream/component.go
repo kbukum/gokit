@@ -9,10 +9,7 @@ import (
 	"github.com/kbukum/gokit/messaging/nats"
 )
 
-// Component owns a shared [Client] for a component registry: Start connects, Stop drains and closes, and Health is
-// degraded while the connection is down, so a service keeps serving while its client reconnects. Health is unhealthy
-// once a bounded reconnect gives up. Producers and consumers made from it
-// before Start resolve the client at each operation and fail with a service-unavailable error until it is started.
+// Component owns a shared [Client] for a component registry: Start connects, Stop drains and closes, and Health is degraded while the connection is down, so a service keeps serving while its client reconnects. Health is unhealthy once a bounded reconnect gives up. Producers and consumers made from it before Start resolve the client at each operation and fail with a service-unavailable error until it is started.
 type Component struct {
 	name   string
 	cfg    nats.Config
@@ -25,17 +22,22 @@ var (
 	_ component.Describable = (*Component)(nil)
 )
 
-// NewComponent returns an unstarted component named name.
-func NewComponent(name string, cfg nats.Config) *Component {
+// NewComponent returns an unstarted component named name. It refuses an empty name or an invalid configuration, so a misconfigured broker fails at wiring rather than at Start.
+func NewComponent(name string, cfg nats.Config) (*Component, error) {
+	if name == "" {
+		return nil, apperrors.InvalidInput("name", "is required")
+	}
 	cfg.ApplyDefaults()
-	return &Component{name: name, cfg: cfg}
+	if err := validateClientConfig(cfg); err != nil {
+		return nil, err
+	}
+	return &Component{name: name, cfg: cfg}, nil
 }
 
 // Name returns the component name.
 func (c *Component) Name() string { return c.name }
 
-// Start validates the configuration and starts the connection; ctx bounds the first attempt. It does not wait for
-// the server.
+// Start starts the connection; ctx bounds the first attempt. It does not wait for the server.
 func (c *Component) Start(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -62,8 +64,7 @@ func (c *Component) Stop(ctx context.Context) error {
 	return client.Shutdown(ctx)
 }
 
-// Health is healthy while connected, degraded while the client reconnects or before it starts, and unhealthy once the
-// connection gave up reconnecting.
+// Health is healthy while connected, degraded while the client reconnects or before it starts, and unhealthy once the connection gave up reconnecting.
 func (c *Component) Health(context.Context) component.Health {
 	c.mu.RLock()
 	client := c.client

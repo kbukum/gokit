@@ -99,15 +99,12 @@ func snapshotSigner(method SigningMethod, key crypto.Signer) (crypto.Signer, err
 	}
 }
 
-// ecdsaCoordinatesSet reports whether a hand-built ECDSA public key carries both coordinates. Every crypto/ecdsa
-// encoding method still dereferences them without a nil check, so reading the deprecated fields is the only way to
-// reject such a key with an error instead of a panic.
+// ecdsaCoordinatesSet reports whether a hand-built ECDSA public key carries both coordinates. Every crypto/ecdsa encoding method still dereferences them without a nil check, so reading the deprecated fields is the only way to reject such a key with an error instead of a panic.
 func ecdsaCoordinatesSet(pub *ecdsa.PublicKey) bool {
 	return pub.X != nil && pub.Y != nil //nolint:staticcheck // SA1019: nil guard before PublicKey.Bytes, which panics on nil coordinates.
 }
 
-// ecdsaScalarSet reports whether a hand-built ECDSA private key carries its scalar. PrivateKey.Bytes rejects a zero
-// scalar but panics on a nil one.
+// ecdsaScalarSet reports whether a hand-built ECDSA private key carries its scalar. PrivateKey.Bytes rejects a zero scalar but panics on a nil one.
 func ecdsaScalarSet(private *ecdsa.PrivateKey) bool {
 	return private.D != nil //nolint:staticcheck // SA1019: nil guard before PrivateKey.Bytes, which panics on a nil scalar.
 }

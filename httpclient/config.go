@@ -29,7 +29,7 @@ type Config struct {
 	// Set statically via YAML or dynamically via discovery.
 	BaseURL string `yaml:"base_url" mapstructure:"base_url"`
 
-	// Timeout is the default request timeout. Defaults to 30s.
+	// Timeout bounds each buffered attempt, from sending the request to reading the body. Waiting for admission and retries are not included; bound them with ResiliencePolicy or the caller's deadline. Defaults to 30s; negative is invalid. Streams use Stream instead.
 	Timeout time.Duration `yaml:"timeout" mapstructure:"timeout"`
 
 	// Stream configures finite streaming budgets and frame limits independently of buffered requests.
@@ -52,17 +52,20 @@ type Config struct {
 	ResiliencePolicy *resilience.Policy `yaml:"resilience_policy" mapstructure:"resilience_policy"`
 
 	// MaxResponseBodyBytes bounds the buffered response body read into memory by Do.
-	// Defaults to 10 MiB. Streaming responses (DoStream) are not affected.
+	// Defaults to 10 MiB; negative is invalid. Streaming responses (DoStream) are not affected.
 	MaxResponseBodyBytes int64 `yaml:"max_response_body_bytes" mapstructure:"max_response_body_bytes"`
+
+	// MaxConnsPerHost caps open connections to one host, and idle ones with it. Zero means no cap; negative is invalid.
+	MaxConnsPerHost int `yaml:"max_conns_per_host" mapstructure:"max_conns_per_host"`
 }
 
-// ApplyDefaults fills in zero-value fields with sensible defaults.
+// ApplyDefaults fills unset (zero) fields. It leaves bad values for Validate to reject.
 func (c *Config) ApplyDefaults() {
 	c.Stream.ApplyDefaults()
-	if c.Timeout <= 0 {
+	if c.Timeout == 0 {
 		c.Timeout = defaultTimeout
 	}
-	if c.MaxResponseBodyBytes <= 0 {
+	if c.MaxResponseBodyBytes == 0 {
 		c.MaxResponseBodyBytes = defaultMaxResponseBytes
 	}
 }
@@ -76,6 +79,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Timeout <= 0 {
 		return fmt.Errorf("httpclient: timeout must be positive")
+	}
+	if c.MaxResponseBodyBytes < 0 {
+		return NewValidationError("max_response_body_bytes must not be negative")
+	}
+	if c.MaxConnsPerHost < 0 {
+		return NewValidationError("max_conns_per_host must not be negative")
 	}
 	if c.MaxResponseBodyBytes == math.MaxInt64 {
 		return NewValidationError("max_response_body_bytes must leave room for overflow detection")

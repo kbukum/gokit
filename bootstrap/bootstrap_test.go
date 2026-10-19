@@ -307,9 +307,8 @@ func TestReadyCheckDegraded(t *testing.T) {
 		health: component.Health{Name: "svc", Status: component.StatusDegraded, Message: "slow"},
 	})
 
-	err := app.ReadyCheck(context.Background())
-	if err == nil {
-		t.Error("expected error for degraded component")
+	if err := app.ReadyCheck(context.Background()); err != nil {
+		t.Errorf("degraded component failed ReadyCheck, unlike /readyz: %v", err)
 	}
 }
 

@@ -88,6 +88,22 @@ Streaming requests acquire the configured rate limiter, bulkhead and circuit bre
 
 A protocol consumer sets `Request.RequireStreamCompletion` and must call `StreamResponse.Complete(err)` after its reader exits on every path. Only validated protocol completion passes nil; incomplete EOF must pass an error. `Progress(true)` marks content/reasoning/tool progress; later valid chunks call `Progress(false)` to renew idle. Partial bytes and heartbeats do not count. `Context()` signals budget exhaustion, which closes the body but retains admission until the protocol owner completes cleanup. Generic raw/SSE readers report progress and completion automatically. Callers must close streams they abandon.
 
+## Budgets
+
+Every call has a limit at each stage. The caller's deadline always wins when it is shorter.
+
+| Stage | Buffered (`Do`) | Stream (`DoStream`) |
+|---|---|---|
+| Admission | `ResiliencePolicy` (limiter, bulkhead, breaker) | Same, held until the stream closes |
+| Dial (DNS + TCP) | 10s with `EndpointPolicy` (`security.WithEndpointDialBudget`), otherwise 30s (Go's default) | `Stream.ConnectTimeout` (10s) |
+| TLS handshake | Go's default (10s) | Included in `Stream.ConnectTimeout` |
+| Response headers | Within `Timeout` | `Stream.HeaderTimeout` (30s) |
+| First progress | — | `Stream.FirstProgressTimeout` (60s) |
+| Idle | — | `Stream.IdleTimeout` (30s) |
+| Total | `Timeout` (30s) per attempt; admission and retries come on top | `Stream.TotalTimeout` (5m) |
+
+`MaxConnsPerHost` caps connections per host. It is a capacity setting and works with or without `EndpointPolicy`. Zero means no cap. `GetConfig` returns the budgets in use.
+
 ## Key Types & Functions
 
 For raw HTTP/SSE peers, `NewTracingTransport(next, TracingConfig{Tracer: tracer, Operation: "events.subscribe"})` decorates an owned client's transport with an injected tracer and optional propagator. Handle its configuration error before assigning the transport. `Operation` is a fixed declared route/procedure, not a URL. It clones request headers, replaces stale propagation, strips baggage and keeps the span open through response consumption or close. It adds no retries or deadlines; retain the client's existing budgets and redirect policy. Explicit `http.Client.CloseIdleConnections` still reaches the wrapped transport. Use Connect's RPC interceptor instead for Connect clients.
@@ -107,9 +123,9 @@ For raw HTTP/SSE peers, `NewTracingTransport(next, TracingConfig{Tracer: tracer,
 
 ## Restricted model endpoints
 
-Inject `Config.EndpointPolicy` from `security.NewEndpointPolicy` for an operator-approved outbound endpoint. Rules grant exact normalized scheme/host/port origins; private, loopback and link-local destinations require explicit private subnet grants, and HTTP requires an explicit grant. URL userinfo, queries, fragments, ambiguous authorities and unchecked request Host overrides are refused.
+Inject `Config.EndpointPolicy` from `security.NewEndpointPolicy` for an operator-approved outbound endpoint. Rules grant exact normalized scheme/host/port origins; private, loopback and link-local destinations require explicit private subnet grants, and HTTP requires an explicit grant. Query parameters are sent only through `Request.Query` and are left out of error text; URL userinfo, raw query text in a path, fragments, ambiguous authorities and unchecked request Host overrides are refused. DNS is checked when each connection is dialed, not per request, and DNS plus connection setup share a dial budget (`security.WithEndpointDialBudget`, 10s by default) that tries every approved address in turn. Request budgets come from `Config.Timeout` and `Config.Stream`. Shared address space (100.64.0.0/10), benchmarking and IETF protocol ranges also need private grants; NAT64 and 6to4 addresses are judged by the IPv4 address they embed.
 
-Each request validates current DNS answers, and each new TCP connection resolves again and dials only a validated numeric address. Every answer must be permitted; mixed public/private answers fail closed. Hostname certificate verification and SNI remain bound to the original endpoint, not the numeric dial address. DNS/TCP share two seconds, TLS/header setup is bounded at two seconds, and connections/idle retention are bounded. Buffered calls apply `Config.Timeout` across validation and dispatch.
+Each new connection resolves the host and dials only an approved address. Mixed public and private answers fail closed. Certificate checks and SNI stay bound to the original host name.
 
 The restricted client disables proxy discovery and both inherited TLS dial hooks, requires TLS 1.3 with certificate verification, refuses every redirect including same-host redirects, and rejects configured request retries. Normal client behavior is unchanged without a policy. Drain consumers and call `Close`; supplied policy/resolver/dialer ownership remains with composition. Keep provider credentials in headers, never URL fields or logs.
 

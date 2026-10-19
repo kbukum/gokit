@@ -16,6 +16,13 @@ Use the returned context for the whole operation. After closing the operation's 
 
 Set a policy timeout or supply a caller deadline when a finite budget is required. A nil policy adds no timeout. No reader, watcher or cleanup goroutine is started by `Acquire`; the transport owns I/O cancellation and resource teardown. See `ExamplePolicy_Acquire` for the ownership sequence.
 
+## Choosing a concurrency limit
+
+- `Bulkhead` (or `Policy.WithBulkhead`) caps concurrent calls to one dependency; callers wait in a bounded queue for a slot.
+- `Policy.Acquire` holds the policy's timeout, bulkhead slot and breaker admission for a long-lived operation, such as a stream, until `finish` is called.
+- `ConcurrencyLimit` never waits. It caps work overall and per key (for example per tenant), so one key cannot take every slot. Refuse work that gets no slot.
+- `KeyedRateLimiter` and `KeyedComponent` limit how often a key may act, not how many of its calls run at once.
+
 ## Install
 
 ```bash
@@ -71,7 +78,7 @@ func main() {
 | `CircuitBreaker` | Circuit breaker with closed/open/half-open states |
 | `RateLimiter` | Token bucket rate limiter |
 | `KeyedRateLimiter` | Per-key token buckets with an injected `Clock` and a `MaxKeys` bound (default 100 000); when full it drops expired buckets and otherwise denies new keys with `Saturated` set |
-| `NewKeyedComponent(name, config)` | Lifecycle-owned keyed limiter: starts cleanup on `Start`, joins it on `Stop`, denies admission outside its running lifetime, and starts with fresh buckets after restart |
+| `NewKeyedComponent(name, config)` | Returns `(*KeyedComponent, error)`. Lifecycle-owned keyed limiter: starts cleanup on `Start`, joins it on `Stop`, denies admission outside its running lifetime, and starts with fresh buckets after restart |
 | `Bulkhead` | Concurrency limiter with semaphore pattern |
 | `ConcurrencyLimit` | Non-waiting concurrency limit overall and per key; a slot binds to its key once known |
 | `Policy.Acquire()` | Whole-operation admission with a call context and one terminal completion |

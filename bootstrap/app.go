@@ -2,9 +2,11 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -14,6 +16,7 @@ import (
 	"github.com/kbukum/gokit/di"
 	"github.com/kbukum/gokit/hook"
 	"github.com/kbukum/gokit/logging"
+	"github.com/kbukum/gokit/util"
 )
 
 // App represents a generic application with uniform lifecycle management.
@@ -92,8 +95,11 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 		app.gracefulTimeout = *o.gracefulTimeout
 	}
 	app.quietSummary = o.quietSummary
+	if o.adminMetricsSet && (o.admin == nil || util.IsNil(o.adminMetrics)) {
+		return nil, fmt.Errorf("%w: metrics handler must be non-nil and used with WithAdmin", ErrInvalidAdminConfig)
+	}
 	if o.admin != nil {
-		admin, err := newAdmin(*o.admin, app.readiness)
+		admin, err := newAdmin(*o.admin, o.adminMetrics, app.readiness)
 		if err != nil {
 			return nil, err
 		}
@@ -118,10 +124,21 @@ func NewApp[C Config](cfg C, opts ...Option) (*App[C], error) {
 	app.Summary = NewSummary(base.Name, base.Version)
 	app.Summary.SetEnvironment(base.Environment)
 	if app.admin != nil {
-		// The registry is new, so the first registration cannot collide.
-		_ = app.Components.Register(app.admin)
+		if err := app.Components.Register(app.admin); err != nil {
+			return nil, errors.Join(fmt.Errorf("bootstrap: register admin listener: %w", err), app.releaseOwnedLogger())
+		}
 	}
 	return app, nil
+}
+
+// releaseOwnedLogger releases a logger NewApp created when construction fails after creating it.
+func (a *App[C]) releaseOwnedLogger() error {
+	if !a.ownsLogger {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), a.gracefulTimeout)
+	defer cancel()
+	return a.Logger.Shutdown(ctx)
 }
 
 // RegisterComponent adds a component to the application's registry.
@@ -129,12 +146,7 @@ func (a *App[C]) RegisterComponent(c component.Component) error {
 	return a.Components.Register(c)
 }
 
-// OnConfigure registers a callback to run during the configure phase. Use it to register
-// application components and wire business-layer dependencies. Configure runs before
-// StartAll, so components it registers start in the same single pass as infrastructure —
-// they are not yet running when the callback executes. Callbacks run in registration order
-// through the lifecycle hook registry (EventConfigure); a callback error is fatal and aborts
-// startup, rolling back anything earlier phases created.
+// OnConfigure registers a callback to run during the configure phase. Use it to register application components and wire business-layer dependencies. Configure runs before StartAll, so components it registers start in the same single pass as infrastructure — they are not yet running when the callback executes. Callbacks run in registration order through the lifecycle hook registry (EventConfigure); a callback error is fatal and aborts startup, rolling back anything earlier phases created.
 func (a *App[C]) OnConfigure(fn func(ctx context.Context, app *App[C]) error) {
 	a.hooks.On(EventConfigure, func(ctx context.Context, _ hook.Event) error {
 		if err := fn(ctx, a); err != nil {
@@ -144,23 +156,29 @@ func (a *App[C]) OnConfigure(fn func(ctx context.Context, app *App[C]) error) {
 	})
 }
 
-// ReadyCheck verifies that all registered components are healthy.
+// ReadyCheck applies the /readyz rule to every registered component: it returns an error wrapping [ErrNotReady] that lists each component that is not healthy when any is unhealthy, and nil when all are healthy or some are only degraded.
 func (a *App[C]) ReadyCheck(ctx context.Context) error {
 	results := a.Components.HealthAll(ctx)
-	var unhealthy []string
+	if healthReadiness(results) != ReadinessNotReady {
+		return nil
+	}
+	return fmt.Errorf("%w: %s", ErrNotReady, strings.Join(healthProblems(results), ", "))
+}
+
+// healthProblems describes each component that is not healthy as name=status(message).
+func healthProblems(results []component.Health) []string {
+	var problems []string
 	for _, h := range results {
-		if h.Status != component.StatusHealthy {
-			detail := h.Name + "=" + string(h.Status)
-			if h.Message != "" {
-				detail += "(" + h.Message + ")"
-			}
-			unhealthy = append(unhealthy, detail)
+		if h.Status == component.StatusHealthy {
+			continue
 		}
+		detail := h.Name + "=" + string(h.Status)
+		if h.Message != "" {
+			detail += "(" + h.Message + ")"
+		}
+		problems = append(problems, detail)
 	}
-	if len(unhealthy) > 0 {
-		return fmt.Errorf("unhealthy components: %v", unhealthy)
-	}
-	return nil
+	return problems
 }
 
 // Run executes the full application lifecycle for long-running services:

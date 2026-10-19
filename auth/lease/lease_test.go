@@ -383,13 +383,17 @@ func TestRevokeMatchesKeys(t *testing.T) {
 		s := newSet(t, c)
 		a, _ := acquire(t, s, "a", time.Hour)
 		b, _ := acquire(t, s, "b", time.Hour)
-		if n := s.Revoke(func(k string) bool { return k == "a" }); n != 1 {
+		if n, err := s.Revoke(func(k string) bool { return k == "a" }); err != nil || n != 1 {
 			t.Fatalf("revoked %d", n)
 		}
 		if a.Err() == nil {
 			t.Fatal("revoke did not end the lease before returning")
 		}
 		endedWith(t, a, lease.ErrRevoked)
+		alive(t, b)
+		if _, err := s.Revoke(nil); !hasCode(err, apperrors.ErrCodeInvalidInput) {
+			t.Fatalf("nil match = %v", err)
+		}
 		alive(t, b)
 	})
 }
@@ -400,7 +404,7 @@ func TestRevokePredicateRunsOutsideTheSetLock(t *testing.T) {
 		c.set("a", true)
 		s := newSet(t, c)
 		a, _ := acquire(t, s, "a", time.Hour)
-		if n := s.Revoke(func(string) bool { return s.Len() == 1 }); n != 1 {
+		if n, err := s.Revoke(func(string) bool { return s.Len() == 1 }); err != nil || n != 1 {
 			t.Fatalf("revoked %d", n)
 		}
 		endedWith(t, a, lease.ErrRevoked)
@@ -456,4 +460,9 @@ func TestCloseIsBoundedByContextWhenCheckerHangs(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+func hasCode(err error, code apperrors.ErrorCode) bool {
+	app, ok := apperrors.AsAppError(err)
+	return ok && app.Code == code
 }

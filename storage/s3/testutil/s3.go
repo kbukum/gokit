@@ -42,9 +42,7 @@ type options struct {
 // Option configures StartS3.
 type Option func(*options) error
 
-// WithImage runs an alternate SeaweedFS-compatible image instead of S3Image, such as an artifact built from source.
-// The reference must be immutable: a local image ID (sha256:<hex>) or a name pinned by digest. A missing image fails
-// provisioning; the fixture never falls back to another image. The image must provide /usr/bin/weed.
+// WithImage runs an alternate SeaweedFS-compatible image instead of S3Image, such as an artifact built from source. The reference must be immutable: a local image ID (sha256:<hex>) or a name pinned by digest. A missing image fails provisioning; the fixture never falls back to another image. The image must provide /usr/bin/weed.
 func WithImage(ref string) Option {
 	return func(o *options) error {
 		if !imageID.MatchString(ref) {
@@ -89,9 +87,7 @@ type s3Identity struct {
 	Actions     []string       `json:"actions"`
 }
 
-// StartS3 requires Docker and an owned temporary directory. It runs S3Image unless WithImage selects another artifact. Provisioning is bounded at three minutes and returns once the bucket accepts writes.
-// Config exposes mounted credential paths; callers must never retain their contents outside the fixture.
-// A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
+// StartS3 requires Docker and an owned temporary directory. It runs S3Image unless WithImage selects another artifact. Provisioning is bounded at three minutes and returns once the bucket accepts writes. Config exposes mounted credential paths; callers must never retain their contents outside the fixture. A non-nil fixture transfers cleanup ownership even on error; register Close before checking the error.
 func StartS3(ctx context.Context, dir string, opts ...Option) (*S3Fixture, error) {
 	if util.IsNil(ctx) || dir == "" {
 		return nil, errors.New("S3 fixture: context and an owned temporary directory are required")
@@ -167,8 +163,7 @@ func StartS3(ctx context.Context, dir string, opts ...Option) (*S3Fixture, error
 		},
 		// The default growth of seven volumes per collection exceeds the four bounded volume slots.
 		Env: map[string]string{"WEED_MASTER_VOLUME_GROWTH_COPY_1": "1"},
-		// An HTTP response proves the server itself is serving. A port wait would pass on Docker's proxy alone in
-		// images without a shell, because testcontainers then skips its in-container listener check.
+		// An HTTP response proves the server itself is serving. A port wait would pass on Docker's proxy alone in images without a shell, because testcontainers then skips its in-container listener check.
 		WaitingFor: wait.ForHTTP("/").WithPort("8333/tcp").WithStatusCodeMatcher(func(int) bool { return true }).
 			WithStartupTimeout(30 * time.Second),
 		ConfigModifier: func(c *container.Config) {
@@ -222,9 +217,7 @@ func (f *S3Fixture) setupClient(endpoint string) (client *awss3.Client, closeIdl
 	return client, httpClient.CloseIdleConnections
 }
 
-// awaitWritable proves the bucket accepts and deletes a sentinel object. The S3 listener opens before the master
-// elects a leader and the volume server registers, so an open port alone does not mean writes can be assigned.
-// Callers must hold f.mu or have exclusive ownership of f.
+// awaitWritable proves the bucket accepts and deletes a sentinel object. The S3 listener opens before the master elects a leader and the volume server registers, so an open port alone does not mean writes can be assigned. Callers must hold f.mu or have exclusive ownership of f.
 func (f *S3Fixture) awaitWritable(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, readinessTimeout)
 	defer cancel()
@@ -263,8 +256,7 @@ func (f *S3Fixture) Config() storages3.Config {
 	return f.config
 }
 
-// Restart stops the same container with SIGTERM, verifies a clean exit, and starts it with its persistent metadata/data,
-// returning once writable, within sixty seconds. The filer's graceful gRPC stop alone may take fifteen seconds.
+// Restart stops the same container with SIGTERM, verifies a clean exit, and starts it with its persistent metadata/data, returning once writable, within sixty seconds. The filer's graceful gRPC stop alone may take fifteen seconds.
 func (f *S3Fixture) Restart(ctx context.Context) error {
 	if util.IsNil(ctx) {
 		return errors.New("S3 fixture restart requires a context")
@@ -300,8 +292,7 @@ func (f *S3Fixture) Restart(ctx context.Context) error {
 	return f.awaitWritable(ctx)
 }
 
-// CrashRestart kills PID 1 with SIGKILL and restarts the same persistent node, returning once writable, within thirty seconds.
-// This proves process-crash recovery, not host power-loss or multi-node durability.
+// CrashRestart kills PID 1 with SIGKILL and restarts the same persistent node, returning once writable, within thirty seconds. This proves process-crash recovery, not host power-loss or multi-node durability.
 func (f *S3Fixture) CrashRestart(ctx context.Context) (err error) {
 	if util.IsNil(ctx) {
 		return errors.New("S3 fixture crash restart requires a context")
@@ -339,8 +330,7 @@ func (f *S3Fixture) CrashRestart(ctx context.Context) (err error) {
 	return f.awaitWritable(ctx)
 }
 
-// ContainerID identifies the owned container for attachment to a caller-owned test network.
-// It is empty after release. The fixture, not the network caller, owns container teardown.
+// ContainerID identifies the owned container for attachment to a caller-owned test network. It is empty after release. The fixture, not the network caller, owns container teardown.
 func (f *S3Fixture) ContainerID() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -43,9 +43,7 @@ type RelationAccess struct {
 	Privileges []Privilege
 }
 
-// RuntimeAccess is the runtime role's complete allowlist in one schema. Sequences receive USAGE only, for serial
-// inserts. Every version table of the plan receives SELECT only. Anything not listed receives nothing; there are no
-// default or future-table grants, so each migration that adds a relation must update the manifest.
+// RuntimeAccess is the runtime role's complete allowlist in one schema. Sequences receive USAGE only, for serial inserts. Every version table of the plan receives SELECT only. Anything not listed receives nothing; there are no default or future-table grants, so each migration that adds a relation must update the manifest.
 type RuntimeAccess struct {
 	Role      string
 	Relations []RelationAccess
@@ -107,11 +105,7 @@ func (p SchemaPlan) Validate() error {
 	return nil
 }
 
-// ApplySchema provisions plan with the migration role on one pinned connection while holding the migration advisory
-// lock: it audits the existing runtime role, plans every set, creates the schema owned by the current role when it is
-// absent, applies every set to its target, reconciles grants transactionally to the exact manifest, and verifies the
-// runtime role's effective privileges before committing the grants. It never creates or edits roles. It works on a pool limited to one connection.
-// Rerunning is idempotent; a failure leaves runtime readiness unavailable.
+// ApplySchema provisions plan with the migration role on one pinned connection while holding the migration advisory lock: it audits the existing runtime role, plans every set, creates the schema owned by the current role when it is absent, applies every set to its target, reconciles grants transactionally to the exact manifest, and verifies the runtime role's effective privileges before committing the grants. It never creates or edits roles. It works on a pool limited to one connection. Rerunning is idempotent; a failure leaves runtime readiness unavailable.
 func ApplySchema(ctx context.Context, migrationDB *gorm.DB, plan SchemaPlan) (err error) {
 	if util.IsNil(ctx) {
 		return apperrors.InvalidInput("context", "Context is required")
@@ -149,11 +143,7 @@ func ApplySchema(ctx context.Context, migrationDB *gorm.DB, plan SchemaPlan) (er
 	})
 }
 
-// ReadyAccess verifies, as the runtime role on runtimeDB, that the session user is the plan's runtime role with exactly
-// the manifest's privileges: schema USAGE without CREATE, no database CREATE or TEMP, the declared relation and
-// sequence rights, and SELECT-only version tables. It runs the same role and undeclared-object audit as ApplySchema,
-// so every state ApplySchema rejects also fails readiness. It reads catalogs only; it never locks, migrates or creates
-// metadata.
+// ReadyAccess verifies, as the runtime role on runtimeDB, that the session user is the plan's runtime role with exactly the manifest's privileges: schema USAGE without CREATE, no database CREATE or TEMP, the declared relation and sequence rights, and SELECT-only version tables. It runs the same role and undeclared-object audit as ApplySchema, so every state ApplySchema rejects also fails readiness. It reads catalogs only; it never locks, migrates or creates metadata.
 func ReadyAccess(ctx context.Context, runtimeDB *gorm.DB, plan SchemaPlan) error {
 	if util.IsNil(ctx) {
 		return apperrors.InvalidInput("context", "Context is required")
@@ -181,9 +171,7 @@ func ReadyAccess(ctx context.Context, runtimeDB *gorm.DB, plan SchemaPlan) error
 	return auditAccess(ctx, pool, user, plan)
 }
 
-// Readiness returns a [database.Check] for [database.Component.WithReadiness] that requires every set of plan at its
-// expected clean version, then [ReadyAccess] for the runtime session. It is read-only: no metadata creation, locks or
-// migrations, so a component with this check fails Start before migration and reports drift from Health.
+// Readiness returns a [database.Check] for [database.Component.WithReadiness] that requires every set of plan at its expected clean version, then [ReadyAccess] for the runtime session. It is read-only: no metadata creation, locks or migrations, so a component with this check fails Start before migration and reports drift from Health.
 func Readiness(plan SchemaPlan) database.Check {
 	return func(ctx context.Context, db *database.DB) error {
 		if db == nil {
@@ -236,10 +224,7 @@ func createSchema(ctx context.Context, conn *sql.Conn, schema string) error {
 	return nil
 }
 
-// auditRoles rejects a runtime role that is missing, is the migration role (when migrating is set, the session user),
-// holds role attributes, can create in any schema or the database, owns any object of the plan schema, or is a member
-// of any role. The runtime role must be a leaf: memberships, whether inherited, SET-only or neither, would let it reach
-// privileges outside the audited matrix.
+// auditRoles rejects a runtime role that is missing, is the migration role (when migrating is set, the session user), holds role attributes, can create in any schema or the database, owns any object of the plan schema, or is a member of any role. The runtime role must be a leaf: memberships, whether inherited, SET-only or neither, would let it reach privileges outside the audited matrix.
 func auditRoles(ctx context.Context, q querier, plan SchemaPlan, migrating bool) error {
 	role := plan.RuntimeAccess.Role
 	var exists, migrator, attributes, member, create, owns bool
@@ -357,9 +342,7 @@ func expected(plan SchemaPlan) map[string]grant {
 	return want
 }
 
-// objectPrivileges is the effective-privilege matrix of the plan schema's relations, computed by PostgreSQL itself
-// for role, including PUBLIC, inherited and column grants. excess covers prohibited and grant-option privileges,
-// including PostgreSQL 17 MAINTAIN, which the CASE keeps unparsed on older servers.
+// objectPrivileges is the effective-privilege matrix of the plan schema's relations, computed by PostgreSQL itself for role, including PUBLIC, inherited and column grants. excess covers prohibited and grant-option privileges, including PostgreSQL 17 MAINTAIN, which the CASE keeps unparsed on older servers.
 const objectPrivileges = `
 SELECT c.relname, c.relkind::text,
 	CASE WHEN c.relkind = 'S' THEN false ELSE pg_catalog.has_table_privilege($1, c.oid, 'SELECT') OR pg_catalog.has_any_column_privilege($1, c.oid, 'SELECT') END,
@@ -376,8 +359,7 @@ FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamesp
 WHERE n.nspname = $2 AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
 ORDER BY c.relname LIMIT 4097`
 
-// auditAccess compares role's effective privileges on every relation of the schema with the manifest and rejects any
-// callable SECURITY DEFINER routine.
+// auditAccess compares role's effective privileges on every relation of the schema with the manifest and rejects any callable SECURITY DEFINER routine.
 func auditAccess(ctx context.Context, q querier, role string, plan SchemaPlan) (err error) {
 	var usage, schemaCreate, databaseCreate, definer bool
 	if err = q.QueryRowContext(ctx, `SELECT

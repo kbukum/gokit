@@ -134,7 +134,7 @@ server.MountDocs(engine, log,
 | `Recovery()` | Panic recovery |
 | `Tracing(TracingConfig)` | Inject a tracer and optional propagator, registered-route classifier and authenticated-parent policy; returns middleware and a configuration error |
 | `RequestLogger(log)` | Log registered routes and context-derived identifiers without raw URLs or request-header IDs |
-| `StreamWriteDeadline(budget, clock)` | For long-lived streaming routes: replace the server's absolute `WriteTimeout` with a deadline per write and flush, disarmed while idle; returns middleware and a configuration error |
+| `StreamWriteDeadline(budget, opts...)` | For long-lived streaming routes: replace the server's absolute `WriteTimeout` with a deadline per write and flush, disarmed while idle; returns middleware and a configuration error. `WithStreamDeadlineClock` injects a test clock |
 
 ### Middleware ordering
 
@@ -149,7 +149,7 @@ When composing transport concerns, keep the shared order explicit:
 
 Recovery inside tracing handles downstream panics with the active context before the span ends, writes a canonical safe 500 problem response and logs only safe failure metadata. An additional outer recovery boundary protects setup and middleware before tracing. `ApplyMiddleware` installs both boundaries when tracing is enabled. Never log raw panic values or stack dumps.
 
-Public tracing starts a fresh root and ignores incoming sampling, baggage and forwarded scheme headers. For internal parent propagation, install tracing inside peer authentication and supply `TrustParent`; never decide trust from trace headers. An authentication rejection needs fresh local tracing at its rejection boundary, not trusted extraction. `Route` returns only a registered template/procedure; absent classification uses `http.request`. Place request logging inside tracing to share its context. Traces omit request bodies, URLs and raw errors; HTTP problem responses include the active trace ID.
+Public tracing starts a fresh root and ignores incoming sampling, baggage and forwarded scheme headers. To continue a caller's trace, authenticate once with `middleware.NewAuthStages`: install `Authenticate` with `Server.Authenticate`, pass `Trusted` as `TrustParent`, and wrap protected handlers with `Enforce`. Never decide trust from trace headers. A rejected request starts a new trace, and its error response carries that trace ID. `Route` returns only a registered template/procedure; absent classification uses `http.request`. Place request logging inside tracing to share its context. Traces omit request bodies, URLs and raw errors; HTTP problem responses include the active trace ID.
 
 Use `HTTPAuth` for cookie/API-key chains. The injected authenticator sees the original request and owns ambiguity, CSRF, expiry, and revocation checks. Pair its setter with the downstream typed getter and wrap protected handlers only.
 

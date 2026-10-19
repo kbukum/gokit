@@ -11,7 +11,10 @@ import (
 
 func TestKeyedComponentLifecycle(t *testing.T) {
 	t.Parallel()
-	c := resilience.NewKeyedComponent("admission", resilience.KeyedRateLimiterConfig{MaxKeys: 2, Clock: util.NewFakeClock(time.Unix(0, 0))})
+	c, err := resilience.NewKeyedComponent("admission", resilience.KeyedRateLimiterConfig{MaxKeys: 2, Clock: util.NewFakeClock(time.Unix(0, 0))})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if c.Name() != "admission" {
 		t.Fatal(c.Name())
 	}
@@ -37,5 +40,21 @@ func TestKeyedComponentLifecycle(t *testing.T) {
 		if err := c.Stop(t.Context()); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestNewKeyedComponentRefusesInvalidConfig(t *testing.T) {
+	t.Parallel()
+	for name, cfg := range map[string]resilience.KeyedRateLimiterConfig{
+		"cleanup":  {CleanupInterval: -1},
+		"ttl":      {BucketTTL: -1},
+		"max keys": {MaxKeys: -1},
+	} {
+		if _, err := resilience.NewKeyedComponent("admission", cfg); err == nil {
+			t.Errorf("%s: expected error", name)
+		}
+	}
+	if _, err := resilience.NewKeyedComponent("", resilience.KeyedRateLimiterConfig{}); err == nil {
+		t.Error("empty name accepted")
 	}
 }

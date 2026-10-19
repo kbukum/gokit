@@ -4,7 +4,7 @@
 // # Architecture
 //
 // The database module follows gokit's component pattern with a driver-agnostic design.
-// Users provide the database backend as a Dialect (postgres, sqlite, etc.) via WithDialect()
+// Users provide the database backend as a Dialect (postgres, sqlite, etc.) via the WithDialect option
 // or an explicit DialectRegistry, keeping runtime backend selection adapter-driven.
 //
 // # Quick Start
@@ -20,8 +20,11 @@
 //	func main() {
 //	    app := bootstrap.New()
 //	    cfg := database.Config{Enabled: true, DSN: "host=localhost user=myuser dbname=mydb"}
-//	    app.Register(database.NewComponent(cfg, log).
-//	        WithDialect(postgres.Dialect()))
+//	    db, err := database.NewComponent(cfg, log, database.WithDialect(postgres.Dialect()))
+//	    if err != nil {
+//	        return err
+//	    }
+//	    app.Register(db)
 //	    app.Start(context.Background())
 //	}
 //

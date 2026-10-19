@@ -8,8 +8,7 @@ import (
 	"go.opentelemetry.io/otel/metric/embedded"
 )
 
-// Gauge is one observable gauge in a set registered by [ObserveGauges]. It reads its value from the set's snapshot.
-// Build it with [Int64Gauge] or [Float64Gauge].
+// Gauge is one observable gauge in a set registered by [ObserveGauges]. It reads its value from the set's snapshot. Build it with [Int64Gauge] or [Float64Gauge].
 type Gauge[T any] struct {
 	name     string
 	opts     []InstrumentOption
@@ -27,8 +26,7 @@ func Float64Gauge[T any](name string, value func(T) float64, opts ...InstrumentO
 	return Gauge[T]{name: name, opts: opts, value: value}
 }
 
-// ObserveGauges registers gauges on meter with one callback that takes a single snapshot per collection, so values
-// that belong together are read together. A nil meter registers nothing. Unregister the result when its owner stops.
+// ObserveGauges registers gauges on meter with one callback that takes a single snapshot per collection, so values that belong together are read together. A nil meter registers nothing. Unregister the result when its owner stops.
 func ObserveGauges[T any](meter metric.Meter, snapshot func() T, gauges ...Gauge[T]) (metric.Registration, error) {
 	if meter == nil {
 		return nopRegistration{}, nil

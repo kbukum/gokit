@@ -57,7 +57,7 @@ func Prepare(ctx context.Context, input database.ConnectionInput) (database.Open
 	}
 	location, err := time.LoadLocation(runtime["timezone"])
 	if err != nil {
-		return nil, apperrors.InvalidInput("timezone", "Unsupported timezone").WithCause(database.Failure(err))
+		return nil, apperrors.InvalidInput("timezone", "Unsupported timezone").WithCause(database.WrapFailure(err))
 	}
 	secret, err := database.ResolvePassword(ctx, params, input.Secrets)
 	if err != nil {
@@ -73,7 +73,7 @@ func Prepare(ctx context.Context, input database.ConnectionInput) (database.Open
 		}},
 	)
 	if err != nil {
-		return nil, database.Failure(err)
+		return nil, database.WrapFailure(err)
 	}
 	config.Host, config.User, config.Database = params.Host, params.User, params.Database
 	config.Port = uint16(params.Port)
@@ -100,7 +100,7 @@ func rejectAmbient() error {
 func opaqueParams(dsn string) (database.ConnParams, error) {
 	u, err := url.Parse(dsn)
 	if err != nil {
-		return database.ConnParams{}, apperrors.InvalidInput("dsn", "Invalid PostgreSQL URL").WithCause(database.Failure(err))
+		return database.ConnParams{}, apperrors.InvalidInput("dsn", "Invalid PostgreSQL URL").WithCause(database.WrapFailure(err))
 	}
 	if u.Scheme != "postgres" && u.Scheme != "postgresql" || u.User == nil || u.Fragment != "" {
 		return database.ConnParams{}, apperrors.InvalidInput("dsn", "PostgreSQL opaque input must be a credential-free PostgreSQL URL")
@@ -117,7 +117,7 @@ func opaqueParams(dsn string) (database.ConnParams, error) {
 	}
 	query, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
-		return database.ConnParams{}, apperrors.InvalidInput("options", "Invalid PostgreSQL URL options").WithCause(database.Failure(err))
+		return database.ConnParams{}, apperrors.InvalidInput("options", "Invalid PostgreSQL URL options").WithCause(database.WrapFailure(err))
 	}
 	params := database.ConnParams{Host: u.Hostname(), Port: port, User: u.User.Username(), Database: strings.TrimPrefix(u.Path, "/"), Options: make(map[string]string, len(query))}
 	for key, values := range query {
@@ -184,7 +184,7 @@ func connectionOptions(params database.ConnParams) (map[string]string, *tls.Conf
 		ServerName: params.Host, CAFile: params.Options["sslrootcert"], MinVersion: tls.VersionTLS13,
 	}).Build()
 	if err != nil {
-		return nil, nil, database.Failure(err)
+		return nil, nil, database.WrapFailure(err)
 	}
 	return runtime, tlsConfig, nil
 }

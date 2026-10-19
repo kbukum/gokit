@@ -182,12 +182,12 @@ func (c Config) connectOptions() ([]natsgo.Option, error) {
 	switch {
 	case c.PasswordFile != "":
 		// The file is read now to fail fast, then again at every connect, so a rotated password is used on reconnect.
-		if _, err := fs.ReadSecret(c.PasswordFile, 1, maxPasswordBytes); err != nil {
+		if _, err := fs.ReadSecret(c.PasswordFile, fs.SecretBounds{Min: 1, Max: maxPasswordBytes}); err != nil {
 			return nil, fmt.Errorf("nats: read password_file: %w", err)
 		}
 		user, file := c.Username, c.PasswordFile
 		opts = append(opts, natsgo.UserInfoHandler(func() (string, string) {
-			secret, err := fs.ReadSecret(file, 1, maxPasswordBytes)
+			secret, err := fs.ReadSecret(file, fs.SecretBounds{Min: 1, Max: maxPasswordBytes})
 			if err != nil {
 				// An unreadable file fails authentication, and the connection retries.
 				return user, ""

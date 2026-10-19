@@ -1,480 +1,488 @@
 name: CI
 
+# One workflow proves every change. The gate job decides scope and plans the
+# fuzz shards; every other job runs the same Make targets developers run locally.
+# `CI Status` is the single required check, so it must report on every PR,
+# including docs-only ones where the Go jobs are skipped.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE/**'
   merge_group:
     branches: [main]
+  schedule:
+    # Nightly: full suite on the latest Go plus a long fuzz campaign.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: Fuzz time per target (positive Go duration; at most 11m, as a shard runs up to 8 targets in 90 minutes)
+        required: false
+        default: 30s
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
-# Pinned, published Toven release used to drive the structural guardrail through
-# the same `command`-ecosystem task the Makefile uses (`toven run structure`).
-# Kept in lock-step with .github/workflows/toven-canary.yml; bump both together.
+# Pinned Toven release; keep in lock-step with .github/workflows/toven-canary.yml.
+# Third-party actions are pinned by 40-char SHA; Dependabot bumps SHA and comment together.
 env:
-  TOVEN_VERSION: v0.1.0-alpha.10
-
-# All third-party actions are pinned by 40-char SHA. Dependabot is configured
-# (see .github/dependabot.yml) to bump both the SHA and the trailing version
-# comment in lock-step. Do not relax to floating tags.
+  TOVEN_VERSION: v0.1.0-alpha.14
 
 jobs:
-  # ── Stage 0: Path filter (skip expensive jobs when Go code is unchanged) ──
-  changes:
-    name: Changes
+  # ── Gate: scope, repo guardrails, and the fuzz plan ───────────────────────
+  gate:
+    name: Gate
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
+    timeout-minutes: 20
     outputs:
-      go-code: ${{ steps.filter.outputs.go-code }}
-      affected: ${{ steps.domains.outputs.affected || 'all' }}
+      code: ${{ steps.scope.outputs.code }}
+      go-floor: ${{ steps.go.outputs.floor }}
+      go-versions: ${{ steps.go.outputs.versions }}
+      fuzz-groups: ${{ steps.fuzz.outputs.groups }}
+      fuzz-total: ${{ steps.fuzz.outputs.total }}
+      fuzz-modules: ${{ steps.fuzz.outputs.modules }}
+      fuzz-time: ${{ steps.fuzz.outputs.time }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
-
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          filters: |
-            go-code:
-              - '**/*.go'
-              - '**/go.mod'
-              - '**/go.sum'
-              - 'go.work'
-              - '*.go.work'
-              - 'go.work.sum'
-              - 'toven.toml'
-              - 'gomod.sh'
-              - 'scripts/**'
-              - 'Makefile'
-              - '.golangci.yml'
-              - '.github/workflows/ci.yml'
-              - '.github/govulncheck-suppressions.json'
-              - '.github/dependabot.yml'
+          fetch-depth: 0
 
-      - name: Detect affected domains
-        id: domains
-        if: github.event_name == 'pull_request'
+      # Pull requests that only touch docs skip the Go jobs; every other event runs everything.
+      - name: Decide scope
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          CHANGED=$(git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.sha }} 2>/dev/null || echo "")
-          if [ -n "$CHANGED" ]; then
-            AFFECTED=$(echo "$CHANGED" | ./scripts/affected-domains.sh)
-          else
-            AFFECTED=""
+          set -euo pipefail
+          code=true
+          if [ "$EVENT" = pull_request ]; then
+            # Capture first: a failed diff must fail the gate, never read as "docs only".
+            changed=$(git diff --name-only "$BASE_SHA...HEAD")
+            if [ -n "$changed" ] && ! grep -qvE '(\.md$|^docs/|^LICENSE$|^\.github/(ISSUE_TEMPLATE|PULL_REQUEST_TEMPLATE)/)' <<<"$changed"; then
+              code=false
+            fi
           fi
-          if [ -z "$AFFECTED" ]; then
-            AFFECTED="all"
-          fi
-          echo "affected<<EOF" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$AFFECTED" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "Affected domains: $AFFECTED"
+          echo "code=$code" | tee -a "$GITHUB_OUTPUT"
 
-  # ── Stage 1: Preflight (version consistency, tidy, changelog) ─────────────
-  preflight:
-    name: Preflight
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
-
+      # The root go.mod directive is the supported floor; every module declares it.
       - name: Verify uniform Go version across modules
+        id: floor
+        if: steps.scope.outputs.code == 'true'
         run: |
-          versions=$(grep '^go ' $(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*') | awk '{print $NF}' | sort -u)
-          count=$(printf '%s\n' "$versions" | grep -c .)
-          if [ "$count" -ne 1 ]; then
-            echo "::error::Multiple Go versions found across modules:"
-            printf '%s\n' "$versions"
+          set -euo pipefail
+          floor=$(sed -n 's/^go //p' go.mod)
+          versions=$(git ls-files '*go.mod' | xargs sed -n 's/^go //p' | sort -u)
+          if [ "$versions" != "$floor" ]; then
+            echo "::error::Every go.mod must declare go $floor (the root floor); found: ${versions//$'\n'/ }"
             exit 1
           fi
-          echo "All modules use Go version: $versions"
+          echo "floor=$floor" >> "$GITHUB_OUTPUT"
 
+      # Runs on docs-only changes too, since they can edit the CHANGELOG.
       - name: Validate CHANGELOG unreleased heading
         run: ./scripts/check_changelog_unreleased.sh
 
-      - name: Test CI guardrails
+      - id: setup-go
+        if: steps.scope.outputs.code == 'true'
+        uses: ./.github/actions/setup-go
+        with:
+          cache-name: gate
+
+      - name: Install the pinned Toven release
+        id: toven
+        if: steps.scope.outputs.code == 'true'
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
+        with:
+          version: ${{ env.TOVEN_VERSION }}
+
+      - name: Test CI scripts
+        if: steps.scope.outputs.code == 'true'
+        env:
+          TOVEN: ${{ steps.toven.outputs.toven }}
         run: |
           python3 -m pip install -r scripts/requirements-test.txt
-          python3 -m pytest scripts/test_govulncheck.py scripts/test_module_replaces.py -q
+          python3 -m pytest -q scripts/test_govulncheck.py scripts/test_module_replaces.py \
+            scripts/test_fuzz.py scripts/test_integration_modules.py
+          python3 -m unittest discover -s scripts -p test_validation.py
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
-        with:
-          go-version-file: go.mod
+      - name: Lint workflows
+        if: steps.scope.outputs.code == 'true'
+        run: make actionlint
 
-      - name: Verify intra-repo replace graph is complete
-        run: ./gomod.sh replace-sync --check
+      - name: Verify the intra-repo replace graph
+        if: steps.scope.outputs.code == 'true'
+        run: make replace-check
 
       - name: Verify modules are tidy
-        run: |
-          ./gomod.sh tidy
-          if [ -n "$(git status --porcelain -- '*.mod' '*.sum')" ]; then
-            echo "::error::go.mod/go.sum are not tidy. Run 'make tidy' and commit the changes."
-            git --no-pager diff -- '*.mod' '*.sum'
-            exit 1
-          fi
+        if: steps.scope.outputs.code == 'true'
+        run: make TOVEN="${{ steps.toven.outputs.toven }}" tidy-check
 
-  # ── Stage 2: Build + Vet + Test (single job for all modules on Linux) ────
+      # The floor plus the latest release when it is newer, so a new toolchain
+      # cannot silently break the build.
+      - name: Choose Go versions
+        id: go
+        if: steps.scope.outputs.code == 'true'
+        env:
+          FLOOR: ${{ steps.floor.outputs.floor }}
+        run: |
+          set -euo pipefail
+          latest=$(curl -fsSL --retry 5 --retry-all-errors --max-time 30 'https://go.dev/VERSION?m=text' | head -1)
+          versions="[\"$FLOOR\"]"
+          [ "${latest#go}" = "$FLOOR" ] || versions="[\"$FLOOR\",\"stable\"]"
+          { echo "floor=$FLOOR"; echo "versions=$versions"; } | tee -a "$GITHUB_OUTPUT"
+
+      # Pull requests fuzz the modules their change affects; main, the merge
+      # queue, the nightly run and manual runs fuzz everything.
+      - name: Plan fuzz shards
+        id: fuzz
+        if: steps.scope.outputs.code == 'true'
+        env:
+          TOVEN: ${{ steps.toven.outputs.toven }}
+          FUZZ_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          EVENT: ${{ github.event_name }}
+          DISPATCH_TIME: ${{ inputs.fuzztime }}
+        run: |
+          set -euo pipefail
+          case "$EVENT" in
+            schedule) time=5m ;;
+            workflow_dispatch) time=${DISPATCH_TIME:-30s} ;;
+            *) time=30s ;;
+          esac
+          # The plan refuses a manual input that is not a positive Go duration
+          # or that would overrun a shard, before it reaches GITHUB_OUTPUT.
+          plan=$(python3 scripts/fuzz.py plan --fuzztime "$time")
+          echo "$plan"
+          {
+            echo "groups=$(jq -c .group <<<"$plan")"
+            echo "total=$(jq .groups <<<"$plan")"
+            echo "modules=$(jq -c .modules <<<"$plan")"
+            echo "time=$(jq -r .fuzztime <<<"$plan")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Save Go cache
+        if: steps.scope.outputs.code == 'true' && github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
+
+  # ── Build, vet, race tests and the coverage gate ──────────────────────────
   check:
     name: Check (Go ${{ matrix.go }})
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        # Floor pinned to the go.mod directive; `stable` tracks the latest
-        # release so a newer toolchain cannot silently break the build.
-        go: ['1.27.2', 'stable']
+        go: ${{ fromJSON(needs.gate.outputs.go-versions) }}
     env:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
           go-version: ${{ matrix.go }}
+          cache-name: check
 
-      - name: Build, vet, and test all modules
-        run: |
-          set -euo pipefail
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
-          failed=0
-          for mod in $modules; do
-            echo "::group::Check $mod"
-            (cd "$mod" && go build ./... && go vet ./...) || { echo "::error::Build/vet failed: $mod"; failed=1; echo "::endgroup::"; continue; }
-            testargs=()
-            if [ -f "$mod/.coverpkg" ]; then
-              coverpkg=$(tr -s '[:space:]' ',' < "$mod/.coverpkg" | sed 's/^,//; s/,$//')
-              if [ -n "$coverpkg" ]; then
-                testargs+=("-coverpkg=$coverpkg")
-              fi
-            fi
-            if ! (cd "$mod" && go test -race -shuffle=on -count=1 -timeout=20m -covermode=atomic "${testargs[@]+"${testargs[@]}"}" -coverprofile=coverage.out ./...); then
-              echo "::error::Tests failed: $mod"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit $failed
+      - name: Install the pinned Toven release
+        id: toven
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
+        with:
+          version: ${{ env.TOVEN_VERSION }}
 
-      - name: Merge and upload coverage
-        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.2'
-        run: |
-          set -euo pipefail
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
-          covfiles=""
-          for mod in $modules; do
-            if [ -f "$mod/coverage.out" ]; then
-              covfiles="$covfiles,$mod/coverage.out"
-            fi
-          done
-          covfiles="${covfiles#,}"
-          echo "Coverage files: $covfiles"
-          echo "files=$covfiles" >> "$GITHUB_ENV"
+      # test-coverage is the full race test run: every module with -race and
+      # -shuffle, gated per module by [ecosystems.go.coverage] in toven.toml.
+      - name: Build, vet, test with coverage
+        run: make TOVEN="${{ steps.toven.outputs.toven }}" build vet test-coverage
+
+      - name: List coverage profiles
+        id: coverage
+        if: matrix.go == needs.gate.outputs.go-floor
+        run: echo "files=$(find target/toven/coverage -name '*.out' | sort | paste -sd, -)" >> "$GITHUB_OUTPUT"
 
       - name: Upload coverage
-        if: env.CODECOV_TOKEN != '' && matrix.go == '1.27.2'
-        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7.1.1
+        if: matrix.go == needs.gate.outputs.go-floor && github.event_name != 'merge_group'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
-          files: ${{ env.files }}
-          fail_ci_if_error: true
+          files: ${{ steps.coverage.outputs.files }}
+          fail_ci_if_error: ${{ secrets.CODECOV_TOKEN != '' }}
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
-  # ── Stage 2-cross: Cross-OS tests for platform-sensitive modules ──────────
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
+
+  # ── Cross-OS tests for platform-sensitive modules ─────────────────────────
   check-cross:
     name: Check (${{ matrix.module }} / ${{ matrix.os }})
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
-          - module: 'storage'
+          - module: storage
             os: macos-latest
-          - module: 'server'
+          - module: server
             os: macos-latest
-          - module: 'workload'
+          - module: workload
             os: macos-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
-          cache-dependency-path: ${{ matrix.module }}/go.sum
+          cache-name: cross-${{ matrix.module }}
 
-      - name: Build
-        working-directory: ${{ matrix.module }}
-        run: go build ./...
+      - name: Build and test
+        run: make check M=${{ matrix.module }}
 
-      - name: Test
-        working-directory: ${{ matrix.module }}
-        run: go test -race -shuffle=on -count=1 -timeout=20m ./...
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
 
-  # ── Stage 3: Lint ───────────────────────────────────────────────────────────
-  # gosec runs exclusively as part of golangci-lint (see .golangci.yml).
+  # ── Lint (gosec runs inside golangci-lint; see .golangci.yml) ─────────────
   lint:
     name: Lint
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 30
+    env:
+      GOLANGCI_LINT_VERSION: 2.14.0
+      GOLANGCI_LINT_SHA256: ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          cache-name: lint
 
+      # Prebuilt, checksum-verified release binary: faster than `go install`
+      # and identical to the version developers pin.
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
-
-      - name: Lint all modules
         run: |
           set -euo pipefail
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
-          failed=0
-          for mod in $modules; do
-            echo "::group::Lint $mod"
-            if ! (cd "$mod" && golangci-lint run ./...); then
-              echo "::error::Lint failed for module: $mod"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit $failed
+          name="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64"
+          curl -fsSL --retry 3 -o /tmp/gcl.tar.gz \
+            "https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/${name}.tar.gz"
+          echo "${GOLANGCI_LINT_SHA256}  /tmp/gcl.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gcl.tar.gz -C /tmp
+          sudo install -m 0755 "/tmp/${name}/golangci-lint" /usr/local/bin/golangci-lint
+          golangci-lint version
 
       - name: Install the pinned Toven release
         id: toven
-        # Pinned by immutable commit SHA; `version` independently pins the
-        # installed binary (dual pin, both required). Same pin as toven-canary.yml.
-        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
         with:
           version: ${{ env.TOVEN_VERSION }}
+
+      - name: Lint all modules
+        run: make TOVEN="${{ steps.toven.outputs.toven }}" lint
 
       - name: Structure guard (advisory)
         continue-on-error: true
         run: make TOVEN="${{ steps.toven.outputs.toven }}" structure
 
-      - name: Validation dispatch and actual affected-selection contracts
-        env:
-          TOVEN: ${{ steps.toven.outputs.toven }}
-        run: python3 -m unittest discover -s scripts -p test_validation.py -v
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
 
-  # ── Stage 3s: Security scan ──────────────────────────────────────────────────
+  # ── Known vulnerabilities (reviewed suppressions only) ────────────────────
   security:
     name: Security
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          cache-name: security
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
-      - name: Run govulncheck (all modules)
-        run: |
-          set -euo pipefail
-          modules=$(find . -name 'go.mod' -not -path '*/vendor/*' -not -path '*/.git/*' \
-            | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
-          failed=0
-          for mod in $modules; do
-            echo "::group::Vuln $mod"
-            if ! "$GITHUB_WORKSPACE/scripts/govulncheck.py" --module "$mod" -- ./...; then
-              echo "::error::govulncheck failed for module: $mod"
-              failed=1
-            fi
-            echo "::endgroup::"
-          done
-          exit $failed
-
-  # ── Stage 3f: Fuzz smoke tests ─────────────────────────────────────────────
-  fuzz:
-    name: Fuzz Smoke
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - name: Install the pinned Toven release
+        id: toven
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
         with:
-          go-version-file: go.mod
+          version: ${{ env.TOVEN_VERSION }}
 
-      # 30s per target — surfaces obvious regressions; long campaigns run in
-      # a separate scheduled workflow. Targets are discovered dynamically so
-      # newly-added FuzzXxx are picked up without editing CI.
-      - name: Discover and run fuzz targets
-        run: |
-          set -euo pipefail
-          # Find every (module_dir, package_dir, FuzzName) triple in the repo.
-          mapfile -t mods < <(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' | sed 's|/go.mod$||' | sort)
-          fail=0
-          for mod in "${mods[@]}"; do
-            # Build prune args so grep does not recurse into nested modules
-            # (otherwise fuzz targets in submodules get discovered twice:
-            # once via their own module, once via the parent's recursive scan).
-            prune_args=()
-            for other in "${mods[@]}"; do
-              [ "$other" = "$mod" ] && continue
-              case "$other" in
-                "$mod"/*) prune_args+=( --exclude-dir="$(basename "$other")" ) ;;
-              esac
-            done
-            mapfile -t files < <(grep -rlE '^func Fuzz[A-Za-z0-9_]+' "$mod" --include='*_test.go' "${prune_args[@]}" 2>/dev/null || true)
-            for f in "${files[@]}"; do
-              # package path relative to module (./pkg) and fuzz target names
-              pkgdir=$(dirname "${f#$mod/}")
-              [ "$pkgdir" = "." ] || pkgdir="./$pkgdir"
-              [ "$pkgdir" = "" ] && pkgdir="."
-              targets=$(grep -hoE '^func (Fuzz[A-Za-z0-9_]+)' "$f" | awk '{print $2}' | sort -u)
-              for t in $targets; do
-                echo "::group::$mod $pkgdir $t"
-                # Capture output so we can distinguish a real fuzz crash
-                # ("Failing input written to") from the Go test harness's
-                # known "context deadline exceeded" that fires when
-                # -fuzztime elapses while workers are mid-shutdown — that
-                # surfaces as exit-1 even though no failing seed exists.
-                out=$( ( cd "$mod" && go test -run='^$' -fuzz="^${t}$" -fuzztime=30s "${pkgdir:-.}" ) 2>&1 ) && rc=0 || rc=$?
-                echo "$out"
-                if [ "$rc" -ne 0 ]; then
-                  if echo "$out" | grep -q 'Failing input written to'; then
-                    echo "::error::$mod $pkgdir $t found a failing input"
-                    fail=1
-                  elif echo "$out" | grep -qE 'context deadline exceeded$'; then
-                    echo "::warning::$mod $pkgdir $t: harness deadline race, treating as pass"
-                  else
-                    echo "::error::$mod $pkgdir $t failed (rc=$rc)"
-                    fail=1
-                  fi
-                fi
-                echo "::endgroup::"
-              done
-            done
-          done
-          exit $fail
+      - name: Scan every module
+        run: make TOVEN="${{ steps.toven.outputs.toven }}" vuln
 
-  # ── Stage 3l: License allow-list ─────────────────────────────────────────
-  # Fails if any dependency ships a license outside the permissive allow-list
-  # (see scripts/check-licenses.sh). Runs alongside the other supply-chain gates.
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
+
+  # ── Fuzz: balanced shards, each target in exactly one shard ───────────────
+  fuzz:
+    name: Fuzz (${{ matrix.group }}/${{ needs.gate.outputs.fuzz-total }})
+    needs: gate
+    if: needs.gate.outputs.code == 'true' && needs.gate.outputs.fuzz-groups != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ${{ fromJSON(needs.gate.outputs.fuzz-groups) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: setup-go
+        uses: ./.github/actions/setup-go
+        with:
+          # One namespace per shard keeps each shard's generated corpus in GOCACHE.
+          cache-name: fuzz-${{ matrix.group }}
+
+      - name: Fuzz shard ${{ matrix.group }}
+        env:
+          FUZZ_MODULES: ${{ needs.gate.outputs.fuzz-modules }}
+          FUZZ_GROUP: ${{ matrix.group }}
+          # Not GROUPS: bash reserves it for the caller's group IDs and ignores the env value.
+          FUZZ_GROUPS: ${{ needs.gate.outputs.fuzz-total }}
+          FUZZ_TIME: ${{ needs.gate.outputs.fuzz-time }}
+        run: >-
+          python3 scripts/fuzz.py run
+          --group "$FUZZ_GROUP" --groups "$FUZZ_GROUPS"
+          --fuzztime "$FUZZ_TIME"
+          --failures target/fuzz-failures
+
+      # Failing inputs to reproduce locally: copy into the package's testdata/fuzz.
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-failures-${{ matrix.group }}
+          path: target/fuzz-failures
+          if-no-files-found: ignore
+
+      # Main pushes and the nightly campaign keep every shard's corpus; pull requests only restore.
+      - name: Save Go cache
+        if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'schedule') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
+
+  # ── Dependency license allow-list (scripts/check-licenses.sh) ─────────────
   licenses:
     name: Licenses
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          cache-name: licenses
 
       - name: Install go-licenses
         run: go install github.com/google/go-licenses/v2@v2.0.1
 
-      - name: Check dependency licenses (all modules)
-        run: ./scripts/check-licenses.sh
+      - name: Check dependency licenses
+        run: make licenses
 
-  # ── Stage 3g: Integration suite (gated by //go:build integration) ─────────
-  # Slow / dependency-heavy tests run separately from the default check job.
-  # Pull requests and main require the same result before reporting success.
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
+
+  # ── Integration: modules with //go:build integration (Docker services) ────
   integration:
     name: Integration
-    needs: changes
-    if: needs.changes.outputs.go-code == 'true'
+    needs: gate
+    if: needs.gate.outputs.code == 'true'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v6.0.0
+      - id: setup-go
+        uses: ./.github/actions/setup-go
         with:
-          go-version-file: go.mod
+          cache-name: integration
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@6683762a83098ffde6e5bc088090ffdfd2a1aa6b # v0.1.0-alpha.10
+        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
         with:
           version: ${{ env.TOVEN_VERSION }}
 
-      # The auth host process proof launches the built binary; it fails closed without it.
-      - name: Build the auth test host
-        run: make auth-host-build
+      - name: Run integration tests
+        run: make TOVEN="${{ steps.toven.outputs.toven }}" test-integration
 
-      - name: Run integration tests in every module
-        env:
-          GOKIT_AUTH_HOST_BINARY: ${{ github.workspace }}/auth/testhost/target/auth-host
-        run: '"${{ steps.toven.outputs.toven }}" run test -- -race -count=1 -timeout=20m -tags=integration'
+      - name: Save Go cache
+        if: github.event_name == 'push'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.setup-go.outputs.cache-paths }}
+          key: ${{ steps.setup-go.outputs.cache-key }}
 
-  # ── Gate: Aggregate status for branch protection ──────────────────────────
+  # ── The single required check ─────────────────────────────────────────────
   ci-status:
     name: CI Status
     if: always()
-    needs: [changes, preflight, check, check-cross, lint, security, fuzz, licenses, integration]
+    needs: [gate, check, check-cross, lint, security, fuzz, licenses, integration]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      # The gate must pass. When it chose to run the Go jobs, each must succeed;
+      # fuzz may skip only when the change affects no fuzz targets.
       - name: Evaluate results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          results=("${{ needs.changes.result }}" \
-                   "${{ needs.preflight.result }}" \
-                   "${{ needs.check.result }}" \
-                   "${{ needs.check-cross.result }}" \
-                   "${{ needs.lint.result }}" \
-                   "${{ needs.security.result }}" \
-                   "${{ needs.fuzz.result }}" \
-                   "${{ needs.licenses.result }}" \
-                   "${{ needs.integration.result }}")
-          for r in "${results[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" || ("${{ needs.changes.outputs.go-code }}" == "true" && "$r" != "success") ]]; then
-              echo "::error::CI failed — one or more jobs did not succeed."
-              exit 1
-            fi
-          done
-          echo "All CI checks passed ✓"
+          set -euo pipefail
+          code=$(jq -r '.gate.outputs.code // "false"' <<<"$NEEDS")
+          groups=$(jq -r '.gate.outputs["fuzz-groups"] // "[]"' <<<"$NEEDS")
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            ok=false
+            case "$result" in
+              success) ok=true ;;
+              skipped)
+                if [ "$job" != gate ] && { [ "$code" != true ] || { [ "$job" = fuzz ] && [ "$groups" = '[]' ]; }; }; then
+                  ok=true
+                fi ;;
+            esac
+            echo "$job: $result"
+            [ "$ok" = true ] || { echo "::error::$job did not succeed ($result)"; failed=1; }
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<"$NEEDS")
+          exit $failed

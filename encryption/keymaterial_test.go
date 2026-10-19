@@ -9,8 +9,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// Vectors computed independently with HKDF-SHA256 and the AEAD from Python's cryptography package.
-// rskit-encryption asserts the same vectors, so both kits read each other's key-material envelopes.
+// Vectors computed independently with HKDF-SHA256 and the AEAD from Python's cryptography package. rskit-encryption asserts the same vectors, so both kits read each other's key-material envelopes.
 var keyMaterialVectors = []struct {
 	algorithm Algorithm
 	binding   string

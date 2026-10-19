@@ -28,8 +28,7 @@ var (
 
 // Grant describes the admitting authority check.
 type Grant struct {
-	// CheckedAt is read from the set's [Config.Clock] immediately before the admitting check started; with the default
-	// monotonic clock it must keep its monotonic reading.
+	// CheckedAt is read from the set's [Config.Clock] immediately before the admitting check started; with the default monotonic clock it must keep its monotonic reading.
 	CheckedAt time.Time
 
 	// Lifetime is the non-renewable bound from CheckedAt, such as the credential's remaining validity.
@@ -77,9 +76,7 @@ func New[K comparable](cfg Config[K]) (*Set[K], error) {
 	return s, nil
 }
 
-// Acquire starts a lease for key after an admitting check described by grant. The returned lifetime ends when the
-// lease is denied, expires, reaches its lifetime, is released or revoked, the set closes, or owner ends; context.Cause
-// reports which. The owner must call release, which is idempotent.
+// Acquire starts a lease for key after an admitting check described by grant. The returned lifetime ends when the lease is denied, expires, reaches its lifetime, is released or revoked, the set closes, or owner ends; context.Cause reports which. The owner must call release, which is idempotent.
 func (s *Set[K]) Acquire(owner context.Context, key K, grant Grant) (context.Context, func(), error) {
 	if err := owner.Err(); err != nil {
 		return nil, nil, apperrors.Canceled("lease.acquire").WithCause(context.Cause(owner))
@@ -125,9 +122,11 @@ func (s *Set[K]) endLocked(e *entry[K], cause error) {
 	}
 }
 
-// Revoke ends every lease whose key matches before returning and reports how many ended. match runs outside the
-// set's lock, so it may be slow or call back into the set; leases acquired while it runs are not considered.
-func (s *Set[K]) Revoke(match func(K) bool) int {
+// Revoke ends every lease whose key matches before returning and reports how many ended. match runs outside the set's lock, so it may be slow or call back into the set; leases acquired while it runs are not considered. A nil match is refused with an invalid-input error.
+func (s *Set[K]) Revoke(match func(K) bool) (int, error) {
+	if match == nil {
+		return 0, apperrors.InvalidInput("match", "is required")
+	}
 	s.mu.Lock()
 	snapshot := make([]*entry[K], 0, len(s.leases))
 	for e := range s.leases {
@@ -149,7 +148,7 @@ func (s *Set[K]) Revoke(match func(K) bool) int {
 			n++
 		}
 	}
-	return n
+	return n, nil
 }
 
 // Len reports the number of live leases.

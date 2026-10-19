@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kbukum/gokit/component"
@@ -184,40 +185,42 @@ func TestManagedConsumerNameAndTopic(t *testing.T) {
 }
 
 func TestManagedConsumerLifecycle(t *testing.T) {
-	sc := &stubConsumer{topic: "t"}
-	mc := newManaged(t, ManagedConsumerConfig{Consumer: sc})
-	if h := mc.Health(context.Background()); h.Status != component.StatusUnhealthy || mc.IsRunning() {
-		t.Fatalf("before start: %+v", h)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	if err := mc.Start(ctx); err != nil {
-		t.Fatalf("Start: %v", err)
-	}
-	if err := mc.Start(ctx); err != nil {
-		t.Fatalf("second Start: %v", err)
-	}
-	eventually(t, "consuming", func() bool { return sc.calls.Load() == 1 })
-	cancel()
-	// Consumption outlives the context Start was given.
-	time.Sleep(10 * time.Millisecond)
-	if !mc.IsRunning() || mc.Health(context.Background()).Status != component.StatusHealthy {
-		t.Fatalf("after the start context ended: running %v health %+v", mc.IsRunning(), mc.Health(context.Background()))
-	}
-	if err := mc.Drain(context.Background()); err != nil {
-		t.Fatalf("Drain: %v", err)
-	}
-	if mc.IsRunning() || !sc.closed.Load() {
-		t.Fatal("want stopped and closed")
-	}
-	if h := mc.Health(context.Background()); h.Status != component.StatusUnhealthy || h.Message != "stopped" {
-		t.Fatalf("after stop: %+v", h)
-	}
-	if err := mc.Start(context.Background()); !errors.Is(err, ErrClosed) {
-		t.Fatalf("Start after Stop = %v, want ErrClosed", err)
-	}
-	if err := mc.Stop(context.Background()); err != nil {
-		t.Fatalf("second Stop: %v", err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		sc := &stubConsumer{topic: "t"}
+		mc := newManaged(t, ManagedConsumerConfig{Consumer: sc})
+		if h := mc.Health(context.Background()); h.Status != component.StatusUnhealthy || mc.IsRunning() {
+			t.Fatalf("before start: %+v", h)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		if err := mc.Start(ctx); err != nil {
+			t.Fatalf("Start: %v", err)
+		}
+		if err := mc.Start(ctx); err != nil {
+			t.Fatalf("second Start: %v", err)
+		}
+		eventually(t, "consuming", func() bool { return sc.calls.Load() == 1 })
+		cancel()
+		// Consumption outlives the context Start was given.
+		synctest.Wait()
+		if !mc.IsRunning() || mc.Health(context.Background()).Status != component.StatusHealthy {
+			t.Fatalf("after the start context ended: running %v health %+v", mc.IsRunning(), mc.Health(context.Background()))
+		}
+		if err := mc.Drain(context.Background()); err != nil {
+			t.Fatalf("Drain: %v", err)
+		}
+		if mc.IsRunning() || !sc.closed.Load() {
+			t.Fatal("want stopped and closed")
+		}
+		if h := mc.Health(context.Background()); h.Status != component.StatusUnhealthy || h.Message != "stopped" {
+			t.Fatalf("after stop: %+v", h)
+		}
+		if err := mc.Start(context.Background()); !errors.Is(err, ErrClosed) {
+			t.Fatalf("Start after Stop = %v, want ErrClosed", err)
+		}
+		if err := mc.Stop(context.Background()); err != nil {
+			t.Fatalf("second Stop: %v", err)
+		}
+	})
 }
 
 func TestManagedConsumerStartRefusesEndedContext(t *testing.T) {

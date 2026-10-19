@@ -7,8 +7,7 @@ import (
 	"github.com/kbukum/gokit/auth/apikey/apikeytest"
 )
 
-// TestRunPassesReferenceStore proves the contract itself is satisfiable: the reference memory store passes it with
-// the default owner and with an explicit one.
+// TestRunPassesReferenceStore proves the contract itself is satisfiable: the reference memory store passes it with the default owner and with an explicit one.
 func TestRunPassesReferenceStore(t *testing.T) {
 	t.Parallel()
 	newStore := func(t *testing.T) apikey.Store {

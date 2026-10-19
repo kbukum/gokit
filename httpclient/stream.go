@@ -46,7 +46,7 @@ func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, e
 	streamClient.Timeout = 0
 	resp, err := streamClient.Do(httpReq) //nolint:bodyclose // Ownership transfers to lifetime.attach; every exit closes through lifetime.finish.
 	if err != nil {
-		return fail(NewConnectionError(err))
+		return fail(NewConnectionError(redactURLError(err)))
 	}
 	life.attach(resp.Body)
 	life.setPhase("first_progress", c.config.Stream.FirstProgressTimeout)

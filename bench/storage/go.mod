@@ -58,3 +58,15 @@ replace (
 	github.com/kbukum/gokit/bench => ../
 	github.com/kbukum/gokit/storage => ../../storage
 )
+
+replace github.com/kbukum/gokit/ai => ../../ai
+
+replace github.com/kbukum/gokit/embedding => ../../embedding
+
+replace github.com/kbukum/gokit/httpclient => ../../httpclient
+
+replace github.com/kbukum/gokit/llm => ../../llm
+
+replace github.com/kbukum/gokit/schema => ../../schema
+
+replace github.com/kbukum/gokit/testutil => ../../testutil

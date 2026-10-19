@@ -42,29 +42,33 @@
 //
 // # Bounded unary calls
 //
-// A context.WithTimeout applied before the call looks like the caller's own deadline, so a hung peer would never count as an outage. UnaryTimeoutInterceptor goes after Availability instead:
+// A context.WithTimeout applied before the call looks like the caller's own deadline, so a hung peer would never count as an outage. Interceptors installs the timeout after Availability instead, so a timeout is recorded as an outage:
 //
 //	availability := client.NewAvailability("peer")
-//	limit, err := client.UnaryTimeoutInterceptor(2 * time.Second)
-//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(availability, limit))
+//	chain, err := client.Interceptors(client.WithAvailability(availability), client.WithUnaryTimeout(2*time.Second))
+//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(chain...))
+//
+// A client that only needs a timeout leaves availability out:
+//
+//	chain, err := client.Interceptors(client.WithUnaryTimeout(2*time.Second))
 //
 // # Owning a peer
 //
-// A Peer registers one peer's client and availability as a component, so health follows real calls and idle
-// connections close at shutdown:
+// A Peer registers one peer's client and availability as a component, so health follows real calls and idle connections close at shutdown:
 //
 //	peer, err := client.NewPeer("peer-control", httpClient)
 //	app.RegisterComponent(peer)
-//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(peer.Availability()))
+//	chain, err := peer.Interceptors(client.WithUnaryTimeout(2*time.Second))
+//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(chain...))
 //
 // # Long-lived streams
 //
-// A stream client sets NoTimeout and bounds the wait for the first message instead. FirstMessageTimeoutInterceptor goes after Availability, so a peer that never answers is recorded as unavailable, and MapCallFailure maps the failure for the caller:
+// A stream client sets NoTimeout and bounds the wait for the first message instead, so a peer that never answers is recorded as unavailable, and MapCallFailure maps the failure for the caller:
 //
 //	cfg := client.Config{BaseURL: "http://localhost:8080", NoTimeout: true, AllowInsecureDev: true}
 //	availability := client.NewAvailability("feed")
-//	first, err := client.FirstMessageTimeoutInterceptor(time.Second, util.SystemClock{})
-//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(availability, first))
+//	chain, err := client.Interceptors(client.WithAvailability(availability), client.WithFirstMessageTimeout(time.Second))
+//	opts := append(client.ClientOptions(cfg), connect.WithInterceptors(chain...))
 //	...
 //	if appErr, ok := client.MapCallFailure(ctx, "feed", stream.Err()); ok {
 //	    return appErr

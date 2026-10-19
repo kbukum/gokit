@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/kbukum/gokit/resilience"
 	"github.com/kbukum/gokit/util"
@@ -49,13 +48,15 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 		}
 	}
 
+	if cfg.MaxConnsPerHost > 0 {
+		transport.MaxConnsPerHost, transport.MaxIdleConnsPerHost = cfg.MaxConnsPerHost, cfg.MaxConnsPerHost
+	}
+
 	if cfg.EndpointPolicy != nil {
 		transport.Proxy = nil
 		transport.DialContext = cfg.EndpointPolicy.DialContext
 		transport.DialTLS = nil //nolint:staticcheck // Clear the legacy hook so it cannot bypass validated dialing.
 		transport.DialTLSContext = nil
-		transport.TLSHandshakeTimeout, transport.ResponseHeaderTimeout = 2*time.Second, 2*time.Second
-		transport.MaxConnsPerHost, transport.MaxIdleConnsPerHost, transport.IdleConnTimeout = 8, 8, 30*time.Second
 		if cfg.TLS == nil || transport.TLSClientConfig == nil {
 			transport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS13}
 		} else {
@@ -101,11 +102,6 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 // circuit breaker, timeout, and retry, in that order — so every configured
 // primitive is honored in the policy's documented sequence.
 func (c *Adapter) Do(ctx context.Context, req Request) (*Response, error) {
-	if c.config.EndpointPolicy != nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.config.Timeout)
-		defer cancel()
-	}
 	return resilience.Execute(ctx, c.config.ResiliencePolicy, func(callCtx context.Context) (*Response, error) {
 		return c.executeRequest(callCtx, req)
 	})
@@ -132,6 +128,7 @@ func (c *Adapter) executeRequest(ctx context.Context, req Request) (*Response, e
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		err = redactURLError(err)
 		if ctx.Err() != nil {
 			return nil, NewTimeoutError(err)
 		}
@@ -171,9 +168,6 @@ func (c *Adapter) buildRequest(ctx context.Context, req Request) (*http.Request,
 	}
 
 	if c.config.EndpointPolicy != nil {
-		if len(req.Query) != 0 {
-			return nil, NewValidationError("endpoint policy does not permit query parameters")
-		}
 		normalized, err := c.config.EndpointPolicy.Normalize(url)
 		if err != nil {
 			return nil, err

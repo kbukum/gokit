@@ -92,11 +92,16 @@ func TestConfig_Validate_ZeroTimeout_AfterDefaults(t *testing.T) {
 	}
 }
 
-func TestConfig_Validate_NegativeTimeout(t *testing.T) {
-	cfg := Config{Timeout: -1 * time.Second}
-	cfg.ApplyDefaults()
-	if err := cfg.Validate(); err != nil {
-		t.Error("ApplyDefaults should have corrected negative timeout")
+func TestNewRejectsNegativeSettings(t *testing.T) {
+	for name, cfg := range map[string]Config{
+		"timeout":        {Timeout: -time.Second},
+		"body limit":     {MaxResponseBodyBytes: -1},
+		"max conns":      {MaxConnsPerHost: -1},
+		"stream connect": {Stream: StreamConfig{ConnectTimeout: -time.Second}},
+	} {
+		if _, err := New(cfg); err == nil {
+			t.Errorf("%s: negative value accepted", name)
+		}
 	}
 }
 

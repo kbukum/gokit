@@ -73,3 +73,5 @@ replace (
 )
 
 replace github.com/kbukum/gokit/ai => ../../ai
+
+replace github.com/kbukum/gokit/testutil => ../../testutil

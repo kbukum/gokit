@@ -16,9 +16,7 @@ const MaxSweepStatements = 200
 
 const faultCallback = "gokit:testutil:fault"
 
-// Faults fails a chosen SQL statement run through a gorm database. Use it to prove that every statement's failure is
-// reported and rolled back. Transaction begin and commit are not statements; only gorm create, query, update, delete,
-// row and exec calls count.
+// Faults fails a chosen SQL statement run through a gorm database. Use it to prove that every statement's failure is reported and rolled back. Transaction begin and commit are not statements; only gorm create, query, update, delete, row and exec calls count.
 type Faults struct {
 	mu     sync.Mutex
 	target int
@@ -26,8 +24,7 @@ type Faults struct {
 	fired  bool
 }
 
-// InjectFaults registers the fault callbacks on db. Call it once per database; nothing fails until FailAt arms a
-// statement.
+// InjectFaults registers the fault callbacks on db. Call it once per database; nothing fails until FailAt arms a statement.
 func InjectFaults(db *gorm.DB) (*Faults, error) {
 	if db == nil {
 		return nil, errors.New("database is required")
@@ -71,10 +68,7 @@ func (f *Faults) check(db *gorm.DB) {
 	}
 }
 
-// EveryStatement runs op once per statement it executes, failing that statement each time, then once with no fault.
-// op receives the failed statement's number, or the clean run's, and must leave state as it found it whenever it
-// fails. It returns how many statements were failed. A run that hides its failed statement, a failing clean run and
-// more than [MaxSweepStatements] statements are errors.
+// EveryStatement runs op once per statement it executes, failing that statement each time, then once with no fault. op receives the failed statement's number, or the clean run's, and must leave state as it found it whenever it fails. It returns how many statements were failed. A run that hides its failed statement, a failing clean run and more than [MaxSweepStatements] statements are errors.
 func (f *Faults) EveryStatement(op func(statement int) error) (int, error) {
 	defer f.FailAt(0)
 	for n := 1; n <= MaxSweepStatements+1; n++ {

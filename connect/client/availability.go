@@ -82,13 +82,10 @@ func (a *Availability) Observe(ctx context.Context, err error) {
 	a.state = state
 }
 
-// deadlinePrecision is how much earlier a peer's copy of a propagated deadline can end than the caller's own: Connect
-// sends the remaining time truncated to whole milliseconds.
+// deadlinePrecision is how much earlier a peer's copy of a propagated deadline can end than the caller's own: Connect sends the remaining time truncated to whole milliseconds.
 const deadlinePrecision = time.Millisecond
 
-// deadlineReached reports whether ctx ended or is within deadlinePrecision of its deadline. A peer enforcing the
-// propagated deadline can answer deadline_exceeded before the caller's timer fires, and a loaded runtime can fire that
-// timer late; either way the failure reflects the caller's budget, not the peer.
+// deadlineReached reports whether ctx ended or is within deadlinePrecision of its deadline. A peer enforcing the propagated deadline can answer deadline_exceeded before the caller's timer fires, and a loaded runtime can fire that timer late; either way the failure reflects the caller's budget, not the peer.
 func deadlineReached(ctx context.Context) bool {
 	return ctx.Err() != nil || deadlineDue(ctx)
 }

@@ -1,6 +1,7 @@
 package jetstream
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -16,8 +17,7 @@ import (
 // AdapterName is the adapter's name in a [messaging.Registry].
 const AdapterName = "jetstream"
 
-// MsgIDHeader carries a message's deduplication ID. Within the stream's duplicates window, a second message with the
-// same ID is acknowledged without being stored again. [Producer.Publish] sets it to the event ID.
+// MsgIDHeader carries a message's deduplication ID. Within the stream's duplicates window, a second message with the same ID is acknowledged without being stored again. [Producer.Publish] sets it to the event ID.
 const MsgIDHeader = natsgo.MsgIdHdr
 
 // Bounds and defaults.
@@ -101,19 +101,14 @@ func (c ProducerConfig) Validate() error {
 	return nil
 }
 
-// ConsumerConfig declares a durable pull consumer with explicit acknowledgement that starts at the first retained
-// message, and bounds the loop that reads it. Zero bounds take the Default values.
+// ConsumerConfig declares a durable pull consumer with explicit acknowledgement that starts at the first retained message, and bounds the loop that reads it. Zero bounds take the Default values.
 type ConsumerConfig struct {
 	// Stream is the stream to read; when empty it is the stream that stores the first filter subject.
 	Stream  string
 	Durable string
-	// Bind only binds to an existing durable consumer instead of declaring it, so the user needs no right to create
-	// consumers. The declaration fields below then come from the server; the loop bounds still apply.
+	// Bind only binds to an existing durable consumer instead of declaring it, so the user needs no right to create consumers. The declaration fields below then come from the server; the loop bounds still apply.
 	Bind bool
-	// Declare is the stream this consumer owns, if any. Consume creates or updates it each time it binds the durable,
-	// so the stream's limits follow this configuration and a stream lost in a server restart comes back without
-	// waiting for another process. Its name must be Stream, it does not apply with Bind, and the user needs the
-	// [Client.EnsureStream] rights.
+	// Declare is the stream this consumer owns, if any. Consume creates or updates it each time it binds the durable, so the stream's limits follow this configuration and a stream lost in a server restart comes back without waiting for another process. Its name must be Stream, it does not apply with Bind, and the user needs the [Client.EnsureStream] rights.
 	Declare *StreamConfig
 	// FilterSubjects limits the consumer to matching subjects; empty reads the whole stream.
 	FilterSubjects []string
@@ -121,9 +116,8 @@ type ConsumerConfig struct {
 	AckWait time.Duration
 	// MaxAckPending bounds delivered, unacknowledged messages; it must be at least Batch.
 	MaxAckPending int
-	// MaxDeliver bounds deliveries per message; zero means unlimited. A message that reaches it is no longer
-	// delivered but stays in the stream. A handler can also end redelivery at once with [ErrTerminal].
-	MaxDeliver int
+	// Delivery decides how many times a failing message is tried and what happens when the consumer gives up on it. The zero value retries until the handler succeeds or returns [messaging.ErrTerminal].
+	Delivery DeliveryPolicy
 	// Batch bounds the messages fetched at once, up to MaxFetchBatch.
 	Batch int
 	// FetchWait bounds how long one fetch waits for messages.
@@ -131,8 +125,7 @@ type ConsumerConfig struct {
 	// RetryDelay is the first redelivery or reconnect delay; it doubles per attempt up to MaxRetryDelay.
 	RetryDelay    time.Duration
 	MaxRetryDelay time.Duration
-	// OnError observes broker, acknowledgement and handler failures; the loop continues after each. It is required, so
-	// failures are never silent.
+	// OnError observes adapter failures: broker, acknowledgement, dead-letter and delivery-limit failures. The loop continues after each. It is required, so failures are never silent. Handler errors are not repeated here; the handler already has them.
 	OnError func(error)
 }
 
@@ -185,8 +178,11 @@ func (c ConsumerConfig) Validate() error {
 			return err
 		}
 	}
-	if c.AckWait <= 0 || c.MaxAckPending <= 0 || c.MaxDeliver < 0 {
-		return errors.New("jetstream: consumer ack_wait and max_ack_pending must be > 0 and max_deliver >= 0")
+	if c.AckWait <= 0 || c.MaxAckPending <= 0 {
+		return errors.New("jetstream: consumer ack_wait and max_ack_pending must be > 0")
+	}
+	if err := c.Delivery.Validate(); err != nil {
+		return err
 	}
 	if c.Batch < 1 || c.Batch > MaxFetchBatch || c.Batch > c.MaxAckPending {
 		return fmt.Errorf("jetstream: consumer batch must be between 1 and min(%d, max_ack_pending)", MaxFetchBatch)
@@ -195,6 +191,43 @@ func (c ConsumerConfig) Validate() error {
 		return errors.New("jetstream: consumer fetch_wait and retry_delay must be > 0 and max_retry_delay >= retry_delay")
 	}
 	return nil
+}
+
+// DeliveryPolicy decides how a consumer treats a message whose handler keeps failing. The broker always keeps redelivering an unacknowledged message, so the consumer counts attempts itself and a message ends only by success, a hand-off or an explicit choice to give it up. A failed hand-off is retried on the next delivery, also after the last attempt or a crash during the hand-off.
+type DeliveryPolicy struct {
+	// MaxAttempts bounds handler attempts per message; zero retries until the handler succeeds. A positive bound needs OnDeadLetter or DiscardExhausted to say what happens to an exhausted message.
+	MaxAttempts int
+	// OnDeadLetter receives a message the handler failed for good: its error wraps [messaging.ErrTerminal], or it used its last attempt. A nil result terminates the message. An error is reported to OnError and the message is redelivered, so the hand-off is tried again. After the last attempt, a retried hand-off does not run the handler again; its error wraps [ErrDeliveryLimit] because the handler's original error is not kept. [middleware.DeadLetterProducer.Send] fits this hook.
+	//
+	// [middleware.DeadLetterProducer.Send]: https://pkg.go.dev/github.com/kbukum/gokit/messaging/middleware#DeadLetterProducer.Send
+	OnDeadLetter func(ctx context.Context, msg messaging.Message, err error) error
+	// DiscardExhausted gives up an exhausted message without storing it anywhere: it is terminated and reported to OnError as [ErrDeliveryLimit]. It stays in the stream for replay until the stream's limits remove it.
+	DiscardExhausted bool
+}
+
+// Validate checks that the policy never gives up a message without an explicit choice.
+func (p DeliveryPolicy) Validate() error {
+	switch {
+	case p.MaxAttempts < 0:
+		return errors.New("jetstream: delivery max_attempts must be >= 0; 0 retries until the handler succeeds")
+	case p.OnDeadLetter != nil && p.DiscardExhausted:
+		return errors.New("jetstream: delivery takes on_dead_letter or discard_exhausted, not both")
+	case p.MaxAttempts > 0 && p.OnDeadLetter == nil && !p.DiscardExhausted:
+		return errors.New("jetstream: delivery max_attempts needs on_dead_letter to hand exhausted messages off or discard_exhausted to give them up; use 0 attempts to retry until success")
+	case p.MaxAttempts == 0 && p.DiscardExhausted:
+		return errors.New("jetstream: delivery discard_exhausted needs max_attempts > 0")
+	}
+	return nil
+}
+
+// exhausted reports whether a message delivered this many times used its last attempt.
+func (p DeliveryPolicy) exhausted(delivered uint64) bool {
+	return p.MaxAttempts > 0 && delivered >= uint64(p.MaxAttempts) //nolint:gosec // MaxAttempts is validated positive here
+}
+
+// spent reports whether a message delivered this many times already used its last attempt on an earlier delivery.
+func (p DeliveryPolicy) spent(delivered uint64) bool {
+	return p.MaxAttempts > 0 && delivered > uint64(p.MaxAttempts) //nolint:gosec // MaxAttempts is validated positive here
 }
 
 // topic names what the consumer reads, for logs and [messaging.Consumer.Topic].

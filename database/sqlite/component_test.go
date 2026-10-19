@@ -22,8 +22,7 @@ func testConfig() database.Config {
 
 func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 	cfg := testConfig()
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()))
 	ctx := context.Background()
 
 	if _, err := comp.DB(); !errors.Is(err, database.ErrNotStarted) {
@@ -43,15 +42,12 @@ func TestComponentLifecycleWithSQLiteAdapter(t *testing.T) {
 func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = true
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
-
 	type User struct {
 		ID   uint
 		Name string
 	}
 
-	comp.WithAutoMigrate(&User{})
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()), database.WithAutoMigrate(&User{}))
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -68,15 +64,12 @@ func TestComponentWithAutoMigrateEnabled(t *testing.T) {
 func TestComponentWithAutoMigrateDisabled(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = false
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
-
 	type User struct {
 		ID   uint
 		Name string
 	}
 
-	comp.WithAutoMigrate(&User{})
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()), database.WithAutoMigrate(&User{}))
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -112,8 +105,7 @@ func TestNewWithContextSQLiteAdapter(t *testing.T) {
 func TestComponentStartWithInvalidDSN(t *testing.T) {
 	cfg := testConfig()
 	cfg.DSN = "/invalid/path/to/db.db"
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()))
 
 	err := comp.Start(context.Background())
 	if err != nil && err.Error() == "" {
@@ -123,8 +115,7 @@ func TestComponentStartWithInvalidDSN(t *testing.T) {
 
 func TestComponentHealthAfterStart(t *testing.T) {
 	cfg := testConfig()
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()))
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -144,8 +135,7 @@ func TestComponentHealthAfterStart(t *testing.T) {
 
 func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 	cfg := testConfig()
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()))
 	ctx := context.Background()
 
 	if err := comp.Start(ctx); err != nil {
@@ -161,8 +151,7 @@ func TestComponentDBReturnsValueAfterStart(t *testing.T) {
 
 func TestComponentContextInHealthCheck(t *testing.T) {
 	cfg := testConfig()
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).WithDialect(sqlite.Dialect())
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()))
 	ctx := context.Background()
 	if err := comp.Start(ctx); err != nil {
 		t.Fatalf("Start() failed: %v", err)
@@ -188,10 +177,7 @@ func (unmigratable) TableName() string { return "" }
 func TestComponentStartClosesPoolWhenAutoMigrateFails(t *testing.T) {
 	cfg := testConfig()
 	cfg.AutoMigrate = true
-	log := logging.NewDefault("test")
-	comp := database.NewComponent(cfg, log).
-		WithDialect(sqlite.Dialect()).
-		WithAutoMigrate(&unmigratable{})
+	comp := mustComponent(t, cfg, database.WithDialect(sqlite.Dialect()), database.WithAutoMigrate(&unmigratable{}))
 
 	err := comp.Start(context.Background())
 	if err == nil {
@@ -217,4 +203,13 @@ func mustDB(t *testing.T, comp *database.Component) *database.DB {
 		t.Fatal(err)
 	}
 	return db
+}
+
+func mustComponent(t *testing.T, cfg database.Config, opts ...database.ComponentOption) *database.Component {
+	t.Helper()
+	comp, err := database.NewComponent(cfg, logging.NewDefault("test"), opts...)
+	if err != nil {
+		t.Fatalf("NewComponent: %v", err)
+	}
+	return comp
 }

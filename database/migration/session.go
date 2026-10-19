@@ -18,9 +18,7 @@ import (
 // DefaultTimeout bounds one migration set.
 const DefaultTimeout = 2 * time.Minute
 
-// Session pins one pooled connection and holds the backend's migration lock until Close, so a coordinator can
-// validate several sets and run backend schema work and every migration under one lock on one connection. It never
-// borrows a second connection, so it works on a pool limited to one open connection.
+// Session pins one pooled connection and holds the backend's migration lock until Close, so a coordinator can validate several sets and run backend schema work and every migration under one lock on one connection. It never borrows a second connection, so it works on a pool limited to one open connection.
 type Session struct {
 	mu      sync.Mutex
 	conn    *sql.Conn
@@ -46,12 +44,10 @@ func Begin(ctx context.Context, pool *sql.DB, backend SQLBackend) (*Session, err
 	return &Session{conn: conn, lock: lock, backend: backend}, nil
 }
 
-// Conn returns the pinned connection for backend work under the lock. It is valid until Close and must not be closed
-// by the caller. Begin transactions with Transaction, not Conn().BeginTx.
+// Conn returns the pinned connection for backend work under the lock. It is valid until Close and must not be closed by the caller. Begin transactions with Transaction, not Conn().BeginTx.
 func (s *Session) Conn() *sql.Conn { return s.conn }
 
-// Transaction runs fn in one transaction on the pinned connection and commits when fn succeeds. Canceling ctx stops
-// fn's statements; the rollback still runs on the caller's goroutine, so the connection stays owned by the session.
+// Transaction runs fn in one transaction on the pinned connection and commits when fn succeeds. Canceling ctx stops fn's statements; the rollback still runs on the caller's goroutine, so the connection stays owned by the session.
 func (s *Session) Transaction(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
 	if fn == nil {
 		return apperrors.InvalidInput("transaction", "a transaction function is required")
@@ -72,8 +68,7 @@ func (s *Session) Plan(ctx context.Context, sets ...Set) error {
 	})
 }
 
-// Apply plans every set first, then migrates each forward to its ExpectedVersion, each bounded by DefaultTimeout. A
-// failure stops at that set; sets are not one atomic transaction.
+// Apply plans every set first, then migrates each forward to its ExpectedVersion, each bounded by DefaultTimeout. A failure stops at that set; sets are not one atomic transaction.
 func (s *Session) Apply(ctx context.Context, sets ...Set) error {
 	if err := s.Plan(ctx, sets...); err != nil {
 		return err
@@ -123,8 +118,7 @@ func (s *Session) run(ctx context.Context, set Set, fn func(source.Driver, *sqlD
 	return fn(src, d, set)
 }
 
-// Close releases the lock and returns the connection, using a fresh five-second unlock budget. Repeated calls return
-// the recorded result.
+// Close releases the lock and returns the connection, using a fresh five-second unlock budget. Repeated calls return the recorded result.
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

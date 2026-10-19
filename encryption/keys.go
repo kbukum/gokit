@@ -9,8 +9,7 @@ import (
 	"github.com/kbukum/gokit/util"
 )
 
-// KeySource resolves an encryption key by immutable operator-assigned identifier.
-// Implementations must not log raw keys; callers expose a value only when constructing an encryptor.
+// KeySource resolves an encryption key by immutable operator-assigned identifier. Implementations must not log raw keys; callers expose a value only when constructing an encryptor.
 type KeySource interface {
 	Key(context.Context, string) (util.SecretString, error)
 }
@@ -58,7 +57,7 @@ func (s *FileKeys) Key(ctx context.Context, id string) (util.SecretString, error
 	if !ok {
 		return util.SecretString{}, apperrors.NotFound("encryption key", "").WithReason("ENCRYPTION_KEY_NOT_FOUND")
 	}
-	data, err := fs.ReadSecret(path, 32, 1024)
+	data, err := fs.ReadSecret(path, fs.SecretBounds{Min: 32, Max: 1024})
 	if err != nil {
 		return util.SecretString{}, apperrors.ServiceUnavailable("encryption key").WithReason("ENCRYPTION_KEY_UNAVAILABLE").WithCause(err)
 	}

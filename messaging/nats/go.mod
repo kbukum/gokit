@@ -46,3 +46,5 @@ replace (
 	github.com/kbukum/gokit => ../../
 	github.com/kbukum/gokit/messaging => ../
 )
+
+replace github.com/kbukum/gokit/testutil => ../../testutil

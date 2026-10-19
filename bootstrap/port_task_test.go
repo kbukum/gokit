@@ -69,3 +69,20 @@ func TestRunPortTaskRejectsNilDependencies(t *testing.T) {
 		t.Fatal("nil port accepted")
 	}
 }
+
+func TestRunPortTaskRefusesMissingArgumentsAndNamesItsModuleReadably(t *testing.T) {
+	t.Parallel()
+	task := func(context.Context, store) error { return nil }
+	for name, err := range map[string]error{
+		"app":  RunPortTask[*testConfig](context.Background(), nil, storePort, task),
+		"port": RunPortTask(context.Background(), newQuietApp(t), (*Port[store])(nil), task),
+		"task": RunPortTask(context.Background(), newQuietApp(t), storePort, nil),
+	} {
+		if !errors.Is(err, ErrInvalidPortTask) {
+			t.Errorf("missing %s: %v, want ErrInvalidPortTask", name, err)
+		}
+	}
+	if got := (&portTask[store]{port: storePort}).Spec().Name; got != "task "+storePort.Name() {
+		t.Errorf("task module name = %q", got)
+	}
+}

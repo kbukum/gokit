@@ -61,7 +61,7 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 			return nil, apperrors.InvalidInput("tls", "Fixture CA, certificate and key files are required")
 		}
 		if _, err := (&security.TLSConfig{CAFile: files.CAFile, CertFile: files.CertFile, KeyFile: files.KeyFile, ServerName: "localhost", MinVersion: tls.VersionTLS13}).Build(); err != nil {
-			return nil, database.Failure(err)
+			return nil, database.WrapFailure(err)
 		}
 		customizers = append(customizers,
 			tcpostgres.WithSSLCert(files.CAFile, files.CertFile, files.KeyFile),
@@ -83,15 +83,15 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 		fixture.terminate = func(cleanupCtx context.Context) error { return container.Terminate(cleanupCtx) }
 	}
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("provision PostgreSQL fixture: %w", database.Failure(err)), fixture.Close(ctx))
+		return nil, errors.Join(fmt.Errorf("provision PostgreSQL fixture: %w", database.WrapFailure(err)), fixture.Close(ctx))
 	}
 	host, err := container.Host(ctx)
 	if err != nil {
-		return nil, errors.Join(database.Failure(err), fixture.Close(ctx))
+		return nil, errors.Join(database.WrapFailure(err), fixture.Close(ctx))
 	}
 	port, err := container.MappedPort(ctx, "5432/tcp")
 	if err != nil {
-		return nil, errors.Join(database.Failure(err), fixture.Close(ctx))
+		return nil, errors.Join(database.WrapFailure(err), fixture.Close(ctx))
 	}
 	fixture.Params = database.ConnParams{Host: host, Port: int(port.Num()), User: "fixture", Password: password, Database: "fixture", Options: map[string]string{"sslmode": "disable", "search_path": "fixture"}, AllowInsecureDev: true}
 	if options.tls != nil {
@@ -103,7 +103,7 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 	log := logging.NewDefault("postgres-fixture") //nolint:contextcheck // NewDefault disables OTLP and performs no context-bearing exporter initialization.
 	db, err := database.NewWithContext(setupCtx, postgres.Dialect(), database.Config{Params: fixture.Params, MaxRetries: 1, LogLevel: "silent"}, log.WithContext(setupCtx))
 	if err != nil {
-		return nil, errors.Join(database.Failure(err), fixture.Close(ctx))
+		return nil, errors.Join(database.WrapFailure(err), fixture.Close(ctx))
 	}
 	setupErr := db.WithContext(setupCtx).Exec("CREATE SCHEMA fixture AUTHORIZATION fixture").Error
 	var snapshotErr error
@@ -111,7 +111,7 @@ func Start(ctx context.Context, opts ...Option) (*Fixture, error) {
 		fixture.admin, snapshotErr = snapshotAdmin(setupCtx, db)
 	}
 	if err := errors.Join(setupErr, snapshotErr, db.Close()); err != nil {
-		return nil, errors.Join(database.Failure(err), fixture.Close(ctx))
+		return nil, errors.Join(database.WrapFailure(err), fixture.Close(ctx))
 	}
 	return fixture, nil
 }

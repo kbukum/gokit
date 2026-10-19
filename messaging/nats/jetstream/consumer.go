@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	natsjs "github.com/nats-io/nats.go/jetstream"
 
@@ -14,14 +16,11 @@ import (
 	"github.com/kbukum/gokit/resilience"
 )
 
-// Consumer reads a durable pull consumer with explicit acknowledgement. By default Consume declares the durable
-// consumer, creating or updating it, so its position survives restarts and is shared by every process that uses the
-// same durable name; every such process must declare it alike. With ConsumerConfig.Bind it only binds to a durable
-// consumer that something else declared.
+// Consumer reads a durable pull consumer with explicit acknowledgement. By default Consume declares the durable consumer, creating or updating it, so its position survives restarts and is shared by every process that uses the same durable name; every such process must declare it alike. With ConsumerConfig.Bind it only binds to a durable consumer that something else declared.
 type Consumer struct {
 	source source
 	cfg    ConsumerConfig
-	owned  *Client
+	owned  io.Closer
 	done   chan struct{}
 	mu     sync.Mutex
 	closed bool
@@ -34,7 +33,7 @@ var (
 	_ messaging.ConsumerStatus = (*Consumer)(nil)
 )
 
-func newConsumer(src source, cfg ConsumerConfig, owned *Client) (*Consumer, error) {
+func newConsumer(src source, cfg ConsumerConfig, owned io.Closer) (*Consumer, error) {
 	cfg.ApplyDefaults()
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -44,8 +43,7 @@ func newConsumer(src source, cfg ConsumerConfig, owned *Client) (*Consumer, erro
 	return c, nil
 }
 
-// ConsumeStatus is nil once a fetch succeeds, [ErrNotReceiving] before then, and the last broker failure while the
-// loop retries it.
+// ConsumeStatus is nil once a fetch succeeds, [ErrNotReceiving] before then, and the last broker failure while the loop retries it.
 func (c *Consumer) ConsumeStatus() error {
 	if err := c.status.Load(); err != nil {
 		return *err
@@ -61,20 +59,11 @@ func (c *Consumer) setStatus(err error) {
 	c.status.Store(&err)
 }
 
-// Consume fetches bounded batches and calls handler for each message until ctx ends or the consumer is closed, and
-// returns why: ctx's error, or [messaging.ErrClosed]. Messages are first delivered in stream order; a retried message
-// may come after later ones.
+// Consume fetches bounded batches and calls handler for each message until ctx ends or the consumer is closed, and returns why: ctx's error, or [messaging.ErrClosed]. Messages are first delivered in stream order; a retried message may come after later ones.
 //
-// A nil handler result is acknowledged and confirmed by the server. An error naks the message with a delay that
-// doubles per delivery up to MaxRetryDelay, and the loop goes on; an error wrapping [ErrTerminal] terminates it
-// instead. Each message is marked in progress just before its handler runs, which restarts its AckWait.
+// A nil handler result is acknowledged and confirmed by the server. An error naks the message with a delay that doubles per delivery up to MaxRetryDelay, and the loop goes on. An error wrapping [messaging.ErrTerminal], or a failure on the message's last attempt under [DeliveryPolicy], hands it to OnDeadLetter or gives it up as the policy says; a failed hand-off is retried on the next delivery. Each message is marked in progress just before its handler runs, which restarts its AckWait.
 //
-// Broker failures are reported to OnError and retried with backoff, so the loop survives outages. A fetch the server
-// does not complete by its deadline, such as a pull request a missing permission drops, is such a failure
-// ([ErrFetchIncomplete]); [Consumer.ConsumeStatus] reports it until a fetch completes. A failure that cannot pass,
-// such as a consumer declaration the server refuses or a connection that gave up reconnecting, ends Consume with that
-// error. A missing permission on a request usually shows as a timeout, since the server drops the request without a
-// reply. When Consume stops, fetched messages it has not handled are naked for prompt redelivery.
+// Broker failures are reported to OnError and retried with backoff, so the loop survives outages. A fetch the server does not complete by its deadline, such as a pull request a missing permission drops, is such a failure ([ErrFetchIncomplete]); [Consumer.ConsumeStatus] reports it until a fetch completes. A failure that cannot pass, such as a consumer declaration the server refuses or a connection that gave up reconnecting, ends Consume with that error. A missing permission on a request usually shows as a timeout, since the server drops the request without a reply. When Consume stops, fetched messages it has not handled are naked for prompt redelivery.
 //
 // A message's Topic is its subject, Offset its stream sequence and Timestamp the time the stream stored it.
 func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
@@ -194,16 +183,21 @@ func (c *Consumer) bind(ctx context.Context, client *Client, js natsjs.JetStream
 		if err != nil {
 			return nil, fmt.Errorf("jetstream: bind consumer %s/%s: %w", stream, c.cfg.Durable, err)
 		}
+		server := pull.CachedInfo().Config
+		if server.AckPolicy != natsjs.AckExplicitPolicy {
+			return nil, fmt.Errorf("%w: %s/%s has ack policy %s; it must be explicit", ErrUnsafeBoundConsumer, stream, c.cfg.Durable, server.AckPolicy)
+		}
+		// A server-side delivery limit would end redelivery before a failed hand-off is retried.
+		if server.MaxDeliver > 0 {
+			return nil, fmt.Errorf("%w: %s/%s has max_deliver %d; set it to -1 and bound attempts with Delivery.MaxAttempts", ErrUnsafeBoundConsumer, stream, c.cfg.Durable, server.MaxDeliver)
+		}
 		return pull, nil
-	}
-	maxDeliver := c.cfg.MaxDeliver
-	if maxDeliver == 0 {
-		maxDeliver = -1
 	}
 	durable := natsjs.ConsumerConfig{
 		Durable: c.cfg.Durable, FilterSubjects: c.cfg.FilterSubjects, AckPolicy: natsjs.AckExplicitPolicy,
 		DeliverPolicy: natsjs.DeliverAllPolicy, AckWait: c.cfg.AckWait, MaxAckPending: c.cfg.MaxAckPending,
-		MaxDeliver: maxDeliver,
+		// The consumer counts attempts itself; an unlimited broker limit keeps a failed hand-off retryable.
+		MaxDeliver: -1,
 	}
 	if c.cfg.Declare != nil {
 		if err := client.EnsureStream(ctx, *c.cfg.Declare); err != nil {
@@ -230,20 +224,20 @@ func (c *Consumer) deliver(ctx context.Context, client *Client, msg natsjs.Msg, 
 	if err := msg.InProgress(); err != nil {
 		c.cfg.OnError(fmt.Errorf("jetstream: in progress %s#%d: %w", m.Topic, m.Offset, err))
 	}
+	delay := resilience.CalculateBackoff(int(min(delivered, 64)), c.cfg.RetryDelay, c.cfg.MaxRetryDelay)
+	if c.cfg.Delivery.spent(delivered) {
+		// The last attempt failed and so did its hand-off; retry only the hand-off.
+		c.deadLetter(ctx, msg, m, fmt.Errorf("%w: all %d attempts failed", ErrDeliveryLimit, c.cfg.Delivery.MaxAttempts), delay)
+		return
+	}
 	if err := handler(ctx, m); err != nil {
-		c.cfg.OnError(fmt.Errorf("jetstream: handle %s#%d: %w", m.Topic, m.Offset, err))
 		switch {
-		case errors.Is(err, ErrTerminal):
-			if termErr := msg.Term(); termErr != nil {
-				c.cfg.OnError(fmt.Errorf("jetstream: term: %w", termErr))
-			}
 		case ctx.Err() != nil:
 			c.release(msg)
+		case errors.Is(err, messaging.ErrTerminal) || c.cfg.Delivery.exhausted(delivered):
+			c.deadLetter(ctx, msg, m, err, delay)
 		default:
-			delay := resilience.CalculateBackoff(int(min(delivered, 64)), c.cfg.RetryDelay, c.cfg.MaxRetryDelay)
-			if nakErr := msg.NakWithDelay(delay); nakErr != nil {
-				c.cfg.OnError(fmt.Errorf("jetstream: nak: %w", nakErr))
-			}
+			c.nak(msg, delay)
 		}
 		return
 	}
@@ -251,6 +245,36 @@ func (c *Consumer) deliver(ctx context.Context, client *Client, msg natsjs.Msg, 
 	defer cancel()
 	if err := msg.DoubleAck(ackCtx); err != nil {
 		c.cfg.OnError(fmt.Errorf("jetstream: ack %s#%d: %w", m.Topic, m.Offset, err))
+	}
+}
+
+// deadLetter ends redelivery of a message whose handler failed for good. Without a hook, a terminal failure is the handler's explicit choice and is terminated; an exhausted one is terminated only because DiscardExhausted asked for it, and is reported.
+func (c *Consumer) deadLetter(ctx context.Context, msg natsjs.Msg, m messaging.Message, cause error, delay time.Duration) {
+	hook := c.cfg.Delivery.OnDeadLetter
+	if hook == nil {
+		if !errors.Is(cause, messaging.ErrTerminal) {
+			c.cfg.OnError(fmt.Errorf("%w: %s#%d: %w", ErrDeliveryLimit, m.Topic, m.Offset, cause))
+		}
+		c.term(msg)
+		return
+	}
+	if err := hook(ctx, m, cause); err != nil {
+		c.cfg.OnError(fmt.Errorf("jetstream: dead letter %s#%d: %w", m.Topic, m.Offset, err))
+		c.nak(msg, delay)
+		return
+	}
+	c.term(msg)
+}
+
+func (c *Consumer) term(msg natsjs.Msg) {
+	if err := msg.Term(); err != nil {
+		c.cfg.OnError(fmt.Errorf("jetstream: term: %w", err))
+	}
+}
+
+func (c *Consumer) nak(msg natsjs.Msg, delay time.Duration) {
+	if err := msg.NakWithDelay(delay); err != nil {
+		c.cfg.OnError(fmt.Errorf("jetstream: nak: %w", err))
 	}
 }
 
@@ -264,9 +288,7 @@ func (c *Consumer) release(msg natsjs.Msg) {
 // Topic returns the filter subjects, comma-separated, or the stream when the consumer reads all of it.
 func (c *Consumer) Topic() string { return c.cfg.topic() }
 
-// Close stops a running Consume at once, including its fetch, backoff and the context its handler sees, and closes the
-// client only if the consumer owns it. The durable consumer and its position remain on the server. It is safe to call
-// more than once.
+// Close stops a running Consume at once, including its fetch, backoff and the context its handler sees, and closes the client only if the consumer owns it. The durable consumer and its position remain on the server. It is safe to call more than once.
 func (c *Consumer) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

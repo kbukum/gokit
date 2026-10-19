@@ -10,8 +10,15 @@ import (
 // MaxSecretBytes bounds a mounted secret file's content.
 const MaxSecretBytes = 64 << 10
 
+// SecretBounds is the accepted length of a secret in bytes, after the trailing newline is removed. Min must be at least 1 and Max at most [MaxSecretBytes].
+type SecretBounds struct {
+	Min int
+	Max int
+}
+
 // ReadSecret reads a bounded regular file and removes one trailing LF or CRLF. It follows symlinks, as mounted secrets may use them. Errors never contain file contents.
-func ReadSecret(path string, minimum, limit int) ([]byte, error) {
+func ReadSecret(path string, bounds SecretBounds) ([]byte, error) {
+	minimum, limit := bounds.Min, bounds.Max
 	if path == "" || minimum < 1 || limit < minimum || limit > MaxSecretBytes {
 		return nil, apperrors.InvalidInput("secret", "A path and valid secret bounds are required")
 	}

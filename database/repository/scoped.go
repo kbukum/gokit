@@ -17,9 +17,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// ScopedConfig configures a partition-enforced repository for scalar row type T and scope S. The repository is
-// product-neutral: S is any caller type, such as an organization/project pair, that BindScope turns into one SQL scalar
-// per immutable partition column.
+// ScopedConfig configures a partition-enforced repository for scalar row type T and scope S. The repository is product-neutral: S is any caller type, such as an organization/project pair, that BindScope turns into one SQL scalar per immutable partition column.
 type ScopedConfig[T, S any] struct {
 	// Resource names the row kind in errors.
 	Resource string
@@ -29,19 +27,15 @@ type ScopedConfig[T, S any] struct {
 	ScopeColumns []string
 	// BindScope returns exactly one non-nil, non-empty scalar per ScopeColumns entry, in order.
 	BindScope func(S) ([]any, error)
-	// MutableColumns lists the only columns Update writes. GORM must be allowed to update them. Identity and partition
-	// columns are never mutable.
+	// MutableColumns lists the only columns Update writes. GORM must be allowed to update them. Identity and partition columns are never mutable.
 	MutableColumns []string
 	// Query restricts List filtering, search and sorting. Facets and includes are unsupported.
 	Query query.Config
 }
 
-// ScopedSpec is an immutable, prevalidated scoped repository definition. Validate it once with [NewScopedSpec] and
-// bind it cheaply to a pool or transaction with [ScopedSpec.Bind].
+// ScopedSpec is an immutable, prevalidated scoped repository definition. Validate it once with [NewScopedSpec] and bind it cheaply to a pool or transaction with [ScopedSpec.Bind].
 //
-// Rows are scalar: models with relationships are rejected, hooks never run and associations are never persisted.
-// Every operation binds all partition columns, so a row outside the scope is indistinguishable from a missing row.
-// Trusted custom SQL in a persistence adapter is not sandboxed by this type.
+// Rows are scalar: models with relationships are rejected, hooks never run and associations are never persisted. Every operation binds all partition columns, so a row outside the scope is indistinguishable from a missing row. Trusted custom SQL in a persistence adapter is not sandboxed by this type.
 type ScopedSpec[T any, ID comparable, S any] struct {
 	resource  string
 	id        *schema.Field
@@ -97,8 +91,7 @@ func NewScopedSpec[T any, ID comparable, S any](cfg ScopedConfig[T, S]) (*Scoped
 	return spec, nil
 }
 
-// scopeWritable requires GORM to insert the stamped partition value; a non-creatable field would let a database
-// default decide the partition. mutableWritable requires Update to write the column instead of silently skipping it.
+// scopeWritable requires GORM to insert the stamped partition value; a non-creatable field would let a database default decide the partition. mutableWritable requires Update to write the column instead of silently skipping it.
 func scopeWritable(field *schema.Field) bool   { return field.Creatable }
 func mutableWritable(field *schema.Field) bool { return field.Updatable }
 
@@ -134,8 +127,7 @@ func validateQuery(parsed *schema.Schema, cfg query.Config) error {
 	return nil
 }
 
-// Bind returns a repository over db, which may be a pool or a transaction. Prior statement clauses on db are discarded
-// while its connection or transaction is kept.
+// Bind returns a repository over db, which may be a pool or a transaction. Prior statement clauses on db are discarded while its connection or transaction is kept.
 func (s *ScopedSpec[T, ID, S]) Bind(db *gorm.DB) (*ScopedRepository[T, ID, S], error) {
 	if s == nil || db == nil {
 		return nil, invalid("database", "Scoped repository requires a specification and database")
@@ -162,8 +154,7 @@ func (r *ScopedRepository[T, ID, S]) Get(ctx context.Context, scope S, id ID) (T
 	return row, nil
 }
 
-// List returns one bounded page of rows inside scope. The partition conjunction applies to the count and the page,
-// including free-text OR search.
+// List returns one bounded page of rows inside scope. The partition conjunction applies to the count and the page, including free-text OR search.
 func (r *ScopedRepository[T, ID, S]) List(ctx context.Context, scope S, params query.Params) (*query.Result[T], error) {
 	if !params.Includes.IsEmpty() {
 		return nil, invalid("includes", "Scoped repositories do not support includes")
@@ -179,8 +170,7 @@ func (r *ScopedRepository[T, ID, S]) List(ctx context.Context, scope S, params q
 	return result, nil
 }
 
-// Create inserts a copy of row stamped with the bound partition values and returns it with generated values. A row
-// already carrying a different partition value is rejected; row is never mutated.
+// Create inserts a copy of row stamped with the bound partition values and returns it with generated values. A row already carrying a different partition value is rejected; row is never mutated.
 func (r *ScopedRepository[T, ID, S]) Create(ctx context.Context, scope S, row T) (T, error) {
 	var zero T
 	values, err := r.scopeValues(scope)
@@ -203,9 +193,7 @@ func (r *ScopedRepository[T, ID, S]) Create(ctx context.Context, scope S, row T)
 	return created, nil
 }
 
-// Update writes every mutable column of row, including zero values, to the row with id inside scope. It never
-// inserts; zero matched rows return NOT_FOUND. row's identity and partition fields must be zero or equal the bound
-// values.
+// Update writes every mutable column of row, including zero values, to the row with id inside scope. It never inserts; zero matched rows return NOT_FOUND. row's identity and partition fields must be zero or equal the bound values.
 func (r *ScopedRepository[T, ID, S]) Update(ctx context.Context, scope S, id ID, row T) error {
 	if len(r.spec.mutable) == 0 {
 		return invalid("columns", "Scoped repository declares no mutable columns")

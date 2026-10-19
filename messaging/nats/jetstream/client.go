@@ -15,12 +15,9 @@ import (
 	"github.com/kbukum/gokit/messaging/nats"
 )
 
-// Client owns one JetStream connection, which reconnects in the background, including when the server is not yet
-// reachable at construction. Producers and consumers made from it share the connection; Close releases it.
+// Client owns one JetStream connection, which reconnects in the background, including when the server is not yet reachable at construction. Producers and consumers made from it share the connection; Close releases it.
 //
-// Subjects are absolute: nats.Config.SubjectPrefix and QueueGroup apply only to core NATS and are refused. A zero
-// nats.Config.MaxReconnects means unlimited here, so a broker outage delays work rather than ending it; a positive
-// bound lets the connection die, after which every operation fails and [Component] reports Unhealthy.
+// Subjects are absolute: nats.Config.SubjectPrefix and QueueGroup apply only to core NATS and are refused. A zero nats.Config.MaxReconnects means unlimited here, so a broker outage delays work rather than ending it; a positive bound lets the connection die, after which every operation fails and [Component] reports Unhealthy.
 type Client struct {
 	cfg    nats.Config
 	conn   *natsgo.Conn
@@ -33,8 +30,7 @@ type Client struct {
 // source resolves the client a producer or consumer uses at the time of each operation.
 type source func() (*Client, error)
 
-// New validates cfg and starts a connection. ctx bounds only the first connection attempt; New does not wait for the
-// server, and operations fail with a connection error until it is reachable.
+// New validates cfg and starts a connection. ctx bounds only the first connection attempt; New does not wait for the server, and operations fail with a connection error until it is reachable.
 func New(ctx context.Context, cfg nats.Config) (*Client, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -124,8 +120,7 @@ func (c *Client) Producer(cfg ProducerConfig) (*Producer, error) {
 	return newProducer(c.self, cfg, nil)
 }
 
-// Consumer returns a consumer of the durable consumer cfg declares, over this client. Closing it leaves the client
-// open.
+// Consumer returns a consumer of the durable consumer cfg declares, over this client. Closing it leaves the client open.
 func (c *Client) Consumer(cfg ConsumerConfig) (*Consumer, error) {
 	return newConsumer(c.self, cfg, nil)
 }
@@ -151,8 +146,7 @@ func (c *Client) Close() error {
 	return c.Shutdown(ctx)
 }
 
-// Shutdown drains the connection, so pending publications and acknowledgements are flushed, and waits until it is
-// closed or ctx ends, when it closes the connection at once. It is safe to call more than once.
+// Shutdown drains the connection, so pending publications and acknowledgements are flushed, and waits until it is closed or ctx ends, when it closes the connection at once. It is safe to call more than once.
 func (c *Client) Shutdown(ctx context.Context) error {
 	c.mu.Lock()
 	if c.closed {
@@ -198,8 +192,7 @@ func (c *Client) api() (natsjs.JetStream, error) {
 
 func (c *Client) publishTimeout() time.Duration { return mustDuration(c.cfg.PublishTimeout) }
 
-// request bounds one JetStream API request by nats.Config.PublishTimeout: a request sent during a reconnect or refused
-// by a permission gets no reply, and would otherwise wait for the caller's whole context.
+// request bounds one JetStream API request by nats.Config.PublishTimeout: a request sent during a reconnect or refused by a permission gets no reply, and would otherwise wait for the caller's whole context.
 func (c *Client) request(ctx context.Context) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(ctx, c.publishTimeout())
 }

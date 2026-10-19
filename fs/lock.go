@@ -15,11 +15,7 @@ const (
 	fileLockPoll = 10 * time.Millisecond
 )
 
-// WithFileLock serializes cooperating processes on a stable regular lock file created with mode 0600.
-// The parent directory must be trusted; Windows inherits its ACLs rather than enforcing Unix permission bits.
-// Acquisition respects ctx and waits at most five seconds. The operation must bound its own work.
-// The lock is released even on operation failure or process exit. The lock file must not be removed or replaced:
-// doing so would let another caller lock a different inode. All writers must use the same lock path.
+// WithFileLock serializes cooperating processes on a stable regular lock file created with mode 0600. The parent directory must be trusted; Windows inherits its ACLs rather than enforcing Unix permission bits. Acquisition respects ctx and waits at most five seconds. The operation must bound its own work. The lock is released even on operation failure or process exit. The lock file must not be removed or replaced: doing so would let another caller lock a different inode. All writers must use the same lock path.
 func WithFileLock(ctx context.Context, path string, operation func() error) (err error) {
 	if path == "" || operation == nil {
 		return apperrors.InvalidInput("file lock", "A lock path and operation are required")

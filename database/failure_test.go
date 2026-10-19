@@ -13,7 +13,7 @@ import (
 func TestFailurePreservesClassificationWithoutFormattingCause(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("synthetic confidential cause")
-	err := Failure(cause)
+	err := WrapFailure(cause)
 	for _, format := range []string{"%v", "%+v", "%#v", "%s"} {
 		if strings.Contains(fmt.Sprintf(format, err), cause.Error()) {
 			t.Fatal("database boundary formatted a private cause")
@@ -37,11 +37,11 @@ func TestFailureNormalizesToItsSafeClassification(t *testing.T) {
 		"deadline":          {fmt.Errorf("dial: %w", context.DeadlineExceeded), apperrors.ErrCodeTimeout},
 		"canceled":          {context.Canceled, apperrors.ErrCodeCanceled},
 	} {
-		got := apperrors.Normalize(Failure(tc.cause))
+		got := apperrors.Normalize(WrapFailure(tc.cause))
 		if got.Code != tc.code || got.Cause != nil || strings.Contains(got.Message, "confidential") {
 			t.Errorf("%s: normalized to %v %q (cause %v)", name, got.Code, got.Message, got.Cause)
 		}
-		if !errors.Is(Failure(tc.cause), tc.cause) {
+		if !errors.Is(WrapFailure(tc.cause), tc.cause) {
 			t.Errorf("%s: cause lost", name)
 		}
 	}

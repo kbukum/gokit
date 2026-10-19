@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"testing/synctest"
@@ -52,6 +53,37 @@ func TestFailedDeliveryRetriesWithoutQueueDeadlockOrFanout(t *testing.T) {
 		}
 		if len(other.ch) != 1 {
 			t.Fatal("failed delivery was broadcast again to another subscriber")
+		}
+	})
+}
+
+func TestTerminalFailureIsNotRetained(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		broker := NewBroker()
+		defer broker.Close()
+		consumer := broker.consumer("topic", messaging.CommitAfterHandlerSuccess)
+		producer := broker.Producer()
+		for _, key := range []string{"poison", "next"} {
+			if err := producer.Send(t.Context(), messaging.Message{Topic: "topic", Key: key}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		err := consumer.Consume(t.Context(), func(context.Context, messaging.Message) error {
+			return fmt.Errorf("decode: %w", messaging.ErrTerminal)
+		})
+		if !errors.Is(err, messaging.ErrTerminal) {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var seen []string
+		_ = consumer.Consume(ctx, func(_ context.Context, msg messaging.Message) error {
+			seen = append(seen, msg.Key)
+			cancel()
+			return nil
+		})
+		if !slices.Equal(seen, []string{"next"}) {
+			t.Fatalf("terminal failure was redelivered: %v", seen)
 		}
 	})
 }

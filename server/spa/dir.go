@@ -11,9 +11,7 @@ import (
 	apperrors "github.com/kbukum/gokit/errors"
 )
 
-// Dir serves a built single-page app from a directory as a lifecycle component. Start opens the directory confined
-// with [os.Root] and builds the handler; Stop closes it. Until Start and after Stop it answers 503, so register it
-// before the listener that serves it.
+// Dir serves a built single-page app from a directory as a lifecycle component. Start opens the directory confined with [os.Root] and builds the handler; Stop closes it. Until Start and after Stop it answers 503, so register it before the listener that serves it.
 type Dir struct {
 	name string
 	dir  string

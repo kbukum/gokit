@@ -11,8 +11,7 @@ import (
 	"github.com/kbukum/gokit/messaging"
 )
 
-// ReplayRequest selects retained messages to read without acknowledging them or changing any durable consumer.
-// Exactly one of StartSequence and StartTime is set.
+// ReplayRequest selects retained messages to read without acknowledging them or changing any durable consumer. Exactly one of StartSequence and StartTime is set.
 type ReplayRequest struct {
 	Stream        string
 	Subject       string
@@ -53,9 +52,7 @@ type ReplayPage struct {
 	More bool
 }
 
-// Replay reads one page of retained messages matching the request's subject through a short-lived consumer that it
-// deletes afterwards. The server's inactivity threshold removes the consumer if deletion fails. The user needs the
-// rights to create and delete consumers on the stream and, for a time start, to read the stream's info.
+// Replay reads one page of retained messages matching the request's subject through a short-lived consumer that it deletes afterwards. The server's inactivity threshold removes the consumer if deletion fails. The user needs the rights to create and delete consumers on the stream and, for a time start, to read the stream's info.
 func (c *Client) Replay(ctx context.Context, r ReplayRequest) (ReplayPage, error) {
 	if err := r.Validate(); err != nil {
 		return ReplayPage{}, err
@@ -64,8 +61,7 @@ func (c *Client) Replay(ctx context.Context, r ReplayRequest) (ReplayPage, error
 	if err != nil {
 		return ReplayPage{}, err
 	}
-	// For a time start, the stream's last sequence is read before the consumer counts pending messages: an empty page
-	// then resumes after that snapshot, never past a message stored meanwhile.
+	// For a time start, the stream's last sequence is read before the consumer counts pending messages: an empty page then resumes after that snapshot, never past a message stored meanwhile.
 	var last uint64
 	if r.StartSequence == 0 {
 		reqCtx, cancel := c.request(ctx)

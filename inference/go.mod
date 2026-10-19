@@ -68,3 +68,5 @@ replace (
 	github.com/kbukum/gokit/schema => ../schema
 	github.com/kbukum/gokit/tool => ../tool
 )
+
+replace github.com/kbukum/gokit/testutil => ../testutil

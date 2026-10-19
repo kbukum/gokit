@@ -41,7 +41,7 @@ Replacement is atomic on Unix. On Windows, `WriteAtomicReplace` removes the dest
 | `WriteAtomic()` / `WriteAtomicReplace()` | Atomic same-filesystem writes |
 | `WriteAtomicCreate()` | Publish an owner-only file without overwriting an existing destination; requires an existing parent and hard-link support |
 | `WithFileLock(ctx, path, operation)` | Coordinate cooperating processes around a caller-owned lock file |
-| `ReadSecret(path, minimum, limit)` | Bounded regular-file secret read, preserving bytes except one trailing LF or CRLF; supports mounted symlinks and never includes contents in errors |
+| `ReadSecret(path, SecretBounds{Min, Max})` | Bounded regular-file secret read, preserving bytes except one trailing LF or CRLF; supports mounted symlinks and never includes contents in errors |
 | `CanRead()` / `CanWrite()` / `IsReadonly()` | Capability checks before optional operations |
 | `Mode()` / `SetMode()` / `IsExecutable()` | Permission inspection and updates |
 | `FindInAncestors()` / `ParentDir()` | Walk ancestor directories |

@@ -143,8 +143,8 @@ func TestReadyCheckWithMixedHealth(t *testing.T) {
 	})
 
 	err := app.ReadyCheck(context.Background())
-	if err == nil {
-		t.Fatal("expected error for unhealthy components")
+	if !errors.Is(err, ErrNotReady) {
+		t.Fatalf("ReadyCheck = %v, want ErrNotReady", err)
 	}
 
 	errMsg := err.Error()

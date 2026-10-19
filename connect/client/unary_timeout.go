@@ -38,8 +38,7 @@ func (u unaryTimeout) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	}
 }
 
-// limitEnforced reports a deadline_exceeded answer to the limit itself: the limit is the deadline the peer received and
-// it has been reached, though the bounded context's timer may not have fired yet.
+// limitEnforced reports a deadline_exceeded answer to the limit itself: the limit is the deadline the peer received and it has been reached, though the bounded context's timer may not have fired yet.
 func limitEnforced(caller, bounded context.Context, err error) bool {
 	if connect.CodeOf(err) != connect.CodeDeadlineExceeded || !deadlineReached(bounded) {
 		return false

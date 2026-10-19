@@ -113,15 +113,19 @@ func TestStreamWriteDeadlineServesFlusherAndControllerCallers(t *testing.T) {
 }
 
 func TestStreamWriteDeadlineRejectsInvalidConfiguration(t *testing.T) {
-	_, err := StreamWriteDeadline(0, util.SystemClock{})
+	_, err := StreamWriteDeadline(0)
+	require.Error(t, err)
+	_, err = StreamWriteDeadline(time.Second, WithStreamDeadlineClock(nil))
 	require.Error(t, err)
 	_, err = StreamWriteDeadline(time.Second, nil)
 	require.Error(t, err)
+	_, err = StreamWriteDeadline(time.Second)
+	require.NoError(t, err, "the system clock is the default")
 }
 
 func streamWriteDeadline(t *testing.T, budget time.Duration, clock util.Clock) Middleware {
 	t.Helper()
-	m, err := StreamWriteDeadline(budget, clock)
+	m, err := StreamWriteDeadline(budget, WithStreamDeadlineClock(clock))
 	require.NoError(t, err)
 	return m
 }

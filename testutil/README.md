@@ -55,7 +55,7 @@ Run these gates from the repository root with Go 1.27.2, a C compiler for SQLite
 ```sh
 toven --no-cache test --module go:testutil --module go:server-testutil --module go:connect-testutil --module go:database-testutil --module go:database-sqlite -- -race -shuffle=on -count=1 -timeout=3m
 go test ./process -race -shuffle=on -count=1 -timeout=3m
-toven --no-cache test --module go:database-postgres -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
+toven --no-cache test --module go:database-postgres-testutil -- -tags=integration -race -shuffle=on -count=1 -timeout=10m
 ```
 
 The local-only commands do **not** certify PostgreSQL. The required integration command fails on missing Docker, failed provisioning, or failed termination; no implicit skip is allowed. Lifecycle, loopback, SQLite, and process packages run leak checks. Live-connection tests use a 50 ms drain and 2-second settling ceiling; process tests use 50 ms grace and a 2-second reaping ceiling. Small snapshots/fixtures are limited to 32 tables, 1,000 rows, and 1 MiB encoded data.

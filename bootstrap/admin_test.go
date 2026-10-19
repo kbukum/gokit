@@ -36,9 +36,9 @@ func (s *switchableComponent) Health(context.Context) component.Health {
 	return component.Health{Name: "peer", Status: s.status, Message: string(s.status)}
 }
 
-func newAdminApp(t *testing.T, cfg AdminConfig) *App[*testConfig] {
+func newAdminApp(t *testing.T, cfg AdminConfig, opts ...Option) *App[*testConfig] {
 	t.Helper()
-	app, err := NewApp(newTestConfig("test", "1.0"), WithLogger(logging.NewDefault("test")), WithAdmin(cfg))
+	app, err := NewApp(newTestConfig("test", "1.0"), append([]Option{WithLogger(logging.NewDefault("test")), WithAdmin(cfg)}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestAdminServesPprofOnlyWhenEnabled(t *testing.T) {
 
 func TestAdminUsesTheGivenMetricsHandler(t *testing.T) {
 	t.Parallel()
-	app := newAdminApp(t, AdminConfig{Metrics: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })})
+	app := newAdminApp(t, AdminConfig{}, WithAdminMetrics(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })))
 	if err := app.Startup(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -228,9 +228,18 @@ func TestAdminConfigIsValidated(t *testing.T) {
 		"negative port":           {Port: -1},
 		"port too large":          {Port: 65536},
 		"negative health timeout": {HealthTimeout: -1},
-		"typed-nil metrics":       {Metrics: http.HandlerFunc(nil)},
 	} {
 		_, err := NewApp(newTestConfig("test", "1.0"), WithLogger(logging.NewDefault("test")), WithAdmin(cfg))
+		if !errors.Is(err, ErrInvalidAdminConfig) {
+			t.Errorf("%s: NewApp = %v, want ErrInvalidAdminConfig", name, err)
+		}
+	}
+	for name, opts := range map[string][]Option{
+		"typed-nil metrics":     {WithAdmin(AdminConfig{}), WithAdminMetrics(http.HandlerFunc(nil))},
+		"nil metrics":           {WithAdmin(AdminConfig{}), WithAdminMetrics(nil)},
+		"metrics without admin": {WithAdminMetrics(http.NotFoundHandler())},
+	} {
+		_, err := NewApp(newTestConfig("test", "1.0"), append([]Option{WithLogger(logging.NewDefault("test"))}, opts...)...)
 		if !errors.Is(err, ErrInvalidAdminConfig) {
 			t.Errorf("%s: NewApp = %v, want ErrInvalidAdminConfig", name, err)
 		}
