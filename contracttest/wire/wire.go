@@ -20,9 +20,9 @@ import (
 )
 
 // wireFixtures holds the published golden wire fixtures. They are committed JSON
-// so consumers in other repositories (plainworks over Connect and HTTP, the rskit
-// mirror) can decode exactly the bytes a gokit service emits, and so gokit's own
-// tests can prove it encodes and decodes them without loss.
+// so clients in any language can decode exactly the bytes a gokit service emits
+// over Connect and HTTP, and so gokit's own tests can prove it encodes and decodes
+// them without loss.
 //
 //go:embed testdata/wire/*.json
 var wireFixtures embed.FS
