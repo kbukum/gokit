@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.27.2+**
+- **Go 1.27.3+**
 - **[Toven](https://github.com/kbukum/toven)** — runs the workspace `make` gates; CI pins the version in `TOVEN_VERSION` (`.github/workflows/ci.yml`). Install with `brew tap kbukum/tap && brew install toven` or see [installation](https://github.com/kbukum/toven/blob/main/docs/installation.md)
 - **Python 3** — CI helper scripts (`scripts/*.py`)
 - **golangci-lint** — `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`
@@ -112,7 +112,7 @@ make ci                      # run full CI pipeline locally (requires Docker)
 1. Create `yourmod/` with its own `go.mod`:
    ```
    module github.com/kbukum/gokit/yourmod
-   go 1.27.2
+   go 1.27.3
    require github.com/kbukum/gokit v0.1.2
    replace github.com/kbukum/gokit => ../
    ```

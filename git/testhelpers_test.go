@@ -14,6 +14,9 @@ func initTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	runGit(t, dir, "init")
+	// Detached maintenance must not outlive the fixture and race TempDir cleanup.
+	runGit(t, dir, "config", "maintenance.auto", "false")
+	runGit(t, dir, "config", "gc.auto", "0")
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "Test User")
 	writeFile(t, dir, "README.md", "# test repo")

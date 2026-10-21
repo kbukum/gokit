@@ -50,7 +50,7 @@ A failed start returns both the original failure and rollback failures.
 | Production PostgreSQL | `database/postgres/testutil.Start`; isolated, digest-pinned container; Docker absence fails |
 | Owned child processes | `process.StartPersistent` and `Supervisor`; argv-only, isolated environment, explicit shutdown outcome |
 
-Run these gates from the repository root with Go 1.27.2, a C compiler for SQLite, and a reachable Docker daemon for PostgreSQL:
+Run these gates from the repository root with Go 1.27.3, a C compiler for SQLite, and a reachable Docker daemon for PostgreSQL:
 
 ```sh
 toven --no-cache test --module go:testutil --module go:server-testutil --module go:connect-testutil --module go:database-testutil --module go:database-sqlite -- -race -shuffle=on -count=1 -timeout=3m

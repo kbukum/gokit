@@ -4,7 +4,7 @@
 
 ## Run the backend proof
 
-From the repository root, with Go 1.27.2, a C compiler and Docker:
+From the repository root, with Go 1.27.3, a C compiler and Docker:
 
 ```sh
 make auth-integration

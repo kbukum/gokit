@@ -163,9 +163,9 @@ replace-sync:
 replace-check:
 	@$(GOMOD) replace-sync --check
 
-## Update Go version across modules (usage: make update-go VERSION=1.27.2 [W=core|contrib])
+## Update Go version across modules (usage: make update-go VERSION=1.27.3 [W=core|contrib])
 update-go:
-	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.27.2" && exit 1)
+	@[ -n "$(VERSION)" ] || (echo "Error: VERSION is required. Usage: make update-go VERSION=1.27.3" && exit 1)
 	@$(GOMOD) update-go $(VERSION) $(_W)
 
 ## Preview the release plan: selected modules, versions, tags, and order (read-only)

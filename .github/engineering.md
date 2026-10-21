@@ -67,7 +67,7 @@ Cross-module operations use `./gomod.sh`:
 ./gomod.sh cmd "go test" -m messaging      # Run in specific module
 ```
 
-Requires: Go 1.27.2+,
+Requires: Go 1.27.3+,
 golangci-lint (`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`).
 
 ## Module Structure
