@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/workload/dmr
 
-go 1.27.2
+go 1.27.3
 
 replace github.com/kbukum/gokit => ../../
 

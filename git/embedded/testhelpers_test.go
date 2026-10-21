@@ -1,19 +1,61 @@
 package embedded_test
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/kbukum/gokit/util"
 )
 
+func TestFixtureCommitsDoNotStartMaintenance(t *testing.T) {
+	t.Parallel()
+	dir := initTestRepo(t)
+	tracePath := filepath.Join(t.TempDir(), "git-trace.json")
+	writeFile(t, dir, "next.txt", "next")
+	runGit(t, dir, "add", "next.txt")
+	runGitEnv(t, dir, map[string]string{"GIT_TRACE2_EVENT": tracePath}, "commit", "-m", "next commit")
+
+	trace, err := os.Open(tracePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := trace.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	decoder := json.NewDecoder(trace)
+	for {
+		var event struct {
+			Event string   `json:"event"`
+			Args  []string `json:"argv"`
+		}
+		if err := decoder.Decode(&event); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if event.Event == "child_start" && slices.Contains(event.Args, "--auto") &&
+			(slices.Contains(event.Args, "maintenance") || slices.Contains(event.Args, "gc")) {
+			t.Errorf("fixture commit started automatic maintenance: %v", event.Args)
+		}
+	}
+}
+
 func initTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	runGit(t, dir, "init")
+	// Detached maintenance must not outlive the fixture and race TempDir cleanup.
+	runGit(t, dir, "config", "maintenance.auto", "false")
+	runGit(t, dir, "config", "gc.auto", "0")
 	runGit(t, dir, "config", "user.email", "test@test.com")
 	runGit(t, dir, "config", "user.name", "Test User")
 	writeFile(t, dir, "README.md", "# test repo")

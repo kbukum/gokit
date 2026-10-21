@@ -1,6 +1,6 @@
 module github.com/kbukum/gokit/skill
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
