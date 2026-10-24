@@ -1,32 +1,41 @@
 # gokit
 
-Multi-module Go infrastructure kit. Core packages share the root `go.mod`; heavy adapters have their own modules. Versions and tools come from `go.mod`, CI, and the Makefile, not copied version lists.
+Multi-module Go infrastructure kit, pre-1.0 alpha. Core packages share the root `go.mod`; heavy adapters have their own modules. Rules live in the [engineering standard](engineering.md); this file is the short version and the map.
 
 ## Invariants
 
-- Pre-stable: redesign root causes, not compatibility shims. Choose Redesign / Align / Enhance / Drop for defects; leave sound code alone. Keep changes and dependent callers within the requested scope.
-- Reuse the [canonical concern owner](../docs/concern-owners.md). Imports point downward; `depguard` enforces boundaries. Implement lower-layer contracts and inject behavior at composition. No kit runtime imports another kit. Internal consistency and idiomatic Go outrank symbol parity.
-- Public APIs are typed and minimal; use generics where useful, small interfaces, `...Option` or cohesive request structs. Keep `context.Context` first. Document genuinely opaque `any`. Return cause-preserving `AppError`; no runtime panics, ignored errors, or success-shaped fallbacks.
-- Config selects explicitly registered adapters. Inject logger, telemetry, policies, and clients; no mutable global registry or `init()` I/O. Provider shapes: RequestResponse, Stream, Sink, Duplex.
-- Validate boundaries; no secrets in source/logs, credential URLs, SQL interpolation, or shell-built subprocesses. Bound calls/retries/buffers; every goroutine owns cancellation and shutdown.
-- Use focused concern-named files and declare-only `doc.go`. Follow gofmt, golangci-lint, and current stdlib idioms. Split mixed concerns, not files merely exceeding a line count.
-- Test-first, deterministic behavior/failures; reuse `testutil`, inject clocks, preserve race/shuffle safety. Coverage: >=80% per package, >=85% overall and for errors/auth/authz/security/resilience/encryption. Never weaken integration gates.
-- Docs and skills are concise, task-first, and organized by reader intent. Explain capabilities at a high level; retain technical detail only for correct use, contracts, safety, or verification. Changelogs summarize outcomes, not implementation steps.
-- Markdown and Go comment prose have no arbitrary column wrapping. Describe current behavior, not implementation history.
+- Pre-1.0: fix root causes and update callers; no compatibility shims. For each defect choose Redesign, Align, Enhance, or Drop. Leave sound code alone.
+- Put code where [Architecture](../docs/ARCHITECTURE.md) says. Imports point down. Reuse or enhance the [concern owner](../docs/concern-owners.md); never fork it. No runtime import of another kit.
+- Public APIs are small and typed. `context.Context` first. Typed `AppError` with causes. No runtime panics, ignored errors, or success-shaped fallbacks.
+- Inject registries, loggers, telemetry, policies, and clients. No `init()` I/O or mutable globals.
+- Validate trust boundaries. No secrets in source, logs, or URLs. Parameterized SQL and argv-only subprocesses.
+- Bound remote calls, retries, queues, and concurrency. Every goroutine has an owner, cancellation, and shutdown.
+- Test first, deterministic, race- and shuffle-safe. Unit tests do not prove real driver, TLS, process, or browser behavior.
+- Docs are task-first and concise. No hard-wrapped prose in Markdown or Go comments. Comments describe current behavior, not history.
+- Never claim a rule is enforced unless a gate checks it. See [Enforcement](engineering.md#enforcement) and [Known gaps](engineering.md#known-gaps).
 
 ## Work and validation
 
-Read only the matching [skill](skills/README.md) and needed reference sections. Preserve user edits/index; commit, amend, push, or open draft PRs only when authorized. Keep plans in `tmp/<plan>/`, reusing existing folders. Apply each selected step fully; record progress in the step, not routine handoffs.
+- Read only the matching [skill](skills/README.md) and the engineering sections it needs.
+- Preserve user edits and the Git index. Commit, amend, push, or open a draft PR only when authorized.
+- Keep plans in `tmp/<plan>/`, reusing existing folders. Apply a selected step fully and record progress in the plan.
+- Scope gates to the change while working: `make test M=<module> T=<pattern>`, `make lint M=<module>`, `make test-affected`, or `make check-<domain>`. Run `make check` for acceptance. The [validate](skills/validate/SKILL.md) skill has the rest.
+- Docs-only edits need link and anchor checks, not Go builds.
+- Versions come from `go.mod`, the Makefile, and CI. Do not copy them into docs.
 
-From this repository: `make test M=<module> T=<pattern>`, `make lint M=<module>`, `make test-affected`, or `make check-<domain>` during implementation; `make check` for required full acceptance. See [validate](skills/validate/SKILL.md) for Toven selectors and additional gates. Documentation-only edits need link/metadata checks, not application builds.
+## Where to read
 
-## Load before the relevant change
-
-| Change | Reference |
+| Change | Read |
 |---|---|
-| API/error contracts, signatures, package layout | [Code style](engineering.md#code-style) |
-| Runtime test environments or auth/session/SSE | [Validation scope](engineering.md#validation-scope); real adapter/session proof is mandatory |
-| New module or provider | [Module structure](engineering.md#module-structure), then `new-module` or `new-backend` |
-| AI, security, dependencies, release | [Engineering principles](engineering.md#engineering-principles), then the matching review/release checklist |
-
-Read sections, not the whole reference. A unit test does not certify real driver, TLS, process, or browser behavior.
+| Package or module placement, imports, shared helpers | [Placement and reuse](engineering.md#placement-and-reuse), [Architecture](../docs/ARCHITECTURE.md) |
+| Exported API, signatures, versioning | [Public API and stability](engineering.md#public-api-and-stability) |
+| Errors, retries, remote calls | [Errors and resilience](engineering.md#errors-and-resilience) |
+| Goroutines, components, registries | [Concurrency and lifecycle](engineering.md#concurrency-and-lifecycle), [Composition](engineering.md#composition) |
+| Input, auth, crypto, paths, SQL | [Security and privacy](engineering.md#security-and-privacy) |
+| AI, model, or tool features | [AI and model features](engineering.md#ai-and-model-features) |
+| File layout, naming, `doc.go` | [Code style and structure](engineering.md#code-style-and-structure) |
+| Tests, test environments, auth sessions | [Testing and proof](engineering.md#testing-and-proof); [real adapter proof](engineering.md#real-adapter-proof) is required |
+| Docs, godoc, changelog | [Documentation and consumer experience](engineering.md#documentation-and-consumer-experience) |
+| Dependencies, CI, release | [Dependencies and supply chain](engineering.md#dependencies-and-supply-chain), then the `release` skill |
+| New module or backend | `new-module` or `new-backend` skill |
+| Finishing any change | [Definition of Done](engineering.md#definition-of-done) |

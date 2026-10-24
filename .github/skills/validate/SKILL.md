@@ -4,95 +4,70 @@ description: "gokit: Run the repository's build, test, lint, and documentation g
 user-invocable: true
 ---
 
-# Validating gokit changes with toven
+# Validate a change
 
-gokit is a multi-module Go monorepo. **`toven` is the canonical task runner** (config in `toven.toml`, sibling repo `../toven`). It discovers every `go.mod`, orders work by the dependency graph, caches results, and can scope to just the modules a diff touched. Prefer it over calling `go`/`make`/`gomod.sh` by hand — the Makefile targets are thin wrappers and toven gives you affected-set detection and per-module caching for free.
+`toven` is the task runner (config in [`toven.toml`](../../../toven.toml)). It discovers every `go.mod`, orders work by the dependency graph, caches results, and can select only the modules a diff touches. The Makefile targets wrap it; `make help` lists them. Which rules each gate checks is in [Enforcement](../../engineering.md#enforcement).
 
-## Golden rule: scope to what changed
+## Scope to what changed
 
-Never run the whole tree for a small change. Let toven compute the affected set,
-or name the module explicitly. Full-tree gates are for audits and CI sign-off (see `review`).
+Full-tree gates are for acceptance, audits, and CI.
 
 ```bash
-# What would this task run, and where? (no execution — reviewable argv)
-toven plan test
-toven explain test --module go:media          # exact argv for one module
-
-# Only the modules the diff touches (blast radius incl. reverse-dependents)
+toven plan test                                   # what would run (no execution)
+toven explain test --module go:media              # exact argv for one module
 toven affected test --base origin/main --merge-base
-toven test --base origin/main --merge-base    # run just those
+toven test --base origin/main --merge-base        # run only the affected set
+make test-affected                                # same, via make (BASE=main by default)
 ```
 
-## Core tasks (bare task name = run it)
+`make test-affected` covers committed, staged, unstaged, and untracked changes plus reverse dependents, with caching off. A missing base fails. It rejects `M=`/`W=`; use `make test M=<module> T=<pattern>` for one module. After changing this dispatch, run `python3 -m unittest discover -s scripts -p test_validation.py`.
 
-| Intent | Command | Notes |
-|---|---|---|
-| Build | `toven build` | `go build ./...` per module |
-| Vet | `toven check` | `go vet` per module |
-| Test | `toven test -- -race -count=1 -shuffle=on` | see race note below |
-| Lint | `toven lint` | golangci-lint per module |
-| Format (write) | `toven format` | `gofmt -w` — but see gofumpt note |
-| Format (check) | `toven format-check` | fails on unformatted files |
-| Tidy (check) | `toven tidy` | `go mod tidy -diff` |
-| Tidy (write) | `toven tidy-fix` | `go mod tidy` |
-| Update dependencies | `make update` | Toven runs `go get -u -t ./...`, then tidy |
-| Vuln scan | `toven vuln` | `govulncheck` per module |
-| Structure | `make structure` | declare-only aggregator guard (`doc.go` docs-only + god-file advisory) |
+## Tasks
 
-## Scoping to modules
+| Intent | Command |
+|---|---|
+| Build | `toven build` |
+| Vet | `toven check` |
+| Test | `toven test -- -race -count=1 -shuffle=on` |
+| Coverage gate | `make test-coverage` |
+| Lint | `toven lint` |
+| Format check / write | `toven format-check` / `toven format` |
+| Tidy check / write | `toven tidy` / `toven tidy-fix` (or `make tidy-check` / `make tidy`) |
+| Update dependencies | `make update` |
+| Vulnerabilities | `make vuln` |
+| Licenses | `make licenses` |
+| Structure (advisory) | `make structure` |
+| Integration (Docker) | `make test-integration M=<module>` |
+| Auth session proof | `make auth-integration` |
+| Module index | `make module-index` |
+| Workflows | `make actionlint` |
 
-Module selectors are `go:<name>` (run `toven modules` for the list; sub-modules use `-`, e.g. `go:media`, `go:auth`, `go:messaging-kafka`, `go:database-sqlite`).
-Flags are repeatable.
+## Select modules
+
+Selectors are `go:<name>`; `toven modules` lists them (sub-modules use `-`, for example `go:messaging-kafka`). `toven groups` lists domains.
 
 ```bash
-toven test --module go:media                       # one module
-toven lint --module go:auth --module go:authz      # several
-toven test --module go:errors --dependents         # + everything that depends on errors
-toven build --module go:server --dependencies      # + everything server needs
+toven test --module go:media
+toven lint --module go:auth --module go:authz
+toven test --module go:errors --dependents      # plus everything that depends on errors
+toven build --module go:server --dependencies   # plus everything server needs
+toven test --group transport                    # one domain (`make check-transport` adds build + vet)
 ```
 
-## Race, determinism, and passthrough
+## Flags and output
 
-The `test` task's default selector does **not** include `-race`;
-pass test flags verbatim after `--`. gokit's baseline requires green under race + shuffle:
+- The `test` task does not add `-race`; pass test flags after `--`: `toven test --module go:<name> -- -run TestName -race -shuffle=on -count=1`.
+- `toven test --watch` reruns affected tests on change.
+- `toven --output jsonl test ...` gives machine-readable results.
+- `toven cache stats` inspects the cache; `--no-cache` bypasses it; `--refresh` reruns and rewrites it.
+- golangci-lint enforces gofumpt, but `toven format` runs plain gofmt. Run `gofumpt -w <dirs>` before `toven lint`.
 
-```bash
-toven test --module go:<name> -- -race -count=1 -shuffle=on
-toven test --module go:<name> -- -run TestName -race     # single test
-toven test --watch                                        # rerun affected tests on change
-```
+## Acceptance
 
-## gofumpt before lint (important)
+- Minimum for a self-contained change: format check, lint, vet, and race + shuffle tests on the affected modules. Then `make check` for acceptance.
+- Runtime test-environment and adapter changes also need [real adapter proof](../../engineering.md#real-adapter-proof): loopback, file-backed SQLite, owned process, and required Postgres consumers, as described in [`testutil/README.md`](../../../testutil/README.md). Declare setup, output, fixture, drain, and cleanup budgets first. Missing Docker or a failed teardown cannot certify acceptance.
+- Session and authentication changes run `make auth-integration` and follow [`auth/testhost/README.md`](../../../auth/testhost/README.md).
+- Docs-only changes need link and anchor checks, not Go builds.
+- Record the final source identity, exact commands, failures, limits, and cleanup. Leave blocked prerequisites explicitly blocked.
 
-golangci-lint enforces **gofumpt** (stricter than gofmt), but `toven format` runs plain `gofmt -w`.
-After editing, run gofumpt on the changed dirs, then lint:
-
-```bash
-gofumpt -w <changed-dir>...
-toven lint --module go:<name>
-```
-
-## Machine-readable output for agents
-
-When you need to parse results programmatically rather than read a terminal table:
-
-```bash
-toven --output jsonl test --base origin/main --merge-base
-```
-
-## Cache
-
-toven caches per-unit results. Use `toven cache stats` to inspect, `--no-cache` to bypass a run,
-`--refresh` to re-run but rewrite the cache.
-
-`make test-affected BASE=main` delegates the committed/staged/unstaged/untracked union and reverse-dependency closure to Toven, with result caching disabled. A missing baseline fails rather than selecting an unrelated commit. `M`/`W` are not accepted on this target because they would bypass or truncate affected selection; use `make test M=<module> T=<pattern>` for explicit feedback. Real adapter/process tests remain separate required proof when their contracts change. Run `python3 -m unittest discover -s scripts -p test_validation.py` after changing this dispatch; it tests real dirty/untracked/deleted selection with owned temporary repositories.
-
-## Before you hand work off
-
-For a self-contained change, the minimum green bar is: `format-check`/gofumpt, `lint`, `check` (vet), and `test -- -race -count=1 -shuffle=on` on the affected modules. Escalate to a full-tree run only when the affected set is genuinely tree-wide or you are preparing a release.
-
-For test-environment/runtime ownership changes, also run the real loopback, file-backed SQLite, owned-process, and required Postgres consumers described in [`testutil/README.md`](../../../testutil/README.md). Declare numeric setup, output, fixture, drain, and cleanup budgets before implementation. Unit doubles and the fake migration driver prove failure orchestration, not production adapters. Missing Docker or a forced/failed teardown cannot certify acceptance. Record final source identity, exact commands, failure cases, measured limits, and resource cleanup; leave incomplete prerequisites explicitly blocked.
-
-Per repo workflow, **create the branch and make edits only** — the maintainer commits and pushes.
-
-For session/authentication changes, run `make auth-integration` and follow [`auth/testhost/README.md`](../../../auth/testhost/README.md). This includes the built HTTPS host, actual SQL migrations and required PostgreSQL proof, not just handler mocks. Verify exact trusted readiness, cookie flags, unsafe-method CSRF, same-principal API keys, duplicate/mixed/invalid credentials, store failure, rotation/logout races and measured stream teardown. Test-only controls and credentials must not appear in production dependencies or retained evidence. Browser consumers separately prove terminal session handling and late-response fencing.
+Validation does not authorize Git actions. Commit, push, or open a PR only when asked.

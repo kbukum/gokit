@@ -1,6 +1,6 @@
 # gokit skills
 
-Apply the [repository baseline](../copilot-instructions.md). Each skill is the canonical procedure for this repository.
+Apply the [agent entry point](../copilot-instructions.md); rules live in the [engineering standard](../engineering.md). Each skill is the canonical procedure for this repository and links rules instead of restating them.
 
 Skill names/descriptions are discovery context; bodies load on activation; references load only when their task applies. Do not preload the catalog or recursively follow links. Review directly by default; independent agents require the user's request. Routing to a skill is not delegation to another agent.
 
@@ -18,7 +18,7 @@ Skill names/descriptions are discovery context; bodies load on activation; refer
 | [new-module](new-module/SKILL.md) | Add a Go package or module with layer, workspace, documentation, and test wiring. |
 | [parity](parity/SKILL.md) | Align a capability with sibling kits while preserving idiomatic APIs and tracking deliberate gaps. |
 | [release](release/SKILL.md) | Prepare or publish a release through the repository's version, validation, and supply-chain gates. |
-| [review](review/SKILL.md) | Review a diff, package, or tree for architecture, correctness, security, tests, and documentation. |
+| [review](review/SKILL.md) | Review a diff, package, or tree for placement, runtime safety, public API, tests, quality, docs, and gates. |
 | [validate](validate/SKILL.md) | Run the repository's build, test, lint, and documentation gates scoped to the change. |
 
 Preserve worktree/index state. Planning or review does not authorize source changes; Git mutations/publication require the corresponding authorization. Alternate command/agent entry points route here; edit procedures in the canonical skill, not duplicated copies. Keep descriptions short, requirements explicit, and links valid.

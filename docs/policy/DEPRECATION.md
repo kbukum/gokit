@@ -31,8 +31,10 @@ Every deprecated symbol carries:
 func NewAuthChecker(cfg Config) *Checker { … }
 ```
 
-3. A CHANGELOG entry under `### Deprecated` for the release that introduced the deprecation.
-4. (Where helpful) a runtime `slog.Warn` from the package's first call, gated by `sync.Once`, naming the replacement. This is optional — only do it for hot-path APIs where a doc comment is easy to miss.
+It also gets:
+
+- A CHANGELOG entry under `### Deprecated` for the release that introduced the deprecation.
+- Where helpful, a runtime `slog.Warn` from the package's first call, gated by `sync.Once`, naming the replacement. This is optional — only do it for hot-path APIs where a doc comment is easy to miss.
 
 ## What counts as a deprecation-eligible change
 

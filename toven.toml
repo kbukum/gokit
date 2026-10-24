@@ -11,7 +11,6 @@ global_inputs = [
   "Makefile",
   "toven.toml",
   "*.go.work",
-  "domains.toml",
   "gomod.sh",
   ".golangci.yml",
   "gosec.toml",
@@ -163,6 +162,14 @@ fan_out = "per-module"
 selector = ["./{module.root}/..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
+[ecosystems.go.tasks.licenses]
+# Dependency license allow-list per module (needs go-licenses; network-bound,
+# so never cached). `make licenses` runs the same script over every module.
+argv = ["scripts/check-licenses.sh", "{module.root}"]
+cacheable = false
+fan_out = "per-module"
+kind = "lint"
+
 [ecosystems.go.tasks.run]
 argv = ["go", "-C", "{module.root}", "run", ".", "{args}"]
 fan_out = "per-module"
@@ -200,6 +207,66 @@ fan_out = "per-module"
 selector = ["./..."]
 shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 
+# Domains: every module belongs to one group. `toven <task> --group <name>`
+# runs a domain, `toven groups` lists them (and feeds docs/MODULE-INDEX.md).
+# Group dependencies come from the real module graph; `allow_groups` only
+# limits which other domains a group may depend on, and Toven fails any run
+# whose graph breaks that layering. Package layering inside the root module is
+# described in docs/ARCHITECTURE.md; depguard bans only selected edges.
+[groups.foundation]
+description = "Root module packages: foundation types, config, logging, validation, encryption, codec, fs, schema; shared test helpers (testutil); component lifecycle, providers, DI, hooks; observability, resilience, security; bootstrap, stream, DAG, chain, worker, process; SSE; CLI"
+ecosystem = "go"
+modules = ["gokit", "schema", "testutil"]
+guardrails.allow_groups = []
+
+[groups.composition]
+description = "Stateful state stores and DAG test helpers"
+ecosystem = "go"
+modules = ["dag-testutil", "stateful"]
+guardrails.allow_groups = ["foundation"]
+
+[groups.devtools]
+description = "Developer tooling: git"
+ecosystem = "go"
+modules = ["git", "git-testutil"]
+guardrails.allow_groups = ["foundation"]
+
+[groups.transport]
+description = "Server, HTTP client, gRPC, connect, discovery"
+ecosystem = "go"
+modules = ["server", "server-testutil", "httpclient", "grpc", "connect", "connect-testutil", "discovery", "discovery-testutil"]
+guardrails.allow_groups = ["foundation"]
+
+[groups.auth]
+description = "Authentication and authorization"
+ecosystem = "go"
+modules = ["auth", "authz"]
+guardrails.allow_groups = ["foundation", "transport"]
+
+[groups.data]
+description = "Database, cache, storage, vectorstore, messaging"
+ecosystem = "go"
+modules = ["database", "database-postgres", "database-postgres-testutil", "database-sqlite", "database-testutil", "auth-session-database", "cache", "cache-redis", "storage", "storage-s3", "storage-s3-testutil", "storage-gcs", "storage-testutil", "vectorstore", "vectorstore-qdrant", "messaging", "messaging-kafka", "messaging-nats", "messaging-nats-testutil", "messaging-rabbitmq"]
+guardrails.allow_groups = ["foundation", "transport", "auth"]
+
+[groups.ai]
+description = "LLM, inference, embedding, agent, tool, MCP, skill"
+ecosystem = "go"
+modules = ["ai", "llm", "llm-providers", "llm-tokenizer-tiktoken", "llm-tokenizer-huggingface", "embedding", "inference", "inference-tgi", "inference-triton", "inference-vllm", "agent", "tool", "mcp", "skill"]
+guardrails.allow_groups = ["foundation", "transport", "auth"]
+
+[groups.media]
+description = "Light detection, metadata, image ops, time/spatial, subtitles"
+ecosystem = "go"
+modules = ["media"]
+guardrails.allow_groups = ["foundation"]
+
+[groups.infra]
+description = "Workload management, benchmarking, dataset, auth test host"
+ecosystem = "go"
+modules = ["workload", "workload-dmr", "workload-testutil", "dataset", "bench", "bench-storage", "auth-testhost"]
+guardrails.allow_groups = ["foundation", "transport", "auth", "data", "ai"]
+
 # The `command` ecosystem is Toven's generic-tool adapter: language-agnostic
 # gates that have no `go` home. Declaring gokit's structural guardrails here lets
 # Toven drive the full validation surface, not just the `go` tasks. One module
@@ -210,10 +277,6 @@ shared_inputs = ["go.sum", "go.work", "go.work.sum"]
 # logic stays script-owned with a single source of truth — the Makefile/CI and
 # `toven run <task>` invoke the very same script.
 #
-# The dependency license gate (`scripts/check-licenses.sh`) deliberately stays
-# native (tracked in docs/TOVEN-MIGRATION.md): it is network-bound and runs
-# `go-licenses` across every module, exceeding Toven's bounded task timeout —
-# the same reason rskit keeps its `cargo-deny` gate native.
 [[ecosystems.command.modules]]
 name = "repo"
 root = "."

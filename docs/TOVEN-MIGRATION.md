@@ -13,15 +13,18 @@ gokit's release model is **single-set lock-step, path-prefixed, registry-less**:
 | Read-only self-hosting canary (modules, graph, release previews) | `toven` via `toven-canary.yml` | Migrated |
 | Structural guardrail (declare-only aggregator / god-file / crowded-package) | `toven run structure` | Migrated |
 | Module index generation (`docs/MODULE-INDEX.md`) | `toven run module-index` | Migrated |
-| Go tasks (build/check/test/lint/format/coverage/vuln/tidy) | `make` → `toven <task>` | Migrated, locally and in CI; `M=`/`W=` subsets stay native (gap 2) |
-| Race tests with the per-module coverage gate | `make test-coverage` → `toven coverage` | Migrated; CI's Go version matrix is a job matrix (gap 3) |
+| Go tasks (build/check/test/lint/format/coverage/vuln/tidy) | `make` → `toven <task>` | Migrated, locally and in CI; `G=<domain>` narrows through Toven; `M=`/`W=` subsets stay native (packages and alternate `go.work` files) |
+| Domain gates (`make check-<domain>`) | `make check G=<domain>` → `toven build/check/test --group <domain>` | Migrated locally; domains are `[groups.*]` in `toven.toml` |
+| Race tests with the per-module coverage gate | `make test-coverage` → `toven coverage` | Migrated; CI's Go version matrix is a job matrix (gap 1) |
 | Integration suite (`//go:build integration`) | `make test-integration` → `toven test --module …` | Migrated; `scripts/integration_modules.py` picks the modules |
 | Fuzz targets | `make fuzz` → `scripts/fuzz.py` | Native discovery; Toven `affected` selects modules on pull requests |
-| Dependency license gate | `scripts/check-licenses.sh` (native) | Native by design — see gap 1 |
-| Cross-OS checks (macOS) | `make check M=<module>` | Native subset path (gap 2) |
+| Dependency license gate | `toven licenses` (per module) or `make licenses` (all modules) → `scripts/check-licenses.sh` | Toven task declared; `make licenses` and CI still call the script directly because the CI `licenses` job does not install Toven |
+| Cross-OS checks (macOS) | `make check M=<module>` | Native subset path |
 | Supply-chain artifacts (source archive, checksums, SBOM, cosign, provenance) | GoReleaser via `release-artifacts.yml` | Native — attaches to the Toven-created Release (`keep-existing`) |
 
-Toven discovers every `go.mod` (`toven modules` lists them; `toven tasks` lists every task) and owns the authoritative release path. The `make` gates run the **whole workspace** through Toven, which orders modules by the dependency graph and fans out across cores within the configured compute budget. CI calls the same `make` targets with a pinned Toven release, so a green local run predicts a green CI run. The `M=<module>` / `W=core|contrib` subsets fall back to the native `gomod.sh` path, since Toven has no selector for gokit's named domains yet (gap 2).
+Toven discovers every `go.mod` (`toven modules` lists them; `toven tasks` lists every task) and owns the authoritative release path. The `make` gates run the **whole workspace** through Toven, which orders modules by the dependency graph and fans out across cores within the configured compute budget. CI calls the same `make` targets with a pinned Toven release, so a green local run predicts a green CI run. `G=<domain>` narrows a gate to one domain through Toven. The `M=<module>` / `W=core|contrib` subsets use the native `gomod.sh` path: `M=` also accepts package paths and `W=` switches `GOWORK`, and Toven selects modules, not packages or alternate `go.work` files.
+
+Domains are Toven groups. `toven groups` lists them, `docs/MODULE-INDEX.md` is generated from that list, and Toven fails any run whose real module graph breaks a group's `allow_groups` layering. Package layering inside the root module is described in [Architecture](ARCHITECTURE.md); depguard bans only selected edges. CI runs whole-workspace gates; `--group` is for local, scoped runs.
 
 ## How CI uses Toven
 
@@ -34,34 +37,27 @@ Toven discovers every `go.mod` (`toven modules` lists them; `toven tasks` lists 
 
 Prioritized. File each upstream in the Toven repo.
 
-### 1. Per-task execution/probe timeout override — medium priority
-
-The dependency license gate (`scripts/check-licenses.sh`, running `go-licenses` across every module) is network-bound and exceeds Toven's default 30s task/probe timeout, so it cannot be wired as a `command` task today (`error[TIMEOUT]: … timed out after 30s`). rskit keeps its analogous `cargo-deny` gate native for the same class of reason.
-
-**Requested:** a per-task timeout override in config (e.g. `timeout_secs`) so a legitimately slow, network-bound gate can run as a Toven `command` task instead of staying native.
-
-### 2. Named module groups / domains (replaces `domains.toml`) — medium priority
-
-gokit groups its modules into named domains (`core`, `patterns`, `crosscutting`, `composition`, `transport`, `auth`, `data`, `ai`, `media`, `infra`, `devtools`) in [`../domains.toml`](../domains.toml). Domains drive the targeted local gates (`make check-core`, `make check-ai`, …) and the generated module index. Toven models workspaces, individual modules, and globs — not arbitrary named cross-module groups.
-
-**Requested:** first-class module labels/tags in config and group selectors (`toven test --group ai`). This is the same gap rskit filed for its domains.
-
-### 3. Per-task toolchain selection (Go version matrix) — low priority
+### 1. Per-task toolchain selection (Go version matrix) — low priority
 
 gokit's CI compiles and tests across a Go version matrix and multiple OSes. This works under Toven by activating a toolchain in the job and using the ambient `go`, but there is no Toven-native "run task X on Go 1.N" knob.
 
 **Requested:** an optional per-task/per-run toolchain pin. (Same as rskit's MSRV gap.)
 
-### 4. Go-native dependency & license policy — low priority
+### 2. Go-native dependency & license policy — low priority
 
-The license allow-list check is generic supply-chain policy (allowed SPDX ids, first-party ignore) that Toven could own natively rather than via a shell script, once gap 1 (timeout) is addressed.
+The license allow-list check is generic supply-chain policy (allowed SPDX ids, first-party ignore) that Toven could own natively rather than via a shell script.
 
 **Requested:** a config-driven license/supply-chain policy surface for the Go adapter.
+
+## Resolved gaps
+
+- **Task timeout.** Toven tasks have no default wall-clock limit (`--timeout` is opt-in), so the network-bound license gate runs as the `licenses` task.
+- **Named domains.** Domains are `[groups.*]` with `description` and `guardrails.allow_groups`; `--group` selects them and `toven groups` lists them. `domains.toml` and `scripts/check-domain.sh` are gone.
 
 ## What is explicitly not a gap
 
 - **CI-dispatched publish with a local fallback.** The canonical publish runs in CI through the `Release (publish)` workflow (`release.yml`, `workflow_dispatch`, protected `release` environment) — `toven release publish` from `main`, mirroring Toven's own release pipeline; `make release-publish` remains a maintainer-local fallback. Either way the pushed root tag triggers `release-artifacts.yml`, where GoReleaser attaches supply-chain artifacts to the Toven-created Release in `keep-existing` mode. This is an intentional two-workflow model (publish vs. artifacts), not a shortfall.
 - **Single-wave tests.** Local `go test` fans out across cores in a single wave: a module's `go test ./...` compiles the packages it imports from other modules on demand through Go's shared, concurrency-safe build cache, so Toven runs `test` unordered rather than paying dependency-wave barriers (measured ~2x faster under `-race`); `build`/`vet` keep dependency ordering for cascade fail-fast on a compile break.
 - **Fuzz target discovery.** Fuzz targets are Go functions, not modules or tasks; `scripts/fuzz.py` owns discovery and sharding while Toven owns module selection.
-- **Guardrail rule logic.** `check-structure.sh`, `generate-module-index.sh`, and `check-licenses.sh` encode gokit-specific structure and policy. Toven orchestrates them (or, for the network-bound one, defers to it); it should not reimplement the rules.
+- **Guardrail rule logic.** `check-structure.sh`, `generate-module-index.sh`, and `check-licenses.sh` encode gokit-specific structure and policy. Toven orchestrates them; it should not reimplement the rules.
 - **Tag grammar.** The Go path-prefixed tag grammar is fixed and correct; Toven rejects a `tag_format` override, and gokit withholds no module from the lock-step set. This is the intended contract.

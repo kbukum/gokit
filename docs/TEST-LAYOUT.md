@@ -45,4 +45,4 @@ Fakes, clocks, spies/recorders, setup harnesses, and assertions are a **shipped 
 
 ## Enforcement
 
-Test placement is a **review pass**, not a hard gate — see `.github/skills/review/references/00-structure-placement.md` (Test placement). The advisory `make structure` (`scripts/check-structure.sh`) reports coverage-padding test-file names alongside the declare-only-aggregator and god-file/crowded-package advisories. Nothing here blocks CI; the review pass and reviewer judgment carry it, matching rskit's advisory approach.
+Test placement is checked in review, not by a hard gate — see the [tests and proof lens](../.github/skills/review/references/tests-proof.md). The advisory `make structure` (`scripts/check-structure.sh`) reports coverage-padding test-file names alongside the declare-only `doc.go` and large-file advisories. Nothing here blocks CI, matching rskit's advisory approach.

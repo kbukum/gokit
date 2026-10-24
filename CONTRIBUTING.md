@@ -1,207 +1,92 @@
 # Contributing to gokit
 
+gokit is a pre-1.0 alpha. Contributions are welcome. The rules every change follows are in the [engineering standard](.github/engineering.md); this file covers the workflow.
+
 ## Prerequisites
 
-- **Go 1.27.3+**
-- **[Toven](https://github.com/kbukum/toven)** — runs the workspace `make` gates; CI pins the version in `TOVEN_VERSION` (`.github/workflows/ci.yml`). Install with `brew tap kbukum/tap && brew install toven` or see [installation](https://github.com/kbukum/toven/blob/main/docs/installation.md)
-- **Python 3** — CI helper scripts (`scripts/*.py`)
-- **golangci-lint** — `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0`
-- **govulncheck** — `go install golang.org/x/vuln/cmd/govulncheck@v1.8.0`
-- **go-licenses** — `go install github.com/google/go-licenses/v2@v2.0.1`
-- **shellcheck** — `make actionlint` uses it to check workflow `run:` scripts, as CI does; `brew install shellcheck` or `apt-get install shellcheck`
-- **ast-grep** — powers the advisory `make structure` guard; `make structure` auto-installs it if missing, preferring version-pinned managers (npm/cargo/pipx) and falling back to an unpinned Homebrew install last
-- **Docker** — for `make test-integration` and `make ci` (local CI via [act](https://github.com/nektos/act))
+Tool versions are pinned in [`go.mod`](go.mod) and [CI](.github/workflows/ci.yml). Install the same versions locally.
 
-## Getting Started
+- **Go** — the version in `go.mod`.
+- **[Toven](https://github.com/kbukum/toven)** — runs the workspace `make` gates. Install with `brew tap kbukum/tap && brew install toven` or see [installation](https://github.com/kbukum/toven/blob/main/docs/installation.md).
+- **Python 3** — CI helper scripts (`scripts/*.py`).
+- **golangci-lint v2**, **govulncheck**, **go-licenses** — for `make lint`, `make vuln`, and `make licenses`.
+- **shellcheck** — used by `make actionlint` for workflow `run:` scripts.
+- **ast-grep** — for the advisory `make structure` guard; it installs itself if missing.
+- **Docker** — for `make test-integration` and `make ci` (local CI via [act](https://github.com/nektos/act)).
+
+## Getting started
 
 ```bash
 git clone https://github.com/kbukum/gokit.git
 cd gokit
 make check   # build + vet + test across all modules
-make lint    # run golangci-lint across all modules
+make lint    # golangci-lint across all modules
 ```
 
-## Quick Development Workflow
+## Daily workflow
 
-For rapid iteration on a single module:
-```bash
-make help                     # see available targets
-make check-fast M=mymodule    # build + vet + lint only (~10s)
-make test M=mymodule          # run tests for one module
-make test-affected            # test only modules changed vs main
-make check                    # full validation before PR
-```
-
-## Project Structure
-
-gokit is a **multi-module Go toolkit**. It provides reusable building blocks — not applications.
-
-```
-gokit/
-├── go.mod                  # Root module (core packages)
-├── errors/                 # ─┐
-├── config/                 #  │
-├── logging/                #  │ Core packages — share root go.mod
-├── provider/               #  │ Zero heavy dependencies
-├── stream/                 #  │
-├── resilience/             # ─┘
-├── database/               # ─┐
-│   ├── go.mod              #  │ Sub-modules — own go.mod
-│   └── testutil/           #  │ Bring in heavier deps (GORM, Kafka, etc.)
-│       └── go.mod          #  │ Each has a `replace ../` for local dev
-├── cache/                  #  │
-├── messaging/              #  │
-├── server/                 # ─┘
-├── gomod.sh                # Cross-module operations script
-├── Makefile                # Developer workflow targets
-└── .golangci.yml           # Shared linter configuration
-```
-
-**Core packages** live under the root `go.mod` and must stay lightweight. **Sub-modules** each have their own `go.mod` and may pull in heavy dependencies.
-
-## Development Workflow
-
-### Make Targets
-
-All targets support `M=<module>` for targeting a specific module:
+Scope commands to what you changed. `make help` lists every target.
 
 ```bash
-make check                   # build + vet + test everything
-make test                    # test all modules
-make test M=cache            # test only the cache module
-make test M=cache T=TestGet  # run specific test in cache
-make lint                    # lint all modules
-make lint M=provider         # lint only provider
-make tidy                    # go mod tidy across all modules
-make test-coverage           # race tests + per-module coverage gate (what CI runs)
-make test-integration        # integration tests (Docker required)
-make fuzz FUZZTIME=10s       # fuzz every target; FUZZ_BASE=main for changed modules only
-make update                  # update dependencies and tidy through Toven
-make fmt                     # format all code
-make ci                      # run full CI pipeline locally (requires Docker)
+make check-fast M=<module>         # build + vet + lint
+make test M=<module> T=<pattern>   # one module, race + shuffle
+make test-affected                 # changed modules and their dependents
+make check-<domain>                # one domain; `toven groups` lists them
+make fmt M=<path>                  # format
+make tidy M=<module>               # go mod tidy (CI runs make tidy-check)
+make check                         # full validation before a PR
 ```
 
-### Cross-Module Script
+`gomod.sh` runs a command across discovered modules, for example `./gomod.sh cmd "go test" -m messaging`.
 
-`gomod.sh` discovers all modules automatically by finding `go.mod` files. You never maintain a hardcoded module list:
+## Making a change
 
-```bash
-./gomod.sh tidy              # go mod tidy all modules
-./gomod.sh cmd "go test"     # run tests across all modules
-./gomod.sh cmd "go test" -m messaging  # run tests in messaging only
-```
+1. Branch from `main`.
+2. Make the change and its tests together, following the [engineering standard](.github/engineering.md).
+3. Run the scoped commands above while you work, then `make check` and `make lint`.
+4. Update godoc, READMEs, and the `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md).
+5. Open a pull request and complete the template. The [Definition of Done](.github/engineering.md#definition-of-done) is the bar.
 
-## Making Changes
+## Adding a package or module
 
-1. Create a feature branch from `main`
-2. Make your changes
-3. Run `make check` — builds, vets, and tests everything
-4. Run `make lint` — ensure no linter issues
-5. Run `make tidy` — keep go.mod/go.sum clean (CI fails on `make tidy-check`)
-6. Submit a pull request
+Decide placement with [Architecture](docs/ARCHITECTURE.md) and the [concern owners](docs/concern-owners.md) first.
 
-## Adding a New Core Package
+- **Root-module package** (no heavy dependencies): create `yourpkg/` with a declare-only `doc.go` and tests. Import only the standard library, lower-layer packages, and lightweight dependencies.
+- **Sub-module or nested adapter** (heavy dependencies): create the folder with its own `go.mod` using the root module's `go` directive, then:
+  - run `make replace-sync` to add local `replace` directives for gokit modules it uses (`make replace-check` verifies them);
+  - add it to `go.work` and to `core.go.work` or `contrib.go.work`;
+  - add it to its domain group in [`toven.toml`](toven.toml) and run `make module-index`;
+  - implement `component.Component` if it wraps infrastructure with a lifecycle.
 
-1. Create `yourpkg/` at the repo root with a `doc.go` for package documentation
-2. Only import standard library, other core packages, or lightweight dependencies
-3. Add tests (`yourpkg/*_test.go`) — aim for high coverage
-4. Run `make tidy` at the root
+Agents use the `new-module` and `new-backend` skills for the same steps.
 
-## Adding a New Sub-Module
+## Versioning and releases
 
-1. Create `yourmod/` with its own `go.mod`:
-   ```
-   module github.com/kbukum/gokit/yourmod
-   go 1.27.3
-   require github.com/kbukum/gokit v0.1.2
-   replace github.com/kbukum/gokit => ../
-   ```
-2. Add a `doc.go` with package-level documentation
-3. If the module wraps an infrastructure component, implement `component.Component` for lifecycle management
-4. If the module depends on another gokit sub-module (e.g. `.../testutil`), add a local `replace` for it too — run `make replace-sync` to derive them from the module graph, or `make replace-check` to verify. These keep `go mod tidy` working against not-yet-published versions during a release bump and are enforced in CI.
-5. Add tests — the module is automatically discovered by `gomod.sh`, CI, and all `make` targets
-
-## Coding Standards
-
-- **Formatting**: `gofmt` and `goimports` (enforced by CI via `.golangci.yml`)
-- **Imports**: Separate stdlib, third-party, and gokit imports with blank lines
-- **Config pattern**: Each module that needs configuration uses a `Config` struct with `ApplyDefaults()` and `Validate()` methods
-- **Validation**: Plain Go validation — no external validator library
-- **Naming**: Follow Go conventions; avoid stuttering (e.g., `server.Component` not `server.ServerComponent`)
-- **Testing**: Use `-race -count=1`; **prefer table-driven tests** for any test that exercises >1 input/expected pair. Pattern:
-
-  ```go
-  func TestThing(t *testing.T) {
-      t.Parallel()
-      tests := []struct {
-          name    string
-          in      Input
-          want    Output
-          wantErr bool
-      }{
-          {name: "happy path", in: Input{...}, want: Output{...}},
-          {name: "validation error", in: Input{...}, wantErr: true},
-      }
-      for _, tt := range tests {
-          t.Run(tt.name, func(t *testing.T) {
-              t.Parallel()
-              got, err := DoThing(tt.in)
-              if (err != nil) != tt.wantErr {
-                  t.Fatalf("err = %v, wantErr = %v", err, tt.wantErr)
-              }
-              if !reflect.DeepEqual(got, tt.want) {
-                  t.Errorf("got = %v, want = %v", got, tt.want)
-              }
-          })
-      }
-  }
-  ```
-
-Serial `t.Run("case1", …); t.Run("case2", …)` blocks should be converted to a `[]struct` slice when adjacent cases share setup, assertions, or inputs.
-
-## Versioning & Releases
-
-All modules are tagged together at the same version:
-
-```bash
-make release-tag                # cut manifests, commit, and create signed module tags
-make list-tags                  # view all tags
-```
-
-Tags are created per module (e.g., `v0.2.0`, `cache/v0.2.0`, `messaging/v0.2.0`) by Toven (`toven release tag`), which auto-discovers modules. See [docs/VERSIONING.md](docs/VERSIONING.md) for the full guide.
+All modules are tagged together at the same version, per module path (`v0.2.0`, `cache/v0.2.0`). Toven creates the tags. See [Versioning](docs/VERSIONING.md) and [Releasing](docs/RELEASING.md).
 
 ## CI
 
-CI runs on GitHub Actions and calls the same `make` targets you run locally, with a pinned Toven release. Modules and fuzz targets are discovered at runtime, never hardcoded.
+CI calls the same `make` targets you run locally, with a pinned Toven release. Modules and fuzz targets are discovered at runtime.
 
-- **Gate** — Go version, changelog, CI script tests, workflow lint, replace graph, tidiness, and the fuzz plan. Pull requests that only touch docs skip the Go jobs but still validate the changelog.
-- **Check** — `make build vet test-coverage` on the go.mod floor and the latest Go. A module below its coverage floor in `toven.toml` fails the job; coverage also goes to Codecov.
-- **Lint**, **Security** (`make vuln`), **Licenses**, **Integration** (`make test-integration`), and macOS checks for platform-sensitive modules.
-- **Fuzz** — balanced shards; pull requests fuzz the modules their change affects, `main` fuzzes everything, and a nightly run fuzzes longer. Failing inputs are uploaded as artifacts.
+- **Gate** — Go version, changelog, CI script tests, workflow lint, replace graph, tidiness, and the fuzz plan. Docs-only pull requests skip the Go jobs but still check the changelog.
+- **Check** — `make build vet test-coverage` on the `go.mod` floor and the latest Go. A module below its coverage floor fails; coverage also goes to Codecov.
+- **Lint** (plus the advisory `make structure`), **Security** (`make vuln`), **Licenses**, **Integration** (`make test-integration`), and macOS checks for platform-sensitive modules.
+- **Fuzz** — pull requests fuzz affected modules, `main` fuzzes everything, and a nightly run fuzzes longer. Failing inputs are uploaded as artifacts.
 - **CI Status** — the single required check; it fails unless every job that should run succeeded.
 
-You can run it locally:
+Which rules these gates check, and which they don't, is in [Enforcement](.github/engineering.md#enforcement).
 
-```bash
-make ci        # full pipeline (requires Docker + act)
-make ci-test   # check jobs only
-make ci-lint   # lint jobs only
-```
+Run CI locally with `make ci` (Docker and act), `make ci-test`, or `make ci-lint`.
 
----
+## Sibling parity
 
-## Related Documents
+Shared abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are tracked for parity with [rskit](https://github.com/kbukum/rskit). When you change one here, open a tracking issue in rskit so the change can be evaluated there.
+
+## Related documents
 
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Contributor Covenant v2.1
-- [SECURITY.md](SECURITY.md) — vulnerability disclosure & supply-chain
-- [GOVERNANCE.md](GOVERNANCE.md) — roles, decision making, sibling-parity contract
-- [MAINTAINERS.md](MAINTAINERS.md) — current maintainers & areas
-- [CHANGELOG.md](CHANGELOG.md) — release history
-- [docs/RELEASING.md](docs/RELEASING.md) — release process
-- [docs/VERSIONING.md](docs/VERSIONING.md) — versioning rules
+- [SECURITY.md](SECURITY.md) — vulnerability reporting and supply chain
+- [GOVERNANCE.md](GOVERNANCE.md) — roles, decisions, sibling-parity contract
+- [MAINTAINERS.md](MAINTAINERS.md) — maintainers and areas
 - [docs/policy/SEMVER.md](docs/policy/SEMVER.md) · [docs/policy/DEPRECATION.md](docs/policy/DEPRECATION.md)
-- [docs/adr/](docs/adr/) — Architecture Decision Records
-
-### Sibling-parity reminder
-
-Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are mirrored across [gokit](https://github.com/kbukum/gokit) and [rskit](https://github.com/kbukum/rskit). When you change one of these surfaces here, please open a tracking issue in the rskit repo so the change can be evaluated for parity.
+- [docs/adr/](docs/adr/) — architecture decision records

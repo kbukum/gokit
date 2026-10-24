@@ -17,8 +17,13 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 ALLOWED="Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,BSD-3-Clause-Clear,ISC,MPL-2.0,Unlicense,Zlib,Python-2.0,CC0-1.0"
 IGNORE="github.com/kbukum/gokit"
 
-modules=$(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' \
-  | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+# Module dirs to check (relative to the repo root); every module by default.
+if [ "$#" -gt 0 ]; then
+  modules="$*"
+else
+  modules=$(find . -name go.mod -not -path '*/vendor/*' -not -path '*/.git/*' \
+    | sed 's|/go.mod||' | sed 's|^\./||' | sed 's|^$|.|' | sort)
+fi
 
 failed=0
 for mod in $modules; do

@@ -10,7 +10,7 @@ This file lists the people responsible for the gokit project. Maintainers are re
 
 ## Bus Factor: 1 — Co-Maintainers Wanted
 
-gokit has a **single core maintainer**. This is a known sustainability risk for a project of this size (54 Go modules). We are actively looking for contributors interested in becoming co-maintainers, particularly in the following areas:
+gokit has a **single core maintainer**. This is a known sustainability risk for a multi-module project of this size (`toven modules` lists them). We are actively looking for contributors interested in becoming co-maintainers, particularly in the following areas:
 
 - **Transport/protocol packages**: `grpc`, `connect`, `sse`, `server`
 - **Messaging**: `messaging`, `messaging/kafka`, `messaging/nats`, `messaging/rabbitmq`

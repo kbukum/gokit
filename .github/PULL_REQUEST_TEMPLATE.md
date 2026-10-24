@@ -31,10 +31,14 @@
 
 ## Checklist
 
-- [ ] [Engineering standards](copilot-instructions.md) and canonical ownership are preserved
+- [ ] Code is placed per [Architecture](../docs/ARCHITECTURE.md) and reuses the canonical owner
+- [ ] Public API is minimal and typed; breaking changes are in the CHANGELOG
+- [ ] Errors keep causes; no runtime panics, ignored errors, or success-shaped fallbacks
+- [ ] Goroutines, queues, retries, and remote calls are owned, bounded, and cancellable
+- [ ] Inputs are validated at trust boundaries; no secrets in source, logs, or URLs
 - [ ] Behavior and failure paths have tests; fixes include regressions
-- [ ] APIs, errors, resource bounds, and lifecycle ownership are reviewed
-- [ ] Manifests/locks, current documentation, and concise changelog notes are aligned
+- [ ] Godoc, READMEs, examples, MODULE-INDEX, and changelog notes match the change
+- [ ] Meets the [Definition of Done](engineering.md#definition-of-done)
 
 ## Outstanding work
 

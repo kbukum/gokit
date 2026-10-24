@@ -132,7 +132,7 @@ This file is the bird's-eye index.
 | **Vectors** | embedding, vectorstore | Embedding & similarity search |
 | **Devtools** | git, cli | Git repository operations, terminal UX tooling |
 
-See [`docs/adr/0001-three-tier-layering.md`](adr/0001-three-tier-layering.md) for the layering rationale.
+Where each package sits is in [Architecture](ARCHITECTURE.md); the original rationale is [ADR 0001](adr/0001-three-tier-layering.md).
 
 ## Multi-Module Versioning
 

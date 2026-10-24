@@ -28,11 +28,8 @@ concurrency:
 permissions:
   contents: read
 
-# Pinned Toven release; keep in lock-step with .github/workflows/toven-canary.yml.
+# The Toven action installs the release matching its pinned SHA; keep every Toven pin on the same SHA.
 # Third-party actions are pinned by 40-char SHA; Dependabot bumps SHA and comment together.
-env:
-  TOVEN_VERSION: v0.1.0-alpha.14
-
 jobs:
   # ── Gate: scope, repo guardrails, and the fuzz plan ───────────────────────
   gate:
@@ -97,9 +94,7 @@ jobs:
       - name: Install the pinned Toven release
         id: toven
         if: steps.scope.outputs.code == 'true'
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
-        with:
-          version: ${{ env.TOVEN_VERSION }}
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
 
       - name: Test CI scripts
         if: steps.scope.outputs.code == 'true'
@@ -196,9 +191,7 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
-        with:
-          version: ${{ env.TOVEN_VERSION }}
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
 
       # test-coverage is the full race test run: every module with -race and
       # -shuffle, gated per module by [ecosystems.go.coverage] in toven.toml.
@@ -294,9 +287,7 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
-        with:
-          version: ${{ env.TOVEN_VERSION }}
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
 
       - name: Lint all modules
         run: make TOVEN="${{ steps.toven.outputs.toven }}" lint
@@ -332,9 +323,7 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
-        with:
-          version: ${{ env.TOVEN_VERSION }}
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
 
       - name: Scan every module
         run: make TOVEN="${{ steps.toven.outputs.toven }}" vuln
@@ -441,9 +430,7 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
-        with:
-          version: ${{ env.TOVEN_VERSION }}
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
 
       - name: Run integration tests
         run: make TOVEN="${{ steps.toven.outputs.toven }}" test-integration
