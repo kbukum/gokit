@@ -264,7 +264,7 @@ guardrails.allow_groups = ["foundation"]
 [groups.infra]
 description = "Workload management, benchmarking, dataset, auth test host"
 ecosystem = "go"
-modules = ["workload", "workload-dmr", "workload-testutil", "dataset", "bench", "bench-storage", "auth-testhost"]
+modules = ["workload", "workload-dmr", "workload-lmstudio", "workload-ollama", "workload-openaicompat", "workload-testutil", "dataset", "bench", "bench-storage", "auth-testhost"]
 guardrails.allow_groups = ["foundation", "transport", "auth", "data", "ai"]
 
 # The `command` ecosystem is Toven's generic-tool adapter: language-agnostic

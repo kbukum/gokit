@@ -186,7 +186,7 @@ func builtinCompact(ctx context.Context, _ string, a *Agent) (string, error) {
 	}
 	maxTokens := 0
 	if a.config.Provider != nil {
-		maxTokens = a.config.Provider.Capabilities().MaxInputTokens
+		maxTokens = a.config.Provider.Capabilities().InputBudget()
 	}
 	compacted, err := a.config.Compaction.Compact(ctx, msgs, maxTokens)
 	if err != nil {

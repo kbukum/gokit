@@ -3,6 +3,7 @@ package openai
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
@@ -237,10 +238,11 @@ type rawToolCall struct {
 func encodeMessage(m chat.Message) (map[string]any, error) {
 	switch msg := m.(type) {
 	case chat.UserMessage:
-		return map[string]any{
-			"role":    "user",
-			"content": ai.TextOf(msg.Content),
-		}, nil
+		content, err := encodeUserContent(msg.Content)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"role": "user", "content": content}, nil
 	case chat.AssistantMessage:
 		result := map[string]any{
 			"role":    "assistant",
@@ -275,6 +277,51 @@ func encodeMessage(m chat.Message) (map[string]any, error) {
 	default:
 		return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("openai: unknown message type %T", m))
 	}
+}
+
+// encodeUserContent sends text-only content as a string and mixed content as typed parts. An image is a base64
+// data URL built from its MIME type and data, or its http(s) source when it carries no data. Any other part fails
+// rather than being dropped.
+func encodeUserContent(parts []ai.ContentPart) (any, error) {
+	textOnly := true
+	for _, p := range parts {
+		if _, ok := p.(ai.Text); !ok {
+			textOnly = false
+			break
+		}
+	}
+	if textOnly {
+		return ai.TextOf(parts), nil
+	}
+	out := make([]map[string]any, 0, len(parts))
+	for _, p := range parts {
+		switch part := p.(type) {
+		case ai.Text:
+			out = append(out, map[string]any{"type": "text", "text": part.Text})
+		case ai.Image:
+			url, err := imageURL(part)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, map[string]any{"type": "image_url", "image_url": map[string]any{"url": url}})
+		default:
+			return nil, errors.New(errors.ErrCodeInvalidInput, fmt.Sprintf("openai: user content part %q is not supported", p.PartType()))
+		}
+	}
+	return out, nil
+}
+
+func imageURL(img ai.Image) (string, error) {
+	if img.Data != "" {
+		if img.MimeType == "" {
+			return "", errors.New(errors.ErrCodeInvalidInput, "openai: an inline image needs a MIME type")
+		}
+		return "data:" + img.MimeType + ";base64," + img.Data, nil
+	}
+	if strings.HasPrefix(img.Source, "https://") || strings.HasPrefix(img.Source, "http://") {
+		return img.Source, nil
+	}
+	return "", errors.New(errors.ErrCodeInvalidInput, "openai: an image needs inline data or an http(s) source")
 }
 
 func encodeTools(defs []ai.ToolSpec) []map[string]any {

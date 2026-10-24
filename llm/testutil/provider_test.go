@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/llm"
 	"github.com/kbukum/gokit/llm/testutil"
@@ -101,10 +102,10 @@ func TestFakeProviderBlockUntilCancel(t *testing.T) {
 func TestFakeProviderCapabilitiesAndTokens(t *testing.T) {
 	t.Parallel()
 	p := testutil.NewFakeProvider(
-		testutil.WithCapabilities(llm.Capabilities{JSONMode: true}),
+		testutil.WithCapabilities(llm.Capabilities{JSONMode: ai.Supported(ai.SourceDeclared)}),
 		testutil.WithTokenCounter(func([]chat.Message) int { return 42 }),
 	)
-	if !p.Capabilities().JSONMode {
+	if !p.Capabilities().JSONMode.Supported() {
 		t.Fatal("capabilities override lost")
 	}
 	if got := p.CountTokens([]chat.Message{chat.User("x")}); got != 42 {

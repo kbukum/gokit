@@ -28,7 +28,7 @@ type AdapterProvider struct {
 }
 
 func NewProvider(a *Adapter, model string) *AdapterProvider {
-	return &AdapterProvider{adapter: a, model: model, caps: Capabilities{ToolUse: true, Streaming: true}}
+	return &AdapterProvider{adapter: a, model: model, caps: Capabilities{ToolUse: ai.Supported(ai.SourceDeclared), Streaming: ai.Supported(ai.SourceDeclared)}}
 }
 
 func (p *AdapterProvider) WithCapabilities(caps Capabilities) *AdapterProvider {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/llm"
 )
@@ -78,10 +79,10 @@ func NewFakeProvider(opts ...FakeOption) *FakeProvider {
 	p := &FakeProvider{
 		name: "fake",
 		caps: llm.Capabilities{
-			Streaming:       true,
-			ToolUse:         true,
-			MaxInputTokens:  100000,
-			MaxOutputTokens: 4096,
+			Streaming:       ai.Supported(ai.SourceDeclared),
+			ToolUse:         ai.Supported(ai.SourceDeclared),
+			ContextLength:   ai.Stated(104096, ai.SourceDeclared),
+			MaxOutputTokens: ai.Stated(4096, ai.SourceDeclared),
 		},
 		tokenCounter: chat.CountTokensApprox,
 	}

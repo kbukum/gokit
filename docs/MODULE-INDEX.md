@@ -61,6 +61,6 @@ May depend on: auth, foundation, transport
 ## ⚙️ Infra  (`make check-infra`)
 Workload management, benchmarking, dataset, auth test host
 
-auth/testhost · bench · bench/storage · dataset · workload · workload/dmr · workload/testutil
+auth/testhost · bench · bench/storage · dataset · workload · workload/dmr · workload/lmstudio · workload/ollama · workload/openaicompat · workload/testutil
 
 May depend on: ai, auth, data, foundation, transport

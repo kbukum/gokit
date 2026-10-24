@@ -30,7 +30,7 @@ type mockProvider struct {
 }
 
 func newMockProvider(responses ...llm.CompletionResponse) *mockProvider {
-	return &mockProvider{responses: responses, caps: llm.Capabilities{ToolUse: true, Streaming: true, MaxInputTokens: 100000, MaxOutputTokens: 4096}}
+	return &mockProvider{responses: responses, caps: llm.Capabilities{ToolUse: ai.Supported(ai.SourceDeclared), Streaming: ai.Supported(ai.SourceDeclared), ContextLength: ai.Stated(104096, ai.SourceDeclared), MaxOutputTokens: ai.Stated(4096, ai.SourceDeclared)}}
 }
 func (m *mockProvider) Name() string                       { return "mock" }
 func (m *mockProvider) IsAvailable(_ context.Context) bool { return true }

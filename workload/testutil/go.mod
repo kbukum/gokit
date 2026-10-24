@@ -9,6 +9,8 @@ require (
 )
 
 require (
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
+	github.com/buger/jsonparser v1.6.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
@@ -17,7 +19,13 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
+	github.com/invopop/jsonschema v0.14.0 // indirect
+	github.com/kbukum/gokit/ai v0.3.0-alpha.1 // indirect
+	github.com/kbukum/gokit/schema v0.3.0-alpha.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
+	github.com/pb33f/go-yaml v0.1.1 // indirect
+	github.com/pb33f/ordered-map/v2 v2.3.2 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/zeebo/blake3 v0.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.47.0 // indirect
@@ -43,3 +51,7 @@ replace github.com/kbukum/gokit => ../../
 replace github.com/kbukum/gokit/testutil => ../../testutil
 
 replace github.com/kbukum/gokit/workload => ../../workload
+
+replace github.com/kbukum/gokit/ai => ../../ai
+
+replace github.com/kbukum/gokit/schema => ../../schema

@@ -195,3 +195,44 @@ func TestDialect_BuildRequestTopPAndStopSequences(t *testing.T) {
 		t.Errorf("stop = %v, want [STOP END]", got["stop"])
 	}
 }
+
+func TestDialect_BuildRequestEncodesUserImages(t *testing.T) {
+	d := &Dialect{}
+	body, err := d.BuildRequest(llm.CompletionRequest{Model: "m", Messages: []chat.Message{chat.UserMessage{Content: []ai.ContentPart{
+		ai.Text{Text: "What color?"},
+		ai.Image{Source: "base64", MimeType: "image/png", Data: "iVBOR"},
+		ai.Image{Source: "https://example.com/a.png"},
+	}}}})
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	parts := mustJSONMap(t, body)["messages"].([]any)[0].(map[string]any)["content"].([]any)
+	if len(parts) != 3 {
+		t.Fatalf("parts = %#v", parts)
+	}
+	text, inline, linked := parts[0].(map[string]any), parts[1].(map[string]any), parts[2].(map[string]any)
+	if text["type"] != "text" || text["text"] != "What color?" {
+		t.Fatalf("text part = %#v", text)
+	}
+	if inline["type"] != "image_url" || inline["image_url"].(map[string]any)["url"] != "data:image/png;base64,iVBOR" {
+		t.Fatalf("inline image = %#v", inline)
+	}
+	if linked["image_url"].(map[string]any)["url"] != "https://example.com/a.png" {
+		t.Fatalf("linked image = %#v", linked)
+	}
+
+	text1, err := d.BuildRequest(llm.CompletionRequest{Model: "m", Messages: []chat.Message{chat.User("plain")}})
+	if err != nil || mustJSONMap(t, text1)["messages"].([]any)[0].(map[string]any)["content"] != "plain" {
+		t.Fatalf("text-only user message = %#v, %v", text1, err)
+	}
+
+	for name, part := range map[string]ai.ContentPart{
+		"audio":         ai.Audio{Source: "base64", MimeType: "audio/wav", Data: "x"},
+		"image no mime": ai.Image{Source: "base64", Data: "x"},
+		"image no url":  ai.Image{Source: "memory"},
+	} {
+		if _, err := d.BuildRequest(llm.CompletionRequest{Model: "m", Messages: []chat.Message{chat.UserMessage{Content: []ai.ContentPart{part}}}}); err == nil {
+			t.Fatalf("%s: BuildRequest accepted an unsupported part", name)
+		}
+	}
+}

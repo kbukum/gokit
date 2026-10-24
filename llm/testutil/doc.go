@@ -9,7 +9,8 @@
 //
 // [OpenAIServer] is an OpenAI-compatible chat-completions HTTP handler for tests that need a real HTTP model. It
 // answers with a deterministic echo and usage, counts calls per model, and fails models named with
-// [FailModelPrefix].
+// [FailModelPrefix]. It lists its models on GET /v1/models, and models named with [VisionModelPrefix] name the
+// color of a PNG image, so tests can check a capability probe.
 //
 // Example:
 //

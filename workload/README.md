@@ -14,6 +14,8 @@ The Docker Model Runner backend is a separately versioned nested module; install
 go get github.com/kbukum/gokit/workload/dmr@latest
 ```
 
+To list the models a runtime holds, install the matching lister module: `workload/ollama`, `workload/lmstudio` or `workload/openaicompat`.
+
 ## Quick Start
 
 ### Docker
@@ -94,6 +96,27 @@ if err != nil {
 // h.Endpoint.BaseURL is an OpenAI-compatible base URL for inference.
 ```
 
+### Listing and describing models
+
+`ModelLister.ListModels` returns each model with an `ai.Model` descriptor: family, variant, digest, task, modalities, context length and capabilities. Each field records its source, and a field the runtime does not state stays unknown, never assumed supported.
+
+| Module | Reads | States |
+|---|---|---|
+| `workload/dmr` | `GET /models` | family, variant, digest, context length when configured |
+| `workload/ollama` | `GET /api/tags`, then `POST /api/show` per model | family, variant, digest, context length, task, vision, tools, thinking, audio |
+| `workload/lmstudio` | `GET /api/v1/models` | family, variant, context length, task, vision, tool use, reasoning |
+| `workload/openaicompat` | `GET {base}/models` | the id, and vLLM's context length |
+
+Every lister uses the shared `httpclient`, bounds each request and response body, sends an optional credential in a header, and returns errors that carry only the status, never the response body. Set `EndpointPolicy` to limit requests to granted origins: DNS is checked at dial and redirects are refused.
+
+```go
+l, err := ollama.New(ollama.Config{BaseURL: "http://localhost:11434", EndpointPolicy: policy})
+if err != nil {
+    return err
+}
+models, err := l.ListModels(ctx)
+```
+
 Test consumers without a real daemon using the in-memory fake in [`workload/testutil`](testutil):
 
 ```go
@@ -129,7 +152,15 @@ h, _ := rt.Start(ctx, workload.ModelSpec{Ref: "ai/smollm2"})
 |---|---|
 | `Register(registry, cfg)` | Install the Docker Model Runner backend under `ProviderDMR` |
 | `NewRuntime(cfg, log)` | Create a DMR runtime directly |
-| `Config` | BaseURL, Timeout, PullTimeout, ResiliencePolicy |
+| `Config` | BaseURL, Timeout, PullTimeout, ResiliencePolicy, EndpointPolicy |
+
+### `workload/ollama`, `workload/lmstudio`, `workload/openaicompat`
+
+| Symbol | Description |
+|---|---|
+| `New(cfg)` | Create a lister that implements `workload.ModelLister` |
+| `Config` | BaseURL, Timeout, EndpointPolicy, Auth; Ollama adds MaxDescribed and Concurrency |
+| `Error` | A non-2xx answer, carrying the status only |
 
 ### `workload/docker`
 

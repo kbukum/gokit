@@ -165,34 +165,23 @@ func TestStreamEvent_TypeSwitch(t *testing.T) {
 
 func TestCapabilities_Fields(t *testing.T) {
 	caps := Capabilities{
-		ToolUse:         true,
-		Vision:          true,
-		ReasoningTokens: false,
-		Streaming:       true,
-		MaxInputTokens:  128000,
-		MaxOutputTokens: 4096,
+		ToolUse:         ai.Supported(ai.SourceDeclared),
+		Vision:          ai.Supported(ai.SourceRuntime),
+		Reasoning:       ai.Unsupported(ai.SourceProbe),
+		ContextLength:   ai.Stated(128000, ai.SourceRuntime),
+		MaxOutputTokens: ai.Stated(4096, ai.SourceDeclared),
 	}
-
-	if !caps.ToolUse {
-		t.Error("expected ToolUse=true")
+	if !caps.ToolUse.Supported() || !caps.Vision.Supported() {
+		t.Error("expected tool use and vision supported")
 	}
-	if !caps.Vision {
-		t.Error("expected Vision=true")
+	if !caps.Reasoning.Known() || caps.Reasoning.Supported() {
+		t.Error("expected reasoning known and unsupported")
 	}
-	if caps.ReasoningTokens {
-		t.Error("expected ReasoningTokens=false")
+	if caps.Streaming.Known() {
+		t.Error("expected streaming unknown")
 	}
-	if !caps.Streaming {
-		t.Error("expected Streaming=true")
-	}
-	if caps.MaxInputTokens != 128000 {
-		t.Errorf("expected MaxInputTokens=128000, got %d", caps.MaxInputTokens)
-	}
-	if caps.MaxOutputTokens != 4096 {
-		t.Errorf("expected MaxOutputTokens=4096, got %d", caps.MaxOutputTokens)
-	}
-	if caps.MaxOutputTokens != 4096 {
-		t.Errorf("expected MaxOutputTokens=4096, got %d", caps.MaxOutputTokens)
+	if got := caps.InputBudget(); got != 128000-4096 {
+		t.Errorf("InputBudget() = %d, want %d", got, 128000-4096)
 	}
 }
 
@@ -237,7 +226,7 @@ var _ Provider = (*mockProvider)(nil)
 
 func TestProvider_Complete(t *testing.T) {
 	p := &mockProvider{
-		caps: Capabilities{Streaming: true, MaxInputTokens: 128000},
+		caps: Capabilities{Streaming: ai.Supported(ai.SourceDeclared), ContextLength: ai.Stated(128000, ai.SourceDeclared)},
 		resp: &CompletionResponse{
 			Message: chat.Assistant("hello"),
 			Model:   "test-model",
@@ -255,7 +244,7 @@ func TestProvider_Complete(t *testing.T) {
 
 func TestProvider_Stream(t *testing.T) {
 	p := &mockProvider{
-		caps: Capabilities{Streaming: true, MaxInputTokens: 128000},
+		caps: Capabilities{Streaming: ai.Supported(ai.SourceDeclared), ContextLength: ai.Stated(128000, ai.SourceDeclared)},
 		resp: &CompletionResponse{
 			Message: chat.Assistant("streamed text"),
 			Model:   "test-model",

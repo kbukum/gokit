@@ -34,10 +34,10 @@ func TestEchoIsAvailable(t *testing.T) {
 func TestEchoCapabilities(t *testing.T) {
 	t.Parallel()
 	caps := (llm.Echo{}).Capabilities()
-	if !caps.Streaming {
+	if !caps.Streaming.Supported() {
 		t.Error("Capabilities().Streaming = false, want true")
 	}
-	if caps.ToolUse {
+	if caps.ToolUse.Supported() {
 		t.Error("Capabilities().ToolUse = true, want false")
 	}
 }
