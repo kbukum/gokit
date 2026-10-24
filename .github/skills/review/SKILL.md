@@ -1,44 +1,70 @@
 ---
 name: review
-description: "gokit: Review a diff, package, or tree for architecture, correctness, security, tests, and documentation."
+description: "gokit: Review a diff, package, or tree for placement, runtime safety, public API, tests, quality, docs, and gates."
 user-invocable: true
 ---
 
 # Review
 
-Apply the [baseline](../../copilot-instructions.md). Review code and evidence, not the author's rationale; plans define scope, not exceptions to requirements.
+Review code and evidence against the [engineering standard](../../engineering.md), not the author's rationale. Plans define scope, not exceptions to the rules.
 
-## Scope and execution
+Review directly. Launch an independent reviewer only when the user asks; pass it the scope, constraints, and files, not the authoring transcript. Re-check returned findings against source before acting.
 
-Review directly by default. Launch an independent reviewer only when the user requests it; use one bounded reviewer unless distinct additional scopes are explicitly requested. Pass the scope, constraints, and relevant files, not the authoring transcript. Reevaluate returned findings against source before acting.
-
-For changes, include staged/unstaged/untracked work when requested, plus close callers, callees, and affected contracts. Report pre-existing defects in that impact area; do not silently widen into an unrelated audit. For project review, state the package/domain boundary.
-
-Reviews are read-only unless fixes are authorized. For each real defect choose **Redesign / Align / Enhance / Drop** with a one-line reason. Preserve user staging and unrelated work; do not commit, amend, push, resolve remote threads, or post replies implicitly.
-
-## Load checks by trigger
-
-Check placement and canonical reuse first for code changes. A blocker there stops acceptance; report any unperformed checks rather than claiming a complete review. Apply every relevant lens below, in order; load only its file, not the entire reference directory. For prose-only work, use documentation/claim checks rather than runtime test suites.
-
-| Trigger | Checklist |
-|---|---|
-| Code placement, imports, exports, or package wiring | [Pass 00 — Structure and placement](references/00-structure-placement.md) |
-| Shared behavior or a proposed helper/adapter | [Pass 01 — Canonical-owner reuse](references/01-canonical-reuse.md) |
-| Runtime APIs, errors, concurrency, or composition | [Pass 02 — Principles](references/02-principles.md) |
-| Trust boundaries, auth, crypto, privacy, or external input | [Pass 03 — Security & privacy](references/03-security-privacy.md) |
-| Behavior, readability, maintainability, or dead code | [Pass 04 — Quality, readability & maintainability](references/04-quality.md) |
-| Behavior changes, tests, fixtures, or coverage | [Pass 05 — Tests & TDD](references/05-tests-tdd.md) |
-| Documentation, dependencies, CI, or release | [Pass 06 — Docs & supply chain](references/06-docs-supply-chain.md) |
-| Comments and public API documentation | [Pass 07 — Comments & godoc semantics](references/07-comments-godoc.md) |
+Reviews are read-only unless fixes are authorized. Preserve user edits and the index. Never commit, amend, push, resolve threads, or post replies unless asked.
 
 ## Modes
 
-- [Changes](references/review-changes.md): diff and affected contracts.
-- [Project](references/review-project.md): bounded tree audit.
-- [Review and fix](references/review-details.md): select only when fixes are requested; confirm the proposed fix scope before editing.
+**Changes** — a diff, branch, or commit range.
 
-## Evidence and output
+1. Get the diff (`git diff <base>...HEAD --stat`, plus staged, unstaged, and untracked work when asked).
+2. List the impact area: touched files, close callers and callees, and affected contracts. A core public-surface change reaches every sub-module and consumer.
+3. Apply each lens whose trigger matches, in the order below. Report pre-existing defects inside the impact area; do not widen into an unrelated audit.
+4. Run scoped gates only: `make lint M=<module>`, `make test M=<module> T=<pattern>`, `make test-affected`, or `make check-<domain>`.
 
-Use [validate](../validate/SKILL.md) for scoped gates; reuse fresh evidence and retain required full acceptance gates. Green tooling is necessary, not proof of lifecycle/security correctness.
+**Project** — a package, domain, or the whole tree.
 
-Report `severity | file:line | defect and impact | evidence | proposed action`. **Blocker** means broken behavior/contract or a hard-rule violation; **should-fix** means a substantiated maintainability defect; **nit** is optional style, never a gate. List incomplete/skipped checks and uncertainty. Do not invent findings or treat grep hits as proof.
+1. State the boundary first (one package, one domain from `toven groups`, or everything).
+2. Map it: `toven modules`, `toven groups`, and each module's gokit requires (`grep -E '^\s+github.com/kbukum/gokit' <module>/go.mod`).
+3. Apply every lens in priority order. Group findings by module, then by lens.
+4. Run the full gates for the boundary: `make check`, `make lint`, `make test-coverage`, `make vuln`, `make licenses`, `make tidy-check`, `make structure`.
+
+**Review and fix** — only when fixes are requested.
+
+1. Run the changes or project mode first and share the findings.
+2. Confirm the fix scope when it is unclear. For each fix choose Redesign, Align, Enhance, or Drop with a one-line reason.
+3. Fix test first, rerun the affected gates, and report what is still open.
+4. A fix request is not permission to commit, push, or publish.
+
+## Lenses
+
+Apply in this order. A blocker in placement and ownership stops acceptance. Load only the lens files whose trigger matches; for prose-only changes use docs and gates only.
+
+| Order | Lens | Trigger |
+|---|---|---|
+| 1 | [Placement and ownership](references/placement-ownership.md) | New or moved code, imports, `go.mod`, shared helpers |
+| 2 | [Runtime and security](references/runtime-security.md) | Errors, goroutines, registries, remote calls, input, auth, crypto, AI |
+| 3 | [Public API and stability](references/public-api.md) | Exported identifiers, signatures, options, breaking changes |
+| 4 | [Tests and proof](references/tests-proof.md) | Any behavior change, tests, fixtures, coverage |
+| 5 | [Code quality](references/code-quality.md) | File layout, readability, dead code, comments |
+| 6 | [Docs and supply chain](references/docs-supply-chain.md) | Docs, godoc, dependencies, CI, release |
+| 7 | [Gates](references/gates.md) | Claims about enforcement, gate config, or before acceptance |
+
+gokit has no UI, so there is no UI lens.
+
+## Severity
+
+| Severity | Meaning | Gates acceptance |
+|---|---|---|
+| **blocker** | Broken behavior or contract, a security hole, or a hard-rule violation (misplaced code, forked owner, runtime panic, leaked goroutine, untested behavior) | Yes |
+| **should-fix** | A real maintainability, docs, or test defect with clear evidence | Fix in this change unless the user defers it |
+| **nit** | Optional style | Never |
+
+## Findings
+
+One line per finding:
+
+```
+<severity> | <file:line> | <lens> | <defect and impact> | <Redesign|Align|Enhance|Drop>: <fix>
+```
+
+Group repeated patterns into one finding with every location. Detection commands find candidates, not verdicts; read each hit. List skipped lenses, unrun gates, and uncertainty. Green gates are necessary, not proof of lifecycle or security correctness.

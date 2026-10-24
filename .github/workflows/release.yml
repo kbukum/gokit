@@ -41,9 +41,6 @@ concurrency:
   group: release-publish
   cancel-in-progress: false
 
-env:
-  TOVEN_VERSION: v0.1.0-alpha.14
-
 jobs:
   # Mutation-free rehearsal: the exact plan a real publish would use, preserved
   # as review evidence for the `release` environment's required reviewers before
@@ -69,11 +66,10 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        # Pinned by immutable commit SHA; `version` independently pins the
-        # installed binary (dual pin, both required). Same pin as ci.yml.
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
+        # Pinned by immutable commit SHA; the action installs the Toven release
+        # built from that commit. Same pin as ci.yml.
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
         with:
-          version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"
 
       - name: Discover modules and dependency graph
@@ -134,9 +130,8 @@ jobs:
 
       - name: Install the pinned Toven release
         id: toven
-        uses: kbukum/toven/.github/actions/toven@38bdaeb81c983a8bb2da0573e15f403032a5d2a2 # v0.1.0-alpha.14
+        uses: kbukum/toven/.github/actions/toven@4af3e339b1bade7811c705c886ec07cac94d3362 # v0.1.0-alpha.17
         with:
-          version: ${{ env.TOVEN_VERSION }}
           install-cosign: "true"
 
       # Publish requires a pristine tree (Toven's clean-tree guard). Surface any

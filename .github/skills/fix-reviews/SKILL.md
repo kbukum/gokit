@@ -6,7 +6,7 @@ user-invocable: true
 
 # Fix review findings
 
-Only act when requested. Evaluate comments against the [baseline](../../copilot-instructions.md), not the reviewer's authority.
+Only act when requested. Evaluate comments against the [engineering standard](../../engineering.md), not the reviewer's authority.
 
 1. Identify the PR and collect reviews, inline comments, and paginated GraphQL threads, including resolution state and node IDs.
 2. Accept valid findings; reject conflicting or incorrect advice with a brief reason.

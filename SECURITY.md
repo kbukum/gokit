@@ -2,9 +2,13 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-|---------|--------------------|
-| 0.1.x   | :white_check_mark: |
+gokit is pre-1.0. Security fixes go to the latest release line.
+
+| Version | Supported |
+|---------|-----------|
+| 0.3.x prereleases | :white_check_mark: |
+| 0.2.x | :white_check_mark: until `v0.3.0` is released |
+| < 0.2 | :x: |
 
 ## Reporting a Vulnerability
 
@@ -40,16 +44,18 @@ Do **not** open a public GitHub issue for security reports.
 
 When using gokit in production:
 
-- Keep dependencies up to date (`make update && make tidy`).
+- Stay on a supported release and keep your dependencies current.
 - Use the `encryption` package for sensitive data at rest.
 - Configure TLS via the `security` package for all network communication — never set `InsecureSkipVerify: true` in production.
 - Never commit secrets — use environment variables or secret managers.
 - Review `gosec` and `govulncheck` findings regularly (`make lint` includes `gosec`; CI runs `govulncheck` per module on every push).
 - Authenticate the original request with the typed auth chain before HTTP/Connect/SSE dispatch. Credentials belong in secure host-only session cookies or supported headers, never URLs. Optional authentication accepts missing credentials only; invalid, duplicate or mixed credentials fail closed. Unsafe cookie requests require signed CSRF.
 
+Threats, trust boundaries, and secure defaults are described in the [security model](docs/security-model.md).
+
 ## Supply Chain
 
-- All GitHub Actions used in CI are pinned to commit SHAs (see `.github/workflows/`).
+- All GitHub Actions used in CI are pinned to commit SHAs (see `.github/workflows/`). No gate checks this yet.
 - Dependency updates are automated via Dependabot (`.github/dependabot.yml`).
-- Module Go versions are kept consistent across all sub-modules; the CI `version-check` job enforces this invariant.
+- Module Go versions are kept consistent across all sub-modules; a step in the CI `gate` job enforces this.
 - Every dependency's license is checked against an allow-list on each push (`scripts/check-licenses.sh`); strong copyleft (GPL/LGPL/AGPL) and unknown licenses fail CI. New direct dependencies are justified and audited in [`docs/dependencies.md`](docs/dependencies.md).

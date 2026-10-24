@@ -7,35 +7,30 @@
 
 **A modular Go toolkit for building production services.** Config, logging, resilience, observability, dependency injection, and infrastructure adapters — so teams can focus on business logic instead of reinventing plumbing.
 
-> **Status — pre-1.0.** Public surface is semver-stable per module;
-> breaking changes are documented in [`CHANGELOG.md`](CHANGELOG.md).
-> See [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md).
+> **Status — pre-1.0 alpha.** APIs may change in a minor release; patch releases do not break them. Breaking changes are listed in [`CHANGELOG.md`](CHANGELOG.md). See the [SemVer policy](docs/policy/SEMVER.md).
 >
-> **Latest release — `v0.2.0`.** The next development line being prepared is
-> `v0.3.0-alpha.1`, a prerelease for evaluation and integration testing; APIs
-> may change before the stable `v0.3.0`.
+> **Latest release — `v0.2.0`.** Latest prerelease — `v0.3.0-alpha.1`, for evaluation and integration testing; APIs may change before the stable `v0.3.0`.
 
 > **Sibling project.** gokit (Go, this repo) · [**rskit**](https://github.com/kbukum/rskit) (Rust).
-> Public abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) are evaluated for parity across both.
+> Shared abstractions (`AppError`, `Component`, `Provider`, `Stream`, lifecycle hooks) aim for parity in capability and wire contracts; each kit stays idiomatic to its language.
 
 ## Browse by Domain
 
-Modules are organized into domains for scoped development.
-See [Module Index](docs/MODULE-INDEX.md) for the full breakdown.
+Modules are organized into domains for scoped development. Domains are `[groups.*]` in [`toven.toml`](toven.toml); Toven checks that each domain only depends on the domains it allows. `toven groups` lists them, and the [Module Index](docs/MODULE-INDEX.md) shows the full breakdown.
 
 | Domain | Focus | Quick check |
 |--------|-------|-------------|
-| core | Foundation types, config, logging | `make check-core` |
-| patterns | Component, provider, DI, hooks | `make check-patterns` |
-| crosscutting | Observability, resilience, security | `make check-crosscutting` |
-| composition | Bootstrap, stream, DAG, workers | `make check-composition` |
-| transport | Server, HTTP, gRPC, SSE | `make check-transport` |
+| foundation | Root module: core types, config, logging, patterns, observability, resilience, security, bootstrap, stream, DAG, workers, SSE, CLI; `schema`, `testutil` | `make check-foundation` |
+| composition | Stateful stores, DAG test helpers | `make check-composition` |
+| transport | Server, HTTP, gRPC, connect, discovery | `make check-transport` |
 | auth | Authentication, authorization | `make check-auth` |
 | data | Database, cache, storage, messaging | `make check-data` |
 | ai | LLM, inference, agents, tools | `make check-ai` |
 | media | Light detection, metadata, image ops | `make check-media` |
-| infra | Workload, CLI, dataset, benchmarks, testing | `make check-infra` |
+| infra | Workload, dataset, benchmarks, auth test host | `make check-infra` |
 | devtools | Git repository operations | `make check-devtools` |
+
+Package layering inside the root module is described in [Architecture](docs/ARCHITECTURE.md). Lint bans only selected edges; the rest is checked in review.
 
 CI always validates the whole workspace with the same `make` targets; see [Development](#development) for the local commands.
 
@@ -47,7 +42,7 @@ CI always validates the whole workspace with the same `make` targets; see [Devel
 - **Provider pattern** — typed `RequestResponse[I,O]`, `Stream`, `Sink`, and `Duplex` traits with composable middleware and sink combinators.
 - **Typed authentication** — one principal across HTTP, Connect and SSE, with separate application authorization and credential ceilings. [Opaque browser sessions](auth/README.md) keep credentials in secure host-only cookies and validate database state on every request; automation uses header API keys.
 - **Per-module versioning** — every module has its own matching tag, while normal releases are cut in lock-step for convenience. See [`docs/VERSIONING.md`](docs/VERSIONING.md).
-- **Sibling parity** — APIs mirror [rskit](https://github.com/kbukum/rskit) (Rust).
+- **Sibling parity** — capabilities track [rskit](https://github.com/kbukum/rskit) (Rust), with idiomatic Go APIs.
 
 ## Install
 
@@ -60,7 +55,7 @@ go get github.com/kbukum/gokit/server@latest
 go get github.com/kbukum/gokit/database@latest
 ```
 
-Requires **Go 1.27.3+** for the current development branch.
+Requires the Go version in [`go.mod`](go.mod).
 
 ## Quickstart
 
@@ -114,6 +109,8 @@ More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → 
 |---|---|
 | All packages & sub-modules | [`docs/PACKAGES.md`](docs/PACKAGES.md) |
 | Usage examples | [`docs/EXAMPLES.md`](docs/EXAMPLES.md) |
+| Where code goes | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Engineering standard | [`.github/engineering.md`](.github/engineering.md) |
 | Architecture decisions | [`docs/adr/`](docs/adr/) |
 | Versioning & releases | [`docs/VERSIONING.md`](docs/VERSIONING.md) · [`docs/RELEASING.md`](docs/RELEASING.md) |
 | Semver & deprecation policy | [`docs/policy/SEMVER.md`](docs/policy/SEMVER.md) · [`docs/policy/DEPRECATION.md`](docs/policy/DEPRECATION.md) |
@@ -125,13 +122,13 @@ More examples → [`docs/EXAMPLES.md`](docs/EXAMPLES.md). Full package list → 
 
 ```bash
 make check    # build + vet + test (all modules)
-make test     # tests with -race across all modules
+make test     # tests with -race -shuffle=on across all modules
 make lint     # golangci-lint
 make tidy     # go mod tidy for core + sub-modules
 make examples # build + vet the runnable demos in examples/
 ```
 
-CI runs these same targets; see [`CONTRIBUTING.md`](CONTRIBUTING.md#ci) for the full list, including coverage, integration and fuzz.
+CI runs these same targets; see [`CONTRIBUTING.md`](CONTRIBUTING.md#ci) for the full list, including coverage, integration and fuzz. `make help` lists every target.
 
 ## Contributing
 

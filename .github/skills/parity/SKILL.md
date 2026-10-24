@@ -22,7 +22,7 @@ Project consistency comes first, then current Go idioms, then structural parity.
 
 1. Inspect both implementations' APIs, invariants, failure behavior, and ownership.
 2. Choose the level and direction; retain deliberate kit-only distinctions.
-3. Implement idiomatically using typed contracts, canonical owners, and the [baseline](../../copilot-instructions.md).
+3. Implement idiomatically using typed contracts, canonical owners, and the [engineering standard](../../engineering.md).
 4. Record public abstraction changes and intentional divergence in rskit's tracking issues, using full URLs. Do not claim parity without evidence.
 5. Identify improvements for whichever kit remains behind; keep both generic and runtime-independent.
 6. Run affected [validation](../validate/SKILL.md) and review the actual parity claim.

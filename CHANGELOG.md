@@ -61,6 +61,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ### Changed
 - **ci**: every job runs the same `make` targets as local development through a pinned Toven. Coverage is measured per module in parallel under `-race` and blocks below each module's floor; test-support modules are measured only, and modules still below the floor are held at today's level. Fuzz targets run as balanced parallel shards, only for affected modules on pull requests, with a nightly longer run; integration runs only the modules that have integration tests; Go caches and each fuzz shard's corpus are saved from `main` only. Every job has a time limit, a fuzz time must be positive and fit a shard's budget, and a failed change-scope check fails the gate instead of skipping the Go jobs.
 - **tooling**: `make test-integration` runs through Toven and builds the auth test host first; it fails when the integration module list cannot be found.
+- **tooling**: domains are Toven `[groups.*]` in `toven.toml`, and Toven enforces their layering. `make check-<domain>` and `G=<domain>` on `build`, `vet`, `test`, `lint` and `test-coverage` run one domain; `toven groups` lists them. The root-module domains `core`, `patterns` and `crosscutting` are now `foundation`. `docs/MODULE-INDEX.md` reads its domains from Toven.
 - **storage/local**: canceled conditional creates no longer publish files; copy and temporary-file ownership remain synchronous.
 - **encryption**: unavailable or invalid mounted key material reports a cause-preserving dependency failure instead of misleading product not-found.
 - **storage**: nonblocking fail-closed lifecycle injection, canceled initialization cleanup, and serialized owned backend teardown prevent unavailable or closing dependencies from appearing ready.
@@ -129,6 +130,7 @@ Defaults and rules that change what an existing app sees without a compile error
 
 ### Removed
 - **tooling**: `scripts/affected-domains.sh`; Toven selects affected modules.
+- **tooling**: `domains.toml` and `scripts/check-domain.sh`; Toven groups replace them.
 - **server/middleware**: `GinRequestLogger`; `RequestLogger` already logs every route at the server level.
 - **auth/apikey**: standalone authentication middleware; API keys use the shared authentication chain.
 - **database**: legacy tenant-scoping and session-setting helpers; use scoped repositories and transaction-local settings.

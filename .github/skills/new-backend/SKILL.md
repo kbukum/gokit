@@ -6,13 +6,13 @@ user-invocable: true
 
 # Add a backend
 
-Follow the [baseline](../../copilot-instructions.md) and the owner's existing typed registry/factory contract. Heavy adapters live in nested opt-in modules; core stays driver-independent. Preserve an existing local default only where the owner defines one—database selection is explicit.
+A backend is a nested adapter module that implements an owner's typed contract. Placement: [Architecture](../../../docs/ARCHITECTURE.md#module-kinds). Rules: [Composition](../../engineering.md#composition), [Errors and resilience](../../engineering.md#errors-and-resilience), [Security and privacy](../../engineering.md#security-and-privacy).
 
-1. Find the canonical owner, contract, callers, and sibling adapters. Use `new-module` for module wiring, including `contrib.go.work` and `domains.toml`.
-2. Define validated typed configuration and factories. Capture provider configuration in factory closures, never opaque `any` parameters.
-3. Implement the owner contract with bounded calls, cancellation, idempotent jittered retries, and typed failures preserving causes. Keep credentials in headers and resources explicitly owned.
-4. Expose explicit caller-driven registration into an injected registry. No import-time setup or mutable globals.
-5. Add focused package documentation and deterministic behavioral/failure tests using shared fixtures and clocks.
-6. Use `validate` for the exact module selector and affected gates, including race/shuffle, tidiness, and dependency checks. Required adapter/integration acceptance fails when its service is unavailable; optional tests may skip only when clearly designated optional. Unit doubles never replace real backend proof.
+1. Find the owner, its contract and registry, its callers, and sibling adapters. Keep the core package driver-independent; keep its local default only where the owner defines one (database selection is explicit).
+2. Use [new-module](../new-module/SKILL.md) for module wiring: `contrib.go.work`, replaces, and the `toven.toml` domain group.
+3. Define validated, typed config and a factory that captures it in a closure, never an opaque `any` parameter.
+4. Implement the contract. Expose explicit `Register(registry)`; no `init()` or globals.
+5. Add a declare-only `doc.go` and deterministic behavior and failure tests using shared fixtures and clocks.
+6. Run [validate](../validate/SKILL.md) for the module and affected gates. Required [real adapter proof](../../engineering.md#real-adapter-proof) fails when its service is unavailable; only clearly optional tests may skip.
 
-Remove superseded callers and guidance with the change. Commit, push, or publish only when authorized.
+Remove superseded callers and guidance in the same change. Commit, push, or publish only when authorized.

@@ -25,4 +25,4 @@ gh pr create --draft --base main --title "<conventional-title>" --body-file <pat
 - Check only verified testing and checklist items. Distinguish unit, adapter, process, and integration evidence.
 - For public abstractions, confirm [sibling parity](../parity/SKILL.md) or identify the outstanding gap. Cross-repository references use full URLs.
 
-Apply the [baseline](../../copilot-instructions.md). Review and fix in-scope defects before publication; green tooling alone is insufficient. Never request reviewers or trigger a review implicitly.
+Apply the [engineering standard](../../engineering.md). Review and fix in-scope defects before publication; green tooling alone is insufficient. Never request reviewers or trigger a review implicitly.

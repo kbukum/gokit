@@ -1,7 +1,6 @@
 .PHONY: all build test test-integration test-coverage lint vet fmt tidy update update-go check check-fast test-affected structure \
        replace-sync replace-check \
-       check-core check-patterns check-crosscutting check-composition check-transport check-auth check-data check-ai \
-       check-media check-infra check-devtools clean help release-plan release-status release-readiness release-tag \
+       clean help release-plan release-status release-readiness release-tag \
        release-publish-dry-run release-publish list-tags release-dry ci ci-test ci-lint ensure-act toven-canary module-index release-bump examples \
        consumer-check fuzz fuzz-plan vuln licenses tidy-check actionlint
 
@@ -21,10 +20,15 @@ _M = $(if $(M),-m $(M))
 # Workspace flag: pass -w $(W) to gomod.sh when W is set
 _W = $(if $(W),-w $(W))
 
+# Domain flag: G=<group> narrows the Toven gates to one `[groups.*]` domain
+# from toven.toml (`toven groups` lists them).
+_G = $(if $(G),--group $(G))
+
 # Non-empty when a module (M=) or workspace (W=) subset is requested. The
-# everyday gates run the WHOLE workspace through Toven (locally and in CI); an
-# M=/W= subset falls back to the native gomod.sh path because Toven has no
-# selector for gokit's named domains yet (see docs/TOVEN-MIGRATION.md, gap 2).
+# everyday gates run through Toven (whole workspace, or one domain with G=). M=
+# also takes package paths (M=httpclient/rest) and W= switches GOWORK to
+# core.go.work/contrib.go.work; Toven selects modules, not packages or
+# alternate go.work files, so those subsets use the native gomod.sh path.
 _FILTERED = $(strip $(M)$(W))
 
 ## Default target
@@ -45,19 +49,19 @@ auth-host: auth-host-build
 auth-integration: auth-host-build
 	@GOKIT_AUTH_HOST_BINARY="$(AUTH_HOST_BINARY)" go test ./auth/... ./auth/session/database/... ./auth/testhost/... -tags=integration -race -shuffle=on -count=1 -timeout=10m
 
-## Build packages. Unfiltered → Toven (whole workspace); M=/W= → native gomod.sh.
+## Build packages. Unfiltered → Toven (whole workspace or G= domain); M=/W= → native gomod.sh.
 build:
 ifeq ($(_FILTERED),)
-	@$(TOVEN) build
+	@$(TOVEN) build $(_G)
 else
 	@$(GOMOD) cmd "go build" $(_M) $(_W)
 endif
 
-## Run tests. Unfiltered → Toven (whole workspace, single wave); M=/W= → native.
+## Run tests. Unfiltered → Toven (whole workspace or G= domain); M=/W= → native.
 ## T=<pattern> passes through as `-run` either way.
 test:
 ifeq ($(_FILTERED),)
-	@$(TOVEN) test -- -race -shuffle=on -count=1 $(if $(T),-run $(T))
+	@$(TOVEN) test $(_G) -- -race -shuffle=on -count=1 $(if $(T),-run $(T))
 else
 	@$(GOMOD) cmd "go test -race -shuffle=on -count=1 $(if $(T),-run $(T))" $(_M) $(_W)
 endif
@@ -92,28 +96,28 @@ vuln:
 licenses:
 	@./scripts/check-licenses.sh
 
-## Run tests with coverage. Unfiltered → Toven's coverage gate; M=/W=/T= → native.
+## Run tests with coverage. Unfiltered → Toven's coverage gate (G= narrows it); M=/W=/T= → native.
 ## Toven's coverage gate has no `-run` selector, so a T=<pattern> request must take
 ## the native branch that applies it rather than silently covering the whole workspace.
 test-coverage:
 ifeq ($(strip $(_FILTERED)$(T)),)
-	@$(TOVEN) coverage
+	@$(TOVEN) coverage $(_G)
 else
 	@$(GOMOD) cmd "go test -race -coverprofile=coverage.out -covermode=atomic $(if $(T),-run $(T))" $(_M) $(_W)
 endif
 
-## Run linter. Unfiltered → Toven; M=/W= → native gomod.sh.
+## Run linter. Unfiltered → Toven (G= narrows it); M=/W= → native gomod.sh.
 lint:
 ifeq ($(_FILTERED),)
-	@$(TOVEN) lint
+	@$(TOVEN) lint $(_G)
 else
 	@$(GOMOD) cmd "golangci-lint run" $(_M) $(_W)
 endif
 
-## Run go vet (Toven's `check` task). Unfiltered → Toven; M=/W= → native.
+## Run go vet (Toven's `check` task). Unfiltered → Toven (G= narrows it); M=/W= → native.
 vet:
 ifeq ($(_FILTERED),)
-	@$(TOVEN) check
+	@$(TOVEN) check $(_G)
 else
 	@$(GOMOD) cmd "go vet" $(_M) $(_W)
 endif
@@ -264,8 +268,14 @@ test-affected:
 	@test -z "$(_FILTERED)" || { echo "test-affected does not accept M/W: use test M= for an explicit subset"; exit 2; }
 	@$(TOVEN) test --base "$(BASE)" --no-cache -- -race -shuffle=on -count=1 $(if $(T),-run $(T))
 
-## Run all checks (build + vet + test) — supports M=<module>
+## Run all checks (build + vet + test) — supports M=<module>, W=<workspace>, G=<domain>
 check: build vet test
+
+## Check one domain: `make check-<group>` = `make check G=<group>` (build + vet +
+## race tests over the group's modules). `toven groups` lists the domains; an
+## unknown name fails and lists them.
+check-%:
+	@$(MAKE) --no-print-directory check G=$*
 
 ## Build and vet a consumer module against this checkout; it must replace gokit with this path.
 ## (usage: make consumer-check CONSUMER=../app/go-services)
@@ -297,50 +307,6 @@ examples:
 	  rc=$$?; rm -rf "$$out"; [ $$rc -eq 0 ] || exit $$rc; \
 	done
 
-## Check only core domain modules
-check-core:
-	@./scripts/check-domain.sh core
-
-## Check only patterns domain modules
-check-patterns:
-	@./scripts/check-domain.sh patterns
-
-## Check only crosscutting domain modules
-check-crosscutting:
-	@./scripts/check-domain.sh crosscutting
-
-## Check only composition domain modules
-check-composition:
-	@./scripts/check-domain.sh composition
-
-## Check only transport domain modules
-check-transport:
-	@./scripts/check-domain.sh transport
-
-## Check only auth domain modules
-check-auth:
-	@./scripts/check-domain.sh auth
-
-## Check only data domain modules
-check-data:
-	@./scripts/check-domain.sh data
-
-## Check only ai domain modules
-check-ai:
-	@./scripts/check-domain.sh ai
-
-## Check only media domain modules
-check-media:
-	@./scripts/check-domain.sh media
-
-## Check only infra domain modules
-check-infra:
-	@./scripts/check-domain.sh infra
-
-## Check only devtools domain modules
-check-devtools:
-	@./scripts/check-domain.sh devtools
-
 ## Clean build artifacts
 clean:
 	@find . -name "coverage.out" -o -name "coverage.html" | xargs rm -f
@@ -369,7 +335,7 @@ ci-lint: ensure-act
 
 ## Show help
 help:
-	@echo "Usage: make <target> [M=<module>] [T=<test>] [W=core|contrib]"
+	@echo "Usage: make <target> [M=<module>] [T=<test>] [W=core|contrib] [G=<domain>]"
 	@echo ""
 	@echo "Development:"
 	@echo "  make help                     Show this help"
@@ -391,19 +357,9 @@ help:
 	@echo "  make replace-sync             Sync intra-repo replace directives"
 	@echo "  make replace-check            Verify intra-repo replace graph (read-only)"
 	@echo "  make update   [M=] [W=]       Update dependencies"
-	@echo "  make check-fast [M=] [W=]     Build + vet + lint"
-	@echo "  make check    [M=] [W=]       Build + vet + test"
-	@echo "  make check-core               Check only core domain modules"
-	@echo "  make check-patterns           Check only patterns domain modules"
-	@echo "  make check-crosscutting       Check only crosscutting domain modules"
-	@echo "  make check-composition        Check only composition domain modules"
-	@echo "  make check-transport          Check only transport domain modules"
-	@echo "  make check-auth               Check only auth domain modules"
-	@echo "  make check-data               Check only data domain modules"
-	@echo "  make check-ai                 Check only ai domain modules"
-	@echo "  make check-media              Check only media domain modules"
-	@echo "  make check-infra              Check only infra domain modules"
-	@echo "  make check-devtools           Check only devtools domain modules"
+	@echo "  make check-fast [M=] [W=] [G=] Build + vet + lint"
+	@echo "  make check    [M=] [W=] [G=]  Build + vet + test"
+	@echo "  make check-<domain>           Check one domain (= check G=<domain>; toven groups lists them)"
 	@echo "  make clean                    Remove build artifacts"
 	@echo ""
 	@echo "Guardrails (Toven-driven):"
@@ -434,6 +390,9 @@ help:
 	@echo "  M=httpclient/rest   Target httpclient module, rest package"
 	@echo "  M=grpc/client       Target grpc module, client package"
 	@echo "  M=security          Target root module, security package"
+	@echo ""
+	@echo "Domain targeting (G=, a toven.toml group):"
+	@echo "  G=transport         Only transport modules"
 	@echo ""
 	@echo "Workspace targeting (W=):"
 	@echo "  W=core              Only core modules"
