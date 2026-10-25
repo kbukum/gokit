@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/llm/internal/streamwire"
 )
@@ -63,11 +64,11 @@ func TestAdapterProviderCompleteStreamAndCapabilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider := NewProvider(adapter, "m").WithCapabilities(Capabilities{MaxInputTokens: 128000}).WithDefaults(func(req *CompletionRequest) { req.MaxTokens = 7 })
+	provider := NewProvider(adapter, "m").WithCapabilities(Capabilities{ContextLength: ai.Stated(128000, ai.SourceDeclared)}).WithDefaults(func(req *CompletionRequest) { req.MaxTokens = 7 })
 	if !adapter.IsAvailable(context.Background()) {
 		t.Fatal("expected available")
 	}
-	if provider.Capabilities().MaxInputTokens != 128000 {
+	if provider.Capabilities().InputBudget() != 128000 {
 		t.Fatal("capabilities not set")
 	}
 	if provider.CountTokens([]chat.Message{chat.User("hello")}) == 0 {

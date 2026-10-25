@@ -219,7 +219,7 @@ func (a *Agent) runLoop(ctx context.Context, messages []chat.Message, llmCall ll
 		}
 		if a.contextTooLarge(msgs) {
 			oldTokens := a.config.Provider.CountTokens(msgs)
-			compacted, compactErr := a.config.Compaction.Compact(turnCtx, msgs, a.config.Provider.Capabilities().MaxInputTokens)
+			compacted, compactErr := a.config.Compaction.Compact(turnCtx, msgs, a.config.Provider.Capabilities().InputBudget())
 			if compactErr != nil {
 				turnSpan.RecordError(compactErr)
 				turnSpan.End()

@@ -7,17 +7,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/httpclient"
 	"github.com/kbukum/gokit/workload"
 )
 
-// maxErrBody bounds how much of an error response body is read for diagnostics.
+// maxErrBody bounds how much of a pull stream's plain-text failure tail is read.
 const maxErrBody = 4 << 10
 
 // maxModelBody bounds how much of a model list/detail response is read. BaseURL
@@ -29,18 +31,14 @@ const maxModelBody = 8 << 20
 // misbehaving daemon cannot stream unboundedly.
 const maxPullStream = 64 << 20
 
-// Error is a typed Docker Model Runner API error. Callers can inspect Status via
-// errors.As to distinguish not-found, unauthorized, or server failures.
+// Error is a typed Docker Model Runner API error. Callers can inspect Status via errors.As to distinguish not-found,
+// unauthorized, or server failures. It carries the status only: a response body can echo credentials or prompts.
 type Error struct {
-	Status int    // HTTP status code
-	Body   string // bounded response snippet
+	Status int // HTTP status code
 }
 
 func (e *Error) Error() string {
-	if e.Body == "" {
-		return fmt.Sprintf("dmr: unexpected status %d", e.Status)
-	}
-	return fmt.Sprintf("dmr: unexpected status %d: %s", e.Status, e.Body)
+	return fmt.Sprintf("dmr: unexpected status %d", e.Status)
 }
 
 // client is a thin typed wrapper over the Docker Model Runner REST API, built on
@@ -64,6 +62,7 @@ func newClient(cfg *Config) (*client, error) {
 			IdleTimeout:          cfg.PullTimeout,
 		},
 		ResiliencePolicy:     cfg.ResiliencePolicy,
+		EndpointPolicy:       cfg.EndpointPolicy,
 		MaxResponseBodyBytes: maxModelBody,
 		DefaultHeaders:       map[string]string{"Accept": "application/json"},
 	})
@@ -113,11 +112,35 @@ type modelObject struct {
 	Tags    []string `json:"tags"`
 	Created int64    `json:"created"`
 	Config  struct {
+		Format       string `json:"format"`
 		Size         string `json:"size"`
 		Architecture string `json:"architecture"`
 		Parameters   string `json:"parameters"`
 		Quantization string `json:"quantization"`
+		ContextSize  *int32 `json:"context_size"`
 	} `json:"config"`
+}
+
+// describe maps the record to a model descriptor. DMR reports no task or capabilities, so those stay unknown.
+func (m *modelObject) describe() ai.Model {
+	d := ai.Model{
+		Name:     m.ref(),
+		Provider: ai.ProviderDMR,
+		Digest:   m.ID,
+		Variant: ai.Variant{
+			Parameters:   m.Config.Parameters,
+			Quantization: m.Config.Quantization,
+			Format:       m.Config.Format,
+			SizeBytes:    m.sizeBytes(),
+		},
+	}
+	if m.Config.Architecture != "" {
+		d.Family = ai.Stated(m.Config.Architecture, ai.SourceRuntime)
+	}
+	if m.Config.ContextSize != nil && *m.Config.ContextSize > 0 {
+		d.Capabilities.ContextLength = ai.Stated(int(*m.Config.ContextSize), ai.SourceRuntime)
+	}
+	return d
 }
 
 // ref returns the human-readable model reference (first tag), falling back to the
@@ -131,11 +154,30 @@ func (m *modelObject) ref() string {
 
 // sizeBytes parses the on-disk size, returning 0 when absent or unparseable.
 func (m *modelObject) sizeBytes() int64 {
-	n, err := strconv.ParseInt(m.Config.Size, 10, 64)
-	if err != nil {
+	return parseSize(m.Config.Size)
+}
+
+// sizeUnits are the units DMR's human-readable sizes use, such as "256.35MiB" or "1.2 GB".
+var sizeUnits = map[string]float64{
+	"": 1, "B": 1,
+	"kB": 1e3, "KB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12,
+	"KiB": 1 << 10, "MiB": 1 << 20, "GiB": 1 << 30, "TiB": 1 << 40,
+}
+
+// parseSize reads a byte count with an optional unit. It returns 0 for anything it cannot read, so a size is
+// unknown rather than wrong.
+func parseSize(s string) int64 {
+	s = strings.TrimSpace(s)
+	i := strings.IndexFunc(s, func(r rune) bool { return (r < '0' || r > '9') && r != '.' })
+	if i < 0 {
+		i = len(s)
+	}
+	n, err := strconv.ParseFloat(s[:i], 64)
+	unit, ok := sizeUnits[strings.TrimSpace(s[i:])]
+	if err != nil || !ok || n <= 0 || n*unit > math.MaxInt64 {
 		return 0
 	}
-	return n
+	return int64(n * unit)
 }
 
 // pullProgress is one event in DMR's model-create progress stream. DMR emits
@@ -273,17 +315,12 @@ func (c *client) remove(ctx context.Context, ref string) error {
 }
 
 // do issues a non-streaming request through the httpclient adapter. A non-2xx
-// response is surfaced as a typed [Error] carrying the status and a bounded body
-// snippet; a transport failure preserves its cause for errors.Is inspection.
+// response is surfaced as a typed [Error] carrying the status only; a transport failure preserves its cause for errors.Is inspection.
 func (c *client) do(ctx context.Context, method, path string, body any) (*httpclient.Response, error) {
 	resp, err := c.http.Do(ctx, httpclient.Request{Method: method, Path: path, Body: body})
 	if err != nil {
 		if resp != nil {
-			snippet := resp.Body
-			if int64(len(snippet)) > maxErrBody {
-				snippet = snippet[:maxErrBody]
-			}
-			return nil, &Error{Status: resp.StatusCode, Body: string(bytes.TrimSpace(snippet))}
+			return nil, &Error{Status: resp.StatusCode}
 		}
 		return nil, fmt.Errorf("dmr: %s %s: %w", method, path, err)
 	}

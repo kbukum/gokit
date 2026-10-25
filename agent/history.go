@@ -7,8 +7,8 @@ import (
 )
 
 func (a *Agent) contextTooLarge(msgs []chat.Message) bool {
-	caps := a.config.Provider.Capabilities()
-	return caps.MaxInputTokens > 0 && a.config.Provider.CountTokens(msgs) > caps.MaxInputTokens
+	budget := a.config.Provider.Capabilities().InputBudget()
+	return budget > 0 && a.config.Provider.CountTokens(msgs) > budget
 }
 
 func (a *Agent) persistHistory(ctx context.Context, msgs []chat.Message) {

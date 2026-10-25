@@ -133,8 +133,8 @@ func (p *FakeProvider) Execute(ctx context.Context, req embedding.EmbedRequest) 
 // EmbedBatch embeds each request independently, honoring the same behavior as Execute.
 func (p *FakeProvider) EmbedBatch(ctx context.Context, reqs []embedding.EmbedRequest) ([]embedding.EmbedResponse, error) {
 	responses := make([]embedding.EmbedResponse, len(reqs))
-	for i, req := range reqs {
-		resp, err := p.Execute(ctx, req)
+	for i := range reqs {
+		resp, err := p.Execute(ctx, reqs[i])
 		if err != nil {
 			return nil, err
 		}

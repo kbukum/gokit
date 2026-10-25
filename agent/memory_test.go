@@ -7,6 +7,7 @@ import (
 
 	"github.com/kbukum/gokit/agent"
 	"github.com/kbukum/gokit/agent/memory"
+	"github.com/kbukum/gokit/ai"
 	"github.com/kbukum/gokit/ai/chat"
 	"github.com/kbukum/gokit/llm"
 )
@@ -123,8 +124,8 @@ func (p *echoCountProvider) Stream(_ context.Context, req llm.CompletionRequest)
 
 func (p *echoCountProvider) Capabilities() llm.Capabilities {
 	return llm.Capabilities{
-		Streaming:      true,
-		MaxInputTokens: 100000,
+		Streaming:     ai.Supported(ai.SourceDeclared),
+		ContextLength: ai.Stated(100000, ai.SourceDeclared),
 	}
 }
 

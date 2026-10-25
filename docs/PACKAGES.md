@@ -96,6 +96,9 @@ This file is the bird's-eye index.
 | `inference/triton` | `gokit/inference/triton` | Triton inference adapter |
 | `inference/vllm` | `gokit/inference/vllm` | vLLM inference adapter |
 | `workload/dmr` | `gokit/workload/dmr` | Docker Model Runner model-runtime adapter |
+| `workload/lmstudio` | `gokit/workload/lmstudio` | LM Studio model lister |
+| `workload/ollama` | `gokit/workload/ollama` | Ollama model lister |
+| `workload/openaicompat` | `gokit/workload/openaicompat` | OpenAI-compatible model lister |
 | `vectorstore/qdrant` | `gokit/vectorstore/qdrant` | Qdrant vectorstore adapter |
 
 ## Nested Test Utility Modules

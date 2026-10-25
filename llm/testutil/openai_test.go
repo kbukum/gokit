@@ -250,3 +250,12 @@ func TestWithMaxModelsRejectsNonPositive(t *testing.T) {
 		t.Fatalf("a non-positive bound must keep the default: status %d", got.status)
 	}
 }
+
+func TestOpenAIServerKeylessAnswersWithoutBearer(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(testutil.NewOpenAIServer(testutil.WithKeyless()))
+	t.Cleanup(srv.Close)
+	if got := postChat(t, srv.URL, "", streamed); got.status != http.StatusOK {
+		t.Fatalf("keyless status %d, want %d", got.status, http.StatusOK)
+	}
+}

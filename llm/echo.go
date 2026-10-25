@@ -23,7 +23,7 @@ func (Echo) IsAvailable(context.Context) bool { return true }
 
 // Capabilities reports streaming support and nothing else — Echo has no tool use, vision, or JSON mode.
 func (Echo) Capabilities() Capabilities {
-	return Capabilities{Streaming: true}
+	return Capabilities{Streaming: ai.Supported(ai.SourceDeclared)}
 }
 
 // CountTokens counts tokens over messages using the shared approximation, the same rule Execute uses for usage accounting.

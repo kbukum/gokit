@@ -3,6 +3,8 @@ package workload
 import (
 	"context"
 	"time"
+
+	"github.com/kbukum/gokit/ai"
 )
 
 // ModelRuntime runs and serves models as managed workloads, independent of the
@@ -104,13 +106,15 @@ type Endpoint struct {
 	API     string // Dialect the base URL speaks: APIOpenAI, APIAnthropic, APIOllama
 }
 
-// ModelInfo summarizes a model known to the runtime.
+// ModelInfo summarizes a model known to the runtime. Model describes it as far as the runtime states; fields the
+// runtime does not report stay unknown.
 type ModelInfo struct {
 	ID        string
 	Ref       string
 	SizeBytes int64
 	Labels    map[string]string
 	Created   time.Time
+	Model     ai.Model
 }
 
 // ModelStats reports resource usage for a model. Fields a backend cannot

@@ -103,8 +103,8 @@ func (p *Provider) Health(_ context.Context) component.Health {
 // EmbedBatch embeds each request independently.
 func (p *Provider) EmbedBatch(ctx context.Context, reqs []embedding.EmbedRequest) ([]embedding.EmbedResponse, error) {
 	responses := make([]embedding.EmbedResponse, len(reqs))
-	for i, req := range reqs {
-		resp, err := p.Execute(ctx, req)
+	for i := range reqs {
+		resp, err := p.Execute(ctx, reqs[i])
 		if err != nil {
 			return nil, err
 		}

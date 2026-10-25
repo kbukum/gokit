@@ -120,8 +120,8 @@ func (p *EmbeddingProvider) Health(ctx context.Context) component.Health {
 // EmbedBatch generates embeddings for a batch of canonical requests.
 func (p *EmbeddingProvider) EmbedBatch(ctx context.Context, reqs []embedding.EmbedRequest) ([]embedding.EmbedResponse, error) {
 	responses := make([]embedding.EmbedResponse, len(reqs))
-	for i, req := range reqs {
-		resp, err := p.embedOne(ctx, req)
+	for i := range reqs {
+		resp, err := p.embedOne(ctx, reqs[i])
 		if err != nil {
 			return nil, err
 		}

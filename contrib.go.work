@@ -24,4 +24,7 @@ use (
 	./storage/s3/testutil
 	./vectorstore/qdrant
 	./workload/dmr
+	./workload/lmstudio
+	./workload/ollama
+	./workload/openaicompat
 )

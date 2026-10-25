@@ -48,8 +48,8 @@ func TestUsageCostBudgetAndModel(t *testing.T) {
 	if budget.MaxCost.Input.Units != 1 || budget.WallClock != time.Minute {
 		t.Fatalf("budget not preserved: %#v", budget)
 	}
-	model := ai.Model{Name: "gpt", Provider: ai.ProviderOpenAI, Capabilities: ai.Capabilities{Streaming: true, ToolUse: true, MaxInputTokens: 128}}
-	if model.Provider != ai.ProviderOpenAI || !model.Capabilities.Streaming || !model.Capabilities.ToolUse {
+	model := ai.Model{Name: "gpt", Provider: ai.ProviderOpenAI, Capabilities: ai.Capabilities{Streaming: ai.Supported(ai.SourceDeclared), ToolUse: ai.Supported(ai.SourceDeclared), ContextLength: ai.Stated(128, ai.SourceDeclared)}}
+	if model.Provider != ai.ProviderOpenAI || !model.Capabilities.Streaming.Supported() || !model.Capabilities.ToolUse.Supported() {
 		t.Fatalf("model capabilities not preserved: %#v", model)
 	}
 }

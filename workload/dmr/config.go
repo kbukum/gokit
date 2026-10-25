@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kbukum/gokit/resilience"
+	"github.com/kbukum/gokit/security"
 )
 
 // DefaultBaseURL is the Docker Model Runner host TCP endpoint on Docker Desktop
@@ -36,6 +37,9 @@ type Config struct {
 
 	// ResiliencePolicy configures admission and circuit breaking for all requests, and retries for non-streaming requests only. Streaming pulls never retry.
 	ResiliencePolicy *resilience.Policy `mapstructure:"-" json:"-"`
+
+	// EndpointPolicy, when set, limits every request to its granted origins: DNS is checked at dial and redirects are refused. Injected, never loaded from config.
+	EndpointPolicy *security.EndpointPolicy `mapstructure:"-" json:"-"`
 }
 
 // ApplyDefaults fills in zero-valued fields.

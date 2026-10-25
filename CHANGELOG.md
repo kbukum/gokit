@@ -5,6 +5,9 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **workload/ollama, workload/lmstudio, workload/openaicompat**: model listers that describe each model a runtime holds as an `ai.Model`, through the shared `httpclient`, with an optional endpoint policy and header credential, bounded bodies and status-only errors. Ollama describes models a few at a time, and a model whose description fails, or is not reached before the caller's deadline, keeps its listed facts instead of failing the whole listing.
+- **llm/providers/openai**: user messages send image parts as `image_url` content (a base64 data URL or an http(s) source); any other non-text part fails instead of being dropped.
+- **llm/testutil**: `OpenAIServer` lists its models on `GET /v1/models`, accepts multi-part message content, and `vision-*` models name the color of a PNG image. `WithKeyless` answers without a bearer token, like a local runtime.
 - **server/spa**: `Config.ImmutableDirs` caches every file beneath a fingerprinted build directory, such as Vite's `assets`, for one year, so a runtime-loaded build needs no manifest list.
 - **database/postgres**: `Migrate` opens a short-lived connection with the migration login, applies a `SchemaPlan` and closes it, bounded per migration set.
 - **server/spa**: `NewDir` serves a build directory as a lifecycle component that opens the confined directory on Start, closes it on Stop, reports health, and answers 503 while closed.
@@ -84,6 +87,8 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **sse/testutil**: reusable test and benchmark helpers with failure-path coverage.
 
 ### Breaking Changes
+- **ai**: `Model` is a descriptor with family, variant, digest, task, input and output modalities, and parameters. `Capabilities` fields are tri-state `Fact`s and `Known` values that record their `Source`; the zero value is unknown and never supported. `MaxInputTokens` and the `ReasoningTokens` flag are replaced by `ContextLength`, `Reasoning` and `Capabilities.InputBudget`, which `agent` uses for compaction.
+- **workload**: `ModelInfo.Model` describes each listed model. **workload/dmr** fills it, reads human-readable sizes, accepts an `EndpointPolicy`, and `Error` no longer carries a response body.
 - **messaging**: `NewManagedConsumer` validates its config and returns an error. It restarts only when `Restart` allows, bounds each message with `HandleTimeout`, reports outcomes to a `ConsumerObserver`, and keeps consuming after the Start context ends until Stop. Health is degraded while restarting or not receiving.
 - **messaging/nats/jetstream**: `ErrTerminal` moved to `messaging.ErrTerminal`. `OnError` receives adapter failures only; handler errors stay with the handler and its observers. `NewComponent` validates and returns an error.
 - **httpclient**: query strings must come from `Request.Query`, and errors redact them.

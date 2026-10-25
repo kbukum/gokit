@@ -163,7 +163,7 @@ func (r *Runtime) ListModels(ctx context.Context) ([]workload.ModelInfo, error) 
 	out := make([]workload.ModelInfo, 0, len(objs))
 	for i := range objs {
 		o := &objs[i]
-		info := workload.ModelInfo{ID: o.ID, Ref: o.ref(), SizeBytes: o.sizeBytes()}
+		info := workload.ModelInfo{ID: o.ID, Ref: o.ref(), SizeBytes: o.sizeBytes(), Model: o.describe()}
 		if o.Created > 0 {
 			info.Created = time.Unix(o.Created, 0)
 		}

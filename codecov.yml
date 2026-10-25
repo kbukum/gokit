@@ -654,6 +654,15 @@ component_management:
     - component_id: workload_dmr
       name: workload/dmr
       paths: ["workload/dmr/**", "!workload/dmr/*/**"]
+    - component_id: workload_lmstudio
+      name: workload/lmstudio
+      paths: ["workload/lmstudio/**", "!workload/lmstudio/*/**"]
+    - component_id: workload_ollama
+      name: workload/ollama
+      paths: ["workload/ollama/**", "!workload/ollama/*/**"]
+    - component_id: workload_openaicompat
+      name: workload/openaicompat
+      paths: ["workload/openaicompat/**", "!workload/openaicompat/*/**"]
     - component_id: workload_kubernetes
       name: workload/kubernetes
       paths: ["workload/kubernetes/**", "!workload/kubernetes/*/**"]
