@@ -31,7 +31,7 @@ func Register(registry *workload.ModelRuntimeRegistry, cfg Config) error {
 
 // Runtime implements [workload.ModelRuntime] (plus the optional
 // [workload.ModelHealthChecker], [workload.ModelStatsReporter],
-// [workload.ModelLister], and [workload.ModelRemover] capabilities) against a
+// [workload.ModelLister], [workload.ModelRemover] and [workload.ModelPuller] capabilities) against a
 // Docker Model Runner daemon.
 type Runtime struct {
 	client *client
@@ -44,6 +44,7 @@ var (
 	_ workload.ModelStatsReporter = (*Runtime)(nil)
 	_ workload.ModelLister        = (*Runtime)(nil)
 	_ workload.ModelRemover       = (*Runtime)(nil)
+	_ workload.ModelPuller        = (*Runtime)(nil)
 )
 
 // NewRuntime creates a Docker Model Runner runtime from config. The config is
@@ -91,7 +92,7 @@ func (r *Runtime) Start(ctx context.Context, spec workload.ModelSpec) (*workload
 		return nil, fmt.Errorf("dmr: context size %d exceeds the DMR maximum of %d", spec.ContextSize, math.MaxInt32)
 	}
 	r.log.InfoCtx(ctx, "pulling model", map[string]any{"ref": spec.Ref})
-	if err := r.client.pull(ctx, spec.Ref); err != nil {
+	if err := r.client.pull(ctx, spec.Ref, nil); err != nil {
 		return nil, fmt.Errorf("dmr: start %q: %w", spec.Ref, err)
 	}
 	if spec.ContextSize > 0 {
@@ -170,6 +171,18 @@ func (r *Runtime) ListModels(ctx context.Context) ([]workload.ModelInfo, error) 
 		out = append(out, info)
 	}
 	return out, nil
+}
+
+// PullModel downloads ref through DMR's create endpoint, reporting its progress.
+// DMR lists a model only once its pull completes.
+func (r *Runtime) PullModel(ctx context.Context, ref string, progress func(workload.PullProgress) error) error {
+	if ref == "" {
+		return fmt.Errorf("dmr: model ref is required")
+	}
+	if err := r.client.pull(ctx, ref, progress); err != nil {
+		return fmt.Errorf("dmr: pull %q: %w", ref, err)
+	}
+	return nil
 }
 
 // RemoveModel deletes a local model from disk.

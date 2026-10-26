@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/kbukum/gokit/workload"
 )
 
 func TestReadLimitedRejectsOversized(t *testing.T) {
@@ -75,7 +77,7 @@ func TestDrainPullStreamCapExceededIsError(t *testing.T) {
 	// A stream longer than the limit must be reported as a failure, never as a
 	// completed pull.
 	stream := strings.NewReader(strings.Repeat(`{"type":"progress"}`+"\n", 100))
-	err := drainPullStream(stream, 16)
+	err := drainPullStream(stream, 16, nil)
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("expected limit-exceeded error, got %v", err)
 	}
@@ -84,7 +86,7 @@ func TestDrainPullStreamCapExceededIsError(t *testing.T) {
 func TestDrainPullStreamGenuineEOF(t *testing.T) {
 	t.Parallel()
 	stream := strings.NewReader(`{"type":"progress"}` + "\n" + `{"type":"success","message":"Model pulled successfully"}` + "\n")
-	if err := drainPullStream(stream, 1<<20); err != nil {
+	if err := drainPullStream(stream, 1<<20, nil); err != nil {
 		t.Fatalf("expected clean completion, got %v", err)
 	}
 }
@@ -94,7 +96,7 @@ func TestDrainPullStreamGenuineEOF(t *testing.T) {
 func TestDrainPullStreamTypeErrorEvent(t *testing.T) {
 	t.Parallel()
 	stream := strings.NewReader(`{"type":"progress"}` + "\n" + `{"type":"error","message":"Error: disk full"}` + "\n")
-	err := drainPullStream(stream, 1<<20)
+	err := drainPullStream(stream, 1<<20, nil)
 	if err == nil || !strings.Contains(err.Error(), "disk full") {
 		t.Fatalf("expected type:error event surfaced as failure, got %v", err)
 	}
@@ -105,7 +107,7 @@ func TestDrainPullStreamTypeErrorEvent(t *testing.T) {
 func TestDrainPullStreamEOFBeforeSuccess(t *testing.T) {
 	t.Parallel()
 	stream := strings.NewReader(`{"type":"progress"}` + "\n" + `{"type":"progress"}` + "\n")
-	err := drainPullStream(stream, 1<<20)
+	err := drainPullStream(stream, 1<<20, nil)
 	if err == nil || !strings.Contains(err.Error(), "before a success") {
 		t.Fatalf("expected EOF-before-success failure, got %v", err)
 	}
@@ -119,7 +121,7 @@ func TestDrainPullStreamPreservesReadErrorCause(t *testing.T) {
 	// A partial JSON object followed by a read error is not a json.SyntaxError,
 	// so the underlying cause must be wrapped.
 	r := io.MultiReader(strings.NewReader(`{"type":`), &errReader{err: want})
-	err := drainPullStream(r, 1<<20)
+	err := drainPullStream(r, 1<<20, nil)
 	if !errors.Is(err, want) {
 		t.Fatalf("expected wrapped read error cause, got %v", err)
 	}
@@ -132,12 +134,70 @@ func TestDrainPullStreamPreservesReadErrorCause(t *testing.T) {
 func TestDrainPullStreamPlainTextTailBounded(t *testing.T) {
 	t.Parallel()
 	stream := strings.NewReader(`{"type":"progress"}` + "\n" + strings.Repeat("x", 1<<20))
-	err := drainPullStream(stream, 30)
+	err := drainPullStream(stream, 30, nil)
 	if err == nil {
 		t.Fatal("expected terminal plain-text error to surface")
 	}
 	if len(err.Error()) > 200 {
 		t.Fatalf("tail read exceeded the stream cap: error length %d", len(err.Error()))
+	}
+}
+
+// Progress follows DMR's events: the stated total, and the bytes pulled summed over layers.
+func TestDrainPullStreamReportsProgress(t *testing.T) {
+	t.Parallel()
+	stream := strings.NewReader(strings.Join([]string{
+		`{"type":"progress","message":"Downloading","total":300,"layer":{"id":"a","size":200,"current":100}}`,
+		`{"type":"progress","message":"Downloading","total":300,"layer":{"id":"b","size":100,"current":50}}`,
+		`{"type":"progress","message":"Downloading","total":300,"layer":{"id":"a","size":200,"current":200}}`,
+		`{"type":"success","message":"Model pulled successfully"}`,
+	}, "\n"))
+	var got []workload.PullProgress
+	err := drainPullStream(stream, 1<<20, func(p workload.PullProgress) error {
+		got = append(got, p)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	want := []workload.PullProgress{
+		{Status: "Downloading", Completed: 100, Total: 300},
+		{Status: "Downloading", Completed: 150, Total: 300},
+		{Status: "Downloading", Completed: 250, Total: 300},
+		{Status: "Model pulled successfully", Completed: 300, Total: 300},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("progress = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("progress[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// An older DMR states only the overall pulled bytes; a stated count never exceeds the total.
+func TestDrainPullStreamReportsLegacyPulled(t *testing.T) {
+	t.Parallel()
+	stream := strings.NewReader(`{"type":"progress","total":10,"pulled":4}` + "\n" + `{"type":"progress","total":10,"pulled":40}` + "\n" + `{"type":"success"}` + "\n")
+	var got []workload.PullProgress
+	if err := drainPullStream(stream, 1<<20, func(p workload.PullProgress) error { got = append(got, p); return nil }); err != nil {
+		t.Fatalf("drain: %v", err)
+	}
+	if len(got) != 3 || got[0].Completed != 4 || got[1].Completed != 10 || got[2].Completed != 10 {
+		t.Fatalf("progress = %+v", got)
+	}
+}
+
+// A progress error stops the pull at once and is returned wrapped.
+func TestDrainPullStreamStopsOnProgressError(t *testing.T) {
+	t.Parallel()
+	stop := errors.New("too large")
+	stream := strings.NewReader(`{"type":"progress","total":10}` + "\n" + `{"type":"success"}` + "\n")
+	calls := 0
+	err := drainPullStream(stream, 1<<20, func(workload.PullProgress) error { calls++; return stop })
+	if !errors.Is(err, stop) || calls != 1 {
+		t.Fatalf("err = %v after %d calls, want the progress error after 1", err, calls)
 	}
 }
 

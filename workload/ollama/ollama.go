@@ -1,10 +1,13 @@
 package ollama
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -19,6 +22,13 @@ import (
 // than a tag list entry but stays well under this.
 const maxBody = 4 << 20
 
+// maxPullLine bounds one line of a pull's progress stream, and maxPullStream the whole stream. A pull reports a
+// short status per layer update, so a real stream stays far below both.
+const (
+	maxPullLine   = 64 << 10
+	maxPullStream = 64 << 20
+)
+
 // Error is a non-2xx answer from Ollama. It carries the status only: a response body can echo credentials.
 type Error struct {
 	Status int
@@ -26,34 +36,42 @@ type Error struct {
 
 func (e *Error) Error() string { return fmt.Sprintf("ollama: unexpected status %d", e.Status) }
 
-// Lister lists and describes the models an Ollama server holds.
-type Lister struct {
+// Client lists, describes and pulls the models an Ollama server holds.
+type Client struct {
 	http         *httpclient.Adapter
 	maxDescribed int
 	concurrency  int
 }
 
-var _ workload.ModelLister = (*Lister)(nil)
+var (
+	_ workload.ModelLister = (*Client)(nil)
+	_ workload.ModelPuller = (*Client)(nil)
+)
 
-// New builds a lister from a validated copy of cfg.
-func New(cfg Config) (*Lister, error) {
+// New builds a client from a validated copy of cfg.
+func New(cfg Config) (*Client, error) {
 	c, err := cfg.normalized()
 	if err != nil {
 		return nil, err
 	}
 	hc, err := httpclient.New(httpclient.Config{
-		Name:                 "ollama",
-		BaseURL:              c.BaseURL,
-		Timeout:              c.Timeout,
-		Auth:                 c.Auth,
-		EndpointPolicy:       c.EndpointPolicy,
+		Name:           "ollama",
+		BaseURL:        c.BaseURL,
+		Timeout:        c.Timeout,
+		Auth:           c.Auth,
+		EndpointPolicy: c.EndpointPolicy,
+		Stream: httpclient.StreamConfig{
+			TotalTimeout:         c.PullTimeout,
+			FirstProgressTimeout: c.PullTimeout,
+			IdleTimeout:          c.PullTimeout,
+		},
 		MaxResponseBodyBytes: maxBody,
 		DefaultHeaders:       map[string]string{"Accept": "application/json"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ollama: build http client: %w", err)
 	}
-	return &Lister{http: hc, maxDescribed: c.MaxDescribed, concurrency: c.Concurrency}, nil
+	return &Client{http: hc, maxDescribed: c.MaxDescribed, concurrency: c.Concurrency}, nil
 }
 
 type details struct {
@@ -81,11 +99,11 @@ type showResponse struct {
 // as an error status or a request timeout, leaves that model with what /api/tags states, so one slow or broken model
 // never hides the rest. ctx's deadline bounds describing the same way: models not described by then keep their tag
 // facts. Canceling ctx, or a deadline before the tag list arrives, fails the listing.
-func (l *Lister) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
+func (c *Client) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
 	var list struct {
 		Models *[]tagModel `json:"models"`
 	}
-	if err := l.call(ctx, http.MethodGet, "/api/tags", nil, &list); err != nil {
+	if err := c.call(ctx, http.MethodGet, "/api/tags", nil, &list); err != nil {
 		return nil, err
 	}
 	if list.Models == nil {
@@ -97,7 +115,7 @@ func (l *Lister) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
 	for i := range tagged {
 		infos[i] = describeTag(&tagged[i])
 	}
-	l.describe(ctx, tagged[:min(len(tagged), l.maxDescribed)], infos, gone)
+	c.describe(ctx, tagged[:min(len(tagged), c.maxDescribed)], infos, gone)
 	if err := ctx.Err(); err != nil && !errors.Is(err, context.DeadlineExceeded) {
 		return nil, fmt.Errorf("ollama: list models: %w", err)
 	}
@@ -112,8 +130,8 @@ func (l *Lister) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
 
 // describe applies each model's show response to infos[i], or marks gone[i] when the model no longer exists. It
 // returns once every call it started has finished.
-func (l *Lister) describe(ctx context.Context, tagged []tagModel, infos []workload.ModelInfo, gone []bool) {
-	slots := make(chan struct{}, l.concurrency)
+func (c *Client) describe(ctx context.Context, tagged []tagModel, infos []workload.ModelInfo, gone []bool) {
+	slots := make(chan struct{}, c.concurrency)
 	var wg sync.WaitGroup
 	for i := range tagged {
 		select {
@@ -125,7 +143,7 @@ func (l *Lister) describe(ctx context.Context, tagged []tagModel, infos []worklo
 		wg.Go(func() {
 			defer func() { <-slots }()
 			var show showResponse
-			err := l.call(ctx, http.MethodPost, "/api/show", map[string]string{"model": tagged[i].Name}, &show)
+			err := c.call(ctx, http.MethodPost, "/api/show", map[string]string{"model": tagged[i].Name}, &show)
 			var apiErr *Error
 			switch {
 			case errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound:
@@ -138,8 +156,86 @@ func (l *Lister) describe(ctx context.Context, tagged []tagModel, infos []worklo
 	wg.Wait()
 }
 
-func (l *Lister) call(ctx context.Context, method, path string, body, into any) error {
-	resp, err := l.http.Do(ctx, httpclient.Request{Method: method, Path: path, Body: body})
+// pullLine is one line of POST /api/pull's stream. A layer download states its digest, its total and the bytes so
+// far; a failure is an error line.
+type pullLine struct {
+	Status    string `json:"status"`
+	Digest    string `json:"digest"`
+	Total     int64  `json:"total"`
+	Completed int64  `json:"completed"`
+	Error     string `json:"error"`
+}
+
+// PullModel downloads ref with POST /api/pull, reporting progress summed over its layers. The pull succeeds only on
+// Ollama's final success line: an error line, a truncated stream or an oversized one fails it. An error from progress,
+// or canceling ctx, stops the pull. Ollama lists a model only once its pull completes.
+func (c *Client) PullModel(ctx context.Context, ref string, progress func(workload.PullProgress) error) error {
+	if ref == "" {
+		return errors.New("ollama: model ref is required")
+	}
+	stream, err := c.http.DoStream(ctx, httpclient.Request{
+		Method: http.MethodPost,
+		Path:   "/api/pull",
+		Body:   map[string]any{"model": ref, "stream": true},
+	})
+	if err != nil {
+		var hErr *httpclient.Error
+		if errors.As(err, &hErr) && hErr.StatusCode > 0 {
+			return &Error{Status: hErr.StatusCode}
+		}
+		return fmt.Errorf("ollama: pull %q: %w", ref, err)
+	}
+	defer func() { _ = stream.Close() }()
+	if err := drainPull(stream.Body, progress); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("ollama: pull %q: %w", ref, ctxErr)
+		}
+		return fmt.Errorf("ollama: pull %q: %w", ref, err)
+	}
+	return nil
+}
+
+func drainPull(body io.Reader, progress func(workload.PullProgress) error) error {
+	scanner := bufio.NewScanner(io.LimitReader(body, maxPullStream))
+	scanner.Buffer(make([]byte, 0, 4<<10), maxPullLine)
+	layers := map[string][2]int64{}
+	for scanner.Scan() {
+		raw := bytes.TrimSpace(scanner.Bytes())
+		if len(raw) == 0 {
+			continue
+		}
+		var line pullLine
+		if err := json.Unmarshal(raw, &line); err != nil {
+			return fmt.Errorf("decode progress: %w", err)
+		}
+		if line.Error != "" {
+			return fmt.Errorf("pull failed: %s", strings.TrimSpace(line.Error))
+		}
+		if line.Digest != "" {
+			layers[line.Digest] = [2]int64{max(line.Completed, 0), max(line.Total, 0)}
+		}
+		report := workload.PullProgress{Status: strings.TrimSpace(line.Status)}
+		for _, l := range layers {
+			report.Completed += min(l[0], l[1])
+			report.Total += l[1]
+		}
+		if progress != nil {
+			if err := progress(report); err != nil {
+				return fmt.Errorf("pull stopped: %w", err)
+			}
+		}
+		if line.Status == "success" {
+			return nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read progress: %w", err)
+	}
+	return errors.New("progress stream ended before success")
+}
+
+func (c *Client) call(ctx context.Context, method, path string, body, into any) error {
+	resp, err := c.http.Do(ctx, httpclient.Request{Method: method, Path: path, Body: body})
 	if err != nil {
 		if resp != nil {
 			return &Error{Status: resp.StatusCode}

@@ -81,7 +81,27 @@ thumb := media.Thumbnail(img, 256, 256)       // nearest-neighbor, never upscale
 view := media.Crop(img, image.Rect(0, 0, 100, 100))
 ```
 
-Formats outside the stdlib decoders (WebP, TIFF, HEIF, AVIF) are **detected** but not decoded here; decoding/processing those is an external service's job. `Decode` reads the header first and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
+JPEG, PNG, GIF and WebP have pure-Go decoders. TIFF, HEIF and AVIF are **detected** but not decoded here. `Decode` reads the header first and rejects inputs above `MaxDecodePixels` to bound memory on untrusted content (decompression bombs).
+
+## Verifying untrusted images
+
+`VerifyImage` accepts one still PNG, JPEG or WebP and nothing else. Use it before you store or serve an uploaded image.
+
+```go
+img, err := media.VerifyImage(data, media.ImageLimits{MaxBytes: 10 << 20})
+var rejected *media.ImageError
+if errors.As(err, &rejected) {
+    return fmt.Errorf("refused: %s", rejected.Reason) // too_large, format, malformed, trailing_data, dimensions
+}
+fmt.Println(img.MimeType, img.Width, img.Height)
+```
+
+| Check | How |
+|---|---|
+| Type | From the bytes only. SVG, HTML, GIF and any other format is refused. |
+| Size | Bytes, width, height and pixel count, read from the header before decoding. |
+| Content | PNG, JPEG and WebP are fully decoded. WebP's RIFF chunks and frame header are also checked. |
+| Polyglots | Any byte after the image's end is refused, so a file that is also a zip or a web page fails. |
 
 ## Time & spatial types (pure Go)
 
@@ -146,6 +166,7 @@ The heavy path is **an external service**, never a Go reimplementation. gokit de
 | `Prober` | Metadata backend abstraction |
 | `Detect` / `DetectReader` / `DetectFile` | Signature detection entry points |
 | `DecodeConfig` / `Decode` / `Thumbnail` / `Crop` | Pure-Go image ops |
+| `VerifyImage` / `ImageLimits` / `ImageError` | Strict check of an untrusted still image |
 | `Timestamp` / `TimeRange` / `Segment` | Time vocabulary and range math |
 | `Resolution` / `FrameRate` | Spatial vocabulary (presets, aspect ratio, scaling) |
 | `SubtitleTrack` / `ParseSRT` / `ParseVTT` | Subtitle parse/serialize (SRT, WebVTT) |

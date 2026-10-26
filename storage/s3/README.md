@@ -25,7 +25,7 @@ func configure() (*storage.FactoryRegistry, error) {
 
 Importing this package has no side effects. Applications own the registry and choose the backend through configuration.
 
-`NewStorage(ctx, cfg)` copies and validates configuration and passes the startup context to AWS configuration loading. The backend owns its HTTP client: requests are bounded at ten seconds, dialing/TLS/response headers at two seconds, connections at eight per host, and idle connections at thirty seconds. HTTPS requires TLS 1.3; redirects and implicit proxy discovery are disabled.
+`NewStorage(ctx, cfg)` copies and validates configuration and passes the startup context to AWS configuration loading. The backend owns its HTTP client: requests (headers and body) share a ten-second budget, dialing and TLS are bounded at two seconds, connections at eight per host, and idle connections at thirty seconds. Response headers can wait for storage commits within the request budget; an earlier caller deadline still wins. HTTPS requires TLS 1.3; redirects and implicit proxy discovery are disabled.
 
 SDK retries are disabled, including after ambiguous upload failures. Applications own any bounded retry policy and must limit it to operations they can prove idempotent; cancellation cannot retract a write already accepted by the server. Drain callers before `Close`, which releases idle connections. `storage.Component` performs that closure during teardown.
 
