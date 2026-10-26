@@ -31,12 +31,13 @@ type fakeDMR struct {
 	running  map[string]bool  // ref -> loaded runner present
 	created  int64            // created timestamp reported for models
 
-	pullStatus    int    // pre-stream status for POST /models/create (0 => stream 200)
-	pullStreamErr string // plain-text terminal error appended mid-stream (after 200)
-	pullErrEvent  string // JSON error event emitted mid-stream (after 200)
-	listStatus    int    // status returned by GET /models (0 => 200)
-	configStatus  int    // status returned by POST /engines/_configure (0 => 202)
-	unloadStatus  int    // status returned by POST /engines/unload (0 => 200)
+	pullStatus    int           // pre-stream status for POST /models/create (0 => stream 200)
+	pullStreamErr string        // plain-text terminal error appended mid-stream (after 200)
+	pullErrEvent  string        // JSON error event emitted mid-stream (after 200)
+	pullHold      chan struct{} // when set, the pull waits after its first event until closed or the client leaves
+	listStatus    int           // status returned by GET /models (0 => 200)
+	configStatus  int           // status returned by POST /engines/_configure (0 => 202)
+	unloadStatus  int           // status returned by POST /engines/unload (0 => 200)
 }
 
 type recordedRequest struct {
@@ -86,6 +87,13 @@ func (f *fakeDMR) handle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		writeChunk(`{"type":"progress","message":"pulling"}`)
+		if f.pullHold != nil {
+			select {
+			case <-f.pullHold:
+			case <-r.Context().Done():
+			}
+			return
+		}
 		switch {
 		case f.pullErrEvent != "":
 			// Real DMR failure: an in-band {"type":"error"} event. DMR then closes
@@ -308,6 +316,47 @@ func TestStartMidStreamErrorEvent(t *testing.T) {
 	_, err := rt.Start(context.Background(), workload.ModelSpec{Ref: "ai/smollm2"})
 	if err == nil || !strings.Contains(err.Error(), "model not found") {
 		t.Fatalf("expected error-event surfaced, got %v", err)
+	}
+}
+
+// PullModel reports DMR's progress and lists the model once the pull succeeds.
+func TestPullModelReportsProgress(t *testing.T) {
+	t.Parallel()
+	f := newFakeDMR(t)
+	rt := newRuntime(t, f.srv.URL)
+	puller, ok := rt.(workload.ModelPuller)
+	if !ok {
+		t.Fatal("dmr runtime should implement ModelPuller")
+	}
+	var got []workload.PullProgress
+	err := puller.PullModel(context.Background(), "ai/smollm2", func(p workload.PullProgress) error {
+		got = append(got, p)
+		return nil
+	})
+	if err != nil || len(got) != 2 || got[0].Status != "pulling" {
+		t.Fatalf("PullModel = %v with progress %+v", err, got)
+	}
+	if err := puller.PullModel(context.Background(), "", nil); err == nil {
+		t.Fatal("expected an error for an empty ref")
+	}
+}
+
+// A progress error stops the pull before DMR finishes, so nothing is listed.
+func TestPullModelStopsOnProgressError(t *testing.T) {
+	t.Parallel()
+	f := newFakeDMR(t)
+	f.pullHold = make(chan struct{})
+	defer close(f.pullHold)
+	rt := newRuntime(t, f.srv.URL)
+	stop := errors.New("too large")
+	err := rt.(workload.ModelPuller).PullModel(context.Background(), "ai/smollm2", func(workload.PullProgress) error { return stop })
+	if !errors.Is(err, stop) {
+		t.Fatalf("PullModel = %v, want the progress error", err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, listed := f.models["ai/smollm2"]; listed {
+		t.Fatal("a stopped pull must not list the model")
 	}
 }
 

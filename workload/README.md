@@ -117,6 +117,17 @@ if err != nil {
 models, err := l.ListModels(ctx)
 ```
 
+`workload/dmr` and `workload/ollama` also implement `ModelPuller`. `PullModel` reports progress summed over the model's layers; an error from the progress callback stops the pull, so a caller can refuse a model as soon as its size is known. A runtime lists a model only once its pull completes, so a stopped pull leaves nothing listed.
+
+```go
+err := puller.PullModel(ctx, "gemma3:4b", func(p workload.PullProgress) error {
+    if p.Total > limit {
+        return errTooLarge
+    }
+    return nil
+})
+```
+
 Test consumers without a real daemon using the in-memory fake in [`workload/testutil`](testutil):
 
 ```go
@@ -143,6 +154,7 @@ h, _ := rt.Start(ctx, workload.ModelSpec{Ref: "ai/smollm2"})
 | `ModelRuntime` | Interface — Start, Stop, Endpoint (run/serve a model) |
 | `ModelHealthChecker` / `ModelStatsReporter` | Optional — probe reachability / report per-model usage |
 | `ModelLister` / `ModelRemover` | Optional — enumerate / delete local models |
+| `ModelPuller` / `PullProgress` | Optional — download a model, reporting status, bytes done and total |
 | `NewModelRuntime(registry, cfg, log)` | Create a model runtime from a registry |
 | `ModelSpec` / `ModelHandle` / `Endpoint` | Model identity, started-model handle, inference endpoint |
 
@@ -158,8 +170,8 @@ h, _ := rt.Start(ctx, workload.ModelSpec{Ref: "ai/smollm2"})
 
 | Symbol | Description |
 |---|---|
-| `New(cfg)` | Create a lister that implements `workload.ModelLister` |
-| `Config` | BaseURL, Timeout, EndpointPolicy, Auth; Ollama adds MaxDescribed and Concurrency |
+| `New(cfg)` | Create a lister that implements `workload.ModelLister`; Ollama's `Client` also implements `workload.ModelPuller` |
+| `Config` | BaseURL, Timeout, EndpointPolicy, Auth; Ollama adds PullTimeout, MaxDescribed and Concurrency |
 | `Error` | A non-2xx answer, carrying the status only |
 
 ### `workload/docker`

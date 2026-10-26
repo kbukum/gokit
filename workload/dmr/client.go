@@ -182,11 +182,53 @@ func parseSize(s string) int64 {
 
 // pullProgress is one event in DMR's model-create progress stream. DMR emits
 // oci.ProgressMessage events: a failure is a {"type":"error","message":...}
-// event (Error is a legacy fallback field).
+// event (Error is a legacy fallback field). Total is the model's download size;
+// Layer reports the bytes of one layer so far, and older daemons state only
+// Pulled for the whole model.
 type pullProgress struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
-	Error   string `json:"error"`
+	Type    string    `json:"type"`
+	Message string    `json:"message"`
+	Error   string    `json:"error"`
+	Total   int64     `json:"total"`
+	Pulled  int64     `json:"pulled"`
+	Layer   pullLayer `json:"layer"`
+}
+
+type pullLayer struct {
+	ID      string `json:"id"`
+	Current int64  `json:"current"`
+}
+
+// pullTally sums a pull's progress across events.
+type pullTally struct {
+	layers map[string]int64
+	pulled int64
+	total  int64
+}
+
+// add folds one event in and returns the overall progress. Completed never
+// exceeds a stated total, and a successful pull completes it.
+func (t *pullTally) add(ev *pullProgress) workload.PullProgress {
+	t.total = max(t.total, ev.Total, 0)
+	if ev.Layer.ID != "" {
+		if t.layers == nil {
+			t.layers = map[string]int64{}
+		}
+		t.layers[ev.Layer.ID] = max(ev.Layer.Current, 0)
+		t.pulled = 0
+		for _, n := range t.layers {
+			t.pulled += n
+		}
+	} else if ev.Pulled > 0 {
+		t.pulled = ev.Pulled
+	}
+	if ev.Type == "success" && t.total > 0 {
+		t.pulled = t.total
+	}
+	if t.total > 0 {
+		t.pulled = min(t.pulled, t.total)
+	}
+	return workload.PullProgress{Status: strings.TrimSpace(ev.Message), Completed: t.pulled, Total: t.total}
 }
 
 // failure reports the failure message if this event marks a failed pull.
@@ -216,7 +258,7 @@ type backendStatus struct {
 // in the stream rather than the status code.
 //
 // Pulls use the configured pull budget rather than the HTTP adapter's shorter inference defaults. An earlier caller deadline is preserved.
-func (c *client) pull(ctx context.Context, ref string) error {
+func (c *client) pull(ctx context.Context, ref string, progress func(workload.PullProgress) error) error {
 	if _, ok := ctx.Deadline(); !ok && c.pullTimeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, c.pullTimeout)
@@ -231,7 +273,7 @@ func (c *client) pull(ctx context.Context, ref string) error {
 		return fmt.Errorf("dmr: pull %q: %w", ref, err)
 	}
 	defer func() { _ = stream.Close() }()
-	return drainPullStream(stream.Body, maxPullStream)
+	return drainPullStream(stream.Body, maxPullStream, progress)
 }
 
 // configure applies per-model runtime settings via POST /engines/_configure. DMR
@@ -377,11 +419,14 @@ func decodeModelList(r io.Reader, limit int64) ([]modelObject, error) {
 // a successful pull ends with a terminal {"type":"success"} event. Both failure
 // forms surface here, a stream that ends before the success event is treated as a
 // failed pull, and consuming the whole limit is an explicit failure so neither a
-// truncated nor an oversized stream can masquerade as a completed pull.
-func drainPullStream(body io.Reader, limit int64) error {
+// truncated nor an oversized stream can masquerade as a completed pull. Each
+// progress or success event goes to progress when it is set; an error from it
+// stops the drain, and the caller closing the body ends the request.
+func drainPullStream(body io.Reader, limit int64, progress func(workload.PullProgress) error) error {
 	lr := &io.LimitedReader{R: body, N: limit + 1}
 	dec := json.NewDecoder(lr)
 	sawSuccess := false
+	var tally pullTally
 	for {
 		var ev pullProgress
 		err := dec.Decode(&ev)
@@ -391,6 +436,12 @@ func drainPullStream(body io.Reader, limit int64) error {
 			}
 			if ev.Type == "success" {
 				sawSuccess = true
+			}
+			report := tally.add(&ev)
+			if progress != nil {
+				if perr := progress(report); perr != nil {
+					return fmt.Errorf("dmr: pull stopped: %w", perr)
+				}
 			}
 			continue
 		}

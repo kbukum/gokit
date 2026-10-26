@@ -19,8 +19,8 @@ func newHTTPClient() *http.Client {
 		Transport: &http.Transport{
 			DialContext: dialer.DialContext, ForceAttemptHTTP2: true,
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS13},
-			TLSHandshakeTimeout: 2 * time.Second, ResponseHeaderTimeout: 2 * time.Second,
-			IdleConnTimeout: 30 * time.Second, MaxIdleConns: 8, MaxIdleConnsPerHost: 8, MaxConnsPerHost: 8,
+			TLSHandshakeTimeout: 2 * time.Second,
+			IdleConnTimeout:     30 * time.Second, MaxIdleConns: 8, MaxIdleConnsPerHost: 8, MaxConnsPerHost: 8,
 		},
 	}
 }

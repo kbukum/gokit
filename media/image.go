@@ -8,8 +8,7 @@ import (
 
 	// Register the stdlib image decoders
 	// so DecodeConfig/Decode recognize the pure-Go formats the light kit supports.
-	// Heavier formats (webp, tiff, heif) are detected but intentionally not decoded here —
-	// decoding them is out of scope by design.
+	// WebP is registered by the verifier; TIFF and HEIF remain detection-only.
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -27,7 +26,7 @@ var ErrImageTooLarge = errors.New("media: image exceeds maximum decode pixel cou
 // DecodeConfig reads only the header of data and returns the image dimensions
 // and detected [Format] without decoding the full pixel buffer.
 //
-// It supports the pure-Go stdlib formats (JPEG, PNG, GIF);
+// It supports the pure-Go JPEG, PNG, GIF and WebP decoders;
 // other detected image formats wrap [ErrUnsupported].
 // Decode failures on a supported format (corrupt or truncated data) preserve the underlying cause instead.
 // On any error the returned [Format] is a best-effort signature detection (via [Detect]),
@@ -44,7 +43,7 @@ func DecodeConfig(data []byte) (cfg image.Config, format Format, err error) {
 	return cfg, stdlibFormat(name), nil
 }
 
-// Decode fully decodes data into an [image.Image] using the stdlib decoders,
+// Decode fully decodes data into an [image.Image] using the registered pure-Go decoders,
 // returning the detected [Format]. It first reads the header
 // and rejects inputs whose declared pixel count (width × height) is non-positive
 // or exceeds [MaxDecodePixels] (wrapping [ErrImageTooLarge]) to bound memory use on untrusted content;
@@ -129,6 +128,8 @@ func stdlibFormat(name string) Format {
 		return FormatJPEG
 	case "png":
 		return FormatPNG
+	case "webp":
+		return FormatWebP
 	case "gif":
 		return FormatGIF
 	default:

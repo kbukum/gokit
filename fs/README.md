@@ -47,6 +47,7 @@ Replacement is atomic on Unix. On Windows, `WriteAtomicReplace` removes the dest
 | `FindInAncestors()` / `ParentDir()` | Walk ancestor directories |
 | `TarGz()` / `Zip()` / `ExtractTarGz()` / `ExtractZip()` | Create and bounded-extract tar.gz / zip archives |
 | `ExtractLimits` / `DefaultExtractLimits()` | Bound entry count and total uncompressed bytes; reject non-local paths and link escapes |
+| `ReadZip(data, ZipReadLimits{})` | Read an untrusted in-memory zip without touching disk; bounds members, bytes per member and in total, and compression ratio; refuses unsafe names, repeated names, links and encrypted members with `ErrArchive*` sentinels |
 | `HardLink()` / `SymlinkFile()` / `SymlinkDir()` / `ReadLink()` | Hard and symbolic links |
 | `NewFsWatcher()` / `FsWatcher` | Debounced filesystem change watching |
 | `AppCacheDir(app)` | OS-standard per-application cache directory |

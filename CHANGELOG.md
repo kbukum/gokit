@@ -5,6 +5,9 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **fs**: `ReadZip` reads an untrusted zip held in memory, bounded by `ZipReadLimits` (members, bytes per member and in total, compression ratio). Unsafe, repeated or non-regular members are refused, and each refusal matches an `ErrArchive*` sentinel.
+- **media**: `VerifyImage` fully decodes one still PNG, JPEG or WebP within `ImageLimits` (bytes, sides, pixels). The type comes from the bytes, structure and trailing bytes are checked, and SVG, HTML and polyglot files fail with a typed `ImageError` reason.
+- **workload**: `ModelPuller` downloads a model and reports `PullProgress` (status, bytes done, total). `workload/dmr` and `workload/ollama` implement it; an error from the progress callback or a canceled context stops the pull, and a truncated or failed stream is never reported as success. `ollama.Lister` is now `ollama.Client`, with `Config.PullTimeout`.
 - **workload/ollama, workload/lmstudio, workload/openaicompat**: model listers that describe each model a runtime holds as an `ai.Model`, through the shared `httpclient`, with an optional endpoint policy and header credential, bounded bodies and status-only errors. Ollama describes models a few at a time, and a model whose description fails, or is not reached before the caller's deadline, keeps its listed facts instead of failing the whole listing.
 - **llm/providers/openai**: user messages send image parts as `image_url` content (a base64 data URL or an http(s) source); any other non-text part fails instead of being dropped.
 - **llm/testutil**: `OpenAIServer` lists its models on `GET /v1/models`, accepts multi-part message content, and `vision-*` models name the color of a PNG image. `WithKeyless` answers without a bearer token, like a local runtime.
@@ -142,6 +145,7 @@ Defaults and rules that change what an existing app sees without a compile error
 - **database**: untimed `Ping`; use context-aware `PingContext`.
 
 ### Fixed
+- **storage/s3**: response headers share the existing ten-second request budget instead of timing out at two seconds while storage commits a write. Earlier caller deadlines, connection bounds and no-retry behavior remain unchanged.
 - **ci**: pull requests that only change docs now report `CI Status` instead of waiting for it forever.
 - **tooling**: `make replace-sync` adds local `replace` lines for intra-repo modules reached through other modules, so `go mod tidy` no longer needs unpublished versions.
 - **ci**: the Dependabot tidy workflow passes the branch name through an environment variable instead of inline script text.

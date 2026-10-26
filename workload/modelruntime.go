@@ -67,6 +67,25 @@ type ModelRemover interface {
 	RemoveModel(ctx context.Context, model string) error
 }
 
+// ModelPuller is optionally implemented by runtimes that can download a model on
+// request and report its progress.
+type ModelPuller interface {
+	// PullModel downloads ref. When progress is non-nil it is called, in order, for
+	// every update the runtime streams. An error from progress stops the pull and is
+	// returned wrapped, so a caller can enforce a size limit as soon as the runtime
+	// states the size. Canceling ctx stops the pull. A runtime does not list a model
+	// until its pull completes, so a stopped pull leaves nothing listed.
+	PullModel(ctx context.Context, ref string, progress func(PullProgress) error) error
+}
+
+// PullProgress is one update from a model pull. Total is zero until the runtime
+// states the download size, and may grow as the runtime discovers more layers.
+type PullProgress struct {
+	Status    string // The runtime's short status, such as "pulling manifest"
+	Completed int64  // Bytes downloaded so far
+	Total     int64  // Bytes to download, as far as the runtime has stated
+}
+
 // Inference API dialect spoken by a runtime [Endpoint].
 const (
 	APIOpenAI    = "openai"

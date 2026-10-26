@@ -12,6 +12,9 @@ import (
 // DefaultTimeout bounds each request so a slow server cannot stall a listing.
 const DefaultTimeout = 5 * time.Second
 
+// DefaultPullTimeout bounds a model pull, which can download many gigabytes. An earlier caller deadline wins.
+const DefaultPullTimeout = 30 * time.Minute
+
 // DefaultMaxDescribed bounds how many models get a POST /api/show call per listing. Models past the bound are
 // listed with what /api/tags states.
 const DefaultMaxDescribed = 64
@@ -22,12 +25,15 @@ const DefaultConcurrency = 4
 // MaxConcurrency bounds Concurrency so one listing cannot flood a local server.
 const MaxConcurrency = 16
 
-// Config configures a [Lister].
+// Config configures a [Client].
 type Config struct {
 	// BaseURL is the Ollama API root, such as "http://localhost:11434".
 	BaseURL string `mapstructure:"base_url" json:"base_url"`
 	// Timeout bounds each request. Defaults to [DefaultTimeout].
 	Timeout time.Duration `mapstructure:"timeout" json:"timeout"`
+	// PullTimeout bounds a model pull, its first progress and each wait between updates. Zero means
+	// [DefaultPullTimeout].
+	PullTimeout time.Duration `mapstructure:"pull_timeout" json:"pull_timeout"`
 	// MaxDescribed bounds the per-model show calls. Zero means [DefaultMaxDescribed].
 	MaxDescribed int `mapstructure:"max_described" json:"max_described"`
 	// Concurrency bounds the show calls in flight at once, at most [MaxConcurrency]. Zero means [DefaultConcurrency].
@@ -46,6 +52,12 @@ func (c Config) normalized() (Config, error) {
 	c.BaseURL = strings.TrimRight(base, "/")
 	if c.Timeout <= 0 {
 		c.Timeout = DefaultTimeout
+	}
+	switch {
+	case c.PullTimeout < 0:
+		return c, fmt.Errorf("ollama: pull_timeout must not be negative")
+	case c.PullTimeout == 0:
+		c.PullTimeout = DefaultPullTimeout
 	}
 	switch {
 	case c.MaxDescribed < 0:

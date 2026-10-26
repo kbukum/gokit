@@ -380,3 +380,137 @@ func TestMalformedListIsRefused(t *testing.T) {
 		t.Fatal("a success body without models must not read as an empty list")
 	}
 }
+
+// pullServer streams canned /api/pull lines and records whether a pull finished.
+func pullServer(t *testing.T, lines []string, hold bool) (*httptest.Server, *atomic.Bool) {
+	t.Helper()
+	done := &atomic.Bool{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/pull" {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			Model  string
+			Stream bool
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Model != "gemma3:4b" || !req.Stream {
+			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+			return
+		}
+		flusher, _ := w.(http.Flusher)
+		for _, line := range lines {
+			_, _ = io.WriteString(w, line+"\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		if hold {
+			<-r.Context().Done()
+			return
+		}
+		done.Store(true)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, done
+}
+
+func newClient(t *testing.T, base string) *ollama.Client {
+	t.Helper()
+	c, err := ollama.New(ollama.Config{BaseURL: base})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+// Progress sums the layers Ollama reports, and the pull completes on its success line.
+func TestPullModelReportsProgress(t *testing.T) {
+	t.Parallel()
+	srv, done := pullServer(t, []string{
+		`{"status":"pulling manifest"}`,
+		`{"status":"pulling aa","digest":"sha256:aa","total":300,"completed":100}`,
+		`{"status":"pulling bb","digest":"sha256:bb","total":100}`,
+		`{"status":"pulling aa","digest":"sha256:aa","total":300,"completed":300}`,
+		`{"status":"pulling bb","digest":"sha256:bb","total":100,"completed":100}`,
+		`{"status":"verifying sha256 digest"}`,
+		`{"status":"success"}`,
+	}, false)
+	var got []workload.PullProgress
+	err := newClient(t, srv.URL).PullModel(context.Background(), "gemma3:4b", func(p workload.PullProgress) error {
+		got = append(got, p)
+		return nil
+	})
+	if err != nil || !done.Load() {
+		t.Fatalf("PullModel = %v", err)
+	}
+	want := []workload.PullProgress{
+		{Status: "pulling manifest"},
+		{Status: "pulling aa", Completed: 100, Total: 300},
+		{Status: "pulling bb", Completed: 100, Total: 400},
+		{Status: "pulling aa", Completed: 300, Total: 400},
+		{Status: "pulling bb", Completed: 400, Total: 400},
+		{Status: "verifying sha256 digest", Completed: 400, Total: 400},
+		{Status: "success", Completed: 400, Total: 400},
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("progress = %+v\nwant %+v", got, want)
+	}
+}
+
+// An error line, or a stream that ends before success, fails the pull.
+func TestPullModelFailures(t *testing.T) {
+	t.Parallel()
+	for name, lines := range map[string][]string{
+		"error line": {`{"status":"pulling manifest"}`, `{"error":"pull model manifest: file does not exist"}`},
+		"truncated":  {`{"status":"pulling manifest"}`},
+		"not json":   {`{"status":"pulling manifest"}`, `oops`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			srv, _ := pullServer(t, lines, false)
+			if err := newClient(t, srv.URL).PullModel(context.Background(), "gemma3:4b", nil); err == nil {
+				t.Fatal("expected the pull to fail")
+			}
+		})
+	}
+}
+
+// A progress error stops the pull at once and is returned wrapped; the server sees the client leave.
+func TestPullModelStopsOnProgressError(t *testing.T) {
+	t.Parallel()
+	srv, done := pullServer(t, []string{`{"status":"pulling aa","digest":"sha256:aa","total":900}`}, true)
+	stop := errors.New("too large")
+	err := newClient(t, srv.URL).PullModel(context.Background(), "gemma3:4b", func(workload.PullProgress) error { return stop })
+	if !errors.Is(err, stop) || done.Load() {
+		t.Fatalf("PullModel = %v, want the progress error", err)
+	}
+}
+
+// Canceling the context stops a pull that is waiting on the server.
+func TestPullModelCancel(t *testing.T) {
+	t.Parallel()
+	srv, _ := pullServer(t, []string{`{"status":"pulling manifest"}`}, true)
+	ctx, cancel := context.WithCancel(context.Background())
+	err := newClient(t, srv.URL).PullModel(ctx, "gemma3:4b", func(workload.PullProgress) error { cancel(); return nil })
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("PullModel = %v, want context.Canceled", err)
+	}
+}
+
+// A status error before the stream is a typed, status-only error.
+func TestPullModelStatusError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"error":"secret sk-123"}`, http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	err := newClient(t, srv.URL).PullModel(context.Background(), "gemma3:4b", nil)
+	var apiErr *ollama.Error
+	if !errors.As(err, &apiErr) || apiErr.Status != http.StatusUnauthorized || strings.Contains(err.Error(), "sk-123") {
+		t.Fatalf("PullModel = %v, want a status-only error", err)
+	}
+	if err := newClient(t, srv.URL).PullModel(context.Background(), "", nil); err == nil {
+		t.Fatal("expected an error for an empty ref")
+	}
+}
