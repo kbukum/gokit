@@ -16,17 +16,23 @@ type (
 type FinishReason = chat.FinishReason
 
 type CompletionRequest struct {
-	Model         string            `json:"model,omitempty" yaml:"model"`
-	Messages      []chat.Message    `json:"-"`
-	SystemPrompt  string            `json:"system_prompt,omitempty" yaml:"system_prompt"`
-	Temperature   *float64          `json:"temperature,omitempty" yaml:"temperature"`
-	TopP          *float64          `json:"top_p,omitempty" yaml:"top_p"`
-	MaxTokens     int               `json:"max_tokens,omitempty" yaml:"max_tokens"`
-	StopSequences []string          `json:"stop_sequences,omitempty" yaml:"stop_sequences,omitempty"`
-	Stream        bool              `json:"stream,omitempty" yaml:"stream"`
-	Tools         []ai.ToolSpec     `json:"tools,omitempty" yaml:"tools,omitempty"`
-	ToolChoice    *ToolChoice       `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Model         string         `json:"model,omitempty" yaml:"model"`
+	Messages      []chat.Message `json:"-"`
+	SystemPrompt  string         `json:"system_prompt,omitempty" yaml:"system_prompt"`
+	Temperature   *float64       `json:"temperature,omitempty" yaml:"temperature"`
+	TopP          *float64       `json:"top_p,omitempty" yaml:"top_p"`
+	MaxTokens     int            `json:"max_tokens,omitempty" yaml:"max_tokens"`
+	StopSequences []string       `json:"stop_sequences,omitempty" yaml:"stop_sequences,omitempty"`
+	// Seed asks for repeatable sampling where the provider supports it; it is a best-effort hint, not a guarantee.
+	Seed *int64 `json:"seed,omitempty" yaml:"seed,omitempty"`
+	// PresencePenalty and FrequencyPenalty discourage repeated tokens. A dialect that cannot send a set value refuses
+	// the request rather than dropping it.
+	PresencePenalty  *float64          `json:"presence_penalty,omitempty" yaml:"presence_penalty,omitempty"`
+	FrequencyPenalty *float64          `json:"frequency_penalty,omitempty" yaml:"frequency_penalty,omitempty"`
+	Stream           bool              `json:"stream,omitempty" yaml:"stream"`
+	Tools            []ai.ToolSpec     `json:"tools,omitempty" yaml:"tools,omitempty"`
+	ToolChoice       *ToolChoice       `json:"tool_choice,omitempty" yaml:"tool_choice,omitempty"`
+	Metadata         map[string]string `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 	// Extra carries provider-specific request extensions as a raw JSON value that is merged into the outgoing request body.
 	// It is [RawJSON] rather than a decoded map so the public API stays free of any:
 	// each provider dialect decodes it at its own wire boundary.

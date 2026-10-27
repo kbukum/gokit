@@ -480,3 +480,22 @@ func TestConfig_ApplyDefaults(t *testing.T) {
 		t.Error("applyDefaults should set Model")
 	}
 }
+
+func TestDialect_BuildRequestSeedAndPenalties(t *testing.T) {
+	d := &Dialect{}
+	seed, presence, frequency := int64(7), 0.5, -0.25
+	body, err := d.BuildRequest(llm.CompletionRequest{
+		Model: "gemini-2.0-flash", Messages: []chat.Message{chat.User("test")},
+		Seed: &seed, PresencePenalty: &presence, FrequencyPenalty: &frequency,
+	})
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	bs, _ := json.Marshal(body)
+	var result map[string]any
+	_ = json.Unmarshal(bs, &result)
+	gc, _ := result["generationConfig"].(map[string]any)
+	if gc["seed"] != float64(7) || gc["presencePenalty"] != 0.5 || gc["frequencyPenalty"] != -0.25 {
+		t.Fatalf("generationConfig = %v", gc)
+	}
+}

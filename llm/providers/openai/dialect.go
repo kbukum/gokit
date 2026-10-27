@@ -69,6 +69,15 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if len(req.StopSequences) > 0 {
 		body["stop"] = req.StopSequences
 	}
+	if req.Seed != nil {
+		body["seed"] = *req.Seed
+	}
+	if req.PresencePenalty != nil {
+		body["presence_penalty"] = *req.PresencePenalty
+	}
+	if req.FrequencyPenalty != nil {
+		body["frequency_penalty"] = *req.FrequencyPenalty
+	}
 	if len(req.Tools) > 0 {
 		body["tools"] = encodeTools(req.Tools)
 	}

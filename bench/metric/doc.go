@@ -6,5 +6,5 @@
 //
 // BLEU follows sacreBLEU 2.4.3 corpus BLEU with 13a tokenization, exponential smoothing, four orders, no effective order, case sensitivity, and a 0-1 scale. ROUGE follows rouge-score 0.1.2 without stemming: mean per-sample F and mean precision/recall. Pinned Python 3.11.6 reference cases use an absolute tolerance of 1e-9.
 //
-// Classification, probability, ranking, regression, matching, and weighted metrics remain available. SemanticSimilarity and LLMJudge are context metrics with bounded provider calls. Judge identity is recorded in Result.Judge; configuration belongs in Identity().Config, not measured Values. AsRunMetric preserves optional streaming capabilities; AsRunContextMetric adapts I/O-backed metrics.
+// Classification, probability, ranking, regression, matching, and weighted metrics remain available. SemanticSimilarity and LLMJudge are context metrics with bounded provider calls. Judge scores one output or compares two in both orders by a versioned Rubric; a reply that breaks the verdict schema is no verdict, never a score. Judge identity is recorded in Result.Judge; configuration belongs in Identity().Config, not measured Values. AsRunMetric preserves optional streaming capabilities; AsRunContextMetric adapts I/O-backed metrics.
 package metric

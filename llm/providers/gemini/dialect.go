@@ -91,6 +91,15 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.TopP != nil {
 		genConfig["topP"] = *req.TopP
 	}
+	if req.Seed != nil {
+		genConfig["seed"] = *req.Seed
+	}
+	if req.PresencePenalty != nil {
+		genConfig["presencePenalty"] = *req.PresencePenalty
+	}
+	if req.FrequencyPenalty != nil {
+		genConfig["frequencyPenalty"] = *req.FrequencyPenalty
+	}
 	if len(genConfig) > 0 {
 		body["generationConfig"] = genConfig
 	}

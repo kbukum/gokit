@@ -5,6 +5,8 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **bench/stats**: `BootstrapMean` (mean with a seeded percentile bootstrap interval) and `BradleyTerry` (ranking from pairwise outcomes with seeded intervals).
+- **llm**: `CompletionRequest.Seed`, `PresencePenalty` and `FrequencyPenalty`. OpenAI and Gemini send them; Anthropic refuses a request that sets them instead of dropping them.
 - **fs**: `ReadZip` reads an untrusted zip held in memory, bounded by `ZipReadLimits` (members, bytes per member and in total, compression ratio). Unsafe, repeated or non-regular members are refused, and each refusal matches an `ErrArchive*` sentinel.
 - **media**: `VerifyImage` fully decodes one still PNG, JPEG or WebP within `ImageLimits` (bytes, sides, pixels). The type comes from the bytes, structure and trailing bytes are checked, and SVG, HTML and polyglot files fail with a typed `ImageError` reason.
 - **workload**: `ModelPuller` downloads a model and reports `PullProgress` (status, bytes done, total). `workload/dmr` and `workload/ollama` implement it; an error from the progress callback or a canceled context stops the pull, and a truncated or failed stream is never reported as success. `ollama.Lister` is now `ollama.Client`, with `Config.PullTimeout`.
@@ -65,6 +67,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - **util**: shared typed-nil dependency validation.
 
 ### Changed
+- **bench/metric**: the LLM judge is redesigned. `NewJudge` takes a versioned `Rubric` and judges one output (`Score`) or two in both orders (`Compare`, a tie when the orders disagree), reference-free unless the rubric uses the expected answer, with text and media input. A reply that breaks the strict schema is a `no_verdict`, not an error or a score. `LLMJudge` now wraps a `Judge`, averages judged samples and counts `no_verdict`. `JudgePrompt`, `ParseJudgePrompt`, `DefaultJudgePrompt` and `JudgeVerdict` are removed.
 - **ci**: every job runs the same `make` targets as local development through a pinned Toven. Coverage is measured per module in parallel under `-race` and blocks below each module's floor; test-support modules are measured only, and modules still below the floor are held at today's level. Fuzz targets run as balanced parallel shards, only for affected modules on pull requests, with a nightly longer run; integration runs only the modules that have integration tests; Go caches and each fuzz shard's corpus are saved from `main` only. Every job has a time limit, a fuzz time must be positive and fit a shard's budget, and a failed change-scope check fails the gate instead of skipping the Go jobs.
 - **tooling**: `make test-integration` runs through Toven and builds the auth test host first; it fails when the integration module list cannot be found.
 - **tooling**: domains are Toven `[groups.*]` in `toven.toml`, and Toven enforces their layering. `make check-<domain>` and `G=<domain>` on `build`, `vet`, `test`, `lint` and `test-coverage` run one domain; `toven groups` lists them. The root-module domains `core`, `patterns` and `crosscutting` are now `foundation`. `docs/MODULE-INDEX.md` reads its domains from Toven.
