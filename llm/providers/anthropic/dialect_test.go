@@ -196,3 +196,17 @@ func TestDialect_BuildRequestTopPAndStopSequences(t *testing.T) {
 		t.Errorf("stop_sequences = %v, want [STOP]", got["stop_sequences"])
 	}
 }
+
+func TestDialect_BuildRequestRefusesSeedAndPenalties(t *testing.T) {
+	d := &Dialect{}
+	seed, penalty := int64(7), 0.5
+	for name, req := range map[string]llm.CompletionRequest{
+		"seed":      {Model: "claude-test", Messages: []chat.Message{chat.User("hi")}, Seed: &seed},
+		"presence":  {Model: "claude-test", Messages: []chat.Message{chat.User("hi")}, PresencePenalty: &penalty},
+		"frequency": {Model: "claude-test", Messages: []chat.Message{chat.User("hi")}, FrequencyPenalty: &penalty},
+	} {
+		if _, err := d.BuildRequest(req); err == nil {
+			t.Fatalf("%s: request with an unsupported parameter was built", name)
+		}
+	}
+}

@@ -12,11 +12,20 @@ import (
 
 func judgeContextMetric(t *testing.T, provider llm.Provider) bench.RunContextMetric[string] {
 	t.Helper()
-	m, err := metric.LLMJudge[string](provider, "judge-model", metric.DefaultJudgePrompt())
+	m, err := metric.LLMJudge[string](judge(t, provider, "judge-model"))
 	if err != nil {
 		t.Fatalf("LLMJudge: %v", err)
 	}
 	return metric.AsRunContextMetric[string](m)
+}
+
+func judge(t *testing.T, provider llm.Provider, model string) *metric.Judge {
+	t.Helper()
+	j, err := metric.NewJudge(provider, model, metric.Rubric{ID: "r", Version: "1.0.0", Criteria: "Correct?", Points: 5})
+	if err != nil {
+		t.Fatalf("NewJudge: %v", err)
+	}
+	return j
 }
 
 // When a judge metric scores a run, its model and prompt version are lifted into
@@ -27,7 +36,7 @@ func TestRunnerRecordsJudgeProvenance(t *testing.T) {
 	loader := writeContextDataset(t)
 	provider := llmtestutil.NewFakeProvider(llmtestutil.WithResponder(
 		func(context.Context, llm.CompletionRequest) (llm.CompletionResponse, error) {
-			return llmtestutil.TextResponse(`{"score": 0.9}`), nil
+			return llmtestutil.TextResponse(`{"score": 5}`), nil
 		}))
 
 	runner := bench.NewBenchRunner(
@@ -48,8 +57,8 @@ func TestRunnerRecordsJudgeProvenance(t *testing.T) {
 	if judge.Model != "judge-model" {
 		t.Errorf("Judges[0].Model = %q, want judge-model", judge.Model)
 	}
-	if judge.PromptVersion != "1.0.0" {
-		t.Errorf("Judges[0].PromptVersion = %q, want 1.0.0", judge.PromptVersion)
+	if judge.PromptVersion != metric.JudgePromptVersion {
+		t.Errorf("Judges[0].PromptVersion = %q, want %s", judge.PromptVersion, metric.JudgePromptVersion)
 	}
 	if judge.Metric == "" {
 		t.Error("Judges[0].Metric is empty, want the judge metric name")
@@ -65,14 +74,14 @@ func TestRunnerRecordsEveryJudgeProvenance(t *testing.T) {
 	loader := writeContextDataset(t)
 	provider := llmtestutil.NewFakeProvider(llmtestutil.WithResponder(
 		func(context.Context, llm.CompletionRequest) (llm.CompletionResponse, error) {
-			return llmtestutil.TextResponse(`{"score": 0.9}`), nil
+			return llmtestutil.TextResponse(`{"score": 5}`), nil
 		}))
 
-	first, err := metric.LLMJudge[string](provider, "judge-a", metric.DefaultJudgePrompt())
+	first, err := metric.LLMJudge[string](judge(t, provider, "judge-a"))
 	if err != nil {
 		t.Fatalf("LLMJudge first: %v", err)
 	}
-	second, err := metric.LLMJudge[string](provider, "judge-b", metric.DefaultJudgePrompt())
+	second, err := metric.LLMJudge[string](judge(t, provider, "judge-b"))
 	if err != nil {
 		t.Fatalf("LLMJudge second: %v", err)
 	}

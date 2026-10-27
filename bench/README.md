@@ -75,6 +75,14 @@ Latency runs from immediately before evaluator execution until return. Records s
 
 Exact/fuzzy matching, BLEU, ROUGE, MAE, MSE, and RMSE stream through independent accumulators. Classification, probability/calibration, ranking, R-squared, weighted, semantic, and judge metrics remain available. Whole-set metrics collect only up to `MaxRetainedSamples`; larger runs fail explicitly instead of approximating.
 
+## Judging and rating statistics
+
+`metric.NewJudge` judges model outputs with an `llm.Provider` and a versioned `metric.Rubric` (criteria, a 2–10 point scale, and whether to show the expected answer). `Judge.Score` scores one output; `Judge.Compare` judges two outputs in both orders, gives a tie when the orders disagree, and reports that disagreement. The judge sees the task input (text and media parts), the expected answer only when the rubric uses it, and the outputs, never model names. The reply must be exactly the schema's JSON object; anything else is a `no_verdict` with a reason, never a score. Provider failures, timeouts and cancellation are errors. Calls are time-bounded and never retried.
+
+`metric.LLMJudge` runs a judge over a run's samples in score mode. It reports the mean over judged samples with `judged` and `no_verdict` counts, and fails when no sample got a verdict.
+
+`bench/stats` summarizes small samples: `BootstrapMean` gives a mean with a percentile bootstrap interval, and `BradleyTerry` ranks items from pairwise outcomes (a tie is half a win) with bootstrap intervals. Both take a seed and give the same answer for the same input and seed.
+
 BLEU matches sacreBLEU **2.4.3** corpus BLEU: 13a tokenizer, exponential smoothing, max order four, case-sensitive, no effective order, scaled to 0-1. ROUGE-1/2/L match **rouge-score 0.1.2**, default tokenizer without stemming, averaging per-sample F with mean P/R. Python **3.11.6** generated the pinned reference cases; absolute tolerance is **1e-9**. Empty and one-word BLEU are zero without effective order.
 
 ## Storage and limits

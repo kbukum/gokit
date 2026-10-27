@@ -48,6 +48,10 @@ func (d *Dialect) BuildRequest(req llm.CompletionRequest) (any, error) {
 	if req.SystemPrompt != "" {
 		body["system"] = req.SystemPrompt
 	}
+	// The Messages API has no seed or penalties; sending a request without them would quietly change its meaning.
+	if req.Seed != nil || req.PresencePenalty != nil || req.FrequencyPenalty != nil {
+		return nil, errors.New(errors.ErrCodeInvalidInput, "anthropic: seed, presence_penalty and frequency_penalty are not supported")
+	}
 
 	if req.Stream {
 		body["stream"] = true

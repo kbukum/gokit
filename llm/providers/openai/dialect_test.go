@@ -236,3 +236,28 @@ func TestDialect_BuildRequestEncodesUserImages(t *testing.T) {
 		}
 	}
 }
+
+func TestDialect_BuildRequestSeedAndPenalties(t *testing.T) {
+	d := &Dialect{}
+	seed, presence, frequency := int64(7), 0.5, -0.25
+	body, err := d.BuildRequest(llm.CompletionRequest{
+		Model: "gpt-test", Messages: []chat.Message{chat.User("hi")},
+		Seed: &seed, PresencePenalty: &presence, FrequencyPenalty: &frequency,
+	})
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	got := mustJSONMap(t, body)
+	if got["seed"] != float64(7) || got["presence_penalty"] != 0.5 || got["frequency_penalty"] != -0.25 {
+		t.Fatalf("body = %v", got)
+	}
+	unset, err := d.BuildRequest(llm.CompletionRequest{Model: "gpt-test", Messages: []chat.Message{chat.User("hi")}})
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	for _, key := range []string{"seed", "presence_penalty", "frequency_penalty"} {
+		if _, ok := mustJSONMap(t, unset)[key]; ok {
+			t.Fatalf("unset %s was sent", key)
+		}
+	}
+}

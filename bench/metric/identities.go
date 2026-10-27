@@ -69,7 +69,8 @@ func (m *semanticSimilarity[L]) Identity() bench.MetricIdentity {
 }
 
 func (m *llmJudge[L]) Identity() bench.MetricIdentity {
-	return offlineIdentity(m.Name(), map[string]string{"model": m.model, "provider": m.provider.Name(), "prompt": m.prompt.fingerprint(), "threshold": formatThreshold(m.threshold)})
+	p := m.judge.Provenance(JudgeScorePromptID)
+	return offlineIdentity(m.Name(), map[string]string{"model": p.Model, "provider": p.Provider, "rubric": p.PromptFingerprint, "threshold": formatThreshold(m.threshold)})
 }
 
 func (m *weightedMetric[L]) Identity() bench.MetricIdentity {
