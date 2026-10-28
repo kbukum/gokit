@@ -5,6 +5,9 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **cli/command**: `Program` runs a command tree on the standard `flag` package: global and command flags in any order, help with examples, typo suggestions for commands and flags, bash/zsh/fish completion scripts and usage errors that exit with `ExitUsage`. `ExitCode` keeps an error's own exit code.
+- **cli/cienv**: `Detect` reads the CI provider, repository, commit, branch and pipeline from GitHub Actions, GitLab CI or a generic `CI=true`, as labels safe to record.
+- **auth/apikey**: `Manager.RecordUse` records a validated key's last use at minute precision (`UseGranularity`), writing at most once a minute per key.
 - **bench/stats**: `BootstrapMean` (mean with a seeded percentile bootstrap interval) and `BradleyTerry` (ranking from pairwise outcomes with seeded intervals).
 - **llm**: `CompletionRequest.Seed`, `PresencePenalty` and `FrequencyPenalty`. OpenAI and Gemini send them; Anthropic refuses a request that sets them instead of dropping them.
 - **fs**: `ReadZip` reads an untrusted zip held in memory, bounded by `ZipReadLimits` (members, bytes per member and in total, compression ratio). Unsafe, repeated or non-regular members are refused, and each refusal matches an `ErrArchive*` sentinel.
@@ -146,6 +149,9 @@ Defaults and rules that change what an existing app sees without a compile error
 - **auth/apikey**: standalone authentication middleware; API keys use the shared authentication chain.
 - **database**: legacy tenant-scoping and session-setting helpers; use scoped repositories and transaction-local settings.
 - **database**: untimed `Ping`; use context-aware `PingContext`.
+
+### Security
+- **dependencies**: `golang.org/x/net` v0.62.0 resolves GO-2026-6860 and GO-2026-6866 (`html` parsing and rendering).
 
 ### Fixed
 - **storage/s3**: response headers share the existing ten-second request budget instead of timing out at two seconds while storage commits a write. Earlier caller deadlines, connection bounds and no-retry behavior remain unchanged.
