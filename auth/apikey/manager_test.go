@@ -294,3 +294,53 @@ func TestAuthenticateNeedsAValidAPIKey(t *testing.T) {
 		t.Fatalf("an unknown key authenticated: %v", err)
 	}
 }
+
+// usedStore counts last-use writes in front of the real memory store.
+type usedStore struct {
+	Store
+	writes int
+	err    error
+}
+
+func (s *usedStore) UpdateLastUsed(ctx context.Context, id string, at time.Time) error {
+	s.writes++
+	if s.err != nil {
+		return s.err
+	}
+	return s.Store.UpdateLastUsed(ctx, id, at)
+}
+
+func TestRecordUseWritesOncePerInterval(t *testing.T) {
+	t.Parallel()
+	clock := util.NewFakeClock(epoch.Add(30 * time.Second))
+	store := &usedStore{Store: newMemory(t)}
+	m := newTestManager(t, store, clock)
+	issued := issue(t, m, "k1", at(epoch.Add(time.Hour)))
+	key, err := m.ValidateKey(context.Background(), issued.PlainKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RecordUse(context.Background(), key); err != nil || store.writes != 1 {
+		t.Fatalf("first use: %v, %d writes", err, store.writes)
+	}
+	key, _ = m.ValidateKey(context.Background(), issued.PlainKey)
+	if key.LastUsedAt == nil || !key.LastUsedAt.Equal(epoch) {
+		t.Fatalf("last use is not truncated to the minute: %v", key.LastUsedAt)
+	}
+	clock.Set(epoch.Add(59 * time.Second))
+	if err := m.RecordUse(context.Background(), key); err != nil || store.writes != 1 {
+		t.Fatalf("same minute wrote again: %v, %d writes", err, store.writes)
+	}
+	clock.Set(epoch.Add(time.Minute))
+	if err := m.RecordUse(context.Background(), key); err != nil || store.writes != 2 {
+		t.Fatalf("next minute: %v, %d writes", err, store.writes)
+	}
+	store.err = errors.New("db down")
+	clock.Set(epoch.Add(2 * time.Minute))
+	if err := m.RecordUse(context.Background(), key); reason(err) != "AUTH_STORE_UNAVAILABLE" {
+		t.Fatalf("store failure: %v", err)
+	}
+	if err := m.RecordUse(context.Background(), nil); apperrors.Normalize(err).Code != apperrors.ErrCodeInvalidInput {
+		t.Fatalf("nil key: %v", err)
+	}
+}

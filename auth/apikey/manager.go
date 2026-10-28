@@ -180,6 +180,27 @@ func (m *Manager) check(candidate *Key, err error, requiredScopes []string) (*Ke
 	return candidate.Clone(), nil
 }
 
+// UseGranularity is the precision of a key's recorded last use; [Manager.RecordUse] writes at most once per interval.
+const UseGranularity = time.Minute
+
+// RecordUse records that a validated key was used now, truncated to [UseGranularity]. It writes only when the key's
+// recorded use is older than that, so a busy key costs one write a minute. Validation never depends on it.
+func (m *Manager) RecordUse(ctx context.Context, key *Key) error {
+	if key == nil || key.ID == "" {
+		return apperrors.InvalidInput("key", "A validated key is required")
+	}
+	now := m.clock.Now().UTC().Truncate(UseGranularity)
+	if key.LastUsedAt != nil && !key.LastUsedAt.Before(now) {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, mutationBudget)
+	defer cancel()
+	if err := m.store.UpdateLastUsed(ctx, key.ID, now); err != nil {
+		return storeUnavailable(err)
+	}
+	return nil
+}
+
 // RevokeKey ends a key at once, including any remaining rotation grace. Revocation is one-way and idempotent.
 func (m *Manager) RevokeKey(ctx context.Context, id string) error {
 	ctx, cancel := context.WithTimeout(ctx, mutationBudget)
