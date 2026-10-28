@@ -5,6 +5,7 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **connect/client**: `Unary` makes one unary call and returns its validated response, and `CallFailure` turns a failed call into the outage mapping or the peer's typed error, so module clients stop copying the same call pipeline.
 - **cli/command**: `Program` runs a command tree on the standard `flag` package: global and command flags in any order, help with examples, typo suggestions for commands and flags, bash/zsh/fish completion scripts and usage errors that exit with `ExitUsage`. `ExitCode` keeps an error's own exit code.
 - **cli/cienv**: `Detect` reads the CI provider, repository, commit, branch and pipeline from GitHub Actions, GitLab CI or a generic `CI=true`, as labels safe to record.
 - **auth/apikey**: `Manager.RecordUse` records a validated key's last use at minute precision (`UseGranularity`), writing at most once a minute per key.
