@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/go-viper/mapstructure/v2 v2.5.0
-	github.com/hashicorp/consul/api v1.34.5
+	github.com/hashicorp/consul/api v1.35.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 )
 
