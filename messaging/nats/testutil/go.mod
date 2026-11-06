@@ -7,7 +7,7 @@ require (
 	github.com/kbukum/gokit/messaging v0.3.0-alpha.1
 	github.com/kbukum/gokit/messaging/nats v0.3.0-alpha.1
 	github.com/moby/moby/api v1.56.1
-	github.com/nats-io/nats.go v1.54.0
+	github.com/nats-io/nats.go v1.55.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 )
 
@@ -70,7 +70,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v1.47.0 // indirect
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
