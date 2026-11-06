@@ -5,6 +5,10 @@ Notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [Unreleased]
 
 ### Added
+- **modelhub**: new module that reads model metadata without downloading weights. `oci` resolves registry model artifacts (sha256-verified manifests with bounded annotations, CNCF ModelPack and Docker model configs, weight and vision projector sizes, bounded tags, blob byte ranges) and reads a tag's digest by HEAD, which does not count as a pull, with cached anonymous bearer tokens learned from the registry or a repository challenge; `dockerhub` lists a namespace's repositories with pull and star counts and each repository's tags with digests and download sizes from the Docker Hub API; `huggingface` searches the Hub, skipping and counting malformed items, and reads model details, file sizes, licenses and gating, and file byte ranges; `gguf` parses a GGUF header under strict, fuzzed limits (context length, layers, attention numbers, license, quantization) and never executes its content; `memory` estimates weights plus key-value cache from header numbers. Clients require an injected `httpclient.Adapter` with an endpoint policy, take an injected clock, bound every body while streaming it, retry only reads, and fail with typed `AppError`s.
+- **workload/lmstudio**: `Downloader` starts a download (`POST /api/v1/models/download`, never retried), reads job status with bounded retries, and follows progress on an injected clock. It does not implement `workload.ModelPuller`: LM Studio has no API to cancel a download, so stopping the follow leaves the download running. `Config` accepts an injected `HTTP` adapter, `Clock` and `PollInterval`.
+- **httpclient**: `Config.EndpointRedirects` follows up to that many redirects of GET and HEAD requests under an endpoint policy; each hop is checked against the policy; headers are kept while every hop stays on the request's exact origin, and from the first hop that leaves it only `Accept`, `Range` and `User-Agent` are carried. Redirects stay refused by default. A `DoStream` status error now carries the response headers in `Error.Header`, so callers can honor `Retry-After` and auth challenges.
+- **resilience**: `RetryConfig.Clock` drives backoff waits and the elapsed-time budget, so retries are testable on a fake clock.
 - **connect/client**: `Unary` makes one unary call and returns its validated response, and `CallFailure` turns a failed call into the outage mapping or the peer's typed error, so module clients stop copying the same call pipeline.
 - **cli/command**: `Program` runs a command tree on the standard `flag` package: global and command flags in any order, help with examples, typo suggestions for commands and flags, bash/zsh/fish completion scripts and usage errors that exit with `ExitUsage`. `ExitCode` keeps an error's own exit code.
 - **cli/cienv**: `Detect` reads the CI provider, repository, commit, branch and pipeline from GitHub Actions, GitLab CI or a generic `CI=true`, as labels safe to record.
@@ -153,6 +157,7 @@ Defaults and rules that change what an existing app sees without a compile error
 
 ### Security
 - **dependencies**: `golang.org/x/net` v0.62.0 resolves GO-2026-6860 and GO-2026-6866 (`html` parsing and rendering).
+- **dependencies**: `github.com/klauspost/compress` v1.20.2 resolves GO-2026-6865 (panic on two-block frames).
 
 ### Fixed
 - **storage/s3**: response headers share the existing ten-second request budget instead of timing out at two seconds while storage commits a write. Earlier caller deadlines, connection bounds and no-retry behavior remain unchanged.

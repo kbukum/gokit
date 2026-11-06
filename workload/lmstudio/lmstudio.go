@@ -24,6 +24,7 @@ func (e *Error) Error() string { return fmt.Sprintf("lmstudio: unexpected status
 // Lister lists and describes the models an LM Studio server holds.
 type Lister struct {
 	http *httpclient.Adapter
+	base string
 }
 
 var _ workload.ModelLister = (*Lister)(nil)
@@ -34,19 +35,11 @@ func New(cfg Config) (*Lister, error) {
 	if err != nil {
 		return nil, err
 	}
-	hc, err := httpclient.New(httpclient.Config{
-		Name:                 "lmstudio",
-		BaseURL:              c.BaseURL,
-		Timeout:              c.Timeout,
-		Auth:                 c.Auth,
-		EndpointPolicy:       c.EndpointPolicy,
-		MaxResponseBodyBytes: maxBody,
-		DefaultHeaders:       map[string]string{"Accept": "application/json"},
-	})
+	hc, err := c.adapter()
 	if err != nil {
-		return nil, fmt.Errorf("lmstudio: build http client: %w", err)
+		return nil, err
 	}
-	return &Lister{http: hc}, nil
+	return &Lister{http: hc, base: c.BaseURL}, nil
 }
 
 type model struct {
@@ -71,7 +64,7 @@ type model struct {
 
 // ListModels reads GET /api/v1/models.
 func (l *Lister) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
-	resp, err := l.http.Do(ctx, httpclient.Request{Method: http.MethodGet, Path: "/api/v1/models"})
+	resp, err := l.http.Do(ctx, httpclient.Request{Method: http.MethodGet, Path: l.base + "/api/v1/models"})
 	if err != nil {
 		if resp != nil {
 			return nil, &Error{Status: resp.StatusCode}
@@ -80,6 +73,9 @@ func (l *Lister) ListModels(ctx context.Context) ([]workload.ModelInfo, error) {
 	}
 	var body struct {
 		Models *[]model `json:"models"`
+	}
+	if len(resp.Body) > maxBody {
+		return nil, errors.New("lmstudio: model list exceeds the size limit")
 	}
 	if err := json.Unmarshal(resp.Body, &body); err != nil {
 		return nil, fmt.Errorf("lmstudio: decode models: %w", err)

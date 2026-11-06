@@ -3,6 +3,7 @@ package httpclient
 import (
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // ErrorCode classifies HTTP client errors.
@@ -64,6 +65,8 @@ type Error struct {
 	Retryable bool
 	// Body is the original response body (may be nil).
 	Body []byte
+	// Header holds the response headers of a streaming request's error status, such as Retry-After (may be nil).
+	Header http.Header
 	// Err is the underlying error.
 	Err error
 }

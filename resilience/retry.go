@@ -9,6 +9,7 @@ import (
 	"time"
 
 	apperr "github.com/kbukum/gokit/errors"
+	"github.com/kbukum/gokit/util"
 )
 
 // Common retry errors. ErrMaxRetriesExceeded is a typed AppError so callers can
@@ -113,6 +114,9 @@ type RetryConfig struct {
 	MinimumDelay func(error) (time.Duration, error) `json:"-" yaml:"-" mapstructure:"-"`
 	// OnRetry is called before each retry.
 	OnRetry func(attempt int, err error, backoff time.Duration) `json:"-" yaml:"-" mapstructure:"-"`
+	// Clock measures the elapsed-time budget and drives backoff timers. Nil uses the
+	// monotonic system clock; inject a fake clock to make retry timing deterministic.
+	Clock util.TimerClock `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 // DefaultRetryConfig returns sensible defaults.
@@ -172,12 +176,14 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 	var lastErr error
 
 	cfg = normalizeRetryConfig(cfg)
-	start := time.Now()
+	clock := cfg.Clock
+	start := clock.Now()
+	elapsed := func() time.Duration { return clock.Now().Sub(start) }
 
 	for attempt := 1; attempt <= cfg.MaxAttempts; attempt++ {
 		// Stop before another attempt once the elapsed-time budget is spent, so a slow
 		// prior attempt cannot buy additional attempts beyond the budget.
-		if cfg.MaxElapsedTime > 0 && attempt > 1 && time.Since(start) >= cfg.MaxElapsedTime {
+		if cfg.MaxElapsedTime > 0 && attempt > 1 && elapsed() >= cfg.MaxElapsedTime {
 			break
 		}
 
@@ -222,7 +228,7 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		// cannot overflow the duration addition and wrap negative past the guard. Using >=
 		// also stops when the sleep would land exactly on the deadline, leaving no room for
 		// the next attempt to run.
-		if cfg.MaxElapsedTime > 0 && backoff >= cfg.MaxElapsedTime-time.Since(start) {
+		if cfg.MaxElapsedTime > 0 && backoff >= cfg.MaxElapsedTime-elapsed() {
 			break
 		}
 		if deadline, ok := ctx.Deadline(); ok && backoff >= time.Until(deadline) {
@@ -234,12 +240,12 @@ func Retry[T any](ctx context.Context, cfg RetryConfig, fn func() (T, error)) (T
 		}
 
 		// Wait with context awareness
-		timer := time.NewTimer(backoff)
+		timer := clock.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
 			return zero, ctx.Err()
-		case <-timer.C:
+		case <-timer.C():
 		}
 	}
 
@@ -264,6 +270,9 @@ func BackoffDelay(attempt int, cfg RetryConfig) time.Duration {
 }
 
 func normalizeRetryConfig(cfg RetryConfig) RetryConfig {
+	if util.IsNil(cfg.Clock) {
+		cfg.Clock = util.MonotonicClock{}
+	}
 	if cfg.MaxAttempts <= 0 {
 		cfg.MaxAttempts = 3
 	}

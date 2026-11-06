@@ -58,7 +58,9 @@ func (c *Adapter) doStream(ctx context.Context, req Request) (*StreamResponse, e
 		if int64(len(body)) > c.config.MaxResponseBodyBytes {
 			return fail(NewResponseTooLargeError(c.config.MaxResponseBodyBytes))
 		}
-		return fail(ClassifyStatusCode(resp.StatusCode, body))
+		statusErr := ClassifyStatusCode(resp.StatusCode, body)
+		statusErr.Header = resp.Header.Clone()
+		return fail(statusErr)
 	}
 	body := &streamBody{life: life, rawEOF: !strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream")}
 	result := &StreamResponse{StatusCode: resp.StatusCode, Headers: flattenHeaders(resp.Header), lifetime: life}

@@ -1103,6 +1103,24 @@ func TestAdapter_DoStream_ErrorStatus_ReturnsClassifiedError(t *testing.T) {
 	}
 }
 
+func TestAdapter_DoStream_ErrorStatus_KeepsResponseHeaders(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "7")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer ts.Close()
+
+	a, err := New(Config{BaseURL: ts.URL, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.DoStream(context.Background(), Request{Method: "GET", Path: "/"})
+	httpErr, ok := errors.AsType[*Error](err)
+	if !ok || httpErr.Header.Get("Retry-After") != "7" {
+		t.Fatalf("DoStream() error = %#v, want Retry-After header kept", err)
+	}
+}
+
 func TestConnectionCapIsIndependentOfEndpointPolicy(t *testing.T) {
 	transport := func(cfg Config) *http.Transport {
 		t.Helper()

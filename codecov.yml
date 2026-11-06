@@ -17,13 +17,14 @@
 #   - 90% is the aspirational direction, reported repo-wide (the `aspirational`
 #     project status) but not gated: forcing it now would reward padding over
 #     behavioral tests.
-#   - Test-support packages -- the shipped `*/testutil` product and
-#     `security/tlstest` -- and build-time `scripts/**` carry an informational
-#     status only. A pure harness exists to support other packages' tests, not
-#     to be unit-tested to a shipped-code floor.
+#   - Test-support packages -- the shipped `*/testutil` product,
+#     `security/tlstest` and `modelhub/internal/fetchtest` -- and build-time
+#     `scripts/**` carry an informational status only. A pure harness exists
+#     to support other packages' tests, not to be unit-tested to a shipped-code
+#     floor.
 #   - Declaration-only packages with no coverable statements (`embedding`,
-#     `git/auth` -- sealed-interface marker methods) report informational; they
-#     have nothing to cover.
+#     `git/auth` -- sealed-interface marker methods, the `modelhub` doc
+#     package) report informational; they have nothing to cover.
 #
 # The individual_components list is the per-package floor and the source of
 # truth: a package is gated once it is listed here, so keep it in sync when
@@ -508,6 +509,40 @@ component_management:
           target: 80%
           threshold: 1%
           informational: true
+    - component_id: modelhub
+      name: modelhub
+      paths: ["modelhub/**", "!modelhub/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: modelhub_dockerhub
+      name: modelhub/dockerhub
+      paths: ["modelhub/dockerhub/**", "!modelhub/dockerhub/*/**"]
+    - component_id: modelhub_gguf
+      name: modelhub/gguf
+      paths: ["modelhub/gguf/**", "!modelhub/gguf/*/**"]
+    - component_id: modelhub_huggingface
+      name: modelhub/huggingface
+      paths: ["modelhub/huggingface/**", "!modelhub/huggingface/*/**"]
+    - component_id: modelhub_internal_fetch
+      name: modelhub/internal/fetch
+      paths: ["modelhub/internal/fetch/**", "!modelhub/internal/fetch/*/**"]
+    - component_id: modelhub_internal_fetchtest
+      name: modelhub/internal/fetchtest
+      paths: ["modelhub/internal/fetchtest/**", "!modelhub/internal/fetchtest/*/**"]
+      statuses:
+        - type: project
+          target: 80%
+          threshold: 1%
+          informational: true
+    - component_id: modelhub_memory
+      name: modelhub/memory
+      paths: ["modelhub/memory/**", "!modelhub/memory/*/**"]
+    - component_id: modelhub_oci
+      name: modelhub/oci
+      paths: ["modelhub/oci/**", "!modelhub/oci/*/**"]
     - component_id: observability
       name: observability
       paths: ["observability/**", "!observability/*/**"]
