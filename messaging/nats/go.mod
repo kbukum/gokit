@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/messaging v0.3.0-alpha.1
-	github.com/nats-io/nats.go v1.54.0
+	github.com/nats-io/nats.go v1.55.0
 )
 
 require (
