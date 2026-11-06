@@ -39,13 +39,13 @@ use (
 	./llm/tokenizer/huggingface
 	./llm/tokenizer/tiktoken
 	./mcp
-	./modelhub
 	./media
 	./messaging
 	./messaging/kafka
 	./messaging/nats
 	./messaging/nats/testutil
 	./messaging/rabbitmq
+	./modelhub
 
 	./schema
 	./server
