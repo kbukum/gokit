@@ -72,6 +72,7 @@ This file is the bird's-eye index.
 | `schema` | `gokit/schema` | JSON Schema generation from Go types |
 | `mcp` | `gokit/mcp` | Model Context Protocol server / client |
 | `skill` | `gokit/skill` | SDK-free skill manifests, loading, registry, activation |
+| `modelhub` | `gokit/modelhub` | Model metadata from OCI registries, Docker Hub listings and the Hugging Face Hub, GGUF headers, memory estimates |
 | `git` | `gokit/git` | Git repository operations — capability interfaces, embedded/CLI backends |
 | `embedding` | `gokit/embedding` | Cosine similarity, distance metrics, pooling |
 | `vectorstore` | `gokit/vectorstore` | Vector similarity search abstraction |
@@ -96,7 +97,7 @@ This file is the bird's-eye index.
 | `inference/triton` | `gokit/inference/triton` | Triton inference adapter |
 | `inference/vllm` | `gokit/inference/vllm` | vLLM inference adapter |
 | `workload/dmr` | `gokit/workload/dmr` | Docker Model Runner model-runtime adapter |
-| `workload/lmstudio` | `gokit/workload/lmstudio` | LM Studio model lister |
+| `workload/lmstudio` | `gokit/workload/lmstudio` | LM Studio model lister and downloader |
 | `workload/ollama` | `gokit/workload/ollama` | Ollama model lister |
 | `workload/openaicompat` | `gokit/workload/openaicompat` | OpenAI-compatible model lister |
 | `vectorstore/qdrant` | `gokit/vectorstore/qdrant` | Qdrant vectorstore adapter |
@@ -130,7 +131,7 @@ This file is the bird's-eye index.
 | **Transport** | server, grpc, connect, discovery | HTTP, gRPC, service discovery |
 | **Execution** | process, workload, worker | Subprocess and container workloads |
 | **Testing** | testutil | Component lifecycle testing infrastructure |
-| **AI** | ai, llm, inference, agent, tool, mcp, skill, schema | LLM orchestration & tooling |
+| **AI** | ai, llm, inference, agent, tool, mcp, skill, schema, modelhub | LLM orchestration & tooling |
 | **Evaluation** | bench, bench/viz, bench/storage | Provider benchmarking |
 | **Vectors** | embedding, vectorstore | Embedding & similarity search |
 | **Devtools** | git, cli | Git repository operations, terminal UX tooling |

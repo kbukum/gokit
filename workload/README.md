@@ -14,7 +14,7 @@ The Docker Model Runner backend is a separately versioned nested module; install
 go get github.com/kbukum/gokit/workload/dmr@latest
 ```
 
-To list the models a runtime holds, install the matching lister module: `workload/ollama`, `workload/lmstudio` or `workload/openaicompat`.
+To list the models a runtime holds, install the matching lister module: `workload/ollama`, `workload/lmstudio` or `workload/openaicompat`. `workload/lmstudio` also downloads models with `Downloader`.
 
 ## Quick Start
 

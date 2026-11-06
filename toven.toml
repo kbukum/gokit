@@ -250,9 +250,9 @@ modules = ["database", "database-postgres", "database-postgres-testutil", "datab
 guardrails.allow_groups = ["foundation", "transport", "auth"]
 
 [groups.ai]
-description = "LLM, inference, embedding, agent, tool, MCP, skill"
+description = "LLM, inference, embedding, agent, tool, MCP, skill, model sources"
 ecosystem = "go"
-modules = ["ai", "llm", "llm-providers", "llm-tokenizer-tiktoken", "llm-tokenizer-huggingface", "embedding", "inference", "inference-tgi", "inference-triton", "inference-vllm", "agent", "tool", "mcp", "skill"]
+modules = ["ai", "llm", "llm-providers", "llm-tokenizer-tiktoken", "llm-tokenizer-huggingface", "embedding", "inference", "inference-tgi", "inference-triton", "inference-vllm", "agent", "tool", "mcp", "skill", "modelhub"]
 guardrails.allow_groups = ["foundation", "transport", "auth"]
 
 [groups.media]

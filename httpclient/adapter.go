@@ -91,7 +91,7 @@ func New(cfg Config, opts ...Option) (*Adapter, error) {
 	}
 	if cfg.EndpointPolicy != nil {
 		c.httpClient.Transport = &endpointTransport{policy: cfg.EndpointPolicy, next: c.httpClient.Transport}
-		c.httpClient.CheckRedirect = refuseEndpointRedirect
+		c.httpClient.CheckRedirect = endpointRedirect(cfg.EndpointRedirects)
 	}
 
 	return c, nil

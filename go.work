@@ -39,6 +39,7 @@ use (
 	./llm/tokenizer/huggingface
 	./llm/tokenizer/tiktoken
 	./mcp
+	./modelhub
 	./media
 	./messaging
 	./messaging/kafka

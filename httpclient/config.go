@@ -45,6 +45,9 @@ type Config struct {
 	// EndpointPolicy constrains every request, redirect and DNS-at-dial destination. Injected, never loaded from wire config.
 	EndpointPolicy *security.EndpointPolicy `yaml:"-" mapstructure:"-"`
 
+	// EndpointRedirects is how many GET or HEAD redirects a policy-bound client follows. Every hop is checked against EndpointPolicy and carries only Accept, Range and User-Agent headers, so credentials never reach the redirect target. Zero refuses every redirect; at most 10; requires EndpointPolicy.
+	EndpointRedirects int `yaml:"endpoint_redirects" mapstructure:"endpoint_redirects"`
+
 	// DefaultHeaders are default headers applied to all requests.
 	DefaultHeaders map[string]string `yaml:"default_headers" mapstructure:"default_headers"`
 
@@ -93,6 +96,12 @@ func (c *Config) Validate() error {
 		if err := c.TLS.Validate(); err != nil {
 			return err
 		}
+	}
+	if c.EndpointRedirects < 0 || c.EndpointRedirects > maxEndpointRedirects {
+		return NewValidationError("endpoint_redirects must be within [0, 10]")
+	}
+	if c.EndpointRedirects > 0 && c.EndpointPolicy == nil {
+		return NewValidationError("endpoint_redirects requires an endpoint policy")
 	}
 	if c.EndpointPolicy != nil {
 		if c.TLS != nil && (c.TLS.SkipVerify || c.TLS.ServerName != "" || (c.TLS.MinVersion != 0 && c.TLS.MinVersion < tls.VersionTLS13)) {

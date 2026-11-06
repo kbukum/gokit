@@ -45,9 +45,9 @@ auth · authz
 May depend on: foundation, transport
 
 ## 🧠 AI  (`make check-ai`)
-LLM, inference, embedding, agent, tool, MCP, skill
+LLM, inference, embedding, agent, tool, MCP, skill, model sources
 
-agent · ai · embedding · inference · inference/tgi · inference/triton · inference/vllm · llm · llm/providers · llm/tokenizer/huggingface · llm/tokenizer/tiktoken · mcp · skill · tool
+agent · ai · embedding · inference · inference/tgi · inference/triton · inference/vllm · llm · llm/providers · llm/tokenizer/huggingface · llm/tokenizer/tiktoken · mcp · modelhub · skill · tool
 
 May depend on: auth, foundation, transport
 

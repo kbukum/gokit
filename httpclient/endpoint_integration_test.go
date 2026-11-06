@@ -101,3 +101,49 @@ func TestEndpointPolicyDialsValidatedAddressAndPreservesTLSHostname(t *testing.T
 		t.Fatal("raw query text bypassed request policy")
 	}
 }
+
+func TestEndpointPolicyFollowsGrantedReadRedirectWithoutCredentials(t *testing.T) {
+	t.Parallel()
+	var leaked atomic.Bool
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" || r.Header.Get("X-Api-Key") != "" {
+			leaked.Store(true)
+		}
+		w.WriteHeader(http.StatusPartialContent)
+	}))
+	defer cdn.Close()
+	denied := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer denied.Close()
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := cdn.URL + "/blob"
+		if r.URL.Path == "/denied" {
+			target = denied.URL + "/blob"
+		}
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	}))
+	defer origin.Close()
+	loopback := []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}
+	policy, err := security.NewEndpointPolicy([]security.EndpointRule{
+		{Origin: origin.URL, AllowHTTP: true, PrivateRanges: loopback},
+		{Origin: cdn.URL, AllowHTTP: true, PrivateRanges: loopback},
+	}, net.DefaultResolver, &net.Dialer{Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := httpclient.New(httpclient.Config{EndpointPolicy: policy, EndpointRedirects: 2, Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Unwrap().CloseIdleConnections()
+	auth := httpclient.APIKeyAuth("provider-sentinel")
+	resp, err := client.Do(t.Context(), httpclient.Request{Method: http.MethodGet, Path: origin.URL + "/granted", Auth: auth, Headers: map[string]string{"Authorization": "Bearer provider-sentinel"}})
+	if err != nil || resp.StatusCode != http.StatusPartialContent {
+		t.Fatalf("granted redirect = %v, %v", resp, err)
+	}
+	if leaked.Load() {
+		t.Fatal("redirect forwarded credentials to the redirect target")
+	}
+	if _, err := client.Do(t.Context(), httpclient.Request{Method: http.MethodGet, Path: origin.URL + "/denied"}); err == nil {
+		t.Fatal("redirect to an ungranted origin was followed")
+	}
+}

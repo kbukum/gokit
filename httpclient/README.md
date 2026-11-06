@@ -127,7 +127,7 @@ Inject `Config.EndpointPolicy` from `security.NewEndpointPolicy` for an operator
 
 Each new connection resolves the host and dials only an approved address. Mixed public and private answers fail closed. Certificate checks and SNI stay bound to the original host name.
 
-The restricted client disables proxy discovery and both inherited TLS dial hooks, requires TLS 1.3 with certificate verification, refuses every redirect including same-host redirects, and rejects configured request retries. Normal client behavior is unchanged without a policy. Drain consumers and call `Close`; supplied policy/resolver/dialer ownership remains with composition. Keep provider credentials in headers, never URL fields or logs.
+The restricted client disables proxy discovery and both inherited TLS dial hooks, requires TLS 1.3 with certificate verification, and rejects configured request retries. It refuses every redirect, including same-host redirects, unless `Config.EndpointRedirects` allows a bounded number (at most 10) for GET and HEAD; each hop must still match a granted origin. Headers are kept while every hop stays on the request's exact origin (scheme, host and port); from the first hop that leaves it, only `Accept`, `Range` and `User-Agent` are carried, so credentials never follow a redirect to a CDN and are not restored on a hop back. Normal client behavior is unchanged without a policy. Drain consumers and call `Close`; supplied policy/resolver/dialer ownership remains with composition. Keep provider credentials in headers, never URL fields or logs.
 
 ## Authentication
 
@@ -164,6 +164,8 @@ if err != nil {
     }
 }
 ```
+
+`Do` returns the response alongside a status error. `DoStream` returns none, so its status error carries the response headers in `Error.Header`, for example `Retry-After` or `WWW-Authenticate`.
 
 ## TLS
 

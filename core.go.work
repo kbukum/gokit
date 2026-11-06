@@ -26,6 +26,7 @@ use (
 	./inference
 	./llm
 	./mcp
+	./modelhub
 	./media
 	./messaging
 	./schema
