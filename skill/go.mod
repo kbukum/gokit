@@ -6,7 +6,7 @@ require (
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/ai v0.3.0-alpha.1
 	github.com/kbukum/gokit/tool v0.3.0-alpha.1
-	go.yaml.in/yaml/v4 v4.0.0-rc.6
+	go.yaml.in/yaml/v4 v4.0.0-rc.9
 )
 
 require (
