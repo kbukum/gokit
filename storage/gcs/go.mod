@@ -7,7 +7,7 @@ require (
 	cloud.google.com/go/storage v1.70.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
-	google.golang.org/api v0.307.0
+	google.golang.org/api v0.310.0
 )
 
 require (
@@ -33,7 +33,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/s2a-go v0.1.11 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.23 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.24 // indirect
 	github.com/googleapis/gax-go/v2 v2.27.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.31.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
