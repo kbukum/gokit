@@ -160,6 +160,7 @@ Defaults and rules that change what an existing app sees without a compile error
 - **dependencies**: `github.com/klauspost/compress` v1.20.2 resolves GO-2026-6865 (panic on two-block frames).
 
 ### Fixed
+- **messaging/nats/jetstream**: stopping `Consume` no longer strands messages from its current fetch until `AckWait`. It finishes the fetch (at most `FetchWait`) and naks every unhandled message, so other consumers get them promptly.
 - **storage/s3**: response headers share the existing ten-second request budget instead of timing out at two seconds while storage commits a write. Earlier caller deadlines, connection bounds and no-retry behavior remain unchanged.
 - **ci**: pull requests that only change docs now report `CI Status` instead of waiting for it forever.
 - **tooling**: `make replace-sync` adds local `replace` lines for intra-repo modules reached through other modules, so `go mod tidy` no longer needs unpublished versions.
