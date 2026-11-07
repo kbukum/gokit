@@ -48,6 +48,12 @@ const (
 	MaxEndpointDialBudget = 2 * time.Minute
 )
 
+// A CDN host can resolve to dozens of addresses; every one is validated, but one dial tries only a few.
+const (
+	maxResolvedAddresses = 64
+	maxDialAttempts      = 16
+)
+
 // EndpointOption configures an [EndpointPolicy].
 type EndpointOption func(*EndpointPolicy) error
 
@@ -136,7 +142,7 @@ func (p *EndpointPolicy) Normalize(raw string) (string, error) {
 	return u.String(), nil
 }
 
-// DialContext resolves at most sixteen candidates and validates all of them before dialing their numeric addresses in resolver order until one connects. DNS and every connection attempt share the dial budget; no unchecked DNS lookup follows validation.
+// DialContext validates every resolved address, at most [maxResolvedAddresses], then dials up to [maxDialAttempts] of the numeric addresses matching the network, in resolver order, until one connects. DNS and every connection attempt share the dial budget; no unchecked DNS lookup follows validation.
 func (p *EndpointPolicy) DialContext(ctx context.Context, network, authority string) (net.Conn, error) {
 	if util.IsNil(ctx) {
 		return nil, apperrors.InvalidInput("endpoint", "A context is required")
@@ -171,6 +177,9 @@ func (p *EndpointPolicy) DialContext(ctx context.Context, network, authority str
 	for _, address := range addresses {
 		if (network == "tcp4" && !address.Is4()) || (network == "tcp6" && address.Is4()) {
 			continue
+		}
+		if len(failures) == maxDialAttempts {
+			break
 		}
 		conn, dialErr := p.dialer.DialContext(ctx, network, net.JoinHostPort(address.String(), port))
 		if dialErr == nil && util.IsNil(conn) {
@@ -210,8 +219,8 @@ func (p *EndpointPolicy) addresses(ctx context.Context, host string, rule Endpoi
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(addresses) == 0 || len(addresses) > 16 {
-		return nil, apperrors.Forbidden("Endpoint resolution must return one to sixteen addresses")
+	if len(addresses) == 0 || len(addresses) > maxResolvedAddresses {
+		return nil, apperrors.Forbidden("Endpoint resolution must return one to sixty-four addresses")
 	}
 	addresses = slices.Clone(addresses)
 	for i, candidate := range addresses {

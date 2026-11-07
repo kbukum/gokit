@@ -109,6 +109,37 @@ func TestEndpointPolicyChecksEveryDNSAnswerAtDial(t *testing.T) {
 	}
 }
 
+func TestEndpointPolicyChecksLargeDNSAnswersAndBoundsDialAttempts(t *testing.T) {
+	t.Parallel()
+	answer := func(n int) []netip.Addr {
+		addresses := make([]netip.Addr, n)
+		for i := range addresses {
+			addresses[i] = netip.AddrFrom4([4]byte{8, 8, 4, byte(i + 1)})
+		}
+		return addresses
+	}
+	dns := &endpointDNS{addresses: answer(24)}
+	dial := &endpointDial{}
+	policy, err := security.NewEndpointPolicy([]security.EndpointRule{{Origin: "https://cdn.example"}}, dns, dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := policy.Validate(t.Context(), "https://cdn.example/blob"); err != nil {
+		t.Fatalf("a CDN answer of 24 public addresses was refused: %v", err)
+	}
+	if _, err := policy.DialContext(t.Context(), "tcp", "cdn.example:443"); err == nil || dial.calls != 16 {
+		t.Fatalf("dial made %d attempts, want at most 16", dial.calls)
+	}
+	dns.addresses = append(answer(23), netip.MustParseAddr("10.0.0.1"))
+	if _, err := policy.Validate(t.Context(), "https://cdn.example/blob"); err == nil {
+		t.Fatal("a private address past the dial bound escaped validation")
+	}
+	dns.addresses = answer(65)
+	if _, err := policy.Validate(t.Context(), "https://cdn.example/blob"); err == nil {
+		t.Fatal("an unbounded DNS answer was accepted")
+	}
+}
+
 func TestEndpointPolicyRequiresExplicitPrivateRangesAndUnambiguousURLs(t *testing.T) {
 	t.Parallel()
 	dns, dial := &endpointDNS{}, &endpointDial{}
