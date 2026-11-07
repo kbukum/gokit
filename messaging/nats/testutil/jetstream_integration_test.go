@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -106,6 +107,47 @@ func TestJetStreamPublishDedupAndRefusals(t *testing.T) {
 	}
 	if err := p.PublishBinary(t.Context(), "other.a", "", nil); err == nil {
 		t.Fatal("message outside every stream was acknowledged")
+	}
+}
+
+// Stopping during a large fetch releases the rest of the batch, including messages still on the wire, so another consumer gets them long before AckWait.
+func TestJetStreamStoppedConsumerReleasesItsFetch(t *testing.T) {
+	t.Parallel()
+	client, _ := startJetStream(t)
+	p := producer(t, client)
+	const total = 200
+	for i := range total {
+		send(t, p, "facts.a", "evt-"+strconv.Itoa(i))
+	}
+	cfg := jetstream.ConsumerConfig{
+		Durable: "usage", FilterSubjects: []string{"facts.>"}, AckWait: time.Minute, MaxAckPending: total, Batch: total,
+		FetchWait: time.Second, RetryDelay: 50 * time.Millisecond, MaxRetryDelay: 200 * time.Millisecond,
+		OnError: func(err error) { t.Log(err) },
+	}
+	consume := func(wait time.Duration, handle func(id string, stop context.CancelFunc)) error {
+		c, err := client.Consumer(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), wait)
+		defer cancel()
+		return c.Consume(ctx, func(_ context.Context, m messaging.Message) error {
+			handle(m.Headers[jetstream.MsgIDHeader], cancel)
+			return nil
+		})
+	}
+	if err := consume(10*time.Second, func(_ string, stop context.CancelFunc) { stop() }); !errors.Is(err, context.Canceled) {
+		t.Fatalf("first Consume = %v", err)
+	}
+	seen := map[string]bool{}
+	err := consume(10*time.Second, func(id string, stop context.CancelFunc) {
+		seen[id] = true
+		if len(seen) == total-1 {
+			stop()
+		}
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("after stopping mid-fetch, %d of %d messages came back before AckWait: %v", len(seen), total-1, err)
 	}
 }
 

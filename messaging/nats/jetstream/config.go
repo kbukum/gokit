@@ -120,7 +120,7 @@ type ConsumerConfig struct {
 	Delivery DeliveryPolicy
 	// Batch bounds the messages fetched at once, up to MaxFetchBatch.
 	Batch int
-	// FetchWait bounds how long one fetch waits for messages.
+	// FetchWait bounds how long one fetch waits for messages, and so how long a stopping Consume takes to release its fetch.
 	FetchWait time.Duration
 	// RetryDelay is the first redelivery or reconnect delay; it doubles per attempt up to MaxRetryDelay.
 	RetryDelay    time.Duration

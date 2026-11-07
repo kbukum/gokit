@@ -63,7 +63,7 @@ func (c *Consumer) setStatus(err error) {
 //
 // A nil handler result is acknowledged and confirmed by the server. An error naks the message with a delay that doubles per delivery up to MaxRetryDelay, and the loop goes on. An error wrapping [messaging.ErrTerminal], or a failure on the message's last attempt under [DeliveryPolicy], hands it to OnDeadLetter or gives it up as the policy says; a failed hand-off is retried on the next delivery. Each message is marked in progress just before its handler runs, which restarts its AckWait.
 //
-// Broker failures are reported to OnError and retried with backoff, so the loop survives outages. A fetch the server does not complete by its deadline, such as a pull request a missing permission drops, is such a failure ([ErrFetchIncomplete]); [Consumer.ConsumeStatus] reports it until a fetch completes. A failure that cannot pass, such as a consumer declaration the server refuses or a connection that gave up reconnecting, ends Consume with that error. A missing permission on a request usually shows as a timeout, since the server drops the request without a reply. When Consume stops, fetched messages it has not handled are naked for prompt redelivery.
+// Broker failures are reported to OnError and retried with backoff, so the loop survives outages. A fetch the server does not complete by its deadline, such as a pull request a missing permission drops, is such a failure ([ErrFetchIncomplete]); [Consumer.ConsumeStatus] reports it until a fetch completes. A failure that cannot pass, such as a consumer declaration the server refuses or a connection that gave up reconnecting, ends Consume with that error. A missing permission on a request usually shows as a timeout, since the server drops the request without a reply. When Consume stops, it finishes its current fetch, which takes at most FetchWait, and naks every message the fetch delivers that it has not handled, so they are redelivered promptly.
 //
 // A message's Topic is its subject, Offset its stream sequence and Timestamp the time the stream stored it.
 func (c *Consumer) Consume(ctx context.Context, handler messaging.MessageHandler) error {
@@ -127,7 +127,8 @@ func (c *Consumer) consume(ctx context.Context, handler messaging.MessageHandler
 			}
 			bound = client
 		}
-		fetchCtx, cancel := context.WithTimeout(ctx, c.cfg.FetchWait)
+		// Stopping must not cancel the fetch: the client would drop messages still arriving, leaving them unacknowledged until AckWait. The loop drains the fetch and releases them.
+		fetchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), c.cfg.FetchWait)
 		batch, err := pull.Fetch(c.cfg.Batch, natsjs.FetchContext(fetchCtx))
 		if err == nil {
 			for msg := range batch.Messages() {
@@ -288,7 +289,7 @@ func (c *Consumer) release(msg natsjs.Msg) {
 // Topic returns the filter subjects, comma-separated, or the stream when the consumer reads all of it.
 func (c *Consumer) Topic() string { return c.cfg.topic() }
 
-// Close stops a running Consume at once, including its fetch, backoff and the context its handler sees, and closes the client only if the consumer owns it. The durable consumer and its position remain on the server. It is safe to call more than once.
+// Close stops a running Consume: its backoff and the context its handler sees end at once, and its current fetch is released within FetchWait. It closes the client only if the consumer owns it; that ends the connection at once, so messages still in the fetch wait for AckWait instead. The durable consumer and its position remain on the server. It is safe to call more than once.
 func (c *Consumer) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
