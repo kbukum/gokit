@@ -160,6 +160,7 @@ Defaults and rules that change what an existing app sees without a compile error
 - **dependencies**: `github.com/klauspost/compress` v1.20.2 resolves GO-2026-6865 (panic on two-block frames).
 
 ### Fixed
+- **security**: an endpoint policy now accepts DNS answers of up to 64 addresses, checks every one, and tries at most 16 per dial. CDN hosts such as Docker Hub's blob CDN, which return more than 16 addresses on Linux, are no longer refused.
 - **storage/s3**: response headers share the existing ten-second request budget instead of timing out at two seconds while storage commits a write. Earlier caller deadlines, connection bounds and no-retry behavior remain unchanged.
 - **ci**: pull requests that only change docs now report `CI Status` instead of waiting for it forever.
 - **tooling**: `make replace-sync` adds local `replace` lines for intra-repo modules reached through other modules, so `go mod tidy` no longer needs unpublished versions.
