@@ -64,13 +64,14 @@ type errLimit struct{ name string }
 
 func (e errLimit) Error() string { return "gguf limit " + e.name }
 
-// value is a decoded scalar or a kept integer array.
+// value is a decoded scalar or a kept integer or boolean array; elem is a kept array's element type.
 type value struct {
 	kind  uint32
 	num   uint64
 	neg   bool
 	str   string
 	array []uint64
+	elem  uint32
 	isInt bool
 }
 
@@ -203,8 +204,8 @@ func (p *parser) value(kind uint32, keepArray bool) (value, error) {
 		if !keepArray {
 			return value{kind: kind}, p.skip(kind, 0)
 		}
-		arr, err := p.intArray()
-		return value{kind: kind, array: arr}, err
+		arr, elem, err := p.intArray()
+		return value{kind: kind, array: arr, elem: elem}, err
 	case typeBool:
 		b, err := p.bytes(1)
 		if err != nil {
@@ -231,6 +232,11 @@ func (p *parser) scalar(kind uint32) (num uint64, neg, isInt bool, err error) {
 		return 0, false, false, err
 	}
 	switch kind {
+	case typeBool:
+		if raw[0] > 1 {
+			return 0, false, false, errors.New("invalid bool")
+		}
+		return uint64(raw[0]), false, true, nil
 	case typeUint8:
 		return uint64(raw[0]), false, true, nil
 	case typeInt8:
@@ -274,38 +280,38 @@ func scalarSize(kind uint32) int64 {
 	}
 }
 
-func (p *parser) intArray() ([]uint64, error) {
-	elem, err := p.u32()
+func (p *parser) intArray() (values []uint64, elem uint32, err error) {
+	elem, err = p.u32()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	n, err := p.u64()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	switch elem {
-	case typeUint8, typeInt8, typeUint16, typeInt16, typeUint32, typeInt32, typeUint64, typeInt64:
+	case typeUint8, typeInt8, typeUint16, typeInt16, typeUint32, typeInt32, typeUint64, typeInt64, typeBool:
 	default:
-		return nil, errors.New("kept array is not an integer array")
+		return nil, 0, errors.New("kept array is not an integer or boolean array")
 	}
 	if n > uint64(p.limits.MaxArrayLen) {
-		return nil, errLimit{LimitArray}
+		return nil, 0, errLimit{LimitArray}
 	}
 	if n*uint64(scalarSize(elem)) > uint64(p.left) {
-		return nil, errLimit{LimitBytes}
+		return nil, 0, errLimit{LimitBytes}
 	}
 	out := make([]uint64, 0, n)
 	for range n {
 		v, neg, _, err := p.scalar(elem)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if neg {
-			return nil, errors.New("negative count")
+			return nil, 0, errors.New("negative count")
 		}
 		out = append(out, v)
 	}
-	return out, nil
+	return out, elem, nil
 }
 
 // skip consumes a value without keeping it.

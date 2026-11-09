@@ -16,7 +16,7 @@ go get github.com/kbukum/gokit/modelhub@latest
 | `modelhub/oci` | OCI registry model artifacts, such as Docker Hub `ai/*`: manifests and their annotations, CNCF ModelPack and Docker model configs, weight and projector layer sizes, tags, digests by HEAD, and byte ranges of blobs. |
 | `modelhub/huggingface` | Hugging Face Hub search, model details, file sizes, LFS digests, licenses, gating, and byte ranges of repository files. |
 | `modelhub/gguf` | A GGUF header under strict limits: architecture, name, license, quantization, context length, layers and attention numbers. |
-| `modelhub/memory` | The memory a model needs: its weight file size plus the key-value cache for a chosen context length. |
+| `modelhub/memory` | The memory a model needs: its weight file size plus the key-value cache for a chosen context length, with llama.cpp's sliding-window layers. |
 
 To download a model into a local runtime, use the runtime's adapter, such as `workload/lmstudio` (`Downloader`) or `workload/ollama`.
 

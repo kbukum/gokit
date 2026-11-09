@@ -67,6 +67,49 @@ func TestParseReadsPerLayerKVHeadsAndKeyLengths(t *testing.T) {
 	}
 }
 
+func TestParseReadsSlidingWindow(t *testing.T) {
+	t.Parallel()
+	data := newBuilder(3, 0, 5).
+		kvString("general.architecture", "gemma3").
+		kvU32("gemma3.attention.sliding_window", 1024).
+		kvU32("gemma3.attention.sliding_window_pattern", 6).
+		kvU32("gemma3.attention.key_length_swa", 128).
+		kvU32("gemma3.attention.value_length_swa", 64).
+		bytes()
+	h, err := gguf.Parse(bytes.NewReader(data), gguf.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.SlidingWindow != 1024 || h.SlidingWindowPeriod != 6 || h.SlidingWindowLayers != nil || h.KeyLengthSWA != 128 || h.ValueLengthSWA != 64 {
+		t.Fatalf("header = %+v", h)
+	}
+	perLayer := newBuilder(3, 0, 3).
+		kvString("general.architecture", "gemma4").
+		kvU32("gemma4.attention.sliding_window", 512).
+		kvBoolArray("gemma4.attention.sliding_window_pattern", true, true, false).
+		bytes()
+	if h, err = gguf.Parse(bytes.NewReader(perLayer), gguf.DefaultLimits()); err != nil {
+		t.Fatal(err)
+	}
+	if h.SlidingWindowPeriod != 0 || len(h.SlidingWindowLayers) != 3 || !h.SlidingWindowLayers[0] || h.SlidingWindowLayers[2] {
+		t.Fatalf("per-layer pattern = %+v", h)
+	}
+	wrong := newBuilder(3, 0, 2).
+		kvString("general.architecture", "gemma3").
+		kvStringArray("gemma3.attention.sliding_window_pattern", "yes").
+		bytes()
+	if _, err := gguf.Parse(bytes.NewReader(wrong), gguf.DefaultLimits()); reasonOf(t, err) != gguf.ReasonMalformed {
+		t.Fatalf("string pattern = %v", err)
+	}
+	boolHeads := newBuilder(3, 0, 2).
+		kvString("general.architecture", "llama").
+		kvBoolArray("llama.attention.head_count", true).
+		bytes()
+	if _, err := gguf.Parse(bytes.NewReader(boolHeads), gguf.DefaultLimits()); reasonOf(t, err) != gguf.ReasonMalformed {
+		t.Fatalf("boolean head counts = %v", err)
+	}
+}
+
 func TestParseReadsVersion2AndBigEndian(t *testing.T) {
 	t.Parallel()
 	v2 := newBuilder(2, 1, 1).kvString("general.architecture", "llama").bytes()

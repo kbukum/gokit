@@ -98,6 +98,21 @@ func (b *builder) kvI32Array(key string, vals ...int32) *builder {
 	return b
 }
 
+func (b *builder) kvBoolArray(key string, vals ...bool) *builder {
+	b.str(key)
+	b.u32(tArray)
+	b.u32(tBool)
+	b.u64(uint64(len(vals)))
+	for _, v := range vals {
+		if v {
+			b.u8(1)
+		} else {
+			b.u8(0)
+		}
+	}
+	return b
+}
+
 func (b *builder) kvStringArray(key string, vals ...string) *builder {
 	b.str(key)
 	b.u32(tArray)
