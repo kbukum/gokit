@@ -2,6 +2,7 @@ package memory_test
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	apperr "github.com/kbukum/gokit/errors"
@@ -112,5 +113,136 @@ func TestEstimateRoundsQuantizedRowsPerLayer(t *testing.T) {
 	in = memory.Input{FileBytes: 1, ContextLength: 10, Layers: 2, KVHeads: []uint64{1, 1}, KeyLength: 40, ValueLength: 24, Cache: memory.CacheQ8_0}
 	if got, err = memory.Estimate(in); err != nil || got.KVCache != 10*2*(68+34) {
 		t.Fatalf("Estimate() = %+v, %v, want %d", got, err, 10*2*(68+34))
+	}
+}
+
+func TestEstimateCapsSlidingWindowLayers(t *testing.T) {
+	t.Parallel()
+	// Gemma 3 4B shape: 34 layers, every sixth global (5 global, 29 sliding); 4 kv heads of width 256; window 1024; 131072 tokens.
+	sliding := make([]bool, 34)
+	for i := range sliding {
+		sliding[i] = i%6 < 5
+	}
+	in := memory.Input{
+		FileBytes: 1, ContextLength: 131072, Layers: 34, KVHeads: []uint64{4}, KeyLength: 256, ValueLength: 256, Cache: memory.CacheF16,
+		SlidingWindow: 1024, Sliding: sliding,
+	}
+	got, err := memory.Estimate(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	perLayerToken := int64(4 * (256 + 256) * 2)
+	// 29 sliding layers keep the window plus one 512-token batch, padded to 256 cells; 5 global layers keep it all.
+	want := 5*131072*perLayerToken + 29*1536*perLayerToken
+	if got.KVCache != want {
+		t.Fatalf("KVCache = %d, want %d", got.KVCache, want)
+	}
+	// Four conversations sharing a unified cache keep four windows: 4×1024+512 = 4608 cells.
+	in.Sequences = 4
+	if got, err = memory.Estimate(in); err != nil || got.KVCache != 5*131072*perLayerToken+29*4608*perLayerToken {
+		t.Fatalf("four sequences = %+v, %v", got, err)
+	}
+	// A short context caps the sliding layers too, and sliding layers may use their own head widths.
+	in.Sequences, in.ContextLength, in.SlidingKeyLength, in.SlidingValueLength = 0, 1000, 128, 64
+	if got, err = memory.Estimate(in); err != nil || got.KVCache != 5*1000*perLayerToken+29*1000*4*(128+64)*2 {
+		t.Fatalf("short context = %+v, %v", got, err)
+	}
+	// Per-layer head counts give the same answer as uniform ones.
+	uniform := got.KVCache
+	in.KVHeads = slices.Repeat([]uint64{4}, 34)
+	if got, err = memory.Estimate(in); err != nil || got.KVCache != uniform {
+		t.Fatalf("per-layer heads = %+v, %v, want %d", got, err, uniform)
+	}
+}
+
+func TestEstimateRefusesInconsistentSlidingWindow(t *testing.T) {
+	t.Parallel()
+	ok := memory.Input{FileBytes: 1, ContextLength: 8, Layers: 2, KVHeads: []uint64{1}, KeyLength: 1, ValueLength: 1, Cache: memory.CacheF16}
+	for name, mutate := range map[string]func(*memory.Input){
+		"window without layers": func(in *memory.Input) { in.SlidingWindow = 4 },
+		"layers without window": func(in *memory.Input) { in.Sliding = []bool{true, false} },
+		"layer count mismatch":  func(in *memory.Input) { in.SlidingWindow, in.Sliding = 4, []bool{true} },
+	} {
+		in := ok
+		mutate(&in)
+		if _, err := memory.Estimate(in); err == nil {
+			t.Errorf("%s: Estimate() guessed", name)
+		}
+	}
+}
+
+func TestAnImplausibleLayerCountIsRefusedBeforeAnythingIsSizedByIt(t *testing.T) {
+	t.Parallel()
+	h := &gguf.Header{Architecture: "gemma3", SlidingWindow: 1024, ContextLength: 8192, BlockCount: memory.MaxLayers + 1, HeadCount: []uint64{4}, KeyLength: 8, ValueLength: 8}
+	if _, err := memory.FromHeader(h, 1); apperr.Normalize(err).Code != apperr.ErrCodeInvalidInput {
+		t.Errorf("FromHeader(%d layers) = %v, want invalid input", h.BlockCount, err)
+	}
+	in := memory.Input{FileBytes: 1, ContextLength: 8, Layers: memory.MaxLayers + 1, KVHeads: []uint64{1}, KeyLength: 1, ValueLength: 1, Cache: memory.CacheF16}
+	if _, err := memory.Estimate(in); apperr.Normalize(err).Code != apperr.ErrCodeInvalidInput {
+		t.Errorf("Estimate(%d layers) = %v, want invalid input", in.Layers, err)
+	}
+	h.BlockCount = memory.MaxLayers
+	if _, err := memory.FromHeader(h, 1); err != nil {
+		t.Errorf("FromHeader(%d layers) = %v", h.BlockCount, err)
+	}
+}
+
+func TestFromHeaderFollowsLlamaCppSlidingWindow(t *testing.T) {
+	t.Parallel()
+	base := func(arch string) *gguf.Header {
+		return &gguf.Header{Architecture: arch, ContextLength: 8192, BlockCount: 12, HeadCount: []uint64{4}, HeadCountKV: []uint64{1}, KeyLength: 8, ValueLength: 8}
+	}
+	slides := func(in memory.Input) (n int) {
+		for _, s := range in.Sliding {
+			if s {
+				n++
+			}
+		}
+		return n
+	}
+	cases := map[string]struct {
+		header  func() *gguf.Header
+		window  uint64
+		sliding int
+	}{
+		"llama ignores none":    {func() *gguf.Header { return base("llama") }, 0, 0},
+		"gemma3 every sixth":    {func() *gguf.Header { h := base("gemma3"); h.SlidingWindow = 1024; return h }, 1024, 10},
+		"gemma3 without window": {func() *gguf.Header { return base("gemma3") }, 0, 0},
+		"gemma2 default window": {func() *gguf.Header { return base("gemma2") }, 4096, 6},
+		"cohere2 every fourth":  {func() *gguf.Header { h := base("cohere2"); h.SlidingWindow = 4096; return h }, 4096, 9},
+		"gpt-oss alternates":    {func() *gguf.Header { h := base("gpt-oss"); h.SlidingWindow = 128; return h }, 128, 6},
+		"phi3 runs full":        {func() *gguf.Header { h := base("phi3"); h.SlidingWindow = 2047; return h }, 0, 0},
+		"stated period wins":    {func() *gguf.Header { h := base("gemma3"); h.SlidingWindow, h.SlidingWindowPeriod = 512, 3; return h }, 512, 8},
+		"stated layers win": {func() *gguf.Header {
+			h := base("olmo2")
+			h.SlidingWindow, h.SlidingWindowLayers = 64, make([]bool, 12)
+			h.SlidingWindowLayers[1] = true
+			return h
+		}, 64, 1},
+	}
+	for name, tc := range cases {
+		in, err := memory.FromHeader(tc.header(), 1)
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if in.SlidingWindow != tc.window || slides(in) != tc.sliding || (tc.window > 0 && len(in.Sliding) != 12) {
+			t.Errorf("%s: window %d sliding %d of %d", name, in.SlidingWindow, slides(in), len(in.Sliding))
+		}
+	}
+	unknown := base("olmo2")
+	unknown.SlidingWindow = 4096
+	if _, err := memory.FromHeader(unknown, 1); err == nil {
+		t.Error("an unknown sliding-window pattern was guessed")
+	}
+	short := base("gemma4")
+	short.SlidingWindow, short.SlidingWindowLayers = 64, []bool{true}
+	if _, err := memory.FromHeader(short, 1); err == nil {
+		t.Error("a per-layer pattern of the wrong length was accepted")
+	}
+	swa := base("gemma3")
+	swa.SlidingWindow, swa.KeyLengthSWA, swa.ValueLengthSWA = 1024, 16, 4
+	if in, err := memory.FromHeader(swa, 1); err != nil || in.SlidingKeyLength != 16 || in.SlidingValueLength != 4 {
+		t.Errorf("sliding head widths = %+v, %v", in, err)
 	}
 }

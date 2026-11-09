@@ -91,6 +91,17 @@ type Header struct {
 	KeyLength uint64
 	// ValueLength is the value head width; zero means EmbeddingLength/HeadCount.
 	ValueLength uint64
+	// SlidingWindow is the attention window in tokens of the sliding-window layers; zero when none is stated.
+	SlidingWindow uint64
+	// SlidingWindowPeriod is a stated sliding-window pattern period, such as 6 when every sixth layer is global;
+	// zero when none is stated.
+	SlidingWindowPeriod uint64
+	// SlidingWindowLayers is a stated per-layer sliding-window pattern, true for a sliding-window layer; nil when
+	// none is stated.
+	SlidingWindowLayers []bool
+	// KeyLengthSWA and ValueLengthSWA are the sliding-window layers' head widths; zero means the full layers' widths.
+	KeyLengthSWA   uint64
+	ValueLengthSWA uint64
 
 	// ChatTemplate is tokenizer.chat_template as plain text. It is never rendered or executed.
 	ChatTemplate string
