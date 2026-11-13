@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/golang-migrate/migrate/v4 v4.20.1
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/kbukum/gokit v0.3.0-alpha.1
 	github.com/kbukum/gokit/database v0.3.0-alpha.1
 	gorm.io/driver/postgres v1.6.3

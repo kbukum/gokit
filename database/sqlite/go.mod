@@ -9,7 +9,7 @@ require (
 	github.com/kbukum/gokit/database v0.3.0-alpha.1
 	github.com/kbukum/gokit/database/testutil v0.3.0-alpha.1
 	github.com/kbukum/gokit/testutil v0.3.0-alpha.1
-	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/mattn/go-sqlite3 v1.14.53
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk/metric v1.47.0
 	go.uber.org/goleak v1.3.0
