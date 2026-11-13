@@ -8,7 +8,7 @@ require (
 	github.com/kbukum/gokit/messaging/nats v0.3.0-alpha.1
 	github.com/moby/moby/api v1.56.1
 	github.com/nats-io/nats.go v1.55.0
-	github.com/testcontainers/testcontainers-go v0.44.0
+	github.com/testcontainers/testcontainers-go v0.45.0
 )
 
 require (
