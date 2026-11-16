@@ -25,11 +25,12 @@ const (
 	suffixSlidingPattern  = ".attention.sliding_window_pattern"
 	suffixKeyLengthSWA    = ".attention.key_length_swa"
 	suffixValueLengthSWA  = ".attention.value_length_swa"
+	suffixPredictLayers   = ".nextn_predict_layers"
 )
 
 var architectureSuffixes = [...]string{
 	suffixContextLength, suffixBlockCount, suffixEmbeddingLength, suffixHeadCount, suffixHeadCountKV, suffixKeyLength, suffixValueLength,
-	suffixSlidingWindow, suffixSlidingPattern, suffixKeyLengthSWA, suffixValueLengthSWA,
+	suffixSlidingWindow, suffixSlidingPattern, suffixKeyLengthSWA, suffixValueLengthSWA, suffixPredictLayers,
 }
 
 // wanted reports whether a key may carry a fact. Architecture keys are matched by suffix because the architecture
@@ -111,6 +112,7 @@ func (h *Header) apply(facts map[string]value) error {
 		count(arch+suffixSlidingWindow, &h.SlidingWindow)
 		count(arch+suffixKeyLengthSWA, &h.KeyLengthSWA)
 		count(arch+suffixValueLengthSWA, &h.ValueLengthSWA)
+		count(arch+suffixPredictLayers, &h.NextTokenLayers)
 		if v, ok := facts[arch+suffixSlidingPattern]; ok && err == nil {
 			switch {
 			case v.kind == typeArray:

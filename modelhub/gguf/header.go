@@ -102,6 +102,8 @@ type Header struct {
 	// KeyLengthSWA and ValueLengthSWA are the sliding-window layers' head widths; zero means the full layers' widths.
 	KeyLengthSWA   uint64
 	ValueLengthSWA uint64
+	// NextTokenLayers is the number of multi-token prediction layers (nextn_predict_layers); zero when none is stated.
+	NextTokenLayers uint64
 
 	// ChatTemplate is tokenizer.chat_template as plain text. It is never rendered or executed.
 	ChatTemplate string
@@ -110,6 +112,11 @@ type Header struct {
 	Truncated bool
 	// Limit names the limit that stopped reading.
 	Limit string
+}
+
+// DraftOnly reports a file whose every layer is a multi-token prediction layer: a draft head that helps another model answer faster and cannot answer on its own. A whole model that also carries such layers is not draft-only.
+func (h *Header) DraftOnly() bool {
+	return h.BlockCount > 0 && h.NextTokenLayers >= h.BlockCount
 }
 
 // FileType is the llama.cpp file type enumeration stored in general.file_type.
