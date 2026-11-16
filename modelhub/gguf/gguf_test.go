@@ -67,6 +67,36 @@ func TestParseReadsPerLayerKVHeadsAndKeyLengths(t *testing.T) {
 	}
 }
 
+func TestParseReadsNextTokenLayers(t *testing.T) {
+	t.Parallel()
+	draft := newBuilder(3, 0, 3).
+		kvString("general.architecture", "gemma4-assistant").
+		kvU32("gemma4-assistant.block_count", 4).
+		kvU32("gemma4-assistant.nextn_predict_layers", 4).
+		bytes()
+	h, err := gguf.Parse(bytes.NewReader(draft), gguf.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h.NextTokenLayers != 4 || !h.DraftOnly() {
+		t.Fatalf("draft head = %+v", h)
+	}
+	whole := newBuilder(3, 0, 3).
+		kvString("general.architecture", "glm4moe").
+		kvU32("glm4moe.block_count", 47).
+		kvU32("glm4moe.nextn_predict_layers", 1).
+		bytes()
+	if h, err = gguf.Parse(bytes.NewReader(whole), gguf.DefaultLimits()); err != nil {
+		t.Fatal(err)
+	}
+	if h.NextTokenLayers != 1 || h.DraftOnly() {
+		t.Fatalf("whole model with a next-token layer = %+v", h)
+	}
+	if (&gguf.Header{}).DraftOnly() {
+		t.Fatal("a header that states no layers is not a draft head")
+	}
+}
+
 func TestParseReadsSlidingWindow(t *testing.T) {
 	t.Parallel()
 	data := newBuilder(3, 0, 5).
