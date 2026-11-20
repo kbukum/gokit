@@ -11,9 +11,9 @@ require (
 	github.com/kbukum/gokit/storage v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage/s3 v0.3.0-alpha.1
 	github.com/kbukum/gokit/storage/testutil v0.3.0-alpha.1
-	github.com/moby/moby/api v1.56.1
-	github.com/moby/moby/client v0.6.2
-	github.com/testcontainers/testcontainers-go v0.44.0
+	github.com/moby/moby/api v1.57.0
+	github.com/moby/moby/client v0.6.3
+	github.com/testcontainers/testcontainers-go v0.45.0
 )
 
 require (
