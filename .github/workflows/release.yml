@@ -60,7 +60,7 @@ jobs:
       # mismatch against the `toolchain` directive can otherwise perturb the
       # module graph and leave the tree dirty before Toven's clean-tree guard.
       - name: Set up Go from go.mod
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v6.0.0
         with:
           go-version-file: go.mod
 
@@ -115,7 +115,7 @@ jobs:
       # incidental Go — a mismatch against the `toolchain` directive can perturb
       # the module graph and dirty the tree before Toven's clean-tree guard.
       - name: Set up Go from go.mod
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6.0.0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v6.0.0
         with:
           go-version-file: go.mod
 
